@@ -27,7 +27,6 @@ async def get_analytics(
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
         .group_by(models.Player.user_id, models.Player.role, models.Player.team_id)
@@ -45,7 +44,6 @@ async def get_analytics(
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
         .group_by(models.Player.user_id, models.Player.role, models.Player.team_id)
@@ -59,7 +57,6 @@ async def get_analytics(
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
         .group_by(models.Encounter.home_team_id)
@@ -73,7 +70,6 @@ async def get_analytics(
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
         .group_by(models.Encounter.away_team_id)
@@ -197,7 +193,6 @@ async def get_analytics(
         .join(performance_points, performance_points.c.player_id == models.Player.id, isouter=True)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             models.Player.is_substitution.is_(False),
             *workspace_filter(workspace_id),
         )
@@ -232,7 +227,6 @@ async def get_matches(
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
         .where(
             models.Encounter.tournament_id.between(start_range, end_range),
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
         .order_by(models.Encounter.tournament_id, models.Encounter.id)
@@ -268,7 +262,6 @@ async def get_tournament_version_ids(
         sa.select(models.Tournament.id, models.Tournament.division_grid_version_id)
         .where(
             models.Tournament.id >= 1,
-            models.Tournament.is_league.is_(False),
             *workspace_filter(workspace_id),
         )
     )

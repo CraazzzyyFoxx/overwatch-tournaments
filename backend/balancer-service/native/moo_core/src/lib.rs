@@ -9,7 +9,6 @@ use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::sync::Mutex;
 
 type Solution = Vec<TeamState>;
 
@@ -174,40 +173,10 @@ struct Context {
     support_role_idx: Option<usize>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TeamState {
     id: usize,
     roster: Vec<Vec<usize>>,
-    /// `(signature, stats)` cache. Signature is a hash of roster contents at
-    /// the time `stats` was filled; when the current signature differs, the
-    /// cached stats are stale and must be recomputed. Wrapped in `Mutex` so
-    /// `TeamState: Sync` (rayon needs this for parallel archive iteration).
-    cached: Mutex<(u64, Option<TeamStats>)>,
-}
-
-impl Clone for TeamState {
-    fn clone(&self) -> Self {
-        let cached = self
-            .cached
-            .lock()
-            .map(|guard| guard.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
-        Self {
-            id: self.id,
-            roster: self.roster.clone(),
-            cached: Mutex::new(cached),
-        }
-    }
-}
-
-impl TeamState {
-    fn new(id: usize, roster: Vec<Vec<usize>>) -> Self {
-        Self {
-            id,
-            roster,
-            cached: Mutex::new((0, None)),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -501,43 +470,7 @@ fn tank_gap_penalty(gap: f64) -> f64 {
     }
 }
 
-/// Hashes roster contents into a signature used as the cache invalidation
-/// key. Two teams with identical roster (same players in same role buckets,
-/// in the same order) produce the same signature.
-fn compute_team_signature(team: &TeamState) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    for role in &team.roster {
-        role.len().hash(&mut hasher);
-        for &p in role {
-            p.hash(&mut hasher);
-        }
-        // Separator so [[1,2],[3]] and [[1],[2,3]] don't collide.
-        u64::MAX.hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
-/// Returns cached `TeamStats` if the roster signature still matches, otherwise
-/// recomputes and refreshes the cache. Avoids 90%+ of `calculate_team_stats`
-/// work during a typical genetic loop where each mutation touches only 1-2
-/// teams while the rest of a child's teams are inherited unchanged.
-fn cached_team_stats(ctx: &Context, team: &TeamState) -> TeamStats {
-    let current_sig = compute_team_signature(team);
-    let mut guard = team
-        .cached
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if guard.0 == current_sig {
-        if let Some(ref stats) = guard.1 {
-            return stats.clone();
-        }
-    }
-    let stats = calculate_team_stats_uncached(ctx, team);
-    *guard = (current_sig, Some(stats.clone()));
-    stats
-}
-
-fn calculate_team_stats_uncached(context: &Context, team: &TeamState) -> TeamStats {
+fn calculate_team_stats(context: &Context, team: &TeamState) -> TeamStats {
     let mut sum_rating = 0.0;
     let mut sum_rating2 = 0.0;
     let mut count = 0usize;
@@ -761,7 +694,7 @@ fn calculate_objectives_from_stats(stats: &[TeamStats], ctx: &Context) -> Object
 fn calculate_objectives(solution: &Solution, context: &Context) -> Objectives {
     let stats: Vec<TeamStats> = solution
         .iter()
-        .map(|t| cached_team_stats(context, t))
+        .map(|t| calculate_team_stats(context, t))
         .collect();
     calculate_objectives_from_stats(&stats, context)
 }
@@ -1115,7 +1048,10 @@ fn solution_is_complete(solution: &Solution, context: &Context) -> bool {
 
 fn create_empty_solution(context: &Context) -> Solution {
     (0..context.num_teams)
-        .map(|i| TeamState::new(i + 1, vec![Vec::new(); context.roles.len()]))
+        .map(|i| TeamState {
+            id: i + 1,
+            roster: vec![Vec::new(); context.roles.len()],
+        })
         .collect()
 }
 
@@ -1673,7 +1609,7 @@ fn strategy_robin_hood(sol: &mut Solution, ctx: &Context, rng: &mut StdRng) -> b
     }
     let totals: Vec<f64> = sol
         .iter()
-        .map(|t| cached_team_stats(ctx, t).total_rating)
+        .map(|t| calculate_team_stats(ctx, t).total_rating)
         .collect();
     let max_i = totals
         .iter()
@@ -2054,7 +1990,7 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
     if ctx.roles.is_empty() || cur.len() < 2 {
         return cur;
     }
-    let mut stats: Vec<TeamStats> = cur.iter().map(|t| cached_team_stats(ctx, t)).collect();
+    let mut stats: Vec<TeamStats> = cur.iter().map(|t| calculate_team_stats(ctx, t)).collect();
     let mut best_obj = calculate_objectives_from_stats(&stats, ctx);
 
     let is_captain = |p: usize| ctx.config.use_captains && ctx.players[p].is_captain;
@@ -2089,8 +2025,8 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                             }
 
                             swap_players(&mut cur, i, r, a, j, r, b);
-                            stats[i] = cached_team_stats(ctx, &cur[i]);
-                            stats[j] = cached_team_stats(ctx, &cur[j]);
+                            stats[i] = calculate_team_stats(ctx, &cur[i]);
+                            stats[j] = calculate_team_stats(ctx, &cur[j]);
                             let nw = calculate_objectives_from_stats(&stats, ctx);
                             if accept_move(&best_obj, &nw) {
                                 best_obj = nw;
@@ -2098,8 +2034,8 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                                 break 'same_role;
                             }
                             swap_players(&mut cur, i, r, a, j, r, b);
-                            stats[i] = cached_team_stats(ctx, &cur[i]);
-                            stats[j] = cached_team_stats(ctx, &cur[j]);
+                            stats[i] = calculate_team_stats(ctx, &cur[i]);
+                            stats[j] = calculate_team_stats(ctx, &cur[j]);
                         }
                     }
                 }
@@ -2129,7 +2065,7 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                                 continue;
                             }
                             swap_players(&mut cur, t, r1, a, t, r2, b);
-                            stats[t] = cached_team_stats(ctx, &cur[t]);
+                            stats[t] = calculate_team_stats(ctx, &cur[t]);
                             let nw = calculate_objectives_from_stats(&stats, ctx);
                             if accept_move(&best_obj, &nw) {
                                 best_obj = nw;
@@ -2137,7 +2073,7 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                                 break 'intra_cross;
                             }
                             swap_players(&mut cur, t, r1, a, t, r2, b);
-                            stats[t] = cached_team_stats(ctx, &cur[t]);
+                            stats[t] = calculate_team_stats(ctx, &cur[t]);
                         }
                     }
                 }
@@ -2174,8 +2110,8 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                                     continue;
                                 }
                                 swap_players(&mut cur, i, r1, a, j, r2, b);
-                                stats[i] = cached_team_stats(ctx, &cur[i]);
-                                stats[j] = cached_team_stats(ctx, &cur[j]);
+                                stats[i] = calculate_team_stats(ctx, &cur[i]);
+                                stats[j] = calculate_team_stats(ctx, &cur[j]);
                                 let nw = calculate_objectives_from_stats(&stats, ctx);
                                 if accept_move(&best_obj, &nw) {
                                     best_obj = nw;
@@ -2183,8 +2119,8 @@ fn polish_pareto(sol: &Solution, ctx: &Context, max_passes: usize) -> Solution {
                                     break 'cross_team;
                                 }
                                 swap_players(&mut cur, i, r1, a, j, r2, b);
-                                stats[i] = cached_team_stats(ctx, &cur[i]);
-                                stats[j] = cached_team_stats(ctx, &cur[j]);
+                                stats[i] = calculate_team_stats(ctx, &cur[i]);
+                                stats[j] = calculate_team_stats(ctx, &cur[j]);
                             }
                         }
                     }
@@ -3244,7 +3180,7 @@ fn run_optimizer(
             let mut indexed_teams: Vec<(TeamState, f64)> = sol
                 .into_iter()
                 .map(|t| {
-                    let stats = cached_team_stats(ctx, &t);
+                    let stats = calculate_team_stats(ctx, &t);
                     (t, stats.total_rating)
                 })
                 .collect();
@@ -3531,7 +3467,10 @@ mod tests {
         let mut off_role_count = 0usize;
 
         for (team_pos, team) in variant.teams.iter().enumerate() {
-            let mut state = TeamState::new(team_pos + 1, vec![Vec::new(); ctx.roles.len()]);
+            let mut state = TeamState {
+                id: team_pos + 1,
+                roster: vec![Vec::new(); ctx.roles.len()],
+            };
             for (role, uuids) in &team.roster {
                 let r = *role_index
                     .get(role.as_str())
@@ -3554,7 +3493,7 @@ mod tests {
                 }
             }
 
-            let stats = cached_team_stats(ctx, &state);
+            let stats = calculate_team_stats(ctx, &state);
             mmr_sum += stats.mmr;
             mmr_sum2 += stats.mmr * stats.mmr;
             team_count += 1;
