@@ -37,7 +37,6 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
 
         self.assertIn("/tournaments/{id}", paths)
         self.assertIn("/tournaments/{id}/standings", paths)
-        self.assertIn("/tournaments/{id}/ws", paths)
         self.assertIn("/encounters/{id}", paths)
         self.assertIn("/encounters/{encounter_id}/submit-result", paths)
         self.assertIn("/encounters/{encounter_id}/map-pool/ws", paths)

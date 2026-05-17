@@ -9,7 +9,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["shared", "app-service", "auth-service", "discord-service", "parser-service", "twitch-service", "balancer-service", "tournament-service", "mixtura-balancer-tournament"]
+members = ["shared", "app-service", "auth-service", "discord-service", "parser-service", "realtime-service", "twitch-service", "balancer-service", "tournament-service", "mixtura-balancer-tournament"]
 
 [tool.uv.sources]
 shared = { workspace = true }
@@ -31,6 +31,7 @@ root = [
     "app-service",
     "auth-service",
     "parser-service",
+    "realtime-service",
     "tournament-service",
     "balancer-service",
     "discord-service",
@@ -41,6 +42,7 @@ extra-paths = [
     "app-service",
     "auth-service",
     "parser-service",
+    "realtime-service",
     "tournament-service",
     "balancer-service",
     "discord-service",

@@ -1,6 +1,6 @@
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import DivisionGridNormalizationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,19 +12,8 @@ from src.core import config, db, enums, pagination
 from src.core.workspace import WorkspaceQuery, get_division_grid
 from src.services.standings import flows as standings_flows
 from src.services.tournament import flows as tournament_flows
-from src.services.tournament.realtime import tournament_realtime_manager
 
 router = APIRouter(prefix="/tournaments", tags=[enums.RouteTag.TOURNAMENT])
-
-
-@router.websocket("/{id}/ws")
-async def tournament_socket(websocket: WebSocket, id: int) -> None:
-    await tournament_realtime_manager.connect(id, websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        tournament_realtime_manager.disconnect(id, websocket)
 
 
 @router.get(

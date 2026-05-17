@@ -23,7 +23,6 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 events = importlib.import_module("src.services.tournament.recalculation_events")
-realtime_pubsub = importlib.import_module("src.services.tournament.realtime_pubsub")
 tournament_events = importlib.import_module("src.services.tournament.events")
 realtime_commit = importlib.import_module("src.services.tournament.realtime_commit")
 
@@ -41,18 +40,6 @@ class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
 
         invalidate.assert_awaited_once_with(42)
         publish.assert_awaited_once_with(42, "results_changed")
-
-    async def test_pubsub_message_broadcasts_to_local_websocket_manager(self) -> None:
-        broadcast = AsyncMock()
-
-        with patch.object(
-            realtime_pubsub.tournament_realtime_manager,
-            "broadcast_updated",
-            broadcast,
-        ):
-            await realtime_pubsub.handle_tournament_pubsub_message('{"tournament_id":77,"reason":"structure_changed"}')
-
-        broadcast.assert_awaited_once_with(77, "structure_changed")
 
     async def test_changed_outbox_event_registers_post_commit_realtime_update(self) -> None:
         session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock())

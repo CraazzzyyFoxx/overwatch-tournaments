@@ -15,7 +15,6 @@ from shared.observability import (
     CorrelationIdMiddleware,
     TimeMiddleware,
     check_postgres,
-    check_rabbitmq,
     check_redis,
     instrument_fastapi,
     instrument_sqlalchemy,
@@ -29,10 +28,11 @@ from starlette.requests import Request
 
 from src.core import config, db
 from src.routes import router
-from src.services.tournament.recalculation_events import task_router as tournament_recalculation_task_router
+from src.services.connection_manager import connection_manager
+from src.services.pubsub_listener import PubSubListener
 
 logger = setup_logging(
-    service_name="tournament-service",
+    service_name="realtime-service",
     log_level=config.settings.log_level,
     logs_root_path=config.settings.logs_root_path,
     json_output=config.settings.json_logging,
@@ -42,6 +42,7 @@ auth_client = AuthClient(
     base_url=config.settings.auth_service_url,
     timeout=config.settings.auth_service_timeout,
 )
+pubsub_listener = PubSubListener(connection_manager)
 
 
 @asynccontextmanager
@@ -56,7 +57,7 @@ async def lifespan(_: FastAPI):
         https_proxy=config.settings.sentry_https_proxy_url,
     )
     setup_tracing(
-        service_name="tournament-service",
+        service_name="realtime-service",
         otlp_endpoint=config.settings.otlp_endpoint,
         enabled=config.settings.tracing_enabled,
         sampler_name=config.settings.otel_traces_sampler,
@@ -64,10 +65,12 @@ async def lifespan(_: FastAPI):
     )
     instrument_sqlalchemy(db.async_engine.sync_engine)
     await auth_client.start()
-    logger.info("Starting tournament-service")
+    await pubsub_listener.start()
+    logger.info("Starting realtime-service")
     try:
         yield
     finally:
+        await pubsub_listener.stop()
         await auth_client.close()
 
 
@@ -90,7 +93,6 @@ Instrumentator().instrument(app).expose(app)
 
 app.state.auth_client = auth_client
 app.include_router(router)
-app.include_router(tournament_recalculation_task_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.settings.cors_origins if config.settings.cors_origins else ["*"],
@@ -98,21 +100,20 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "PATCH", "PUT"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)
+app.add_middleware(RequestSizeLimitMiddleware, max_content_length=1024 * 1024)
 app.add_middleware(ExceptionMiddleware, is_development=config.settings.environment == "development")
 app.add_middleware(TimeMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 
 instrument_fastapi(app)
 
-cache.setup(config.settings.api_cache_url, prefix="fastapi:")
-cache.setup(config.settings.backend_cache_url, prefix="backend:")
+cache.setup(config.settings.api_cache_url, prefix="realtime:")
 
 
 @app.get("/health/live")
 async def live_health_check() -> HealthCheckResponse:
     return make_health_response(
-        service="tournament-service",
+        service="realtime-service",
         version=config.settings.version,
         dependencies=[],
         status="ok",
@@ -126,10 +127,9 @@ async def health_check() -> HealthCheckResponse:
     deps = [
         await check_postgres(db.async_session_maker),
         await check_redis(str(config.settings.redis_url)),
-        await check_rabbitmq(config.settings.rabbitmq_url),
     ]
     return make_health_response(
-        service="tournament-service",
+        service="realtime-service",
         version=config.settings.version,
         dependencies=deps,
         timestamp=int(datetime.now(UTC).timestamp()),

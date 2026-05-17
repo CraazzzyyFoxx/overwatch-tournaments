@@ -10,7 +10,6 @@ from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
 
 from src.core import config
-from src.services.tournament.realtime import tournament_realtime_manager
 
 task_router = RabbitRouter(config.settings.rabbitmq_url, logger=logger)
 
@@ -31,7 +30,6 @@ async def invalidate_tournament_standings_cache(tournament_id: int) -> None:
 async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     event = TournamentChangedEvent.model_validate(data)
     await invalidate_tournament_standings_cache(event.tournament_id)
-    await tournament_realtime_manager.broadcast_updated(event.tournament_id, event.reason)
 
 
 @task_router.subscriber(TOURNAMENT_CHANGED_QUEUE, exchange=TOURNAMENT_RECALC_EXCHANGE)

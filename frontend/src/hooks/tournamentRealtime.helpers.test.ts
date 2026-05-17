@@ -4,7 +4,7 @@ import {
   getTournamentRealtimeUpdatePlan,
   parseTournamentRealtimeMessage,
 } from "@/hooks/tournamentRealtime.helpers";
-import { buildTournamentWebSocketUrl } from "@/hooks/useTournamentRealtime";
+import { buildRealtimeWebSocketUrl } from "@/services/realtime.service";
 
 describe("tournament realtime helpers", () => {
   it("parses tournament update websocket messages for the active tournament", () => {
@@ -50,9 +50,9 @@ describe("tournament realtime helpers", () => {
     expect(plan.shouldRefreshRoute).toBe(true);
   });
 
-  it("builds websocket URLs from relative tournament API bases", () => {
+  it("builds websocket URLs from relative realtime API bases", () => {
     expect(
-      buildTournamentWebSocketUrl(42, "/api/tournament", "https://example.test")
-    ).toBe("wss://example.test/api/tournament/tournaments/42/ws");
+      buildRealtimeWebSocketUrl("/api/realtime", "https://example.test")
+    ).toBe("wss://example.test/api/realtime/ws");
   });
 });

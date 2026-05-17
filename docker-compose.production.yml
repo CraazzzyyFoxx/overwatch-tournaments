@@ -355,6 +355,42 @@ services:
       start_period: 40s
     restart: always
 
+  realtime:
+    image: registry.craazzzyyfoxx.me/aqt-realtime:latest
+    build:
+      context: ./backend
+      args:
+        APP_PATH: realtime
+    command: uvicorn main:app --host 0.0.0.0 --port 8005 --workers ${WORKERS_REALTIME:-2} --loop uvloop
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/realtime.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./logs/realtime:/logs
+    depends_on:
+      redis:
+        condition: service_started
+      auth:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
   discord:
     image: registry.craazzzyyfoxx.me/aqt-discord:latest
     build:
@@ -579,6 +615,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_BALANCER_API_URL: ${NEXT_PUBLIC_BALANCER_API_URL}
         NEXT_PUBLIC_TOURNAMENT_API_URL: ${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
+        NEXT_PUBLIC_REALTIME_API_URL: ${NEXT_PUBLIC_REALTIME_API_URL:-}
         NEXT_PUBLIC_AUTH_SERVICE_URL: ${NEXT_PUBLIC_AUTH_SERVICE_URL}
         NEXT_PUBLIC_CACHE_POLICY: ${NEXT_PUBLIC_CACHE_POLICY}
         NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME}
@@ -591,6 +628,7 @@ services:
       - NEXT_PUBLIC_AUTH_SERVICE_URL=${NEXT_PUBLIC_AUTH_SERVICE_URL}
       - NEXT_PUBLIC_BALANCER_API_URL=${NEXT_PUBLIC_BALANCER_API_URL}
       - NEXT_PUBLIC_TOURNAMENT_API_URL=${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
+      - NEXT_PUBLIC_REALTIME_API_URL=${NEXT_PUBLIC_REALTIME_API_URL:-}
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
@@ -601,6 +639,8 @@ services:
       auth:
         condition: service_healthy
       tournament:
+        condition: service_healthy
+      realtime:
         condition: service_healthy
     volumes:
       - ./logs/frontend:/logs
