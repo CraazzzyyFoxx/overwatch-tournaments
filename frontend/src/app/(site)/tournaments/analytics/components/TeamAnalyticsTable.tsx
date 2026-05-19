@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { PlayerAnalytics, TeamAnalytics } from "@/types/analytics.types";
+import { PerformanceV2, PlayerAnalytics, TeamAnalytics } from "@/types/analytics.types";
+import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import {
   formatAnalyticsNumber,
   formatConfidencePercent,
@@ -100,10 +101,16 @@ const ChangeDivisionModal = ({
 
 const TournamentPlayerRow = ({
   player,
-  tournamentGrid
+  tournamentGrid,
+  performance,
+  tournamentId,
+  algorithmId
 }: {
   player: PlayerAnalytics;
   tournamentGrid?: DivisionGridVersion | null;
+  performance?: PerformanceV2;
+  tournamentId: number;
+  algorithmId?: number;
 }) => {
   const [open, setOpen] = React.useState(false);
   const { hasPermission } = usePermissions();
@@ -210,6 +217,21 @@ const TournamentPlayerRow = ({
         >
           {formatAnalyticsNumber(player.shift)}
         </TableCell>
+        <TableCell className="text-center tabular-nums">
+          {performance ? performance.impact_score.toFixed(0) : "—"}
+        </TableCell>
+        <TableCell className="text-center tabular-nums">
+          {performance ? `${Math.round(performance.log_coverage * 100)}%` : "—"}
+        </TableCell>
+        <TableCell className="text-center">
+          {performance ? (
+            <ExplanationPopover
+              playerId={player.id}
+              tournamentId={tournamentId}
+              algorithmId={algorithmId}
+            />
+          ) : null}
+        </TableCell>
       </TableRow>
       {canEdit && <ChangeDivisionModal player={player} open={open} setOpen={setOpen} />}
     </>
@@ -218,10 +240,16 @@ const TournamentPlayerRow = ({
 
 export const TournamentTeamTable = ({
   players,
-  tournamentGrid
+  tournamentGrid,
+  performanceByPlayer,
+  tournamentId,
+  algorithmId
 }: {
   players: PlayerAnalytics[];
   tournamentGrid?: DivisionGridVersion | null;
+  performanceByPlayer?: Record<number, PerformanceV2>;
+  tournamentId: number;
+  algorithmId?: number;
 }) => {
   // @ts-ignore
   const sortedPlayers: PlayerAnalytics[] = useMemo(() => {
@@ -241,6 +269,15 @@ export const TournamentTeamTable = ({
               <TableHead className="text-center">Points</TableHead>
               <TableHead className="text-center">Confidence</TableHead>
               <TableHead className="text-center">Manual</TableHead>
+              <TableHead className="text-center" title="Performance v2 impact score (0-100 percentile within role)">
+                Impact
+              </TableHead>
+              <TableHead className="text-center" title="Fraction of player&apos;s matches that have full log coverage">
+                Logs
+              </TableHead>
+              <TableHead className="text-center" title="Open SHAP feature contributions">
+                Why
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -249,6 +286,9 @@ export const TournamentTeamTable = ({
                 key={player.id}
                 player={player}
                 tournamentGrid={tournamentGrid}
+                performance={performanceByPlayer?.[player.id]}
+                tournamentId={tournamentId}
+                algorithmId={algorithmId}
               />
             ))}
           </TableBody>
@@ -259,7 +299,17 @@ export const TournamentTeamTable = ({
   );
 };
 
-const TeamAnalyticsCard = ({ team }: { team: TeamAnalytics }) => {
+const TeamAnalyticsCard = ({
+  team,
+  performanceByPlayer,
+  tournamentId,
+  algorithmId
+}: {
+  team: TeamAnalytics;
+  performanceByPlayer?: Record<number, PerformanceV2>;
+  tournamentId: number;
+  algorithmId?: number;
+}) => {
   const color = useMemo(() => {
     let color = "text-group-a";
 
@@ -286,6 +336,9 @@ const TeamAnalyticsCard = ({ team }: { team: TeamAnalytics }) => {
         <TournamentTeamTable
           players={team.players}
           tournamentGrid={team.tournament?.division_grid_version}
+          performanceByPlayer={performanceByPlayer}
+          tournamentId={tournamentId}
+          algorithmId={algorithmId}
         />
       </CardContent>
     </Card>
@@ -294,10 +347,16 @@ const TeamAnalyticsCard = ({ team }: { team: TeamAnalytics }) => {
 
 const TeamAnalyticsTable = ({
   teams,
-  isLoading
+  isLoading,
+  performanceByPlayer,
+  tournamentId,
+  algorithmId
 }: {
   teams: TeamAnalytics[];
   isLoading: boolean;
+  performanceByPlayer?: Record<number, PerformanceV2>;
+  tournamentId: number;
+  algorithmId?: number;
 }) => {
   return (
     <div className="grid grid-cols-2 xs:grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
@@ -311,7 +370,15 @@ const TeamAnalyticsTable = ({
           <TournamentTeamCardSkeleton />
         </>
       ) : (
-        teams.map((team) => <TeamAnalyticsCard key={team.id} team={team} />)
+        teams.map((team) => (
+          <TeamAnalyticsCard
+            key={team.id}
+            team={team}
+            performanceByPlayer={performanceByPlayer}
+            tournamentId={tournamentId}
+            algorithmId={algorithmId}
+          />
+        ))
       )}
     </div>
   );

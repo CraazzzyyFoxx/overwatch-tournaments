@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from src.routes.analytics import router as analytics_router
 from src.routes.challonge import router as challonge_router
 from src.routes.encounter import router as encounter_router
 from src.routes.gamemode import router as gamemode_router
@@ -24,7 +23,6 @@ router.include_router(standings_router)
 router.include_router(logs_router)
 router.include_router(logs_task_router)
 router.include_router(challonge_router)
-router.include_router(analytics_router)
 router.include_router(achievement_router)
 router.include_router(user_router)
 router.include_router(gamemode_router)

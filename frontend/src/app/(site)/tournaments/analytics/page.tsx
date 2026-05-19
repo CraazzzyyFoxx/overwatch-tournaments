@@ -1,44 +1,23 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCcw, RotateCcw } from "lucide-react";
-import { Team } from "@/types/team.types";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import TeamComboBox from "@/components/TeamComboBox";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import TeamAnalyticsTable from "@/app/(site)/tournaments/analytics/components/TeamAnalyticsTable";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import RanksPage from "@/app/(site)/tournaments/analytics/components/RanksPage";
+import AnalyticsHero from "@/app/(site)/tournaments/analytics/components/AnalyticsHero";
+import AnalyticsKpiStrip from "@/app/(site)/tournaments/analytics/components/AnalyticsKpiStrip";
+import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
+import AnalyticsHorizon from "@/app/(site)/tournaments/analytics/components/AnalyticsHorizon";
+import AnalyticsInsights from "@/app/(site)/tournaments/analytics/components/AnalyticsInsights";
+import MLAdminToolbar from "@/app/(site)/tournaments/analytics/components/MLAdminToolbar";
+import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
   canShowAnalyticsAdminToolbar,
-  getAnalyticsRefreshKeys,
   getPreferredAnalyticsAlgorithmId,
   sortAnalyticsAlgorithms
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -47,19 +26,8 @@ const AnalyticsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const { toast } = useToast();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
-
-  const previousElementRef = React.useRef<HTMLElement | null>(null);
-  const [selectedTeamState, setSelectedTeamState] = useState<{
-    tournamentId: number | null;
-    name: string;
-  }>({
-    tournamentId: null,
-    name: ""
-  });
 
   const parseId = useCallback((value: string | null) => {
     if (!value) return null;
@@ -68,19 +36,8 @@ const AnalyticsPage = () => {
     return parsed;
   }, []);
 
-  const tournamentId = useMemo(() => {
-    return parseId(searchParams.get("tournamentId"));
-  }, [parseId, searchParams]);
-
-  const algorithmId = useMemo(() => {
-    return parseId(searchParams.get("algorithm"));
-  }, [parseId, searchParams]);
-
-  const activeTab = useMemo(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "teams" || tab === "ranks") return tab;
-    return "overview";
-  }, [searchParams]);
+  const tournamentId = useMemo(() => parseId(searchParams.get("tournamentId")), [parseId, searchParams]);
+  const algorithmId = useMemo(() => parseId(searchParams.get("algorithm")), [parseId, searchParams]);
 
   const {
     data: tournamentsData,
@@ -89,8 +46,9 @@ const AnalyticsPage = () => {
     isError: isErrorTournaments
   } = useQuery({
     queryKey: ["tournaments", currentWorkspaceId ?? "global"],
-    queryFn: () => tournamentService.getAll(false, currentWorkspaceId)
+    queryFn: () => tournamentService.getAll(null, currentWorkspaceId)
   });
+
   const {
     data: algorithmData,
     isSuccess: isSuccessAlgorithm,
@@ -100,14 +58,16 @@ const AnalyticsPage = () => {
     queryKey: ["analytics", "algorithms"],
     queryFn: () => analyticsService.getAlgorithms()
   });
+
   const availableAlgorithms = useMemo(
     () => sortAnalyticsAlgorithms(algorithmData?.results ?? []),
     [algorithmData?.results]
   );
-  const canQueryAnalytics = tournamentId != null && algorithmId != null;
-  const canRecalculateAnalytics = canShowAnalyticsAdminToolbar(
-    hasPermission("analytics.update")
-  );
+  const isKnownAlgorithmId =
+    algorithmId != null && availableAlgorithms.some((algorithm) => algorithm.id === algorithmId);
+  const canQueryAnalytics =
+    tournamentId != null && algorithmId != null && (!isSuccessAlgorithm || isKnownAlgorithmId);
+  const canRecalculateAnalytics = canShowAnalyticsAdminToolbar(hasPermission("analytics.update"));
 
   const {
     data: analytics,
@@ -115,69 +75,42 @@ const AnalyticsPage = () => {
     isError: isErrorAnalytics
   } = useQuery({
     queryKey: ["analytics", currentWorkspaceId ?? "global", tournamentId, algorithmId],
-    // @ts-ignore
-    queryFn: () => analyticsService.getAnalytics(tournamentId, algorithmId, currentWorkspaceId),
+    queryFn: () => analyticsService.getAnalytics(tournamentId!, algorithmId!, currentWorkspaceId),
     enabled: canQueryAnalytics
   });
 
-  const recalculateMutation = useMutation({
-    mutationFn: async (selectedAlgorithmIds?: number[]) => {
-      if (tournamentId == null) {
-        throw new Error("Select a tournament before recalculating analytics.");
-      }
-
-      return analyticsService.recalculateAnalytics(
-        tournamentId,
-        selectedAlgorithmIds,
-        currentWorkspaceId,
-      );
-    },
-    onSuccess: async (result, selectedAlgorithmIds) => {
-      if (tournamentId == null) {
-        return;
-      }
-
-      await Promise.all(
-        getAnalyticsRefreshKeys(currentWorkspaceId, tournamentId, algorithmId).map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey })
-        )
-      );
-
-      toast({
-        title: selectedAlgorithmIds?.length
-          ? "Selected analytics recalculated"
-          : "All analytics recalculated",
-        description: result.algorithms.length
-          ? result.algorithms.join(", ")
-          : "Requested algorithms were dispatched."
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
+  const {
+    data: performanceRows
+  } = useQuery({
+    queryKey: ["analytics", "performance-v2", tournamentId],
+    queryFn: () => analyticsService.getPerformanceV2(tournamentId!),
+    enabled: tournamentId != null
   });
+
+  const performanceByPlayer = useMemo(
+    () =>
+      new Map(
+        (performanceRows ?? []).map((row) => [row.player_id, row])
+      ),
+    [performanceRows]
+  );
 
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
-    return tournamentsData?.results?.find((t) => t.id === tournamentId) || null;
+    return tournamentsData?.results?.find((tournament) => tournament.id === tournamentId) ?? null;
   }, [tournamentId, tournamentsData?.results]);
 
   const activeAlgorithm = useMemo(() => {
     if (!algorithmId) return null;
-    return availableAlgorithms.find((a) => a.id === algorithmId) || null;
+    return availableAlgorithms.find((algorithm) => algorithm.id === algorithmId) ?? null;
   }, [algorithmId, availableAlgorithms]);
 
   useEffect(() => {
     const nextParams = new URLSearchParams(searchParams);
     let changed = false;
 
-    const tab = nextParams.get("tab");
-    if (tab && tab !== "overview" && tab !== "teams" && tab !== "ranks") {
-      nextParams.set("tab", "overview");
+    if (nextParams.get("tab")) {
+      nextParams.delete("tab");
       changed = true;
     }
 
@@ -187,7 +120,11 @@ const AnalyticsPage = () => {
     }
 
     const preferredAlgorithmId = getPreferredAnalyticsAlgorithmId(availableAlgorithms);
-    if (algorithmId == null && isSuccessAlgorithm && preferredAlgorithmId != null) {
+    if (
+      isSuccessAlgorithm &&
+      preferredAlgorithmId != null &&
+      (algorithmId == null || !isKnownAlgorithmId)
+    ) {
       nextParams.set("algorithm", String(preferredAlgorithmId));
       changed = true;
     }
@@ -204,500 +141,120 @@ const AnalyticsPage = () => {
     isSuccessAlgorithm,
     availableAlgorithms,
     tournamentId,
-    algorithmId
+    algorithmId,
+    isKnownAlgorithmId
   ]);
 
-  const navToTab = useCallback(
-    (tab: string) => {
-      const newSearchParams = new URLSearchParams(searchParams || undefined);
-      newSearchParams.set("tab", tab);
-      router.push(`${pathname}?${newSearchParams.toString()}`);
-    },
-    [router, searchParams, pathname]
-  );
-
   const pushTournamentId = (newTournamentId: string) => {
-    previousElementRef.current?.classList.remove(
-      "ring-2",
-      "ring-ring",
-      "ring-offset-2",
-      "ring-offset-background"
-    );
-    previousElementRef.current = null;
-    setSelectedTeamState({
-      tournamentId: null,
-      name: ""
-    });
-
     const newSearchParams = new URLSearchParams(searchParams || undefined);
-    newSearchParams.set("tournamentId", String(newTournamentId));
+    newSearchParams.set("tournamentId", newTournamentId);
     router.push(`${pathname}?${newSearchParams.toString()}`);
   };
 
   const pushAlgorithm = (newAlgorithm: string) => {
     const newSearchParams = new URLSearchParams(searchParams || undefined);
-    newSearchParams.set("algorithm", String(newAlgorithm));
+    newSearchParams.set("algorithm", newAlgorithm);
     router.push(`${pathname}?${newSearchParams.toString()}`);
   };
 
-  const scrollToTeam = (team: Team) => {
-    setSelectedTeamState({
-      tournamentId,
-      name: team.name
-    });
-    setTimeout(() => {
-      const element = document.getElementById(team.id.toString());
-      previousElementRef.current?.classList.remove(
-        "ring-2",
-        "ring-ring",
-        "ring-offset-2",
-        "ring-offset-background"
-      );
-      previousElementRef.current = element;
-      if (element) {
-        const offset = 124;
-        const bodyRect = document.body.getBoundingClientRect().top;
-        const elementRect = element.getBoundingClientRect().top;
-        const elementPosition = elementRect - bodyRect;
-        const offsetPosition = elementPosition - offset;
-
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: "smooth"
-        });
-        element.classList.add("ring-2", "ring-ring", "ring-offset-2", "ring-offset-background");
-      }
-    }, 250);
-  };
-
   const isFiltersReady = !loadingTournaments && !loadingAlgorithms;
-  const isAnalyticsReady = canQueryAnalytics && !!analytics;
-  const isEmptyTeams = isAnalyticsReady && (analytics?.teams?.length || 0) === 0;
-  const isRecalculatePending = recalculateMutation.isPending;
-  const selectedTeam =
-    selectedTeamState.tournamentId === tournamentId ? selectedTeamState.name : "";
-
+  const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
   return (
-    <Tabs value={activeTab} onValueChange={navToTab} className="liquid-glass">
-      <div className="sticky top-14 z-40 -mx-4 md:-mx-6 xl:-mx-10 px-4 md:px-6 xl:px-10 pb-4">
-        <Card className="overflow-hidden">
-          <CardHeader className="space-y-4 p-4 pb-0">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <h1 className="text-2xl font-semibold leading-none tracking-tight">Analytics</h1>
-                <p className="text-sm text-muted-foreground hidden sm:block">
-                  Tournament overview, team standings, and division shift tables.
-                </p>
-              </div>
+    <div className={styles.surface}>
+      <AnalyticsHero
+        tournaments={tournamentsData?.results ?? []}
+        algorithms={availableAlgorithms}
+        tournamentId={tournamentId}
+        algorithmId={algorithmId}
+        activeTournament={activeTournament}
+        activeAlgorithm={activeAlgorithm}
+        summary={analytics?.summary}
+        loadingTournaments={loadingTournaments}
+        loadingAlgorithms={loadingAlgorithms}
+        isErrorTournaments={isErrorTournaments}
+        isErrorAlgorithms={isErrorAlgorithms}
+        adminControls={
+          canRecalculateAnalytics && tournamentId != null ? (
+            <MLAdminToolbar tournamentId={tournamentId} workspaceId={currentWorkspaceId} />
+          ) : null
+        }
+        onTournamentChange={pushTournamentId}
+        onAlgorithmChange={pushAlgorithm}
+      />
 
-              {canRecalculateAnalytics ? (
-                <div className="flex w-full flex-col gap-3 rounded-xl border border-dashed border-border/70 bg-background/25 p-4 xl:ml-6 xl:flex-1 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="space-y-2 xl:min-w-0 xl:flex-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      {isRecalculatePending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCcw className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span>Admin actions</span>
-                    </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      Trigger refresh jobs for the active tournament without leaving analytics.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 xl:flex-none">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-10 flex-1 justify-between liquid-glass-panel xl:min-w-52"
-                      onClick={() => recalculateMutation.mutate([algorithmId!])}
-                      disabled={!canQueryAnalytics || isRecalculatePending}
-                    >
-                      <span>Recalculate selected</span>
-                      {isRecalculatePending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RotateCcw className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-10 flex-1 justify-between xl:min-w-44"
-                      onClick={() => recalculateMutation.mutate(undefined)}
-                      disabled={tournamentId == null || isRecalculatePending}
-                    >
-                      <span>Recalculate all</span>
-                      {isRecalculatePending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCcw className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+      {!isFiltersReady ? (
+        <AnalyticsContentSkeleton />
+      ) : tournamentId == null || algorithmId == null ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Choose parameters</CardTitle>
+            <CardDescription>Select a tournament and an algorithm to view analytics.</CardDescription>
           </CardHeader>
-
-          <CardContent className="p-4 pt-4">
-            <div className="space-y-4 border-t border-border/50 pt-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    View
-                  </div>
-                  <TabsList className="grid h-10 w-full grid-cols-3 md:w-[340px]">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="teams">Teams</TabsTrigger>
-                    <TabsTrigger value="ranks">Divisions</TabsTrigger>
-                  </TabsList>
-                </div>
-
-                <div className="text-xs text-muted-foreground/80 lg:max-w-[24rem] lg:text-right">
-                  Switch tournament context, choose the ranking algorithm, and jump directly to a
-                  team card when reviewing the overview.
-                </div>
-              </div>
-
-              <div
-                className={cn(
-                  "grid gap-3 md:grid-cols-2",
-                  activeTab === "overview" && "2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_1.2fr]"
-                )}
-              >
-                <div className="space-y-1.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    Tournament
-                  </div>
-                  <Select
-                    value={tournamentId?.toString()}
-                    onValueChange={(value) => pushTournamentId(value)}
-                    disabled={loadingTournaments || isErrorTournaments}
-                  >
-                    <SelectTrigger
-                      aria-label="Tournament"
-                      className="h-11 w-full cursor-pointer liquid-glass-panel"
-                    >
-                      <SelectValue
-                        placeholder={
-                          loadingTournaments
-                            ? "Loading tournaments..."
-                            : isErrorTournaments
-                              ? "Failed to load tournaments"
-                              : "Select a tournament"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="liquid-glass-panel max-h-[min(var(--radix-select-content-available-height),20rem)]">
-                      <SelectGroup>
-                        {tournamentsData?.results.map((item) => (
-                          <SelectItem key={item.id} value={item.id.toString()}>
-                            {item.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    Algorithm
-                  </div>
-                  <Select
-                    value={algorithmId?.toString()}
-                    onValueChange={(value) => pushAlgorithm(value)}
-                    disabled={loadingAlgorithms || isErrorAlgorithms}
-                  >
-                    <SelectTrigger
-                      aria-label="Algorithm"
-                      className="h-11 w-full cursor-pointer liquid-glass-panel"
-                    >
-                      <SelectValue
-                        placeholder={
-                          loadingAlgorithms
-                            ? "Loading algorithms..."
-                            : isErrorAlgorithms
-                              ? "Failed to load algorithms"
-                              : "Select an algorithm"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="liquid-glass-panel">
-                      <SelectGroup>
-                        {availableAlgorithms.map((item) => (
-                          <SelectItem key={item.id} value={item.id.toString()}>
-                            {item.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {activeTab === "overview" ? (
-                  <div className="space-y-1.5 md:col-span-2 2xl:col-span-1">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                      Jump to team
-                    </div>
-                    {!canQueryAnalytics || loadingAnalytics ? (
-                      <Skeleton className="h-11 w-full" />
-                    ) : (
-                      <TeamComboBox
-                        teams={analytics?.teams || []}
-                        onSelect={scrollToTeam}
-                        selectedTeam={selectedTeam}
-                        variant="glass"
-                      />
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </CardContent>
         </Card>
-      </div>
-
-      <TabsContent value="overview" className="mt-0 pt-6 flex flex-col w-full">
-        {!isFiltersReady ? (
-          <div className="grid gap-4 md:gap-8 md:grid-cols-2 xl:grid-cols-3">
-            <Skeleton className="h-105 w-full rounded-xl" />
-            <Skeleton className="h-105 w-full rounded-xl" />
-            <Skeleton className="h-105 w-full rounded-xl" />
+      ) : isErrorAnalytics ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Analytics unavailable</CardTitle>
+            <CardDescription>Failed to load analytics for the selected parameters.</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : loadingAnalytics || !analytics ? (
+        <AnalyticsContentSkeleton />
+      ) : isEmptyTeams ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No teams</CardTitle>
+            <CardDescription>No teams found for the selected tournament.</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <>
+          <AnalyticsKpiStrip summary={analytics.summary} teams={analytics.teams} />
+          <AnalyticsStandings teams={analytics.teams} performanceByPlayer={performanceByPlayer} />
+          <div className={styles.split}>
+            <AnalyticsHorizon teams={analytics.teams} />
+            <AnalyticsInsights teams={analytics.teams} />
           </div>
-        ) : tournamentId == null || algorithmId == null ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Choose parameters</CardTitle>
-              <CardDescription>Select a tournament and an algorithm to view analytics.</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : isErrorAnalytics ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics unavailable</CardTitle>
-              <CardDescription>Failed to load analytics for the selected parameters.</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : isEmptyTeams ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No teams</CardTitle>
-              <CardDescription>No teams found for the selected tournament.</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : (
-          <TeamAnalyticsTable teams={analytics?.teams || []} isLoading={loadingAnalytics} />
-        )}
-      </TabsContent>
-
-      <TabsContent value="teams" className="mt-0 pt-6 grid gap-4 md:gap-8 xs:grid-cols-1 lg:grid-cols-2">
-        {!isFiltersReady || !canQueryAnalytics || loadingAnalytics ? (
-          <>
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-56" />
-                <Skeleton className="h-4 w-72" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-[92%]" />
-                <Skeleton className="h-8 w-[96%]" />
-                <Skeleton className="h-8 w-[90%]" />
-                <Skeleton className="h-8 w-[95%]" />
-                <Skeleton className="h-8 w-[88%]" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-60" />
-                <Skeleton className="h-4 w-72" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-[92%]" />
-                <Skeleton className="h-8 w-[96%]" />
-                <Skeleton className="h-8 w-[90%]" />
-                <Skeleton className="h-8 w-[95%]" />
-                <Skeleton className="h-8 w-[88%]" />
-              </CardContent>
-            </Card>
-          </>
-        ) : isErrorAnalytics ? (
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Analytics unavailable</CardTitle>
-              <CardDescription>Failed to load analytics for the selected parameters.</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle>Actual standings</CardTitle>
-                <CardDescription>Placement, wins, and group for each team.</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Place</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead className="text-center">Wins</TableHead>
-                        <TableHead className="text-center">Group</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {analytics?.teams.map((team) => {
-                        let color = "text-group-a";
-
-                        if (team.group?.name == "B") color = "text-group-b";
-                        if (team.group?.name == "C") color = "text-group-c";
-                        if (team.group?.name == "D") color = "text-group-d";
-
-                        return (
-                          <TableRow key={team.id} className={color}>
-                            <TableCell className="text-center tabular-nums">
-                              {team.placement}
-                            </TableCell>
-                            <TableCell className="min-w-0">
-                              <span className="block truncate" title={team.name}>
-                                {team.name}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-center tabular-nums">
-                              {analytics?.teams_wins[team.id]}
-                            </TableCell>
-                            <TableCell className="text-center tabular-nums">
-                              {team.group?.name}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Predicted vs actual</CardTitle>
-                <CardDescription>
-                  Sorted by total shift. Large mismatches are highlighted.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-center">Predicted</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead className="text-center">Balancer</TableHead>
-                        <TableHead className="text-center">Anak</TableHead>
-                        <TableHead className="text-center">Total</TableHead>
-                        <TableHead className="text-center">Actual</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {analytics?.teams
-                        .slice()
-                        .sort(
-                          (a, b) =>
-                            a.total_shift - b.total_shift || a.name.localeCompare(b.name)
-                        )
-                        .map((team, index) => {
-                          let rowClassName = "";
-                          // @ts-ignore
-                          if (Math.abs(team.placement - (index + 1)) > 10) {
-                            rowClassName = "bg-destructive/15 hover:bg-destructive/20";
-                          }
-
-                          return (
-                            <TableRow key={team.id} className={rowClassName}>
-                              <TableCell className="text-center tabular-nums">
-                                {index + 1}
-                              </TableCell>
-                              <TableCell className="min-w-0">
-                                <span className="block truncate" title={team.name}>
-                                  {team.name}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-center tabular-nums">
-                                {team.balancer_shift}
-                              </TableCell>
-                              <TableCell className="text-center tabular-nums">
-                                {team.manual_shift}
-                              </TableCell>
-                              <TableCell className="text-center tabular-nums">
-                                {team.total_shift}
-                              </TableCell>
-                              <TableCell className="text-center tabular-nums">
-                                {team.placement}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                    </TableBody>
-                  </Table>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </TabsContent>
-
-      <TabsContent value={"ranks"} className="mt-0 pt-6">
-        <RanksPage />
-      </TabsContent>
-    </Tabs>
-  );
-};
-
-const AnalyticsPageFallback = () => {
-  return (
-    <div className="flex flex-col gap-4 md:gap-8">
-      <div className="liquid-glass">
-        <Card className="overflow-hidden">
-          <CardHeader className="space-y-4 p-4 pb-0">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="flex flex-col gap-2">
-                <Skeleton className="h-8 w-44" />
-                <Skeleton className="hidden sm:block h-4 w-80" />
-              </div>
-              <Skeleton className="h-36 w-full rounded-xl sm:max-w-[22rem] xl:w-[22rem]" />
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-4 pt-4">
-            <div className="space-y-4 border-t border-border/50 pt-4">
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-12" />
-                <Skeleton className="h-10 w-full max-w-[340px]" />
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_1.2fr]">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full md:col-span-2 2xl:col-span-1" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:gap-8 md:grid-cols-2 xl:grid-cols-3">
-        <Skeleton className="h-[420px] w-full rounded-xl" />
-        <Skeleton className="h-[420px] w-full rounded-xl" />
-        <Skeleton className="h-[420px] w-full rounded-xl" />
-      </div>
+        </>
+      )}
     </div>
   );
 };
+
+const AnalyticsContentSkeleton = () => (
+  <>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <Skeleton key={index} className="h-28 rounded-lg" />
+      ))}
+    </div>
+    <Skeleton className="h-[520px] rounded-lg" />
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+      <Skeleton className="h-[360px] rounded-lg" />
+      <Skeleton className="h-[360px] rounded-lg" />
+    </div>
+  </>
+);
+
+const AnalyticsPageFallback = () => (
+  <div className={styles.surface}>
+    <Card className="overflow-hidden">
+      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-52" />
+          <Skeleton className="h-12 w-full max-w-2xl" />
+          <Skeleton className="h-5 w-full max-w-xl" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
+          <Skeleton className="h-11 sm:col-span-2" />
+        </div>
+      </div>
+    </Card>
+    <AnalyticsContentSkeleton />
+  </div>
+);
 
 const AnalyticsPageWrapper = () => (
   <Suspense fallback={<AnalyticsPageFallback />}>

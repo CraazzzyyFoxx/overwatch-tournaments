@@ -6,7 +6,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type ServiceName = "app" | "parser" | "balancer" | "tournament" | "auth";
+type ServiceName = "app" | "parser" | "balancer" | "tournament" | "auth" | "analytics";
 
 interface ApiFetchOptions {
   query?: Record<string, unknown>;
@@ -76,6 +76,12 @@ const SERVICE_CONFIG: Record<ServiceName, ServiceConfig> = {
     clientBase: (process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:8001").replace(/\/$/, ""),
     serverBase: (process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:8001").replace(/\/$/, ""),
     injectWorkspace: false,
+    defaultCache: "no-store",
+  },
+  analytics: {
+    clientBase: "/api/analytics",
+    serverBase: process.env.NEXT_ANALYTICS_URL ?? process.env.NEXT_PUBLIC_ANALYTICS_API_URL,
+    injectWorkspace: true,
     defaultCache: "no-store",
   },
 };

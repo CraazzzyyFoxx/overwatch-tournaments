@@ -130,7 +130,16 @@ export default class userService {
         per_page: perPage,
         sort: sort,
         order: order,
-        entities: ["tournament", "stage", "stage_item", "matches.map"]
+        entities: [
+          "tournament",
+          "stage",
+          "stage_item",
+          "home_team",
+          "home_team.players",
+          "away_team",
+          "away_team.players",
+          "matches.map"
+        ]
       }
     }).then((res) => res.json());
   }

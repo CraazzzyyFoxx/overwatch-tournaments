@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import sqlalchemy as sa
-from fastapi import Depends, HTTPException, WebSocket, status
+from fastapi import Depends, HTTPException, Request, WebSocket, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from shared.core.auth import create_auth_dependencies
 from shared.models.auth_user import AuthUser
 from sqlalchemy import select
@@ -49,6 +50,48 @@ require_role = _auth.require_role
 require_any_role = _auth.require_any_role
 require_workspace_member = _auth.require_workspace_member
 require_workspace_admin = _auth.require_workspace_admin
+
+_optional_security = HTTPBearer(auto_error=False)
+
+
+async def get_current_user_optional(
+    request: Request,
+    token: Annotated[HTTPAuthorizationCredentials | None, Depends(_optional_security)],
+    session: Annotated[AsyncSession, Depends(db.get_async_session)],
+) -> AuthUser | None:
+    raw_token: str | None = None
+    if token is not None:
+        raw_token = token.credentials
+    if not raw_token:
+        raw_token = request.query_params.get("token")
+    if not raw_token:
+        raw_token = request.cookies.get("aqt_access_token")
+    if not raw_token:
+        return None
+
+    raw_token = raw_token.removeprefix("Bearer ").strip()
+    if not raw_token:
+        return None
+
+    auth_client = getattr(request.app.state, "auth_client", None)
+    if auth_client is None:
+        return None
+
+    try:
+        payload = await auth_client.validate_token(raw_token)
+    except Exception:
+        return None
+    if not payload:
+        return None
+
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
+    if user_id <= 0:
+        return None
+
+    return await _resolve_user_from_db(user_id, payload, session=session)
 
 
 async def _require_workspace_permission(

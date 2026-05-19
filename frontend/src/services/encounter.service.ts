@@ -1,4 +1,10 @@
-import { Encounter, MatchWithStats } from "@/types/encounter.types";
+import {
+  Encounter,
+  EncounterFilters,
+  EncounterOverview,
+  EncounterSavedView,
+  MatchWithStats
+} from "@/types/encounter.types";
 import { PaginatedResponse } from "@/types/pagination.types";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -45,8 +51,10 @@ export default class encounterService {
     perPage: number = 15,
     sort: string | null = null,
     order: "asc" | "desc" = "desc",
-    workspaceId?: number | null
+    workspaceId?: number | null,
+    filters: EncounterFilters & { entities?: string[] } = {}
   ): Promise<PaginatedResponse<Encounter>> {
+    const { entities, ...restFilters } = filters;
     return apiFetch("tournament", `encounters`, {
       query: {
         workspace_id: workspaceId,
@@ -55,11 +63,65 @@ export default class encounterService {
         query: query,
         sort: sort ?? "id",
         order: order,
-        entities: ["tournament", "stage", "stage_item", "home_team", "away_team"],
+        entities: entities ?? ["tournament", "stage", "stage_item", "home_team", "away_team"],
         fields: ["name"],
-        tournament_id: tournamentId
+        tournament_id: tournamentId,
+        ...restFilters
       }
     }).then((res) => res.json());
+  }
+
+  static async getOverview(
+    query: string,
+    filters: EncounterFilters = {},
+    workspaceId?: number | null
+  ): Promise<EncounterOverview> {
+    return apiFetch("tournament", `encounters/overview`, {
+      query: {
+        workspace_id: workspaceId,
+        per_page: -1,
+        page: 1,
+        query,
+        fields: ["name"],
+        sort: filters.sort ?? "id",
+        order: "desc",
+        ...filters
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getSavedViews(workspaceId?: number | null): Promise<EncounterSavedView[]> {
+    return apiFetch("tournament", `encounters/views`, {
+      query: {
+        workspace_id: workspaceId
+      }
+    }).then((res) => res.json());
+  }
+
+  static async saveView(
+    name: string,
+    filters: EncounterFilters & { query?: string },
+    workspaceId?: number | null
+  ): Promise<EncounterSavedView> {
+    return apiFetch("tournament", `encounters/views`, {
+      method: "POST",
+      query: {
+        workspace_id: workspaceId
+      },
+      body: {
+        name,
+        filters
+      }
+    }).then((res) => res.json());
+  }
+
+  static async deleteView(id: number, workspaceId?: number | null): Promise<void> {
+    await apiFetch("tournament", `encounters/views/${id}`, {
+      method: "DELETE",
+      query: {
+        workspace_id: workspaceId
+      }
+    });
   }
 
   static async getCount(

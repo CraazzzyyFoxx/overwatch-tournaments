@@ -224,6 +224,59 @@ SWISS_NEXT_ROUND_DLQ = RabbitQueue(
 )
 
 # ============================================================================
+# Analytics v2 ML Queues
+# ============================================================================
+
+ANALYTICS_JOB_QUEUE = RabbitQueue(
+    "analytics_job",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "analytics_job.dlq",
+        # Compute + training can both fit comfortably in 1 hour.
+        "x-message-ttl": 3600000,
+    },
+)
+
+ANALYTICS_JOB_DLQ = RabbitQueue(
+    "analytics_job.dlq",
+    durable=True,
+)
+
+
+ANALYTICS_TRAIN_QUEUE = RabbitQueue(
+    "analytics_train",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "analytics_train.dlq",
+        # Training can take many minutes; bump TTL accordingly.
+        "x-message-ttl": 3600000,  # 1 hour
+    },
+)
+
+ANALYTICS_TRAIN_DLQ = RabbitQueue(
+    "analytics_train.dlq",
+    durable=True,
+)
+
+ANALYTICS_INFER_QUEUE = RabbitQueue(
+    "analytics_infer",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "analytics_infer.dlq",
+        "x-message-ttl": 1800000,  # 30 min
+    },
+)
+
+ANALYTICS_INFER_DLQ = RabbitQueue(
+    "analytics_infer.dlq",
+    durable=True,
+)
+
+
+# ============================================================================
 # Achievement Evaluate Queue
 # ============================================================================
 

@@ -13,5 +13,4 @@ from .standing import *
 from .statistics import *
 from .achievement import *
 from .user import *
-from .analytics import *
 from .workspace import *

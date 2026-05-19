@@ -11,6 +11,7 @@ from .team import *
 from .encounter import *
 from .encounter_link import *
 from .encounter_map import *
+from .encounter_saved_view import *
 from .match import *
 from .standings import *
 from .achievement import *

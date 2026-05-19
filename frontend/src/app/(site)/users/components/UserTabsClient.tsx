@@ -3,14 +3,15 @@
 import React, { useEffect, useState, useTransition } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import UserProfileTabList from "@/app/(site)/users/components/UserProfileTabList";
+import UserProfileTabList, { type TabBadges } from "@/app/(site)/users/components/UserProfileTabList";
 
 export interface UserTabsClientProps {
   activeTab: string;
   children: React.ReactNode;
+  badges?: TabBadges;
 }
 
-const UserTabsClient = ({ activeTab, children }: UserTabsClientProps) => {
+const UserTabsClient = ({ activeTab, children, badges }: UserTabsClientProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,7 +36,7 @@ const UserTabsClient = ({ activeTab, children }: UserTabsClientProps) => {
   return (
     <Tabs value={value} onValueChange={onValueChange}>
       <div className="sticky top-14 z-40 -mx-10 px-10 pt-4 pb-4 bg-background">
-        <UserProfileTabList />
+        <UserProfileTabList badges={badges} />
       </div>
       <div className="pt-6">{children}</div>
     </Tabs>

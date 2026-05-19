@@ -35,7 +35,7 @@ export const getPlayerType = (player: PlayerRoleInfo) => {
   return "ㅤ";
 };
 
-export const sortTeamPlayers = (players: Player[]) => {
+export const sortTeamPlayers = <P extends Player>(players: P[]): P[] => {
   const getRolePriority = (role: string) => {
     if (role === "Tank") return 1;
     if (role === "Damage") return 2;
@@ -46,8 +46,8 @@ export const sortTeamPlayers = (players: Player[]) => {
   const playerById = new Map(players.map((p) => [p.id, p]));
 
   // Build substitution graph: parent -> children (who replaced them)
-  const children = new Map<number, Player[]>();
-  const roots: Player[] = [];
+  const children = new Map<number, P[]>();
+  const roots: P[] = [];
 
   for (const player of players) {
     const relatedPlayerId = player.related_player_id ?? player.relative_player ?? null;
@@ -66,7 +66,7 @@ export const sortTeamPlayers = (players: Player[]) => {
   }
 
   // DFS: flatten each substitution chain (player, then their replacements)
-  const flatten = (player: Player): Player[] => {
+  const flatten = (player: P): P[] => {
     const result = [player];
     const subs = children.get(player.id);
     if (subs) {

@@ -12,15 +12,14 @@ describe("analytics helpers", () => {
     expect(canShowAnalyticsAdminToolbar(false)).toBe(false);
   });
 
-  it("prefers Linear Stable as the default analytics algorithm", () => {
+  it("prefers Linear as the default analytics algorithm", () => {
     expect(
       getPreferredAnalyticsAlgorithmId([
         { id: 1, name: "Points" },
-        { id: 2, name: "Open Skill" },
-        { id: 3, name: "Linear Hybrid" },
-        { id: 4, name: "Linear Stable" },
+        { id: 2, name: "OpenSkill + ML" },
+        { id: 3, name: "Linear" },
       ]),
-    ).toBe(4);
+    ).toBe(3);
   });
 
   it("returns the analytics queries that must be invalidated after recalculate", () => {

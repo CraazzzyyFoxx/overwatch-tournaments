@@ -1,11 +1,9 @@
 import { AlgorithmAnalytics, PlayerAnalytics } from "@/types/analytics.types";
 
 const RECOMMENDED_ALGORITHM_ORDER = [
-  "Linear Stable",
-  "Linear Trend",
-  "Linear Hybrid",
+  "Linear",
   "Points",
-  "Open Skill",
+  "OpenSkill + ML",
 ] as const;
 
 const algorithmPriority = new Map<string, number>(

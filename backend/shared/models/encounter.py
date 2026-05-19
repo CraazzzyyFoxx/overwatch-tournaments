@@ -46,6 +46,10 @@ class Encounter(db.TimeStampIntegerMixin):
     round: Mapped[int] = mapped_column(Integer(), index=True)
     closeness: Mapped[float | None] = mapped_column(Float(), nullable=True)
     best_of: Mapped[int] = mapped_column(Integer(), default=3, server_default="3")
+    scheduled_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    current_map_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), index=True

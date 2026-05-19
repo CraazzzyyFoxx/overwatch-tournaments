@@ -41,6 +41,24 @@ services:
         strip_path: false
         preserve_host: true
 
+  - name: analytics
+    url: http://analytics:8006
+    routes:
+      - name: analytics-api
+        paths:
+          - /api/analytics
+        strip_path: false
+        preserve_host: true
+
+  - name: realtime
+    url: http://realtime:8005
+    routes:
+      - name: realtime-api
+        paths:
+          - /api/realtime
+        strip_path: true
+        preserve_host: true
+
   - name: backend
     url: http://backend:8000
     routes:

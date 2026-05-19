@@ -1,156 +1,270 @@
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { User, UserProfile } from "@/types/user.types";
 import { getPlayerImage } from "@/utils/player";
-import { cn } from "@/lib/utils";
-import UserBattleTags from "@/app/(site)/users/components/UserBattleTags";
-import UserHeaderAura from "@/app/(site)/users/components/UserHeaderAura";
+import DivisionIcon from "@/components/DivisionIcon";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { FormStreak, type FormResult } from "@/app/(site)/users/components/redesign/atoms";
+import userService from "@/services/user.service";
 
 export interface UserHeaderProps {
   profile: UserProfile;
   user: User;
 }
 
-const StatPill = ({ label, value }: { label: string; value: string }) => {
-  return (
-    <div className="rounded-xl border bg-background/20 px-3 py-2 sm:min-w-[160px]">
-      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
-      <div className="text-xl font-bold leading-tight tabular-nums">{value}</div>
-    </div>
-  );
-};
-
-const TagChip = ({ children, className }: { children: React.ReactNode; className?: string }) => {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border bg-background/15 px-3 py-2 text-sm font-semibold text-muted-foreground",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-};
-
-const formatNullableStat = (value: number | null, digits = 1, suffix = "") => {
-  if (value === null || !Number.isFinite(value)) {
+const formatPlace = (value: number | null | undefined) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return "-";
   }
-
-  return `${value.toFixed(digits)}${suffix}`;
+  return value.toFixed(1);
 };
 
-const UserHeader = ({ profile, user }: UserHeaderProps) => {
-  const nameData = user.name.split("#");
-  const name = nameData[0];
-  const tag = nameData[1];
+const deriveFormStreak = async (userId: number): Promise<FormResult[]> => {
+  try {
+    const encounters = await userService.getUserEncounters(userId, 1, 10, "id", "desc");
+    return encounters.results.slice(0, 10).map((enc): FormResult => {
+      const homePlayers = enc.home_team?.players ?? [];
+      const isUserHome = homePlayers.some((p) => p.user_id === userId);
+      const userScore = isUserHome ? enc.score.home : enc.score.away;
+      const oppScore = isUserHome ? enc.score.away : enc.score.home;
+      if (userScore > oppScore) return "W";
+      if (userScore < oppScore) return "L";
+      return "D";
+    });
+  } catch {
+    return [];
+  }
+};
 
-  const battle_tags: string[] = user.battle_tag.map((battleTag) => battleTag.battle_tag);
+const primaryRoleOf = (profile: UserProfile) => {
+  if (!profile.roles.length) return null;
+  return profile.roles.reduce((best, current) => (current.tournaments > best.tournaments ? current : best));
+};
 
-  const primaryRole = profile.roles.length
-    ? profile.roles.reduce((best, current) => (current.tournaments > best.tournaments ? current : best))
-    : null;
-  const primaryRoleDivisionRaw = primaryRole?.division ?? 1;
-  const primaryRoleDivision = Math.min(20, Math.max(1, primaryRoleDivisionRaw));
+const auraLabel = (profile: UserProfile): string | null => {
+  const role = primaryRoleOf(profile);
+  if (!role) return null;
+  const division = role.division;
+  if (division >= 16) return `${role.role} · Div ${division} · Anchor`;
+  if (division >= 11) return `Top ${role.role} · Div ${division}`;
+  if (division >= 6) return `${role.role} core · Div ${division}`;
+  return `Rising ${role.role} · Div ${division}`;
+};
+
+const UserHeader = async ({ profile, user }: UserHeaderProps) => {
+  const [name, tag] = user.name.split("#");
+  const primaryRole = primaryRoleOf(profile);
   const avatarSrc = getPlayerImage(profile, user);
 
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
+  const formStreak = await deriveFormStreak(user.id);
+  const aura = auraLabel(profile);
+  const mapWinPct = profile.maps_total > 0 ? ((profile.maps_won / profile.maps_total) * 100).toFixed(2) : null;
+  const roleSwatchColor =
+    primaryRole?.role === "Tank"
+      ? "var(--aqt-tank)"
+      : primaryRole?.role === "Support"
+        ? "var(--aqt-support)"
+        : "var(--aqt-damage)";
 
   return (
-    <section className="liquid-glass-panel relative overflow-hidden rounded-2xl border p-4 md:p-6">
-      <UserHeaderAura
-        avatarSrc={avatarSrc}
-        division={primaryRoleDivision}
-        divisionGridVersion={primaryRole?.division_grid_version ?? null}
+    <section className="aqt-player relative overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E\")",
+          backgroundSize: "80px 92.4px"
+        }}
       />
-      <div className="pointer-events-none absolute inset-0">
-        <div
-          className="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl"
-          style={{ backgroundColor: "rgb(var(--lg-a) / 0.18)" }}
-        />
-        <div
-          className="absolute -top-28 right-0 h-80 w-80 rounded-full blur-3xl"
-          style={{ backgroundColor: "rgb(var(--lg-b) / 0.14)" }}
-        />
-        <div
-          className="absolute -bottom-24 left-1/3 h-80 w-80 rounded-full blur-3xl"
-          style={{ backgroundColor: "rgb(var(--lg-c) / 0.12)" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background/35" />
-      </div>
+      <div
+        className="pointer-events-none absolute -left-[5%] -top-[20%] h-[140%] w-[60%]"
+        style={{ background: "radial-gradient(ellipse at 30% 50%, hsl(340 78% 60% / 0.15), transparent 62%)" }}
+      />
+      <div
+        className="pointer-events-none absolute -right-[5%] -top-[25%] h-[120%] w-[55%]"
+        style={{ background: "radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 58%)" }}
+      />
 
-      <div className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div className="flex flex-1 items-center gap-4 min-w-0">
-          <div className="relative">
-            <div
-              className="absolute -inset-1 rounded-2xl blur"
-              style={{
-                backgroundImage:
-                  "linear-gradient(135deg, rgb(var(--lg-a) / 0.35), rgb(var(--lg-b) / 0.25), rgb(var(--lg-c) / 0.30))"
-              }}
-            />
-            <Image
-              className="relative rounded-2xl aspect-square ring-1 ring-white/10"
-              src={avatarSrc}
-              width={96}
-              height={96}
-              alt={`${name} avatar`}
-            />
+      <p className="relative z-[1] px-9 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+        <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Roster</Link>
+        <span className="mx-1">·</span>
+        <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
+        <span className="mx-1">·</span>
+        <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
+      </p>
+
+      <div className="relative z-[1] grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">
+        <div className="relative h-[110px] w-[110px] flex-shrink-0">
+          <div
+            className="absolute -inset-1 rounded-[22px] opacity-60 blur-2xl"
+            style={{
+              background:
+                "linear-gradient(135deg,var(--aqt-damage),var(--aqt-amber),var(--aqt-teal))"
+            }}
+          />
+          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:hsl(30_40%_22%)]">
+            <Image src={avatarSrc} alt={`${name} avatar`} fill sizes="110px" className="object-cover" priority />
           </div>
-
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h1 className="scroll-m-20 text-2xl font-semibold tracking-tight">{name}</h1>
-              {tag ? (
-                <span className="text-lg font-semibold tracking-tight text-muted-foreground">#{tag}</span>
-              ) : null}
+          {primaryRole ? (
+            <div
+              className="absolute -bottom-2 -right-2 flex items-center justify-center rounded-md"
+              style={{
+                background: "var(--aqt-card)",
+                padding: 3,
+                boxShadow: "0 0 0 1px var(--aqt-border-2)"
+              }}
+              title={`${primaryRole.role} · Div ${primaryRole.division}`}
+            >
+              <DivisionIcon
+                division={primaryRole.division}
+                tournamentGrid={primaryRole.division_grid_version}
+                width={46}
+                height={46}
+              />
             </div>
+          ) : null}
+        </div>
 
-            {battle_tags.length > 0 ? (
-              <UserBattleTags tags={battle_tags} />
+        <div className="flex min-w-0 flex-col gap-2">
+          <h1 className="m-0 flex flex-wrap items-baseline gap-2.5 text-[clamp(28px,4vw,48px)] aqt-display font-bold uppercase tracking-[0.02em] leading-none">
+            <span>{name}</span>
+            {tag ? <span className="text-[22px] font-medium tracking-[0.04em] text-[color:var(--aqt-fg-faint)]">#{tag}</span> : null}
+            {user.battle_tag.length > 0 ? (
+              <span className="text-[18px] text-[color:var(--aqt-teal)]" title="Verified roster">
+                ✓
+              </span>
             ) : null}
-
-            {(user.twitch.length > 0 || user.discord.length > 0 || user.battle_tag.length > 0) && (
-              <div className="mt-3 flex flex-wrap gap-2 max-w-full">
-                {user.twitch.length > 0 ? (
-                  <TagChip className="text-foreground">
-                    <Image src={"/twitch.png"} width={18} height={18} alt="Twitch" />
-                    <span className="max-w-[260px] truncate" title={user.twitch[0].name}>
-                      {user.twitch[0].name}
-                    </span>
-                  </TagChip>
-                ) : null}
-                {user.discord.length > 0 ? (
-                  <TagChip className="text-foreground">
-                    <Image src={"/discord.png"} width={18} height={18} alt="Discord" />
-                    <span className="max-w-[260px] truncate" title={user.discord[0].name}>
-                      {user.discord[0].name}
-                    </span>
-                  </TagChip>
-                ) : null}
-                {user.battle_tag.length > 0 ? (
-                  <TagChip className="text-foreground">
-                    <Image src={"/battlenet.svg"} width={18} height={18} alt="Battle.net" />
-                    <span className="max-w-[260px] truncate" title={user.battle_tag[0].battle_tag}>
-                      {user.battle_tag[0].battle_tag}
-                    </span>
-                  </TagChip>
-                ) : null}
-              </div>
-            )}
+          </h1>
+          {primaryRole ? (
+            <div className="aqt-mono flex flex-wrap items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-muted)]">
+              <span className="inline-flex h-4 w-4 items-center justify-center">
+                <PlayerRoleIcon role={primaryRole.role} size={14} color={roleSwatchColor} />
+              </span>
+              <span>{primaryRole.role}</span>
+              <span>· Div {primaryRole.division}</span>
+              <span>· {profile.tournaments_count} tournaments</span>
+              <span>· {profile.maps_total} maps</span>
+            </div>
+          ) : null}
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {user.battle_tag.map((bt) => (
+              <span
+                key={bt.id}
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                style={{
+                  background: "hsl(210 80% 60% / 0.06)",
+                  borderColor: "hsl(210 80% 60% / 0.25)",
+                  color: "var(--aqt-blue)"
+                }}
+              >
+                <Image src="/battlenet.svg" width={12} height={12} alt="Battle.net" />
+                {bt.battle_tag}
+              </span>
+            ))}
+            {user.twitch.map((tw) => (
+              <span
+                key={tw.id}
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                style={{
+                  background: "hsl(270 70% 62% / 0.06)",
+                  borderColor: "hsl(270 70% 62% / 0.25)",
+                  color: "var(--aqt-violet)"
+                }}
+              >
+                <Image src="/twitch.png" width={12} height={12} alt="Twitch" />
+                {tw.name}
+              </span>
+            ))}
+            {user.discord.map((dc) => (
+              <span
+                key={dc.id}
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                style={{
+                  background: "hsl(220 70% 60% / 0.06)",
+                  borderColor: "hsl(220 70% 60% / 0.25)",
+                  color: "hsl(220 70% 70%)"
+                }}
+              >
+                <Image src="/discord.png" width={12} height={12} alt="Discord" />
+                {dc.name}
+              </span>
+            ))}
           </div>
         </div>
 
-        <div className="grid w-full grid-cols-2 gap-2 md:w-auto md:self-start shrink-0">
-          <StatPill label="Tournaments" value={`${profile.tournaments_count}`} />
-          <StatPill label="Winrate" value={formatNullableStat(winrate, 1, "%")} />
-          <StatPill label="Maps" value={`${profile.maps_won}/${profile.maps_total}`} />
-          <StatPill label="Avg Place" value={formatNullableStat(profile.avg_placement)} />
+        <div className="grid w-full items-end gap-4 md:w-auto md:min-w-[460px] md:grid-cols-4">
+          <PfStat
+            label="Tournaments"
+            value={`${profile.tournaments_count}`}
+            sub={profile.tournaments_won > 0 ? `${profile.tournaments_won} won` : "—"}
+          />
+          <PfStat
+            label="Winrate"
+            value={winrate !== null ? `${winrate.toFixed(1)}` : "-"}
+            unit="%"
+          />
+          <PfStat
+            label="Maps"
+            value={`${profile.maps_won}`}
+            valueSuffix={`/${profile.maps_total}`}
+            sub={mapWinPct !== null ? `${mapWinPct}% win` : "—"}
+          />
+          <PfStat
+            label="Avg Place"
+            value={formatPlace(profile.avg_placement)}
+            sub={profile.avg_playoff_placement !== null ? `Playoffs ${formatPlace(profile.avg_playoff_placement)}` : null}
+          />
+
+          <div className="col-span-full mt-2 flex flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+              Form · last {formStreak.length}
+            </span>
+            {formStreak.length > 0 ? (
+              <FormStreak results={formStreak} />
+            ) : (
+              <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">No recent matches</span>
+            )}
+            {aura ? (
+              <span
+                className="ml-auto inline-flex items-center gap-2 rounded-lg px-2.5 py-1"
+                style={{
+                  background: "hsl(38 95% 55% / 0.08)",
+                  border: "1px solid hsl(38 95% 55% / 0.25)"
+                }}
+              >
+                <span className="aqt-mono text-[10px] font-bold tracking-[0.1em] text-[color:var(--aqt-amber)]">AURA</span>
+                <span className="text-xs font-semibold text-[color:var(--aqt-fg)]">{aura}</span>
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>
   );
 };
+
+interface PfStatProps {
+  label: string;
+  value: string;
+  unit?: string;
+  valueSuffix?: string;
+  sub?: string | null;
+}
+
+const PfStat = ({ label, value, unit, valueSuffix, sub }: PfStatProps) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
+    <span className="aqt-display aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
+      {value}
+      {unit ? <em className="ml-0.5 not-italic text-[color:var(--aqt-teal)]">{unit}</em> : null}
+      {valueSuffix ? (
+        <span className="text-[22px] text-[color:var(--aqt-fg-faint)]">{valueSuffix}</span>
+      ) : null}
+    </span>
+    {sub ? <span className="text-[11px] text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
+  </div>
+);
 
 export default UserHeader;

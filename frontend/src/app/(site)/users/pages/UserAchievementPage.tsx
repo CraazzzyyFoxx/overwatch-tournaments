@@ -1,10 +1,9 @@
 import React from "react";
 import { User } from "@/types/user.types";
 import userService from "@/services/user.service";
-import AchievementCard from "@/components/AchievementCard";
 import UserAchievementsFilter from "@/app/(site)/users/components/UserAchievementsFilter";
-import { Trophy } from "lucide-react";
 import { AchievementRarity } from "@/types/achievement.types";
+import AchievementsView from "@/app/(site)/users/components/redesign/AchievementsView";
 
 interface UserAchievementPageProps {
   user: User;
@@ -38,34 +37,19 @@ const UserAchievementPage = async ({ user, selectedTournamentId }: UserAchieveme
   const { tournamentId, withoutTournament, selectValue } = parseAchievementFilter(selectedTournamentId);
 
   const [achievements, profile] = await Promise.all([
-    userService.getUserAchievements(user.id, {
-      tournamentId,
-      withoutTournament
-    }).catch(() => [] as AchievementRarity[]),
+    userService
+      .getUserAchievements(user.id, {
+        tournamentId,
+        withoutTournament
+      })
+      .catch(() => [] as AchievementRarity[]),
     userService.getUserProfile(user.id)
   ]);
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="aqt-player flex w-full flex-col gap-3.5">
       <UserAchievementsFilter tournaments={profile.tournaments} selectedValue={selectValue} />
-      {achievements.length > 0 ? (
-          <div className="grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 gap-2.5 w-full">
-          {achievements.map((achievement) => (
-            <AchievementCard
-              key={achievement.id}
-              achievement={achievement}
-              href={`/achievements/${achievement.id}`}
-              descriptionLocale="ru"
-              showDetails
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center gap-2 py-16 text-white/25">
-          <Trophy className="h-8 w-8" />
-          <p className="text-sm">У пользователя пока нет достижений.</p>
-        </div>
-      )}
+      <AchievementsView achievements={achievements} />
     </div>
   );
 };

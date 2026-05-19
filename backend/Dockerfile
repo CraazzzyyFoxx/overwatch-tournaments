@@ -32,6 +32,7 @@ COPY tournament-service/pyproject.toml /app/tournament-service/pyproject.toml
 COPY discord-service/pyproject.toml /app/discord-service/pyproject.toml
 COPY twitch-service/pyproject.toml /app/twitch-service/pyproject.toml
 COPY balancer-service/pyproject.toml /app/balancer-service/pyproject.toml
+COPY analytics-service/pyproject.toml /app/analytics-service/pyproject.toml
 
 # `shared` is a workspace member; its source is required to build its wheel during `uv sync`.
 COPY ./shared /app/shared
@@ -44,6 +45,25 @@ RUN if [ "${APP_PATH}" = "balancer" ]; then \
         for attempt in 1 2 3; do \
             if apt-get update -o Acquire::Retries=3 \
                 && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Acquire::Retries=3 build-essential cargo rustc; then \
+                break; \
+            fi; \
+            if [ "${attempt}" -eq 3 ]; then \
+                exit 1; \
+            fi; \
+            sleep "$((attempt * 5))"; \
+        done; \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# analytics-service: LightGBM + XGBoost link against the GCC OpenMP runtime
+# (libgomp1) which the slim base image does not ship. Without it, importing
+# lightgbm fails with: ``OSError: libgomp.so.1: cannot open shared object file``.
+RUN if [ "${APP_PATH}" = "analytics" ]; then \
+        set -eux; \
+        sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources; \
+        for attempt in 1 2 3; do \
+            if apt-get update -o Acquire::Retries=3 \
+                && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Acquire::Retries=3 libgomp1; then \
                 break; \
             fi; \
             if [ "${attempt}" -eq 3 ]; then \

@@ -179,6 +179,7 @@ async def get_all_encounters(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,
     workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
 ) -> pagination.Paginated[schemas.EncounterRead]:
     """
     Retrieves a paginated list of encounters and converts them to Pydantic schemas.
@@ -191,12 +192,172 @@ async def get_all_encounters(
     Returns:
         pagination.Paginated[schemas.EncounterRead]: A paginated list of Pydantic schemas representing the encounters.
     """
-    encounters, total = await service.get_all_encounters(session, params, workspace_id=workspace_id)
+    encounters, total = await service.get_all_encounters(
+        session,
+        params,
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+    )
     return pagination.Paginated(
         total=total,
         per_page=params.per_page,
         page=params.page,
         results=[await to_pydantic(session, encounter, params.entities) for encounter in encounters],
+    )
+
+
+def _saved_view_to_read(saved_view: models.EncounterSavedView) -> schemas.EncounterSavedViewRead:
+    return schemas.EncounterSavedViewRead(
+        id=saved_view.id,
+        workspace_id=saved_view.workspace_id,
+        name=saved_view.name,
+        filters=schemas.EncounterFiltersRead.model_validate(saved_view.filters_json or {}),
+        sort_order=saved_view.sort_order,
+    )
+
+
+async def get_saved_views(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+) -> list[schemas.EncounterSavedViewRead]:
+    views = await service.get_saved_views(session, workspace_id=workspace_id, auth_user_id=auth_user_id)
+    return [_saved_view_to_read(view) for view in views]
+
+
+async def save_view(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+    data: schemas.EncounterSavedViewCreate,
+) -> schemas.EncounterSavedViewRead:
+    saved_view = await service.upsert_saved_view(
+        session,
+        workspace_id=workspace_id,
+        auth_user_id=auth_user_id,
+        name=data.name,
+        filters=data.filters.model_dump(exclude_none=True),
+    )
+    return _saved_view_to_read(saved_view)
+
+
+async def delete_saved_view(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+    saved_view_id: int,
+) -> None:
+    await service.delete_saved_view(
+        session,
+        workspace_id=workspace_id,
+        auth_user_id=auth_user_id,
+        saved_view_id=saved_view_id,
+    )
+
+
+async def get_encounters_overview(
+    session: AsyncSession,
+    params: schemas.EncounterSearchParams,
+    workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
+) -> schemas.EncounterOverviewRead:
+    data = await service.get_overview_data(
+        session,
+        params,
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+    )
+    total = data["total"]
+    with_logs_count = data["with_logs_count"]
+    completed_series_count = data["completed_series_count"]
+    sweep_count = data["sweep_count"]
+    home_wins = data["home_wins"]
+    away_wins = data["away_wins"]
+    decided_count = home_wins + away_wins
+
+    histogram_by_bucket = {int(bucket): int(count) for bucket, count in data["histogram_rows"] if bucket is not None}
+    histogram = [
+        schemas.EncounterHistogramBucketRead(
+            label=f"{index * 10}-{(index + 1) * 10}%",
+            start=index / 10,
+            end=(index + 1) / 10,
+            count=histogram_by_bucket.get(index, 0),
+        )
+        for index in range(10)
+    ]
+
+    return schemas.EncounterOverviewRead(
+        kpis=schemas.EncounterKpiRead(
+            total_encounters=total,
+            recent_count=data["recent_count"],
+            with_logs_count=with_logs_count,
+            with_logs_pct=round((with_logs_count / total) * 100, 1) if total else 0,
+            avg_closeness=round(data["avg_closeness"] * 100, 1) if data["avg_closeness"] is not None else None,
+            live_now_count=data["live_now_count"],
+            upcoming_count=data["upcoming_count"],
+        ),
+        preset_counts=data["preset_counts"],
+        closeness_histogram=histogram,
+        score_heatmap=[
+            schemas.EncounterScoreHeatmapCellRead(home=int(home), away=int(away), count=int(count))
+            for home, away, count in data["score_rows"]
+        ],
+        stage_split=[
+            schemas.EncounterStageSplitRead(
+                name=str(name),
+                count=int(count),
+                pct=round((int(count) / total) * 100, 1) if total else 0,
+            )
+            for name, count in data["stage_rows"]
+        ],
+        featured=schemas.EncounterFeaturedRead(
+            closest=[
+                await to_pydantic(
+                    session,
+                    encounter,
+                    ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                )
+                for encounter in data["closest"]
+            ],
+            upcoming=[
+                await to_pydantic(
+                    session,
+                    encounter,
+                    ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                )
+                for encounter in data["upcoming"]
+            ],
+            live=[
+                await to_pydantic(
+                    session,
+                    encounter,
+                    ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                )
+                for encounter in data["live"]
+            ],
+        ),
+        hot_maps=[
+            schemas.EncounterMapMetricRead(name=str(name), count=int(count))
+            for name, count in data["hot_map_rows"]
+        ],
+        pulse=schemas.EncounterPulseRead(
+            avg_series_seconds=data["avg_series_seconds"],
+            completed_series_count=completed_series_count,
+            sweep_rate=round((sweep_count / completed_series_count) * 100, 1) if completed_series_count else 0,
+            sweep_count=sweep_count,
+            went_distance_count=data["went_distance_count"],
+            reverse_sweep_rate=0,
+            most_decisive_map=str(data["hot_map_rows"][0][0]) if data["hot_map_rows"] else None,
+        ),
+        side_balance=schemas.EncounterSideBalanceRead(
+            home_wins=home_wins,
+            away_wins=away_wins,
+            home_win_pct=round((home_wins / decided_count) * 100, 1) if decided_count else 0,
+            away_win_pct=round((away_wins / decided_count) * 100, 1) if decided_count else 0,
+        ),
     )
 
 

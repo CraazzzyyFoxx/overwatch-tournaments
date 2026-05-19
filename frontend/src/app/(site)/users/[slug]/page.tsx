@@ -206,6 +206,35 @@ const resolveTabContent = ({
   }
 };
 
+const TabsWithBadges = async ({
+  userAndProfile,
+  activeTab,
+  children
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  activeTab: UserTab;
+  children: React.ReactNode;
+}) => {
+  const { profile } = await userAndProfile;
+  const heroesCount = profile.hero_statistics?.length ?? null;
+  const tournamentsCount = profile.tournaments_count ?? null;
+  // Maps badge: not always available — approximate via maps_total
+  const mapsTotal = profile.maps_total ?? null;
+
+  return (
+    <UserTabsClient
+      activeTab={activeTab}
+      badges={{
+        tournaments: tournamentsCount,
+        heroes: heroesCount,
+        maps: mapsTotal
+      }}
+    >
+      {children}
+    </UserTabsClient>
+  );
+};
+
 export default async function UserPage({
   params,
   searchParams
@@ -247,13 +276,25 @@ export default async function UserPage({
       <Suspense fallback={<UserHeaderSkeleton />}>
         <UserHeaderSection userAndProfile={userAndProfile} />
       </Suspense>
-      <UserTabsClient activeTab={activeTab}>
-        <Suspense fallback={tabContent.fallback}>
-          <TabsContent value={tabContent.value} className="mt-0">
-            {tabContent.content}
-          </TabsContent>
-        </Suspense>
-      </UserTabsClient>
+      <Suspense
+        fallback={
+          <UserTabsClient activeTab={activeTab}>
+            <Suspense fallback={tabContent.fallback}>
+              <TabsContent value={tabContent.value} className="mt-0">
+                {tabContent.content}
+              </TabsContent>
+            </Suspense>
+          </UserTabsClient>
+        }
+      >
+        <TabsWithBadges userAndProfile={userAndProfile} activeTab={activeTab}>
+          <Suspense fallback={tabContent.fallback}>
+            <TabsContent value={tabContent.value} className="mt-0">
+              {tabContent.content}
+            </TabsContent>
+          </Suspense>
+        </TabsWithBadges>
+      </Suspense>
     </UserLiquidGlassProvider>
   );
 }

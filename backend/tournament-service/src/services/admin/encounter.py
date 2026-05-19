@@ -159,6 +159,10 @@ async def create_encounter(session: AsyncSession, data: admin_schemas.EncounterC
         home_score=data.home_score,
         away_score=data.away_score,
         status=encounter_status,
+        scheduled_at=data.scheduled_at,
+        started_at=data.started_at,
+        ended_at=data.ended_at,
+        current_map_index=data.current_map_index,
     )
 
     session.add(encounter)

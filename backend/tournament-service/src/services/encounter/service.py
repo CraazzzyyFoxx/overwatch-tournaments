@@ -1,7 +1,11 @@
 import typing
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from src import models, schemas
@@ -206,6 +210,114 @@ def join_encounter_entities(query: sa.Select, in_entities: list[str]) -> sa.Sele
             models.Encounter.tournament_group_id == models.TournamentGroup.id,
         )
     return query
+
+
+def _coerce_encounter_status(value: str) -> enums.EncounterStatus:
+    try:
+        return enums.EncounterStatus(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {', '.join(item.value for item in enums.EncounterStatus)}",
+        ) from exc
+
+
+def _apply_encounter_filters(
+    query: sa.Select,
+    params: schemas.EncounterSearchParams,
+    *,
+    workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
+    joined_tournament: bool = False,
+) -> sa.Select:
+    if params.query:
+        query = params.apply_search(query, models.Encounter)
+
+    if params.tournament_id:
+        query = query.where(models.Encounter.tournament_id == params.tournament_id)
+    if params.stage_id is not None:
+        query = query.where(models.Encounter.stage_id == params.stage_id)
+    if params.stage_item_id is not None:
+        query = query.where(models.Encounter.stage_item_id == params.stage_item_id)
+    if params.best_of is not None:
+        query = query.where(models.Encounter.best_of == params.best_of)
+    if params.status:
+        query = query.where(models.Encounter.status == _coerce_encounter_status(params.status))
+    if params.has_logs is not None:
+        query = query.where(models.Encounter.has_logs.is_(params.has_logs))
+    if params.closeness_min is not None:
+        query = query.where(models.Encounter.closeness.isnot(None), models.Encounter.closeness >= params.closeness_min)
+    if params.closeness_max is not None:
+        query = query.where(models.Encounter.closeness.isnot(None), models.Encounter.closeness <= params.closeness_max)
+
+    if workspace_id is not None:
+        if not joined_tournament:
+            query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
+            joined_tournament = True
+        query = query.where(*workspace_filter(workspace_id))
+
+    if params.scope == "my_team":
+        if viewer_auth_user_id is None:
+            query = query.where(sa.false())
+        else:
+            linked_player_ids = sa.select(models.AuthUserPlayer.player_id).where(
+                models.AuthUserPlayer.auth_user_id == viewer_auth_user_id
+            )
+            query = query.join(
+                models.Player,
+                sa.and_(
+                    models.Player.tournament_id == models.Encounter.tournament_id,
+                    models.Player.user_id.in_(linked_player_ids),
+                    sa.or_(
+                        models.Player.team_id == models.Encounter.home_team_id,
+                        models.Player.team_id == models.Encounter.away_team_id,
+                    ),
+                ),
+            )
+
+    return query
+
+
+def _encounter_ids_query(
+    params: schemas.EncounterSearchParams,
+    *,
+    workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
+) -> sa.Select:
+    query = sa.select(models.Encounter.id)
+    query = _apply_encounter_filters(
+        query,
+        params,
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+    )
+    return query.distinct()
+
+
+def _live_condition(now: datetime) -> sa.ColumnElement[bool]:
+    return sa.or_(
+        sa.and_(
+            models.Encounter.started_at.isnot(None),
+            models.Encounter.ended_at.is_(None),
+        ),
+        sa.and_(
+            models.Encounter.status == enums.EncounterStatus.PENDING,
+            models.Encounter.current_map_index.isnot(None),
+        ),
+        sa.and_(
+            models.Encounter.status == enums.EncounterStatus.PENDING,
+            models.Encounter.scheduled_at <= now,
+            models.Encounter.ended_at.is_(None),
+        ),
+    )
+
+
+def _upcoming_condition(now: datetime) -> sa.ColumnElement[bool]:
+    return sa.and_(
+        models.Encounter.scheduled_at.isnot(None),
+        models.Encounter.scheduled_at > now,
+        models.Encounter.status.in_([enums.EncounterStatus.OPEN, enums.EncounterStatus.PENDING]),
+    )
 
 
 async def get_match(session: AsyncSession, id: int, entities: list[str]) -> models.Match | None:
@@ -442,6 +554,7 @@ async def get_all_encounters(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,
     workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
 ) -> tuple[typing.Sequence[models.Encounter], int]:
     """
     Retrieves a paginated list of encounters based on search parameters.
@@ -457,29 +570,350 @@ async def get_all_encounters(
             - The total count of encounters.
     """
     query = sa.select(models.Encounter).options(*encounter_entities(params.entities))
-    total_query = sa.select(sa.func.count(models.Encounter.id))
+    total_query = sa.select(sa.func.count(sa.distinct(models.Encounter.id)))
     query = join_encounter_entities(query, params.entities)
     total_query = join_encounter_entities(total_query, params.entities)
-    if params.query:
-        query = params.apply_search(query, models.Encounter)
-        total_query = params.apply_search(total_query, models.Encounter)
 
-    if params.tournament_id:
-        query = query.where(sa.and_(models.Encounter.tournament_id == params.tournament_id))
-        total_query = total_query.where(sa.and_(models.Encounter.tournament_id == params.tournament_id))
-
-    if workspace_id is not None:
-        if "tournament" not in params.entities:
-            query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
-            total_query = total_query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
-        query = query.where(*workspace_filter(workspace_id))
-        total_query = total_query.where(*workspace_filter(workspace_id))
+    query = _apply_encounter_filters(
+        query,
+        params,
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+        joined_tournament="tournament" in params.entities,
+    )
+    total_query = _apply_encounter_filters(
+        total_query,
+        params,
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+        joined_tournament="tournament" in params.entities,
+    )
 
     query = params.apply_pagination_sort(query)
 
     result = await session.execute(query)
     result_total = await session.execute(total_query)
     return result.unique().scalars().all(), result_total.scalar_one()
+
+
+async def get_saved_views(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+) -> typing.Sequence[models.EncounterSavedView]:
+    result = await session.execute(
+        sa.select(models.EncounterSavedView)
+        .where(
+            models.EncounterSavedView.workspace_id == workspace_id,
+            models.EncounterSavedView.auth_user_id == auth_user_id,
+        )
+        .order_by(models.EncounterSavedView.sort_order.asc(), models.EncounterSavedView.created_at.asc())
+    )
+    return result.scalars().all()
+
+
+async def upsert_saved_view(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+    name: str,
+    filters: dict,
+) -> models.EncounterSavedView:
+    result = await session.execute(
+        sa.select(models.EncounterSavedView).where(
+            models.EncounterSavedView.workspace_id == workspace_id,
+            models.EncounterSavedView.auth_user_id == auth_user_id,
+            models.EncounterSavedView.name == name,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        existing.filters_json = filters
+        await session.commit()
+        await session.refresh(existing)
+        return existing
+
+    sort_order = await session.scalar(
+        sa.select(sa.func.coalesce(sa.func.max(models.EncounterSavedView.sort_order), -1) + 1).where(
+            models.EncounterSavedView.workspace_id == workspace_id,
+            models.EncounterSavedView.auth_user_id == auth_user_id,
+        )
+    )
+    saved_view = models.EncounterSavedView(
+        workspace_id=workspace_id,
+        auth_user_id=auth_user_id,
+        name=name,
+        filters_json=filters,
+        sort_order=int(sort_order or 0),
+    )
+    session.add(saved_view)
+    await session.commit()
+    await session.refresh(saved_view)
+    return saved_view
+
+
+async def delete_saved_view(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    auth_user_id: int,
+    saved_view_id: int,
+) -> None:
+    result = await session.execute(
+        sa.select(models.EncounterSavedView).where(
+            models.EncounterSavedView.id == saved_view_id,
+            models.EncounterSavedView.workspace_id == workspace_id,
+            models.EncounterSavedView.auth_user_id == auth_user_id,
+        )
+    )
+    saved_view = result.scalar_one_or_none()
+    if saved_view is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved view not found")
+    await session.delete(saved_view)
+    await session.commit()
+
+
+async def get_overview_data(
+    session: AsyncSession,
+    params: schemas.EncounterSearchParams,
+    *,
+    workspace_id: int | None = None,
+    viewer_auth_user_id: int | None = None,
+) -> dict[str, typing.Any]:
+    now = datetime.now(UTC)
+    recent_since = now - timedelta(days=7)
+    base_ids = _encounter_ids_query(
+        replace(params, page=1, per_page=-1),
+        workspace_id=workspace_id,
+        viewer_auth_user_id=viewer_auth_user_id,
+    ).subquery()
+
+    def encounter_base() -> sa.Select:
+        return sa.select(models.Encounter).join(base_ids, base_ids.c.id == models.Encounter.id)
+
+    async def scalar_int(query: sa.Select) -> int:
+        value = await session.scalar(query)
+        return int(value or 0)
+
+    total = await scalar_int(sa.select(sa.func.count()).select_from(base_ids))
+    with_logs_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.has_logs.is_(True))
+    )
+    recent_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.created_at >= recent_since)
+    )
+    live_now_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(_live_condition(now))
+    )
+    upcoming_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(_upcoming_condition(now))
+    )
+    avg_closeness = await session.scalar(
+        sa.select(sa.func.avg(models.Encounter.closeness))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.closeness.isnot(None))
+    )
+
+    bucket_expr = sa.case(
+        (models.Encounter.closeness >= 1, 9),
+        else_=sa.func.floor(models.Encounter.closeness * 10),
+    ).label("bucket")
+    histogram_rows = await session.execute(
+        sa.select(bucket_expr, sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.closeness.isnot(None))
+        .group_by(bucket_expr)
+    )
+
+    score_rows = await session.execute(
+        sa.select(models.Encounter.home_score, models.Encounter.away_score, sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.status == enums.EncounterStatus.COMPLETED)
+        .group_by(models.Encounter.home_score, models.Encounter.away_score)
+    )
+
+    stage_name = sa.func.coalesce(models.StageItem.name, models.Stage.name, "Unassigned").label("stage_name")
+    stage_rows = await session.execute(
+        sa.select(stage_name, sa.func.count(models.Encounter.id))
+        .select_from(models.Encounter)
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .outerjoin(models.Stage, models.Encounter.stage_id == models.Stage.id)
+        .outerjoin(models.StageItem, models.Encounter.stage_item_id == models.StageItem.id)
+        .group_by(stage_name)
+        .order_by(sa.func.count(models.Encounter.id).desc())
+    )
+
+    hot_map_rows = await session.execute(
+        sa.select(models.Map.name, sa.func.count(models.Match.id))
+        .select_from(models.Match)
+        .join(base_ids, base_ids.c.id == models.Match.encounter_id)
+        .join(models.Map, models.Match.map_id == models.Map.id)
+        .group_by(models.Map.name)
+        .order_by(sa.func.count(models.Match.id).desc())
+        .limit(6)
+    )
+
+    duration_by_encounter = (
+        sa.select(models.Match.encounter_id.label("encounter_id"), sa.func.sum(models.Match.time).label("seconds"))
+        .join(base_ids, base_ids.c.id == models.Match.encounter_id)
+        .group_by(models.Match.encounter_id)
+        .subquery()
+    )
+    avg_series_seconds = await session.scalar(sa.select(sa.func.avg(duration_by_encounter.c.seconds)))
+    completed_series_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.status == enums.EncounterStatus.COMPLETED)
+    )
+    sweep_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(
+            models.Encounter.status == enums.EncounterStatus.COMPLETED,
+            sa.or_(models.Encounter.home_score == 0, models.Encounter.away_score == 0),
+            models.Encounter.home_score != models.Encounter.away_score,
+        )
+    )
+    went_distance_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(
+            models.Encounter.status == enums.EncounterStatus.COMPLETED,
+            models.Encounter.home_score + models.Encounter.away_score == models.Encounter.best_of,
+        )
+    )
+    home_wins = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(
+            models.Encounter.status == enums.EncounterStatus.COMPLETED,
+            models.Encounter.home_score > models.Encounter.away_score,
+        )
+    )
+    away_wins = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(
+            models.Encounter.status == enums.EncounterStatus.COMPLETED,
+            models.Encounter.away_score > models.Encounter.home_score,
+        )
+    )
+
+    closest_rows = await session.execute(
+        encounter_base()
+        .where(models.Encounter.closeness.isnot(None))
+        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
+        .order_by(models.Encounter.closeness.desc(), models.Encounter.updated_at.desc().nullslast(), models.Encounter.id.desc())
+        .limit(4)
+    )
+    upcoming_rows = await session.execute(
+        encounter_base()
+        .where(_upcoming_condition(now))
+        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
+        .order_by(models.Encounter.scheduled_at.asc(), models.Encounter.id.desc())
+        .limit(4)
+    )
+    live_rows = await session.execute(
+        encounter_base()
+        .where(_live_condition(now))
+        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
+        .order_by(models.Encounter.started_at.desc().nullslast(), models.Encounter.id.desc())
+        .limit(4)
+    )
+
+    finals_count = await scalar_int(
+        sa.select(sa.func.count(sa.distinct(models.Encounter.id)))
+        .select_from(models.Encounter)
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .outerjoin(models.Stage, models.Encounter.stage_id == models.Stage.id)
+        .outerjoin(models.StageItem, models.Encounter.stage_item_id == models.StageItem.id)
+        .where(sa.or_(models.Stage.name.ilike("%final%"), models.StageItem.name.ilike("%final%")))
+    )
+    close_bo5_count = await scalar_int(
+        sa.select(sa.func.count(models.Encounter.id))
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .where(models.Encounter.best_of >= 5, models.Encounter.closeness >= 0.6)
+    )
+    home_standing = aliased(models.Standing)
+    away_standing = aliased(models.Standing)
+    upset_count = await scalar_int(
+        sa.select(sa.func.count(sa.distinct(models.Encounter.id)))
+        .select_from(models.Encounter)
+        .join(base_ids, base_ids.c.id == models.Encounter.id)
+        .join(
+            home_standing,
+            sa.and_(
+                home_standing.tournament_id == models.Encounter.tournament_id,
+                home_standing.team_id == models.Encounter.home_team_id,
+                home_standing.stage_id == models.Encounter.stage_id,
+                home_standing.stage_item_id == models.Encounter.stage_item_id,
+            ),
+        )
+        .join(
+            away_standing,
+            sa.and_(
+                away_standing.tournament_id == models.Encounter.tournament_id,
+                away_standing.team_id == models.Encounter.away_team_id,
+                away_standing.stage_id == models.Encounter.stage_id,
+                away_standing.stage_item_id == models.Encounter.stage_item_id,
+            ),
+        )
+        .where(
+            models.Encounter.status == enums.EncounterStatus.COMPLETED,
+            sa.or_(
+                sa.and_(models.Encounter.home_score > models.Encounter.away_score, home_standing.position > away_standing.position),
+                sa.and_(models.Encounter.away_score > models.Encounter.home_score, away_standing.position > home_standing.position),
+            ),
+        )
+    )
+    my_team_count = 0
+    if viewer_auth_user_id is not None:
+        my_team_ids = _encounter_ids_query(
+            replace(params, page=1, per_page=-1, scope="my_team"),
+            workspace_id=workspace_id,
+            viewer_auth_user_id=viewer_auth_user_id,
+        ).subquery()
+        my_team_count = await scalar_int(sa.select(sa.func.count()).select_from(my_team_ids))
+
+    return {
+        "total": total,
+        "recent_count": recent_count,
+        "with_logs_count": with_logs_count,
+        "avg_closeness": float(avg_closeness) if avg_closeness is not None else None,
+        "live_now_count": live_now_count,
+        "upcoming_count": upcoming_count,
+        "histogram_rows": list(histogram_rows.all()),
+        "score_rows": list(score_rows.all()),
+        "stage_rows": list(stage_rows.all()),
+        "hot_map_rows": list(hot_map_rows.all()),
+        "avg_series_seconds": float(avg_series_seconds) if avg_series_seconds is not None else None,
+        "completed_series_count": completed_series_count,
+        "sweep_count": sweep_count,
+        "went_distance_count": went_distance_count,
+        "home_wins": home_wins,
+        "away_wins": away_wins,
+        "closest": closest_rows.unique().scalars().all(),
+        "upcoming": upcoming_rows.unique().scalars().all(),
+        "live": live_rows.unique().scalars().all(),
+        "preset_counts": {
+            "all": total,
+            "my_team": my_team_count,
+            "finals": finals_count,
+            "close_bo5": close_bo5_count,
+            "upsets": upset_count,
+            "with_logs": with_logs_count,
+        },
+    }
 
 
 async def get_match_stats_for_user(

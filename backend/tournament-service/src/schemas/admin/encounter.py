@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field, model_validator
 
 __all__ = (
@@ -22,6 +24,10 @@ class EncounterCreate(BaseModel):
     home_score: int = 0
     away_score: int = 0
     status: str = "open"  # open, pending, completed
+    scheduled_at: datetime | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    current_map_index: int | None = None
 
 
 class EncounterUpdate(BaseModel):
@@ -38,6 +44,10 @@ class EncounterUpdate(BaseModel):
     status: str | None = None
     round: int | None = None
     closeness: float | None = Field(default=None, ge=0.0, le=1.0)
+    scheduled_at: datetime | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    current_map_index: int | None = None
 
 
 class MatchUpdate(BaseModel):

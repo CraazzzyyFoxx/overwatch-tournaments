@@ -7,7 +7,7 @@ import userService from "@/services/user.service";
 import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";
-import UserHeroes from "@/app/(site)/users/components/UserHeroes";
+import HeroesView from "@/app/(site)/users/components/redesign/HeroesView";
 
 interface UserHeroesContainerProps {
   userId: number;
@@ -51,7 +51,7 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
     </div>
   );
 
-  return <UserHeroes heroes={heroes} filterSlot={filterSlot} />;
+  return <HeroesView heroes={heroes} filterSlot={filterSlot} />;
 };
 
 export default UserHeroesContainer;
