@@ -688,27 +688,6 @@ services:
       start_period: 40s
     restart: always
 
-  mixtura-balancer:
-    image: dmelackov/mixtura-tournament-balancer:latest
-    build:
-      context: ./backend/mixtura-balancer-tournament
-      dockerfile: Dockerfile
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/mixtura-balancer.env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
-
   frontend:
     image: registry.craazzzyyfoxx.me/frontend:latest
     build:
