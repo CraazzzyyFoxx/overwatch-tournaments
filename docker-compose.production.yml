@@ -6,6 +6,11 @@ services:
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - app-network
 
@@ -195,6 +200,10 @@ services:
         condition: service_healthy
       tournament:
         condition: service_healthy
+      realtime:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
       balancer:
         condition: service_healthy
       frontend:
@@ -213,7 +222,7 @@ services:
       context: ./backend
       args:
         APP_PATH: app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS_BACKEND} --loop uvloop
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS_BACKEND:-2} --loop uvloop
     volumes:
       - ./logs/backend:/logs
     env_file:
@@ -228,7 +237,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       ss-local:
@@ -249,7 +258,7 @@ services:
       context: ./backend
       args:
         APP_PATH: auth
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --workers ${WORKERS_AUTH}
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --workers ${WORKERS_AUTH:-2}
     env_file:
       - ./backend/env/common.env
       - ./backend/env/auth.env
@@ -262,7 +271,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       ss-local:
@@ -285,7 +294,7 @@ services:
       context: ./backend
       args:
         APP_PATH: parser
-    command: uvicorn main:app --host 0.0.0.0 --port 8002 --workers ${WORKERS_PARSER} --loop uvloop
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --workers ${WORKERS_PARSER:-2} --loop uvloop
     env_file:
       - ./backend/env/common.env
       - ./backend/env/parser.env
@@ -300,7 +309,7 @@ services:
       - ./logs/parser:/logs
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       auth:
@@ -338,7 +347,7 @@ services:
       - ./logs/tournament:/logs
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       auth:
@@ -376,7 +385,7 @@ services:
       - ./logs/realtime:/logs
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       auth:
         condition: service_healthy
       ss-local:
@@ -409,7 +418,7 @@ services:
       - WORKER_METRICS_PORT=9100
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       parser:
@@ -465,7 +474,7 @@ services:
       context: ./backend
       args:
         APP_PATH: balancer
-    command: uvicorn main:app --host 0.0.0.0 --port 8003 --workers ${WORKERS_BALANCER} --loop uvloop
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --workers ${WORKERS_BALANCER:-2} --loop uvloop
     env_file:
       - ./backend/env/common.env
       - ./backend/env/balancer.env
@@ -478,7 +487,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       backend:
@@ -491,6 +500,45 @@ services:
       - app-network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  analytics:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:latest
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: uvicorn main:app --host 0.0.0.0 --port 8006 --workers ${WORKERS_ANALYTICS:-2} --loop uvloop
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    volumes:
+      - ./backend/.cache/analytics:/cache/analytics
+      - ./logs/analytics:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -587,13 +635,70 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       balancer:
         condition: service_healthy
     volumes:
       - ./logs/balancer-worker:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  analytics-worker:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:latest
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: faststream run serve:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - WORKER_METRICS_PORT=9106
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    volumes:
+      - ./backend/.cache/analytics:/cache/analytics
+      - ./logs/analytics-worker:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  mixtura-balancer:
+    image: dmelackov/mixtura-tournament-balancer:latest
+    build:
+      context: ./backend/mixtura-balancer-tournament
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/mixtura-balancer.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     networks:
       - app-network
     healthcheck:
@@ -617,6 +722,8 @@ services:
         NEXT_PUBLIC_TOURNAMENT_API_URL: ${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
         NEXT_PUBLIC_REALTIME_API_URL: ${NEXT_PUBLIC_REALTIME_API_URL:-}
         NEXT_PUBLIC_AUTH_SERVICE_URL: ${NEXT_PUBLIC_AUTH_SERVICE_URL}
+        NEXT_ANALYTICS_URL: ${NEXT_ANALYTICS_URL:-http://analytics:8006}
+        NEXT_PUBLIC_ANALYTICS_API_URL: ${NEXT_PUBLIC_ANALYTICS_API_URL:-}
         NEXT_PUBLIC_CACHE_POLICY: ${NEXT_PUBLIC_CACHE_POLICY}
         NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
@@ -626,6 +733,8 @@ services:
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AUTH_SERVICE_URL=${NEXT_PUBLIC_AUTH_SERVICE_URL}
+      - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
+      - NEXT_PUBLIC_ANALYTICS_API_URL=${NEXT_PUBLIC_ANALYTICS_API_URL:-}
       - NEXT_PUBLIC_BALANCER_API_URL=${NEXT_PUBLIC_BALANCER_API_URL}
       - NEXT_PUBLIC_TOURNAMENT_API_URL=${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
       - NEXT_PUBLIC_REALTIME_API_URL=${NEXT_PUBLIC_REALTIME_API_URL:-}
@@ -638,9 +747,15 @@ services:
         condition: service_healthy
       auth:
         condition: service_healthy
+      parser:
+        condition: service_healthy
       tournament:
         condition: service_healthy
       realtime:
+        condition: service_healthy
+      balancer:
+        condition: service_healthy
+      analytics:
         condition: service_healthy
     volumes:
       - ./logs/frontend:/logs
