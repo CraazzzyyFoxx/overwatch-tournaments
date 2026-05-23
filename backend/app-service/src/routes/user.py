@@ -76,6 +76,56 @@ async def get_overview(
 
 
 @router.get(
+    path="/overview/stats",
+    response_model=schemas.UserOverviewStats,
+    description="Aggregated KPI numbers (total players, players with logs, "
+    "average tournaments/player, active in last 30 days, role counts) for the users hero header. "
+    "Respects the same role/division/search filters as the main overview list.",
+    summary="Get users overview KPI stats",
+)
+async def get_overview_stats(
+    params: schemas.UserOverviewStatsQueryParams = Depends(),
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    grid = await get_division_grid(session, workspace_id)
+    return await user_flows.get_overview_stats(session, params, grid=grid)
+
+
+@router.get(
+    path="/overview/catalog",
+    response_model=schemas.UserCatalogResponse,
+    description="Alphabetised catalog of users for the catalog view. Groups players "
+    "by the first letter of their name (A-Z, plus '#' for non-alpha). "
+    "Optional `letter` returns a single bucket; `per_letter` caps the number of "
+    "cards per letter. Same role/division/query filters as the overview list.",
+    summary="Get users alphabetical catalog",
+)
+async def get_overview_catalog(
+    params: schemas.UserCatalogQueryParams = Depends(),
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    grid = await get_division_grid(session, workspace_id)
+    normalizer = None
+    if workspace_id is not None:
+        try:
+            normalizer = await build_workspace_division_grid_normalizer(
+                session,
+                workspace_id,
+                require_complete=False,
+            )
+        except DivisionGridNormalizationError:
+            pass
+    return await user_flows.get_catalog(
+        session,
+        schemas.UserCatalogParams.from_query_params(params),
+        grid=grid,
+        normalizer=normalizer,
+    )
+
+
+@router.get(
     path="/{id}/compare",
     response_model=schemas.UserCompareResponse,
     description="Compare one user against another user, global averages, or a rank cohort.",

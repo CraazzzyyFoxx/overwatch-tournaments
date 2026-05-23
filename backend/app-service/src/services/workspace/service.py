@@ -8,48 +8,28 @@ from shared.rbac import (
     replace_user_workspace_roles,
     user_has_only_workspace_owner_role,
 )
+from shared.repository import RoleRepository, WorkspaceMemberRepository, WorkspaceRepository
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_default_division_grid_version_id
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from src import models
 
+_role_repo = RoleRepository()
+_workspace_member_repo = WorkspaceMemberRepository()
+_workspace_repo = WorkspaceRepository()
+
 
 async def get_by_id(session: AsyncSession, workspace_id: int) -> models.Workspace | None:
-    result = await session.execute(
-        sa.select(models.Workspace)
-        .options(
-            selectinload(models.Workspace.default_division_grid_version)
-            .selectinload(models.DivisionGridVersion.tiers)
-        )
-        .where(models.Workspace.id == workspace_id)
-    )
-    return result.scalars().first()
+    return await _workspace_repo.get_with_default_grid(session, workspace_id)
 
 
 async def get_by_slug(session: AsyncSession, slug: str) -> models.Workspace | None:
-    result = await session.execute(
-        sa.select(models.Workspace)
-        .options(
-            selectinload(models.Workspace.default_division_grid_version)
-            .selectinload(models.DivisionGridVersion.tiers)
-        )
-        .where(models.Workspace.slug == slug)
-    )
-    return result.scalars().first()
+    return await _workspace_repo.get_by_slug(session, slug)
 
 
 async def get_all(session: AsyncSession) -> typing.Sequence[models.Workspace]:
-    result = await session.execute(
-        sa.select(models.Workspace)
-        .options(
-            selectinload(models.Workspace.default_division_grid_version)
-            .selectinload(models.DivisionGridVersion.tiers)
-        )
-        .order_by(models.Workspace.id)
-    )
-    return result.scalars().all()
+    return await _workspace_repo.list_ordered(session)
 
 
 async def get_user_workspaces(
@@ -88,9 +68,7 @@ async def create(session: AsyncSession, **kwargs) -> models.Workspace:
     )
 
     workspace = models.Workspace(**payload)
-    session.add(workspace)
-    await session.flush()
-    return workspace
+    return await _workspace_repo.create(session, workspace)
 
 
 async def update(
@@ -107,43 +85,30 @@ async def update(
         "default_division_grid_version_id" in resolved_data
         and resolved_data["default_division_grid_version_id"] != workspace.default_division_grid_version_id
     )
-    for field, value in resolved_data.items():
-        setattr(workspace, field, value)
-    await session.flush()
+    await _workspace_repo.update_fields(session, workspace, resolved_data)
     if should_invalidate_grid:
         await division_grid_cache.invalidate_workspace(workspace.id)
     return workspace
 
 
 async def delete(session: AsyncSession, workspace: models.Workspace) -> None:
-    await session.delete(workspace)
-    await session.flush()
+    await _workspace_repo.delete(session, workspace)
 
 
 async def get_members(
     session: AsyncSession, workspace_id: int
 ) -> typing.Sequence[models.WorkspaceMember]:
-    result = await session.execute(
-        sa.select(models.WorkspaceMember)
-        .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
-        .where(models.WorkspaceMember.workspace_id == workspace_id)
-        .order_by(models.WorkspaceMember.id)
-    )
-    return result.scalars().all()
+    return await _workspace_member_repo.list_by_workspace(session, workspace_id)
 
 
 async def get_member(
     session: AsyncSession, workspace_id: int, auth_user_id: int
 ) -> models.WorkspaceMember | None:
-    result = await session.execute(
-        sa.select(models.WorkspaceMember)
-        .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
-        .where(
-            models.WorkspaceMember.workspace_id == workspace_id,
-            models.WorkspaceMember.auth_user_id == auth_user_id,
-        )
+    return await _workspace_member_repo.get_member(
+        session,
+        workspace_id=workspace_id,
+        auth_user_id=auth_user_id,
     )
-    return result.scalars().first()
 
 
 async def add_member(
@@ -155,9 +120,7 @@ async def add_member(
         auth_user_id=auth_user_id,
         role=role,
     )
-    session.add(member)
-    await session.flush()
-    return member
+    return await _workspace_member_repo.create(session, member)
 
 
 async def add_member_with_roles(
@@ -199,13 +162,11 @@ async def _workspace_roles_from_ids(
 ) -> list[models.Role]:
     if not role_ids:
         return []
-    result = await session.execute(
-        sa.select(models.Role).where(
-            models.Role.workspace_id == workspace_id,
-            models.Role.id.in_(role_ids),
-        )
+    roles = await _role_repo.bulk_get(
+        session,
+        role_ids,
     )
-    roles = list(result.scalars().all())
+    roles = [role for role in roles if role.workspace_id == workspace_id]
     if len({role.id for role in roles}) != len(set(role_ids)):
         raise ValueError("All role_ids must refer to roles in the target workspace")
     return roles
@@ -246,16 +207,11 @@ async def get_member_workspace_roles(
     workspace_id: int,
     auth_user_id: int,
 ) -> list[models.Role]:
-    result = await session.execute(
-        sa.select(models.Role)
-        .join(user_roles, user_roles.c.role_id == models.Role.id)
-        .where(
-            user_roles.c.user_id == auth_user_id,
-            models.Role.workspace_id == workspace_id,
-        )
-        .order_by(models.Role.is_system.desc(), models.Role.name)
+    return await _role_repo.list_for_user_workspace(
+        session,
+        user_id=auth_user_id,
+        workspace_id=workspace_id,
     )
-    return list(result.scalars().all())
 
 
 async def can_remove_member(session: AsyncSession, member: models.WorkspaceMember) -> bool:

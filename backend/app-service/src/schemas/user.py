@@ -35,6 +35,13 @@ __all__ = (
     "UserOverviewRow",
     "UserOverviewQueryParams",
     "UserOverviewParams",
+    "UserOverviewStats",
+    "UserOverviewStatsQueryParams",
+    "UserCatalogLetter",
+    "UserCatalogEntry",
+    "UserCatalogResponse",
+    "UserCatalogQueryParams",
+    "UserCatalogParams",
     "UserCompareQueryParams",
     "UserCompareParams",
     "UserCompareBaselineMode",
@@ -286,6 +293,77 @@ class UserOverviewParams(pagination.PaginationSortSearchParams):
     def apply_search(self, query: sa.Select, model: type) -> sa.Select:
         fields = self.fields if self.fields else ["name"]
         return pagination.apply_search(model, query, self.query, fields)
+
+
+class UserOverviewStats(BaseModel):
+    total_players: int
+    with_logs_count: int
+    with_logs_pct: float
+    avg_tournaments_per_player: float
+    median_tournaments_per_player: float
+    active_last_30d: int
+    active_last_30d_pct: float
+    tank_count: int
+    damage_count: int
+    support_count: int
+    flex_count: int
+
+
+class UserOverviewStatsQueryParams(BaseModel):
+    role: enums.HeroClass | None = None
+    div_min: int | None = Field(default=None, ge=1, le=20)
+    div_max: int | None = Field(default=None, ge=1, le=20)
+    query: str | None = None
+
+
+class UserCatalogEntry(BaseModel):
+    id: int
+    name: str
+    roles: list[UserOverviewRoleDivision]
+    top_heroes: list[UserOverviewHero]
+    tournaments_count: int
+    achievements_count: int
+    avg_placement: float | None
+
+
+class UserCatalogLetter(BaseModel):
+    letter: str
+    count: int
+    users: list[UserCatalogEntry]
+
+
+class UserCatalogResponse(BaseModel):
+    letters: list[UserCatalogLetter]
+    total: int
+    available_letters: list[str]
+
+
+class UserCatalogQueryParams(BaseModel):
+    role: enums.HeroClass | None = None
+    div_min: int | None = Field(default=None, ge=1, le=20)
+    div_max: int | None = Field(default=None, ge=1, le=20)
+    query: str | None = None
+    letter: str | None = Field(default=None, min_length=1, max_length=2)
+    per_letter: int = Field(default=12, ge=1, le=50)
+    max_letters: int = Field(default=27, ge=1, le=40)
+
+
+@dataclass
+class UserCatalogParams:
+    role: enums.HeroClass | None = None
+    div_min: int | None = None
+    div_max: int | None = None
+    query: str | None = None
+    letter: str | None = None
+    per_letter: int = 12
+    max_letters: int = 27
+
+    @classmethod
+    def from_query_params(cls, query_params: UserCatalogQueryParams) -> "UserCatalogParams":
+        data = query_params.model_dump()
+        if data.get("letter"):
+            data["letter"] = data["letter"].upper()
+        return cls(**data)
 
 
 UserCompareBaselineMode = typing.Literal["target_user", "global", "cohort"]

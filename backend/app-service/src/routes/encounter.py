@@ -51,6 +51,7 @@ async def get_all_encounters(
 async def get_one(
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
+    workspace_id: WorkspaceQuery = None,
     entities: list[str] = Query([]),
 ):
-    return await encounter_flows.get_encounter(session, id, entities)
+    return await encounter_flows.get_encounter(session, id, entities, workspace_id=workspace_id)

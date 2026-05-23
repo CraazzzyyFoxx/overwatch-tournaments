@@ -1,7 +1,9 @@
+import asyncio
 import typing
 from datetime import UTC, datetime
 from statistics import mean
 
+from cashews import cache
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import (
@@ -15,7 +17,7 @@ from shared.services.division_grid_resolution import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import enums, errors, pagination
+from src.core import config, enums, errors, pagination
 from src.core.workspace import get_division_grid_version
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import service as encounter_service
@@ -363,6 +365,148 @@ async def get_overview(
         per_page=params.per_page,
         total=total,
         results=rows,
+    )
+
+
+async def get_overview_stats(
+    session: AsyncSession,
+    params: "schemas.UserOverviewStatsQueryParams",
+    *,
+    grid: DivisionGrid,
+) -> "schemas.UserOverviewStats":
+    if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[
+                errors.ApiExc(
+                    code="invalid_filter",
+                    msg="div_min must be less than or equal to div_max.",
+                )
+            ],
+        )
+
+    payload = await service.get_overview_stats(
+        session,
+        role=params.role,
+        div_min=params.div_min,
+        div_max=params.div_max,
+        query=params.query,
+        grid=grid,
+    )
+    return schemas.UserOverviewStats(**payload)
+
+
+async def get_catalog(
+    session: AsyncSession,
+    params: "schemas.UserCatalogParams",
+    *,
+    grid: DivisionGrid,
+    normalizer: DivisionGridNormalizer | None = None,
+) -> "schemas.UserCatalogResponse":
+    if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[
+                errors.ApiExc(
+                    code="invalid_filter",
+                    msg="div_min must be less than or equal to div_max.",
+                )
+            ],
+        )
+
+    letters_with_users, total_users, available_letters = await service.get_catalog_users(
+        session,
+        role=params.role,
+        div_min=params.div_min,
+        div_max=params.div_max,
+        query=params.query,
+        letter=params.letter,
+        per_letter=params.per_letter,
+        max_letters=params.max_letters,
+        grid=grid,
+    )
+
+    flat_users = [user for _letter, bucket in letters_with_users for user in bucket]
+    if not flat_users:
+        return schemas.UserCatalogResponse(
+            letters=[],
+            total=total_users,
+            available_letters=available_letters,
+        )
+
+    user_ids = [user.id for user in flat_users]
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
+    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
+    averages_map = await service.get_overview_averages(session, user_ids)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+
+    catalog_letters: list[schemas.UserCatalogLetter] = []
+    for letter_label, users in letters_with_users:
+        entries: list[schemas.UserCatalogEntry] = []
+        for user in users:
+            roles = [
+                schemas.UserOverviewRoleDivision(
+                    role=role,
+                    division=resolve_workspace_division(
+                        rank,
+                        source_version_id=version_id,
+                        fallback_grid=grid,
+                        normalizer=normalizer,
+                    ),
+                )
+                for role, rank, version_id in raw_roles_map.get(user.id, [])
+            ]
+
+            top_heroes: list[schemas.UserOverviewHero] = []
+            for hero, playtime_seconds in top_heroes_map.get(user.id, []):
+                metrics_payload: list[schemas.UserOverviewHeroMetric] = []
+                metrics = hero_metrics_map.get((user.id, hero.id), {})
+                for metric_name in overview_hero_metrics_order:
+                    metric_value = metrics.get(metric_name)
+                    if metric_value is None:
+                        continue
+                    metrics_payload.append(
+                        schemas.UserOverviewHeroMetric(
+                            name=metric_name,
+                            avg_10=round(metric_value, 2),
+                        )
+                    )
+                top_heroes.append(
+                    schemas.UserOverviewHero(
+                        hero=await hero_flows.to_pydantic(session, hero, []),
+                        playtime_seconds=round(playtime_seconds, 2),
+                        metrics=metrics_payload,
+                    )
+                )
+
+            avg_placement, _, _, _ = averages_map.get(user.id, (None, None, None, None))
+
+            entries.append(
+                schemas.UserCatalogEntry(
+                    id=user.id,
+                    name=user.name,
+                    roles=roles,
+                    top_heroes=top_heroes,
+                    tournaments_count=tournaments_count_map.get(user.id, 0),
+                    achievements_count=achievements_count_map.get(user.id, 0),
+                    avg_placement=round(avg_placement, 2) if avg_placement is not None else None,
+                )
+            )
+
+        catalog_letters.append(
+            schemas.UserCatalogLetter(
+                letter=letter_label,
+                count=len(entries),
+                users=entries,
+            )
+        )
+
+    return schemas.UserCatalogResponse(
+        letters=catalog_letters,
+        total=total_users,
+        available_letters=available_letters,
     )
 
 
@@ -734,6 +878,15 @@ async def get_roles(
     return payload
 
 
+# Cache key intentionally omits `session`, `grid`, `normalizer` — they're
+# either non-hashable runtime fixtures (session) or derivable from workspace_id
+# (grid/normalizer are loaded fresh for the workspace). Workspace-level grid
+# changes are rare; a TournamentChangedEvent invalidates all user_* keys.
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_profile:{id}:{workspace_id}",
+    prefix="backend:",
+)
 async def get_profile(
     session: AsyncSession,
     id: int,
@@ -798,13 +951,19 @@ async def get_profile(
     placements: list[int] = []
     placements_playoff: list[int] = []
     placements_group: list[int] = []
-    tournaments: list[schemas.TournamentRead] = []
     tournaments_count: int = 0
     tournaments_won: int = 0
 
-    for team in teams:
-        tournaments.append(await tournament_flows.to_pydantic(session, team.tournament, []))
+    # Pydantic conversion with entities=[] is CPU-only — safe to fan out.
+    # Sequential awaits here used to stall on the event-loop scheduler for
+    # veterans with 30+ teams.
+    tournaments: list[schemas.TournamentRead] = list(
+        await asyncio.gather(
+            *(tournament_flows.to_pydantic(session, team.tournament, []) for team in teams)
+        )
+    )
 
+    for team in teams:
         if team.tournament.is_league:
             continue
 
@@ -837,6 +996,11 @@ async def get_profile(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_tournaments:{id}:{workspace_id}",
+    prefix="backend:",
+)
 async def get_tournaments(
     session: AsyncSession, id: int, workspace_id: int | None = None, *, grid: DivisionGrid
 ) -> list[schemas.UserTournament]:
@@ -921,6 +1085,15 @@ async def get_tournaments(
             else None
         )
 
+        players_read = list(
+            await asyncio.gather(
+                *(
+                    team_flows.to_pydantic_player(session, player, [], grid=tournament_grid)
+                    for player in team.players
+                )
+            )
+        )
+
         tournament = schemas.UserTournament(
             id=team.tournament.id,
             number=team.tournament.number,
@@ -928,7 +1101,7 @@ async def get_tournaments(
             is_league=team.tournament.is_league,
             team_id=team.id,
             team=team.name,
-            players=[await team_flows.to_pydantic_player(session, player, [], grid=tournament_grid) for player in team.players],
+            players=players_read,
             closeness=round(avg_closeness, 2) if avg_closeness else 0,
             maps_won=wins,
             maps_lost=losses,
@@ -1047,7 +1220,7 @@ async def get_heroes(
         all_stats = await service.get_statistics_by_heroes_all_values(session)
     payload: list[schemas.HeroWithUserStats] = []
 
-    cache: dict[int, dict[enums.LogStatsName, schemas.HeroStat]] = {}
+    stats_by_hero: dict[int, dict[enums.LogStatsName, schemas.HeroStat]] = {}
     cache_hero: dict[int, schemas.HeroRead] = {}
 
     for name, hero, value, value_best, value_avg_10, best_meta in user_stats:
@@ -1055,9 +1228,9 @@ async def get_heroes(
             continue
         if hero.id not in cache_hero:
             cache_hero[hero.id] = await hero_flows.to_pydantic(session, hero, [])
-        if hero.id not in cache:
-            cache[hero.id] = {}
-        cache[hero.id][name] = schemas.HeroStat(
+        if hero.id not in stats_by_hero:
+            stats_by_hero[hero.id] = {}
+        stats_by_hero[hero.id][name] = schemas.HeroStat(
             name=name,
             overall=round(value, 2),
             best=schemas.HeroStatBest(
@@ -1076,8 +1249,8 @@ async def get_heroes(
     for name, hero_id, value_best, value_avg_10, best_meta in all_stats:
         if requested_stats and name not in requested_stats:
             continue
-        if hero_id in cache:
-            cache[hero_id][name].best_all = schemas.HeroStatBest(
+        if hero_id in stats_by_hero:
+            stats_by_hero[hero_id][name].best_all = schemas.HeroStatBest(
                 encounter_id=best_meta["encounter_id"],
                 map_name=best_meta["map_name"],
                 value=round(value_best, 2),
@@ -1085,9 +1258,9 @@ async def get_heroes(
                 tournament_name=best_meta["tournament_name"],
                 player_name=best_meta["username"],
             )
-            cache[hero_id][name].avg_10_all = round(value_avg_10, 2)
+            stats_by_hero[hero_id][name].avg_10_all = round(value_avg_10, 2)
 
-    for hero_id, stats in cache.items():
+    for hero_id, stats in stats_by_hero.items():
         # Filter out heroes without meaningful playtime. Previously we used
         # eliminations == 0 which could hide valid support picks.
         playtime_stat = stats.get(enums.LogStatsName.HeroTimePlayed)

@@ -121,29 +121,20 @@ async def get_top_maps(
             - A sequence of tuples, each containing a Map object and its statistics (total matches, won matches, lost matches, draw matches, win rate).
             - The total count of maps.
     """
-    home_team_score = sa.case(
-        (models.Match.home_team_id == models.Team.id, models.Match.home_score),
-        else_=models.Match.away_score,
-    )
-    away_team_score = sa.case(
-        (models.Match.home_team_id == models.Team.id, models.Match.away_score),
-        else_=models.Match.home_score,
-    )
-    home_team_win = sa.case((home_team_score > away_team_score, 1), else_=0)
-    away_team_win = sa.case((home_team_score < away_team_score, 1), else_=0)
-    draw = sa.case((home_team_score == away_team_score, 1), else_=0)
-
-    subquery_query = (
+    # Pre-resolve the user's team_id for each match via a CTE — this avoids
+    # fan-out from the Player table when a user has multiple Player records
+    # for the same team (e.g. starter + substitution role for different periods).
+    user_match_teams = (
         sa.select(
-            models.Map.id.label("map_id"),
-            sa.func.count(models.Match.id).label("count"),
-            sa.func.sum(home_team_win).label("win"),
-            sa.func.sum(away_team_win).label("loss"),
-            sa.func.sum(draw).label("draw"),
-            (sa.func.sum(home_team_win) / sa.func.count(models.Match.id)).cast(sa.Numeric(10, 2)).label("winrate"),
+            models.Match.id.label("match_id"),
+            models.Match.map_id.label("map_id"),
+            models.Match.encounter_id.label("encounter_id"),
+            models.Match.home_team_id.label("home_team_id"),
+            models.Match.home_score.label("home_score"),
+            models.Match.away_score.label("away_score"),
+            models.Team.id.label("user_team_id"),
         )
         .select_from(models.Match)
-        .join(models.Map, models.Map.id == models.Match.map_id)
         .join(
             models.Team,
             sa.or_(
@@ -152,12 +143,44 @@ async def get_top_maps(
             ),
         )
         .join(models.Player, models.Player.team_id == models.Team.id)
-        .where(sa.and_(models.Player.user_id == user_id))
+        .where(
+            sa.and_(
+                models.Player.user_id == user_id,
+                models.Player.is_substitution.is_(False),
+            )
+        )
+        .distinct()
+        .cte("user_match_teams")
+    )
+
+    user_home_score = sa.case(
+        (user_match_teams.c.home_team_id == user_match_teams.c.user_team_id, user_match_teams.c.home_score),
+        else_=user_match_teams.c.away_score,
+    )
+    user_away_score = sa.case(
+        (user_match_teams.c.home_team_id == user_match_teams.c.user_team_id, user_match_teams.c.away_score),
+        else_=user_match_teams.c.home_score,
+    )
+    user_win = sa.case((user_home_score > user_away_score, 1), else_=0)
+    user_loss = sa.case((user_home_score < user_away_score, 1), else_=0)
+    user_draw = sa.case((user_home_score == user_away_score, 1), else_=0)
+
+    subquery_query = (
+        sa.select(
+            models.Map.id.label("map_id"),
+            sa.func.count(user_match_teams.c.match_id).label("count"),
+            sa.func.sum(user_win).label("win"),
+            sa.func.sum(user_loss).label("loss"),
+            sa.func.sum(user_draw).label("draw"),
+            (sa.func.sum(user_win) / sa.func.count(user_match_teams.c.match_id)).cast(sa.Numeric(10, 2)).label("winrate"),
+        )
+        .select_from(user_match_teams)
+        .join(models.Map, models.Map.id == user_match_teams.c.map_id)
         .group_by(models.Map.id)
     )
 
     if params.tournament_id or workspace_id:
-        subquery_query = subquery_query.join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        subquery_query = subquery_query.join(models.Encounter, models.Encounter.id == user_match_teams.c.encounter_id)
 
         if params.tournament_id:
             subquery_query = subquery_query.where(models.Encounter.tournament_id == params.tournament_id)
@@ -177,7 +200,7 @@ async def get_top_maps(
         subquery_query = pagination.apply_search(models.Map, subquery_query, params.query, fields)
 
     if params.min_count:
-        subquery_query = subquery_query.having(sa.func.count(models.Match.id) >= params.min_count)
+        subquery_query = subquery_query.having(sa.func.count(user_match_teams.c.match_id) >= params.min_count)
 
     subquery = subquery_query.subquery("user_map_stats")
 

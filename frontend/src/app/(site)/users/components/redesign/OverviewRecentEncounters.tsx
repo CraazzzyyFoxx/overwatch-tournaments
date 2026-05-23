@@ -1,33 +1,35 @@
 import React from "react";
 import Link from "next/link";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
-import { EncounterWithUserStats } from "@/types/user.types";
+import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   encounters: EncounterWithUserStats[];
-  userId: number;
   userName: string;
+  tournaments: UserTournament[];
 }
 
 const getStageLabel = (encounter: EncounterWithUserStats): string => {
   return encounter.stage_item?.name ?? encounter.stage?.name ?? "";
 };
 
-const getTeamLabels = (encounter: EncounterWithUserStats, userId: number): { home: string; away: string; isUserHome: boolean } => {
+const getTeamLabels = (
+  encounter: EncounterWithUserStats,
+  userTeamId: number | undefined
+): { home: string; away: string; isUserHome: boolean } => {
   const homeTeam = encounter.home_team;
   const awayTeam = encounter.away_team;
   const home = homeTeam?.name ?? "Home";
   const away = awayTeam?.name ?? "Away";
-  // Determine which side is the user's by checking team players' user_id
-  const homePlayers = homeTeam?.players ?? [];
-  const isUserHome = homePlayers.some((p) => p.user_id === userId);
+  const isUserHome = userTeamId != null && encounter.home_team_id === userTeamId;
   return { home, away, isUserHome };
 };
 
-const OverviewRecentEncounters = ({ encounters, userId, userName }: Props) => {
+const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) => {
   if (encounters.length === 0) return null;
   const userSlug = userName.replace("#", "-");
+  const teamIdByTournament = new Map(tournaments.map((t) => [t.id, t.team_id]));
 
   return (
     <CardSurface
@@ -41,7 +43,8 @@ const OverviewRecentEncounters = ({ encounters, userId, userName }: Props) => {
       }
     >
       {encounters.map((enc) => {
-        const { home, away, isUserHome } = getTeamLabels(enc, userId);
+        const userTeamId = enc.tournament ? teamIdByTournament.get(enc.tournament.id) : undefined;
+        const { home, away, isUserHome } = getTeamLabels(enc, userTeamId);
         const stage = getStageLabel(enc);
         const t = enc.tournament;
         const tournamentLabel = t ? (t.number ? `T${t.number}` : t.name.slice(0, 3)) : "T?";

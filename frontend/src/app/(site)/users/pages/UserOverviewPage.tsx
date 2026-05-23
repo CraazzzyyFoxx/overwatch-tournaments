@@ -47,7 +47,14 @@ const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPagePro
       : Promise.resolve(null),
     userService.getUserBestTeammates(user.id),
     userService.getUserTournaments(user.id),
-    userService.getUserEncounters(user.id, 1, 5)
+    userService.getUserEncounters(user.id, 1, 5, "id", "desc", [
+      "tournament",
+      "stage",
+      "stage_item",
+      "home_team",
+      "away_team",
+      "matches.map"
+    ])
   ]);
 
   const totalSharedMaps = teammates.results.reduce((sum, tm) => sum + (tm.tournaments ?? 0), 0);
@@ -71,8 +78,8 @@ const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPagePro
         </div>
         <OverviewRecentEncounters
           encounters={encounters.results}
-          userId={user.id}
           userName={user.name}
+          tournaments={tournaments}
         />
       </div>
       <aside className="flex flex-col gap-3.5 xl:sticky xl:top-[88px]">

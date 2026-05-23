@@ -94,13 +94,13 @@ def encounter_entities(
     if "stage" in in_entities:
         stage_entity = utils.join_entity(child, models.Encounter.stage)
         entities.append(stage_entity)
-        stage_items_entity = utils.join_entity(stage_entity, models.Stage.items)
+        stage_items_entity = utils.selectin_entity(stage_entity, models.Stage.items)
         entities.append(stage_items_entity)
-        entities.append(utils.join_entity(stage_items_entity, models.StageItem.inputs))
+        entities.append(utils.selectin_entity(stage_items_entity, models.StageItem.inputs))
     if "stage_item" in in_entities:
         stage_item_entity = utils.join_entity(child, models.Encounter.stage_item)
         entities.append(stage_item_entity)
-        entities.append(utils.join_entity(stage_item_entity, models.StageItem.inputs))
+        entities.append(utils.selectin_entity(stage_item_entity, models.StageItem.inputs))
     if "tournament_group" in in_entities:
         entities.append(utils.join_entity(child, models.Encounter.tournament_group))
     if "group" in in_entities:
@@ -133,7 +133,7 @@ def encounter_entities(
             )
         )
     if "matches" in in_entities:
-        matches_entity = utils.join_entity(child, models.Encounter.matches)
+        matches_entity = utils.selectin_entity(child, models.Encounter.matches)
         entities.append(matches_entity)
         entities.extend(
             match_entities(
@@ -238,7 +238,11 @@ def join_encounter_entities(query: sa.Select, in_entities: list[str]) -> sa.Sele
 
 
 async def get_match(
-    session: AsyncSession, id: int, entities: list[str]
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
 ) -> models.Match | None:
     """
     Retrieves a match by its ID.
@@ -247,6 +251,7 @@ async def get_match(
         session (AsyncSession): The SQLAlchemy async session.
         id (int): The ID of the match to retrieve.
         entities (list[str]): A list of related entities to load (e.g., ["teams", "map"]).
+        workspace_id: When provided, scopes the lookup to matches in this workspace.
 
     Returns:
         models.Match | None: The Match object if found, otherwise None.
@@ -256,6 +261,12 @@ async def get_match(
         .where(sa.and_(models.Match.id == id))
         .options(*match_entities(entities))
     )
+    if workspace_id is not None:
+        query = (
+            query.join(models.Encounter, models.Match.encounter_id == models.Encounter.id)
+            .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
+            .where(models.Tournament.workspace_id == workspace_id)
+        )
     result = await session.execute(query)
     return result.unique().scalars().first()
 
@@ -366,6 +377,13 @@ async def get_by_user(
             - A sequence of tuples containing encounter, match, performance, and hero data.
             - The total count of encounters.
     """
+    # is_substitution=False MUST match between count and data queries — otherwise
+    # subs inflate the total and break pagination.
+    user_player_filter = sa.and_(
+        models.Player.user_id == user_id,
+        models.Player.is_substitution.is_(False),
+    )
+
     total_query = (
         sa.select(sa.func.count(models.Encounter.id))
         .join(
@@ -375,7 +393,7 @@ async def get_by_user(
                 models.Encounter.away_team_id == models.Player.team_id,
             ),
         )
-        .where(sa.and_(models.Player.user_id == user_id))
+        .where(user_player_filter)
     )
 
     encounters_query = (
@@ -391,7 +409,7 @@ async def get_by_user(
                 models.Encounter.away_team_id == models.Player.team_id,
             ),
         )
-        .where(sa.and_(models.Player.user_id == user_id))
+        .where(user_player_filter)
     )
 
     if workspace_id is not None:
@@ -405,6 +423,16 @@ async def get_by_user(
     encounters_query = params.apply_pagination_sort(encounters_query)
     encounters_query = encounters_query.subquery()
 
+    # Restrict the MatchStatistics scan to matches on the paginated page only.
+    # Without this, both CTEs scan user_id's entire match_statistics history
+    # before being joined against the page — for veterans this is O(thousands).
+    paginated_match_ids = (
+        sa.select(models.Match.id.label("match_id"))
+        .select_from(encounters_query)
+        .join(models.Match, models.Match.encounter_id == encounters_query.c.id)
+        .cte("paginated_match_ids")
+    )
+
     performance_cte = (
         sa.select(
             models.MatchStatistics.match_id,
@@ -416,6 +444,7 @@ async def get_by_user(
                 models.MatchStatistics.name == enums.LogStatsName.Performance,
                 models.MatchStatistics.hero_id.is_(None),
                 models.MatchStatistics.round == 0,
+                models.MatchStatistics.match_id.in_(sa.select(paginated_match_ids.c.match_id)),
             )
         )
         .cte("performance_cte")
@@ -434,6 +463,7 @@ async def get_by_user(
                 models.MatchStatistics.hero_id.isnot(None),
                 models.MatchStatistics.value > 60,
                 models.MatchStatistics.round == 0,
+                models.MatchStatistics.match_id.in_(sa.select(paginated_match_ids.c.match_id)),
             )
         )
         .group_by(models.MatchStatistics.match_id)
@@ -467,7 +497,11 @@ async def get_by_user(
 
 
 async def get_encounter(
-    session: AsyncSession, id: int, entities: list[str]
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
 ) -> models.Encounter | None:
     """
     Retrieves an encounter by its ID.
@@ -476,6 +510,7 @@ async def get_encounter(
         session (AsyncSession): The SQLAlchemy async session.
         id (int): The ID of the encounter to retrieve.
         entities (list[str]): A list of related entities to load (e.g., ["tournament", "teams"]).
+        workspace_id: When provided, scopes the lookup to encounters in this workspace.
 
     Returns:
         models.Encounter | None: The Encounter object if found, otherwise None.
@@ -485,6 +520,10 @@ async def get_encounter(
         .options(*encounter_entities(entities))
         .where(sa.and_(models.Encounter.id == id))
     )
+    if workspace_id is not None:
+        query = query.join(
+            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
+        ).where(models.Tournament.workspace_id == workspace_id)
     result = await session.execute(query)
     return result.unique().scalars().first()
 

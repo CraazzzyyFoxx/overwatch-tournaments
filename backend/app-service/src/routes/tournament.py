@@ -48,10 +48,11 @@ async def lookup_tournaments(
 async def get_one(
     request: Request,
     id: int,
+    workspace_id: WorkspaceQuery = None,
     entities: list[str] = Query([]),
     session=Depends(db.get_async_session),
 ):
-    return await tournament_flows.get_read(session, id, entities)
+    return await tournament_flows.get_read(session, id, entities, workspace_id=workspace_id)
 
 
 @router.get(

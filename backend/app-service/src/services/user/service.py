@@ -1297,6 +1297,221 @@ def _normalize_compare_value(value: typing.Any) -> float | int | None:
         return None
 
 
+async def get_overview_stats(
+    session: AsyncSession,
+    *,
+    role: enums.HeroClass | None,
+    div_min: int | None,
+    div_max: int | None,
+    query: str | None,
+    grid: DivisionGrid,
+) -> dict[str, typing.Any]:
+    """Compute KPI numbers for the users hero header.
+
+    Counts respect the same filter chips as the main overview table:
+    role, division range, and search query. The result includes:
+      - total_players: distinct users matching the filters
+      - with_logs_count / with_logs_pct: how many have at least one parsed match stat row
+      - avg_tournaments_per_player / median_tournaments_per_player
+      - active_last_30d / active_last_30d_pct: distinct players in tournaments
+        whose start_date or end_date falls within the last 30 days
+      - tank / damage / support / flex counts (distinct roles per user)
+    """
+    base_query = sa.select(models.User.id).select_from(models.User)
+
+    if query:
+        base_query = pagination.apply_search(models.User, base_query, query, ["name"])
+
+    if role is not None or div_min is not None or div_max is not None:
+        base_query = _apply_overview_role_filters(
+            base_query,
+            role=role,
+            div_min=div_min,
+            div_max=div_max,
+            grid=grid,
+        )
+
+    candidate_user_ids: list[int] = [
+        row[0] for row in (await session.execute(base_query.distinct())).all()
+    ]
+    total_players = len(candidate_user_ids)
+
+    if not candidate_user_ids:
+        return {
+            "total_players": 0,
+            "with_logs_count": 0,
+            "with_logs_pct": 0.0,
+            "avg_tournaments_per_player": 0.0,
+            "median_tournaments_per_player": 0.0,
+            "active_last_30d": 0,
+            "active_last_30d_pct": 0.0,
+            "tank_count": 0,
+            "damage_count": 0,
+            "support_count": 0,
+            "flex_count": 0,
+        }
+
+    with_logs_query = (
+        sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id)))
+        .where(models.MatchStatistics.user_id.in_(candidate_user_ids))
+    )
+    with_logs_count = (await session.execute(with_logs_query)).scalar_one() or 0
+
+    tournaments_query = (
+        sa.select(
+            models.Player.user_id,
+            sa.func.count(sa.distinct(models.Team.tournament_id)).label("tournaments_count"),
+        )
+        .select_from(models.Player)
+        .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .where(
+            models.Player.user_id.in_(candidate_user_ids),
+            models.Player.is_substitution.is_(False),
+            models.Tournament.is_finished.is_(True),
+            models.Tournament.is_league.is_(False),
+        )
+        .group_by(models.Player.user_id)
+    )
+    tournament_counts = [int(count) for _user_id, count in (await session.execute(tournaments_query)).all()]
+    counts_with_zero = tournament_counts + [0] * (total_players - len(tournament_counts))
+    avg_tournaments = sum(counts_with_zero) / total_players if total_players else 0.0
+    sorted_counts = sorted(counts_with_zero)
+    if sorted_counts:
+        mid = len(sorted_counts) // 2
+        if len(sorted_counts) % 2 == 0:
+            median_tournaments = (sorted_counts[mid - 1] + sorted_counts[mid]) / 2
+        else:
+            median_tournaments = float(sorted_counts[mid])
+    else:
+        median_tournaments = 0.0
+
+    cutoff = sa.func.now() - sa.text("INTERVAL '30 days'")
+    active_query = (
+        sa.select(sa.func.count(sa.distinct(models.Player.user_id)))
+        .select_from(models.Player)
+        .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .where(
+            models.Player.user_id.in_(candidate_user_ids),
+            models.Player.is_substitution.is_(False),
+            models.Tournament.is_league.is_(False),
+            sa.or_(
+                sa.and_(models.Tournament.end_date.isnot(None), models.Tournament.end_date >= cutoff),
+                sa.and_(models.Tournament.start_date.isnot(None), models.Tournament.start_date >= cutoff),
+            ),
+        )
+    )
+    active_last_30d = (await session.execute(active_query)).scalar_one() or 0
+
+    roles_query = (
+        sa.select(models.Player.user_id, models.Player.role)
+        .where(
+            models.Player.user_id.in_(candidate_user_ids),
+            models.Player.is_substitution.is_(False),
+            models.Player.role.isnot(None),
+        )
+        .distinct()
+    )
+    user_roles: dict[int, set[enums.HeroClass]] = defaultdict(set)
+    for user_id, player_role in (await session.execute(roles_query)).all():
+        user_roles[user_id].add(player_role)
+
+    tank_count = damage_count = support_count = flex_count = 0
+    for roles_set in user_roles.values():
+        if len(roles_set) > 1:
+            flex_count += 1
+        if enums.HeroClass.tank in roles_set:
+            tank_count += 1
+        if enums.HeroClass.damage in roles_set:
+            damage_count += 1
+        if enums.HeroClass.support in roles_set:
+            support_count += 1
+
+    return {
+        "total_players": total_players,
+        "with_logs_count": int(with_logs_count),
+        "with_logs_pct": round(with_logs_count / total_players * 100, 1) if total_players else 0.0,
+        "avg_tournaments_per_player": round(avg_tournaments, 1),
+        "median_tournaments_per_player": round(median_tournaments, 1),
+        "active_last_30d": int(active_last_30d),
+        "active_last_30d_pct": round(active_last_30d / total_players * 100, 1) if total_players else 0.0,
+        "tank_count": tank_count,
+        "damage_count": damage_count,
+        "support_count": support_count,
+        "flex_count": flex_count,
+    }
+
+
+def _classify_letter(name: str) -> str:
+    """Bucket the first character of a name into A..Z or '#'."""
+    if not name:
+        return "#"
+    first_char = name[0].upper()
+    if "A" <= first_char <= "Z":
+        return first_char
+    return "#"
+
+
+async def get_catalog_users(
+    session: AsyncSession,
+    *,
+    role: enums.HeroClass | None,
+    div_min: int | None,
+    div_max: int | None,
+    query: str | None,
+    letter: str | None,
+    per_letter: int,
+    max_letters: int,
+    grid: DivisionGrid,
+) -> tuple[list[tuple[str, list[models.User]]], int, list[str]]:
+    """Return (letters_with_users, total_users, available_letters).
+
+    Users are loaded across the full filtered set, grouped by their starting
+    letter (or '#' for non-alpha names), then per-letter capped at `per_letter`.
+    If `letter` is specified, only that bucket is returned (still capped).
+    `available_letters` reports every letter that has at least one matching user
+    (used to grey out empty letters in the alphabet index).
+    """
+    base_query = (
+        sa.select(models.User)
+        .select_from(models.User)
+        .order_by(sa.func.lower(models.User.name).asc(), models.User.id.asc())
+    )
+
+    if query:
+        base_query = pagination.apply_search(models.User, base_query, query, ["name"])
+
+    if role is not None or div_min is not None or div_max is not None:
+        base_query = _apply_overview_role_filters(
+            base_query,
+            role=role,
+            div_min=div_min,
+            div_max=div_max,
+            grid=grid,
+        )
+
+    all_users = list((await session.execute(base_query)).unique().scalars().all())
+
+    grouped: dict[str, list[models.User]] = defaultdict(list)
+    for user in all_users:
+        grouped[_classify_letter(user.name)].append(user)
+
+    available_letters = sorted(grouped.keys(), key=lambda x: (x != "#", x))
+
+    if letter is not None:
+        letter_key = letter.upper() if letter != "#" else "#"
+        bucket = grouped.get(letter_key, [])
+        letters_with_users = [(letter_key, bucket[:per_letter])] if bucket else []
+    else:
+        sorted_letters = sorted(grouped.keys(), key=lambda x: (x != "#", x))
+        letters_with_users = [
+            (lbl, grouped[lbl][:per_letter]) for lbl in sorted_letters[:max_letters]
+        ]
+
+    return letters_with_users, len(all_users), available_letters
+
+
 async def get_compare_population(
     session: AsyncSession,
     *,
@@ -1307,15 +1522,16 @@ async def get_compare_population(
     tournament_id: int | None = None,
     grid: DivisionGrid,
 ) -> list[dict[str, typing.Any]]:
-    query = _compare_metrics_query(role=role, div_min=div_min, div_max=div_max, tournament_id=tournament_id, grid=grid)
+    # _compare_metrics_query emits 14 correlated scalar subqueries per row.
+    # Pre-resolving the candidate set bounds that fan-out to known user_ids
+    # instead of letting PG re-evaluate the cohort EXISTS per metric per row.
+    candidate_user_ids = user_ids
+    has_scope_filter = (
+        role is not None or div_min is not None or div_max is not None or tournament_id is not None
+    )
 
-    if user_ids is not None:
-        if not user_ids:
-            return []
-        query = query.where(models.User.id.in_(user_ids))
-
-    if role is not None or div_min is not None or div_max is not None or tournament_id is not None:
-        query = query.where(
+    if candidate_user_ids is None and has_scope_filter:
+        scope_query = sa.select(models.User.id).where(
             _compare_user_scope_exists(
                 models.User.id,
                 role=role,
@@ -1325,6 +1541,18 @@ async def get_compare_population(
                 grid=grid,
             )
         )
+        scope_result = await session.execute(scope_query)
+        candidate_user_ids = [row[0] for row in scope_result.all()]
+        if not candidate_user_ids:
+            return []
+
+    if candidate_user_ids is not None and not candidate_user_ids:
+        return []
+
+    query = _compare_metrics_query(role=role, div_min=div_min, div_max=div_max, tournament_id=tournament_id, grid=grid)
+
+    if candidate_user_ids is not None:
+        query = query.where(models.User.id.in_(candidate_user_ids))
 
     result = await session.execute(query)
     payload: list[dict[str, typing.Any]] = []

@@ -28,7 +28,7 @@ def team_entities(
         entities.append(utils.join_entity(child, models.Team.tournament))
     if "players" in in_entities:
         players_entities = utils.prepare_entities(in_entities, "players")
-        players_entity = utils.join_entity(child, models.Team.players)
+        players_entity = utils.selectin_entity(child, models.Team.players)
         entities.append(players_entity)
         if "user" in players_entities:
             user_entity = utils.join_entity(players_entity, models.Player.user)
@@ -47,9 +47,9 @@ def team_entities(
             )
         )
     if "placement" in in_entities:
-        entities.append(utils.join_entity(child, models.Team.standings))
+        entities.append(utils.selectin_entity(child, models.Team.standings))
     if "group" in in_entities:
-        standings = utils.join_entity(child, models.Team.standings)
+        standings = utils.selectin_entity(child, models.Team.standings)
         entities.append(standings)
         entities.append(utils.join_entity(standings, models.Standing.group))
 

@@ -209,6 +209,42 @@ export interface UserOverviewRow {
   averages: UserOverviewAverages;
 }
 
+export interface UserOverviewStats {
+  total_players: number;
+  with_logs_count: number;
+  with_logs_pct: number;
+  avg_tournaments_per_player: number;
+  median_tournaments_per_player: number;
+  active_last_30d: number;
+  active_last_30d_pct: number;
+  tank_count: number;
+  damage_count: number;
+  support_count: number;
+  flex_count: number;
+}
+
+export interface UserCatalogEntry {
+  id: number;
+  name: string;
+  roles: UserOverviewRoleDivision[];
+  top_heroes: UserOverviewHero[];
+  tournaments_count: number;
+  achievements_count: number;
+  avg_placement: number | null;
+}
+
+export interface UserCatalogLetter {
+  letter: string;
+  count: number;
+  users: UserCatalogEntry[];
+}
+
+export interface UserCatalogResponse {
+  letters: UserCatalogLetter[];
+  total: number;
+  available_letters: string[];
+}
+
 export type UserCompareBaselineMode = "target_user" | "global" | "cohort";
 
 export interface UserCompareUser {

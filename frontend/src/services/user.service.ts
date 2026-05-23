@@ -1,5 +1,6 @@
 import {
   EncounterWithUserStats,
+  UserCatalogResponse,
   UserCompareBaselineMode,
   UserCompareResponse,
   UserHeroCompareResponse,
@@ -8,6 +9,7 @@ import {
   UserMapRead,
   UserMapsSummary,
   UserOverviewRow,
+  UserOverviewStats,
   UserProfile,
   MinimizedUser,
   UserRoleType,
@@ -122,7 +124,17 @@ export default class userService {
     page: number,
     perPage: number = 10,
     sort: string = "id",
-    order: string = "desc"
+    order: string = "desc",
+    entities: string[] = [
+      "tournament",
+      "stage",
+      "stage_item",
+      "home_team",
+      "home_team.players",
+      "away_team",
+      "away_team.players",
+      "matches.map"
+    ]
   ): Promise<PaginatedResponse<EncounterWithUserStats>> {
     return apiFetch("app",`users/${id}/encounters`, {
       query: {
@@ -130,16 +142,7 @@ export default class userService {
         per_page: perPage,
         sort: sort,
         order: order,
-        entities: [
-          "tournament",
-          "stage",
-          "stage_item",
-          "home_team",
-          "home_team.players",
-          "away_team",
-          "away_team.players",
-          "matches.map"
-        ]
+        entities
       }
     }).then((res) => res.json());
   }
@@ -225,6 +228,57 @@ export default class userService {
         role,
         div_min: divMin,
         div_max: divMax
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getUsersOverviewStats({
+    query,
+    role,
+    divMin,
+    divMax
+  }: {
+    query?: string;
+    role?: UserRoleType;
+    divMin?: number;
+    divMax?: number;
+  } = {}): Promise<UserOverviewStats> {
+    return apiFetch("app", "users/overview/stats", {
+      query: {
+        query,
+        role,
+        div_min: divMin,
+        div_max: divMax
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getUsersCatalog({
+    query,
+    role,
+    divMin,
+    divMax,
+    letter,
+    perLetter = 12,
+    maxLetters = 27
+  }: {
+    query?: string;
+    role?: UserRoleType;
+    divMin?: number;
+    divMax?: number;
+    letter?: string;
+    perLetter?: number;
+    maxLetters?: number;
+  } = {}): Promise<UserCatalogResponse> {
+    return apiFetch("app", "users/overview/catalog", {
+      query: {
+        query,
+        role,
+        div_min: divMin,
+        div_max: divMax,
+        letter,
+        per_letter: perLetter,
+        max_letters: maxLetters
       }
     }).then((res) => res.json());
   }

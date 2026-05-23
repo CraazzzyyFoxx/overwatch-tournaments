@@ -165,7 +165,11 @@ async def to_pydantic_match(
 
 
 async def get_encounter(
-    session: AsyncSession, encounter_id: int, entities: list[str]
+    session: AsyncSession,
+    encounter_id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
 ) -> schemas.EncounterRead:
     """
     Retrieves an encounter by its ID and converts it to a Pydantic schema.
@@ -174,6 +178,7 @@ async def get_encounter(
         session (AsyncSession): The SQLAlchemy async session.
         encounter_id (int): The ID of the encounter to retrieve.
         entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
+        workspace_id: When provided, returns 404 for encounters outside this workspace.
 
     Returns:
         schemas.EncounterRead: The Pydantic schema representing the encounter.
@@ -181,7 +186,7 @@ async def get_encounter(
     Raises:
         errors.ApiHTTPException: If the encounter is not found.
     """
-    encounter = await service.get_encounter(session, encounter_id, entities)
+    encounter = await service.get_encounter(session, encounter_id, entities, workspace_id=workspace_id)
     if not encounter:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -281,7 +286,11 @@ def create_team_with_match_stats(
 
 
 async def get_match(
-    session: AsyncSession, match_id: int, entities: list[str]
+    session: AsyncSession,
+    match_id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
 ) -> schemas.MatchRead:
     """
     Retrieves a match by its ID and converts it to a Pydantic schema.
@@ -290,6 +299,7 @@ async def get_match(
         session (AsyncSession): The SQLAlchemy async session.
         match_id (int): The ID of the match to retrieve.
         entities (list[str]): A list of related entities to include (e.g., ["teams", "map"]).
+        workspace_id: When provided, returns 404 for matches outside this workspace.
 
     Returns:
         schemas.MatchRead: The Pydantic schema representing the match.
@@ -297,7 +307,7 @@ async def get_match(
     Raises:
         errors.ApiHTTPException: If the match is not found.
     """
-    match = await service.get_match(session, match_id, entities)
+    match = await service.get_match(session, match_id, entities, workspace_id=workspace_id)
     if not match:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -311,7 +321,11 @@ async def get_match(
 
 
 async def get_match_with_stats(
-    session: AsyncSession, match_id: int, entities: list[str]
+    session: AsyncSession,
+    match_id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
 ) -> schemas.MatchReadWithStats:
     """
     Retrieves a match by its ID and converts it to a Pydantic schema with detailed statistics.
@@ -320,6 +334,7 @@ async def get_match_with_stats(
         session (AsyncSession): The SQLAlchemy async session.
         match_id (int): The ID of the match to retrieve.
         entities (list[str]): A list of related entities to include (e.g., ["teams", "map"]).
+        workspace_id: When provided, returns 404 for matches outside this workspace.
 
     Returns:
         schemas.MatchReadWithStats: The Pydantic schema representing the match with detailed statistics.
@@ -331,7 +346,7 @@ async def get_match_with_stats(
         entities.append("teams")
     if "teams.players" not in entities:
         entities.append("teams.players")
-    match = await get_match(session, match_id, entities)
+    match = await get_match(session, match_id, entities, workspace_id=workspace_id)
     max_round: int = 0
     home_team_stats: dict[
         int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]

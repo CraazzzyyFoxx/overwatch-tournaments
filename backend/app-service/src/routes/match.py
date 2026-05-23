@@ -49,6 +49,7 @@ async def get_all_matches(
 async def get_match(
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
+    workspace_id: WorkspaceQuery = None,
     entities: list[str] = Query([]),
 ):
-    return await encounter_flows.get_match_with_stats(session, id, entities)
+    return await encounter_flows.get_match_with_stats(session, id, entities, workspace_id=workspace_id)

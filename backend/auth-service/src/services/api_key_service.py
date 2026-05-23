@@ -6,10 +6,9 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
-import sqlalchemy as sa
 from fastapi import HTTPException, status
+from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from src import models, schemas
 from src.core.config import settings
@@ -40,6 +39,10 @@ DEFAULT_API_KEY_CONFIG_POLICY: dict[str, Any] = {
         "max_result_variants": 10,
     },
 }
+
+_api_key_repo = ApiKeyRepository()
+_workspace_member_repo = WorkspaceMemberRepository()
+_workspace_repo = WorkspaceRepository()
 
 
 def _now() -> datetime:
@@ -104,18 +107,15 @@ async def _get_workspace_member(
     user_id: int,
     workspace_id: int,
 ) -> models.WorkspaceMember | None:
-    result = await session.execute(
-        sa.select(models.WorkspaceMember).where(
-            models.WorkspaceMember.auth_user_id == user_id,
-            models.WorkspaceMember.workspace_id == workspace_id,
-        )
+    return await _workspace_member_repo.get_member(
+        session,
+        workspace_id=workspace_id,
+        auth_user_id=user_id,
     )
-    return result.scalar_one_or_none()
 
 
 async def _ensure_active_workspace(session: AsyncSession, workspace_id: int) -> models.Workspace:
-    result = await session.execute(sa.select(models.Workspace).where(models.Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
+    workspace = await _workspace_repo.get(session, workspace_id)
     if workspace is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     if not workspace.is_active:
@@ -164,15 +164,12 @@ async def list_api_keys(
     workspace_id: int,
 ) -> list[schemas.ApiKeyRead]:
     await ensure_can_manage_api_keys(session, user=user, workspace_id=workspace_id)
-    result = await session.execute(
-        sa.select(models.ApiKey)
-        .where(
-            models.ApiKey.auth_user_id == user.id,
-            models.ApiKey.workspace_id == workspace_id,
-        )
-        .order_by(models.ApiKey.created_at.desc(), models.ApiKey.id.desc())
+    rows = await _api_key_repo.list_for_user_workspace(
+        session,
+        auth_user_id=user.id,
+        workspace_id=workspace_id,
     )
-    return [_serialize_api_key(row) for row in result.scalars().all()]
+    return [_serialize_api_key(row) for row in rows]
 
 
 async def create_api_key(
@@ -197,7 +194,7 @@ async def create_api_key(
         config_policy_json=dict(DEFAULT_API_KEY_CONFIG_POLICY),
         expires_at=payload.expires_at,
     )
-    session.add(row)
+    await _api_key_repo.create(session, row)
     await session.commit()
     await session.refresh(row)
     return schemas.ApiKeyCreateResponse(api_key=_serialize_api_key(row), key=full_key)
@@ -210,7 +207,7 @@ async def update_api_key(
     api_key_id: int,
     payload: schemas.ApiKeyUpdate,
 ) -> schemas.ApiKeyRead:
-    row = await session.get(models.ApiKey, api_key_id)
+    row = await _api_key_repo.get(session, api_key_id)
     if row is None or row.auth_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     await ensure_can_manage_api_keys(session, user=user, workspace_id=row.workspace_id)
@@ -226,7 +223,7 @@ async def revoke_api_key(
     user: models.AuthUser,
     api_key_id: int,
 ) -> None:
-    row = await session.get(models.ApiKey, api_key_id)
+    row = await _api_key_repo.get(session, api_key_id)
     if row is None or row.auth_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     await ensure_can_manage_api_keys(session, user=user, workspace_id=row.workspace_id)
@@ -241,15 +238,7 @@ async def validate_api_key(session: AsyncSession, raw_key: str) -> schemas.Token
         return None
 
     public_id, secret = parsed
-    result = await session.execute(
-        sa.select(models.ApiKey)
-        .where(models.ApiKey.public_id == public_id)
-        .options(
-            selectinload(models.ApiKey.user),
-            selectinload(models.ApiKey.workspace),
-        )
-    )
-    api_key = result.scalar_one_or_none()
+    api_key = await _api_key_repo.get_by_public_id(session, public_id)
     if api_key is None:
         return None
     if not hmac.compare_digest(api_key.secret_hash, _hash_secret(secret)):

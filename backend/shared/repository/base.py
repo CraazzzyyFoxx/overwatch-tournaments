@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,36 +10,46 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 from shared.core.db import Base
 from shared.core.pagination import PaginationSortParams, PaginationSortSearchParams
 
-ModelType = TypeVar("ModelType", bound=Base)
 
-
-class BaseRepository(Generic[ModelType]):
+class BaseRepository[ModelType: Base]:
     """Generic async repository for common CRUD operations.
 
-    Stateless — instantiate at module level, pass session per-call.
-
-    Usage::
-
-        hero_repo = BaseRepository(Hero)
-        hero = await hero_repo.get(session, id=1)
-        heroes, total = await hero_repo.get_all(session, params)
+    Repositories are transaction-neutral: write methods mutate the session and
+    flush, while callers decide when to commit or roll back.
     """
 
     def __init__(self, model: type[ModelType]) -> None:
         self.model = model
 
-    # ── Read ──────────────────────────────────────────────────────────
+    def select(self) -> sa.Select[tuple[ModelType]]:
+        return sa.select(self.model)
+
+    def _apply_options(
+        self,
+        query: sa.Select[tuple[Any]],
+        options: Sequence[_AbstractLoad] | None,
+    ) -> sa.Select[tuple[Any]]:
+        if options:
+            query = query.options(*options)
+        return query
+
+    def _apply_filters(
+        self,
+        query: sa.Select[tuple[Any]],
+        filters: Sequence[sa.ColumnElement[bool]] | None,
+    ) -> sa.Select[tuple[Any]]:
+        if filters:
+            query = query.where(*filters)
+        return query
 
     async def get(
         self,
         session: AsyncSession,
         id: int | str,
         *,
-        options: list[_AbstractLoad] | None = None,
+        options: Sequence[_AbstractLoad] | None = None,
     ) -> ModelType | None:
-        query = sa.select(self.model).where(self.model.id == id)
-        if options:
-            query = query.options(*options)
+        query = self._apply_options(self.select().where(self.model.id == id), options)
         result = await session.execute(query)
         return result.unique().scalars().first()
 
@@ -45,118 +57,129 @@ class BaseRepository(Generic[ModelType]):
         self,
         session: AsyncSession,
         *,
-        options: list[_AbstractLoad] | None = None,
+        options: Sequence[_AbstractLoad] | None = None,
         **filters: Any,
     ) -> ModelType | None:
-        query = sa.select(self.model).filter_by(**filters)
-        if options:
-            query = query.options(*options)
+        query = self._apply_options(self.select().filter_by(**filters), options)
         result = await session.execute(query)
         return result.unique().scalars().first()
+
+    async def list(
+        self,
+        session: AsyncSession,
+        params: PaginationSortParams | PaginationSortSearchParams | None = None,
+        *,
+        options: Sequence[_AbstractLoad] | None = None,
+        filters: Sequence[sa.ColumnElement[bool]] | None = None,
+        order_by: Sequence[sa.ColumnElement[Any]] | None = None,
+    ) -> tuple[Sequence[ModelType], int]:
+        query = self._apply_options(self.select(), options)
+        total_query = sa.select(sa.func.count(self.model.id))
+
+        query = self._apply_filters(query, filters)
+        total_query = self._apply_filters(total_query, filters)
+
+        if isinstance(params, PaginationSortSearchParams):
+            query = params.apply_search(query, self.model)
+            total_query = params.apply_search(total_query, self.model)
+
+        if order_by:
+            query = query.order_by(*order_by)
+
+        if params is not None:
+            query = params.apply_pagination_sort(query, self.model)
+
+        result = await session.execute(query)
+        total_result = await session.execute(total_query)
+        return result.unique().scalars().all(), total_result.scalar_one()
 
     async def get_all(
         self,
         session: AsyncSession,
         params: PaginationSortParams | PaginationSortSearchParams,
         *,
-        options: list[_AbstractLoad] | None = None,
-        filters: list[sa.ColumnElement[bool]] | None = None,
+        options: Sequence[_AbstractLoad] | None = None,
+        filters: Sequence[sa.ColumnElement[bool]] | None = None,
     ) -> tuple[Sequence[ModelType], int]:
-        query = sa.select(self.model)
-        total_query = sa.select(sa.func.count(self.model.id))
+        return await self.list(session, params, options=options, filters=filters)
 
-        if options:
-            query = query.options(*options)
-        if filters:
-            for f in filters:
-                query = query.where(f)
-                total_query = total_query.where(f)
-
-        if isinstance(params, PaginationSortSearchParams):
-            query = params.apply_search(query, self.model)
-            total_query = params.apply_search(total_query, self.model)
-
-        query = params.apply_pagination_sort(query, self.model)
-
+    async def bulk_get(
+        self,
+        session: AsyncSession,
+        ids: Sequence[int | str],
+        *,
+        options: Sequence[_AbstractLoad] | None = None,
+    ) -> Sequence[ModelType]:
+        if not ids:
+            return []
+        query = self._apply_options(self.select().where(self.model.id.in_(ids)), options)
         result = await session.execute(query)
-        total_result = await session.execute(total_query)
-        return result.unique().scalars().all(), total_result.scalar_one()
+        return result.unique().scalars().all()
 
     async def get_bulk(
         self,
         session: AsyncSession,
-        ids: list[int | str],
+        ids: Sequence[int | str],
         *,
-        options: list[_AbstractLoad] | None = None,
+        options: Sequence[_AbstractLoad] | None = None,
     ) -> Sequence[ModelType]:
-        query = sa.select(self.model).where(self.model.id.in_(ids))
-        if options:
-            query = query.options(*options)
-        result = await session.execute(query)
-        return result.unique().scalars().all()
+        return await self.bulk_get(session, ids, options=options)
 
     async def count(
         self,
         session: AsyncSession,
         *,
-        filters: list[sa.ColumnElement[bool]] | None = None,
+        filters: Sequence[sa.ColumnElement[bool]] | None = None,
     ) -> int:
-        query = sa.select(sa.func.count(self.model.id))
-        if filters:
-            for f in filters:
-                query = query.where(f)
+        query = self._apply_filters(sa.select(sa.func.count(self.model.id)), filters)
         result = await session.execute(query)
         return result.scalar_one()
 
-    # ── Write ─────────────────────────────────────────────────────────
-
-    async def create(
+    async def exists(
         self,
         session: AsyncSession,
-        instance: ModelType,
         *,
-        commit: bool = True,
-    ) -> ModelType:
+        filters: Sequence[sa.ColumnElement[bool]] | None = None,
+        **filter_by: Any,
+    ) -> bool:
+        query = sa.select(sa.literal(True)).select_from(self.model).filter_by(**filter_by).limit(1)
+        query = self._apply_filters(query, filters)
+        result = await session.execute(query)
+        return result.scalar_one_or_none() is True
+
+    async def create(self, session: AsyncSession, instance: ModelType) -> ModelType:
         session.add(instance)
-        if commit:
-            await session.commit()
-            await session.refresh(instance)
+        await session.flush()
         return instance
 
     async def create_many(
         self,
         session: AsyncSession,
-        instances: list[ModelType],
-        *,
-        commit: bool = True,
-    ) -> list[ModelType]:
-        session.add_all(instances)
-        if commit:
-            await session.commit()
+        instances: Sequence[ModelType],
+    ) -> Sequence[ModelType]:
+        session.add_all(list(instances))
+        await session.flush()
         return instances
+
+    async def update_fields(
+        self,
+        session: AsyncSession,
+        instance: ModelType,
+        data: dict[str, Any],
+    ) -> ModelType:
+        for field, value in data.items():
+            setattr(instance, field, value)
+        await session.flush()
+        return instance
 
     async def update(
         self,
         session: AsyncSession,
         instance: ModelType,
         data: dict[str, Any],
-        *,
-        commit: bool = True,
     ) -> ModelType:
-        for field, value in data.items():
-            setattr(instance, field, value)
-        if commit:
-            await session.commit()
-            await session.refresh(instance)
-        return instance
+        return await self.update_fields(session, instance, data)
 
-    async def delete(
-        self,
-        session: AsyncSession,
-        instance: ModelType,
-        *,
-        commit: bool = True,
-    ) -> None:
+    async def delete(self, session: AsyncSession, instance: ModelType) -> None:
         await session.delete(instance)
-        if commit:
-            await session.commit()
+        await session.flush()

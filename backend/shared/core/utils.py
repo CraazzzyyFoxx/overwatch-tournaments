@@ -8,6 +8,7 @@ __all__ = (
     "remove_from_entities",
     "find_entities",
     "join_entity",
+    "selectin_entity",
 )
 
 
@@ -39,3 +40,17 @@ def join_entity(child: typing.Any, entity: typing.Any) -> _AbstractLoad:
     if child:
         return child.joinedload(entity)  # noqa
     return sa.orm.joinedload(entity)
+
+
+def selectin_entity(child: typing.Any, entity: typing.Any) -> _AbstractLoad:
+    """Build a selectinload chain, optionally nested under a parent load.
+
+    Why: joinedload on to-many relationships multiplies the result set
+    (one row per descendant). For nested collections like
+    Encounter -> matches and Team -> players, this becomes a cartesian
+    explosion that blows up memory and stalls workers. selectinload
+    issues a follow-up IN(...) query per collection level instead.
+    """
+    if child:
+        return child.selectinload(entity)  # noqa
+    return sa.orm.selectinload(entity)

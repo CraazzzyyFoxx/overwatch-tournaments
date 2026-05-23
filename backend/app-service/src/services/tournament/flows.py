@@ -99,7 +99,13 @@ async def to_pydantic_group(
     )
 
 
-async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tournament:
+async def get(
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
+) -> models.Tournament:
     """
     Retrieves a `Tournament` model instance by its ID, optionally including related entities.
 
@@ -107,6 +113,8 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
         session: An SQLAlchemy `AsyncSession` for database interaction.
         id: The ID of the tournament to retrieve.
         entities: A list of strings representing the names of related entities to include.
+        workspace_id: When provided, scopes the lookup; tournaments in other
+            workspaces will return 404 instead of leaking cross-tenant data.
 
     Returns:
         A `Tournament` model instance.
@@ -114,7 +122,7 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
     Raises:
         errors.ApiHTTPException: If the tournament is not found.
     """
-    tournament = await service.get(session, id, entities)
+    tournament = await service.get(session, id, entities, workspace_id=workspace_id)
     if tournament is None:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -128,7 +136,13 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
     return tournament
 
 
-async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schemas.TournamentRead:
+async def get_read(
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
+) -> schemas.TournamentRead:
     """
     Retrieves a `Tournament` model instance by its ID and converts it to a `TournamentRead` schema.
 
@@ -136,11 +150,12 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
         session: An SQLAlchemy `AsyncSession` for database interaction.
         id: The ID of the tournament to retrieve.
         entities: A list of strings representing the names of related entities to include.
+        workspace_id: When provided, scopes the lookup to this workspace.
 
     Returns:
         A `TournamentRead` schema instance.
     """
-    tournament = await get(session, id, entities)
+    tournament = await get(session, id, entities, workspace_id=workspace_id)
     return await to_pydantic(session, tournament, entities)
 
 

@@ -2,7 +2,7 @@
 
 import sqlalchemy as sa
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from shared.repository import GamemodeRepository, MapRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,27 +10,26 @@ from src import models
 from src.schemas import MapRead
 from src.schemas.admin import map as admin_schemas
 
+_gamemode_repo = GamemodeRepository()
+_map_repo = MapRepository()
+
 
 async def get_maps(session: AsyncSession, params: admin_schemas.MapListParams) -> dict:
     """Get paginated list of maps"""
-    query = select(models.Map).options(selectinload(models.Map.gamemode))
-    count_query = select(sa.func.count(models.Map.id))
-
+    filters: list[sa.ColumnElement[bool]] = []
     if params.search:
         search_term = f"%{params.search}%"
-        query = query.where(models.Map.name.ilike(search_term))
-        count_query = count_query.where(models.Map.name.ilike(search_term))
+        filters.append(models.Map.name.ilike(search_term))
 
     if params.gamemode_id is not None:
-        query = query.where(models.Map.gamemode_id == params.gamemode_id)
-        count_query = count_query.where(models.Map.gamemode_id == params.gamemode_id)
+        filters.append(models.Map.gamemode_id == params.gamemode_id)
 
-    query = params.apply_pagination_sort(query, models.Map)
-
-    result = await session.execute(query)
-    total_result = await session.execute(count_query)
-    maps = result.scalars().all()
-    total = total_result.scalar_one()
+    maps, total = await _map_repo.list(
+        session,
+        params,
+        filters=filters,
+        options=[selectinload(models.Map.gamemode)],
+    )
 
     return {
         "results": [MapRead.model_validate(map_obj, from_attributes=True) for map_obj in maps],
@@ -42,14 +41,12 @@ async def get_maps(session: AsyncSession, params: admin_schemas.MapListParams) -
 
 async def create_map(session: AsyncSession, data: admin_schemas.MapCreate) -> models.Map:
     """Create a new map"""
-    gamemode_result = await session.execute(select(models.Gamemode).where(models.Gamemode.id == data.gamemode_id))
-    gamemode = gamemode_result.scalar_one_or_none()
+    gamemode = await _gamemode_repo.get(session, data.gamemode_id)
 
     if not gamemode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gamemode not found")
 
-    result = await session.execute(select(models.Map).where(models.Map.name == data.name))
-    existing_map = result.scalar_one_or_none()
+    existing_map = await _map_repo.get_by_name(session, data.name)
 
     if existing_map:
         raise HTTPException(
@@ -59,7 +56,7 @@ async def create_map(session: AsyncSession, data: admin_schemas.MapCreate) -> mo
 
     map_obj = models.Map(name=data.name, gamemode_id=data.gamemode_id)
 
-    session.add(map_obj)
+    await _map_repo.create(session, map_obj)
     await session.commit()
     await session.refresh(map_obj, ["gamemode"])
 
@@ -68,17 +65,13 @@ async def create_map(session: AsyncSession, data: admin_schemas.MapCreate) -> mo
 
 async def update_map(session: AsyncSession, map_id: int, data: admin_schemas.MapUpdate) -> models.Map:
     """Update map fields"""
-    result = await session.execute(
-        select(models.Map).where(models.Map.id == map_id).options(selectinload(models.Map.gamemode))
-    )
-    map_obj = result.scalar_one_or_none()
+    map_obj = await _map_repo.get_with_gamemode(session, map_id)
 
     if not map_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
     if data.gamemode_id:
-        gamemode_result = await session.execute(select(models.Gamemode).where(models.Gamemode.id == data.gamemode_id))
-        gamemode = gamemode_result.scalar_one_or_none()
+        gamemode = await _gamemode_repo.get(session, data.gamemode_id)
 
         if not gamemode:
             raise HTTPException(
@@ -87,8 +80,7 @@ async def update_map(session: AsyncSession, map_id: int, data: admin_schemas.Map
             )
 
     if data.name and data.name != map_obj.name:
-        result = await session.execute(select(models.Map).where(models.Map.name == data.name))
-        existing_map = result.scalar_one_or_none()
+        existing_map = await _map_repo.get_by_name(session, data.name)
 
         if existing_map:
             raise HTTPException(
@@ -97,9 +89,7 @@ async def update_map(session: AsyncSession, map_id: int, data: admin_schemas.Map
             )
 
     update_data = data.model_dump(exclude_unset=True)
-    for field_name, value in update_data.items():
-        setattr(map_obj, field_name, value)
-
+    await _map_repo.update_fields(session, map_obj, update_data)
     await session.commit()
     await session.refresh(map_obj, ["gamemode"])
 
@@ -108,11 +98,10 @@ async def update_map(session: AsyncSession, map_id: int, data: admin_schemas.Map
 
 async def delete_map(session: AsyncSession, map_id: int) -> None:
     """Delete map"""
-    result = await session.execute(select(models.Map).where(models.Map.id == map_id))
-    map_obj = result.scalar_one_or_none()
+    map_obj = await _map_repo.get(session, map_id)
 
     if not map_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
-    await session.delete(map_obj)
+    await _map_repo.delete(session, map_obj)
     await session.commit()

@@ -22,6 +22,11 @@ async def invalidate_tournament_standings_cache(tournament_id: int) -> None:
         f"fastapi:*tournaments/{tournament_id}/standings*",
         f"backend:*tournaments/{tournament_id}/standings*",
         f"*tournaments/{tournament_id}/standings*",
+        # User-scoped flow caches aggregate across tournaments — we don't know
+        # which users touched this tournament, so invalidate them broadly.
+        # TTL is short (users_cache_ttl=60s) so the steady-state cost is low.
+        "backend:user_profile:*",
+        "backend:user_tournaments:*",
     )
     for pattern in patterns:
         await cache.delete_match(pattern)

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from shared.clients import AuthClient, S3Client
@@ -124,6 +125,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "PATCH", "PUT"],
     allow_headers=["*"],
 )
+
+# Gzip JSON responses larger than 1 KiB. Big payloads like /users/{id}/profile (~41 KB)
+# and /users/{id}/tournaments (~70 KB) shrink 60-80% on the wire.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Observability middleware (order matters: last added = first executed)
 app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit

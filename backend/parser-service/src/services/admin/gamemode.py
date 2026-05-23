@@ -2,15 +2,14 @@
 
 import sqlalchemy as sa
 from fastapi import HTTPException, status
+from shared.repository import GamemodeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared.repository import BaseRepository
 
 from src import models
 from src.schemas import GamemodeRead
 from src.schemas.admin import gamemode as admin_schemas
 
-_repo = BaseRepository(models.Gamemode)
+_repo = GamemodeRepository()
 
 
 async def get_gamemodes(session: AsyncSession, params: admin_schemas.GamemodeListParams) -> dict:
@@ -39,7 +38,10 @@ async def create_gamemode(session: AsyncSession, data: admin_schemas.GamemodeCre
         )
 
     gamemode = models.Gamemode(name=data.name)
-    return await _repo.create(session, gamemode)
+    gamemode = await _repo.create(session, gamemode)
+    await session.commit()
+    await session.refresh(gamemode)
+    return gamemode
 
 
 async def update_gamemode(
@@ -59,7 +61,10 @@ async def update_gamemode(
             )
 
     update_data = data.model_dump(exclude_unset=True)
-    return await _repo.update(session, gamemode, update_data)
+    gamemode = await _repo.update_fields(session, gamemode, update_data)
+    await session.commit()
+    await session.refresh(gamemode)
+    return gamemode
 
 
 async def delete_gamemode(session: AsyncSession, gamemode_id: int) -> None:
@@ -69,3 +74,4 @@ async def delete_gamemode(session: AsyncSession, gamemode_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gamemode not found")
 
     await _repo.delete(session, gamemode)
+    await session.commit()

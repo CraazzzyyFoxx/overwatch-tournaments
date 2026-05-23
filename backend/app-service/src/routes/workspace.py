@@ -4,6 +4,7 @@ from redis.asyncio import Redis
 from shared.clients.s3 import S3Client
 from shared.clients.s3.upload import upload_avatar
 from shared.rbac import assign_workspace_system_role, ensure_workspace_system_roles, get_workspace_system_role
+from shared.repository import AuthUserRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -16,6 +17,7 @@ def get_s3(request: Request) -> S3Client:
 
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+_auth_user_repo = AuthUserRepository()
 
 
 def _require_workspace_permission(
@@ -45,7 +47,7 @@ async def _workspace_member_payload(
     session: AsyncSession,
     member: models.WorkspaceMember,
 ) -> schemas.WorkspaceMemberRead:
-    auth_user = await session.get(models.AuthUser, member.auth_user_id)
+    auth_user = await _auth_user_repo.get(session, member.auth_user_id)
     roles = await workspace_service.get_member_workspace_roles(
         session,
         member.workspace_id,
@@ -238,7 +240,7 @@ async def add_workspace_member(
     workspace = await workspace_service.get_by_id(session, workspace_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    target_user = await session.get(models.AuthUser, data.auth_user_id)
+    target_user = await _auth_user_repo.get(session, data.auth_user_id)
     if target_user is None:
         raise HTTPException(status_code=404, detail="Auth user not found")
 

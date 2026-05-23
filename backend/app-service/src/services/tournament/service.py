@@ -44,7 +44,13 @@ def tournament_entities(in_entities: list[str], child: typing.Any | None = None)
     return entities
 
 
-async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tournament | None:
+async def get(
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    *,
+    workspace_id: int | None = None,
+) -> models.Tournament | None:
     """
     Retrieves a `Tournament` model instance by its ID, optionally including related entities.
 
@@ -52,6 +58,8 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
         session: An SQLAlchemy `AsyncSession` for database interaction.
         id: The ID of the tournament to retrieve.
         entities: A list of strings representing the names of related entities to include.
+        workspace_id: When provided, scopes the lookup to this workspace so callers
+            in workspace A cannot read tournaments belonging to workspace B.
 
     Returns:
         A `Tournament` model instance if found, otherwise `None`.
@@ -59,6 +67,8 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
     query = (
         sa.select(models.Tournament).where(sa.and_(models.Tournament.id == id)).options(*tournament_entities(entities))
     )
+    if workspace_id is not None:
+        query = query.where(models.Tournament.workspace_id == workspace_id)
     result = await session.execute(query)
     return result.unique().scalars().first()
 

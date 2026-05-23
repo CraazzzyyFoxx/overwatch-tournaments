@@ -4,15 +4,14 @@ import re
 
 import sqlalchemy as sa
 from fastapi import HTTPException, status
+from shared.repository import HeroRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared.repository import BaseRepository
 
 from src import models
 from src.schemas import HeroRead
 from src.schemas.admin import hero as admin_schemas
 
-_repo = BaseRepository(models.Hero)
+_repo = HeroRepository()
 
 
 def _slugify_name(name: str) -> str:
@@ -54,7 +53,10 @@ async def create_hero(session: AsyncSession, data: admin_schemas.HeroCreate) -> 
         type=data.role,
         color=data.color,
     )
-    return await _repo.create(session, hero)
+    hero = await _repo.create(session, hero)
+    await session.commit()
+    await session.refresh(hero)
+    return hero
 
 
 async def update_hero(session: AsyncSession, hero_id: int, data: admin_schemas.HeroUpdate) -> models.Hero:
@@ -76,7 +78,10 @@ async def update_hero(session: AsyncSession, hero_id: int, data: admin_schemas.H
     if role is not None:
         update_data["type"] = role
 
-    return await _repo.update(session, hero, update_data)
+    hero = await _repo.update_fields(session, hero, update_data)
+    await session.commit()
+    await session.refresh(hero)
+    return hero
 
 
 async def delete_hero(session: AsyncSession, hero_id: int) -> None:
@@ -86,3 +91,4 @@ async def delete_hero(session: AsyncSession, hero_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hero not found")
 
     await _repo.delete(session, hero)
+    await session.commit()

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
+from shared.repository import RefreshTokenRepository
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +14,7 @@ from src import models
 
 SessionStatus = Literal["active", "revoked", "expired"]
 DEFAULT_USER_SESSION_HISTORY_LIMIT = 20
+_refresh_token_repo = RefreshTokenRepository()
 
 
 class SessionService:
@@ -100,12 +102,7 @@ class SessionService:
         current_session_id: str | None = None,
         history_limit: int = DEFAULT_USER_SESSION_HISTORY_LIMIT,
     ) -> list[dict]:
-        result = await session.execute(
-            select(models.RefreshToken)
-            .where(models.RefreshToken.user_id == user_id)
-            .order_by(models.RefreshToken.session_started_at.desc(), models.RefreshToken.created_at.desc())
-        )
-        tokens = result.scalars().all()
+        tokens = await _refresh_token_repo.list_by_user(session, user_id)
         summaries = SessionService._summaries_from_tokens(tokens, current_session_id=current_session_id)
         return SessionService._limit_user_session_history(summaries, history_limit=history_limit)
 
@@ -117,15 +114,11 @@ class SessionService:
         *,
         current_session_id: str | None = None,
     ) -> dict | None:
-        result = await session.execute(
-            select(models.RefreshToken)
-            .where(
-                models.RefreshToken.user_id == user_id,
-                models.RefreshToken.session_id == session_id,
-            )
-            .order_by(models.RefreshToken.created_at.desc())
+        tokens = await _refresh_token_repo.list_by_user_session(
+            session,
+            user_id=user_id,
+            session_id=session_id,
         )
-        tokens = result.scalars().all()
         if not tokens:
             return None
         summaries = SessionService._summaries_from_tokens(tokens, current_session_id=current_session_id)

@@ -55,6 +55,7 @@ class _FakeSession:
     def __init__(self, results: list[dict] | None = None) -> None:
         self._results = list(results or [])
         self.added = []
+        self.flush_calls = 0
         self.commit_calls = 0
         self.refresh_calls = 0
 
@@ -68,6 +69,9 @@ class _FakeSession:
 
     async def commit(self) -> None:
         self.commit_calls += 1
+
+    async def flush(self) -> None:
+        self.flush_calls += 1
 
     async def refresh(self, row) -> None:
         self.refresh_calls += 1
@@ -143,6 +147,7 @@ def test_create_api_key_returns_secret_once_and_stores_only_hash(monkeypatch: py
     assert stored.secret_hash != "secret-token"
     assert stored.name == "Balancer API"
     assert "secret" not in response.api_key.model_dump()
+    assert session.flush_calls == 1
     assert session.commit_calls == 1
     assert session.refresh_calls == 1
 
