@@ -622,7 +622,9 @@ async def list_registrations(
         sa.select(models.BalancerRegistration)
         .where(models.BalancerRegistration.tournament_id == tournament_id)
         .options(
-            selectinload(models.BalancerRegistration.roles),
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero),
             selectinload(models.BalancerRegistration.auth_user),
             selectinload(models.BalancerRegistration.reviewer),
             selectinload(models.BalancerRegistration.deleted_by_user),
@@ -654,7 +656,9 @@ async def get_registration_by_id(session: AsyncSession, registration_id: int) ->
         sa.select(models.BalancerRegistration)
         .where(models.BalancerRegistration.id == registration_id)
         .options(
-            selectinload(models.BalancerRegistration.roles),
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero),
             selectinload(models.BalancerRegistration.reviewer),
             selectinload(models.BalancerRegistration.checked_in_by_user),
             selectinload(models.BalancerRegistration.google_sheet_binding),

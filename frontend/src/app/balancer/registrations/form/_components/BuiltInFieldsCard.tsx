@@ -28,10 +28,12 @@ export function BuiltInFieldsCard({
         <div className="divide-y rounded-lg border">
           {BUILT_IN_FIELDS.map((def) => {
             const cfg = builtInFields[def.key] ?? { enabled: def.defaultEnabled, required: def.defaultRequired };
+
             return (
               <div key={def.key} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1">
+                <div className="grid gap-4 items-center grid-cols-1 md:grid-cols-[220px_1fr_1.2fr_180px]">
+                  {/* Column 1: Label & Description */}
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{def.label}</span>
                       {cfg.required && cfg.enabled && (
@@ -42,9 +44,80 @@ export function BuiltInFieldsCard({
                     </div>
                     <p className="text-xs text-muted-foreground">{def.description}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-4">
-                    {cfg.enabled && (
-                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+
+                  {/* Column 2: Regex or Max Heroes */}
+                  <div className="min-w-0">
+                    {cfg.enabled && def.supportsValidation && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/75">
+                          Regex pattern
+                        </Label>
+                        <Input
+                          value={cfg.validation?.regex ?? ""}
+                          onChange={(e) =>
+                            onUpdate(def.key, {
+                              validation: {
+                                ...cfg.validation,
+                                regex: e.target.value || null,
+                              },
+                            })
+                          }
+                          placeholder={def.defaultValidation?.regex ?? "^[a-z0-9_]+$"}
+                          className="h-8 text-xs bg-background/50"
+                        />
+                      </div>
+                    )}
+                    {cfg.enabled && def.supportsMaxHeroes && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/75">
+                          Max heroes per role
+                        </Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={cfg.max_heroes ?? ""}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value, 10);
+                            onUpdate(def.key, {
+                              max_heroes: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
+                            });
+                          }}
+                          placeholder="5"
+                          className="h-8 text-xs bg-background/50"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 3: Error Message */}
+                  <div className="min-w-0">
+                    {cfg.enabled && def.supportsValidation && (
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/75">
+                          Error message
+                        </Label>
+                        <Input
+                          value={cfg.validation?.error_message ?? ""}
+                          onChange={(e) =>
+                            onUpdate(def.key, {
+                              validation: {
+                                ...cfg.validation,
+                                error_message: e.target.value || null,
+                              },
+                            })
+                          }
+                          placeholder={`Shown when ${def.label} is invalid`}
+                          className="h-8 text-xs bg-background/50"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 4: Controls */}
+                  <div className="flex items-center justify-end gap-3 justify-self-end">
+                    {cfg.enabled && def.supportsRequired !== false && (
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
                         <Switch
                           checked={cfg.required}
                           onCheckedChange={(checked) => onUpdate(def.key, { required: checked })}
@@ -61,40 +134,6 @@ export function BuiltInFieldsCard({
                     />
                   </div>
                 </div>
-                {def.supportsValidation && cfg.enabled && (
-                  <div className="mt-3 grid gap-3 rounded-md border border-dashed border-border/60 p-3 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Regex pattern</Label>
-                      <Input
-                        value={cfg.validation?.regex ?? ""}
-                        onChange={(e) =>
-                          onUpdate(def.key, {
-                            validation: {
-                              ...cfg.validation,
-                              regex: e.target.value || null,
-                            },
-                          })
-                        }
-                        placeholder={def.defaultValidation?.regex ?? "^[a-z0-9_]+$"}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Error message</Label>
-                      <Input
-                        value={cfg.validation?.error_message ?? ""}
-                        onChange={(e) =>
-                          onUpdate(def.key, {
-                            validation: {
-                              ...cfg.validation,
-                              error_message: e.target.value || null,
-                            },
-                          })
-                        }
-                        placeholder={`Shown when ${def.label} is invalid`}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -103,3 +142,5 @@ export function BuiltInFieldsCard({
     </Card>
   );
 }
+
+

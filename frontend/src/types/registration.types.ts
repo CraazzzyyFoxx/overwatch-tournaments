@@ -20,6 +20,8 @@ export interface BuiltInFieldConfig {
   required: boolean;
   subroles?: Record<string, string[]>;
   validation?: FieldValidationConfig | null;
+  /** `top_heroes` field only: max heroes selectable per role (default 5). */
+  max_heroes?: number | null;
 }
 
 export interface SubroleOption {
@@ -98,12 +100,16 @@ export interface RegistrationRole {
   subrole: string | null;
   is_primary: boolean;
   priority: number;
+  /** Ordered hero slugs (top picks). */
+  top_heroes: string[];
 }
 
 export interface RoleInput {
   role: string;
   subrole?: string;
   is_primary: boolean;
+  /** Ordered hero slugs (top picks). */
+  top_heroes?: string[];
 }
 
 export interface RegistrationCreateInput {

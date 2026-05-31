@@ -9,6 +9,14 @@ from src.presentation.http.admin_balancer_serializers import loaded_relationship
 from src.schemas.admin import balancer as admin_schemas
 
 
+def _role_top_heroes(role: models.BalancerRegistrationRole) -> list[str]:
+    """Ordered hero slugs for a role, without triggering a lazy load."""
+    hero_entries = loaded_relationship_or_none(role, "hero_entries")
+    if not hero_entries:
+        return []
+    return [entry.hero.slug for entry in sorted(hero_entries, key=lambda entry: entry.priority)]
+
+
 def serialize_registration_role(
     role: models.BalancerRegistrationRole,
 ) -> admin_schemas.BalancerRegistrationRoleRead:
@@ -19,6 +27,7 @@ def serialize_registration_role(
         is_primary=role.is_primary,
         rank_value=role.rank_value,
         is_active=role.is_active,
+        top_heroes=_role_top_heroes(role),
     )
 
 

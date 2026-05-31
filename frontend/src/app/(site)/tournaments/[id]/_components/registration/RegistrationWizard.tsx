@@ -7,9 +7,11 @@ import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import registrationService from "@/services/registration.service";
 import userService from "@/services/user.service";
+import heroService from "@/services/hero.service";
 import type {
   RegistrationCreateInput,
   RegistrationForm,
+  RoleInput,
 } from "@/types/registration.types";
 import type { User } from "@/types/user.types";
 
@@ -41,14 +43,20 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return {
         ...state,
         isFlex: action.isFlex,
-        ...(action.isFlex ? { primaryRole: "", subrole: "", additionalRoles: [] } : {}),
+        ...(action.isFlex
+          ? { primaryRole: "", subrole: "", additionalRoles: [], primaryRoleHeroes: [] }
+          : {}),
       };
     case "SET_PRIMARY_ROLE":
-      return { ...state, primaryRole: action.role, isFlex: false };
+      return { ...state, primaryRole: action.role, isFlex: false, primaryRoleHeroes: [] };
     case "SET_SUBROLE":
       return { ...state, subrole: action.subrole };
     case "SET_ADDITIONAL_ROLES":
       return { ...state, additionalRoles: action.roles };
+    case "SET_PRIMARY_ROLE_HEROES":
+      return { ...state, primaryRoleHeroes: action.heroes };
+    case "SET_FLEX_HEROES":
+      return { ...state, flexHeroes: action.heroes };
     case "INIT_VALUES":
       return { ...state, values: { ...state.values, ...action.values } };
     default:
@@ -63,6 +71,8 @@ const initialState: WizardState = {
   isFlex: false,
   primaryRole: "",
   subrole: "",
+  primaryRoleHeroes: [],
+  flexHeroes: [],
   additionalRoles: [],
 };
 
@@ -93,6 +103,21 @@ export default function RegistrationWizard({
     isEnabled(fieldKey) && form.built_in_fields?.[fieldKey]?.required === true;
   const getBuiltInConfig = (fieldKey: string) => form.built_in_fields?.[fieldKey];
 
+  // Top-heroes picker: absent key => feature off. Flex role: absent key => available.
+  const topHeroesConfig = form.built_in_fields?.top_heroes;
+  const topHeroesEnabled = !!topHeroesConfig && topHeroesConfig.enabled !== false;
+  const maxHeroes =
+    topHeroesConfig?.max_heroes && topHeroesConfig.max_heroes > 0 ? topHeroesConfig.max_heroes : 5;
+  const flexEnabled = form.built_in_fields?.flex_role?.enabled !== false;
+
+  const heroesQuery = useQuery({
+    queryKey: ["heroes-all"],
+    queryFn: () => heroService.getAll({ perPage: -1 }),
+    enabled: topHeroesEnabled,
+    staleTime: 5 * 60_000,
+  });
+  const allHeroes = heroesQuery.data?.results ?? [];
+
   const STEPS = [
     { label: t("registration.wizard.steps.accounts") },
     { label: t("registration.wizard.steps.roles") },
@@ -101,6 +126,7 @@ export default function RegistrationWizard({
 
   const PRIMARY_ROLE_REQUIRED_ERROR = t("registration.wizard.validation.primaryRoleRequired");
   const ADDITIONAL_ROLES_REQUIRED_ERROR = t("registration.wizard.validation.fallbackRoleRequired");
+  const TOP_HEROES_REQUIRED_ERROR = t("registration.wizard.validation.topHeroesRequired");
 
   const userQuery = useQuery({
     queryKey: ["user-profile-full", authUser?.username],
@@ -126,16 +152,23 @@ export default function RegistrationWizard({
     dispatch({ type: "INIT_VALUES", values: init });
   }, [linkedUser]);
 
-  const buildRolesPayload = (): { role: string; subrole?: string; is_primary: boolean }[] => {
+  const buildRolesPayload = (): RoleInput[] => {
     if (state.isFlex) {
-      return ROLES.map((r) => ({ role: r.code, is_primary: true }));
+      // Flex selects all roles as primary; the single flex hero list is attached
+      // to each role row (class validation is skipped server-side for flex).
+      return ROLES.map((r) => ({
+        role: r.code,
+        is_primary: true,
+        ...(state.flexHeroes.length > 0 ? { top_heroes: state.flexHeroes } : {}),
+      }));
     }
-    const roles: { role: string; subrole?: string; is_primary: boolean }[] = [];
+    const roles: RoleInput[] = [];
     if (state.primaryRole) {
       roles.push({
         role: state.primaryRole,
         ...(state.subrole ? { subrole: state.subrole } : {}),
         is_primary: true,
+        ...(state.primaryRoleHeroes.length > 0 ? { top_heroes: state.primaryRoleHeroes } : {}),
       });
     }
     for (const ar of state.additionalRoles) {
@@ -143,6 +176,7 @@ export default function RegistrationWizard({
         role: ar.code,
         ...(ar.subrole ? { subrole: ar.subrole } : {}),
         is_primary: false,
+        ...(ar.topHeroes.length > 0 ? { top_heroes: ar.topHeroes } : {}),
       });
     }
     return roles;
@@ -253,6 +287,15 @@ export default function RegistrationWizard({
       }
       if (isRequired("additional_roles") && !state.isFlex && state.additionalRoles.length === 0) {
         return ADDITIONAL_ROLES_REQUIRED_ERROR;
+      }
+      if (topHeroesEnabled && topHeroesConfig?.required) {
+        const hasHero = state.isFlex
+          ? state.flexHeroes.length > 0
+          : state.primaryRoleHeroes.length > 0
+            || state.additionalRoles.some((entry) => entry.topHeroes.length > 0);
+        if (!hasHero) {
+          return TOP_HEROES_REQUIRED_ERROR;
+        }
       }
       return null;
     }
@@ -370,6 +413,16 @@ export default function RegistrationWizard({
     dispatch({ type: "SET_ADDITIONAL_ROLES", roles });
   };
 
+  const handlePrimaryRoleHeroesChange = (heroes: string[]) => {
+    setError(null);
+    dispatch({ type: "SET_PRIMARY_ROLE_HEROES", heroes });
+  };
+
+  const handleFlexHeroesChange = (heroes: string[]) => {
+    setError(null);
+    dispatch({ type: "SET_FLEX_HEROES", heroes });
+  };
+
   return (
     <div className="flex flex-col gap-5 sm:min-h-[560px] lg:min-h-[640px]">
       <div>
@@ -412,6 +465,14 @@ export default function RegistrationWizard({
             primaryRoleError={roleStepPrimaryError}
             secondaryRolesError={roleStepSecondaryError}
             form={form}
+            allHeroes={allHeroes}
+            topHeroesEnabled={topHeroesEnabled}
+            maxHeroes={maxHeroes}
+            flexEnabled={flexEnabled}
+            primaryRoleHeroes={state.primaryRoleHeroes}
+            onSetPrimaryRoleHeroes={handlePrimaryRoleHeroesChange}
+            flexHeroes={state.flexHeroes}
+            onSetFlexHeroes={handleFlexHeroesChange}
           />
         )}
         {state.step === 2 && (

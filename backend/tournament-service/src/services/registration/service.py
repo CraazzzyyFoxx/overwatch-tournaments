@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from fastapi import HTTPException
 from shared.core import enums
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
+from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -75,20 +76,63 @@ async def get_registration(
             models.BalancerRegistration.auth_user_id == auth_user_id,
             models.BalancerRegistration.deleted_at.is_(None),
         )
-        .options(selectinload(models.BalancerRegistration.roles))
+        .options(
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero)
+        )
         .options(selectinload(models.BalancerRegistration.tournament))
     )
     return result.scalar_one_or_none()
 
 
-def build_registration_roles(roles: list[Any] | None) -> list[models.BalancerRegistrationRole]:
+def _build_hero_entries(
+    slugs: list[str] | None,
+    *,
+    hero_catalog: HeroCatalog,
+    max_heroes: int,
+) -> list[models.BalancerRegistrationRoleHero]:
+    """Translate ordered hero slugs into ``registration_role_hero`` rows.
+
+    De-duplicates, drops unknown slugs, caps at ``max_heroes`` and assigns a
+    1-based priority (1 = top pick). Validation runs earlier, so this is a
+    defensive, lossless translation of already-clean input.
+    """
+    hero_entries: list[models.BalancerRegistrationRoleHero] = []
+    seen: set[str] = set()
+    for slug in slugs or []:
+        if slug in seen:
+            continue
+        entry = hero_catalog.get(slug)
+        if entry is None:
+            continue
+        seen.add(slug)
+        hero_entries.append(
+            models.BalancerRegistrationRoleHero(hero_id=entry.id, priority=len(hero_entries) + 1)
+        )
+        if len(hero_entries) >= max_heroes:
+            break
+    return hero_entries
+
+
+def build_registration_roles(
+    roles: list[Any] | None,
+    *,
+    hero_catalog: HeroCatalog | None = None,
+    max_heroes: int | None = None,
+) -> list[models.BalancerRegistrationRole]:
     """Build normalized role entries, mirroring the admin write path.
 
     Filters to valid registration role codes (tank/dps/support), de-duplicates,
     normalizes the sub-role slug, and assigns sequential priority. Keeps the
     public and admin/Google-Sheets paths consistent so a sub-role like
     ``main_dps`` is stored identically regardless of entry point.
+
+    When ``hero_catalog`` is provided (the top-heroes field is enabled), the
+    ordered ``top_heroes`` slugs on each role are attached as
+    ``registration_role_hero`` rows.
     """
+    resolved_max = max_heroes if max_heroes and max_heroes > 0 else DEFAULT_MAX_TOP_HEROES
     entries: list[models.BalancerRegistrationRole] = []
     seen: set[str] = set()
     for role in roles or []:
@@ -96,14 +140,19 @@ def build_registration_roles(roles: list[Any] | None) -> list[models.BalancerReg
         if role_code not in REGISTRATION_ROLE_CODES or role_code in seen:
             continue
         seen.add(role_code)
-        entries.append(
-            models.BalancerRegistrationRole(
-                role=role_code,
-                subrole=normalize_sub_role(getattr(role, "subrole", None)),
-                is_primary=bool(getattr(role, "is_primary", False)),
-                priority=len(entries),
-            )
+        entry = models.BalancerRegistrationRole(
+            role=role_code,
+            subrole=normalize_sub_role(getattr(role, "subrole", None)),
+            is_primary=bool(getattr(role, "is_primary", False)),
+            priority=len(entries),
         )
+        if hero_catalog is not None:
+            entry.hero_entries = _build_hero_entries(
+                getattr(role, "top_heroes", None),
+                hero_catalog=hero_catalog,
+                max_heroes=resolved_max,
+            )
+        entries.append(entry)
     return entries
 
 

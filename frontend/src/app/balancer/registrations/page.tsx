@@ -519,7 +519,8 @@ function RegistrationProfileForm({
     ? ROLE_OPTIONS.filter((role) => draft.roles[role].enabled && !draft.roles[role].is_primary).map(
         (role) => ({
           code: role,
-          subrole: draft.roles[role].subrole
+          subrole: draft.roles[role].subrole,
+          topHeroes: []
         })
       )
     : [];
@@ -713,6 +714,14 @@ function RegistrationProfileForm({
               secondaryRolesError={null}
               form={form}
               hideHelperText
+              allHeroes={[]}
+              topHeroesEnabled={false}
+              maxHeroes={5}
+              flexEnabled={form.built_in_fields?.flex_role?.enabled !== false}
+              primaryRoleHeroes={[]}
+              onSetPrimaryRoleHeroes={() => {}}
+              flexHeroes={[]}
+              onSetFlexHeroes={() => {}}
             />
           </section>
         ) : null}

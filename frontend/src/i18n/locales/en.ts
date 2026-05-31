@@ -140,6 +140,7 @@ export const en = {
         twitchRequired: "Twitch is required.",
         primaryRoleRequired: "Choose a primary role or enable Flex before continuing.",
         fallbackRoleRequired: "This tournament requires at least one fallback role.",
+        topHeroesRequired: "Select at least one top hero before continuing.",
         notesRequired: "Notes are required.",
         fieldRequired: "Fill in the required field: {label}.",
         invalidFormat: "{label} format is invalid."
@@ -180,7 +181,13 @@ export const en = {
       },
       specialization: "Specialization",
       roleSpecialization: "{role} specialization",
-      any: "Any"
+      any: "Any",
+      topHeroes: {
+        title: "Top Heroes",
+        desc: "Pick up to {max} hero(es) you play best for each role.",
+        anyRole: "Any role",
+        count: "{count}/{max}"
+      }
     },
     details: {
       title: "Additional Details",

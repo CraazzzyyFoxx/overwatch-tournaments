@@ -140,6 +140,7 @@ export const ru = {
         twitchRequired: "Требуется Twitch.",
         primaryRoleRequired: "Выберите основную роль или включите Flex перед продолжением.",
         fallbackRoleRequired: "Для этого турнира требуется хотя бы одна запасная роль.",
+        topHeroesRequired: "Выберите хотя бы одного топ-героя перед продолжением.",
         notesRequired: "Обязательное поле.",
         fieldRequired: "Заполните обязательное поле: {label}.",
         invalidFormat: "Неверный формат: {label}."
@@ -180,7 +181,13 @@ export const ru = {
       },
       specialization: "Специализация",
       roleSpecialization: "Специализация {role}",
-      any: "Любой"
+      any: "Любой",
+      topHeroes: {
+        title: "Топ героев",
+        desc: "Выберите до {max} героев на каждую роль, на которых играете лучше всего.",
+        anyRole: "Любая роль",
+        count: "{count}/{max}"
+      }
     },
     details: {
       title: "Дополнительные детали",

@@ -257,6 +257,8 @@ export interface BuiltInFieldConfig {
   /** Per-role subrole options. Only relevant for primary_role / additional_roles fields. */
   subroles?: Record<string, string[]>;
   validation?: FieldValidationConfig | null;
+  /** `top_heroes` field only: max heroes selectable per role (default 5). */
+  max_heroes?: number | null;
 }
 
 export interface SubroleOption {

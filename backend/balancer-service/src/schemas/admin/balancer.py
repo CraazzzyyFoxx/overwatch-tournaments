@@ -255,6 +255,7 @@ class BalancerRegistrationRoleRead(BaseModel):
     is_primary: bool = False
     rank_value: int | None = None
     is_active: bool = True
+    top_heroes: list[str] = Field(default_factory=list)  # ordered hero slugs (read-only display)
 
 
 class BalancerRegistrationRoleInput(BaseModel):

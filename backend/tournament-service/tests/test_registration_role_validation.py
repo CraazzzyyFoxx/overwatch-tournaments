@@ -34,14 +34,28 @@ validation = importlib.import_module("src.services.registration.validation")
 reg_service = importlib.import_module("src.services.registration.service")
 schemas = importlib.import_module("src.schemas.registration")
 
+from shared.core import enums  # noqa: E402
 from shared.domain.player_sub_roles import (  # noqa: E402
     build_subrole_catalog,
     canonical_to_registration_role,
 )
+from shared.hero_catalog import HeroCatalogEntry  # noqa: E402
 
 
 def _form(built_in_fields: dict) -> SimpleNamespace:
     return SimpleNamespace(built_in_fields_json=built_in_fields, custom_fields_json=[])
+
+
+HERO_CATALOG = {
+    "ana": HeroCatalogEntry(id=1, slug="ana", hero_class=enums.HeroClass.support),
+    "kiriko": HeroCatalogEntry(id=2, slug="kiriko", hero_class=enums.HeroClass.support),
+    "ashe": HeroCatalogEntry(id=3, slug="ashe", hero_class=enums.HeroClass.damage),
+    "genji": HeroCatalogEntry(id=4, slug="genji", hero_class=enums.HeroClass.damage),
+    "reinhardt": HeroCatalogEntry(id=5, slug="reinhardt", hero_class=enums.HeroClass.tank),
+    "dva": HeroCatalogEntry(id=6, slug="dva", hero_class=enums.HeroClass.tank),
+}
+
+TOP_HEROES_ON = {"top_heroes": {"enabled": True}}
 
 
 def _payload(roles: list[dict]) -> schemas.RegistrationCreate:
@@ -180,6 +194,134 @@ class BuildRegistrationRolesTests(TestCase):
 
     def test_handles_none(self) -> None:
         assert reg_service.build_registration_roles(None) == []
+
+
+class TopHeroValidationTests(TestCase):
+    def _validate(self, built_in_fields: dict, roles: list[dict]) -> None:
+        validation.validate_registration_input(
+            _form(built_in_fields),
+            _payload(roles),
+            hero_catalog=HERO_CATALOG,
+        )
+
+    def test_disabled_field_skips_hero_validation(self) -> None:
+        # No top_heroes config -> heroes are ignored even when class would mismatch.
+        self._validate({}, [{"role": "dps", "is_primary": True, "top_heroes": ["ana"]}])
+
+    def test_hero_class_must_match_non_flex_role(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ana"]}])
+        assert exc.value.status_code == 422
+
+    def test_matching_class_accepted(self) -> None:
+        self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
+
+    def test_unknown_hero_rejected(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["nobody"]}])
+        assert exc.value.status_code == 422
+
+    def test_duplicate_heroes_rejected(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "ashe"]}])
+        assert exc.value.status_code == 422
+
+    def test_exceeding_configured_max_rejected(self) -> None:
+        form = {"top_heroes": {"enabled": True, "max_heroes": 1}}
+        with pytest.raises(HTTPException) as exc:
+            self._validate(form, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
+        assert exc.value.status_code == 422
+
+    def test_default_max_is_five(self) -> None:
+        many = ["ashe", "genji", "ashe", "genji", "ashe", "genji"]  # 6 items
+        with pytest.raises(HTTPException) as exc:
+            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": many}])
+        assert exc.value.status_code == 422
+
+    def test_flex_accepts_any_class(self) -> None:
+        # All-primary submission (flex) attaches any-class heroes -> class check skipped.
+        self._validate(
+            TOP_HEROES_ON,
+            [
+                {"role": "dps", "is_primary": True, "top_heroes": ["ana", "reinhardt"]},
+                {"role": "tank", "is_primary": True},
+                {"role": "support", "is_primary": True},
+            ],
+        )
+
+    def test_required_without_heroes_rejected(self) -> None:
+        form = {"top_heroes": {"enabled": True, "required": True}}
+        with pytest.raises(HTTPException) as exc:
+            self._validate(form, [{"role": "dps", "is_primary": True}])
+        assert exc.value.status_code == 422
+
+    def test_required_with_heroes_accepted(self) -> None:
+        form = {"top_heroes": {"enabled": True, "required": True}}
+        self._validate(form, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe"]}])
+
+
+class FlexGuardTests(TestCase):
+    def test_flex_disabled_rejects_all_primary(self) -> None:
+        form = _form({"flex_role": {"enabled": False}})
+        with pytest.raises(HTTPException) as exc:
+            validation.validate_registration_input(
+                form,
+                _payload(
+                    [
+                        {"role": "tank", "is_primary": True},
+                        {"role": "dps", "is_primary": True},
+                        {"role": "support", "is_primary": True},
+                    ]
+                ),
+            )
+        assert exc.value.status_code == 422
+
+    def test_flex_disabled_allows_non_flex(self) -> None:
+        form = _form({"flex_role": {"enabled": False}})
+        validation.validate_registration_input(
+            form,
+            _payload([{"role": "dps", "is_primary": True}, {"role": "tank", "is_primary": False}]),
+        )
+
+    def test_flex_enabled_by_default(self) -> None:
+        validation.validate_registration_input(
+            _form({}),
+            _payload(
+                [
+                    {"role": "tank", "is_primary": True},
+                    {"role": "dps", "is_primary": True},
+                    {"role": "support", "is_primary": True},
+                ]
+            ),
+        )
+
+
+class BuildRegistrationRoleHeroesTests(TestCase):
+    def test_attaches_ordered_hero_entries(self) -> None:
+        entries = reg_service.build_registration_roles(
+            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe", "genji"])],
+            hero_catalog=HERO_CATALOG,
+        )
+        heroes = entries[0].hero_entries
+        assert [(h.hero_id, h.priority) for h in heroes] == [(3, 1), (4, 2)]
+
+    def test_caps_dedups_and_drops_unknown(self) -> None:
+        entries = reg_service.build_registration_roles(
+            [
+                schemas.RoleWithSubrole(
+                    role="dps", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"]
+                )
+            ],
+            hero_catalog=HERO_CATALOG,
+            max_heroes=2,
+        )
+        assert [h.hero_id for h in entries[0].hero_entries] == [3, 4]
+
+    def test_no_catalog_means_no_hero_entries(self) -> None:
+        entries = reg_service.build_registration_roles(
+            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe"])]
+        )
+        assert list(entries[0].hero_entries) == []
 
 
 class SharedCatalogMappingTests(TestCase):

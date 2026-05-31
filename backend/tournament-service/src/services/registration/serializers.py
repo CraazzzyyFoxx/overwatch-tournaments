@@ -16,6 +16,18 @@ def loaded_relationship_or_none(instance: object, attribute: str):
     return loaded_value
 
 
+def _role_top_heroes(role: models.BalancerRegistrationRole) -> list[str]:
+    """Ordered hero slugs for a role, without triggering a lazy load.
+
+    Returns ``[]`` when ``hero_entries`` was not eagerly loaded, so callers that
+    don't need heroes need not eager-load them.
+    """
+    hero_entries = loaded_relationship_or_none(role, "hero_entries")
+    if not hero_entries:
+        return []
+    return [entry.hero.slug for entry in sorted(hero_entries, key=lambda entry: entry.priority)]
+
+
 def serialize_registration_role(
     role: models.BalancerRegistrationRole,
 ) -> admin_schemas.BalancerRegistrationRoleRead:
@@ -26,6 +38,7 @@ def serialize_registration_role(
         is_primary=role.is_primary,
         rank_value=role.rank_value,
         is_active=role.is_active,
+        top_heroes=_role_top_heroes(role),
     )
 
 

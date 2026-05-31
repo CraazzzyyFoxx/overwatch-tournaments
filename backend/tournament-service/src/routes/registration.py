@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +44,24 @@ async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: in
     return workspace_id
 
 
+async def _resolve_top_heroes_config(
+    session: AsyncSession,
+    form: models.BalancerRegistrationForm,
+) -> tuple[HeroCatalog | None, int | None]:
+    """Resolve ``(hero_catalog, max_heroes)`` when the top-heroes field is enabled.
+
+    Returns ``(None, None)`` when the field is absent or disabled, so heroes are
+    neither validated nor persisted for that tournament.
+    """
+    config = (form.built_in_fields_json or {}).get("top_heroes")
+    if not config or config.get("enabled", True) is False:
+        return None, None
+    raw_max = config.get("max_heroes")
+    max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else None
+    hero_catalog = await resolve_hero_catalog(session)
+    return hero_catalog, max_heroes
+
+
 def _form_to_read(
     form: models.BalancerRegistrationForm,
     *,
@@ -74,6 +93,7 @@ def _reg_to_read(
                 subrole=r.subrole,
                 is_primary=r.is_primary,
                 priority=r.priority,
+                top_heroes=[he.hero.slug for he in sorted(r.hero_entries, key=lambda he: he.priority)],
             )
             for r in sorted(reg.roles, key=lambda r: (not r.is_primary, r.priority))
         ]
@@ -132,7 +152,13 @@ async def register(
     workspace_id = form.workspace_id
 
     subrole_catalog = await resolve_subrole_catalog(session, workspace_id)
-    validate_registration_input(form, data, subrole_catalog=subrole_catalog)
+    hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form)
+    validate_registration_input(
+        form,
+        data,
+        subrole_catalog=subrole_catalog,
+        hero_catalog=hero_catalog,
+    )
 
     existing = await reg_service.get_registration(session, tournament_id, user.id)
     if existing is not None:
@@ -153,8 +179,12 @@ async def register(
         user_player_id = primary_link.player_id
 
     # Build role entries for normalized table (normalized + filtered to match
-    # the admin / Google-Sheets write path).
-    role_entries = reg_service.build_registration_roles(data.roles)
+    # the admin / Google-Sheets write path). Attaches top-hero rows when enabled.
+    role_entries = reg_service.build_registration_roles(
+        data.roles,
+        hero_catalog=hero_catalog,
+        max_heroes=max_heroes,
+    )
 
     try:
         registration = await reg_service.create_registration(
@@ -187,7 +217,11 @@ async def register(
     result = await session.execute(
         sa.select(models.BalancerRegistration)
         .where(models.BalancerRegistration.id == registration.id)
-        .options(selectinload(models.BalancerRegistration.roles))
+        .options(
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero)
+        )
     )
     registration = result.scalar_one()
     status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
@@ -290,7 +324,11 @@ async def list_registrations(
                 models.BalancerRegistration.workspace_id == workspace_id,
                 models.BalancerRegistration.deleted_at.is_(None),
             )
-            .options(selectinload(models.BalancerRegistration.roles))
+            .options(
+                selectinload(models.BalancerRegistration.roles)
+                .selectinload(models.BalancerRegistrationRole.hero_entries)
+                .selectinload(models.BalancerRegistrationRoleHero.hero)
+            )
             .order_by(models.BalancerRegistration.submitted_at.asc())
         )
         registrations = result.scalars().all()

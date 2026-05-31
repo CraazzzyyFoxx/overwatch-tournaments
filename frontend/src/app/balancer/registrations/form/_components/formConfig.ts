@@ -18,6 +18,10 @@ export interface BuiltInFieldDef {
   hasSubroles?: boolean;
   supportsValidation?: boolean;
   defaultValidation?: FieldValidationConfig;
+  /** Whether the "Required" toggle applies (default true). */
+  supportsRequired?: boolean;
+  /** `top_heroes`: shows a numeric "max heroes" input (default 5). */
+  supportsMaxHeroes?: boolean;
 }
 
 export const DEFAULT_BATTLE_TAG_REGEX = String.raw`([\w0-9]{2,12}#[0-9]{4,})`;
@@ -90,6 +94,22 @@ export const BUILT_IN_FIELDS: BuiltInFieldDef[] = [
     defaultEnabled: false,
     defaultRequired: false,
     hasSubroles: true,
+  },
+  {
+    key: "flex_role",
+    label: "Flex Role",
+    description: "Let players register as Flex (all roles, equal priority)",
+    defaultEnabled: true,
+    defaultRequired: false,
+    supportsRequired: false,
+  },
+  {
+    key: "top_heroes",
+    label: "Top Heroes",
+    description: "Let players pick their best heroes per role",
+    defaultEnabled: false,
+    defaultRequired: false,
+    supportsMaxHeroes: true,
   },
   { key: "stream_pov", label: "Stream POV", description: "Player will stream their POV", defaultEnabled: false, defaultRequired: false },
   {

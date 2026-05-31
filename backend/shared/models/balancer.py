@@ -10,6 +10,7 @@ from shared.core import db
 
 if TYPE_CHECKING:
     from shared.models.auth_user import AuthUser
+    from shared.models.hero import Hero
     from shared.models.tournament import Tournament
     from shared.models.user import User
     from shared.models.workspace import Workspace
@@ -25,6 +26,7 @@ __all__ = (
     "BalancerRegistrationGoogleSheetBinding",
     "BalancerRegistrationGoogleSheetFeed",
     "BalancerRegistrationRole",
+    "BalancerRegistrationRoleHero",
     "BalancerRegistrationStatus",
     "BalancerTeam",
     "BalancerTeamSlot",
@@ -465,6 +467,31 @@ class BalancerRegistrationRole(db.TimeStampIntegerMixin):
     is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
 
     registration: Mapped["BalancerRegistration"] = relationship(back_populates="roles")
+    hero_entries: Mapped[list["BalancerRegistrationRoleHero"]] = relationship(
+        back_populates="role",
+        cascade="all, delete-orphan",
+        order_by="BalancerRegistrationRoleHero.priority",
+    )
+
+
+class BalancerRegistrationRoleHero(db.TimeStampIntegerMixin):
+    """Ordered hero preference ("top hero") for a registration role entry."""
+
+    __tablename__ = "registration_role_hero"
+    __table_args__ = (
+        UniqueConstraint("role_id", "priority", name="uq_reg_role_hero_role_priority"),
+        UniqueConstraint("role_id", "hero_id", name="uq_reg_role_hero_role_hero"),
+        {"schema": "balancer"},
+    )
+
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("balancer.registration_role.id", ondelete="CASCADE"), index=True
+    )
+    hero_id: Mapped[int] = mapped_column(ForeignKey("overwatch.hero.id", ondelete="CASCADE"))
+    priority: Mapped[int] = mapped_column(Integer(), nullable=False)
+
+    role: Mapped["BalancerRegistrationRole"] = relationship(back_populates="hero_entries")
+    hero: Mapped["Hero"] = relationship()
 
 
 class BalancerRegistrationGoogleSheetFeed(db.TimeStampIntegerMixin):

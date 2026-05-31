@@ -51,6 +51,8 @@ class BuiltInFieldConfig(BaseModel):
     required: bool = False
     subroles: dict[str, list[str]] | None = None
     validation: FieldValidationConfig | None = None
+    # ``top_heroes`` field only: max heroes a player may select per role (default 5).
+    max_heroes: int | None = None
 
 
 class SubroleOption(BaseModel):

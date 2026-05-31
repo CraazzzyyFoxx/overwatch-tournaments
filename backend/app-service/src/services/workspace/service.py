@@ -144,6 +144,10 @@ async def add_member_with_roles(
         workspace_id=workspace_id,
     )
     await session.flush()
+    # ``updated_at`` (onupdate=func.now()) is server-computed and gets expired by
+    # the flush; refresh inside the async context so callers can read it without
+    # triggering a lazy load outside the greenlet (sqlalchemy.exc.MissingGreenlet).
+    await session.refresh(member)
     return member
 
 
@@ -199,6 +203,10 @@ async def update_member_roles(
         workspace_id=member.workspace_id,
     )
     await session.flush()
+    # ``updated_at`` (onupdate=func.now()) is server-computed and gets expired by
+    # the flush; refresh inside the async context so callers can read it without
+    # triggering a lazy load outside the greenlet (sqlalchemy.exc.MissingGreenlet).
+    await session.refresh(member)
     return member
 
 

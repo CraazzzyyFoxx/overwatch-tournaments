@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import HTTPException, status
-from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
+from shared.core import enums
+from shared.domain.player_sub_roles import (
+    REGISTRATION_ROLE_CODES,
+    REGISTRATION_TO_CANONICAL,
+    normalize_sub_role,
+)
+from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
 
 from src.schemas.registration import (
     BuiltInFieldConfig,
@@ -17,6 +23,13 @@ from src.schemas.registration import (
 
 BATTLE_TAG_FIELDS = {"battle_tag", "smurf_tags"}
 TEXTUAL_CUSTOM_FIELD_TYPES = {"text", "number", "url"}
+
+_ROLE_LABELS = {"tank": "Tank", "dps": "DPS", "support": "Support"}
+_HERO_CLASS_BY_CANONICAL = {
+    "tank": enums.HeroClass.tank,
+    "damage": enums.HeroClass.damage,
+    "support": enums.HeroClass.support,
+}
 
 SubroleCatalog = dict[str, list[Any]]
 
@@ -82,6 +95,72 @@ def _validate_roles(
             _validation_error(f"Invalid sub-role '{subrole}' for {role_code}.")
 
 
+def _is_flex_submission(roles: list[Any]) -> bool:
+    """A flex registration selects every role as primary.
+
+    Requires more than one role so a lone primary role (a normal single-role
+    registration) is *not* treated as flex — only the wizard's full-flex
+    submission (all roles, each primary) qualifies.
+    """
+    return len(roles) > 1 and all(getattr(role, "is_primary", False) for role in roles)
+
+
+def _resolve_max_heroes(config: BuiltInFieldConfig) -> int:
+    if config.max_heroes is not None and config.max_heroes > 0:
+        return config.max_heroes
+    return DEFAULT_MAX_TOP_HEROES
+
+
+def _validate_role_heroes(
+    roles: list[Any],
+    *,
+    built_in_fields: dict[str, BuiltInFieldConfig],
+    hero_catalog: HeroCatalog,
+) -> None:
+    """Validate the optional ``top_heroes`` slugs submitted for each role.
+
+    Enforces (per role): the configured max, no duplicates, existence in the
+    hero catalog, and — for non-flex registrations — that the hero's class
+    matches the role. Flex registrations accept heroes of any class.
+    """
+    config = built_in_fields.get("top_heroes")
+    if config is None or not config.enabled:
+        return
+
+    max_heroes = _resolve_max_heroes(config)
+    is_flex = _is_flex_submission(roles)
+    any_selected = False
+
+    for role in roles:
+        slugs = getattr(role, "top_heroes", None)
+        if not slugs:
+            continue
+        any_selected = True
+        role_code = getattr(role, "role", None)
+
+        if len(slugs) > max_heroes:
+            _validation_error(f"You can select at most {max_heroes} heroes per role.")
+        if len(set(slugs)) != len(slugs):
+            _validation_error("Duplicate heroes are not allowed.")
+
+        expected_class = None
+        if not is_flex:
+            canonical = REGISTRATION_TO_CANONICAL.get(role_code) if role_code else None
+            expected_class = _HERO_CLASS_BY_CANONICAL.get(canonical) if canonical else None
+
+        for slug in slugs:
+            entry = hero_catalog.get(slug)
+            if entry is None:
+                _validation_error(f"Unknown hero: {slug}.")
+            if expected_class is not None and entry.hero_class != expected_class:
+                _validation_error(
+                    f"Hero '{slug}' is not a {_ROLE_LABELS.get(role_code, role_code)} hero."
+                )
+
+    if config.required and not any_selected:
+        _validation_error("Select at least one top hero.")
+
+
 def _canonicalize_battle_tag(value: str | None) -> str:
     text = (value or "").strip()
     text = re.sub(r"\s*#\s*", "#", text)
@@ -111,7 +190,7 @@ def _compile_fullmatch_pattern(pattern: str | None) -> re.Pattern[str] | None:
 
 def _validation_error(
     message: str,
-) -> None:
+) -> NoReturn:
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=message)
 
 
@@ -227,6 +306,7 @@ def validate_registration_input(
     *,
     partial: bool = False,
     subrole_catalog: SubroleCatalog | None = None,
+    hero_catalog: HeroCatalog | None = None,
 ) -> None:
     built_in_fields = {
         key: _coerce_built_in_field_config(value)
@@ -300,6 +380,19 @@ def validate_registration_input(
             built_in_fields=built_in_fields,
             catalog=subrole_catalog,
         )
+
+        # Flex availability guard: when the organizer disabled the Flex role,
+        # reject an all-primary (full-flex) submission.
+        flex_config = built_in_fields.get("flex_role")
+        if flex_config is not None and not flex_config.enabled and _is_flex_submission(submitted_roles):
+            _validation_error("Flex registration is not available for this tournament.")
+
+        if hero_catalog is not None:
+            _validate_role_heroes(
+                submitted_roles,
+                built_in_fields=built_in_fields,
+                hero_catalog=hero_catalog,
+            )
 
     custom_values = getattr(payload, "custom_fields", None) or {}
     if not isinstance(custom_values, dict):

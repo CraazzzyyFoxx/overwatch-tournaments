@@ -34,6 +34,8 @@ class BuiltInFieldConfig(BaseModel):
     required: bool = False
     subroles: dict[str, list[str]] | None = None
     validation: FieldValidationConfig | None = None
+    # ``top_heroes`` field only: max heroes a player may select per role (default 5).
+    max_heroes: int | None = None
 
 
 class SubroleOption(BaseModel):
@@ -75,6 +77,8 @@ class RoleWithSubrole(BaseModel):
     role: str
     subrole: str | None = None
     is_primary: bool = False
+    # Ordered hero slugs (top picks). Length capped by built_in_fields.top_heroes.max_heroes.
+    top_heroes: list[str] | None = None
 
 
 class RegistrationCreate(BaseModel):
@@ -103,6 +107,7 @@ class RegistrationRoleRead(BaseModel):
     subrole: str | None = None
     is_primary: bool = False
     priority: int = 0
+    top_heroes: list[str] = Field(default_factory=list)  # ordered hero slugs
 
 
 class RegistrationRead(BaseModel):
