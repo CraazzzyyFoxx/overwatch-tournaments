@@ -31,7 +31,8 @@ export default class userService {
     }).then((res) => res.json());
   }
   static async getUserByName(name: string): Promise<User> {
-    return apiFetch("app", `users/${encodeURIComponent(name)}`, {
+    const apiName = name.replace("#", "-");
+    return apiFetch("app", `users/${encodeURIComponent(apiName)}`, {
       query: {
         entities: ["twitch", "discord", "battle_tag"]
       }
