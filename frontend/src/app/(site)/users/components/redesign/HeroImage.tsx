@@ -7,7 +7,7 @@ import { heroVariantFromRole, heroInitials } from "@/app/(site)/users/components
 export type HeroImageSize = "sm" | "md" | "lg";
 
 const SIZE_PX: Record<HeroImageSize, number> = {
-  sm: 22,
+  sm: 26,
   md: 30,
   lg: 40
 };

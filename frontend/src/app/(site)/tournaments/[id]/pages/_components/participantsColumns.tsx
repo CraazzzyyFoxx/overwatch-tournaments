@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { CheckCircle2, ExternalLink, XCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import {
@@ -20,6 +21,9 @@ import type {
   RegistrationForm,
   RegistrationRole,
 } from "@/types/registration.types";
+import type { Hero } from "@/types/hero.types";
+import heroService from "@/services/hero.service";
+import HeroImage from "@/app/(site)/users/components/redesign/HeroImage";
 
 import AdmissionBadge from "./AdmissionBadge";
 import BalancerStatusBadge from "./BalancerStatusBadge";
@@ -132,6 +136,130 @@ function RolesCell({ roles }: { roles: RegistrationRole[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function getCanonicalRole(hero: Hero): "tank" | "dps" | "support" {
+  const r = (hero.type || hero.role || "").toLowerCase();
+  if (r === "tank") return "tank";
+  if (r === "damage" || r === "dps") return "dps";
+  if (r === "support") return "support";
+  return "support"; // fallback
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  tank: "text-sky-400",
+  dps: "text-orange-400",
+  support: "text-emerald-400",
+};
+
+function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
+  const { data: heroesData } = useQuery({
+    queryKey: ["heroes-all"],
+    queryFn: () => heroService.getAll({ perPage: -1 }),
+    staleTime: 5 * 60_000,
+  });
+
+  const sortedRoles = useMemo(() => {
+    if (!roles) return [];
+    return [...roles].sort((a, b) => {
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      return a.priority - b.priority;
+    });
+  }, [roles]);
+
+  const heroesMap = useMemo(() => {
+    const map = new Map<string, Hero>();
+    if (heroesData?.results) {
+      for (const h of heroesData.results) {
+        map.set(h.slug, h);
+      }
+    }
+    return map;
+  }, [heroesData]);
+
+  const topHeroesList = useMemo(() => {
+    const uniqueHeroSlugs = new Set<string>();
+    const list: Hero[] = [];
+
+    for (const r of sortedRoles) {
+      if (r.top_heroes) {
+        for (const slug of r.top_heroes) {
+          if (!slug) continue;
+          if (!uniqueHeroSlugs.has(slug)) {
+            uniqueHeroSlugs.add(slug);
+            const heroObj = heroesMap.get(slug);
+            if (heroObj) {
+              list.push(heroObj);
+            } else {
+              // Fallback
+              list.push({
+                name: slug,
+                slug,
+                image_path: "",
+                role: r.role,
+              } as any);
+            }
+          }
+        }
+      }
+    }
+    return list;
+  }, [sortedRoles, heroesMap]);
+
+  const heroesByRole = useMemo(() => {
+    const groups: Record<"tank" | "dps" | "support", Hero[]> = {
+      tank: [],
+      dps: [],
+      support: [],
+    };
+
+    for (const hero of topHeroesList) {
+      const canonical = getCanonicalRole(hero);
+      groups[canonical].push(hero);
+    }
+
+    return groups;
+  }, [topHeroesList]);
+
+  const activeRoles = useMemo(() => {
+    return (["tank", "dps", "support"] as const).filter(
+      (role) => heroesByRole[role].length > 0
+    );
+  }, [heroesByRole]);
+
+  if (topHeroesList.length === 0) {
+    return <span className="text-white/30">&mdash;</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 justify-center">
+      {activeRoles.map((role) => (
+        <div
+          key={role}
+          className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.04] rounded-full pl-2 pr-1 py-0.5 shadow-sm"
+        >
+          <span
+            className={cn("inline-flex items-center shrink-0", ROLE_COLORS[role])}
+            title={role.toUpperCase()}
+          >
+            <PlayerRoleIcon role={ROLE_TO_ICON[role] || role} size={14} />
+          </span>
+          <span className="aqt-hero-strip">
+            {heroesByRole[role].map((hero, idx) => (
+              <HeroImage
+                key={`${hero.slug}-${idx}`}
+                hero={hero}
+                size="sm"
+                title={hero.name}
+                className="aqt-hero-av"
+              />
+            ))}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -326,6 +454,16 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     searchValue: (reg) =>
       reg.roles?.map((r) => r.role).join(" ") ?? null,
   },
+  top_heroes: {
+    id: "top_heroes",
+    label: "Top Heroes",
+    defaultVisible: true,
+    responsive: "sm",
+    align: "center",
+    render: (reg) => <TopHeroesCell roles={reg.roles} />,
+    searchValue: (reg) =>
+      reg.roles?.flatMap((r) => r.top_heroes).join(" ") ?? null,
+  },
   additional_roles: {
     // Merged into primary_role column — skip as standalone
     id: "_skip_additional_roles",
@@ -441,7 +579,7 @@ export function buildParticipantColumns(
     }
   } else {
     // Fallback when no form config
-    for (const key of ["battle_tag", "smurf_tags", "primary_role", "notes"]) {
+    for (const key of ["battle_tag", "smurf_tags", "primary_role", "top_heroes", "notes"]) {
       const def = BUILT_IN_FIELD_DEFS[key];
       if (!def) continue;
       columns.push({

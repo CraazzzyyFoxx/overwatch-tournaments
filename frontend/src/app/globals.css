@@ -366,9 +366,9 @@ body, html {
   flex-shrink: 0;
 }
 .aqt-hero-av.sm {
-  width: 22px;
-  height: 22px;
-  font-size: 9px;
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
 }
 .aqt-hero-av.lg {
   width: 40px;
