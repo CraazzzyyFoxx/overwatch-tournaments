@@ -17,16 +17,13 @@ from shared.services.division_grid_resolution import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import config, enums, errors, pagination
+from src.core import config, enums, errors, pagination, utils
 from src.core.workspace import get_division_grid_version
-from src.services.encounter import flows as encounter_flows
-from src.services.encounter import service as encounter_service
 from src.services.hero import flows as hero_flows
 from src.services.map import flows as map_flows
 from src.services.statistics import service as statistics_service
-from src.services.team import flows as team_flows
-from src.services.team import service as team_service
-from src.services.tournament import flows as tournament_flows
+
+from . import _mappers, _repositories
 
 from . import service
 
@@ -49,12 +46,14 @@ overview_hero_metrics_order = [
 ]
 
 
-def _metric_direction_map() -> dict[str, bool]:
-    return {key: higher_is_better for key, _label, higher_is_better in service.COMPARE_METRIC_DEFINITIONS}
-
-
-def _metric_label_map() -> dict[str, str]:
-    return {key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS}
+# Computed once at import — COMPARE_METRIC_DEFINITIONS is module-level
+# constant; rebuilding these dicts per request was pure waste.
+_METRIC_DIRECTION_MAP: dict[str, bool] = {
+    key: higher_is_better for key, _label, higher_is_better in service.COMPARE_METRIC_DEFINITIONS
+}
+_METRIC_LABEL_MAP: dict[str, str] = {
+    key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS
+}
 
 
 def _build_baseline_average_row(rows: list[dict[str, typing.Any]]) -> dict[str, float | None]:
@@ -592,8 +591,8 @@ async def get_compare(
         baseline_row = _build_baseline_average_row(population_rows)
         sample_size = len(population_rows)
 
-    labels = _metric_label_map()
-    directions = _metric_direction_map()
+    labels = _METRIC_LABEL_MAP
+    directions = _METRIC_DIRECTION_MAP
 
     metrics: list[schemas.UserCompareMetric] = []
     for key, _label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS:
@@ -954,20 +953,17 @@ async def get_profile(
     tournaments_count: int = 0
     tournaments_won: int = 0
 
-    # Pydantic conversion with entities=[] is CPU-only — safe to fan out.
-    # Sequential awaits here used to stall on the event-loop scheduler for
-    # veterans with 30+ teams.
-    tournaments: list[schemas.TournamentRead] = list(
-        await asyncio.gather(
-            *(tournament_flows.to_pydantic(session, team.tournament, []) for team in teams)
-        )
-    )
+    # Narrow tournament summary — only fields the frontend renders on the user
+    # overview. Pure CPU conversion (no SQL), no need to fan out.
+    tournaments: list[schemas.UserTournamentSummary] = [
+        _mappers.to_user_tournament_summary(team.tournament) for team in teams
+    ]
 
     for team in teams:
         if team.tournament.is_league:
             continue
 
-        placement = team_flows.resolve_team_placement(team)
+        placement = _mappers.resolve_team_placement(team)
         if placement is None:
             continue
         placements.append(placement)
@@ -990,6 +986,7 @@ async def get_profile(
         avg_group_placement=(round(mean(placements_group), 2) if placements_group else None),
         avg_closeness=round(avg_closeness, 2) if avg_closeness else 0,
         most_played_hero=(hero_statistics.results[0].hero if hero_statistics.results else None),
+        heroes_count=hero_statistics.total,
         roles=roles,
         hero_statistics=hero_statistics.results,
         tournaments=sorted(tournaments, key=lambda x: x.id, reverse=True),
@@ -1021,8 +1018,8 @@ async def get_tournaments(
     encounters: dict[int, list[schemas.EncounterReadWithUserStats]] = {}
     encounters_cache: dict[int, dict[int, models.Encounter]] = {}
     matches_cache: dict[int, dict[int, list[schemas.MatchReadWithUserStats]]] = {}
-    matches = await encounter_service.get_by_user_with_teams(session, user.id, ["map"])
-    placements = await team_service.get_team_count_by_tournament_bulk(session, tournaments_ids)
+    matches = await _repositories.get_user_encounter_matches_unpaginated(session, user.id)
+    placements = await _repositories.count_teams_by_tournament_bulk(session, tournaments_ids)
 
     for team, encounter, match, performance, heroes in matches:
         encounters.setdefault(team.id, [])
@@ -1032,30 +1029,29 @@ async def get_tournaments(
         matches_cache[team.id].setdefault(encounter.id, [])
 
         if match:
-            match_read_ = await encounter_flows.to_pydantic_match(session, match, ["map"])
-            match_read = schemas.MatchReadWithUserStats(
-                **match_read_.model_dump(),
-                performance=performance,
-                heroes=heroes if heroes else [],
+            matches_cache[team.id][encounter.id].append(
+                _mappers.to_match_with_user_stats(
+                    match, performance=performance, heroes=heroes
+                )
             )
-            matches_cache[team.id][encounter.id].append(match_read)
 
     for team_id, encounter_dict in encounters_cache.items():
         for encounter_id, encounter in encounter_dict.items():
-            encounter_read_ = await encounter_flows.to_pydantic(session, encounter, [])
-            encounter_read = schemas.EncounterReadWithUserStats(
-                **encounter_read_.model_dump(exclude={"matches"}),
-                matches=matches_cache.get(team_id, {}).get(encounter_id, []),
+            encounters[team_id].append(
+                _mappers.to_encounter_with_user_stats(
+                    encounter,
+                    matches=matches_cache.get(team_id, {}).get(encounter_id, []),
+                    viewer_user_id=user.id,
+                )
             )
-            encounters[team_id].append(encounter_read)
 
     for team, wins, losses, avg_closeness in tournaments:
-        user_role: enums.HeroClass = None  # type: ignore
-        user_division: int = None  # type: ignore
+        user_role: enums.HeroClass | None = None
+        user_division: int | None = None
         won: int = 0
         lost: int = 0
         draw: int = 0
-        placement = team_flows.resolve_team_placement(team)
+        placement = _mappers.resolve_team_placement(team)
 
         # Use tournament-specific grid if available, otherwise fall back to workspace grid
         tournament_grid = (
@@ -1085,14 +1081,10 @@ async def get_tournaments(
             else None
         )
 
-        players_read = list(
-            await asyncio.gather(
-                *(
-                    team_flows.to_pydantic_player(session, player, [], grid=tournament_grid)
-                    for player in team.players
-                )
-            )
-        )
+        players_read = [
+            _mappers.to_user_tournament_player(player, grid=tournament_grid)
+            for player in team.players
+        ]
 
         tournament = schemas.UserTournament(
             id=team.tournament.id,
@@ -1136,9 +1128,19 @@ async def get_tournament_with_stats(
         A `UserTournamentWithStats` schema instance if found, otherwise `None`.
     """
     user = await get(session, id, [])
-    player = await team_flows.get_player_by_user_and_tournament(
-        session, user.id, tournament_id, ["team", "team.tournament", "team.placement"]
+    player = await _repositories.get_player_by_user_and_tournament(
+        session, user.id, tournament_id
     )
+    if player is None:
+        raise errors.ApiHTTPException(
+            status_code=404,
+            detail=[
+                errors.ApiExc(
+                    code="not_found",
+                    msg=f"Player with user [id={user.id}] not found in tournament [id={tournament_id}].",
+                )
+            ],
+        )
     team = player.team
     statistics = await service.get_tournament_stats_overall(session, team.tournament, user.id)
     last_playoff_placement: float | None = None
@@ -1321,4 +1323,53 @@ async def get_best_teammates(
             )
             for teammate, winrate, tournaments, performance, kda in teammates
         ],
+    )
+
+
+async def get_encounters_by_user(
+    session: AsyncSession,
+    user_id: int,
+    params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
+) -> pagination.Paginated[schemas.EncounterReadWithUserStats]:
+    """Paginated encounters involving a specific user, with per-user stats.
+
+    Returns narrow `EncounterReadWithUserStats` objects — the tournament and
+    team summaries are always populated (loaded via joinedload in the repo).
+    The `params.entities` query parameter is accepted for backward
+    compatibility but ignored: the shape is fixed by the narrow DTO.
+    """
+    user = await get(session, user_id, [])
+    encounters, total = await _repositories.get_user_encounters_paginated(
+        session, user.id, params, workspace_id=workspace_id
+    )
+    encounters_read: list[schemas.EncounterReadWithUserStats] = []
+    encounters_cache: dict[int, models.Encounter] = {}
+    matches_cache: dict[int, list[schemas.MatchReadWithUserStats]] = {}
+
+    for encounter, match, performance, heroes in encounters:
+        encounters_cache.setdefault(encounter.id, encounter)
+        matches_cache.setdefault(encounter.id, [])
+
+        if match:
+            matches_cache[encounter.id].append(
+                _mappers.to_match_with_user_stats(
+                    match, performance=performance, heroes=heroes
+                )
+            )
+
+    for encounter_id, encounter in encounters_cache.items():
+        encounters_read.append(
+            _mappers.to_encounter_with_user_stats(
+                encounter,
+                matches=matches_cache.get(encounter_id, []),
+                viewer_user_id=user.id,
+            )
+        )
+
+    return pagination.Paginated(
+        total=total,
+        per_page=params.per_page,
+        page=params.page,
+        results=encounters_read,
     )

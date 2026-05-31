@@ -33,3 +33,5 @@ proxy/xray.json
 
 target/
 debug/
+.playwright-mcp/
+frontend-redesign/

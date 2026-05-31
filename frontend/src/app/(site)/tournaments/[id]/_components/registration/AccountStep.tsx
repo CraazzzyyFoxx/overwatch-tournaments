@@ -1,6 +1,7 @@
 "use client";
 
 import type { RegistrationForm } from "@/types/registration.types";
+import { useTranslation } from "@/i18n/LanguageContext";
 import AccountCombobox from "./AccountCombobox";
 import SmurfTagsInput from "./SmurfTagsInput";
 
@@ -27,6 +28,7 @@ export default function AccountStep({
   discordSuggestions,
   twitchSuggestions,
 }: AccountStepProps) {
+  const { t } = useTranslation();
   const fields = form.built_in_fields;
   const showBattleTag = fields?.battle_tag?.enabled !== false;
   const showSmurfTags = fields?.smurf_tags?.enabled !== false;
@@ -36,15 +38,16 @@ export default function AccountStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">Your Accounts</h3>
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">{t("registration.accounts.title")}</h3>
         <p className="text-xs leading-5 text-white/42">
-          We&apos;ve pre-filled your linked accounts. Change them if needed.
+          {t("registration.accounts.desc")}
         </p>
       </div>
 
+
       {showBattleTag && (
         <AccountCombobox
-          label="BattleTag"
+          label={t("registration.accounts.battleTag")}
           placeholder="Player#1234"
           value={values.battle_tag ?? ""}
           onChange={(v) => onUpdate("battle_tag", v)}
@@ -71,7 +74,7 @@ export default function AccountStep({
 
       {showDiscord && (
         <AccountCombobox
-          label="Discord"
+          label={t("registration.accounts.discord")}
           placeholder="username"
           value={values.discord_nick ?? ""}
           onChange={(v) => onUpdate("discord_nick", v)}
@@ -86,7 +89,7 @@ export default function AccountStep({
 
       {showTwitch && (
         <AccountCombobox
-          label="Twitch"
+          label={t("registration.accounts.twitch")}
           placeholder="channel_name"
           value={values.twitch_nick ?? ""}
           onChange={(v) => onUpdate("twitch_nick", v)}

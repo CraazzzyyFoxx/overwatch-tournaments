@@ -208,11 +208,9 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                   const heroSet = new Set<string>();
                   const heroList: Pick<Hero, "name" | "image_path" | "role">[] = [];
                   (enc.matches ?? []).forEach((match) => {
-                    const player = (isUserHome ? match.home_team : match.away_team)?.players?.find(
-                      (p) => p.user_id === selfUserId
-                    );
-                    const heroes = (player as { heroes?: Hero[] } | undefined)?.heroes ?? [];
-                    heroes.forEach((h) => {
+                    // MatchWithUserStats.heroes is already the viewer's heroes for
+                    // this match (computed server-side from MatchStatistics).
+                    (match.heroes ?? []).forEach((h) => {
                       if (!heroSet.has(h.name)) {
                         heroSet.add(h.name);
                         heroList.push({ name: h.name, image_path: h.image_path, role: h.type ?? h.role });

@@ -1,108 +1,18 @@
+"""Map stats queries specific to app-service.
+
+Generic CRUD-style operations (`get`, `get_by_name`, `get_by_name_and_gamemode`,
+`all`) live on `shared.repository.MapRepository`. The aggregate `get_top_maps`
+below is user-stats domain and stays here.
+"""
+
 import typing
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.strategy_options import _AbstractLoad
+from sqlalchemy.orm import selectinload
 
 from src import models, schemas
-from src.core import pagination, utils
-
-
-def map_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
-    """
-    Generates a list of SQLAlchemy loading options for related entities of a map.
-
-    Parameters:
-        in_entities (list[str]): A list of entity names to load (e.g., ["gamemode"]).
-        child (typing.Any | None): Optional child entity for nested loading.
-
-    Returns:
-        list[_AbstractLoad]: A list of SQLAlchemy loading options.
-    """
-    entities = []
-    if "gamemode" in in_entities:
-        entities.append(utils.join_entity(child, models.Map.gamemode))
-
-    return entities
-
-
-async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Map | None:
-    """
-    Retrieves a map by its ID.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        id (int): The ID of the map to retrieve.
-        entities (list[str]): A list of related entities to load (e.g., ["gamemode"]).
-
-    Returns:
-        models.Map | None: The Map object if found, otherwise None.
-    """
-    query = sa.select(models.Map).filter_by(id=id).options(*map_entities(entities))
-    result = await session.execute(query)
-    return result.scalar_one_or_none()
-
-
-async def get_by_name(session: AsyncSession, name: str, entities: list[str]) -> models.Map | None:
-    """
-    Retrieves a map by its name.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        name (str): The name of the map to retrieve.
-        entities (list[str]): A list of related entities to load (e.g., ["gamemode"]).
-
-    Returns:
-        models.Map | None: The Map object if found, otherwise None.
-    """
-    query = sa.select(models.Map).where(sa.and_(models.Map.name == name)).options(*map_entities(entities))
-    result = await session.execute(query)
-    return result.scalar_one_or_none()
-
-
-async def get_by_name_and_gamemode(session: AsyncSession, name: str, gamemode: str) -> models.Map | None:
-    """
-    Retrieves a map by its name and associated gamemode.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        name (str): The name of the map to retrieve.
-        gamemode (str): The name of the gamemode associated with the map.
-
-    Returns:
-        models.Map | None: The Map object if found, otherwise None.
-    """
-    query = (
-        sa.select(models.Map)
-        .join(models.Gamemode)
-        .where(sa.and_(models.Map.name == name, models.Gamemode.name == gamemode))
-    )
-    result = await session.execute(query)
-    return result.scalar_one_or_none()
-
-
-async def get_all(
-    session: AsyncSession,
-    params: pagination.PaginationSortParams,
-) -> tuple[typing.Sequence[models.Map], int]:
-    """
-    Retrieves a paginated list of maps.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        params (pagination.PaginationSortParams): Pagination and sorting parameters.
-
-    Returns:
-        tuple[typing.Sequence[models.Map], int]: A tuple containing:
-            - A sequence of Map objects.
-            - The total count of maps.
-    """
-    query = sa.select(models.Map).options(*map_entities(params.entities))
-    query = params.apply_pagination_sort(query, models.Map)
-    result = await session.execute(query)
-    total_query = sa.select(sa.func.count(models.Map.id))
-    total_result = await session.execute(total_query)
-    return result.scalars().all(), total_result.scalar_one()
+from src.core import pagination
 
 
 async def get_top_maps(
@@ -216,8 +126,9 @@ async def get_top_maps(
             subquery.c.winrate,
         )
         .join(subquery, subquery.c.map_id == models.Map.id)
-        .options(*map_entities(params.entities))
     )
+    if "gamemode" in params.entities:
+        query = query.options(selectinload(models.Map.gamemode))
 
     query = params.apply_sort(query)
     if params.sort == "winrate":

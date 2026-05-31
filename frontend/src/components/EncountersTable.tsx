@@ -1,29 +1,79 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { Encounter, Score } from "@/types/encounter.types";
-import { CircleMinus, CirclePlus, Search } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Encounter } from "@/types/encounter.types";
+import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useDebounce } from "use-debounce";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
+import { useQuery } from "@tanstack/react-query";
+
 import { PaginationControlled } from "@/components/ui/pagination-with-links";
 import { PaginatedResponse } from "@/types/pagination.types";
-import { Tournament } from "@/types/tournament.types";
-import { ScrollArea, ScrollBar } from "./ui/scroll-area";
-import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 
+const COMPLETED_STATUSES = new Set(["completed", "finished", "closed"]);
+const PER_PAGE = 15;
+
+const TEAM_GRADIENTS = [
+  "linear-gradient(135deg,hsl(174 72% 60%),hsl(174 60% 32%))",
+  "linear-gradient(135deg,hsl(340 75% 65%),hsl(340 60% 38%))",
+  "linear-gradient(135deg,hsl(270 70% 68%),hsl(270 55% 42%))",
+  "linear-gradient(135deg,hsl(38 95% 62%),hsl(38 80% 42%))",
+  "linear-gradient(135deg,hsl(210 78% 65%),hsl(210 60% 38%))",
+  "linear-gradient(135deg,hsl(142 65% 55%),hsl(142 50% 32%))",
+];
+
+function teamGradient(seed: number): string {
+  return TEAM_GRADIENTS[Math.abs(seed) % TEAM_GRADIENTS.length];
+}
+
+function teamInitials(name?: string | null): string {
+  const cleaned = (name ?? "").trim();
+  if (!cleaned) return "?";
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
 const getStageLabel = (encounter: Encounter) =>
   encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
+
+function getMatchMeta(encounter: Encounter) {
+  const isCompleted = COMPLETED_STATUSES.has(encounter.status);
+  const isLive = !isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
+  let winner: "home" | "away" | null = null;
+  if (isCompleted && encounter.score.home !== encounter.score.away) {
+    winner = encounter.score.home > encounter.score.away ? "home" : "away";
+  }
+  return { isCompleted, isLive, winner };
+}
+
+function formatAgo(value: Date | string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatWhen(encounter: Encounter, isLive: boolean) {
+  if (isLive) return { day: "Now", time: "Live", live: true };
+  const source =
+    encounter.ended_at ?? encounter.started_at ?? encounter.scheduled_at ?? encounter.created_at;
+  if (!source) return { day: "TBD", time: "", live: false };
+  const date = new Date(source);
+  return {
+    day: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    time: formatAgo(source),
+    live: false,
+  };
+}
 
 const EncountersTable = ({
   data,
@@ -47,83 +97,6 @@ const EncountersTable = ({
   const [currentPage, setCurrentPage] = useState<number>(InitialPage);
   const previousDebouncedSearchRef = useRef(search);
   const previousUrlStateRef = useRef({ page: InitialPage, search });
-
-  const columns: ColumnDef<Encounter>[] = useMemo(() => {
-    let columns: ColumnDef<Encounter>[] = [];
-    if (!hideTournament) {
-      columns = [
-        {
-          accessorKey: "tournament",
-          header: "Tournament",
-          cell: ({ row }) => {
-            let name = `Tournament ${row.getValue<Tournament>("tournament").number}`;
-            if (row.getValue<Tournament>("tournament").is_league) {
-              name = row.getValue<Tournament>("tournament").name;
-            }
-
-            return <div className="capitalize">{name}</div>;
-          }
-        }
-      ];
-    }
-    columns = [
-      {
-        accessorKey: "name",
-        header: () => <div>Name</div>,
-        cell: ({ row }) => {
-          return <div className="font-medium text-white/90">{row.getValue("name")}</div>;
-        }
-      },
-      ...columns,
-      {
-        accessorKey: "stage",
-        header: "Stage",
-        cell: ({ row }) => <div className="text-white/55">{getStageLabel(row.original)}</div>
-      },
-      {
-        accessorKey: "round",
-        header: "Round",
-        cell: ({ row }) => <div className="text-white/55">{row.getValue("round")}</div>
-      },
-
-      {
-        accessorKey: "score",
-        header: "Score",
-        cell: ({ row }) => {
-          const score = row.getValue<Score>("score");
-          return (
-            <div className="font-semibold tabular-nums text-white/85">
-              {score.home}–{score.away}
-            </div>
-          );
-        }
-      },
-      {
-        accessorKey: "closeness",
-        header: () => <div className="text-center">Closeness</div>,
-        cell: ({ row }) => {
-          const closeness = row.getValue<number>("closeness")
-            ? `${(row.getValue<number>("closeness") * 100).toFixed(0)}%`
-            : "—";
-          return <div className="text-center tabular-nums text-white/50">{closeness}</div>;
-        }
-      },
-      {
-        accessorKey: "has_logs",
-        header: () => <div className="text-center">Logs</div>,
-        cell: ({ row }) => (
-          <div className="flex justify-center">
-            {row.getValue("has_logs") ? (
-              <CirclePlus className="h-4 w-4 text-emerald-400" />
-            ) : (
-              <CircleMinus className="h-4 w-4 text-white/25" />
-            )}
-          </div>
-        )
-      }
-    ];
-    return columns;
-  }, [hideTournament]);
 
   useEffect(() => {
     setSearchValue(search);
@@ -151,7 +124,7 @@ const EncountersTable = ({
         currentPage,
         debouncedSearchValue,
         tournamentId,
-        15,
+        PER_PAGE,
         undefined,
         undefined,
         workspaceId,
@@ -160,12 +133,12 @@ const EncountersTable = ({
     initialData:
       data && currentPage === InitialPage && debouncedSearchValue === search
         ? data
-        : undefined
+        : undefined,
   });
 
   const encounters = encountersQuery.data ?? data ?? {
     page: currentPage,
-    per_page: 15,
+    per_page: PER_PAGE,
     total: 0,
     results: [],
   };
@@ -174,18 +147,12 @@ const EncountersTable = ({
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const nextPage = Number.parseInt(params.get("page") ?? "1", 10) || 1;
-
-      previousUrlStateRef.current = {
-        page: nextPage,
-        search: debouncedSearchValue
-      };
+      previousUrlStateRef.current = { page: nextPage, search: debouncedSearchValue };
       setCurrentPage(nextPage);
     };
 
     window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
+    return () => window.removeEventListener("popstate", handlePopState);
   }, [debouncedSearchValue]);
 
   useEffect(() => {
@@ -197,131 +164,193 @@ const EncountersTable = ({
     const searchChanged = previousUrlState.search !== debouncedSearchValue;
     const pageChanged = previousUrlState.page !== currentPage;
 
-    if (!searchChanged && !pageChanged) {
-      return;
-    }
+    if (!searchChanged && !pageChanged) return;
 
     if (currentSearch === debouncedSearchValue && currentPageParam === currentPage) {
-      previousUrlStateRef.current = {
-        page: currentPage,
-        search: debouncedSearchValue
-      };
+      previousUrlStateRef.current = { page: currentPage, search: debouncedSearchValue };
       return;
     }
 
-    if (debouncedSearchValue) {
-      params.set("search", debouncedSearchValue);
-    } else {
-      params.delete("search");
-    }
+    if (debouncedSearchValue) params.set("search", debouncedSearchValue);
+    else params.delete("search");
 
-    if (currentPage > 1) {
-      params.set("page", String(currentPage));
-    } else {
-      params.delete("page");
-    }
+    if (currentPage > 1) params.set("page", String(currentPage));
+    else params.delete("page");
 
     const query = params.toString();
     const nextUrl = query ? `${pathname}?${query}` : pathname;
 
-    if (searchChanged) {
-      window.history.replaceState(null, "", nextUrl);
-    } else {
-      window.history.pushState(null, "", nextUrl);
-    }
+    if (searchChanged) window.history.replaceState(null, "", nextUrl);
+    else window.history.pushState(null, "", nextUrl);
 
-    previousUrlStateRef.current = {
-      page: currentPage,
-      search: debouncedSearchValue
-    };
+    previousUrlStateRef.current = { page: currentPage, search: debouncedSearchValue };
   }, [currentPage, debouncedSearchValue, pathname]);
 
-  const table = useReactTable({
-    data: encounters.results ?? [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    manualPagination: true,
-    rowCount: encounters.total ?? 0
-  });
+  const rows = encounters.results ?? [];
+  const columnCount = hideTournament ? 6 : 7;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Search */}
-      <div className="relative sm:w-[300px] md:w-[220px] lg:w-[300px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 pointer-events-none" />
+    <div className="aqt-matches flex flex-col gap-4">
+      <div className="m-search">
+        <Search width={14} height={14} />
         <input
-          className="h-9 w-full rounded-lg border border-white/[0.07] bg-white/[0.02] pl-9 pr-3 text-sm text-white placeholder:text-white/25 transition-colors focus:outline-none focus:border-white/[0.18] focus:bg-white/[0.04]"
           placeholder="Search by name"
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
         />
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-white/[0.07] overflow-hidden">
-        <ScrollArea>
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="border-white/[0.06] hover:bg-transparent">
-                  {headerGroup.headers.map((header) => {
-                    return (
-                      <TableHead key={header.id} className="h-8 text-[10px] uppercase tracking-wide text-white/35 font-semibold">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
+      <div className="matches-card">
+        <div className="m-scroll">
+          <table className="m">
+            <thead>
+              <tr>
+                <th>Matchup</th>
+                {!hideTournament && <th>Tournament</th>}
+                <th className="r">Score</th>
+                <th>Closeness</th>
+                <th>Stage</th>
+                <th className="r">When</th>
+                <th className="c">Logs</th>
+              </tr>
+            </thead>
+            <tbody>
               {encountersQuery.isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-32 text-center">
-                    <p className="text-sm text-white/35">Loading encounters...</p>
-                  </TableCell>
-                </TableRow>
-              ) : table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                    className="border-white/[0.04] hover:bg-white/[0.03] cursor-pointer transition-colors"
-                    onClick={() => {
-                      router.push(`/encounters/${row.original.id}`);
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-3">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                <tr>
+                  <td colSpan={columnCount} className="m-empty">
+                    Loading matches…
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={columnCount} className="m-empty">
+                    No matches found.
+                  </td>
+                </tr>
               ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-32 text-center">
-                    <div className="flex flex-col flex-1 items-center justify-center gap-2">
-                      <CircleMinus className="h-8 w-8 text-white/20" />
-                      <p className="text-sm text-white/35">No encounters found.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                rows.map((encounter) => {
+                  const meta = getMatchMeta(encounter);
+                  const when = formatWhen(encounter, meta.isLive);
+                  const closeness = encounter.closeness;
+                  const tournamentName = encounter.tournament?.is_league
+                    ? encounter.tournament.name
+                    : `Tournament ${encounter.tournament?.number ?? "—"}`;
+
+                  return (
+                    <tr
+                      key={encounter.id}
+                      className={cn(meta.isLive && "live")}
+                      onClick={() => router.push(`/encounters/${encounter.id}`)}
+                    >
+                      <td>
+                        <div className="m-up">
+                          <div
+                            className={cn(
+                              "row",
+                              meta.winner === "home" && "winner",
+                              meta.winner === "away" && "loser"
+                            )}
+                          >
+                            <span
+                              className="av"
+                              style={{ background: teamGradient(encounter.home_team_id) }}
+                            >
+                              {teamInitials(encounter.home_team?.name)}
+                            </span>
+                            <span className="nm">{encounter.home_team?.name ?? "TBD"}</span>
+                          </div>
+                          <div
+                            className={cn(
+                              "row",
+                              meta.winner === "away" && "winner",
+                              meta.winner === "home" && "loser"
+                            )}
+                          >
+                            <span
+                              className="av"
+                              style={{ background: teamGradient(encounter.away_team_id) }}
+                            >
+                              {teamInitials(encounter.away_team?.name)}
+                            </span>
+                            <span className="nm">{encounter.away_team?.name ?? "TBD"}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {!hideTournament && (
+                        <td>
+                          <span className="m-round">{tournamentName}</span>
+                        </td>
+                      )}
+
+                      <td className="r">
+                        <div className="m-score">
+                          <span className={meta.winner === "home" ? "w" : "l"}>
+                            {encounter.score.home}
+                          </span>
+                          <span className="sep">–</span>
+                          <span className={meta.winner === "away" ? "w" : "l"}>
+                            {encounter.score.away}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        {closeness != null ? (
+                          <div className="m-close">
+                            <span className="track">
+                              <span
+                                className={cn("fill", closeness >= 0.8 && "hot")}
+                                style={{ width: `${Math.round(closeness * 100)}%` }}
+                              />
+                            </span>
+                            <span className="num">{Math.round(closeness * 100)}%</span>
+                          </div>
+                        ) : (
+                          <span className="num" style={{ color: "var(--fg-faint)" }}>
+                            —
+                          </span>
+                        )}
+                      </td>
+
+                      <td>
+                        <span className="m-round">
+                          {getStageLabel(encounter)}
+                          <span className="stage"> · R{encounter.round}</span>
+                        </span>
+                      </td>
+
+                      <td className="r">
+                        <div className="m-when" style={{ alignItems: "flex-end" }}>
+                          <span className="day">{when.day}</span>
+                          <span className={cn("time", when.live && "live")}>
+                            {when.live && <span className="m-live-dot" style={{ marginRight: 4 }} />}
+                            {when.time}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="c">
+                        <div className="m-media" style={{ justifyContent: "center" }}>
+                          <span className={cn("pill", encounter.has_logs ? "has" : "empty")}>
+                            Logs
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
-            </TableBody>
-          </Table>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-end">
+      <div className="m-pagination">
         <PaginationControlled
           page={currentPage}
           totalCount={encounters.total ?? 0}
-          pageSize={15}
+          pageSize={PER_PAGE}
           onSetPage={setCurrentPage}
         />
       </div>

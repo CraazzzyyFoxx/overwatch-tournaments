@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { LogIn, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -24,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
 import UserMenu from "@/components/UserMenu";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import ActiveEvents from "@/components/ActiveEvents";
 import { adminEntryPermissions } from "@/components/admin/admin-navigation";
@@ -122,8 +124,33 @@ const components: Record<string, { title: string; href: string; description: str
   Organization: organization_components
 };
 
+// Redesign nav-link look (flat, teal-active) — overrides the shared
+// navigationMenuTriggerStyle() via twMerge conflict resolution.
+const navTriggerClass =
+  "h-8 rounded-lg bg-transparent px-3 text-[13px] font-medium text-[var(--aqt-fg-muted)] " +
+  "hover:bg-[hsl(0_0%_100%/0.04)] hover:text-[var(--aqt-fg)] " +
+  "focus:bg-[hsl(0_0%_100%/0.04)] focus:text-[var(--aqt-fg)] " +
+  "data-[state=open]:bg-[hsl(0_0%_100%/0.04)] data-[state=open]:text-[var(--aqt-fg)]";
+
+const navTriggerActiveClass =
+  "bg-[hsl(174_72%_46%/0.1)] text-[var(--aqt-teal)] " +
+  "hover:bg-[hsl(174_72%_46%/0.16)] hover:text-[var(--aqt-teal)] " +
+  "focus:bg-[hsl(174_72%_46%/0.16)] focus:text-[var(--aqt-teal)] " +
+  "data-[state=open]:bg-[hsl(174_72%_46%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
+
+function isNavGroupActive(
+  items: { href: string }[],
+  pathname: string
+): boolean {
+  return items.some((item) => {
+    if (item.href === "/") return pathname === "/";
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  });
+}
+
 const Header = () => {
   const { user } = useAuthProfile();
+  const pathname = usePathname() ?? "";
   const openAuthModal = useAuthModalStore((state) => state.open);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const { isOrganizer, isLoaded, canAccessAdminRoute } = usePermissions();
@@ -164,7 +191,7 @@ const Header = () => {
     });
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center bg-background gap-4 border-b px-4 md:px-6">
+    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
       <WorkspaceSwitcher />
       <NavigationMenu className="hidden md:flex">
         {Object.keys(components)
@@ -172,7 +199,14 @@ const Header = () => {
           .map((title) => (
             <NavigationMenuList key={title}>
               <NavigationMenuItem>
-                <NavigationMenuTrigger>{title}</NavigationMenuTrigger>
+                <NavigationMenuTrigger
+                  className={cn(
+                    navTriggerClass,
+                    isNavGroupActive(components[title], pathname) && navTriggerActiveClass
+                  )}
+                >
+                  {title}
+                </NavigationMenuTrigger>
                 <NavigationMenuContent>
                   <ul className="grid w-100 gap-3 p-4 md:w-125 md:grid-cols-2 lg:w-150 ">
                     {getVisibleItems(components[title]).map((component) => (
@@ -234,10 +268,13 @@ const Header = () => {
         {username ? (
           <UserMenu username={username} avatarUrl={avatarUrl} profileHref={profileHref} />
         ) : (
-          <Button variant="outline" className="text-base" onClick={handleLoginClick}>
-            <LogIn className="h-5 w-5" />
-            <span className="hidden sm:inline">Login</span>
-          </Button>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Button variant="outline" className="text-base" onClick={handleLoginClick}>
+              <LogIn className="h-5 w-5" />
+              <span className="hidden sm:inline">Login</span>
+            </Button>
+          </div>
         )}
       </div>
     </header>

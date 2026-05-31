@@ -1,0 +1,104 @@
+[importlinter]
+# Configured per the architecture review (P3-C in docs/architecture/layering.md).
+# Goal: enforce acyclic dependencies inside src.services so any single domain
+# can be extracted to its own service later without dragging half the others.
+#
+# After P3-A (2026-05-24), tournament-flow HTTP endpoints moved to
+# tournament-service. There is NO public src.services._internal/ anymore —
+# user/ and achievements/ each carry their own private `_repositories.py` +
+# `_mappers.py` that read tournament-flow tables directly via shared ORM and
+# convert to narrow DTOs defined in `src.schemas.user` / `src.schemas.achievement`.
+
+root_packages =
+    src
+
+# ----------------------------------------------------------------------------
+# Contract 1: layered hierarchy inside src.services.
+#
+# Layers (high → low):
+#   - achievements: aggregates user/encounter/tournament behaviour
+#   - dashboard, user: cross-domain read APIs
+#   - hero, map, gamemode, statistics, workspace:
+#     leaf/core domains, no cross-domain dependencies
+# ----------------------------------------------------------------------------
+[[importlinter.contracts]]
+name = src.services layered hierarchy
+type = layers
+layers =
+    src.services.achievements
+    src.services.dashboard | src.services.user
+    src.services.hero | src.services.map | src.services.gamemode | src.services.statistics | src.services.workspace
+containers =
+    src.services
+ignore_imports =
+    # ---- Known debt: map → hero ----
+    src.services.map.flows -> src.services.hero.flows
+    src.services.map.flows -> src.services.hero.service
+
+    # ---- Known debt: lower layers reaching into user ----
+    src.services.map.flows -> src.services.user.flows
+
+
+# ----------------------------------------------------------------------------
+# Contract 2: routes don't bypass flows.
+#
+# routes/*.py must orchestrate via services/<domain>/flows.py — direct
+# imports of service.py from routes are bypassing the layered orchestration.
+# ----------------------------------------------------------------------------
+[[importlinter.contracts]]
+name = Routes must orchestrate via flows
+type = forbidden
+source_modules =
+    src.routes
+forbidden_modules =
+    src.services.user.service
+    src.services.hero.service
+    src.services.map.service
+    src.services.achievements.service_v2
+    src.services.statistics.service
+    src.services.gamemode.service
+    src.services.dashboard.service
+ignore_imports =
+    # ---- Known debt: routes touching service.py directly ----
+    src.routes.workspace -> src.services.workspace.service
+
+
+# ----------------------------------------------------------------------------
+# Contract 3 (P3-A): private mappers / repositories stay private.
+#
+# Each consumer of tournament-flow data (services/user, services/achievements)
+# owns its own `_mappers.py` + `_repositories.py`. Other consumers MUST NOT
+# import those — if a third consumer needs the same data, it gets its own
+# repository so the consumers can evolve independently.
+# ----------------------------------------------------------------------------
+[[importlinter.contracts]]
+name = user/ private modules belong to user/
+type = forbidden
+source_modules =
+    src.services.achievements
+    src.services.dashboard
+    src.services.statistics
+    src.services.hero
+    src.services.map
+    src.services.gamemode
+    src.services.workspace
+    src.routes
+forbidden_modules =
+    src.services.user._repositories
+    src.services.user._mappers
+
+[[importlinter.contracts]]
+name = achievements/ private modules belong to achievements/
+type = forbidden
+source_modules =
+    src.services.user
+    src.services.dashboard
+    src.services.statistics
+    src.services.hero
+    src.services.map
+    src.services.gamemode
+    src.services.workspace
+    src.routes
+forbidden_modules =
+    src.services.achievements._repositories
+    src.services.achievements._mappers

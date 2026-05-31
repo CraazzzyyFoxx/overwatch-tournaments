@@ -10,7 +10,7 @@ from src import models
 from src.core import auth, db
 
 
-router = APIRouter(prefix="/admin/assets", tags=["admin", "assets"])
+router = APIRouter(prefix="/assets", tags=["assets"])
 
 
 def get_s3(request: Request) -> S3Client:

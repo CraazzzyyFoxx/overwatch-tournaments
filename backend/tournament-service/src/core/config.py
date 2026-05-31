@@ -5,7 +5,7 @@ from shared.core.config import BaseServiceSettings
 class Settings(BaseServiceSettings):
     project_name: str = "Anak Tournament Service"
     port: int = 8004
-    api_root_path: str = "/api/tournament"
+    api_v1_str: str = "/api/v1"
 
     redis_url: RedisDsn
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672"

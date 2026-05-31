@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { RegistrationForm } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "@/i18n/LanguageContext";
 import CustomField from "./CustomField";
 import FieldLabel from "./FieldLabel";
 import { getBuiltInFieldValidationError } from "./validation";
@@ -21,6 +22,7 @@ export default function DetailsStep({
   onFieldValidationChange,
   form,
 }: DetailsStepProps) {
+  const { t } = useTranslation();
   const fields = form.built_in_fields;
   const showNotes = fields?.notes?.enabled !== false;
   const showStreamPov = fields?.stream_pov?.enabled === true;
@@ -28,6 +30,7 @@ export default function DetailsStep({
     "notes",
     values.notes ?? "",
     fields?.notes,
+    t,
   ) : null;
 
   useEffect(() => {
@@ -40,18 +43,20 @@ export default function DetailsStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">Additional Details</h3>
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+          {t("registration.details.title")}
+        </h3>
         <p className="text-xs leading-5 text-white/42">
           {hasAnyField
-            ? "Almost done! Fill in any extra info."
-            : "No additional fields required. You're ready to submit!"}
+            ? t("registration.details.descWithFields")
+            : t("registration.details.descNoFields")}
         </p>
       </div>
 
       {showStreamPov && (
         <div className="space-y-2">
           <FieldLabel
-            label="Stream POV"
+            label={t("registration.details.streamPov")}
             required={fields?.stream_pov?.required === true}
           />
           <label className="flex items-center gap-3">
@@ -59,7 +64,7 @@ export default function DetailsStep({
               checked={values.stream_pov === "true"}
               onCheckedChange={(checked) => onUpdate("stream_pov", checked ? "true" : "false")}
             />
-            <span className="text-sm text-white/70">I will stream my POV</span>
+            <span className="text-sm text-white/70">{t("registration.details.streamPovLabel")}</span>
           </label>
         </div>
       )}
@@ -67,11 +72,11 @@ export default function DetailsStep({
       {showNotes && (
         <div className="space-y-1.5">
           <FieldLabel
-            label="Notes"
+            label={t("registration.details.notes")}
             required={fields?.notes?.required === true}
           />
           <textarea
-            placeholder="Anything you'd like organizers to know"
+            placeholder={t("registration.details.notesPlaceholder")}
             value={values.notes ?? ""}
             onChange={(e) => onUpdate("notes", e.target.value)}
             rows={2}
@@ -98,3 +103,4 @@ export default function DetailsStep({
     </div>
   );
 }
+

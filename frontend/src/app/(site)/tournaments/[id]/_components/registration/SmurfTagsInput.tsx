@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BuiltInFieldConfig } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import {
   getBuiltInValueValidationError,
   normalizeBuiltInFieldValue,
@@ -24,17 +25,18 @@ export default function SmurfTagsInput({
   tags,
   onChange,
   suggestions,
-  label = "Smurf Accounts",
+  label,
   icon,
   required = false,
   config,
   onValidationChange,
 }: SmurfTagsInputProps) {
+  const { t } = useTranslation();
   const [inputValue, setInputValue] = useState("");
   const trimmedInputValue = inputValue.trim();
   const normalizedInputValue = normalizeBuiltInFieldValue("smurf_tags", inputValue);
   const inputValidationError = trimmedInputValue
-    ? getBuiltInValueValidationError("smurf_tags", inputValue, config)
+    ? getBuiltInValueValidationError("smurf_tags", inputValue, config, t)
     : null;
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export default function SmurfTagsInput({
   return (
     <div className="space-y-1.5">
       <FieldLabel
-        label={label}
+        label={label ?? t("registration.accounts.smurfs")}
         required={required}
         icon={
           icon
@@ -103,7 +105,7 @@ export default function SmurfTagsInput({
       <div className="relative">
         <input
           type="text"
-          placeholder="Add smurf BattleTag"
+          placeholder={t("registration.accounts.addSmurfPlaceholder")}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -119,7 +121,7 @@ export default function SmurfTagsInput({
           disabled={!trimmedInputValue || Boolean(inputValidationError) || tags.includes(normalizedInputValue)}
           className="absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-md border border-white/10 bg-white/6 px-2.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Add
+          {t("registration.accounts.addSmurfButton")}
         </button>
       </div>
       {inputValidationError && (

@@ -10,10 +10,7 @@ type TournamentStatusMeta = {
   isEnded: boolean;
 };
 
-export const TOURNAMENT_STATUS_META: Record<
-  TournamentStatus,
-  TournamentStatusMeta
-> = {
+export const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
   draft: {
     label: "Draft",
     badgeLabel: "Draft",
@@ -21,7 +18,7 @@ export const TOURNAMENT_STATUS_META: Record<
     badgeClassName: "text-amber-400",
     dotClassName: "bg-amber-400",
     isActive: true,
-    isEnded: false,
+    isEnded: false
   },
   registration: {
     label: "Registration",
@@ -30,7 +27,7 @@ export const TOURNAMENT_STATUS_META: Record<
     badgeClassName: "text-sky-400",
     dotClassName: "bg-sky-400",
     isActive: true,
-    isEnded: false,
+    isEnded: false
   },
   check_in: {
     label: "Check-in",
@@ -39,7 +36,7 @@ export const TOURNAMENT_STATUS_META: Record<
     badgeClassName: "text-orange-400",
     dotClassName: "bg-orange-400",
     isActive: true,
-    isEnded: false,
+    isEnded: false
   },
   live: {
     label: "Live",
@@ -48,7 +45,7 @@ export const TOURNAMENT_STATUS_META: Record<
     badgeClassName: "text-emerald-400",
     dotClassName: "bg-emerald-400",
     isActive: true,
-    isEnded: false,
+    isEnded: false
   },
   playoffs: {
     label: "Playoffs",
@@ -57,7 +54,7 @@ export const TOURNAMENT_STATUS_META: Record<
     badgeClassName: "text-violet-400",
     dotClassName: "bg-violet-400",
     isActive: true,
-    isEnded: false,
+    isEnded: false
   },
   completed: {
     label: "Ended",
@@ -65,7 +62,7 @@ export const TOURNAMENT_STATUS_META: Record<
     textClassName: "text-white/60",
     badgeClassName: "text-white/45",
     isActive: false,
-    isEnded: true,
+    isEnded: true
   },
   archived: {
     label: "Archived",
@@ -73,8 +70,8 @@ export const TOURNAMENT_STATUS_META: Record<
     textClassName: "text-zinc-500",
     badgeClassName: "text-zinc-500",
     isActive: false,
-    isEnded: true,
-  },
+    isEnded: true
+  }
 };
 
 export function getTournamentStatusMeta(status: TournamentStatus) {
@@ -82,12 +79,10 @@ export function getTournamentStatusMeta(status: TournamentStatus) {
 }
 
 export const TOURNAMENT_STATUS_OPTIONS = (
-  Object.entries(TOURNAMENT_STATUS_META) as Array<
-    [TournamentStatus, TournamentStatusMeta]
-  >
+  Object.entries(TOURNAMENT_STATUS_META) as Array<[TournamentStatus, TournamentStatusMeta]>
 ).map(([value, meta]) => ({
   value,
-  label: meta.badgeLabel,
+  label: meta.badgeLabel
 }));
 
 export function isTournamentStatusActive(status: TournamentStatus) {
@@ -96,4 +91,32 @@ export function isTournamentStatusActive(status: TournamentStatus) {
 
 export function isTournamentStatusEnded(status: TournamentStatus) {
   return TOURNAMENT_STATUS_META[status].isEnded;
+}
+
+export const TOURNAMENT_STATUS_ORDER: TournamentStatus[] = [
+  "live",
+  "playoffs",
+  "registration",
+  "check_in",
+  "completed",
+  "archived",
+  "draft"
+];
+
+export function countByTournamentStatus(
+  statuses: ReadonlyArray<TournamentStatus>
+): Record<TournamentStatus, number> {
+  const counts: Record<TournamentStatus, number> = {
+    draft: 0,
+    registration: 0,
+    check_in: 0,
+    live: 0,
+    playoffs: 0,
+    completed: 0,
+    archived: 0
+  };
+  for (const status of statuses) {
+    counts[status] += 1;
+  }
+  return counts;
 }

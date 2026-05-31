@@ -36,6 +36,11 @@ class BuiltInFieldConfig(BaseModel):
     validation: FieldValidationConfig | None = None
 
 
+class SubroleOption(BaseModel):
+    slug: str
+    label: str
+
+
 class RegistrationFormRead(BaseModel):
     id: int
     tournament_id: int
@@ -46,6 +51,10 @@ class RegistrationFormRead(BaseModel):
     closes_at: datetime | None = None
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
+    # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
+    # The single source of truth for available sub-roles; per-tournament
+    # built_in_fields[*].subroles selects which of these are offered.
+    subrole_catalog: dict[str, list[SubroleOption]] = Field(default_factory=dict)
 
 
 class RegistrationFormUpsert(BaseModel):

@@ -96,30 +96,28 @@ export default class workspaceService {
   }
 
   static async getDivisionGrids(workspaceId: number): Promise<DivisionGridEntity[]> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grids`).then((r) => r.json());
+    return apiFetch("tournament", `division-grids/by-workspace/${workspaceId}`).then((r) => r.json());
   }
 
   static async createDivisionGrid(
     workspaceId: number,
     data: { slug: string; name: string; description?: string | null }
   ): Promise<DivisionGridEntity> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grids`, {
+    return apiFetch("tournament", `division-grids/by-workspace/${workspaceId}`, {
       method: "POST",
       body: data
     }).then((r) => r.json());
   }
 
   static async getDivisionGridVersions(
-    workspaceId: number,
+    _workspaceId: number,
     gridId: number
   ): Promise<DivisionGridVersion[]> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grids/${gridId}/versions`).then(
-      (r) => r.json()
-    );
+    return apiFetch("tournament", `division-grids/${gridId}/versions`).then((r) => r.json());
   }
 
   static async createDivisionGridVersion(
-    workspaceId: number,
+    _workspaceId: number,
     gridId: number,
     data: {
       label: string;
@@ -134,28 +132,28 @@ export default class workspaceService {
       }>;
     }
   ): Promise<DivisionGridVersion> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grids/${gridId}/versions`, {
+    return apiFetch("tournament", `division-grids/${gridId}/versions`, {
       method: "POST",
       body: data
     }).then((r) => r.json());
   }
 
   static async publishDivisionGridVersion(versionId: number): Promise<DivisionGridVersion> {
-    return apiFetch("app", `division-grid-versions/${versionId}/publish`, {
+    return apiFetch("tournament", `division-grids/versions/${versionId}/publish`, {
       method: "POST",
       body: {}
     }).then((r) => r.json());
   }
 
   static async cloneDivisionGridVersion(versionId: number): Promise<DivisionGridVersion> {
-    return apiFetch("app", `division-grid-versions/${versionId}/clone`, {
+    return apiFetch("tournament", `division-grids/versions/${versionId}/clone`, {
       method: "POST",
       body: {}
     }).then((r) => r.json());
   }
 
   static async deleteDivisionGridVersion(versionId: number): Promise<void> {
-    await apiFetch("app", `division-grid-versions/${versionId}`, { method: "DELETE" });
+    await apiFetch("tournament", `division-grids/versions/${versionId}`, { method: "DELETE" });
   }
 
   static async uploadDivisionIcon(
@@ -165,7 +163,7 @@ export default class workspaceService {
   ): Promise<{ key: string; public_url: string }> {
     const formData = new FormData();
     formData.append("file", file);
-    return apiFetch("app", `admin/assets/divisions/${slug}`, {
+    return apiFetch("app", `assets/divisions/${slug}`, {
       method: "POST",
       body: formData,
       query: { workspace_id: workspaceId }
@@ -183,9 +181,10 @@ export default class workspaceService {
     is_complete: boolean;
     rules: DivisionGridMappingRule[];
   }> {
-    return apiFetch("app", `division-grid-mappings/${sourceVersionId}/${targetVersionId}`).then(
-      (r) => r.json()
-    );
+    return apiFetch(
+      "app",
+      `division-grids/mappings/${sourceVersionId}/${targetVersionId}`
+    ).then((r) => r.json());
   }
 
   static async putDivisionGridMapping(
@@ -200,7 +199,7 @@ export default class workspaceService {
     is_complete: boolean;
     rules: DivisionGridMappingRule[];
   }> {
-    return apiFetch("app", `division-grid-mappings/${sourceVersionId}/${targetVersionId}`, {
+    return apiFetch("tournament", `division-grids/mappings/${sourceVersionId}/${targetVersionId}`, {
       method: "PUT",
       body: data
     }).then((r) => r.json());
@@ -209,16 +208,17 @@ export default class workspaceService {
   static async getDivisionGridMarketplaceWorkspaces(
     workspaceId: number
   ): Promise<DivisionGridMarketplaceWorkspace[]> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grid-marketplace/workspaces`).then(
-      (r) => r.json()
-    );
+    return apiFetch(
+      "app",
+      `division-grids/by-workspace/${workspaceId}/marketplace/workspaces`
+    ).then((r) => r.json());
   }
 
   static async getDivisionGridMarketplace(
     workspaceId: number,
     sourceWorkspaceId: number
   ): Promise<DivisionGridMarketplaceGrid[]> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grid-marketplace`, {
+    return apiFetch("tournament", `division-grids/by-workspace/${workspaceId}/marketplace`, {
       query: { source_workspace_id: sourceWorkspaceId }
     }).then((r) => r.json());
   }
@@ -227,7 +227,7 @@ export default class workspaceService {
     workspaceId: number,
     data: DivisionGridMarketplaceImportRequest
   ): Promise<DivisionGridMarketplaceImportResult> {
-    return apiFetch("app", `workspaces/${workspaceId}/division-grid-marketplace/import`, {
+    return apiFetch("tournament", `division-grids/by-workspace/${workspaceId}/marketplace/import`, {
       method: "POST",
       body: data
     }).then((r) => r.json());

@@ -11,12 +11,8 @@ interface Props {
   limit?: number;
 }
 
-const formatPlaytime = (seconds: number): string => {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
-  return `${m}m`;
-};
+// playtime from the profile API is a normalized share in [0, 1]
+const formatShare = (share: number): string => `${(share * 100).toFixed(0)}%`;
 
 const FALLBACK_COLOR = "#d4506b";
 
@@ -51,10 +47,10 @@ const OverviewMostPlayedHeroes = ({ heroes, userSlug, totalCount, limit = 9 }: P
               <div
                 className="relative h-5 cursor-pointer overflow-hidden rounded-[5px] transition-[filter] hover:brightness-110"
                 style={{ width: `${widthPct}%`, background: heroBarBackground(hp.hero.color) }}
-                title={`${hp.hero.name} · ${formatPlaytime(hp.playtime)}`}
+                title={`${hp.hero.name} · ${formatShare(hp.playtime)}`}
               />
               <span className="aqt-mono text-right text-[11px] text-[color:var(--aqt-fg-muted)]">
-                {formatPlaytime(hp.playtime)}
+                {formatShare(hp.playtime)}
               </span>
             </div>
           );

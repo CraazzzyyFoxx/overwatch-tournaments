@@ -10,11 +10,12 @@ import {
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import { cn } from "@/lib/utils";
+import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
 import type {
   AdminRegistration,
   AdminRegistrationRole,
-  BalancerRoleSubtype,
 } from "@/types/balancer-admin.types";
+import type { SubroleCatalog } from "@/types/registration.types";
 
 export interface BalancerRegistrationColumnDefinition {
   id: string;
@@ -27,25 +28,6 @@ export interface BalancerRegistrationColumnDefinition {
   widthClass?: string;
   align?: "left" | "center" | "right";
 }
-
-const ROLE_TO_ICON: Record<string, string> = {
-  tank: "Tank",
-  dps: "Damage",
-  support: "Support",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  tank: "Tank",
-  dps: "DPS",
-  support: "Support",
-};
-
-const SUBROLE_LABELS: Record<BalancerRoleSubtype, string> = {
-  hitscan: "HS",
-  projectile: "Proj",
-  main_heal: "Main",
-  light_heal: "Light",
-};
 
 function formatTimestamp(dateString: string | null | undefined): string | null {
   if (!dateString) {
@@ -119,7 +101,13 @@ function ParticipantCell({ registration }: { registration: AdminRegistration }) 
   );
 }
 
-function RolesCell({ roles }: { roles: AdminRegistrationRole[] }) {
+function RolesCell({
+  roles,
+  catalog,
+}: {
+  roles: AdminRegistrationRole[];
+  catalog?: SubroleCatalog;
+}) {
   if (!roles || roles.length === 0) {
     return <span className="text-white/30">—</span>;
   }
@@ -135,34 +123,37 @@ function RolesCell({ roles }: { roles: AdminRegistrationRole[] }) {
 
   return (
     <div className="flex flex-wrap items-start justify-center gap-x-1 gap-y-2">
-      {sortedRoles.map((role) => (
-        <div
-          key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
-          className="inline-flex min-w-8 flex-col items-center gap-0.5"
-          title={[
-            ROLE_LABELS[role.role] ?? role.role,
-            role.subrole ? SUBROLE_LABELS[role.subrole] ?? role.subrole : null,
-            role.rank_value != null ? `${role.rank_value}` : null,
-            role.is_primary ? "Primary" : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        >
-          <span
-            className={cn(
-              "relative inline-flex h-8 w-8 items-center justify-center p-1",
-              role.is_primary
-                ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
-                : "text-white/70",
-            )}
+      {sortedRoles.map((role) => {
+        const subroleLabel = role.subrole ? getSubroleLabel(catalog, role.role, role.subrole) : null;
+        return (
+          <div
+            key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
+            className="inline-flex min-w-8 flex-col items-center gap-0.5"
+            title={[
+              ROLE_LABELS[role.role] ?? role.role,
+              subroleLabel,
+              role.rank_value != null ? `${role.rank_value}` : null,
+              role.is_primary ? "Primary" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           >
-            <PlayerRoleIcon role={ROLE_TO_ICON[role.role] ?? role.role} size={20} />
-          </span>
-          <span className="text-center text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-white/45">
-            {role.subrole ? SUBROLE_LABELS[role.subrole] ?? role.subrole : role.rank_value ?? ""}
-          </span>
-        </div>
-      ))}
+            <span
+              className={cn(
+                "relative inline-flex h-8 w-8 items-center justify-center p-1",
+                role.is_primary
+                  ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
+                  : "text-white/70",
+              )}
+            >
+              <PlayerRoleIcon role={getRoleIconName(role.role)} size={20} />
+            </span>
+            <span className="text-center text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-white/45">
+              {subroleLabel ?? role.rank_value ?? ""}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -304,7 +295,9 @@ function ExclusionCell({ registration }: { registration: AdminRegistration }) {
   );
 }
 
-export function buildBalancerRegistrationColumns(): BalancerRegistrationColumnDefinition[] {
+export function buildBalancerRegistrationColumns(
+  subroleCatalog?: SubroleCatalog,
+): BalancerRegistrationColumnDefinition[] {
   return [
     {
       id: "participant",
@@ -342,7 +335,7 @@ export function buildBalancerRegistrationColumns(): BalancerRegistrationColumnDe
       defaultVisible: true,
       responsive: "always",
       align: "center",
-      render: (registration) => <RolesCell roles={registration.roles} />,
+      render: (registration) => <RolesCell roles={registration.roles} catalog={subroleCatalog} />,
       searchValue: (registration) =>
         registration.roles
           .map((role) => [role.role, role.subrole, role.rank_value].filter(Boolean).join(" "))

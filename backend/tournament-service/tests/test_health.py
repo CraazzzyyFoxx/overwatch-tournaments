@@ -42,11 +42,11 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
         self.assertIn("/encounters/{encounter_id}/map-pool/ws", paths)
         self.assertIn("/teams/{id}", paths)
         self.assertIn(
-            "/workspaces/{workspace_id}/tournaments/{tournament_id}/registration/form",
+            "/tournaments/{tournament_id}/registration/form",
             paths,
         )
         self.assertIn(
-            "/workspaces/{workspace_id}/tournaments/{tournament_id}/registration/me",
+            "/tournaments/{tournament_id}/registration/me",
             paths,
         )
         self.assertIn("/admin/tournaments", paths)

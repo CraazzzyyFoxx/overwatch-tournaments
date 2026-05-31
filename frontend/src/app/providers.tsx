@@ -27,6 +27,8 @@ function getQueryClient() {
   return browserQueryClient;
 }
 
+import { LanguageProvider } from "@/i18n/LanguageContext";
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
 
@@ -34,7 +36,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthBootstrap />
       <WorkspaceBootstrap />
-      {children}
+      <LanguageProvider>
+        {children}
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

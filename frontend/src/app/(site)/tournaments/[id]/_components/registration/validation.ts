@@ -12,6 +12,14 @@ const BUILT_IN_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
+const BUILT_IN_LABEL_KEYS: Record<string, string> = {
+  battle_tag: "registration.accounts.battleTag",
+  smurf_tags: "registration.accounts.smurfs",
+  discord_nick: "registration.accounts.discord",
+  twitch_nick: "registration.accounts.twitch",
+  notes: "registration.details.notes",
+};
+
 const TEXT_VALIDATION_FIELD_TYPES = new Set<CustomFieldDefinition["type"]>(["text", "number", "url"]);
 const DEFAULT_BATTLE_TAG_REGEX = String.raw`([\w0-9]{2,12}#[0-9]{4,})`;
 const DEFAULT_BATTLE_TAG_VALIDATION: FieldValidationConfig = {
@@ -62,22 +70,25 @@ function resolveBuiltInValidation(
 function getErrorMessage(
   validation: FieldValidationConfig | null | undefined,
   label: string,
+  t?: (key: string, variables?: Record<string, string | number>) => string,
 ): string {
-  return validation?.error_message?.trim() || `${label} format is invalid.`;
+  return validation?.error_message?.trim() || (t ? t("registration.wizard.validation.invalidFormat", { label }) : `${label} format is invalid.`);
 }
 
 export function getBuiltInFieldValidationError(
   fieldKey: string,
   value: string,
   config?: BuiltInFieldConfig,
+  t?: (key: string, variables?: Record<string, string | number>) => string,
 ): string | null {
-  return getBuiltInValueValidationError(fieldKey, value, config);
+  return getBuiltInValueValidationError(fieldKey, value, config, t);
 }
 
 export function getBuiltInValueValidationError(
   fieldKey: string,
   value: string,
   config?: BuiltInFieldConfig,
+  t?: (key: string, variables?: Record<string, string | number>) => string,
 ): string | null {
   const validation = resolveBuiltInValidation(fieldKey, config?.validation);
   const regex = buildRegex(validation);
@@ -89,20 +100,23 @@ export function getBuiltInValueValidationError(
     return null;
   }
 
-  return getErrorMessage(validation, BUILT_IN_LABELS[fieldKey] ?? fieldKey);
+  const labelKey = BUILT_IN_LABEL_KEYS[fieldKey];
+  const localizedLabel = (t && labelKey) ? t(labelKey) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
+  return getErrorMessage(validation, localizedLabel, t);
 }
 
 export function getBuiltInListValidationError(
   fieldKey: string,
   values: string[],
   config?: BuiltInFieldConfig,
+  t?: (key: string, variables?: Record<string, string | number>) => string,
 ): string | null {
   if (values.length === 0) {
     return null;
   }
 
   for (const value of values) {
-    const error = getBuiltInValueValidationError(fieldKey, value, config);
+    const error = getBuiltInValueValidationError(fieldKey, value, config, t);
     if (error) {
       return error;
     }
@@ -120,6 +134,7 @@ export function supportsCustomFieldValidation(
 export function getCustomFieldValidationError(
   field: CustomFieldDefinition,
   value: string,
+  t?: (key: string, variables?: Record<string, string | number>) => string,
 ): string | null {
   if (!supportsCustomFieldValidation(field)) {
     return null;
@@ -135,8 +150,9 @@ export function getCustomFieldValidationError(
     return null;
   }
 
-  return getErrorMessage(field.validation, field.label);
+  return getErrorMessage(field.validation, field.label, t);
 }
+
 
 export function getFirstLiveValidationError(
   fieldErrors: Record<string, string | null | undefined>,

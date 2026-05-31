@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from src import schemas
 from src.core import enums, pagination
+from src.schemas.base import Score
 from src.schemas.division_grid import DivisionGridVersionRead
 
 __all__ = (
@@ -13,6 +14,13 @@ __all__ = (
     "UserRole",
     "UserTournamentWithStats",
     "UserTournament",
+    "UserTournamentSummary",
+    "UserTournamentPlayer",
+    "UserEncounterTournament",
+    "UserEncounterStageSummary",
+    "UserEncounterStageItemSummary",
+    "UserEncounterTeamSummary",
+    "UserEncounterTeamPlayerRef",
     "MatchReadWithUserStats",
     "EncounterReadWithUserStats",
     "UserMap",
@@ -67,13 +75,120 @@ class UserRole(BaseModel):
     division_grid_version: DivisionGridVersionRead | None = None
 
 
-class MatchReadWithUserStats(schemas.MatchRead):
-    performance: int | None
-    heroes: list[schemas.HeroRead]
+class UserTournamentSummary(BaseModel):
+    """Tournament card shown in user profile / achievement filter lists.
+
+    Narrow projection of `models.Tournament` — only fields the frontend
+    actually consumes in user-scoped pages.
+    """
+    id: int
+    number: int | None
+    name: str
+    is_league: bool
+    is_finished: bool = False
+    status: enums.TournamentStatus | None = None
+    division_grid_version: DivisionGridVersionRead | None = None
 
 
-class EncounterReadWithUserStats(schemas.EncounterRead):
-    matches: list[MatchReadWithUserStats]
+class UserTournamentPlayer(BaseModel):
+    """Player card inside `UserTournament.players` (rendered by TournamentTeamTable).
+
+    Also populated inside `UserEncounterTeamSummary.players` when the
+    encounter view needs to identify the viewer's row (via `user_id`).
+    """
+    id: int
+    name: str
+    role: enums.HeroClass | None = None
+    sub_role: str | None = None
+    rank: int
+    division: int
+    user_id: int
+    is_substitution: bool
+    is_newcomer: bool
+    is_newcomer_role: bool
+    related_player_id: int | None = None
+    relative_player: int | None = None
+
+
+class UserEncounterTournament(BaseModel):
+    """Tournament link inside `EncounterReadWithUserStats.tournament`."""
+    id: int
+    name: str
+    number: int | None = None
+    is_league: bool
+    is_finished: bool = False
+    status: enums.TournamentStatus | None = None
+
+
+class UserEncounterStageSummary(BaseModel):
+    """Stage link inside `EncounterReadWithUserStats.stage`."""
+    id: int
+    name: str
+
+
+class UserEncounterStageItemSummary(BaseModel):
+    """Stage-item link inside `EncounterReadWithUserStats.stage_item`."""
+    id: int
+    name: str
+
+
+class UserEncounterTeamPlayerRef(BaseModel):
+    """Player reference inside encounter teams — minimal id+user_id+role.
+
+    Used only by the frontend to identify which side the viewer played on
+    (`players.find(p => p.user_id === selfUserId)`). Renders nothing on its
+    own — for the full player card see `UserTournamentPlayer`.
+    """
+    id: int
+    user_id: int
+    role: enums.HeroClass | None = None
+    name: str
+
+
+class UserEncounterTeamSummary(BaseModel):
+    """Team summary inside `EncounterReadWithUserStats.{home,away}_team`."""
+    id: int
+    name: str
+    players: list[UserEncounterTeamPlayerRef] = Field(default_factory=list)
+
+
+class MatchReadWithUserStats(BaseModel):
+    """Match within a user-scoped encounter, with the viewer's performance."""
+    id: int
+    home_team_id: int | None = None
+    away_team_id: int | None = None
+    score: Score
+    time: float
+    log_name: str
+    encounter_id: int
+    map_id: int
+    code: str | None = None
+    map: MapRead | None = None
+    performance: int | None = None
+    heroes: list[schemas.HeroRead] = Field(default_factory=list)
+
+
+class EncounterReadWithUserStats(BaseModel):
+    """Encounter rendered on the user encounters page."""
+    id: int
+    name: str
+    home_team_id: int | None = None
+    away_team_id: int | None = None
+    score: Score
+    round: int
+    best_of: int = 3
+    tournament_id: int
+    status: str
+    closeness: float | None = None
+    has_logs: bool = False
+    result_status: str = "none"
+    user_team_id: int | None = None  # which side the viewer played on
+    tournament: UserEncounterTournament | None = None
+    stage: UserEncounterStageSummary | None = None
+    stage_item: UserEncounterStageItemSummary | None = None
+    home_team: UserEncounterTeamSummary | None = None
+    away_team: UserEncounterTeamSummary | None = None
+    matches: list[MatchReadWithUserStats] = Field(default_factory=list)
 
 
 class UserTournament(BaseModel):
@@ -83,7 +198,7 @@ class UserTournament(BaseModel):
     is_league: bool
     team_id: int
     team: str
-    players: list["schemas.PlayerRead"]
+    players: list[UserTournamentPlayer]
     closeness: float
     placement: int | None
     count_teams: int
@@ -92,8 +207,10 @@ class UserTournament(BaseModel):
     draw: int
     maps_won: int
     maps_lost: int
-    role: enums.HeroClass
-    division: int
+    # Nullable because the user may not have a Player record on the team
+    # (e.g. teams returned for adjacency aggregates have no resolved role).
+    role: enums.HeroClass | None = None
+    division: int | None = None
     division_grid_version: DivisionGridVersionRead | None = None
     encounters: list[EncounterReadWithUserStats]
 
@@ -194,9 +311,10 @@ class UserProfile(BaseModel):
     avg_playoff_placement: float | None
     avg_group_placement: float | None
     most_played_hero: schemas.HeroRead | None
+    heroes_count: int
 
     roles: list[UserRole]
-    tournaments: list[schemas.TournamentRead]
+    tournaments: list[UserTournamentSummary]
     hero_statistics: list[schemas.HeroPlaytime]
 
 

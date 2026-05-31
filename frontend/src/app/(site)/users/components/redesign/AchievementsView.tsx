@@ -1,13 +1,26 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AchievementRarity } from "@/types/achievement.types";
+import type { UserTournamentSummary } from "@/types/user.types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+
+const TOURNAMENT_QUERY_KEY = "achievementTournamentId";
 
 interface Props {
   achievements: AchievementRarity[];
+  tournaments?: UserTournamentSummary[];
+  selectedTournamentValue?: string;
 }
 
 type Rarity = "legendary" | "epic" | "rare" | "uncommon" | "common";
@@ -38,9 +51,35 @@ const RARITY_RANGE: Record<Rarity, string> = {
   common: "> 50%"
 };
 
-const AchievementsView = ({ achievements }: Props) => {
+const AchievementsView = ({ achievements, tournaments = [], selectedTournamentValue = "all" }: Props) => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
+
   const [rarityFilter, setRarityFilter] = useState<Rarity | null>(null);
   const [search, setSearch] = useState("");
+
+  const uniqueTournaments = useMemo(() => {
+    const seen = new Set<number>();
+    return tournaments.filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+  }, [tournaments]);
+
+  const onTournamentChange = (value: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (value === "all") {
+      next.delete(TOURNAMENT_QUERY_KEY);
+    } else {
+      next.set(TOURNAMENT_QUERY_KEY, value);
+    }
+    startTransition(() => {
+      router.push(`${pathname}?${next.toString()}`);
+    });
+  };
 
   const grouped = useMemo(() => {
     const buckets: Record<Rarity, AchievementRarity[]> = {
@@ -51,7 +90,7 @@ const AchievementsView = ({ achievements }: Props) => {
       common: []
     };
     for (const ach of achievements) {
-      const rarity = classifyRarity(ach.rarity);
+      const rarity = classifyRarity(ach.rarity * 100);
       buckets[rarity].push(ach);
     }
     return buckets;
@@ -122,6 +161,23 @@ const AchievementsView = ({ achievements }: Props) => {
             <span className="aqt-count">{counts[r]}</span>
           </span>
         ))}
+        <span className="aqt-filter-divider" />
+        {uniqueTournaments.length > 0 && (
+          <Select value={selectedTournamentValue} onValueChange={onTournamentChange}>
+            <SelectTrigger className="h-8 w-48 border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
+              <SelectValue placeholder="All tournaments" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
+              <SelectItem value="all">All tournaments</SelectItem>
+              <SelectItem value="none">Without tournament</SelectItem>
+              {uniqueTournaments.map((t) => (
+                <SelectItem key={t.id} value={`t-${t.id}`}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
           <input
             placeholder="Search achievements…"
@@ -186,7 +242,7 @@ const AchievementsView = ({ achievements }: Props) => {
                       </div>
                       <div className="mt-auto flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-2 text-[10.5px] text-[color:var(--aqt-fg-muted)]">
                         <span className="aqt-rarity">◆ <span className="capitalize">{r}</span></span>
-                        <span className="aqt-mono">{ach.rarity?.toFixed(2)}%</span>
+                        <span className="aqt-mono">{(ach.rarity * 100).toFixed(2)}%</span>
                       </div>
                     </Link>
                   );

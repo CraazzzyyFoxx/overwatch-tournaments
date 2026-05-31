@@ -74,12 +74,26 @@ const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
                   </TableCell>
                   <TableCell>{achievement.count}</TableCell>
                   <TableCell
-                    onClick={() => router.push(`/tournaments/${achievement.last_tournament.id}`)}
+                    onClick={() =>
+                      achievement.last_tournament
+                        ? router.push(`/tournaments/${achievement.last_tournament.id}`)
+                        : undefined
+                    }
                   >
                     {achievement.last_tournament?.name}
                   </TableCell>
-                  <TableCell onClick={() => router.push(`/matches/${achievement.last_match.id}`)}>
-                    {achievement.last_match?.encounter?.name}
+                  <TableCell
+                    onClick={() =>
+                      achievement.last_match
+                        ? router.push(`/matches/${achievement.last_match.id}`)
+                        : undefined
+                    }
+                  >
+                    {achievement.last_match
+                      ? `${achievement.last_match.home_team?.name ?? "?"} vs ${
+                          achievement.last_match.away_team?.name ?? "?"
+                        }`
+                      : null}
                   </TableCell>
                 </TableRow>
               ))

@@ -7,10 +7,16 @@ class Settings(BaseServiceSettings):
     project_name: str = "Anak Tournaments API"
     project_url: str
     battle_tag_regex: str = r"([\w0-9]{2,12}#[0-9]{4,})"
-    api_v1_str: str = "/api/v1"
+    # Gateway mount prefix for app-service. tournament-service owns the bare
+    # /api/v1 namespace, so app-service is carved out under /api/v1/core. Used as
+    # FastAPI root_path (Kong forwards /api/v1/core/* with strip_path: false).
+    api_v1_str: str = "/api/v1/core"
 
     redis_url: RedisDsn
-    rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672"
+    # No default — require RABBITMQ_URL to be set explicitly. Previously
+    # defaulted to `guest:guest`, which silently shipped insecure credentials
+    # if the env var was missing in any environment.
+    rabbitmq_url: str
 
     # Cache TTLs
     users_cache_ttl: int = 60

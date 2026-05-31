@@ -17,6 +17,8 @@ import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
+import { useTranslation } from "@/i18n/LanguageContext";
+
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
 const BRACKET_REFRESH_INTERVAL_MS = 60_000;
 
@@ -44,6 +46,7 @@ function GroupStagePanel({
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
 }) {
+  const { t } = useTranslation();
   const hasStandings = standings.length > 0;
   const title = stageItem?.name ?? stage.name;
   const subtitle = stageItem
@@ -53,9 +56,9 @@ function GroupStagePanel({
   return (
     <Tabs
       defaultValue={hasStandings ? "matches" : "matches"}
-      className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]"
+      className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
     >
-      <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
           <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
@@ -63,20 +66,20 @@ function GroupStagePanel({
           </p>
         </div>
 
-        <TabsList className="h-auto justify-start rounded-xl border border-white/[0.08] bg-black/20 p-1 text-white/50">
+        <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
           {hasStandings && (
             <TabsTrigger
               value="standings"
-              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-white/[0.08] data-[state=active]:text-white data-[state=active]:shadow-none"
+              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
             >
-              Standings
+              {t("common.standings")}
             </TabsTrigger>
           )}
           <TabsTrigger
             value="matches"
-            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-white/[0.08] data-[state=active]:text-white data-[state=active]:shadow-none"
+            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
           >
-            Bracket
+            {t("common.bracket")}
           </TabsTrigger>
         </TabsList>
       </div>
@@ -103,6 +106,7 @@ function GroupStagePanel({
   );
 }
 
+
 function getGroupScopeCount(stages: Stage[]) {
   return stages.reduce(
     (count, stage) => count + Math.max(stage.items.length, 1),
@@ -126,6 +130,7 @@ export default function TournamentBracketPage({
     (authUser?.isSuperuser ||
       (authUser?.roles ?? []).some((r) => ADMIN_ROLES.has(r)));
 
+  const { t } = useTranslation();
   const [editEncounter, setEditEncounter] = useState<Encounter | null>(null);
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
 
@@ -139,12 +144,12 @@ export default function TournamentBracketPage({
         try {
           const { side } = await captainService.getMyRole(enc.id);
           if (side === null) {
-            toast({ title: "Нет доступа", description: "Вы не являетесь капитаном этой команды", variant: "destructive" });
+            toast({ title: t("common.noAccess"), description: t("common.notCaptain"), variant: "destructive" });
             return;
           }
           setReportEncounter(enc);
         } catch {
-          toast({ title: "Ошибка", description: "Не удалось проверить роль", variant: "destructive" });
+          toast({ title: t("common.error"), description: t("common.roleVerificationFailed"), variant: "destructive" });
         }
       }
     : undefined;
@@ -295,7 +300,7 @@ export default function TournamentBracketPage({
                   key={stage.id}
                   className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground"
                 >
-                  No matches found for {stage.name}
+                  {t("common.noMatches", { stage: stage.name })}
                 </div>
               );
             }
@@ -309,9 +314,9 @@ export default function TournamentBracketPage({
               <Tabs
                 key={stage.id}
                 defaultValue="bracket"
-                className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]"
+                className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
               >
-                <div className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-semibold text-white">{stage.name}</h3>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
@@ -319,20 +324,20 @@ export default function TournamentBracketPage({
                     </p>
                   </div>
 
-                  <TabsList className="h-auto justify-start rounded-xl border border-white/[0.08] bg-black/20 p-1 text-white/50">
+                  <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
                     {hasPlayoffStandings && (
                       <TabsTrigger
                         value="standings"
-                        className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-white/[0.08] data-[state=active]:text-white data-[state=active]:shadow-none"
+                        className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                       >
-                        Standings
+                        {t("common.standings")}
                       </TabsTrigger>
                     )}
                     <TabsTrigger
                       value="bracket"
-                      className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-white/[0.08] data-[state=active]:text-white data-[state=active]:shadow-none"
+                      className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                     >
-                      Bracket
+                      {t("common.bracket")}
                     </TabsTrigger>
                   </TabsList>
                 </div>
@@ -362,8 +367,8 @@ export default function TournamentBracketPage({
       ) : (
         <div className="py-12 text-center text-muted-foreground">
           {stages.length === 0
-            ? "No stages configured for this tournament"
-            : "No bracket matches found for the selected stage"}
+            ? t("common.noStages")
+            : t("common.noBracketMatches")}
         </div>
       )}
 
@@ -389,3 +394,4 @@ export default function TournamentBracketPage({
     </div>
   );
 }
+

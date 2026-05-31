@@ -6,6 +6,7 @@ import sqlalchemy as sa
 from cashews import Command, cache
 from fastapi import APIRouter, Depends, HTTPException
 from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
+from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,12 +29,25 @@ from src.services.registration import service as reg_service
 from src.services.registration.validation import validate_registration_input
 
 router = APIRouter(
-    prefix="/workspaces/{workspace_id}/tournaments/{tournament_id}/registration",
+    prefix="/tournaments/{tournament_id}/registration",
     tags=["registration"],
 )
 
 
-def _form_to_read(form: models.BalancerRegistrationForm) -> RegistrationFormRead:
+async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: int) -> int:
+    workspace_id = await session.scalar(
+        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
+    )
+    if workspace_id is None:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return workspace_id
+
+
+def _form_to_read(
+    form: models.BalancerRegistrationForm,
+    *,
+    subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
+) -> RegistrationFormRead:
     return RegistrationFormRead(
         id=form.id,
         tournament_id=form.tournament_id,
@@ -44,6 +58,7 @@ def _form_to_read(form: models.BalancerRegistrationForm) -> RegistrationFormRead
         closes_at=form.closes_at,
         built_in_fields=form.built_in_fields_json or {},
         custom_fields=form.custom_fields_json or [],
+        subrole_catalog=subrole_catalog or {},
     )
 
 
@@ -91,7 +106,6 @@ def _reg_to_read(
 
 @router.get("/form", response_model=RegistrationFormRead | None)
 async def get_registration_form(
-    workspace_id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
 ):
@@ -99,12 +113,12 @@ async def get_registration_form(
     form = await reg_service.get_registration_form(session, tournament_id)
     if form is None:
         return None
-    return _form_to_read(form)
+    subrole_catalog = await resolve_subrole_catalog(session, form.workspace_id)
+    return _form_to_read(form, subrole_catalog=subrole_catalog)
 
 
 @router.post("", response_model=RegistrationRead, status_code=201)
 async def register(
-    workspace_id: int,
     tournament_id: int,
     data: RegistrationCreate,
     session: AsyncSession = Depends(db.get_async_session),
@@ -115,10 +129,10 @@ async def register(
     if form is None or not form.is_open:
         raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
 
-    if form.workspace_id != workspace_id:
-        raise HTTPException(status_code=400, detail="Tournament does not belong to this workspace")
+    workspace_id = form.workspace_id
 
-    validate_registration_input(form, data)
+    subrole_catalog = await resolve_subrole_catalog(session, workspace_id)
+    validate_registration_input(form, data, subrole_catalog=subrole_catalog)
 
     existing = await reg_service.get_registration(session, tournament_id, user.id)
     if existing is not None:
@@ -138,18 +152,9 @@ async def register(
     if primary_link is not None:
         user_player_id = primary_link.player_id
 
-    # Build role entries for normalized table
-    role_entries: list[models.BalancerRegistrationRole] = []
-    if data.roles:
-        for i, r in enumerate(data.roles):
-            role_entries.append(
-                models.BalancerRegistrationRole(
-                    role=r.role,
-                    subrole=r.subrole,
-                    is_primary=r.is_primary,
-                    priority=i,
-                )
-            )
+    # Build role entries for normalized table (normalized + filtered to match
+    # the admin / Google-Sheets write path).
+    role_entries = reg_service.build_registration_roles(data.roles)
 
     try:
         registration = await reg_service.create_registration(
@@ -191,7 +196,6 @@ async def register(
 
 @router.get("/me", response_model=RegistrationRead | None)
 async def get_my_registration(
-    workspace_id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.get_current_active_user),
@@ -200,13 +204,12 @@ async def get_my_registration(
     reg = await reg_service.get_registration(session, tournament_id, user.id)
     if reg is None:
         return None
-    status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+    status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
     return _reg_to_read(reg, status_meta_map=status_meta_map)
 
 
 @router.patch("/me", response_model=RegistrationRead)
 async def update_my_registration(
-    workspace_id: int,
     tournament_id: int,
     data: RegistrationUpdate,
     session: AsyncSession = Depends(db.get_async_session),
@@ -216,8 +219,6 @@ async def update_my_registration(
     form = await reg_service.get_registration_form(session, tournament_id)
     if form is None:
         raise HTTPException(status_code=404, detail="Registration form not found")
-    if form.workspace_id != workspace_id:
-        raise HTTPException(status_code=400, detail="Tournament does not belong to this workspace")
 
     reg = await reg_service.get_registration(session, tournament_id, user.id)
     if reg is None:
@@ -232,13 +233,12 @@ async def update_my_registration(
         reg,
         **data.model_dump(exclude_unset=True),
     )
-    status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+    status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
     return _reg_to_read(updated, status_meta_map=status_meta_map)
 
 
 @router.delete("/me", response_model=RegistrationStatusResponse)
 async def withdraw_my_registration(
-    workspace_id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.get_current_active_user),
@@ -254,7 +254,6 @@ async def withdraw_my_registration(
 
 @router.post("/me/check-in", response_model=RegistrationRead)
 async def check_in_my_registration(
-    workspace_id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.get_current_active_user),
@@ -263,26 +262,25 @@ async def check_in_my_registration(
     reg = await reg_service.get_registration(session, tournament_id, user.id)
     if reg is None:
         raise HTTPException(status_code=404, detail="No registration found")
-    if reg.workspace_id != workspace_id:
-        raise HTTPException(status_code=400, detail="Tournament does not belong to this workspace")
 
     checked_in = await reg_service.check_in_registration(
         session,
         reg,
         checked_in_by=user.id,
     )
-    status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+    status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
     return _reg_to_read(checked_in, status_meta_map=status_meta_map)
 
 
 @router.get("/list", response_model=list[RegistrationListRead])
 async def list_registrations(
-    workspace_id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
 ):
     """Public list of registrations for a tournament (all statuses, non-deleted)."""
     from sqlalchemy.orm import selectinload
+
+    workspace_id = await _resolve_tournament_workspace(session, tournament_id)
 
     with cache.disabling(Command.GET, Command.SET):
         result = await session.execute(

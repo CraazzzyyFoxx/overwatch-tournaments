@@ -11,6 +11,12 @@ import {
   ShieldBan,
   UserPlus,
   XCircle,
+  Gamepad2,
+  Tv,
+  Twitch,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 import {
@@ -33,6 +39,9 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
+import { useTranslation } from "@/i18n/LanguageContext";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { formatSubroleSlug } from "@/lib/roles";
 
 // ---------------------------------------------------------------------------
 // Responsive class helper
@@ -51,52 +60,107 @@ const ALIGN_CLASS: Record<"left" | "center", string> = {
 };
 
 // ---------------------------------------------------------------------------
-// My registration status bar
+// My registration status bar / card configs
 // ---------------------------------------------------------------------------
 
 const STATUS_BAR_CONFIG: Record<
   RegistrationStatus,
-  { icon: typeof Clock; color: string; label: string }
+  { icon: typeof Clock; color: string }
 > = {
   pending: {
     icon: Clock,
     color: "text-amber-400 border-amber-500/20 bg-amber-500/10",
-    label: "Pending review",
   },
   approved: {
     icon: CheckCircle2,
     color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
-    label: "Approved",
   },
   rejected: {
     icon: XCircle,
     color: "text-red-400 border-red-500/20 bg-red-500/10",
-    label: "Rejected",
   },
   withdrawn: {
     icon: XCircle,
     color: "text-white/40 border-white/10 bg-white/5",
-    label: "Withdrawn",
   },
   banned: {
     icon: ShieldBan,
     color: "text-red-400 border-red-500/20 bg-red-500/10",
-    label: "Banned",
   },
   insufficient_data: {
     icon: AlertTriangle,
     color: "text-orange-400 border-orange-500/20 bg-orange-500/10",
-    label: "Incomplete",
   },
 };
 
-function MyRegistrationBar({
+const ROLE_ACCENT_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
+  tank: { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/20" },
+  dps: { bg: "bg-orange-500/10", text: "text-orange-300", border: "border-orange-500/20" },
+  support: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/20" },
+  flex: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/20" },
+};
+
+const ROLE_TO_ICON: Record<string, string> = {
+  tank: "Tank",
+  dps: "Damage",
+  support: "Support",
+  flex: "Flex",
+};
+
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  tank: "Tank",
+  dps: "DPS",
+  support: "Support",
+  flex: "Flex",
+};
+
+function getRoleLabel(role: string): string {
+  return ROLE_DISPLAY_NAMES[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 127.14 96.36" fill="currentColor" {...props}>
+    <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.5-5c.87-.64,1.72-1.31,2.53-2a75.76,75.76,0,0,0,73,0c.81.69,1.66,1.36,2.53,2a68.43,68.43,0,0,1-10.5,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.86,49.2,123.63,26.54,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z" />
+  </svg>
+);
+
+const STATUS_FILTER_META: Record<RegistrationStatus, { dot: string }> = {
+  approved: { dot: "var(--aqt-emerald)" },
+  pending: { dot: "var(--aqt-amber)" },
+  insufficient_data: { dot: "var(--aqt-amber)" },
+  rejected: { dot: "var(--aqt-rose)" },
+  banned: { dot: "var(--aqt-rose)" },
+  withdrawn: { dot: "var(--aqt-fg-dim)" },
+};
+
+const STATUS_FILTER_ORDER: RegistrationStatus[] = [
+  "approved",
+  "pending",
+  "insufficient_data",
+  "rejected",
+  "banned",
+  "withdrawn",
+];
+
+const localeKeyMap: Record<RegistrationStatus, string> = {
+  pending: "pendingReview",
+  approved: "approved",
+  rejected: "rejected",
+  withdrawn: "withdrawn",
+  banned: "banned",
+  insufficient_data: "incomplete",
+};
+
+type StatusFilter = "all" | RegistrationStatus;
+
+function MyRegistrationCard({
   registration,
   canCheckIn,
   onCheckIn,
   onWithdraw,
   isCheckingIn,
   isWithdrawing,
+  tournament,
 }: {
   registration: Registration;
   canCheckIn: boolean;
@@ -104,52 +168,271 @@ function MyRegistrationBar({
   onWithdraw: () => void;
   isCheckingIn: boolean;
   isWithdrawing: boolean;
+  tournament: Tournament;
 }) {
-  const config =
+  const { t } = useTranslation();
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const primaryRole = registration.roles.find((r) => r.is_primary);
+  const secondaryRoles = registration.roles
+    .filter((r) => !r.is_primary)
+    .sort((a, b) => a.priority - b.priority);
+
+  const statusConfig =
     STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
-  const StatusIcon = config.icon;
+  const StatusIcon = statusConfig.icon;
+
+  const isCheckedIn = registration.checked_in === true;
+
+  let checkInBadgeClass = "bg-white/5 border-white/10 text-white/50";
+  let checkInBadgeText = t("registration.myCard.checkInNotStarted");
+
+  if (isCheckedIn) {
+    checkInBadgeClass = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+    checkInBadgeText = t("registration.myCard.checkedIn");
+  } else if (canCheckIn) {
+    checkInBadgeClass = "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse";
+    checkInBadgeText = t("registration.myCard.checkInRequired");
+  } else if (
+    tournament.status === "live" ||
+    tournament.status === "completed" ||
+    tournament.status === "playoffs" ||
+    tournament.status === "archived"
+  ) {
+    checkInBadgeClass = "bg-red-500/10 border-red-500/20 text-red-400";
+    checkInBadgeText = t("registration.myCard.checkInClosed");
+  }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between",
-        config.color,
+    <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] shadow-md backdrop-blur-md transition-all duration-200">
+      {/* Decorative gradient blurs */}
+      <div className="absolute -right-16 -top-16 -z-10 size-32 rounded-full bg-blue-500/5 blur-2xl" />
+      <div className="absolute -bottom-16 -left-16 -z-10 size-32 rounded-full bg-violet-500/5 blur-2xl" />
+
+      {/* Main Bar (Always Visible) */}
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Left Side: Title, Status, Primary Role */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-white/90 uppercase tracking-wider">
+              {t("registration.myCard.title")}
+            </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                statusConfig.color,
+              )}
+            >
+              <StatusIcon className="size-3" />
+              {t("common." + localeKeyMap[registration.status])}
+            </span>
+          </div>
+
+          {/* Primary Role indicator */}
+          {primaryRole && (
+            <div className="flex items-center gap-2 border-l border-white/10 pl-4 text-xs">
+              <span className="text-white/40">{t("registration.myCard.primaryRole")}:</span>
+              <div
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium border",
+                  ROLE_ACCENT_CLASSES[primaryRole.role]?.bg,
+                  ROLE_ACCENT_CLASSES[primaryRole.role]?.border,
+                  ROLE_ACCENT_CLASSES[primaryRole.role]?.text,
+                )}
+              >
+                <PlayerRoleIcon
+                  role={ROLE_TO_ICON[primaryRole.role] ?? primaryRole.role}
+                  size={12}
+                />
+                <span>{getRoleLabel(primaryRole.role)}</span>
+                {primaryRole.subrole && (
+                  <span className="opacity-60 text-[10px]">
+                    ({formatSubroleSlug(primaryRole.subrole)})
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Side: Check-in button/badge and toggle */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Check-in status indicator */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-white/40">{t("registration.myCard.checkInStatus")}:</span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]",
+                checkInBadgeClass,
+              )}
+            >
+              {checkInBadgeText}
+            </span>
+          </div>
+
+          {/* Inline Check-in Button if required */}
+          {canCheckIn && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCheckIn();
+              }}
+              disabled={isCheckingIn}
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
+              {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
+            </button>
+          )}
+
+          {/* Toggle details */}
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white/95 transition-colors"
+          >
+            <span>{isExpanded ? t("registration.myCard.hideDetails") : t("registration.myCard.showDetails")}</span>
+            {isExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded Content Details */}
+      {isExpanded && (
+        <div className="border-t border-white/[0.06] bg-white/[0.01] p-4 transition-all duration-200">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Left Column: Fallbacks & Accounts */}
+            <div className="space-y-4">
+              {/* Secondary roles */}
+              <div className="space-y-1.5">
+                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                  {t("registration.myCard.secondaryRoles")}
+                </h4>
+                {secondaryRoles.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {secondaryRoles.map((r) => (
+                      <div
+                        key={r.role}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+                          ROLE_ACCENT_CLASSES[r.role]?.bg,
+                          ROLE_ACCENT_CLASSES[r.role]?.border,
+                          ROLE_ACCENT_CLASSES[r.role]?.text,
+                        )}
+                      >
+                        <PlayerRoleIcon
+                          role={ROLE_TO_ICON[r.role] ?? r.role}
+                          size={11}
+                        />
+                        <span>{getRoleLabel(r.role)}</span>
+                        {r.subrole && (
+                          <span className="text-[10px] opacity-60">
+                            ({formatSubroleSlug(r.subrole)})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-white/30">
+                    {t("registration.myCard.noSecondaryRoles")}
+                  </p>
+                )}
+              </div>
+
+              {/* Linked accounts */}
+              <div className="space-y-1.5">
+                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                  {t("registration.myCard.accounts")}
+                </h4>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                  {registration.battle_tag && (
+                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
+                      <Gamepad2 className="size-3.5 text-white/40" />
+                      <span className="font-semibold text-white/85">{registration.battle_tag}</span>
+                    </div>
+                  )}
+                  {registration.discord_nick && (
+                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
+                      <DiscordIcon className="size-3.5 text-[#5865F2]" />
+                      <span className="text-white/70">{registration.discord_nick}</span>
+                    </div>
+                  )}
+                  {registration.twitch_nick && (
+                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
+                      <Twitch className="size-3.5 text-[#9146FF]" />
+                      <span className="text-white/70">{registration.twitch_nick}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: POV, Notes & Cancel Action */}
+            <div className="space-y-4 flex flex-col justify-between">
+              {/* POV and Notes */}
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <Tv className="size-3.5 text-white/40" />
+                  <span
+                    className={cn(
+                      "font-medium",
+                      registration.stream_pov ? "text-emerald-400" : "text-white/50",
+                    )}
+                  >
+                    {registration.stream_pov
+                      ? t("registration.myCard.streamPovActive")
+                      : t("registration.myCard.streamPovInactive")}
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-white/[0.04] bg-white/[0.02] p-2.5 text-xs">
+                  {registration.notes ? (
+                    <p className="italic text-white/60 leading-normal">
+                      &ldquo;{registration.notes}&rdquo;
+                    </p>
+                  ) : (
+                    <span className="italic text-white/30">
+                      {t("registration.myCard.noNotes")}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action row at bottom of details */}
+              <div className="flex items-center justify-between border-t border-white/[0.04] pt-3 mt-2">
+                {/* Pending check-in state helper text */}
+                <div className="text-[11px] text-white/40">
+                  {isCheckedIn ? (
+                    <span className="text-emerald-400 font-medium">
+                      {t("registration.myCard.checkInSuccess")}
+                    </span>
+                  ) : registration.status === "approved" ? (
+                    <span>{t("registration.myCard.pendingCheckInDesc")}</span>
+                  ) : (
+                    <span>{t("registration.myCard.pendingReviewDesc")}</span>
+                  )}
+                </div>
+
+                {/* Withdraw button */}
+                {(registration.status === "pending" ||
+                  registration.status === "approved") && (
+                  <button
+                    type="button"
+                    onClick={onWithdraw}
+                    disabled={isWithdrawing || isCheckingIn}
+                    className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    {isWithdrawing && <Loader2 className="size-3 animate-spin mr-1" />}
+                    {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-    >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <StatusIcon className="size-4" />
-        <span className="text-sm font-medium break-words">
-          Your registration: {config.label}
-        </span>
-        {registration.battle_tag && (
-          <span className="truncate text-xs opacity-60">
-            ({registration.battle_tag})
-          </span>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {canCheckIn && (
-          <button
-            type="button"
-            onClick={onCheckIn}
-            disabled={isCheckingIn}
-            className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isCheckingIn ? "Checking in..." : "Check-in"}
-          </button>
-        )}
-        {(registration.status === "pending" ||
-          registration.status === "approved") && (
-          <button
-            type="button"
-            onClick={onWithdraw}
-            disabled={isWithdrawing || isCheckingIn}
-            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isWithdrawing ? "Withdrawing..." : "Withdraw"}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -177,9 +460,11 @@ export default function TournamentParticipantsPage({
 }: {
   tournament: Tournament;
 }) {
+  const { t, locale } = useTranslation();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
 
@@ -187,35 +472,22 @@ export default function TournamentParticipantsPage({
 
   const myRegQuery = useQuery({
     queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () =>
-      registrationService.getMyRegistration(
-        tournament.workspace_id,
-        tournament.id,
-      ),
+    queryFn: () => registrationService.getMyRegistration(tournament.id),
     enabled: isAuthenticated,
   });
 
   const listQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () =>
-      registrationService.listRegistrations(
-        tournament.workspace_id,
-        tournament.id,
-      ),
+    queryFn: () => registrationService.listRegistrations(tournament.id),
   });
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-    queryFn: () =>
-      registrationService.getForm(tournament.workspace_id, tournament.id),
+    queryFn: () => registrationService.getForm(tournament.id),
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: () =>
-      registrationService.withdrawMyRegistration(
-        tournament.workspace_id,
-        tournament.id,
-      ),
+    mutationFn: () => registrationService.withdrawMyRegistration(tournament.id),
     onSuccess: async () => {
       setIsWithdrawDialogOpen(false);
       await Promise.all([
@@ -233,11 +505,7 @@ export default function TournamentParticipantsPage({
   });
 
   const checkInMutation = useMutation({
-    mutationFn: () =>
-      registrationService.checkInMyRegistration(
-        tournament.workspace_id,
-        tournament.id,
-      ),
+    mutationFn: () => registrationService.checkInMyRegistration(tournament.id),
     onSuccess: async () => {
       setIsCheckInDialogOpen(false);
       await Promise.all([
@@ -262,36 +530,56 @@ export default function TournamentParticipantsPage({
 
   // Dynamic columns
   const allColumns = useMemo(
-    () => buildParticipantColumns(form),
-    [form],
+    () => buildParticipantColumns(form, t, locale),
+    [form, t, locale],
   );
   const { visibleColumns, visibility, toggleColumn, resetToDefaults } =
     useColumnVisibility("participants-table-columns", allColumns);
 
-  // Dynamic search across all searchable columns
+  // Status counts + chips present in the data.
+  const statusCounts = useMemo(() => {
+    const counts: Partial<Record<RegistrationStatus, number>> = {};
+    for (const reg of registrations) {
+      counts[reg.status] = (counts[reg.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [registrations]);
+
+  const presentStatuses = useMemo(
+    () => STATUS_FILTER_ORDER.filter((status) => (statusCounts[status] ?? 0) > 0),
+    [statusCounts],
+  );
+
+  // Status filter + dynamic search across all searchable columns.
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return registrations;
+    const byStatus =
+      statusFilter === "all"
+        ? registrations
+        : registrations.filter((r) => r.status === statusFilter);
+
+    if (!searchQuery.trim()) return byStatus;
     const q = searchQuery.trim().toLowerCase();
-    return registrations.filter((r) =>
+    return byStatus.filter((r) =>
       visibleColumns.some((col) => {
         if (!col.searchValue) return false;
         const val = col.searchValue(r);
         return val?.toLowerCase().includes(q) ?? false;
       }),
     );
-  }, [registrations, searchQuery, visibleColumns]);
+  }, [registrations, searchQuery, statusFilter, visibleColumns]);
 
   return (
     <div className="space-y-5">
       {/* My registration status */}
       {myRegistration && (
-        <MyRegistrationBar
+        <MyRegistrationCard
           registration={myRegistration}
           canCheckIn={canCheckIn}
           onCheckIn={() => setIsCheckInDialogOpen(true)}
           onWithdraw={() => setIsWithdrawDialogOpen(true)}
           isCheckingIn={checkInMutation.isPending}
           isWithdrawing={withdrawMutation.isPending}
+          tournament={tournament}
         />
       )}
 
@@ -301,15 +589,15 @@ export default function TournamentParticipantsPage({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm check-in?</AlertDialogTitle>
+            <AlertDialogTitle>{t("common.confirmCheckIn")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark you as checked in for the tournament. Confirm only
-              if you are ready to participate.
+              {t("common.checkInDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <AlertDialogContent className="hidden" /> {/* wrapper fix */}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={checkInMutation.isPending}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(event) => {
@@ -319,7 +607,7 @@ export default function TournamentParticipantsPage({
               disabled={checkInMutation.isPending}
               className="border border-emerald-500/30 bg-emerald-600 text-white hover:bg-emerald-500"
             >
-              {checkInMutation.isPending ? "Checking in..." : "Confirm check-in"}
+              {checkInMutation.isPending ? t("common.checkingIn") : t("common.checkIn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -331,15 +619,14 @@ export default function TournamentParticipantsPage({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Withdraw registration?</AlertDialogTitle>
+            <AlertDialogTitle>{t("common.withdrawReg")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Your application will be marked as withdrawn, and you will not be
-              able to register for this tournament again.
+              {t("common.withdrawDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={withdrawMutation.isPending}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(event) => {
@@ -349,33 +636,47 @@ export default function TournamentParticipantsPage({
               disabled={withdrawMutation.isPending}
               className="bg-red-600 text-white hover:bg-red-500"
             >
-              {withdrawMutation.isPending ? "Withdrawing..." : "Confirm withdraw"}
+              {withdrawMutation.isPending ? t("common.withdrawing") : t("common.confirmWithdraw")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Header */}
-      <div>
-        <h2 className="text-lg font-semibold text-white">
-          Participants
-          <span className="ml-2 text-sm font-normal text-white/40">
-            {registrations.length}
-          </span>
+      <div className="section-head">
+        <h2>
+          {t("common.participants")} <span className="count-tag">{registrations.length}</span>
         </h2>
       </div>
 
-      {/* Search + Column Picker */}
+      {/* Status filter chips + search + column picker */}
       {registrations.length > 0 && (
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/30" />
+        <div className="filters">
+          <button
+            type="button"
+            className={cn("filter-chip", statusFilter === "all" && "active")}
+            onClick={() => setStatusFilter("all")}
+          >
+            {t("common.all")} <span className="count">{registrations.length}</span>
+          </button>
+          {presentStatuses.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={cn("filter-chip", statusFilter === status && "active")}
+              onClick={() => setStatusFilter(status)}
+            >
+              <span className="dot" style={{ background: STATUS_FILTER_META[status].dot }} />
+              {t("common." + localeKeyMap[status])}{" "}
+              <span className="count">{statusCounts[status] ?? 0}</span>
+            </button>
+          ))}
+          <div className="filter-search">
+            <Search size={13} />
             <input
-              type="text"
-              placeholder="Search participants..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-full rounded-lg border border-white/10 bg-white/3 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20"
+              placeholder={t("common.searchParticipants")}
             />
           </div>
           <ColumnPicker
@@ -389,61 +690,59 @@ export default function TournamentParticipantsPage({
 
       {/* Participants list */}
       {listQuery.isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-white/30" />
+        <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center" }}>
+          <Loader2 className="mx-auto size-6 animate-spin text-white/30" />
         </div>
       ) : filtered.length > 0 ? (
-        <div className="overflow-x-auto overflow-hidden rounded-xl border border-white/[0.07]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/[0.07] bg-white/2">
-                {visibleColumns.map((col) => (
-                  <th
-                    key={col.id}
-                    className={cn(
-                      "px-2 py-2 text-xs font-medium uppercase tracking-wider text-white/40",
-                      RESPONSIVE_CLASS[col.responsive ?? "always"],
-                      ALIGN_CLASS[col.align ?? "left"],
-                      col.widthClass,
-                    )}
-                  >
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((reg, idx) => (
-                <tr
-                  key={reg.id}
-                  className="border-b border-white/4 transition-colors hover:bg-white/2"
-                >
+        <div className="tn-card">
+          <div className="data-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
                   {visibleColumns.map((col) => (
-                    <td
+                    <th
                       key={col.id}
                       className={cn(
-                        "px-2 py-2",
                         RESPONSIVE_CLASS[col.responsive ?? "always"],
                         ALIGN_CLASS[col.align ?? "left"],
                         col.widthClass,
                       )}
                     >
-                      {col.render(reg, idx)}
-                    </td>
+                      {col.label}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((reg, idx) => (
+                  <tr key={reg.id}>
+                    {visibleColumns.map((col) => (
+                      <td
+                        key={col.id}
+                        className={cn(
+                          RESPONSIVE_CLASS[col.responsive ?? "always"],
+                          ALIGN_CLASS[col.align ?? "left"],
+                          col.widthClass,
+                        )}
+                      >
+                        {col.render(reg, idx)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-white/2 py-16 text-center">
-          <UserPlus className="size-10 text-white/15" />
-          <p className="mt-3 text-sm text-white/40">
-            No participants registered yet.
+        <div className="tn-card" style={{ padding: "56px 24px", textAlign: "center" }}>
+          <UserPlus className="mx-auto size-9 text-white/15" />
+          <p className="mt-3 text-sm" style={{ color: "var(--fg-dim)" }}>
+            {t("common.noParticipants")}
           </p>
         </div>
       )}
     </div>
   );
 }
+

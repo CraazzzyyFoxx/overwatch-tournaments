@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException, status
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 
 from src.schemas.registration import (
     BuiltInFieldConfig,
@@ -16,6 +17,69 @@ from src.schemas.registration import (
 
 BATTLE_TAG_FIELDS = {"battle_tag", "smurf_tags"}
 TEXTUAL_CUSTOM_FIELD_TYPES = {"text", "number", "url"}
+
+SubroleCatalog = dict[str, list[Any]]
+
+
+def _catalog_slugs(catalog: SubroleCatalog | None, role_code: str) -> set[str]:
+    slugs: set[str] = set()
+    for option in (catalog or {}).get(role_code, []) or []:
+        slug = option.get("slug") if isinstance(option, dict) else getattr(option, "slug", None)
+        normalized = normalize_sub_role(slug)
+        if normalized:
+            slugs.add(normalized)
+    return slugs
+
+
+def _allowed_subroles(
+    role_code: str,
+    *,
+    is_primary: bool,
+    built_in_fields: dict[str, BuiltInFieldConfig],
+    catalog: SubroleCatalog | None,
+) -> set[str] | None:
+    """Resolve the allowed sub-role slugs for a role, or ``None`` if unconstrained.
+
+    Precedence mirrors the wizard: the per-tournament ``subroles`` selection on
+    the matching role field wins; otherwise fall back to the workspace catalog.
+    Returns ``None`` when nothing is configured anywhere (lenient — nothing to
+    validate against).
+    """
+    field_key = "primary_role" if is_primary else "additional_roles"
+    config = built_in_fields.get(field_key)
+    configured = config.subroles.get(role_code) if config and config.subroles else None
+    if configured is not None:
+        return {normalize_sub_role(slug) for slug in configured if normalize_sub_role(slug)}
+
+    catalog_slugs = _catalog_slugs(catalog, role_code)
+    return catalog_slugs or None
+
+
+def _validate_roles(
+    roles: list[Any],
+    *,
+    built_in_fields: dict[str, BuiltInFieldConfig],
+    catalog: SubroleCatalog | None,
+) -> None:
+    for role in roles:
+        role_code = getattr(role, "role", None)
+        if role_code not in REGISTRATION_ROLE_CODES:
+            _validation_error(f"Invalid role: {role_code}.")
+
+        subrole = normalize_sub_role(getattr(role, "subrole", None))
+        if subrole is None:
+            continue
+
+        allowed = _allowed_subroles(
+            role_code,
+            is_primary=bool(getattr(role, "is_primary", False)),
+            built_in_fields=built_in_fields,
+            catalog=catalog,
+        )
+        if allowed is None:
+            continue
+        if subrole not in allowed:
+            _validation_error(f"Invalid sub-role '{subrole}' for {role_code}.")
 
 
 def _canonicalize_battle_tag(value: str | None) -> str:
@@ -162,6 +226,7 @@ def validate_registration_input(
     payload: RegistrationCreate | RegistrationUpdate,
     *,
     partial: bool = False,
+    subrole_catalog: SubroleCatalog | None = None,
 ) -> None:
     built_in_fields = {
         key: _coerce_built_in_field_config(value)
@@ -226,6 +291,15 @@ def validate_registration_input(
             is_flex = bool(roles) and all(getattr(role, "is_primary", False) for role in roles)
             if not is_flex and not any(not getattr(role, "is_primary", False) for role in roles):
                 _validation_error("At least one additional role is required.")
+
+    # Validate role codes and sub-roles against the workspace catalog / form config.
+    submitted_roles = built_in_payload_values["roles"]
+    if submitted_roles is not None:
+        _validate_roles(
+            submitted_roles,
+            built_in_fields=built_in_fields,
+            catalog=subrole_catalog,
+        )
 
     custom_values = getattr(payload, "custom_fields", None) or {}
     if not isinstance(custom_values, dict):

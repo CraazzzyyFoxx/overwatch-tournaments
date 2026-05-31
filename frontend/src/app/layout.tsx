@@ -1,8 +1,20 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { Barlow_Condensed } from "next/font/google";
+import { Inter, JetBrains_Mono, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import React from "react";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 const barlowCondensed = Barlow_Condensed({
   subsets: ["latin"],
@@ -45,7 +57,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={cn(GeistSans.className, barlowCondensed.variable, "dark")}>
+      <body
+        className={cn(
+          inter.className,
+          inter.variable,
+          jetbrainsMono.variable,
+          barlowCondensed.variable,
+          "dark"
+        )}
+      >
         <GoogleAnalytics gaId="G-6TYE0K6SQM" />
         <Providers>
           <Suspense fallback={null}>

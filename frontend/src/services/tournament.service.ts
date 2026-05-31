@@ -85,7 +85,7 @@ export default class tournamentService {
   static async get(id: number): Promise<Tournament> {
     return apiFetch("tournament", `tournaments/${id}`, {
       query: {
-        entities: ["participants_count"]
+        entities: ["participants_count", "registrations_count"]
       }
     }).then((response) => response.json());
   }

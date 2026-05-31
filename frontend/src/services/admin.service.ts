@@ -1006,7 +1006,7 @@ class AdminService {
     const formData = new FormData();
     formData.append("file", file);
     const query = workspaceId ? { workspace_id: workspaceId } : {};
-    const response = await apiFetch("app", `admin/assets/achievements/${slug}`, {
+    const response = await apiFetch("app", `assets/achievements/${slug}`, {
       method: "POST",
       body: formData,
       query

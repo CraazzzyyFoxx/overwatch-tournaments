@@ -4,8 +4,7 @@ import { ArrowRight, CircleMinus, CirclePlus } from "lucide-react";
 
 import userService from "@/services/user.service";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { EncounterWithUserStats } from "@/types/user.types";
-import { Tournament } from "@/types/tournament.types";
+import { EncounterWithUserStats, UserEncounterTournament } from "@/types/user.types";
 
 export interface UserRecentEncountersCardProps {
   userId: number;
@@ -13,7 +12,7 @@ export interface UserRecentEncountersCardProps {
   limit?: number;
 }
 
-const getTournamentLabel = (tournament?: Tournament | null) => {
+const getTournamentLabel = (tournament?: UserEncounterTournament | null) => {
   if (!tournament) {
     return "Tournament";
   }

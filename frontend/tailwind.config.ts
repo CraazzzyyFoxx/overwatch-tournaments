@@ -29,9 +29,24 @@ const config = {
     },
     extend: {
       fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
         display: ["var(--font-barlow-condensed)", "system-ui", "sans-serif"],
       },
       colors: {
+        // Redesign (OWT) accent palette — references global --aqt-* tokens.
+        aqt: {
+          teal: "var(--aqt-teal)",
+          emerald: "var(--aqt-emerald)",
+          amber: "var(--aqt-amber)",
+          rose: "var(--aqt-rose)",
+          violet: "var(--aqt-violet)",
+          blue: "var(--aqt-blue)",
+          gold: "var(--aqt-gold)",
+          tank: "var(--aqt-tank)",
+          damage: "var(--aqt-damage)",
+          support: "var(--aqt-support)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

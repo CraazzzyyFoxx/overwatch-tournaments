@@ -53,6 +53,11 @@ class BuiltInFieldConfig(BaseModel):
     validation: FieldValidationConfig | None = None
 
 
+class SubroleOption(BaseModel):
+    slug: str
+    label: str
+
+
 class RegistrationFormUpsert(BaseModel):
     is_open: bool = False
     auto_approve: bool = False
@@ -70,5 +75,8 @@ class RegistrationFormRead(BaseModel):
     auto_approve: bool = False
     opens_at: datetime | None = None
     closes_at: datetime | None = None
-    built_in_fields_json: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
-    custom_fields_json: list[CustomFieldDef] = Field(default_factory=list)
+    built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict, validation_alias="built_in_fields_json")
+    custom_fields: list[CustomFieldDef] = Field(default_factory=list, validation_alias="custom_fields_json")
+    # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
+    # Single source of truth for the form builder's Subroles tab.
+    subrole_catalog: dict[str, list[SubroleOption]] = Field(default_factory=dict)

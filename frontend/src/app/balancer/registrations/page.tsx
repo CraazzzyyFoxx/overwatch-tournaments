@@ -90,6 +90,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useToast } from "@/hooks/use-toast";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { ROLE_LABELS, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   AdminGoogleSheetFeed,
@@ -98,7 +99,7 @@ import type {
   BalancerRoleCode,
   BalancerRoleSubtype
 } from "@/types/balancer-admin.types";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, SubroleCatalog } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
@@ -123,27 +124,11 @@ const ALIGN_CLASS: Record<NonNullable<BalancerRegistrationColumnDefinition["alig
 };
 
 const ROLE_OPTIONS: BalancerRoleCode[] = ["tank", "dps", "support"];
-const ROLE_LABELS: Record<BalancerRoleCode, string> = {
-  tank: "Tank",
-  dps: "Damage",
-  support: "Support"
-};
-const SUBROLE_OPTIONS: Record<
-  Exclude<BalancerRoleCode, "tank">,
-  Array<{ value: BalancerRoleSubtype; label: string }>
-> = {
-  dps: [
-    { value: "hitscan", label: "Hitscan" },
-    { value: "projectile", label: "Projectile" }
-  ],
-  support: [
-    { value: "main_heal", label: "Main heal" },
-    { value: "light_heal", label: "Light heal" }
-  ]
-};
 
 const ADMIN_FORM_STEPS = [{ label: "Accounts" }, { label: "Roles" }, { label: "Details" }];
 
+// Minimal fallback used only until the real registration form (with its
+// workspace sub-role catalog) loads. Sub-role options are then data-driven.
 const ADMIN_ROLE_FORM: RegistrationForm = {
   id: 0,
   tournament_id: 0,
@@ -152,22 +137,8 @@ const ADMIN_ROLE_FORM: RegistrationForm = {
   opens_at: null,
   closes_at: null,
   built_in_fields: {
-    primary_role: {
-      enabled: true,
-      required: true,
-      subroles: {
-        dps: ["hitscan", "projectile"],
-        support: ["main_heal", "light_heal"]
-      }
-    },
-    additional_roles: {
-      enabled: true,
-      required: false,
-      subroles: {
-        dps: ["hitscan", "projectile"],
-        support: ["main_heal", "light_heal"]
-      }
-    }
+    primary_role: { enabled: true, required: true },
+    additional_roles: { enabled: true, required: false }
   },
   custom_fields: []
 };
@@ -207,8 +178,8 @@ function RegistrationToggleBar({ tournamentId }: { tournamentId: number }) {
       balancerAdminService.upsertRegistrationForm(tournamentId, {
         is_open: nextValue,
         auto_approve: formQuery.data?.auto_approve ?? false,
-        built_in_fields: formQuery.data?.built_in_fields_json ?? {},
-        custom_fields: formQuery.data?.custom_fields_json ?? []
+        built_in_fields: formQuery.data?.built_in_fields ?? {},
+        custom_fields: formQuery.data?.custom_fields ?? []
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -255,7 +226,13 @@ function RegistrationToggleBar({ tournamentId }: { tournamentId: number }) {
   );
 }
 
-function RolesCell({ roles }: { roles: AdminRegistration["roles"] }) {
+function RolesCell({
+  roles,
+  catalog
+}: {
+  roles: AdminRegistration["roles"];
+  catalog?: SubroleCatalog;
+}) {
   if (roles.length === 0) {
     return <span className="text-muted-foreground">-</span>;
   }
@@ -265,18 +242,25 @@ function RolesCell({ roles }: { roles: AdminRegistration["roles"] }) {
       {roles
         .slice()
         .sort((left, right) => left.priority - right.priority)
-        .map((role) => (
-          <div
-            key={`${role.role}-${role.priority}`}
-            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
-            title={role.rank_value != null ? `${role.role} ${role.rank_value}` : role.role}
-          >
-            <span>{role.role}</span>
-            {role.rank_value != null ? (
-              <span className="text-muted-foreground">{role.rank_value}</span>
-            ) : null}
-          </div>
-        ))}
+        .map((role) => {
+          const roleLabel = ROLE_LABELS[role.role] ?? role.role;
+          const subroleLabel = role.subrole ? getSubroleLabel(catalog, role.role, role.subrole) : null;
+          return (
+            <div
+              key={`${role.role}-${role.priority}`}
+              className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
+              title={[roleLabel, subroleLabel, role.rank_value != null ? `${role.rank_value}` : null]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              <span>{roleLabel}</span>
+              {subroleLabel ? <span className="text-muted-foreground">{subroleLabel}</span> : null}
+              {role.rank_value != null ? (
+                <span className="text-muted-foreground">{role.rank_value}</span>
+              ) : null}
+            </div>
+          );
+        })}
     </div>
   );
 }
@@ -412,7 +396,7 @@ function buildRolePayload(roles: ManualDraft["roles"], isFlex: boolean): AdminRe
     const parsedRankValue = draft.rank_value.trim() ? Number(draft.rank_value) : null;
     return {
       role,
-      subrole: role === "tank" ? null : draft.subrole || null,
+      subrole: draft.subrole || null,
       is_primary: isFlex || explicitPrimary === role,
       priority: Number(draft.priority) || index + 1,
       rank_value: Number.isFinite(parsedRankValue) ? parsedRankValue : null,
@@ -487,6 +471,7 @@ function RegistrationProfileForm({
   draft,
   setDraft,
   step,
+  form,
   registrationStatusOptions,
   balancerStatusOptions,
   onStepChange,
@@ -499,6 +484,7 @@ function RegistrationProfileForm({
   draft: ManualDraft;
   setDraft: Dispatch<SetStateAction<ManualDraft>>;
   step: number;
+  form: RegistrationForm;
   registrationStatusOptions: {
     system: Array<{ value: string; name: string }>;
     custom: Array<{ value: string; name: string }>;
@@ -528,8 +514,7 @@ function RegistrationProfileForm({
     ? ""
     : (ROLE_OPTIONS.find((role) => draft.roles[role].enabled && draft.roles[role].is_primary) ??
       "");
-  const primarySubrole =
-    primaryRoleCode && primaryRoleCode !== "tank" ? draft.roles[primaryRoleCode].subrole : "";
+  const primarySubrole = primaryRoleCode ? draft.roles[primaryRoleCode].subrole : "";
   const additionalRoles: AdditionalRole[] = !draft.is_flex
     ? ROLE_OPTIONS.filter((role) => draft.roles[role].enabled && !draft.roles[role].is_primary).map(
         (role) => ({
@@ -715,7 +700,7 @@ function RegistrationProfileForm({
               }}
               onSetPrimaryRole={(role) => selectPrimaryRole(role as BalancerRoleCode)}
               onSetSubrole={(subrole) => {
-                if (!primaryRoleCode || primaryRoleCode === "tank") {
+                if (!primaryRoleCode) {
                   return;
                 }
                 updateRoleDraft(primaryRoleCode as BalancerRoleCode, (current) => ({
@@ -726,7 +711,7 @@ function RegistrationProfileForm({
               onSetAdditionalRoles={setAdditionalRolesList}
               primaryRoleError={null}
               secondaryRolesError={null}
-              form={ADMIN_ROLE_FORM}
+              form={form}
               hideHelperText
             />
           </section>
@@ -916,11 +901,6 @@ export default function BalancerRegistrationsPage() {
   const [editingRegistration, setEditingRegistration] = useState<AdminRegistration | null>(null);
   const [editStep, setEditStep] = useState(0);
   const [editingDraft, setEditingDraft] = useState<ManualDraft>(EMPTY_MANUAL_DRAFT);
-  const allColumns = useMemo(() => buildBalancerRegistrationColumns(), []);
-  const { visibleColumns, visibility, toggleColumn, resetToDefaults } = useColumnVisibility(
-    "balancer-registrations-table-columns",
-    allColumns
-  );
 
   const registrationsQuery = useQuery({
     queryKey: [
@@ -946,6 +926,39 @@ export default function BalancerRegistrationsPage() {
     queryFn: () => balancerAdminService.getTournamentSheet(tournamentId as number),
     enabled: tournamentId !== null
   });
+
+  const formQuery = useQuery({
+    queryKey: ["balancer-admin", "registration-form", tournamentId],
+    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+
+  // Adapt the admin form into the public RegistrationForm shape used by the
+  // shared RoleStep / sub-role catalog, so admin role editing is data-driven.
+  const roleForm: RegistrationForm = useMemo(() => {
+    const data = formQuery.data;
+    if (!data) {
+      return ADMIN_ROLE_FORM;
+    }
+    return {
+      id: data.id,
+      tournament_id: data.tournament_id,
+      workspace_id: data.workspace_id,
+      is_open: data.is_open,
+      opens_at: data.opens_at,
+      closes_at: data.closes_at,
+      built_in_fields: data.built_in_fields ?? {},
+      custom_fields: [],
+      subrole_catalog: data.subrole_catalog
+    };
+  }, [formQuery.data]);
+  const subroleCatalog = roleForm.subrole_catalog;
+
+  const allColumns = useMemo(() => buildBalancerRegistrationColumns(subroleCatalog), [subroleCatalog]);
+  const { visibleColumns, visibility, toggleColumn, resetToDefaults } = useColumnVisibility(
+    "balancer-registrations-table-columns",
+    allColumns
+  );
 
   const customStatusesQuery = useQuery({
     queryKey: ["balancer-admin", "status-catalog", workspaceId],
@@ -1553,7 +1566,7 @@ export default function BalancerRegistrationsPage() {
                                   <SourceBadge source={registration.source} />
                                 </TableCell>
                                 <TableCell>
-                                  <RolesCell roles={registration.roles} />
+                                  <RolesCell roles={registration.roles} catalog={subroleCatalog} />
                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className={statusConfig.className}>
@@ -1710,6 +1723,7 @@ export default function BalancerRegistrationsPage() {
               draft={manualDraft}
               setDraft={setManualDraft}
               step={createStep}
+              form={roleForm}
               registrationStatusOptions={registrationStatusOptions}
               balancerStatusOptions={balancerStatusOptions}
               onStepChange={setCreateStep}
@@ -1752,6 +1766,7 @@ export default function BalancerRegistrationsPage() {
               draft={editingDraft}
               setDraft={setEditingDraft}
               step={editStep}
+              form={roleForm}
               registrationStatusOptions={registrationStatusOptions}
               balancerStatusOptions={balancerStatusOptions}
               onStepChange={setEditStep}

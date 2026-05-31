@@ -9,6 +9,7 @@ from typing import Any
 import sqlalchemy as sa
 from fastapi import HTTPException
 from shared.core import enums
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -78,6 +79,32 @@ async def get_registration(
         .options(selectinload(models.BalancerRegistration.tournament))
     )
     return result.scalar_one_or_none()
+
+
+def build_registration_roles(roles: list[Any] | None) -> list[models.BalancerRegistrationRole]:
+    """Build normalized role entries, mirroring the admin write path.
+
+    Filters to valid registration role codes (tank/dps/support), de-duplicates,
+    normalizes the sub-role slug, and assigns sequential priority. Keeps the
+    public and admin/Google-Sheets paths consistent so a sub-role like
+    ``main_dps`` is stored identically regardless of entry point.
+    """
+    entries: list[models.BalancerRegistrationRole] = []
+    seen: set[str] = set()
+    for role in roles or []:
+        role_code = getattr(role, "role", None)
+        if role_code not in REGISTRATION_ROLE_CODES or role_code in seen:
+            continue
+        seen.add(role_code)
+        entries.append(
+            models.BalancerRegistrationRole(
+                role=role_code,
+                subrole=normalize_sub_role(getattr(role, "subrole", None)),
+                is_primary=bool(getattr(role, "is_primary", False)),
+                priority=len(entries),
+            )
+        )
+    return entries
 
 
 async def create_registration(

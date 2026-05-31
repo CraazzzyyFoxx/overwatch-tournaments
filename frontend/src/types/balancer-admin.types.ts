@@ -259,6 +259,14 @@ export interface BuiltInFieldConfig {
   validation?: FieldValidationConfig | null;
 }
 
+export interface SubroleOption {
+  slug: string;
+  label: string;
+}
+
+/** Workspace sub-role catalog keyed by registration role code (tank/dps/support). */
+export type SubroleCatalog = Record<string, SubroleOption[]>;
+
 export interface AdminRegistrationForm {
   id: number;
   tournament_id: number;
@@ -267,8 +275,9 @@ export interface AdminRegistrationForm {
   auto_approve: boolean;
   opens_at: string | null;
   closes_at: string | null;
-  built_in_fields_json: Record<string, BuiltInFieldConfig>;
-  custom_fields_json: AdminCustomFieldDef[];
+  built_in_fields: Record<string, BuiltInFieldConfig>;
+  custom_fields: AdminCustomFieldDef[];
+  subrole_catalog?: SubroleCatalog;
 }
 
 export interface AdminRegistrationFormUpsert {

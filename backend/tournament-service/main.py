@@ -81,7 +81,7 @@ app = FastAPI(
     debug=config.settings.environment == "development",
     docs_url="/docs",
     redoc_url="/redoc",
-    root_path=config.settings.api_root_path,
+    root_path=config.settings.api_v1_str,
     default_response_class=JSONResponse,
 )
 register_scalar_docs(app)

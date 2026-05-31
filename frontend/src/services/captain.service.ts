@@ -32,7 +32,7 @@ class CaptainService {
 
     if (typeof window === "undefined") {
       const fallbackUrl = new URL(
-        `/api/tournament/encounters/${encounterId}/map-pool/ws`,
+        `/api/v1/encounters/${encounterId}/map-pool/ws`,
         "http://localhost",
       );
       if (token) {
@@ -43,7 +43,7 @@ class CaptainService {
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const url = new URL(
-      `${protocol}//${window.location.host}/api/tournament/encounters/${encounterId}/map-pool/ws`,
+      `${protocol}//${window.location.host}/api/v1/encounters/${encounterId}/map-pool/ws`,
     );
     if (token) {
       url.searchParams.set("token", token);

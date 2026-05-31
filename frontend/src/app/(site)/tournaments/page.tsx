@@ -1,235 +1,234 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import tournamentService from "@/services/tournament.service";
-import { useWorkspaceStore } from "@/stores/workspace.store";
-import TournamentCard from "@/app/(site)/tournaments/components/TournamentCard";
-import StatisticsCard from "@/components/StatisticsCard";
-import { Skeleton } from "@/components/ui/skeleton";
-import { StatCardSkeleton } from "@/app/home-skeletons";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Trophy, Zap, Shield, Users } from "lucide-react";
-import {
-  isTournamentStatusActive,
-  TOURNAMENT_STATUS_OPTIONS,
-} from "@/lib/tournament-status";
-import type { TournamentStatus } from "@/types/tournament.types";
 
-const TournamentCardSkeleton = () => (
-  <div className="flex flex-col rounded-xl border border-white/[0.07] bg-white/[0.02] p-5">
-    <div className="flex items-center justify-between mb-3">
-      <Skeleton className="h-4 w-14 rounded-full" />
-      <Skeleton className="h-3 w-6" />
-    </div>
-    <Skeleton className="h-4 w-3/4 mb-1" />
-    <Skeleton className="h-4 w-1/2 mb-4" />
-    <div className="space-y-1.5 mb-4">
-      <Skeleton className="h-3 w-2/3" />
-      <Skeleton className="h-3 w-1/2" />
-    </div>
-    <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
-      <Skeleton className="h-3 w-14" />
-      <Skeleton className="h-3 w-12" />
-    </div>
-  </div>
-);
+import tournamentService from "@/services/tournament.service";
+import encounterService from "@/services/encounter.service";
+import statisticsService from "@/services/statistics.service";
+import { useWorkspaceStore } from "@/stores/workspace.store";
+import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { countByTournamentStatus, isTournamentStatusActive } from "@/lib/tournament-status";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import TournamentsHero from "./components/TournamentsHero";
+import FeaturedLive from "./components/FeaturedLive";
+import TournamentsFilters, {
+  type SortBy,
+  type StatusFilter,
+  type TypeFilter
+} from "./components/TournamentsFilters";
+import TournamentsTable from "./components/TournamentsTable";
+import { groupLiveByTournament } from "./components/tournaments-helpers";
+
+export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 11;
 
 const TournamentsPageSkeleton = () => (
-  <div className="space-y-8">
-    <div className="flex flex-col gap-1">
-      <Skeleton className="h-9 w-44" />
-      <Skeleton className="h-4 w-96" />
-    </div>
-
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
-    </div>
-
-    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-      <div className="flex gap-1">
-        <Skeleton className="h-8 w-10 rounded-md" />
-        <Skeleton className="h-8 w-18 rounded-md" />
-        <Skeleton className="h-8 w-18 rounded-md" />
-      </div>
-      <div className="flex gap-1">
-        <Skeleton className="h-8 w-20 rounded-md" />
-        <Skeleton className="h-8 w-20 rounded-md" />
-        <Skeleton className="h-8 w-16 rounded-md" />
-      </div>
-      <Skeleton className="h-9 w-44 rounded-md" />
-    </div>
-
-    <div className="grid xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-      {Array.from({ length: 8 }).map((_, i) => <TournamentCardSkeleton key={i} />)}
-    </div>
+  <div className="space-y-6">
+    <Skeleton className="h-[200px] w-full rounded-2xl" />
+    <Skeleton className="h-12 w-full rounded-xl" />
+    <Skeleton className="h-[520px] w-full rounded-xl" />
   </div>
 );
 
-export const dynamic = 'force-dynamic';
-
-type StatusFilter = 'all' | TournamentStatus;
-type TypeFilter = 'all' | 'standard' | 'league';
-type SortBy = 'latest' | 'oldest' | 'participants';
-
 const TournamentsPage = () => {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('latest');
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("latest");
+  const [page, setPage] = useState(1);
 
   const { data: tournaments, isLoading } = useQuery({
     queryKey: ["tournaments", workspaceId],
-    queryFn: () => tournamentService.getAll(null, workspaceId),
+    queryFn: () => tournamentService.getAll(null, workspaceId)
   });
 
-  // Filter and sort tournaments
+  const { data: overview } = useQuery({
+    queryKey: tournamentQueryKeys.encountersOverview(workspaceId),
+    queryFn: () => encounterService.getOverview("", {}, workspaceId),
+    refetchInterval: 30_000,
+    staleTime: 15_000
+  });
+
+  const { data: overall } = useQuery({
+    queryKey: tournamentQueryKeys.overallStatistics(workspaceId),
+    queryFn: () =>
+      statisticsService.getOverallStatistics(workspaceId != null ? { workspaceId } : undefined)
+  });
+
+  const allResults = useMemo(() => tournaments?.results ?? [], [tournaments]);
+
+  const statusCounts = useMemo(
+    () => countByTournamentStatus(allResults.map((t) => t.status)),
+    [allResults]
+  );
+  const leagueCount = useMemo(() => allResults.filter((t) => t.is_league).length, [allResults]);
+
   const filteredTournaments = useMemo(() => {
-    if (!tournaments?.results) return [];
+    let filtered = allResults;
 
-    let filtered = tournaments.results;
-
-    // Filter by status
-    if (statusFilter !== 'all') {
+    if (statusFilter !== "all") {
       filtered = filtered.filter((t) => t.status === statusFilter);
     }
-
-    // Filter by type
-    if (typeFilter === 'standard') {
-      filtered = filtered.filter(t => !t.is_league);
-    } else if (typeFilter === 'league') {
-      filtered = filtered.filter(t => t.is_league);
+    if (typeFilter === "standard") {
+      filtered = filtered.filter((t) => !t.is_league);
+    } else if (typeFilter === "league") {
+      filtered = filtered.filter((t) => t.is_league);
     }
 
-    // Sort
-    const sorted = [...filtered].sort((a, b) => {
+    const query = search.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          `#${t.number}`.includes(query) ||
+          String(t.number).includes(query)
+      );
+    }
+
+    return [...filtered].sort((a, b) => {
       switch (sortBy) {
-        case 'latest':
+        case "latest":
           return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
-        case 'oldest':
+        case "oldest":
           return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
-        case 'participants':
+        case "participants":
           return (b.participants_count || 0) - (a.participants_count || 0);
         default:
           return 0;
       }
     });
+  }, [allResults, statusFilter, typeFilter, search, sortBy]);
 
-    return sorted;
-  }, [tournaments, statusFilter, typeFilter, sortBy]);
+  // Reset to the first page whenever a filter changes (avoids setState-in-effect).
+  const handleStatusChange = (value: StatusFilter) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+  const handleTypeChange = (value: TypeFilter) => {
+    setTypeFilter(value);
+    setPage(1);
+  };
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+  const handleSortChange = (value: SortBy) => {
+    setSortBy(value);
+    setPage(1);
+  };
 
-  // Calculate statistics
-  const stats = useMemo(() => {
-    if (!tournaments?.results) {
-      return {
-        total: 0,
-        active: 0,
-        leagues: 0,
-        totalParticipants: 0,
-      };
-    }
+  const liveGroups = useMemo(
+    () => groupLiveByTournament(overview?.featured.live ?? []),
+    [overview]
+  );
 
-    return {
-      total: tournaments.total,
-      active: tournaments.results.filter((t) => isTournamentStatusActive(t.status)).length,
-      leagues: tournaments.results.filter(t => t.is_league).length,
-      totalParticipants: tournaments.results.reduce(
-        (sum, t) => sum + (t.participants_count || 0), 0
-      ),
-    };
-  }, [tournaments]);
+  const activeCount = useMemo(
+    () => allResults.filter((t) => isTournamentStatusActive(t.status)).length,
+    [allResults]
+  );
 
   if (isLoading) {
-    return <TournamentsPageSkeleton />;
+    return (
+      <div className="aqt-tn">
+        <TournamentsPageSkeleton />
+      </div>
+    );
   }
 
+  const totalTournaments = tournaments?.total ?? allResults.length;
+  const totalPlayers =
+    overall?.players ?? allResults.reduce((sum, t) => sum + (t.participants_count || 0), 0);
+
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold leading-none tracking-tight">
-          Tournaments
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Browse all tournaments, filter by status, and view detailed statistics.
-        </p>
-      </div>
+    <div className="aqt-tn space-y-6">
+      <TournamentsHero
+        workspaceName={workspaceName}
+        liveEvents={(statusCounts.live ?? 0) + (statusCounts.playoffs ?? 0)}
+        liveMatches={overview?.kpis.live_now_count ?? 0}
+        totalTournaments={totalTournaments}
+        activeTournaments={activeCount}
+        totalPlayers={totalPlayers}
+        totalTeams={overall?.teams ?? 0}
+      />
 
-      {/* Statistics Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatisticsCard name="Total Tournaments" value={stats.total} icon={<Trophy className="h-4 w-4" />} iconClassName="bg-indigo-500/10 text-indigo-400" />
-        <StatisticsCard name="Active" value={stats.active} icon={<Zap className="h-4 w-4" />} iconClassName="bg-emerald-500/10 text-emerald-400" />
-        <StatisticsCard name="Leagues" value={stats.leagues} icon={<Shield className="h-4 w-4" />} iconClassName="bg-purple-500/10 text-purple-400" />
-        <StatisticsCard name="Total Participants" value={stats.totalParticipants} icon={<Users className="h-4 w-4" />} iconClassName="bg-blue-500/10 text-blue-400" />
-      </div>
+      <section className="toolbar">
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--display)",
+              fontWeight: 700,
+              fontSize: 22,
+              textTransform: "uppercase",
+              letterSpacing: ".04em"
+            }}
+          >
+            All tournaments
+          </h2>
+          <span
+            className="tn-id"
+            style={{
+              marginLeft: 6,
+              background: "hsl(0 0% 100% / 0.03)",
+              border: "1px solid var(--border)",
+              padding: "3px 8px",
+              borderRadius: 6
+            }}
+          >
+            {totalTournaments} total
+          </span>
+        </div>
+      </section>
 
-      {/* Filter Controls */}
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-        {/* Status Filter */}
-        <Select
-          value={statusFilter}
-          onValueChange={(value) => setStatusFilter(value as StatusFilter)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {TOURNAMENT_STATUS_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <FeaturedLive groups={liveGroups} />
 
-        {/* Type Filters */}
-        <ToggleGroup
-          type="single"
-          value={typeFilter}
-          onValueChange={(value) => value && setTypeFilter(value as TypeFilter)}
-          variant="outline"
-        >
-          <ToggleGroupItem value="all">All Types</ToggleGroupItem>
-          <ToggleGroupItem value="standard">Standard</ToggleGroupItem>
-          <ToggleGroupItem value="league">League</ToggleGroupItem>
-        </ToggleGroup>
+      <TournamentsFilters
+        total={allResults.length}
+        statusCounts={statusCounts}
+        statusFilter={statusFilter}
+        onStatusChange={handleStatusChange}
+        typeFilter={typeFilter}
+        leagueCount={leagueCount}
+        standardCount={allResults.length - leagueCount}
+        onTypeChange={handleTypeChange}
+        search={search}
+        onSearchChange={handleSearchChange}
+        sortBy={sortBy}
+        onSortChange={handleSortChange}
+      />
 
-        {/* Sort Dropdown */}
-        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Sort by..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="latest">Latest First</SelectItem>
-            <SelectItem value="oldest">Oldest First</SelectItem>
-            <SelectItem value="participants">Most Participants</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Tournament Grid */}
       {filteredTournaments.length === 0 ? (
-        <div className="col-span-full flex flex-col items-center justify-center py-16">
-          <Trophy className="w-16 h-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">No tournaments found</h2>
-          <p className="text-muted-foreground">
-            Try adjusting your filters or check back soon for upcoming tournaments!
+        <div className="tn-card" style={{ padding: "64px 24px", textAlign: "center" }}>
+          <h2
+            style={{
+              fontFamily: "var(--display)",
+              fontWeight: 700,
+              fontSize: 20,
+              textTransform: "uppercase",
+              letterSpacing: ".04em",
+              margin: "0 0 6px"
+            }}
+          >
+            No tournaments found
+          </h2>
+          <p style={{ color: "var(--fg-dim)", fontSize: 13, margin: 0 }}>
+            Try adjusting your filters or check back soon for upcoming tournaments.
           </p>
         </div>
       ) : (
-        <div className="grid xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredTournaments.map((tournament) => (
-            <TournamentCard key={tournament.id} tournament={tournament} />
-          ))}
-        </div>
+        <TournamentsTable
+          tournaments={filteredTournaments}
+          page={page}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

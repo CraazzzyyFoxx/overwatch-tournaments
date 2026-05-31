@@ -28,7 +28,7 @@ export default class encounterService {
     }).then((res) => res.json());
   }
   static async getMatch(match_id: number): Promise<MatchWithStats> {
-    return apiFetch("app", `matches/${match_id}`, {
+    return apiFetch("tournament", `matches/${match_id}`, {
       query: {
         entities: [
           "teams",
@@ -147,7 +147,7 @@ export default class encounterService {
     query: string,
     tournamentId: number | null = null
   ): Promise<PaginatedResponse<MatchWithStats>> {
-    return apiFetch("app", `matches`, {
+    return apiFetch("tournament", `matches`, {
       query: {
         per_page: perPage,
         page: page,

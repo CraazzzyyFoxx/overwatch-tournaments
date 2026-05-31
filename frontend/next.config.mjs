@@ -13,24 +13,31 @@ const nextConfig = {
         /\/$/,
         "",
       );
+    // Single-prefix routing (mirrors Kong):
+    //   /api/v1/core/*  -> app-service     (most specific, must come first)
+    //   /api/v1/*       -> tournament-service (owns the rest of the namespace)
     return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${apiUrl}/:path*`,
-      },
-      ...(parserUrl
+      ...(apiUrl
         ? [
             {
-              source: "/api/parser/:path*",
-              destination: `${parserUrl}/:path*`,
+              source: "/api/v1/core/:path*",
+              destination: `${apiUrl}/:path*`,
             },
           ]
         : []),
       ...(tournamentUrl
         ? [
             {
-              source: "/api/tournament/:path*",
+              source: "/api/v1/:path*",
               destination: `${tournamentUrl}/:path*`,
+            },
+          ]
+        : []),
+      ...(parserUrl
+        ? [
+            {
+              source: "/api/parser/:path*",
+              destination: `${parserUrl}/:path*`,
             },
           ]
         : []),

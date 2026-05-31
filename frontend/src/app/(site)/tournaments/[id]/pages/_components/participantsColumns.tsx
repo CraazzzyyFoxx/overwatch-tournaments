@@ -26,6 +26,8 @@ import BalancerStatusBadge from "./BalancerStatusBadge";
 import CheckInBadge from "./CheckInBadge";
 import StatusBadge from "./StatusBadge";
 import TournamentHistoryCell from "./TournamentHistoryCell";
+import { useTranslation } from "@/i18n/LanguageContext";
+import { formatSubroleSlug } from "@/lib/roles";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,18 +62,7 @@ const ROLE_LABELS: Record<string, string> = {
   tank: "Tank",
   dps: "DPS",
   support: "Support",
-};
-
-const SUBROLE_LABELS: Record<string, string> = {
-  hitscan: "Hitscan",
-  projectile: "Projectile",
-  main_heal: "Main Heal",
-  light_heal: "Light Heal",
-  main_tank: "Main Tank",
-  off_tank: "Off Tank",
-  flanker: "Flanker",
-  flex_dps: "Flex DPS",
-  flex_support: "Flex Support",
+  flex: "Flex",
 };
 
 const SUBROLE_SHORT_LABELS: Record<string, string> = {
@@ -84,46 +75,63 @@ const SUBROLE_SHORT_LABELS: Record<string, string> = {
   flanker: "FLK",
   flex_dps: "FD",
   flex_support: "FS",
+  flex: "FLX",
+  main: "MAIN",
 };
 
+function getRoleLabel(role: string): string {
+  return ROLE_LABELS[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function getSubroleShortLabel(subrole: string): string {
+  return SUBROLE_SHORT_LABELS[subrole.toLowerCase()] ?? subrole.toUpperCase();
+}
+
 function RolesCell({ roles }: { roles: RegistrationRole[] }) {
+  const { t } = useTranslation();
   if (!roles || roles.length === 0)
     return <span className="text-white/30">&mdash;</span>;
 
   return (
     <div className="flex flex-wrap items-start justify-center gap-x-0.5 gap-y-2">
-      {roles.map((r) => (
-        <div
-          key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
-          className="inline-flex min-w-7 flex-col items-center gap-0.5"
-          title={[
-            ROLE_LABELS[r.role] ?? r.role,
-            r.subrole ? SUBROLE_LABELS[r.subrole] ?? r.subrole : null,
-            r.is_primary ? "Primary" : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        >
-          <span
-            className={cn(
-              "relative inline-flex h-8 w-8 items-center justify-center p-1",
-              r.is_primary
-                ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
-                : "text-white/70",
-            )}
+      {roles.map((r) => {
+        const roleLabel = getRoleLabel(r.role);
+        const subroleLabel = r.subrole ? formatSubroleSlug(r.subrole) : null;
+        const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole) : null;
+
+        return (
+          <div
+            key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
+            className="inline-flex min-w-7 flex-col items-center gap-0.5"
+            title={[
+              roleLabel,
+              subroleLabel,
+              r.is_primary ? t("registration.roles.primary.title") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           >
-            <PlayerRoleIcon
-              role={ROLE_TO_ICON[r.role] ?? r.role}
-              size={20}
-            />
-          </span>
-          {r.subrole ? (
-            <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-white/45 uppercase">
-              {SUBROLE_SHORT_LABELS[r.subrole] ?? SUBROLE_LABELS[r.subrole] ?? r.subrole}
+            <span
+              className={cn(
+                "relative inline-flex h-8 w-8 items-center justify-center p-1",
+                r.is_primary
+                  ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
+                  : "text-white/70",
+              )}
+            >
+              <PlayerRoleIcon
+                role={ROLE_TO_ICON[r.role] ?? r.role}
+                size={20}
+              />
             </span>
-          ) : null}
-        </div>
-      ))}
+            {subroleShortLabel ? (
+              <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-white/45 uppercase">
+                {subroleShortLabel}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -135,6 +143,7 @@ function SmurfTagsCell({
 }: {
   tags: string[] | null | undefined;
 }) {
+  const { t } = useTranslation();
   const smurfTags = tags?.filter(Boolean) ?? [];
 
   if (smurfTags.length === 0) {
@@ -163,14 +172,14 @@ function SmurfTagsCell({
               type="button"
               className="text-xs font-medium text-emerald-300/80 transition hover:text-emerald-200"
             >
-              +{hiddenCount} more
+              +{hiddenCount} {t("common.more")}
             </button>
           </DialogTrigger>
           <DialogContent className="border-white/[0.08] bg-[#111113] sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-white">Smurf BattleTags</DialogTitle>
+              <DialogTitle className="text-white">{t("common.smurfBattleTags")}</DialogTitle>
               <DialogDescription className="text-white/50">
-                All registered smurf BattleTags for this participant.
+                {t("common.smurfDesc")}
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[320px] pr-2">
@@ -199,6 +208,7 @@ function SmurfTagsCell({
 function renderCustomFieldValue(
   field: CustomFieldDefinition,
   value: unknown,
+  t: (key: string) => string,
 ): ReactNode {
   if (value === null || value === undefined)
     return <span className="text-white/30">&mdash;</span>;
@@ -206,7 +216,7 @@ function renderCustomFieldValue(
   switch (field.type) {
     case "checkbox":
       return (
-        <span className="text-white/60">{value ? "Yes" : "No"}</span>
+        <span className="text-white/60">{value ? t("common.yes") : t("common.no")}</span>
       );
     case "url":
       return (
@@ -235,12 +245,13 @@ function renderCustomFieldValue(
 // Date formatter
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string | null): ReactNode {
+function formatDate(iso: string | null, locale: string = "ru"): ReactNode {
   if (!iso) return <span className="text-white/30">&mdash;</span>;
   const d = new Date(iso);
+  const formatLocale = locale.startsWith("ru") ? "ru-RU" : "en-GB";
   return (
     <span className="text-white/50 tabular-nums text-xs">
-      {d.toLocaleDateString("en-GB", {
+      {d.toLocaleDateString(formatLocale, {
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -369,8 +380,32 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
 
 export function buildParticipantColumns(
   form: RegistrationForm | null,
+  t: (key: string, variables?: Record<string, string | number>) => string,
+  locale: string = "ru",
 ): ColumnDefinition[] {
   const columns: ColumnDefinition[] = [];
+
+  const getLocalizedLabel = (key: string, fallback: string): string => {
+    switch (key) {
+      case "battle_tag":
+        return t("registration.accounts.battleTag");
+      case "smurf_tags":
+        return t("registration.accounts.smurfs");
+      case "discord_nick":
+        return t("registration.accounts.discord");
+      case "twitch_nick":
+        return t("registration.accounts.twitch");
+      case "primary_role":
+      case "roles":
+        return t("common.roles");
+      case "stream_pov":
+        return t("registration.details.streamPov");
+      case "notes":
+        return t("registration.details.notes");
+      default:
+        return fallback;
+    }
+  };
 
   // Meta: row number
   columns.push({
@@ -394,7 +429,7 @@ export function buildParticipantColumns(
 
       columns.push({
         id: def.id,
-        label: def.label,
+        label: getLocalizedLabel(key, def.label),
         category: "built_in",
         defaultVisible: def.defaultVisible,
         responsive: def.responsive ?? "sm",
@@ -411,7 +446,7 @@ export function buildParticipantColumns(
       if (!def) continue;
       columns.push({
         id: def.id,
-        label: def.label,
+        label: getLocalizedLabel(key, def.label),
         category: "built_in",
         defaultVisible: true,
         responsive: def.responsive ?? "sm",
@@ -436,6 +471,7 @@ export function buildParticipantColumns(
           renderCustomFieldValue(
             field,
             reg.custom_fields_json?.[field.key] ?? null,
+            t,
           ),
         searchValue:
           field.type === "text" || field.type === "select"
@@ -451,7 +487,7 @@ export function buildParticipantColumns(
   // Meta: tournament history
   columns.push({
     id: "_history",
-    label: "History",
+    label: t("common.history"),
     category: "meta",
     defaultVisible: true,
     responsive: "md",
@@ -464,17 +500,17 @@ export function buildParticipantColumns(
   // Meta: registration date
   columns.push({
     id: "_submitted_at",
-    label: "Registered",
+    label: t("common.registered"),
     category: "meta",
     defaultVisible: false,
     responsive: "md",
-    render: (reg) => formatDate(reg.submitted_at),
+    render: (reg) => formatDate(reg.submitted_at, locale),
   });
 
   // Meta: registration status
   columns.push({
     id: "_status",
-    label: "Status",
+    label: t("common.status"),
     category: "meta",
     defaultVisible: true,
     responsive: "always",
@@ -485,7 +521,7 @@ export function buildParticipantColumns(
   // Meta: balancer status
   columns.push({
     id: "_balancer_status",
-    label: "Balancer",
+    label: t("common.balancer"),
     category: "meta",
     defaultVisible: true,
     responsive: "md",
@@ -496,7 +532,7 @@ export function buildParticipantColumns(
   // Meta: check-in status
   columns.push({
     id: "_check_in",
-    label: "Check-in",
+    label: t("common.checkIn"),
     category: "meta",
     defaultVisible: true,
     responsive: "md",
@@ -507,7 +543,7 @@ export function buildParticipantColumns(
   // Meta: admission composite — always last (rightmost)
   columns.push({
     id: "_admission",
-    label: "Admission",
+    label: t("common.admission"),
     category: "meta",
     defaultVisible: true,
     responsive: "always",
@@ -523,3 +559,4 @@ export function buildParticipantColumns(
 
   return columns;
 }
+

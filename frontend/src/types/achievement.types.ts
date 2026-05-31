@@ -1,5 +1,4 @@
-import { Tournament } from "@/types/tournament.types";
-import { Match } from "./encounter.types";
+import { Score } from "./encounter.types";
 import { User } from "@/types/user.types";
 
 export type AchievementCategory = "overall" | "hero" | "division" | "team" | "standing" | "match";
@@ -29,17 +28,40 @@ export interface Achievement {
   rarity: number;
 }
 
+export interface AchievementTournamentLink {
+  id: number;
+  number: number | null;
+  name: string;
+  is_league: boolean;
+}
+
+export interface AchievementMatchTeamRef {
+  id: number;
+  name: string;
+}
+
+export interface AchievementMatchLink {
+  id: number;
+  encounter_id: number;
+  map_id: number;
+  score: Score;
+  log_name: string;
+  time: number;
+  home_team: AchievementMatchTeamRef | null;
+  away_team: AchievementMatchTeamRef | null;
+}
+
 export interface AchievementRarity extends Achievement {
   count: number;
   tournaments_ids: number[];
-  tournaments: Tournament[];
+  tournaments: AchievementTournamentLink[];
   matches_ids: number[];
-  matches: Match[];
+  matches: AchievementMatchLink[];
 }
 
 export interface AchievementEarned {
   user: User;
   count: number;
-  last_tournament: Tournament;
-  last_match: Match;
+  last_tournament: AchievementTournamentLink | null;
+  last_match: AchievementMatchLink | null;
 }

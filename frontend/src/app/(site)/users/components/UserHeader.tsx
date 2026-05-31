@@ -60,7 +60,6 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
   const formStreak = await deriveFormStreak(user.id);
   const aura = auraLabel(profile);
-  const mapWinPct = profile.maps_total > 0 ? ((profile.maps_won / profile.maps_total) * 100).toFixed(2) : null;
   const roleSwatchColor =
     primaryRole?.role === "Tank"
       ? "var(--aqt-tank)"
@@ -88,8 +87,6 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
       />
 
       <p className="relative z-[1] px-9 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-        <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Roster</Link>
-        <span className="mx-1">·</span>
         <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
         <span className="mx-1">·</span>
         <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
@@ -109,12 +106,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
           </div>
           {primaryRole ? (
             <div
-              className="absolute -bottom-2 -right-2 flex items-center justify-center rounded-md"
-              style={{
-                background: "var(--aqt-card)",
-                padding: 3,
-                boxShadow: "0 0 0 1px var(--aqt-border-2)"
-              }}
+              className="absolute -bottom-2 -right-2"
               title={`${primaryRole.role} · Div ${primaryRole.division}`}
             >
               <DivisionIcon
@@ -202,14 +194,13 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
           />
           <PfStat
             label="Winrate"
-            value={winrate !== null ? `${winrate.toFixed(1)}` : "-"}
+            value={winrate !== null ? `${winrate.toFixed(2)}` : "-"}
             unit="%"
           />
           <PfStat
             label="Maps"
             value={`${profile.maps_won}`}
             valueSuffix={`/${profile.maps_total}`}
-            sub={mapWinPct !== null ? `${mapWinPct}% win` : "—"}
           />
           <PfStat
             label="Avg Place"

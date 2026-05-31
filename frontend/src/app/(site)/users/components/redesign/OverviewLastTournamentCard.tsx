@@ -3,8 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { UserTournamentWithStats } from "@/types/user.types";
-import { Tournament } from "@/types/tournament.types";
+import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -19,7 +18,7 @@ import {
 
 interface Props {
   tournament: UserTournamentWithStats;
-  tournaments: Tournament[];
+  tournaments: UserTournamentSummary[];
 }
 
 const compactNumber = (value: number | null | undefined) => {

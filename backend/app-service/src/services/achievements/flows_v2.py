@@ -10,14 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.models.achievement import AchievementRule
 from src import schemas
 from src.core import errors, pagination
-from src.services.encounter import flows as encounter_flows
-from src.services.encounter import service as encounter_service
 from src.services.hero import flows as hero_flows
-from src.services.tournament import flows as tournament_flows
-from src.services.tournament import service as tournament_service
 from src.services.user import flows as user_flows
 
-from . import service_v2 as service
+from . import _mappers, _repositories, service_v2 as service
 
 
 async def to_pydantic(
@@ -114,8 +110,6 @@ async def get_user_achievements(
     without_tournament: bool = False,
     workspace_id: int | None = None,
 ) -> list[schemas.UserAchievementRead]:
-    from src import models
-
     user = await user_flows.get(session, user_id, [])
     results = await service.get_user_results(
         session,
@@ -156,17 +150,38 @@ async def get_user_achievements(
         achievement.tournaments_ids.sort()
         achievement.matches_ids.sort()
 
+    # Bulk-fetch tournaments and matches in one DB hit each, then map back to
+    # achievements. Previous loop did one round-trip per (achievement, tid),
+    # which was O(N*M) — hot on the user-achievements endpoint.
     if "tournaments" in entities:
-        for achievement in cache.values():
-            for tid in achievement.tournaments_ids:
-                tournament = await tournament_flows.get_read(session, tid, [])
-                achievement.tournaments.append(tournament)
+        unique_tournament_ids = sorted({
+            tid for achievement in cache.values() for tid in achievement.tournaments_ids
+        })
+        if unique_tournament_ids:
+            tournaments = await _repositories.get_tournaments_bulk(
+                session, unique_tournament_ids
+            )
+            tournaments_map = {t.id: _mappers.to_tournament_link(t) for t in tournaments}
+            for achievement in cache.values():
+                achievement.tournaments = [
+                    tournaments_map[tid]
+                    for tid in achievement.tournaments_ids
+                    if tid in tournaments_map
+                ]
 
     if "matches" in entities:
-        for achievement in cache.values():
-            for mid in achievement.matches_ids:
-                match = await encounter_flows.get_match(session, mid, ["map", "teams"])
-                achievement.matches.append(match)
+        unique_match_ids = sorted({
+            mid for achievement in cache.values() for mid in achievement.matches_ids
+        })
+        if unique_match_ids:
+            matches = await _repositories.get_matches_bulk(session, unique_match_ids)
+            matches_map = {m.id: _mappers.to_match_link(m) for m in matches}
+            for achievement in cache.values():
+                achievement.matches = [
+                    matches_map[mid]
+                    for mid in achievement.matches_ids
+                    if mid in matches_map
+                ]
 
     return list(cache.values())
 
@@ -187,8 +202,8 @@ async def get_achievement_users(
         if last_match_id:
             matches_to_fetch.append(last_match_id)
 
-    tournaments = await tournament_service.get_bulk_tournament(session, tournament_to_fetch, [])
-    matches = await encounter_service.get_match_bulk(session, matches_to_fetch, ["encounter"])
+    tournaments = await _repositories.get_tournaments_bulk(session, tournament_to_fetch)
+    matches = await _repositories.get_matches_bulk(session, matches_to_fetch)
 
     tournaments_map = {t.id: t for t in tournaments}
     matches_map = {m.id: m for m in matches}
@@ -201,12 +216,10 @@ async def get_achievement_users(
             schemas.AchievementEarned(
                 user=await user_flows.to_pydantic(session, user, []),
                 count=count,
-                last_tournament=await tournament_flows.to_pydantic(session, last_tournament, [])
+                last_tournament=_mappers.to_tournament_link(last_tournament)
                 if last_tournament
                 else None,
-                last_match=await encounter_flows.to_pydantic_match(session, last_match, ["encounter"])
-                if last_match
-                else None,
+                last_match=_mappers.to_match_link(last_match) if last_match else None,
             )
         )
 

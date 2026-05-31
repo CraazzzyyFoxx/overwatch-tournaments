@@ -45,7 +45,9 @@ function resolveAppCache(): RequestCache {
 
 const SERVICE_CONFIG: Record<ServiceName, ServiceConfig> = {
   app: {
-    clientBase: "/api/v1",
+    // app-service is carved out under /api/v1/core (tournament-service owns the
+    // bare /api/v1 namespace). serverBase env (NEXT_API_URL) must include /core.
+    clientBase: "/api/v1/core",
     serverBase: process.env.NEXT_API_URL ?? process.env.NEXT_PUBLIC_API_URL,
     injectWorkspace: true,
     defaultCache: resolveAppCache(),
@@ -57,7 +59,7 @@ const SERVICE_CONFIG: Record<ServiceName, ServiceConfig> = {
     defaultCache: "no-store",
   },
   tournament: {
-    clientBase: "/api/tournament",
+    clientBase: "/api/v1",
     serverBase: (
       process.env.NEXT_TOURNAMENT_URL ??
       process.env.NEXT_PUBLIC_TOURNAMENT_API_URL ??

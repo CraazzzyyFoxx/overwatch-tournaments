@@ -1,11 +1,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid
+from shared.repository import HeroRepository
 
 from src import models, schemas
 from src.core import errors, pagination
 
 from . import service
+
+_hero_repo = HeroRepository()
 
 
 async def get_hero_leaderboard(
@@ -84,35 +87,19 @@ async def to_pydantic(
 
 
 async def get(session: AsyncSession, id: int) -> schemas.HeroRead:
-    """
-    Retrieves a hero by its ID and converts it to a Pydantic schema.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        id (int): The ID of the hero to retrieve.
-
-    Returns:
-        schemas.HeroRead: The Pydantic schema representing the hero.
-    """
-    hero = await service.get(session, id)
+    """Retrieve a hero by ID and convert to its Pydantic schema."""
+    hero = await _hero_repo.get(session, id)
+    if hero is None:
+        raise errors.ApiHTTPException(
+            status_code=404,
+            detail=[errors.ApiExc(code="not_found", msg=f"Hero {id} not found")],
+        )
     return await to_pydantic(session, hero, [])
 
 
 async def get_by_name(session: AsyncSession, name: str) -> models.Hero:
-    """
-    Retrieves a hero by its name.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        name (str): The name of the hero to retrieve.
-
-    Returns:
-        models.Hero: The Hero object if found.
-
-    Raises:
-        errors.ApiHTTPException: If the hero is not found.
-    """
-    hero = await service.get_by_name(session, name)
+    """Retrieve a hero by name (404 if missing)."""
+    hero = await _hero_repo.get_by_name(session, name)
     if not hero:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -126,17 +113,8 @@ async def get_by_name(session: AsyncSession, name: str) -> models.Hero:
 async def get_all(
     session: AsyncSession, params: pagination.PaginationSortSearchParams
 ) -> pagination.Paginated[schemas.HeroRead]:
-    """
-    Retrieves a paginated list of heroes and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        params (pagination.PaginationSortSearchParams): Search, pagination, and sorting parameters.
-
-    Returns:
-        pagination.Paginated[schemas.HeroRead]: A paginated list of Pydantic schemas representing the heroes.
-    """
-    heroes, total = await service.get_all(session, params)
+    """Paginated heroes — delegates to `HeroRepository.all`."""
+    heroes, total = await _hero_repo.all(session, params)
     return pagination.Paginated(
         page=params.page,
         per_page=params.per_page,
@@ -148,20 +126,18 @@ async def get_all(
 async def get_playtime(
     session: AsyncSession, params: schemas.HeroPlaytimePaginationParams, workspace_id: int | None = None
 ) -> pagination.Paginated[schemas.HeroPlaytime]:
-    """
-    Retrieves a paginated list of heroes with their playtime statistics.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        params (schemas.HeroPlaytimePaginationParams): Pagination and filtering parameters.
-        workspace_id (int | None): Optional workspace ID to filter by.
-
-    Returns:
-        pagination.Paginated[schemas.HeroPlaytime]: A paginated list of Pydantic schemas representing the heroes with their playtime percentages.
-    """
-    heroes = await service.get_heroes_playtime(session, params, workspace_id=workspace_id)
+    """Hero playtime share — delegates to `HeroRepository.playtime`."""
+    user_id: int | None = None if params.user_id == "all" else params.user_id
+    heroes = await _hero_repo.playtime(
+        session,
+        user_id=user_id,
+        tournament_id=params.tournament_id,
+        workspace_id=workspace_id,
+    )
+    # Default sort: descending by playtime (was params.apply_sort with the same default).
+    heroes = sorted(heroes, key=lambda row: float(row[1]), reverse=True)
     total = len(heroes)
-    heroes = params.paginate_data(heroes)
+    paginated = params.paginate_data(heroes)
     return pagination.Paginated(
         page=params.page,
         per_page=params.per_page,
@@ -169,8 +145,8 @@ async def get_playtime(
         results=[
             schemas.HeroPlaytime(
                 hero=await to_pydantic(session, hero, []),
-                playtime=round(playtime, 4),
+                playtime=round(float(playtime), 4),
             )
-            for hero, playtime in heroes
+            for hero, playtime in paginated
         ],
     )

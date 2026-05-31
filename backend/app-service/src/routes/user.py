@@ -1,14 +1,15 @@
 import typing
 
 from fastapi import APIRouter, Depends, Query
-from shared.services.division_grid_access import build_workspace_division_grid_normalizer
-from shared.services.division_grid_normalization import DivisionGridNormalizationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import schemas
 from src.core import config, db, enums, pagination
-from src.core.workspace import WorkspaceQuery, get_division_grid
-from src.services.encounter import flows as encounter_flows
+from src.core.workspace import (
+    WorkspaceContextDep,
+    WorkspaceQuery,
+    get_division_grid,
+)
 from src.services.map import flows as map_flows
 from src.services.user import flows as user_flows
 
@@ -51,27 +52,16 @@ async def search_by_name(
     summary="Get users overview",
 )
 async def get_overview(
+    ws: WorkspaceContextDep,
     params: schemas.UserOverviewQueryParams = Depends(),
-    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    grid = await get_division_grid(session, workspace_id)
-    normalizer = None
-    if workspace_id is not None:
-        try:
-            normalizer = await build_workspace_division_grid_normalizer(
-                session,
-                workspace_id,
-                require_complete=False,
-            )
-        except DivisionGridNormalizationError:
-            pass  # Fall back to global grid for all players
     return await user_flows.get_overview(
         session,
         schemas.UserOverviewParams.from_query_params(params),
-        workspace_id=workspace_id,
-        grid=grid,
-        normalizer=normalizer,
+        workspace_id=ws.id,
+        grid=ws.grid,
+        normalizer=ws.normalizer,
     )
 
 
@@ -84,12 +74,11 @@ async def get_overview(
     summary="Get users overview KPI stats",
 )
 async def get_overview_stats(
+    ws: WorkspaceContextDep,
     params: schemas.UserOverviewStatsQueryParams = Depends(),
-    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    grid = await get_division_grid(session, workspace_id)
-    return await user_flows.get_overview_stats(session, params, grid=grid)
+    return await user_flows.get_overview_stats(session, params, grid=ws.grid)
 
 
 @router.get(
@@ -102,26 +91,15 @@ async def get_overview_stats(
     summary="Get users alphabetical catalog",
 )
 async def get_overview_catalog(
+    ws: WorkspaceContextDep,
     params: schemas.UserCatalogQueryParams = Depends(),
-    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    grid = await get_division_grid(session, workspace_id)
-    normalizer = None
-    if workspace_id is not None:
-        try:
-            normalizer = await build_workspace_division_grid_normalizer(
-                session,
-                workspace_id,
-                require_complete=False,
-            )
-        except DivisionGridNormalizationError:
-            pass
     return await user_flows.get_catalog(
         session,
         schemas.UserCatalogParams.from_query_params(params),
-        grid=grid,
-        normalizer=normalizer,
+        grid=ws.grid,
+        normalizer=ws.normalizer,
     )
 
 
@@ -184,10 +162,12 @@ async def get_by_name(
     description=f"Retrieve the profile information of a user by ID. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user profile",
 )
-async def get_profile(id: int, workspace_id: WorkspaceQuery = None, session=Depends(db.get_async_session)):
-    grid = await get_division_grid(session, workspace_id)
-    profile = await user_flows.get_profile(session, id, workspace_id=workspace_id, grid=grid)
-    return profile
+async def get_profile(
+    id: int,
+    ws: WorkspaceContextDep,
+    session=Depends(db.get_async_session),
+):
+    return await user_flows.get_profile(session, id, workspace_id=ws.id, grid=ws.grid)
 
 
 @router.get(
@@ -196,10 +176,12 @@ async def get_profile(id: int, workspace_id: WorkspaceQuery = None, session=Depe
     description=f"Retrieve the list of tournaments associated with a user by ID. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user tournaments",
 )
-async def get_tournaments(id: int, workspace_id: WorkspaceQuery = None, session: AsyncSession = Depends(db.get_async_session)):
-    grid = await get_division_grid(session, workspace_id)
-    tournaments = await user_flows.get_tournaments(session, id, workspace_id=workspace_id, grid=grid)
-    return tournaments
+async def get_tournaments(
+    id: int,
+    ws: WorkspaceContextDep,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_tournaments(session, id, workspace_id=ws.id, grid=ws.grid)
 
 
 @router.get(
@@ -294,7 +276,7 @@ async def get_encounters(
     ] = Depends(),
     workspace_id: WorkspaceQuery = None,
 ):
-    encounters = await encounter_flows.get_encounters_by_user(
+    encounters = await user_flows.get_encounters_by_user(
         session, id, pagination.PaginationSortParams.from_query_params(params), workspace_id=workspace_id
     )
     return encounters

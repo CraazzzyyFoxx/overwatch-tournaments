@@ -1,7 +1,6 @@
 import React from "react";
 import { User } from "@/types/user.types";
 import userService from "@/services/user.service";
-import UserAchievementsFilter from "@/app/(site)/users/components/UserAchievementsFilter";
 import { AchievementRarity } from "@/types/achievement.types";
 import AchievementsView from "@/app/(site)/users/components/redesign/AchievementsView";
 
@@ -36,20 +35,30 @@ const parseAchievementFilter = (selectedTournamentId?: string) => {
 const UserAchievementPage = async ({ user, selectedTournamentId }: UserAchievementPageProps) => {
   const { tournamentId, withoutTournament, selectValue } = parseAchievementFilter(selectedTournamentId);
 
-  const [achievements, profile] = await Promise.all([
-    userService
-      .getUserAchievements(user.id, {
-        tournamentId,
-        withoutTournament
-      })
-      .catch(() => [] as AchievementRarity[]),
-    userService.getUserProfile(user.id)
-  ]);
+  let achievements: AchievementRarity[];
+  let profile: Awaited<ReturnType<typeof userService.getUserProfile>>;
+  try {
+    [achievements, profile] = await Promise.all([
+      userService
+        .getUserAchievements(user.id, { tournamentId, withoutTournament })
+        .catch(() => [] as AchievementRarity[]),
+      userService.getUserProfile(user.id)
+    ]);
+  } catch {
+    return (
+      <div className="aqt-player rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-6 py-10 text-center text-[13px] text-[color:var(--aqt-fg-muted)]">
+        Could not load achievements. Please try again later.
+      </div>
+    );
+  }
 
   return (
     <div className="aqt-player flex w-full flex-col gap-3.5">
-      <UserAchievementsFilter tournaments={profile.tournaments} selectedValue={selectValue} />
-      <AchievementsView achievements={achievements} />
+      <AchievementsView
+        achievements={achievements}
+        tournaments={profile.tournaments}
+        selectedTournamentValue={selectValue}
+      />
     </div>
   );
 };

@@ -1,13 +1,12 @@
 "use client";
 
 import React from "react";
-import { UserTournamentWithStats } from "@/types/user.types";
+import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Box, Clock } from "lucide-react";
 import { ChartConfig, ChartContainer } from "@/components/ui/chart";
 import { Label, Pie, PieChart } from "recharts";
 import { TypographyH4 } from "@/components/ui/typography";
-import { Tournament } from "@/types/tournament.types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -24,7 +23,7 @@ import { getLastTournamentGridVersion } from "@/app/(site)/users/components/user
 
 export interface UserLastTournamentProps {
   tournament: UserTournamentWithStats | null;
-  tournaments: Tournament[];
+  tournaments: UserTournamentSummary[];
 }
 
 export interface UserLastTournamentStatCardProps {
@@ -138,7 +137,7 @@ const UserLastTournamentCardHeader = ({
   tournaments
 }: {
   tournament: UserTournamentWithStats;
-  tournaments: Tournament[];
+  tournaments: UserTournamentSummary[];
 }) => {
   const tournamentGrid = getLastTournamentGridVersion(tournament.id, tournaments);
 

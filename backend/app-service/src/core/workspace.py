@@ -4,11 +4,20 @@ Workspace filtering utilities for SQLAlchemy queries.
 Provides a declarative way to apply workspace_id filtering to any query,
 automatically resolving the join path from the source model to Tournament.workspace_id.
 
-Usage in routes:
+Usage in routes (lightweight — just the id):
     from src.core.workspace import WorkspaceQuery
 
     async def get_all(workspace_id: WorkspaceQuery = None, ...):
         ...
+
+Usage in routes (need grid/normalizer):
+    from src.core.workspace import WorkspaceContext, get_workspace_context
+
+    async def get_overview(
+        ws: WorkspaceContext = Depends(get_workspace_context),
+        ...
+    ):
+        return await flow(..., workspace_id=ws.id, grid=ws.grid, normalizer=ws.normalizer)
 
 Usage in services:
     from src.core.workspace import workspace_filter
@@ -21,20 +30,64 @@ Usage in services:
 """
 
 import typing
+from dataclasses import dataclass
 
 import sqlalchemy as sa
-from fastapi import Query
+from fastapi import Depends, Query
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
+    build_workspace_division_grid_normalizer,
     get_effective_division_grid,
     get_effective_division_grid_version,
+)
+from shared.services.division_grid_normalization import (
+    DivisionGridNormalizationError,
+    DivisionGridNormalizer,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.core import db
 
 WorkspaceQuery = typing.Annotated[int | None, Query(alias="workspace_id")]
+
+
+@dataclass(frozen=True)
+class WorkspaceContext:
+    """Pre-resolved workspace state for a request.
+
+    Bundles the request-scoped `workspace_id`, the effective `DivisionGrid`
+    (workspace-specific override or global fallback), and an optional
+    `DivisionGridNormalizer` for mapping cross-version ranks. Built once per
+    request via `Depends(get_workspace_context)` so individual handlers stop
+    repeating the same 5-line resolution block.
+    """
+
+    id: int | None
+    grid: DivisionGrid
+    normalizer: DivisionGridNormalizer | None = None
+
+
+async def get_workspace_context(
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+) -> WorkspaceContext:
+    grid = await get_effective_division_grid(session, workspace_id, tournament_id=None)
+    normalizer: DivisionGridNormalizer | None = None
+    if workspace_id is not None:
+        try:
+            normalizer = await build_workspace_division_grid_normalizer(
+                session,
+                workspace_id,
+                require_complete=False,
+            )
+        except DivisionGridNormalizationError:
+            normalizer = None
+    return WorkspaceContext(id=workspace_id, grid=grid, normalizer=normalizer)
+
+
+WorkspaceContextDep = typing.Annotated[WorkspaceContext, Depends(get_workspace_context)]
 
 
 def workspace_filter(workspace_id: int | None) -> list:

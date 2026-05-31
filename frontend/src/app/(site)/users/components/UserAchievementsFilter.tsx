@@ -9,13 +9,13 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Tournament } from "@/types/tournament.types";
+import type { UserTournamentSummary } from "@/types/user.types";
 import { Filter } from "lucide-react";
 
 const FILTER_QUERY_KEY = "achievementTournamentId";
 
 interface UserAchievementsFilterProps {
-  tournaments: Tournament[];
+  tournaments: UserTournamentSummary[];
   selectedValue: string;
 }
 

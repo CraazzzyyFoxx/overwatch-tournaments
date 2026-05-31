@@ -216,7 +216,7 @@ const TabsWithBadges = async ({
   children: React.ReactNode;
 }) => {
   const { profile } = await userAndProfile;
-  const heroesCount = profile.hero_statistics?.length ?? null;
+  const heroesCount = profile.heroes_count ?? null;
   const tournamentsCount = profile.tournaments_count ?? null;
   // Maps badge: not always available — approximate via maps_total
   const mapsTotal = profile.maps_total ?? null;

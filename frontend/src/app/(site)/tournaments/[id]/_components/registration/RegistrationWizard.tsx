@@ -13,7 +13,7 @@ import type {
 } from "@/types/registration.types";
 import type { User } from "@/types/user.types";
 
-import { ROLES } from "./constants";
+import { ROLES } from "@/lib/roles";
 import type { AdditionalRole, WizardAction, WizardState } from "./types";
 import StepIndicator from "./StepIndicator";
 import AccountStep from "./AccountStep";
@@ -26,17 +26,10 @@ import {
   getBuiltInListValidationError,
   getCustomFieldValidationError,
 } from "./validation";
-
-const STEPS = [
-  { label: "Accounts" },
-  { label: "Roles" },
-  { label: "Details" },
-];
-
-const PRIMARY_ROLE_REQUIRED_ERROR = "Choose a primary role or enable Flex before continuing.";
-const ADDITIONAL_ROLES_REQUIRED_ERROR = "This tournament requires at least one fallback role.";
+import { useTranslation } from "@/i18n/LanguageContext";
 
 function wizardReducer(state: WizardState, action: WizardAction): WizardState {
+
   switch (action.type) {
     case "SET_STEP":
       return { ...state, step: action.step };
@@ -88,11 +81,26 @@ export default function RegistrationWizard({
   form,
   onClose,
 }: RegistrationWizardProps) {
+  const { t } = useTranslation();
   const { user: authUser } = useAuthProfile();
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(wizardReducer, initialState);
   const [error, setError] = useState<string | null>(null);
   const [liveValidationErrors, setLiveValidationErrors] = useState<Record<string, string | null>>({});
+
+  const isEnabled = (fieldKey: string) => form.built_in_fields?.[fieldKey]?.enabled !== false;
+  const isRequired = (fieldKey: string) =>
+    isEnabled(fieldKey) && form.built_in_fields?.[fieldKey]?.required === true;
+  const getBuiltInConfig = (fieldKey: string) => form.built_in_fields?.[fieldKey];
+
+  const STEPS = [
+    { label: t("registration.wizard.steps.accounts") },
+    { label: t("registration.wizard.steps.roles") },
+    { label: t("registration.wizard.steps.details") },
+  ];
+
+  const PRIMARY_ROLE_REQUIRED_ERROR = t("registration.wizard.validation.primaryRoleRequired");
+  const ADDITIONAL_ROLES_REQUIRED_ERROR = t("registration.wizard.validation.fallbackRoleRequired");
 
   const userQuery = useQuery({
     queryKey: ["user-profile-full", authUser?.username],
@@ -162,7 +170,7 @@ export default function RegistrationWizard({
             .filter(([, v]) => v !== ""),
         ),
       };
-      return registrationService.register(workspaceId, tournamentId, input);
+      return registrationService.register(tournamentId, input);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["registration", workspaceId, tournamentId] });
@@ -176,10 +184,6 @@ export default function RegistrationWizard({
 
   const isLastStep = state.step === STEPS.length - 1;
 
-  const isEnabled = (fieldKey: string) => form.built_in_fields?.[fieldKey]?.enabled !== false;
-  const isRequired = (fieldKey: string) =>
-    isEnabled(fieldKey) && form.built_in_fields?.[fieldKey]?.required === true;
-  const getBuiltInConfig = (fieldKey: string) => form.built_in_fields?.[fieldKey];
   const getCurrentStepLiveValidationFieldKeys = (): string[] => {
     if (state.step === 0) {
       return [
@@ -203,37 +207,41 @@ export default function RegistrationWizard({
   const validateCurrentStep = (): string | null => {
     if (state.step === 0) {
       if (isRequired("battle_tag") && !state.values.battle_tag?.trim()) {
-        return "BattleTag is required.";
+        return t("registration.wizard.validation.battleTagRequired");
       }
       if (isRequired("smurf_tags") && state.smurfTags.length === 0) {
-        return "Add at least one smurf account.";
+        return t("registration.wizard.validation.smurfTagsRequired");
       }
       if (isRequired("discord_nick") && !state.values.discord_nick?.trim()) {
-        return "Discord is required.";
+        return t("registration.wizard.validation.discordRequired");
       }
       if (isRequired("twitch_nick") && !state.values.twitch_nick?.trim()) {
-        return "Twitch is required.";
+        return t("registration.wizard.validation.twitchRequired");
       }
       return (
         (isEnabled("battle_tag") ? getBuiltInFieldValidationError(
           "battle_tag",
           state.values.battle_tag ?? "",
           getBuiltInConfig("battle_tag"),
+          t,
         ) : null)
         ?? (isEnabled("smurf_tags") ? getBuiltInListValidationError(
           "smurf_tags",
           state.smurfTags,
           getBuiltInConfig("smurf_tags"),
+          t,
         ) : null)
         ?? (isEnabled("discord_nick") ? getBuiltInFieldValidationError(
           "discord_nick",
           state.values.discord_nick ?? "",
           getBuiltInConfig("discord_nick"),
+          t,
         ) : null)
         ?? (isEnabled("twitch_nick") ? getBuiltInFieldValidationError(
           "twitch_nick",
           state.values.twitch_nick ?? "",
           getBuiltInConfig("twitch_nick"),
+          t,
         ) : null)
       );
     }
@@ -251,12 +259,13 @@ export default function RegistrationWizard({
 
     if (state.step === 2) {
       if (isRequired("notes") && !state.values.notes?.trim()) {
-        return "Notes are required.";
+        return t("registration.wizard.validation.notesRequired");
       }
       const notesValidationError = getBuiltInFieldValidationError(
         "notes",
         state.values.notes ?? "",
         getBuiltInConfig("notes"),
+        t,
       );
       if (notesValidationError) {
         return notesValidationError;
@@ -266,9 +275,9 @@ export default function RegistrationWizard({
         const rawValue = state.values[field.key] ?? "";
         const isFilled = field.type === "checkbox" ? true : rawValue.trim() !== "";
         if (field.required && !isFilled) {
-          return `Fill in the required field: ${field.label}.`;
+          return t("registration.wizard.validation.fieldRequired", { label: field.label });
         }
-        const customFieldValidationError = getCustomFieldValidationError(field, rawValue);
+        const customFieldValidationError = getCustomFieldValidationError(field, rawValue, t);
         if (customFieldValidationError) {
           return customFieldValidationError;
         }
@@ -365,12 +374,12 @@ export default function RegistrationWizard({
     <div className="flex flex-col gap-5 sm:min-h-[560px] lg:min-h-[640px]">
       <div>
         <h2 className="text-lg font-semibold text-white">
-          Register{tournamentName ? ` for ${tournamentName}` : ""}
+          {tournamentName ? t("registration.wizard.titleFor", { name: tournamentName }) : t("registration.wizard.title")}
         </h2>
         <p className="mt-1 text-sm text-white/50">
-          {state.step === 0 && "Step 1 - Verify your game accounts."}
-          {state.step === 1 && "Step 2 - Pick your preferred role."}
-          {state.step === 2 && "Step 3 - Any additional info for organizers."}
+          {state.step === 0 && t("registration.wizard.step1Desc")}
+          {state.step === 1 && t("registration.wizard.step2Desc")}
+          {state.step === 2 && t("registration.wizard.step3Desc")}
         </p>
       </div>
 
@@ -427,7 +436,7 @@ export default function RegistrationWizard({
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
           >
             <ArrowLeft className="size-3.5" />
-            Back
+            {t("common.back")}
           </button>
         ) : (
           <button
@@ -435,7 +444,7 @@ export default function RegistrationWizard({
             onClick={onClose}
             className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         )}
 
@@ -447,10 +456,10 @@ export default function RegistrationWizard({
         >
           {mutation.isPending && <Loader2 className="size-4 animate-spin" />}
           {isLastStep ? (
-            "Submit"
+            t("common.submit")
           ) : (
             <>
-              Next
+              {t("common.next")}
               <ArrowRight className="size-3.5" />
             </>
           )}
@@ -459,3 +468,4 @@ export default function RegistrationWizard({
     </div>
   );
 }
+

@@ -1,7 +1,23 @@
 import { Player } from "@/types/team.types";
 import { User, UserProfile } from "@/types/user.types";
 
-type PlayerRoleInfo = Pick<Player, "role"> & {
+/** Minimal shape required for `sortTeamPlayers` / TournamentTeamTable rendering. */
+export interface TeamRosterPlayer {
+  id: number;
+  name: string;
+  role: string | null;
+  sub_role: string | null;
+  rank: number;
+  division: number;
+  is_substitution: boolean;
+  is_newcomer: boolean;
+  is_newcomer_role: boolean;
+  related_player_id: number | null;
+  relative_player?: number | null;
+}
+
+type PlayerRoleInfo = {
+  role: string | null;
   sub_role?: string | null;
 };
 
@@ -35,8 +51,8 @@ export const getPlayerType = (player: PlayerRoleInfo) => {
   return "ㅤ";
 };
 
-export const sortTeamPlayers = <P extends Player>(players: P[]): P[] => {
-  const getRolePriority = (role: string) => {
+export const sortTeamPlayers = <P extends TeamRosterPlayer>(players: P[]): P[] => {
+  const getRolePriority = (role: string | null) => {
     if (role === "Tank") return 1;
     if (role === "Damage") return 2;
     if (role === "Support") return 3;

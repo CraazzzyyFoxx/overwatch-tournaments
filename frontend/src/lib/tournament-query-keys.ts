@@ -12,6 +12,14 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["encounters", "tournament", tournamentId] as const)
       : (["encounters", "tournament", tournamentId, workspaceId] as const),
+  encountersOverview: (workspaceId?: number | null) =>
+    workspaceId == null
+      ? (["encounters", "overview"] as const)
+      : (["encounters", "overview", workspaceId] as const),
+  overallStatistics: (workspaceId?: number | null) =>
+    workspaceId == null
+      ? (["statistics", "overall"] as const)
+      : (["statistics", "overall", workspaceId] as const),
   encountersPage: (
     tournamentId: number,
     workspaceId: number | null | undefined,

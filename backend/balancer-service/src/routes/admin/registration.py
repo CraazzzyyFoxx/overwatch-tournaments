@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.balancer_registration_statuses import (
     get_status_metas_map,
 )
+from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from src import models
 from src.composition import build_admin_registration_use_cases
 from src.core import auth, db
@@ -43,7 +44,10 @@ async def get_registration_form(
     form = await use_cases.get_registration_form.execute(session=session, tournament_id=tournament_id)
     if form is None:
         return None
-    return RegistrationFormRead.model_validate(form, from_attributes=True)
+    catalog = await resolve_subrole_catalog(session, form.workspace_id)
+    return RegistrationFormRead.model_validate(form, from_attributes=True).model_copy(
+        update={"subrole_catalog": catalog}
+    )
 
 
 @router.put("/tournaments/{tournament_id}/registration-form", response_model=RegistrationFormRead)
@@ -58,7 +62,10 @@ async def upsert_registration_form(
         tournament_id=tournament_id,
         payload=data,
     )
-    return RegistrationFormRead.model_validate(form, from_attributes=True)
+    catalog = await resolve_subrole_catalog(session, form.workspace_id)
+    return RegistrationFormRead.model_validate(form, from_attributes=True).model_copy(
+        update={"subrole_catalog": catalog}
+    )
 
 
 # ---------------------------------------------------------------------------

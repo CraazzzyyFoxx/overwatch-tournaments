@@ -1,10 +1,8 @@
 import { Hero, HeroPlaytime } from "@/types/hero.types";
-import { Player } from "@/types/team.types";
-import { Encounter, Match } from "@/types/encounter.types";
+import { Score } from "@/types/encounter.types";
 import { MapRead } from "@/types/map.types";
 import { LogStatsName } from "@/types/stats.types";
 import { UserTournamentStat } from "@/types/statistics.types";
-import { Tournament } from "@/types/tournament.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 
 export interface UserDiscord {
@@ -66,13 +64,105 @@ export interface UserTournamentWithStats {
   stats: Record<LogStatsName, UserTournamentStat>;
 }
 
-export interface MatchWithUserStats extends Match {
-  performance: number;
+/**
+ * Narrow projections for user-scoped API responses.
+ *
+ * After P3-A these shapes are defined by `app-service` and don't reuse the
+ * canonical Tournament/Encounter/Match/Player types from tournament-service.
+ * They contain only the fields the user pages render.
+ */
+
+export interface UserTournamentSummary {
+  id: number;
+  number: number | null;
+  name: string;
+  is_league: boolean;
+  is_finished?: boolean;
+  status?: string | null;
+  division_grid_version: DivisionGridVersion | null;
+}
+
+export interface UserTournamentPlayer {
+  id: number;
+  name: string;
+  role: string | null;
+  sub_role: string | null;
+  rank: number;
+  division: number;
+  user_id: number;
+  is_substitution: boolean;
+  is_newcomer: boolean;
+  is_newcomer_role: boolean;
+  related_player_id: number | null;
+  relative_player?: number | null;
+}
+
+export interface UserEncounterTournament {
+  id: number;
+  name: string;
+  number: number | null;
+  is_league: boolean;
+  is_finished?: boolean;
+  status?: string | null;
+}
+
+export interface UserEncounterStageSummary {
+  id: number;
+  name: string;
+}
+
+export interface UserEncounterStageItemSummary {
+  id: number;
+  name: string;
+}
+
+export interface UserEncounterTeamPlayerRef {
+  id: number;
+  user_id: number;
+  role: string | null;
+  name: string;
+}
+
+export interface UserEncounterTeamSummary {
+  id: number;
+  name: string;
+  players: UserEncounterTeamPlayerRef[];
+}
+
+export interface MatchWithUserStats {
+  id: number;
+  home_team_id: number | null;
+  away_team_id: number | null;
+  score: Score;
+  time: number;
+  log_name: string;
+  encounter_id: number;
+  map_id: number;
+  code: string | null;
+  map: MapRead | null;
+  performance: number | null;
   heroes: Hero[];
 }
 
-// @ts-ignore
-export interface EncounterWithUserStats extends Encounter {
+export interface EncounterWithUserStats {
+  id: number;
+  name: string;
+  home_team_id: number | null;
+  away_team_id: number | null;
+  score: Score;
+  round: number;
+  best_of: number;
+  tournament_id: number;
+  status: string;
+  closeness: number | null;
+  has_logs: boolean;
+  result_status: string;
+  user_team_id: number | null;
+  tournament: UserEncounterTournament | null;
+  stage: UserEncounterStageSummary | null;
+  stage_item: UserEncounterStageItemSummary | null;
+  home_team: UserEncounterTeamSummary | null;
+  away_team: UserEncounterTeamSummary | null;
   matches: MatchWithUserStats[];
 }
 
@@ -83,7 +173,7 @@ export interface UserTournament {
   is_league: boolean;
   team_id: number;
   team: string;
-  players: Player[];
+  players: UserTournamentPlayer[];
   closeness: number;
   placement: number;
   count_teams: number;
@@ -109,10 +199,11 @@ export interface UserProfile {
   avg_playoff_placement: number | null;
   avg_group_placement: number | null;
   most_played_hero: Hero;
+  heroes_count?: number;
 
   roles: UserRole[];
   hero_statistics: HeroPlaytime[];
-  tournaments: Tournament[];
+  tournaments: UserTournamentSummary[];
 }
 
 export interface UserMapRead {

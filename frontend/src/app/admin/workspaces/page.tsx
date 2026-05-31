@@ -103,7 +103,7 @@ export default function WorkspacesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      fetch(`/api/v1/workspaces/${id}`, { method: "DELETE" }).then((r) => {
+      fetch(`/api/v1/core/workspaces/${id}`, { method: "DELETE" }).then((r) => {
         if (!r.ok) throw new Error("Failed to delete");
       }),
     onSuccess: () => {

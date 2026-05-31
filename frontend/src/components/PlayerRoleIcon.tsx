@@ -8,7 +8,7 @@ const PlayerRoleIcon = ({
   size = 24,
   color,
 }: {
-  role: string;
+  role: string | null;
   size?: number;
   color?: string;
 }) => {

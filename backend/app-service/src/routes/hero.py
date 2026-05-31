@@ -7,7 +7,7 @@ from starlette.requests import Request
 
 from src import models, schemas
 from src.core import config, db, enums, pagination
-from src.core.workspace import WorkspaceQuery, get_division_grid
+from src.core.workspace import WorkspaceContextDep, WorkspaceQuery
 from src.services.hero import flows as hero_flows
 
 router = APIRouter(prefix="/heroes", tags=[enums.RouteTag.HERO])
@@ -82,15 +82,14 @@ async def get_statistics(
 )
 async def get_hero_leaderboard(
     hero_id: int,
+    ws: WorkspaceContextDep,
     params: schemas.HeroLeaderboardQueryParams = Depends(),
-    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    grid = await get_division_grid(session, workspace_id)
     return await hero_flows.get_hero_leaderboard(
         session,
         hero_id=hero_id,
         params=schemas.HeroLeaderboardParams.from_query_params(params),
-        workspace_id=workspace_id,
-        grid=grid,
+        workspace_id=ws.id,
+        grid=ws.grid,
     )

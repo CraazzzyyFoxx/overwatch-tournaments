@@ -6,12 +6,26 @@ from cashews import cache
 from shared.division_grid import DivisionGrid, division_case_expr
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from src import models
 from src.core import enums, pagination, utils
-from src.services.team import service as team_service
+
+
+def _team_load_options(entities: list[str]) -> list[_AbstractLoad]:
+    """Load options for selecting Team with optional related entities.
+
+    Replaces the dependency on services/team — kept local because the only
+    consumer of this function in app-service is get_teams() below, which
+    passes entities=["tournament", "placement"].
+    """
+    opts: list[_AbstractLoad] = []
+    if "tournament" in entities:
+        opts.append(joinedload(models.Team.tournament))
+    if "placement" in entities:
+        opts.append(selectinload(models.Team.standings))
+    return opts
 
 if typing.TYPE_CHECKING:
     from src import schemas as app_schemas
@@ -2034,7 +2048,7 @@ async def get_teams(
 
     query = (
         sa.select(models.Team)
-        .options(*team_service.team_entities(params.entities))
+        .options(*_team_load_options(params.entities))
         .join(models.Player, models.Player.team_id == models.Team.id)
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
         .where(

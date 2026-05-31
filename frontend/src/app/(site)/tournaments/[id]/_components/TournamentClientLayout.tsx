@@ -1,17 +1,20 @@
 "use client";
 
 import React from "react";
-import { Activity, Calendar, ExternalLink, Users } from "lucide-react";
+import Link from "next/link";
 
-import { Breadcrumb } from "@/components/Breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TournamentChallongeLinkInline } from "@/app/(site)/tournaments/components/TournamentCard";
 import TournamentRegisterButton from "./TournamentRegisterButton";
-import { getTournamentStatusMeta, isTournamentStatusEnded } from "@/lib/tournament-status";
+import { TOURNAMENT_STATUS_META, isTournamentStatusEnded } from "@/lib/tournament-status";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
 import { useTournamentQuery, useTournamentStagesQuery } from "../_hooks/useTournamentClientData";
+import { useQuery } from "@tanstack/react-query";
+import teamService from "@/services/team.service";
+import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import type { Stage } from "@/types/tournament.types";
 
+import { useTranslation } from "@/i18n/LanguageContext";
 import TournamentSectionNav from "./TournamentSectionNav";
 
 type TournamentClientLayoutProps = {
@@ -19,40 +22,48 @@ type TournamentClientLayoutProps = {
   children: React.ReactNode;
 };
 
+function formatLabel(stages: Stage[], t: (key: string) => string): string {
+  const hasGroup = stages.some((s) => s.stage_type === "round_robin" || s.stage_type === "swiss");
+  const hasElim = stages.some(
+    (s) => s.stage_type === "single_elimination" || s.stage_type === "double_elimination"
+  );
+  if (hasGroup && hasElim) return t("common.formatLabel.groupsPlayoff");
+  if (hasElim) return t("common.formatLabel.playoffBracket");
+  if (hasGroup) return t("common.formatLabel.groupStage");
+  return stages[0]?.stage_type?.replace(/_/g, " ") ?? "—";
+}
+
 function TournamentLayoutSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="hidden md:block">
-        <div className="sticky top-20 rounded-xl border border-white/[0.07] bg-white/[0.02] p-2">
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-10 w-full rounded-lg" />
-            <Skeleton className="h-10 w-full rounded-lg" />
-            <Skeleton className="h-10 w-full rounded-lg" />
-            <Skeleton className="h-10 w-full rounded-lg" />
-          </div>
-        </div>
-      </aside>
-      <div className="min-w-0 space-y-5">
-        <Skeleton className="h-4 w-64" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <Skeleton className="h-72 w-full rounded-xl" />
-      </div>
+    <div className="aqt-tn space-y-4">
+      <Skeleton className="h-4 w-64" />
+      <Skeleton className="h-[180px] w-full rounded-2xl" />
+      <Skeleton className="h-10 w-full max-w-xl rounded-lg" />
+      <Skeleton className="h-72 w-full rounded-xl" />
     </div>
   );
 }
 
 export default function TournamentClientLayout({
   tournamentId,
-  children,
+  children
 }: TournamentClientLayoutProps) {
+  const { t, locale } = useTranslation();
   const tournamentQuery = useTournamentQuery(tournamentId);
   const stagesQuery = useTournamentStagesQuery(tournamentId);
   const tournament = tournamentQuery.data;
   const stages = stagesQuery.data ?? [];
 
+  const teamsQuery = useQuery({
+    queryKey: tournamentQueryKeys.teams(tournamentId),
+    queryFn: () => teamService.getCount(tournamentId),
+    enabled: Boolean(tournamentId)
+  });
+  const teamsCount = teamsQuery.data ?? 0;
+
   useTournamentRealtime({
     tournamentId,
-    workspaceId: tournament?.workspace_id,
+    workspaceId: tournament?.workspace_id
   });
 
   if (tournamentQuery.isLoading || stagesQuery.isLoading) {
@@ -61,170 +72,126 @@ export default function TournamentClientLayout({
 
   if (!tournament) {
     return (
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
-        Tournament not found.
+      <div className="aqt-tn">
+        <div
+          className="tn-card"
+          style={{ padding: "48px 24px", textAlign: "center", color: "var(--fg-dim)" }}
+        >
+          {t("common.tournamentNotFound")}
+        </div>
       </div>
     );
   }
 
-  const statusMeta = getTournamentStatusMeta(tournament.status);
+  const designClass =
+    tournament.status === "live" || tournament.status === "playoffs"
+      ? "live"
+      : tournament.status === "registration" || tournament.status === "check_in"
+        ? "upcoming"
+        : tournament.status === "completed" || tournament.status === "archived"
+          ? "finished"
+          : "draft";
   const isEnded = isTournamentStatusEnded(tournament.status);
+  const players = tournament.participants_count ?? 0;
+  const completedStages = stages.filter((stage) => stage.is_completed).length;
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="hidden md:block">
-        <div className="sticky top-20">
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-2">
-            <TournamentSectionNav
-              tournamentId={String(tournamentId)}
-              status={tournament.status}
-              stages={stages}
-              variant="desktop"
+    <div className="aqt-tn space-y-4">
+      <p className="crumb">
+        <Link href="/tournaments">{t("common.tournaments")}</Link>
+        <span className="sep">/</span>
+        <span>{tournament.name}</span>
+      </p>
+
+      <section className={cn("tn-hero", designClass !== "live" && `status-${designClass}`)}>
+        <div className="hex" />
+        <div className="glow-rose" />
+        <div className="glow-teal" />
+
+        {!isEnded && (
+          <div className="tn-actions">
+            <TournamentRegisterButton
+              workspaceId={tournament.workspace_id}
+              tournamentId={tournament.id}
+              tournamentName={tournament.name}
             />
           </div>
-        </div>
-      </aside>
+        )}
 
-      <div className="min-w-0 space-y-5">
-        <Breadcrumb
-          items={[
-            { label: "Tournaments", href: "/tournaments" },
-            { label: tournament.name },
-          ]}
-        />
-
-        <div
-          className={cn(
-            "rounded-xl border border-white/[0.07] bg-white/[0.02] p-6",
-            tournament.is_league && "border-l-2 border-l-purple-500/50",
-          )}
-        >
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {!tournament.is_league && (
-              <span className="font-mono text-xs tabular-nums text-white/40">
-                #{tournament.number}
+        <div className="tn-hero-inner">
+          <div className="tn-h-left">
+            <div className="tn-id-line">
+              <span className="id">
+                {tournament.is_league ? t("common.league") : `#${tournament.number}`}
               </span>
-            )}
-            {tournament.is_league && (
-              <span className="inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-400">
-                League
-              </span>
-            )}
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide",
-                statusMeta.badgeClassName,
-              )}
-            >
-              {statusMeta.dotClassName ? (
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    statusMeta.dotClassName,
-                    tournament.status === "live" && "animate-pulse",
-                  )}
-                />
-              ) : null}
-              {statusMeta.badgeLabel}
-            </span>
-          </div>
-
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">
-                {tournament.name}
-              </h1>
-              {tournament.description && (
-                <p className="mt-2 max-w-prose text-sm leading-relaxed text-white/50">
-                  {tournament.description}
-                </p>
-              )}
+              <span>·</span>
+              <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
             </div>
-            {!isEnded && (
-              <div className="shrink-0">
-                <TournamentRegisterButton
-                  workspaceId={tournament.workspace_id}
-                  tournamentId={tournament.id}
-                  tournamentName={tournament.name}
-                />
-              </div>
+
+            <h1 className="tn-title">{tournament.name}</h1>
+
+            <div className="tn-meta-row">
+              <span className={cn("status-pill", designClass)}>
+                {(tournament.status === "live" || tournament.status === "playoffs") && (
+                  <span className="dot" />
+                )}
+                {t(`common.statusBadge.${tournament.status}`)}
+              </span>
+              <span className="meta-pill">
+                <span className="k">{t("common.format")}</span>
+                <span className="v">{formatLabel(stages, t)}</span>
+              </span>
+            </div>
+
+            {tournament.description && (
+              <p
+                style={{
+                  marginTop: 6,
+                  maxWidth: "44rem",
+                  fontSize: 12.5,
+                  lineHeight: 1.6,
+                  color: "var(--fg-dim)"
+                }}
+              >
+                {tournament.description}
+              </p>
             )}
           </div>
 
-          {(() => {
-            const hasChallonge =
-              Boolean(tournament.challonge_slug) ||
-              stages.some((stage) => Boolean(stage.challonge_slug));
-            return (
-              <div
-                className={cn(
-                  "mt-5 grid grid-cols-2 gap-3",
-                  hasChallonge ? "lg:grid-cols-4" : "lg:grid-cols-3",
-                )}
-              >
-                <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                  <Calendar className="h-4 w-4 shrink-0 text-white/30" />
-                  <div className="min-w-0">
-                    <div className="mb-0.5 text-[10px] uppercase tracking-wide text-white/40">
-                      Dates
-                    </div>
-                    <div className="truncate text-sm font-medium text-white/80">
-                      {formatDateRange(tournament.start_date, tournament.end_date)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                  <Users className="h-4 w-4 shrink-0 text-white/30" />
-                  <div className="min-w-0">
-                    <div className="mb-0.5 text-[10px] uppercase tracking-wide text-white/40">
-                      Participants
-                    </div>
-                    <div className="truncate text-sm font-medium text-white/80">
-                      {tournament.participants_count ?? 0}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                  <Activity className="h-4 w-4 shrink-0 text-white/30" />
-                  <div className="min-w-0">
-                    <div className="mb-0.5 text-[10px] uppercase tracking-wide text-white/40">
-                      Status
-                    </div>
-                    <div className={cn("text-sm font-medium", statusMeta.textClassName)}>
-                      {statusMeta.label}
-                    </div>
-                  </div>
-                </div>
-
-                {hasChallonge && (
-                  <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <ExternalLink className="h-4 w-4 shrink-0 text-white/30" />
-                    <div className="min-w-0">
-                      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-white/40">
-                        Bracket
-                      </div>
-                      <TournamentChallongeLinkInline tournament={tournament} stages={stages} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          <div className="tn-h-stats">
+            <div className="tn-h-stat">
+              <span className="l">{t("common.teams")}</span>
+              <span className="v">{teamsCount}</span>
+              <span className="s">{t("common.registered")}</span>
+            </div>
+            <div className="tn-h-stat">
+              <span className="l">{t("common.participants")}</span>
+              <span className="v">{tournament.registrations_count ?? 0}</span>
+              <span className="s">{t("common.players")}</span>
+            </div>
+            <div className="tn-h-stat">
+              <span className="l">{t("common.rostered")}</span>
+              <span className="v">{players}</span>
+              <span className="s">{t("common.inTeams")}</span>
+            </div>
+            <div className="tn-h-stat">
+              <span className="l">{t("common.stages")}</span>
+              <span className="v">{stages.length}</span>
+              <span className="s">
+                {completedStages} {t("common.done")}
+              </span>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="md:hidden">
-          <TournamentSectionNav
-            tournamentId={String(tournamentId)}
-            status={tournament.status}
-            stages={stages}
-            variant="mobile"
-          />
-        </div>
+      <TournamentSectionNav
+        tournamentId={String(tournamentId)}
+        status={tournament.status}
+        stages={stages}
+      />
 
-        <section className="min-w-0">{children}</section>
-      </div>
+      <section className="min-w-0">{children}</section>
     </div>
   );
 }

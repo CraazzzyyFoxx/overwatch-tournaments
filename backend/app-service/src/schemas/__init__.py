@@ -5,11 +5,6 @@ from .gamemode import *
 from .hero import *
 from .map import *
 from .user_base import *
-from .tournament import *
-from .stage import *
-from .team import *
-from .encounter import *
-from .standing import *
 from .statistics import *
 from .achievement import *
 from .user import *

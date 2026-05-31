@@ -8,6 +8,7 @@ import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";
 import HeroesView from "@/app/(site)/users/components/redesign/HeroesView";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserHeroesContainerProps {
   userId: number;
@@ -34,6 +35,22 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
       label: t.name
     }));
   }, [tournamentsQuery.data]);
+
+  if (heroesQuery.isLoading) {
+    return (
+      <div className="aqt-player flex flex-col gap-3.5">
+        <div className="flex justify-end">
+          <Skeleton className="h-10 w-60 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-[600px] w-full rounded-xl" />
+      </div>
+    );
+  }
 
   const heroes = heroesQuery.data?.results ?? [];
 

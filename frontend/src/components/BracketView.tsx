@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pencil, FileEdit } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -73,8 +73,8 @@ interface BracketLayout {
   height: number;
 }
 
-const CARD_WIDTH = 198;
-const CARD_HEIGHT = 60;
+const CARD_WIDTH = 210;
+const CARD_HEIGHT = 84;
 const CARD_ROW_HEIGHT = 30;
 const ROUND_GAP_X = 48;
 const MATCH_GAP_Y = 10;
@@ -439,27 +439,48 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
   };
 }
 
+function getMatchMeta(encounter: Encounter) {
+  const isCompleted = COMPLETED_STATUSES.has(encounter.status);
+  const isLive = !isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
+  const played = (encounter.score?.home ?? 0) + (encounter.score?.away ?? 0);
+  const bestOf = encounter.best_of ?? 0;
+
+  let timeLabel = "TBD";
+  if (isCompleted) timeLabel = "Final";
+  else if (isLive) timeLabel = "Live";
+  else if (encounter.scheduled_at) {
+    timeLabel = new Date(encounter.scheduled_at).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  return { isCompleted, isLive, played, bestOf, timeLabel };
+}
+
 function MatchCard({
   data,
+  encounter,
   hoveredTeamId,
   onHoveredTeamChange
 }: {
   data: MatchNodeData;
+  encounter: Encounter;
   hoveredTeamId: number | null;
   onHoveredTeamChange: (teamId: number | null) => void;
 }) {
+  const meta = getMatchMeta(encounter);
   const hasVisibleScore = data.isCompleted || data.homeScore !== 0 || data.awayScore !== 0;
+  const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
 
   const getRowClasses = (side: "home" | "away") => {
     if (data.winner === side) {
-      return "bg-emerald-950/70 text-emerald-50";
+      return "bg-[hsl(174_72%_46%/0.10)] text-[var(--aqt-fg)] font-semibold";
     }
-
     if (data.winner && data.winner !== side) {
-      return "bg-black/10 text-white/45";
+      return "text-[var(--aqt-fg-dim)]";
     }
-
-    return "bg-transparent text-white/82";
+    return "text-[var(--aqt-fg-muted)]";
   };
 
   const getTeamId = (side: "home" | "away") =>
@@ -467,18 +488,12 @@ function MatchCard({
 
   const isHighlighted = (side: "home" | "away") => {
     const teamId = getTeamId(side);
-
     return teamId != null && hoveredTeamId === teamId;
   };
 
-  const handlePointerEnter = (side: "home" | "away") => {
-    onHoveredTeamChange(getTeamId(side));
-  };
-
+  const handlePointerEnter = (side: "home" | "away") => onHoveredTeamChange(getTeamId(side));
   const handlePointerLeave = (side: "home" | "away") => {
-    if (isHighlighted(side)) {
-      onHoveredTeamChange(null);
-    }
+    if (isHighlighted(side)) onHoveredTeamChange(null);
   };
 
   const getDisplayName = (side: "home" | "away") => {
@@ -490,61 +505,102 @@ function MatchCard({
     return name;
   };
 
-  const isTbdSlot = (side: "home" | "away") => {
-    const name = side === "home" ? data.homeName : data.awayName;
-    return name === "TBD";
+  const isTbdSlot = (side: "home" | "away") =>
+    (side === "home" ? data.homeName : data.awayName) === "TBD";
+
+  const renderRow = (side: "home" | "away") => {
+    const score = side === "home" ? data.homeScore : data.awayScore;
+    const won = data.winner === side;
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 px-2.5 transition-colors",
+          side === "home" && "border-b border-[var(--aqt-border)]",
+          getRowClasses(side),
+          isHighlighted(side) && "bg-[hsl(174_72%_46%/0.16)] text-[var(--aqt-fg)]"
+        )}
+        data-team-id={getTeamId(side) ?? undefined}
+        data-team-highlighted={isHighlighted(side) || undefined}
+        onPointerEnter={() => handlePointerEnter(side)}
+        onPointerLeave={() => handlePointerLeave(side)}
+        style={{ height: CARD_ROW_HEIGHT }}
+      >
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            isTbdSlot(side) ? "text-[11px] italic text-[var(--aqt-fg-faint)]" : "text-[12.5px]"
+          )}
+        >
+          {getDisplayName(side)}
+        </span>
+        <span
+          className={cn(
+            "shrink-0 text-[13px] font-semibold tabular-nums",
+            won ? "text-[var(--aqt-teal)]" : "text-[var(--aqt-fg-muted)]"
+          )}
+        >
+          {hasVisibleScore ? score : "-"}
+        </span>
+      </div>
+    );
   };
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/45 shadow-[0_12px_30px_rgba(0,0,0,0.28)] ring-1 ring-white/6 backdrop-blur-sm">
+    <div
+      className={cn(
+        "relative flex h-full flex-col overflow-hidden rounded-[10px] border bg-[var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
+        meta.isLive
+          ? "border-[hsl(340_75%_58%/0.45)]"
+          : data.winner
+            ? "border-[var(--aqt-border-2)]"
+            : "border-[var(--aqt-border)]"
+      )}
+    >
+      {renderRow("home")}
+      {renderRow("away")}
+
       <div
-        className={cn(
-          "flex items-center justify-between gap-2 border-b border-white/10 px-3 transition-colors",
-          getRowClasses("home"),
-          data.homeTeamId != null && "cursor-default",
-          isHighlighted("home") && "bg-sky-400/18 text-white"
-        )}
-        data-team-id={data.homeTeamId ?? undefined}
-        data-team-highlighted={isHighlighted("home") || undefined}
-        onPointerEnter={() => handlePointerEnter("home")}
-        onPointerLeave={() => handlePointerLeave("home")}
-        style={{ height: CARD_ROW_HEIGHT }}
+        className="flex items-center justify-between gap-2 border-t border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5"
+        style={{ height: footerHeight }}
       >
+        <div className="flex items-center gap-2">
+          {meta.bestOf > 0 && (
+            <span className="font-mono text-[10px] font-semibold text-[var(--aqt-fg-faint)]">
+              BO{meta.bestOf}
+            </span>
+          )}
+          {meta.bestOf > 0 && (
+            <span className="flex items-center gap-[3px]">
+              {Array.from({ length: meta.bestOf }).map((_, index) => (
+                <span
+                  key={index}
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{
+                    background:
+                      index < meta.played ? "var(--aqt-teal)" : "hsl(0 0% 100% / 0.12)"
+                  }}
+                />
+              ))}
+            </span>
+          )}
+        </div>
         <span
           className={cn(
-            "min-w-0 truncate font-medium",
-            isTbdSlot("home") ? "text-[11px] text-white/40 italic" : "text-[13px]"
+            "flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide",
+            meta.isLive
+              ? "text-[var(--aqt-rose)]"
+              : meta.isCompleted
+                ? "text-[var(--aqt-fg-dim)]"
+                : "text-[var(--aqt-fg-muted)]"
           )}
         >
-          {getDisplayName("home")}
-        </span>
-        <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-          {hasVisibleScore ? data.homeScore : "-"}
-        </span>
-      </div>
-      <div
-        className={cn(
-          "flex items-center justify-between gap-2 px-3 transition-colors",
-          getRowClasses("away"),
-          data.awayTeamId != null && "cursor-default",
-          isHighlighted("away") && "bg-sky-400/18 text-white"
-        )}
-        data-team-id={data.awayTeamId ?? undefined}
-        data-team-highlighted={isHighlighted("away") || undefined}
-        onPointerEnter={() => handlePointerEnter("away")}
-        onPointerLeave={() => handlePointerLeave("away")}
-        style={{ height: CARD_ROW_HEIGHT }}
-      >
-        <span
-          className={cn(
-            "min-w-0 truncate font-medium",
-            isTbdSlot("away") ? "text-[11px] text-white/40 italic" : "text-[13px]"
+          {meta.isLive && (
+            <span
+              className="h-1.5 w-1.5 animate-pulse rounded-full"
+              style={{ background: "var(--aqt-rose)" }}
+            />
           )}
-        >
-          {getDisplayName("away")}
-        </span>
-        <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-          {hasVisibleScore ? data.awayScore : "-"}
+          {meta.timeLabel}
         </span>
       </div>
     </div>
@@ -581,7 +637,40 @@ export function BracketView({
   canReport
 }: BracketViewProps) {
   const [hoveredTeamId, setHoveredTeamId] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef({ active: false, startX: 0, startY: 0, left: 0, top: 0 });
+  const [isGrabbing, setIsGrabbing] = useState(false);
   const layout = useMemo(() => buildLayout(encounters, type), [encounters, type]);
+
+  // Drag-to-pan with the mouse; touch keeps native scrolling.
+  const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button, a")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    panRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop
+    };
+    el.setPointerCapture?.(event.pointerId);
+    setIsGrabbing(true);
+  };
+  const handlePanMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    const el = scrollRef.current;
+    if (!pan.active || !el) return;
+    el.scrollLeft = pan.left - (event.clientX - pan.startX);
+    el.scrollTop = pan.top - (event.clientY - pan.startY);
+  };
+  const handlePanEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (el?.hasPointerCapture?.(event.pointerId)) el.releasePointerCapture(event.pointerId);
+    panRef.current.active = false;
+    setIsGrabbing(false);
+  };
 
   if (layout.nodes.length === 0) {
     return (
@@ -590,16 +679,26 @@ export function BracketView({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/25">
-      <div className="max-h-[78vh] overflow-auto">
+    <div className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-bg-2)]">
+      <div
+        ref={scrollRef}
+        className={cn(
+          "max-h-[78vh] select-none overflow-auto",
+          isGrabbing ? "cursor-grabbing" : "cursor-grab"
+        )}
+        onPointerDown={handlePanStart}
+        onPointerMove={handlePanMove}
+        onPointerUp={handlePanEnd}
+        onPointerCancel={handlePanEnd}
+      >
         <div
           className="relative min-w-full"
           style={{
             width: layout.width,
             height: layout.height,
             backgroundImage:
-              "radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0)",
-            backgroundSize: "20px 20px"
+              "radial-gradient(circle at 1px 1px, hsl(0 0% 100% / 0.05) 1px, transparent 0)",
+            backgroundSize: "22px 22px"
           }}
         >
           <svg
@@ -613,7 +712,9 @@ export function BracketView({
               <path
                 key={edge.id}
                 d={edge.path}
-                stroke={edge.isCompleted ? "rgba(16, 185, 129, 0.55)" : "rgba(255, 255, 255, 0.18)"}
+                stroke={
+                  edge.isCompleted ? "hsl(174 72% 46% / 0.55)" : "hsl(0 0% 100% / 0.12)"
+                }
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -627,11 +728,13 @@ export function BracketView({
               className="absolute"
               style={{ left: header.x, top: header.y, width: CARD_WIDTH }}
             >
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/75">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.45)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--aqt-fg-muted)]">
                 <span
-                  className={`h-2 w-2 rounded-full ${
-                    header.section === "upper" ? "bg-emerald-400" : "bg-sky-400"
-                  }`}
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    background:
+                      header.section === "upper" ? "var(--aqt-teal)" : "var(--aqt-blue)"
+                  }}
                 />
                 <span>{header.label}</span>
               </div>
@@ -644,11 +747,12 @@ export function BracketView({
             return (
               <div
                 key={node.id}
-                className="absolute group"
+                className="group absolute"
                 style={{ left: node.x, top: node.y, width: CARD_WIDTH, height: CARD_HEIGHT }}
               >
                 <MatchCard
                   data={node.data}
+                  encounter={node.encounter}
                   hoveredTeamId={hoveredTeamId}
                   onHoveredTeamChange={setHoveredTeamId}
                 />
@@ -656,7 +760,7 @@ export function BracketView({
                   className="pointer-events-none absolute top-1/2 -translate-y-1/2"
                   style={{ left: CARD_WIDTH + 6 }}
                 >
-                  <span className="font-mono text-[13px] font-semibold text-white">
+                  <span className="font-mono text-[12px] font-semibold text-[var(--aqt-fg-muted)]">
                     {node.data.matchLabel}
                   </span>
                 </div>
@@ -666,7 +770,7 @@ export function BracketView({
                     {editable && (
                       <button
                         type="button"
-                        className="rounded bg-black/70 p-1 text-white hover:bg-black"
+                        className="rounded-md border border-[var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.6)] p-1 text-[var(--aqt-fg-muted)] hover:text-[var(--aqt-fg)]"
                         aria-label="Редактировать матч"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -679,7 +783,7 @@ export function BracketView({
                     {reportable && (
                       <button
                         type="button"
-                        className="rounded bg-emerald-700/90 p-1 text-white hover:bg-emerald-600"
+                        className="rounded-md border border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.16)] p-1 text-[var(--aqt-teal)] hover:bg-[hsl(174_72%_46%/0.24)]"
                         aria-label="Репорт матча"
                         onClick={(e) => {
                           e.stopPropagation();

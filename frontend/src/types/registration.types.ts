@@ -22,6 +22,14 @@ export interface BuiltInFieldConfig {
   validation?: FieldValidationConfig | null;
 }
 
+export interface SubroleOption {
+  slug: string;
+  label: string;
+}
+
+/** Workspace sub-role catalog keyed by registration role code (tank/dps/support). */
+export type SubroleCatalog = Record<string, SubroleOption[]>;
+
 export interface RegistrationForm {
   id: number;
   tournament_id: number;
@@ -31,6 +39,7 @@ export interface RegistrationForm {
   closes_at: string | null;
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: CustomFieldDefinition[];
+  subrole_catalog?: SubroleCatalog;
 }
 
 export type RegistrationStatus = string;

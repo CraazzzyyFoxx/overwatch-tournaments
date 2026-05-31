@@ -30,7 +30,7 @@ from starlette.requests import Request
 
 from src.core import config, db
 from src.routes import router
-from src.services.tournament.recalculation_events import task_router as tournament_recalculation_task_router
+from src.services.tournament_events import task_router as tournament_recalculation_task_router
 
 # Setup structured logging (replaces old logging setup)
 logger = setup_logging(
