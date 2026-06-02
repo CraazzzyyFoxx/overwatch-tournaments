@@ -12,7 +12,7 @@ function historyQuery(params: RankHistoryQuery = {}) {
     battle_tag_id: params.battleTagId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
-    granularity: params.granularity ?? "daily"
+    granularity: params.granularity ?? "raw"
   };
 }
 
