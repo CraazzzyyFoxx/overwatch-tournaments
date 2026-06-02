@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import {
   getTierForRank,
@@ -40,6 +41,7 @@ const DEFAULT_COLLECTION: RankCollectionConfig = {
   batch_size: 50,
   rate_limit_per_minute: 30,
   scope: "registrations_only",
+  extra_accounts_per_registration: 0,
   max_consecutive_failures: 5,
   backoff_base_seconds: 60
 };
@@ -127,14 +129,16 @@ function RankCollectionSection({
         <CardTitle>Rank collection (OverFast)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2">
+          <Switch
+            id="rank-collection-enabled"
             checked={form.enabled}
-            onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+            onCheckedChange={(checked) => setForm({ ...form, enabled: checked })}
           />
-          <span>Enabled</span>
-        </label>
+          <Label htmlFor="rank-collection-enabled" className="cursor-pointer">
+            Enabled
+          </Label>
+        </div>
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <div className="space-y-1">
@@ -161,16 +165,29 @@ function RankCollectionSection({
           </div>
           <div className="space-y-1">
             <Label>Scope</Label>
-            <select
-              className="bg-background border border-border rounded-md px-2 py-2 text-sm w-full"
+            <Select
               value={form.scope}
-              onChange={(e) =>
-                setForm({ ...form, scope: e.target.value as RankCollectionConfig["scope"] })
+              onValueChange={(value) =>
+                setForm({ ...form, scope: value as RankCollectionConfig["scope"] })
               }
             >
-              <option value="registrations_only">Registrations only</option>
-              <option value="all">All users</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="registrations_only">Registrations only</SelectItem>
+                <SelectItem value="all">All users</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Extra accounts / registration</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.extra_accounts_per_registration}
+              onChange={num("extra_accounts_per_registration")}
+            />
           </div>
           <div className="space-y-1">
             <Label>Max consecutive failures</Label>

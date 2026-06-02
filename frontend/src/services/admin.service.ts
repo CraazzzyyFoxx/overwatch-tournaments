@@ -84,7 +84,10 @@ import {
   PlayerSubRoleCreateInput,
   PlayerSubRoleUpdateInput,
   SettingRead,
-  SettingUpsertInput
+  SettingUpsertInput,
+  RankCollectionStatusRow,
+  CollectTriggerInput,
+  CollectTriggerResult
 } from "@/types/admin.types";
 
 class AdminService {
@@ -1367,6 +1370,24 @@ class AdminService {
   async updateSetting(key: string, data: SettingUpsertInput): Promise<SettingRead> {
     const response = await apiFetch("parser", `admin/settings/${key}`, {
       method: "PUT",
+      body: data,
+      skipWorkspace: true
+    });
+    return response.json();
+  }
+
+  // ─── OverFast rank collection (superuser/admin) ───────────────────────────
+
+  async getRankCollectionStatus(userId: number): Promise<RankCollectionStatusRow[]> {
+    const response = await apiFetch("parser", `admin/rank/users/${userId}/collection`, {
+      skipWorkspace: true
+    });
+    return response.json();
+  }
+
+  async triggerRankCollection(data: CollectTriggerInput): Promise<CollectTriggerResult> {
+    const response = await apiFetch("parser", "admin/rank/collect", {
+      method: "POST",
       body: data,
       skipWorkspace: true
     });

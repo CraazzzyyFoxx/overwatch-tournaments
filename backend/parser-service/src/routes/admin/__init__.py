@@ -7,6 +7,7 @@ from .gamemode import router as gamemode_router
 from .hero import router as hero_router
 from .logs import router as logs_router
 from .map import router as map_router
+from .rank_collection import router as rank_collection_router
 from .settings import router as settings_router
 from .team import player_router
 from .user import router as user_router
@@ -25,3 +26,4 @@ admin_router.include_router(achievement_rule_router)
 admin_router.include_router(achievement_library_router)
 admin_router.include_router(achievement_override_router)
 admin_router.include_router(settings_router)
+admin_router.include_router(rank_collection_router)

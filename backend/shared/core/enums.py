@@ -61,6 +61,7 @@ class RankCollectionSource(StrEnum):
 
     scheduled = "scheduled"
     registration = "registration"
+    manual = "manual"
 
 
 class LogEventType(StrEnum):

@@ -160,10 +160,16 @@ class RegistrationHookTests(IsolatedAsyncioTestCase):
         }
         with (
             patch.object(
+                tasks.settings_provider,
+                "get_rank_collection_config",
+                AsyncMock(return_value=RankCollectionConfig()),
+            ),
+            patch.object(
                 tasks.service,
-                "promote_user_tags",
+                "resolve_registration_targets",
                 AsyncMock(return_value=[(10, "A#1"), (11, "B#2")]),
             ),
+            patch.object(tasks.service, "ensure_state", AsyncMock()),
             patch.object(tasks, "enqueue_fetch", AsyncMock(return_value=True)) as enq,
         ):
             count = await tasks.handle_registration_approved(

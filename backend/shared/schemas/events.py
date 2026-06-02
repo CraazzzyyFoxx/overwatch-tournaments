@@ -233,7 +233,7 @@ class FetchRankEvent(BaseEvent):
     event_type: str = Field(default="fetch_rank", frozen=True)
     battle_tag_id: int = Field(..., description="players.battle_tag.id to fetch")
     battle_tag: str = Field(..., description="Full battle tag 'Name#1234'")
-    source: Literal["scheduled", "registration"] = Field(
+    source: Literal["scheduled", "registration", "manual"] = Field(
         default="scheduled", description="What triggered this fetch"
     )
     registration_id: int | None = Field(default=None, description="Registration that triggered it")

@@ -82,13 +82,20 @@ async def enqueue_fetch(
     event: FetchRankEvent,
     *,
     priority: bool = False,
+    force: bool = False,
     broker: Any | None = None,
     redis: Any | None = None,
 ) -> bool:
-    """Publish a fetch event once per battle tag (Redis-deduped)."""
+    """Publish a fetch event once per battle tag (Redis-deduped).
+
+    ``force=True`` bypasses the enqueue dedup (used by manual admin triggers so a
+    "collect now" always runs even if a fetch is already pending).
+    """
     redis_client = redis or await get_redis()
     pending = _pending_key(event.battle_tag_id)
-    if not await _set_once(redis_client, pending, PENDING_TTL_SECONDS):
+    if force:
+        await redis_client.set(pending, "1", ex=PENDING_TTL_SECONDS)
+    elif not await _set_once(redis_client, pending, PENDING_TTL_SECONDS):
         return False
 
     queue = RANK_FETCH_PRIORITY_QUEUE if priority else RANK_FETCH_QUEUE
@@ -123,7 +130,18 @@ async def handle_registration_approved(
         return 0
 
     async with session_factory() as session:
-        tags = await service.promote_user_tags(session, event.user_id, tier=2)
+        cfg = await settings_provider.get_rank_collection_config(session)
+        # Only the registered pool (main + smurfs) + up to N extra accounts —
+        # not every battle tag the registrant owns.
+        tags = await service.resolve_registration_targets(
+            session,
+            registration_id=event.registration_id,
+            fallback_battle_tag=event.battle_tag,
+            user_id=event.user_id,
+            extra_accounts=cfg.extra_accounts_per_registration,
+        )
+        for battle_tag_id, battle_tag in tags:
+            await service.ensure_state(session, battle_tag_id, battle_tag, priority_tier=2)
         await session.commit()
 
     enqueued = 0

@@ -23,6 +23,7 @@ export interface RankCollectionConfig {
   batch_size: number;
   rate_limit_per_minute: number;
   scope: RankCollectionScope;
+  extra_accounts_per_registration: number;
   max_consecutive_failures: number;
   backoff_base_seconds: number;
 }
@@ -36,6 +37,29 @@ export interface RankMappingEntry {
 export interface RankMappingConfig {
   version: string;
   entries: RankMappingEntry[];
+}
+
+// ─── Rank collection status / manual trigger (parser admin) ────────────────────
+
+export interface RankCollectionStatusRow {
+  battle_tag_id: number;
+  battle_tag: string;
+  status: string | null;
+  last_checked_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  next_eligible_at: string | null;
+  priority_tier: number;
+}
+
+export interface CollectTriggerInput {
+  user_id?: number | null;
+  battle_tag_ids?: number[] | null;
+}
+
+export interface CollectTriggerResult {
+  enqueued: number;
 }
 
 // ─── Tournament ──────────────────────────────────────────────────────────────

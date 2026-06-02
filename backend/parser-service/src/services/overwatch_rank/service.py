@@ -70,24 +70,63 @@ async def ensure_state(
     return state
 
 
-async def promote_user_tags(
-    session: AsyncSession, user_id: int, *, tier: int
+async def resolve_user_registration_targets(
+    session: AsyncSession,
+    user_id: int,
+    registered_lower: set[str],
+    extra_accounts: int,
 ) -> list[tuple[int, str]]:
-    """Ensure + promote every battle tag of ``user_id`` to at least ``tier``.
+    """A user's collection pool: their registered tags + up to N extra accounts.
 
-    Returns the list of ``(battle_tag_id, battle_tag)`` touched.
+    ``registered_lower`` is the set of lowercased tags the player entered (main +
+    smurfs). Every matching ``UserBattleTag`` is included; then up to
+    ``extra_accounts`` of their *other* tags (lowest id first, deterministic).
     """
     rows = (
         await session.execute(
-            sa.select(models.UserBattleTag.id, models.UserBattleTag.battle_tag).where(
-                models.UserBattleTag.user_id == user_id
-            )
+            sa.select(models.UserBattleTag.id, models.UserBattleTag.battle_tag)
+            .where(models.UserBattleTag.user_id == user_id)
+            .order_by(models.UserBattleTag.id.asc())
         )
     ).all()
-    tags = [(battle_tag_id, battle_tag) for battle_tag_id, battle_tag in rows]
-    for battle_tag_id, battle_tag in tags:
-        await ensure_state(session, battle_tag_id, battle_tag, priority_tier=tier)
-    return tags
+    targets: list[tuple[int, str]] = []
+    extras = 0
+    for tag_id, battle_tag in rows:
+        if battle_tag and battle_tag.lower() in registered_lower:
+            targets.append((tag_id, battle_tag))
+        elif extras < extra_accounts:
+            targets.append((tag_id, battle_tag))
+            extras += 1
+    return targets
+
+
+async def resolve_registration_targets(
+    session: AsyncSession,
+    *,
+    registration_id: int | None,
+    fallback_battle_tag: str | None,
+    user_id: int,
+    extra_accounts: int,
+) -> list[tuple[int, str]]:
+    """Collection pool for one approved registration (registered tags + N extra)."""
+    registered_lower: set[str] = set()
+    registration = (
+        await session.get(models.BalancerRegistration, registration_id)
+        if registration_id is not None
+        else None
+    )
+    if registration is not None:
+        if registration.battle_tag:
+            registered_lower.add(registration.battle_tag.lower())
+        for smurf in registration.smurf_tags_json or []:
+            if smurf:
+                registered_lower.add(str(smurf).lower())
+    elif fallback_battle_tag:
+        registered_lower.add(fallback_battle_tag.lower())
+
+    return await resolve_user_registration_targets(
+        session, user_id, registered_lower, extra_accounts
+    )
 
 
 async def seed_states_for_all_battle_tags(session: AsyncSession) -> int:
@@ -110,40 +149,118 @@ async def seed_states_for_all_battle_tags(session: AsyncSession) -> int:
     return result.rowcount or 0
 
 
-async def seed_states_from_registrations(session: AsyncSession) -> int:
-    """Backfill (tier 1) state rows for battle tags referenced by registrations.
+async def _registration_collection_targets(
+    session: AsyncSession, extra_accounts: int
+) -> set[int]:
+    """``battle_tag_id`` set to collect under ``registrations_only``.
 
-    Covers the ``registrations_only`` scope: any ``UserBattleTag`` belonging to a
-    user who has a (non-deleted) registration in an **active** tournament (not
-    ``completed``/``archived``), or whose tag matches such a registration, gets a
-    state row so it becomes eligible. The approval hook only promotes tags on
-    *new* approvals — this picks up the existing backlog so enabling collection
-    starts working immediately. Finished/archived tournaments are excluded so the
-    collector doesn't poll their players forever.
+    For active-tournament registrations: the tags the player *entered* (main +
+    smurfs), matched to ``UserBattleTag`` rows, plus up to ``extra_accounts`` of
+    each registrant's *other* battle.net accounts. Tournaments that are
+    ``completed``/``archived`` are excluded.
     """
-    bt = models.UserBattleTag
     reg = models.BalancerRegistration
     tournament = models.Tournament
+    bt = models.UserBattleTag
+
+    rows = (
+        await session.execute(
+            sa.select(reg.user_id, reg.battle_tag, reg.smurf_tags_json)
+            .join(tournament, tournament.id == reg.tournament_id)
+            .where(
+                reg.deleted_at.is_(None),
+                tournament.status.notin_(INACTIVE_TOURNAMENT_STATUSES),
+            )
+        )
+    ).all()
+
+    registered_lower: set[str] = set()
+    user_ids: set[int] = set()
+    for user_id, battle_tag, smurfs in rows:
+        if user_id is not None:
+            user_ids.add(user_id)
+        if battle_tag:
+            registered_lower.add(battle_tag.lower())
+        for smurf in smurfs or []:
+            if smurf:
+                registered_lower.add(str(smurf).lower())
+
+    target_ids: set[int] = set()
+
+    # Tags explicitly registered (matches by string; covers regs without a user).
+    if registered_lower:
+        ids = (
+            await session.scalars(
+                sa.select(bt.id).where(sa.func.lower(bt.battle_tag).in_(registered_lower))
+            )
+        ).all()
+        target_ids.update(ids)
+
+    # Per registrant user: registered tags + up to N extra accounts (lowest id first).
+    if user_ids:
+        user_rows = (
+            await session.execute(
+                sa.select(bt.user_id, bt.id, bt.battle_tag)
+                .where(bt.user_id.in_(user_ids))
+                .order_by(bt.user_id.asc(), bt.id.asc())
+            )
+        ).all()
+        extras_per_user: dict[int, int] = {}
+        for uid, tag_id, battle_tag in user_rows:
+            if battle_tag and battle_tag.lower() in registered_lower:
+                target_ids.add(tag_id)
+            elif extras_per_user.get(uid, 0) < extra_accounts:
+                target_ids.add(tag_id)
+                extras_per_user[uid] = extras_per_user.get(uid, 0) + 1
+
+    return target_ids
+
+
+async def seed_states_from_registrations(
+    session: AsyncSession, *, extra_accounts: int = 0
+) -> int:
+    """Sync tier-1 state to the registration collection pool (registrations_only).
+
+    Keeps ``priority_tier == 1`` equal to the registered tags (main + smurfs) of
+    active-tournament registrations plus up to ``extra_accounts`` other accounts
+    per registrant:
+
+    - inserts a tier-1 state row for newly-targeted tags,
+    - promotes an existing tier-0 row back to tier 1 when its tag enters the pool,
+    - demotes tier-1 rows that leave the pool (e.g. tournament completed) to tier 0.
+
+    Tier 2 (manual triggers / approval hook) is never touched. Returns the number
+    of new state rows inserted.
+    """
+    bt = models.UserBattleTag
     state = models.BattleTagRankState
 
-    active_regs = (
-        sa.select(reg.user_id, reg.battle_tag)
-        .join(tournament, tournament.id == reg.tournament_id)
-        .where(
-            reg.deleted_at.is_(None),
-            tournament.status.notin_(INACTIVE_TOURNAMENT_STATUSES),
-        )
-        .subquery()
+    target_ids = await _registration_collection_targets(session, extra_accounts)
+
+    # Demote tier-1 rows that are no longer in the registration pool.
+    demote = sa.update(state).where(state.priority_tier == 1)
+    if target_ids:
+        demote = demote.where(state.battle_tag_id.notin_(target_ids))
+    await session.execute(demote.values(priority_tier=0))
+
+    if not target_ids:
+        return 0
+
+    # Promote existing tier-0 rows that are now in the pool.
+    await session.execute(
+        sa.update(state)
+        .where(state.priority_tier == 0, state.battle_tag_id.in_(target_ids))
+        .values(priority_tier=1)
     )
-    reg_user_ids = sa.select(active_regs.c.user_id).where(active_regs.c.user_id.isnot(None))
-    reg_tags = sa.select(active_regs.c.battle_tag).where(active_regs.c.battle_tag.isnot(None))
+
+    # Insert tier-1 rows for pool tags that have no state row yet.
     missing = sa.select(
         bt.id.label("battle_tag_id"),
         bt.battle_tag.label("battle_tag"),
         sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
         sa.literal(1).label("priority_tier"),
     ).where(
-        sa.or_(bt.user_id.in_(reg_user_ids), bt.battle_tag.in_(reg_tags)),
+        bt.id.in_(target_ids),
         ~sa.exists().where(state.battle_tag_id == bt.id),
     )
     result = await session.execute(

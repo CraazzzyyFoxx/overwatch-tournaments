@@ -42,6 +42,10 @@ class RankCollectionConfig(BaseModel):
     batch_size: int = Field(default=50, ge=1, le=1000)
     rate_limit_per_minute: int = Field(default=30, ge=1, le=6000)
     scope: RankCollectionScope = "registrations_only"
+    # Under ``registrations_only``: besides the tags entered in a registration
+    # (main + smurfs), also collect up to this many of the registrant's *other*
+    # battle.net accounts. 0 = only the registered pool.
+    extra_accounts_per_registration: int = Field(default=0, ge=0, le=50)
     max_consecutive_failures: int = Field(default=5, ge=1, le=100)
     backoff_base_seconds: int = Field(default=60, ge=1, le=86_400)
 

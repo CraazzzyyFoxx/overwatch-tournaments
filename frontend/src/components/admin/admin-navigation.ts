@@ -1,4 +1,5 @@
 import {
+  Activity,
   Award,
   BarChart3,
   Building2,
@@ -123,6 +124,13 @@ export const adminNavigationGroups: AdminNavGroup[] = [
         href: "/admin/users",
         icon: UserCircle,
         description: "Resolve Discord, BattleTag, and Twitch identities.",
+        permissions: ["user.read"],
+      },
+      {
+        title: "Rank Collection",
+        href: "/admin/rank",
+        icon: Activity,
+        description: "OverFast rank collection status and manual re-fetch per player.",
         permissions: ["user.read"],
       },
       {

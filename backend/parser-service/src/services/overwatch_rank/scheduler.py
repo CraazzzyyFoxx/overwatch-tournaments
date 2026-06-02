@@ -62,7 +62,9 @@ async def run_collection_tick(
             if cfg.scope == "all":
                 seeded = await service.seed_states_for_all_battle_tags(session)
             else:
-                seeded = await service.seed_states_from_registrations(session)
+                seeded = await service.seed_states_from_registrations(
+                    session, extra_accounts=cfg.extra_accounts_per_registration
+                )
             due = await service.select_and_claim_due(
                 session,
                 limit=cfg.batch_size,
