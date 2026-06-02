@@ -5,7 +5,7 @@ import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import type { StatusMeta } from "@/types/balancer-admin.types";
 
 interface StatusBadgeProps {
-  status: string;
+  status?: string | null;
   meta?: StatusMeta | null;
   className?: string;
   compact?: boolean;
@@ -20,7 +20,7 @@ export function RegistrationStatusBadge({
   return (
     <StatusMetaBadge
       meta={meta}
-      fallbackValue={status}
+      fallbackValue={status ?? undefined}
       className={className}
       compact={compact}
     />

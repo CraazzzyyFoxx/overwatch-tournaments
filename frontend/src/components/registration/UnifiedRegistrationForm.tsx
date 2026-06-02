@@ -8,8 +8,8 @@ import { useTranslation } from "@/i18n/LanguageContext";
 import type {
   RegistrationForm,
   RoleInput,
-  AdditionalRole,
 } from "@/types/registration.types";
+import type { AdditionalRole } from "./types";
 import type { User } from "@/types/user.types";
 import type { AdminRegistration, BalancerRoleCode, BalancerRoleSubtype } from "@/types/balancer-admin.types";
 
@@ -579,14 +579,14 @@ export default function UnifiedRegistrationForm({
   const resolvedRegistrationStatusOptions = {
     system: registrationStatusOptions.system,
     custom: initialData?.status_meta?.kind === "custom" 
-      ? [{ value: initialData.status, name: initialData.status_meta.name }]
+      ? [{ value: initialData.status ?? "", name: initialData.status_meta.name }]
       : [],
   };
 
   const resolvedBalancerStatusOptions = {
     system: balancerStatusOptions.system,
     custom: initialData?.balancer_status_meta?.kind === "custom"
-      ? [{ value: initialData.balancer_status, name: initialData.balancer_status_meta.name }]
+      ? [{ value: initialData.balancer_status ?? "", name: initialData.balancer_status_meta.name }]
       : [],
   };
 
