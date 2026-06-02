@@ -9,6 +9,7 @@ from shared.balancer_registration_statuses import build_unknown_status_meta, get
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
+from shared.services.profile_visibility import resolve_profiles_open
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -75,6 +76,8 @@ def _form_to_read(
         auto_approve=form.auto_approve,
         opens_at=form.opens_at,
         closes_at=form.closes_at,
+        require_open_profile=form.require_open_profile,
+        open_profile_scope=form.open_profile_scope,
         built_in_fields=form.built_in_fields_json or {},
         custom_fields=form.custom_fields_json or [],
         subrole_catalog=subrole_catalog or {},
@@ -297,6 +300,20 @@ async def check_in_my_registration(
     if reg is None:
         raise HTTPException(status_code=404, detail="No registration found")
 
+    # "All profiles open" admission gate: block check-in only when the profile is
+    # confirmed closed. Unknown (not yet fetched) fails open to avoid blocking on
+    # OverFast lag/availability.
+    form = await reg_service.get_registration_form(session, tournament_id)
+    if form is not None and form.require_open_profile:
+        verdict = (
+            await resolve_profiles_open(session, [reg], scope=form.open_profile_scope)
+        ).get(reg.id)
+        if verdict is False:
+            raise HTTPException(
+                status_code=400,
+                detail="Your Overwatch profile is private. Make it public to check in.",
+            )
+
     checked_in = await reg_service.check_in_registration(
         session,
         reg,
@@ -342,12 +359,22 @@ async def list_registrations(
             workspace_id,
         )
 
+        # "All profiles open" admission flag — only computed when the tournament
+        # requires it (otherwise it never gates admission, so skip the query).
+        form = await reg_service.get_registration_form(session, tournament_id)
+        profiles_open_map: dict[int, bool | None] = (
+            await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
+            if form is not None and form.require_open_profile
+            else {}
+        )
+
         return [
             RegistrationListRead(
                 **_reg_to_read(r, status_meta_map=status_meta_map).model_dump(),
                 balancer_status=r.balancer_status,
                 balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
                 or build_unknown_status_meta("balancer", r.balancer_status),
+                profiles_open=profiles_open_map.get(r.id),
                 tournament_history=history_map.get(r.id, []),
             )
             for r in registrations

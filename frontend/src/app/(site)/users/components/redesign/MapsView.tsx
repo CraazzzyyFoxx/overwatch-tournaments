@@ -9,7 +9,7 @@ import Image from "next/image";
 import userService from "@/services/user.service";
 import { UserMapRead, UserMapsSummary } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
-import HeroImage from "@/app/(site)/users/components/redesign/HeroImage";
+import HeroImage, { HeroStrip } from "@/components/hero/HeroImage";
 import { getWinrateColor } from "@/utils/colors";
 
 interface Props {
@@ -239,15 +239,10 @@ const MapsView = ({ userId }: Props) => {
                 </div>
                 <span className={cn("aqt-num", wrCls)}>{wr.toFixed(0)}%</span>
               </div>
-              <span className="aqt-hero-strip">
-                {(row.hero_stats ?? row.heroes ?? []).slice(0, 4).map((h, idx) => (
-                  <HeroImage
-                    key={`${row.map.id}-${h.hero.id}-${idx}`}
-                    hero={h.hero}
-                    size="sm"
-                  />
-                ))}
-              </span>
+              <HeroStrip
+                heroes={(row.hero_stats ?? row.heroes ?? []).slice(0, 4).map((h) => h.hero)}
+                size="sm"
+              />
               <span className="aqt-mono text-right text-[12.5px] font-semibold text-[color:var(--aqt-fg-muted)]">
                 {row.win}-{row.loss}-{row.draw}
               </span>

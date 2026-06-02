@@ -9,16 +9,49 @@ type DivisionGridLike = Pick<DivisionGrid, "tiers"> | Pick<DivisionGridVersion, 
 const DEFAULT_DIVISION_ICON_BASE =
   "https://minio.craazzzyyfoxx.me/aqt/assets/divisions";
 
-const DEFAULT_DIVISION_GRID_TIERS: DivisionTier[] = Array.from({ length: 20 }, (_, index) => {
-  const number = index + 1;
-  return {
-    number,
-    name: `Division ${number}`,
-    rank_min: number === 1 ? 2000 : (20 - number) * 100,
-    rank_max: number === 1 ? null : (20 - number) * 100 + 99,
-    icon_url: `${DEFAULT_DIVISION_ICON_BASE}/default-${number}.png`,
+const DEFAULT_DIVISION_GRID_TIERS: DivisionTier[] = (() => {
+  const divisions = ["champion", "grandmaster", "master", "diamond", "platinum", "gold", "silver", "bronze"];
+  const bases: Record<string, number> = {
+    bronze: 1000,
+    silver: 1500,
+    gold: 2000,
+    platinum: 2500,
+    diamond: 3000,
+    master: 3500,
+    grandmaster: 4000,
+    champion: 4500,
   };
-}).sort((left, right) => right.rank_min - left.rank_min);
+  
+  const tiers: DivisionTier[] = [];
+  let sort_order = 0;
+  let number = 1;
+  
+  for (const div of divisions) {
+    const base = bases[div];
+    for (let tier_num = 1; tier_num <= 5; tier_num++) {
+      const slug = `${div}-${tier_num}`;
+      const name = `${div.charAt(0).toUpperCase() + div.slice(1)} ${tier_num}`;
+      const offset = (5 - tier_num) * 100;
+      const rank_min = base + offset;
+      const rank_max = (div === "champion" && tier_num === 1) ? null : rank_min + 99;
+      const icon_url = `${DEFAULT_DIVISION_ICON_BASE}/${slug}.png`;
+      
+      tiers.push({
+        slug,
+        number,
+        name,
+        sort_order,
+        rank_min,
+        rank_max,
+        icon_url,
+      });
+      sort_order++;
+      number++;
+    }
+  }
+  
+  return tiers.sort((left, right) => right.rank_min - left.rank_min);
+})();
 
 export const DEFAULT_DIVISION_GRID: DivisionGrid = {
   tiers: DEFAULT_DIVISION_GRID_TIERS,
@@ -142,8 +175,16 @@ export function getDivisionIconSrc(
     return null;
   }
 
-  return (
-    getTierByDivision(grid, division)?.icon_url ??
-    `${DEFAULT_DIVISION_ICON_BASE}/default-${division}.png`
-  );
+  const tier = getTierByDivision(grid, division);
+  if (tier) {
+    return tier.icon_url;
+  }
+
+  // Fallback to default grid lookup
+  const defaultTier = getTierByDivision(DEFAULT_DIVISION_GRID, division);
+  if (defaultTier) {
+    return defaultTier.icon_url;
+  }
+
+  return `${DEFAULT_DIVISION_ICON_BASE}/bronze-5.png`;
 }

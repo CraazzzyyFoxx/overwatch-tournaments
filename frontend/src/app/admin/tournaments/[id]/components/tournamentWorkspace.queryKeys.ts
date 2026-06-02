@@ -78,3 +78,44 @@ export function invalidateTournamentWorkspace(
 
   void Promise.all(invalidations);
 }
+
+/**
+ * Invalidate only the queries derived from match results (standings, encounters,
+ * hero playtime, stage-completion flags). Use for a `results_changed` realtime
+ * nudge: a score recalculation never alters team rosters, registrations, or the
+ * tournament list, so those are deliberately left untouched to avoid refetching
+ * data that did not change.
+ */
+export function invalidateTournamentResults(
+  queryClient: QueryClient,
+  tournamentId: number,
+  workspaceId?: number | null
+): void {
+  const keys = getTournamentWorkspaceQueryKeys(tournamentId);
+
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: keys.tournament }),
+    queryClient.invalidateQueries({ queryKey: keys.standings }),
+    queryClient.invalidateQueries({ queryKey: keys.encounters }),
+    queryClient.invalidateQueries({ queryKey: keys.stages }),
+    queryClient.invalidateQueries({ queryKey: keys.logHistory }),
+    queryClient.invalidateQueries({ queryKey: keys.standingsCollection }),
+    queryClient.invalidateQueries({ queryKey: keys.encountersCollection }),
+    queryClient.invalidateQueries({ queryKey: keys.publicTournament }),
+    queryClient.invalidateQueries({ queryKey: keys.publicStages }),
+    queryClient.invalidateQueries({ queryKey: keys.publicHeroPlaytime }),
+    queryClient.invalidateQueries({ queryKey: keys.publicStandings }),
+    queryClient.invalidateQueries({ queryKey: keys.publicEncounters })
+  ];
+
+  if (workspaceId != null) {
+    invalidations.push(
+      queryClient.invalidateQueries({ queryKey: ["standings", tournamentId, workspaceId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["encounters", "tournament", tournamentId, workspaceId]
+      })
+    );
+  }
+
+  void Promise.all(invalidations);
+}

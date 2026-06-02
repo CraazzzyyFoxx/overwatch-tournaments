@@ -39,6 +39,8 @@ export interface RegistrationForm {
   is_open: boolean;
   opens_at: string | null;
   closes_at: string | null;
+  require_open_profile?: boolean;
+  open_profile_scope?: "main" | "all";
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: CustomFieldDefinition[];
   subrole_catalog?: SubroleCatalog;
@@ -90,6 +92,7 @@ export interface Registration {
   balancer_status?: BalancerStatus;
   balancer_status_meta?: StatusMeta;
   checked_in?: boolean;
+  profiles_open?: boolean | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   tournament_history?: TournamentHistoryEntry[];

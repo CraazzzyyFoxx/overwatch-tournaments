@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState, createElement } from "react";
+import Image from "next/image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -29,9 +30,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { cn, hexToRgba } from "@/lib/utils";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import registrationService from "@/services/registration.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -41,6 +43,8 @@ import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
 import { useTranslation } from "@/i18n/LanguageContext";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import BattleTagRankHistory from "@/components/BattleTagRankHistory";
+import { getStatusIcon } from "@/lib/status-icons";
 import { formatSubroleSlug } from "@/lib/roles";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +66,8 @@ const ALIGN_CLASS: Record<"left" | "center", string> = {
 // ---------------------------------------------------------------------------
 // My registration status bar / card configs
 // ---------------------------------------------------------------------------
+
+
 
 const STATUS_BAR_CONFIG: Record<
   RegistrationStatus,
@@ -142,14 +148,7 @@ const STATUS_FILTER_ORDER: RegistrationStatus[] = [
   "withdrawn",
 ];
 
-const localeKeyMap: Record<RegistrationStatus, string> = {
-  pending: "pendingReview",
-  approved: "approved",
-  rejected: "rejected",
-  withdrawn: "withdrawn",
-  banned: "banned",
-  insufficient_data: "incomplete",
-};
+// localeKeyMap removed to support DB status names without hardcoded translation
 
 type StatusFilter = "all" | RegistrationStatus;
 
@@ -180,7 +179,39 @@ function MyRegistrationCard({
 
   const statusConfig =
     STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
-  const StatusIcon = statusConfig.icon;
+  
+  const statusMeta = registration.status_meta;
+  const statusName = statusMeta?.name ?? (
+    registration.status.charAt(0).toUpperCase() + registration.status.slice(1).replace(/_/g, " ")
+  );
+
+  let StatusIcon = Clock;
+  if (statusMeta?.icon_slug) {
+    try {
+      StatusIcon = getStatusIcon(statusMeta.icon_slug);
+    } catch {
+      StatusIcon = statusConfig.icon ?? Clock;
+    }
+  } else {
+    StatusIcon = statusConfig.icon ?? Clock;
+  }
+
+  // Color styles
+  let statusBadgeStyle: React.CSSProperties | undefined = undefined;
+  let statusBadgeClass = cn(
+    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+    statusConfig.color
+  );
+
+  if (statusMeta?.icon_color) {
+    const color = statusMeta.icon_color;
+    statusBadgeClass = "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium";
+    statusBadgeStyle = {
+      color: color,
+      borderColor: hexToRgba(color, 0.35) ?? color,
+      backgroundColor: hexToRgba(color, 0.12) ?? "transparent",
+    };
+  }
 
   const isCheckedIn = registration.checked_in === true;
 
@@ -218,13 +249,11 @@ function MyRegistrationCard({
               {t("registration.myCard.title")}
             </span>
             <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                statusConfig.color,
-              )}
+              className={statusBadgeClass}
+              style={statusBadgeStyle}
             >
-              <StatusIcon className="size-3" />
-              {t("common." + localeKeyMap[registration.status])}
+              {createElement(StatusIcon, { className: "size-3" })}
+              {statusName}
             </span>
           </div>
 
@@ -463,10 +492,28 @@ export default function TournamentParticipantsPage({
   const { t, locale } = useTranslation();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useLocalStorageState<string>(
+    `tournament-participants-${tournament.id}-search`,
+    "",
+  );
+  const [statusFilter, setStatusFilter] = useLocalStorageState<StatusFilter>(
+    `tournament-participants-${tournament.id}-status`,
+    "all",
+  );
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpanded = (registrationId: number) =>
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(registrationId)) {
+        next.delete(registrationId);
+      } else {
+        next.add(registrationId);
+      }
+      return next;
+    });
 
   const isAuthenticated = authStatus === "authenticated" && user !== null;
 
@@ -545,10 +592,47 @@ export default function TournamentParticipantsPage({
     return counts;
   }, [registrations]);
 
-  const presentStatuses = useMemo(
-    () => STATUS_FILTER_ORDER.filter((status) => (statusCounts[status] ?? 0) > 0),
-    [statusCounts],
-  );
+  const presentStatuses = useMemo(() => {
+    // Collect all unique statuses actually present in registrations
+    const uniqueStatuses = Array.from(new Set(registrations.map((r) => r.status)));
+    
+    // Sort them so that built-in ones in STATUS_FILTER_ORDER come first, and any others (custom) come after
+    return uniqueStatuses.sort((a, b) => {
+      const idxA = STATUS_FILTER_ORDER.indexOf(a);
+      const idxB = STATUS_FILTER_ORDER.indexOf(b);
+      
+      if (idxA !== -1 && idxB !== -1) {
+        return idxA - idxB;
+      }
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      
+      // Both are custom, sort alphabetically
+      return a.localeCompare(b);
+    });
+  }, [registrations]);
+
+  const statusMetaMap = useMemo(() => {
+    const map: Record<string, { name: string; dot: string }> = {};
+    for (const reg of registrations) {
+      if (!map[reg.status]) {
+        // Resolve name: prefer status_meta.name, fallback to humanized value
+        let name = reg.status_meta?.name ?? reg.status;
+        if (name === reg.status) {
+          name = name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, " ");
+        }
+
+        // Resolve dot color: prefer status_meta.icon_color, fallback to STATUS_FILTER_META, fallback to gray
+        let dot = reg.status_meta?.icon_color ?? "";
+        if (!dot) {
+          dot = STATUS_FILTER_META[reg.status as RegistrationStatus]?.dot ?? "var(--aqt-fg-dim)";
+        }
+
+        map[reg.status] = { name, dot };
+      }
+    }
+    return map;
+  }, [registrations]);
 
   // Status filter + dynamic search across all searchable columns.
   const filtered = useMemo(() => {
@@ -659,18 +743,21 @@ export default function TournamentParticipantsPage({
           >
             {t("common.all")} <span className="count">{registrations.length}</span>
           </button>
-          {presentStatuses.map((status) => (
-            <button
-              key={status}
-              type="button"
-              className={cn("filter-chip", statusFilter === status && "active")}
-              onClick={() => setStatusFilter(status)}
-            >
-              <span className="dot" style={{ background: STATUS_FILTER_META[status].dot }} />
-              {t("common." + localeKeyMap[status])}{" "}
-              <span className="count">{statusCounts[status] ?? 0}</span>
-            </button>
-          ))}
+          {presentStatuses.map((status) => {
+            const meta = statusMetaMap[status];
+            return (
+              <button
+                key={status}
+                type="button"
+                className={cn("filter-chip", statusFilter === status && "active")}
+                onClick={() => setStatusFilter(statusFilter === status ? "all" : status)}
+              >
+                <span className="dot" style={{ background: meta?.dot ?? "var(--aqt-fg-dim)" }} />
+                {meta?.name ?? status}{" "}
+                <span className="count">{statusCounts[status] ?? 0}</span>
+              </button>
+            );
+          })}
           <div className="filter-search">
             <Search size={13} />
             <input
@@ -699,6 +786,7 @@ export default function TournamentParticipantsPage({
             <table className="data-table">
               <thead>
                 <tr>
+                  <th className="w-10" aria-hidden />
                   {visibleColumns.map((col) => (
                     <th
                       key={col.id}
@@ -714,22 +802,88 @@ export default function TournamentParticipantsPage({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((reg, idx) => (
-                  <tr key={reg.id}>
-                    {visibleColumns.map((col) => (
-                      <td
-                        key={col.id}
-                        className={cn(
-                          RESPONSIVE_CLASS[col.responsive ?? "always"],
-                          ALIGN_CLASS[col.align ?? "left"],
-                          col.widthClass,
-                        )}
-                      >
-                        {col.render(reg, idx)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {filtered.map((reg, idx) => {
+                  const isExpanded = expandedIds.has(reg.id);
+                  const hiddenColumns = allColumns.filter(
+                    (col) => col.id !== "_index" && !visibleColumns.some((vc) => vc.id === col.id)
+                  );
+                  return (
+                    <Fragment key={reg.id}>
+                      <tr>
+                        <td className="align-middle">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(reg.id)}
+                            className="inline-flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+                            aria-label={isExpanded ? "Collapse" : "Expand"}
+                            aria-expanded={isExpanded}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="size-4" />
+                            ) : (
+                              <ChevronDown className="size-4" />
+                            )}
+                          </button>
+                        </td>
+                        {visibleColumns.map((col) => (
+                          <td
+                            key={col.id}
+                            className={cn(
+                              RESPONSIVE_CLASS[col.responsive ?? "always"],
+                              ALIGN_CLASS[col.align ?? "left"],
+                              col.widthClass,
+                            )}
+                          >
+                            {col.render(reg, idx)}
+                          </td>
+                        ))}
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td
+                            colSpan={visibleColumns.length + 1}
+                            className="border-t border-white/[0.06] bg-white/[0.015] p-4"
+                          >
+                            <div className="grid gap-4 lg:grid-cols-4">
+                              <div className="space-y-2 lg:col-span-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                  Rank history
+                                </div>
+                                <BattleTagRankHistory
+                                  userId={reg.user_id}
+                                  battleTag={reg.battle_tag}
+                                />
+                              </div>
+                              <div className="rounded-xl border border-white/[0.05] bg-black/10 p-4 space-y-3.5 text-xs lg:col-span-1">
+                                <div className="text-[11px] font-bold uppercase tracking-widest text-white/80 border-b border-white/[0.06] pb-1.5 mb-2">
+                                  {t("registration.myCard.details")}
+                                </div>
+                                {hiddenColumns.length === 0 ? (
+                                  <div className="text-white/30 italic py-1 text-center">
+                                    {locale.startsWith("ru") ? "Все поля видны в таблице" : "All fields visible in table"}
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">
+                                    {hiddenColumns.map((col) => (
+                                      <div key={col.id} className="space-y-1">
+                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                                          {col.label}
+                                        </div>
+                                        <div className="text-white/80">
+                                          {col.render(reg, idx)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

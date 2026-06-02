@@ -11,6 +11,7 @@ from shared.balancer_registration_statuses import (
     get_status_metas_map,
 )
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
+from shared.services.profile_visibility import resolve_profiles_open
 from src import models
 from src.composition import build_admin_registration_use_cases
 from src.core import auth, db
@@ -95,8 +96,20 @@ async def list_registrations(
         session,
         workspace_id=registrations[0].workspace_id,
     ) if registrations else None
+    form = await use_cases.get_registration_form.execute(
+        session=session, tournament_id=tournament_id
+    )
+    profiles_open_map: dict[int, bool | None] = (
+        await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
+        if form is not None and form.require_open_profile
+        else {}
+    )
     return [
-        _serialize_registration(registration, status_meta_map=status_meta_map)
+        _serialize_registration(
+            registration,
+            status_meta_map=status_meta_map,
+            profiles_open=profiles_open_map.get(registration.id),
+        )
         for registration in registrations
     ]
 

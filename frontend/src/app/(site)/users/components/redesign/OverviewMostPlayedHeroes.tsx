@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
-import HeroImage from "@/app/(site)/users/components/redesign/HeroImage";
+import HeroImage from "@/components/hero/HeroImage";
 
 interface Props {
   heroes: HeroPlaytime[];

@@ -55,7 +55,7 @@ export default function TournamentClientLayout({
   const stages = stagesQuery.data ?? [];
 
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.teams(tournamentId),
+    queryKey: tournamentQueryKeys.teamsCount(tournamentId),
     queryFn: () => teamService.getCount(tournamentId),
     enabled: Boolean(tournamentId)
   });

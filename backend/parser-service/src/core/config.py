@@ -12,6 +12,15 @@ class AppConfig(BaseServiceSettings):
 
     redis_url: RedisDsn
 
+    # OverFast API (self-hosted instance) — base URL for Overwatch stats/metadata.
+    # Operational rank-collection params (interval, scope, rate limit, mapping)
+    # live in the `Settings` table, not here.
+    overfast_base_url: str = "https://overfast.craazzzyyfoxx.me"
+    overfast_timeout: float = 15.0
+    overfast_max_retries: int = 3
+    # FastStream prefetch for the rank-fetch worker (keep low to protect OverFast).
+    rank_fetch_worker_prefetch: int = 3
+
     # Challonge
     challonge_username: str
     challonge_api_key: str

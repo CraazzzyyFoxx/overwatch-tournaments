@@ -7,8 +7,11 @@ from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
     PROCESS_MATCH_LOG_QUEUE,
     PROCESS_TOURNAMENT_LOGS_QUEUE,
+    RANK_FETCH_PRIORITY_QUEUE,
+    RANK_FETCH_QUEUE,
     TOURNAMENT_ENCOUNTER_COMPLETED_QUEUE,
     TOURNAMENT_EVENTS_EXCHANGE,
+    TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
 )
 from shared.observability import (
     observe_message_processing,
@@ -28,6 +31,7 @@ from src import models
 from src.core import config, db
 from src.services.achievement.engine.consumer import handle_achievement_evaluate
 from src.services.match_logs import flows as logs_flows
+from src.services.overwatch_rank import tasks as rank_tasks
 from src.services.s3 import service as s3_service
 
 logger = setup_logging(
@@ -60,12 +64,15 @@ async def start_worker() -> None:
     )
     start_worker_metrics_server(config.settings.worker_metrics_port)
     await s3_client.start()
+    await rank_tasks.rank_client.start()
     logger.info("Parser worker started")
 
 
 @app.on_shutdown
 async def stop_worker() -> None:
     await s3_client.close()
+    await rank_tasks.rank_client.close()
+    await rank_tasks.close_redis()
 
 
 @broker.subscriber(PROCESS_MATCH_LOG_QUEUE)
@@ -176,3 +183,36 @@ async def process_tournament_encounter_completed(data: dict, msg: RabbitMessage)
                 encounter_id=event.encounter_id,
             ),
         )
+
+
+@broker.subscriber(RANK_FETCH_QUEUE)
+async def process_rank_fetch(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=RANK_FETCH_QUEUE,
+        handler="process_rank_fetch",
+        message=msg,
+        logger=logger,
+    ):
+        await rank_tasks.process_fetch_rank(data)
+
+
+@broker.subscriber(RANK_FETCH_PRIORITY_QUEUE)
+async def process_rank_fetch_priority(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=RANK_FETCH_PRIORITY_QUEUE,
+        handler="process_rank_fetch_priority",
+        message=msg,
+        logger=logger,
+    ):
+        await rank_tasks.process_fetch_rank(data)
+
+
+@broker.subscriber(TOURNAMENT_REGISTRATION_APPROVED_QUEUE, exchange=TOURNAMENT_EVENTS_EXCHANGE)
+async def process_registration_approved_rank_check(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
+        handler="process_registration_approved_rank_check",
+        message=msg,
+        logger=logger,
+    ):
+        await rank_tasks.handle_registration_approved(data, broker=broker)

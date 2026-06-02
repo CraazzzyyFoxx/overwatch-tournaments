@@ -299,6 +299,14 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     custom_fields_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, server_default="[]", default=list
     )
+    # Admission requirement: registrant's Overwatch profile(s) must be public.
+    # ``open_profile_scope`` = "main" (registered tag only) or "all" (incl. smurfs).
+    require_open_profile: Mapped[bool] = mapped_column(
+        Boolean(), nullable=False, server_default="false", default=False
+    )
+    open_profile_scope: Mapped[str] = mapped_column(
+        String(8), nullable=False, server_default="main", default="main"
+    )
 
     tournament: Mapped["Tournament"] = relationship()
     workspace: Mapped["Workspace"] = relationship()

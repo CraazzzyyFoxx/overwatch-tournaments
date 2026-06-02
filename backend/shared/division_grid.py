@@ -84,29 +84,52 @@ class DivisionGrid:
 
 
 def _build_default_grid() -> DivisionGrid:
+    divisions = ["champion", "grandmaster", "master", "diamond", "platinum", "gold", "silver", "bronze"]
+    bases = {
+        "bronze": 1000,
+        "silver": 1500,
+        "gold": 2000,
+        "platinum": 2500,
+        "diamond": 3000,
+        "master": 3500,
+        "grandmaster": 4000,
+        "champion": 4500,
+    }
+    
     tiers = []
-    for div_num in range(20, 0, -1):
-        if div_num == 1:
-            rank_min = 2000
-            rank_max = None
-        else:
-            rank_min = (20 - div_num) * 100
-            rank_max = rank_min + 99
-
-        tiers.append(
-            DivisionTier(
-                id=None,
-                slug=f"division-{div_num}",
-                number=div_num,
-                name=f"Division {div_num}",
-                rank_min=rank_min,
-                rank_max=rank_max,
-                icon_url=f"https://minio.craazzzyyfoxx.me/aqt/assets/divisions/default-{div_num}.png",
+    number = 1
+    
+    for div in divisions:
+        base = bases[div]
+        for tier_num in range(1, 6):
+            slug = f"{div}-{tier_num}"
+            name = f"{div.capitalize()} {tier_num}"
+            offset = (5 - tier_num) * 100
+            rank_min = base + offset
+            
+            if div == "champion" and tier_num == 1:
+                rank_max = None
+            else:
+                rank_max = rank_min + 99
+                
+            icon_url = f"https://minio.craazzzyyfoxx.me/aqt/assets/divisions/{slug}.png"
+            
+            tiers.append(
+                DivisionTier(
+                    id=None,
+                    slug=slug,
+                    number=number,
+                    name=name,
+                    rank_min=rank_min,
+                    rank_max=rank_max,
+                    icon_url=icon_url,
+                )
             )
-        )
+            number += 1
 
     tiers.sort(key=lambda t: t.rank_min, reverse=True)
     return DivisionGrid(version_id=None, tiers=tuple(tiers))
+
 
 
 DEFAULT_GRID: DivisionGrid = _build_default_grid()

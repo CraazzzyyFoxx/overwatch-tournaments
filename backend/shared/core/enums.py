@@ -10,6 +10,59 @@ class HeroClass(StrEnum):
     support = "Support"
 
 
+class RankPlatform(StrEnum):
+    """Overwatch competitive platform as exposed by OverFast."""
+
+    pc = "pc"
+    console = "console"
+
+
+class RankRole(StrEnum):
+    """Competitive role keys as returned by OverFast (lowercase)."""
+
+    tank = "tank"
+    damage = "damage"
+    support = "support"
+
+
+class RankDivision(StrEnum):
+    """Native Overwatch 2 competitive divisions (OverFast values).
+
+    Stored as a plain string in the DB so future Blizzard additions don't
+    require a migration; this enum documents the known values and powers the
+    default rank mapping.
+    """
+
+    bronze = "bronze"
+    silver = "silver"
+    gold = "gold"
+    platinum = "platinum"
+    diamond = "diamond"
+    master = "master"
+    grandmaster = "grandmaster"
+    # OverFast labels the top division "ultimate" (in-game "Champion").
+    ultimate = "ultimate"
+
+
+class RankCollectionStatus(StrEnum):
+    """Per-battle-tag collection state for the OverFast rank poller."""
+
+    pending = "pending"
+    ok = "ok"
+    private = "private"
+    not_found = "not_found"
+    error = "error"
+    rate_limited = "rate_limited"
+    disabled = "disabled"
+
+
+class RankCollectionSource(StrEnum):
+    """What triggered a rank snapshot."""
+
+    scheduled = "scheduled"
+    registration = "registration"
+
+
 class LogEventType(StrEnum):
     MatchStart = "match_start"
     MatchEnd = "match_end"

@@ -8,7 +8,13 @@ import {
 } from "lucide-react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import StatusMetaBadge from "@/components/status/StatusMetaBadge";
+import {
+  AdmissionStatusBadge,
+  BalancerStatusBadge,
+  CheckInStatusBadge,
+  ProfileStatusBadge,
+  RegistrationStatusBadge,
+} from "@/components/status/RegistrationBadges";
 import { cn } from "@/lib/utils";
 import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
 import type {
@@ -210,49 +216,7 @@ function TextBlockCell({ value }: { value: string | null | undefined }) {
   );
 }
 
-function StatusBadge({ registration }: { registration: AdminRegistration }) {
-  return <StatusMetaBadge meta={registration.status_meta} fallbackValue={registration.status} />;
-}
 
-function BalancerBadge({ registration }: { registration: AdminRegistration }) {
-  return <StatusMetaBadge meta={registration.balancer_status_meta} fallbackValue={registration.balancer_status} />;
-}
-
-function CheckInBadge({ checkedIn }: { checkedIn: boolean }) {
-  const label = checkedIn ? "Checked In" : "Not Checked In";
-  return (
-    <span
-      title={label}
-      aria-label={label}
-      className={cn(
-        "inline-flex size-5 items-center justify-center",
-        checkedIn ? "text-emerald-400" : "text-white/35",
-      )}
-    >
-      {checkedIn ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
-    </span>
-  );
-}
-
-function AdmissionBadge({ registration }: { registration: AdminRegistration }) {
-  const admitted =
-    registration.status === "approved" &&
-    registration.balancer_status === "ready" &&
-    registration.checked_in === true;
-
-  return (
-    <span
-      title={admitted ? "Admitted" : "Not Admitted"}
-      aria-label={admitted ? "Admitted" : "Not Admitted"}
-      className={cn(
-        "inline-flex size-5 items-center justify-center",
-        admitted ? "text-emerald-400" : "text-red-400",
-      )}
-    >
-      {admitted ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
-    </span>
-  );
-}
 
 function SubmittedCell({ submittedAt }: { submittedAt: string | null }) {
   const shortValue = formatTimestamp(submittedAt);
@@ -297,6 +261,7 @@ function ExclusionCell({ registration }: { registration: AdminRegistration }) {
 
 export function buildBalancerRegistrationColumns(
   subroleCatalog?: SubroleCatalog,
+  requireOpenProfile = false,
 ): BalancerRegistrationColumnDefinition[] {
   return [
     {
@@ -348,7 +313,7 @@ export function buildBalancerRegistrationColumns(
       defaultVisible: true,
       responsive: "always",
       align: "center",
-      render: (registration) => <StatusBadge registration={registration} />,
+      render: (registration) => <RegistrationStatusBadge status={registration.status} meta={registration.status_meta} />,
       searchValue: (registration) => registration.status,
     },
     {
@@ -358,7 +323,7 @@ export function buildBalancerRegistrationColumns(
       defaultVisible: true,
       responsive: "always",
       align: "center",
-      render: (registration) => <BalancerBadge registration={registration} />,
+      render: (registration) => <BalancerStatusBadge status={registration.balancer_status} meta={registration.balancer_status_meta} />,
       searchValue: (registration) => registration.balancer_status,
     },
     {
@@ -368,7 +333,7 @@ export function buildBalancerRegistrationColumns(
       defaultVisible: true,
       responsive: "always",
       align: "center",
-      render: (registration) => <CheckInBadge checkedIn={registration.checked_in} />,
+      render: (registration) => <CheckInStatusBadge checkedIn={registration.checked_in} />,
       searchValue: (registration) => (registration.checked_in ? "checked in" : "not checked in"),
     },
     {
@@ -378,13 +343,42 @@ export function buildBalancerRegistrationColumns(
       defaultVisible: true,
       responsive: "md",
       align: "center",
-      render: (registration) => <AdmissionBadge registration={registration} />,
+      render: (registration) => (
+        <AdmissionStatusBadge
+          registrationStatus={registration.status}
+          balancerStatus={registration.balancer_status}
+          checkedIn={registration.checked_in}
+          requireOpenProfile={requireOpenProfile}
+          profilesOpen={registration.profiles_open}
+        />
+      ),
       searchValue: (registration) =>
         registration.status === "approved" &&
         registration.balancer_status === "ready" &&
-        registration.checked_in
+        registration.checked_in &&
+        (!requireOpenProfile || registration.profiles_open !== false)
           ? "admitted"
           : "not admitted",
+    },
+    {
+      id: "profile",
+      label: "Profile",
+      category: "meta",
+      defaultVisible: false,
+      responsive: "lg",
+      align: "center",
+      render: (registration) =>
+        registration.profiles_open != null ? (
+          <ProfileStatusBadge profilesOpen={registration.profiles_open} />
+        ) : (
+          <span className="text-white/25">—</span>
+        ),
+      searchValue: (registration) =>
+        registration.profiles_open === false
+          ? "profile closed"
+          : registration.profiles_open === true
+            ? "profile open"
+            : "",
     },
     {
       id: "submitted",

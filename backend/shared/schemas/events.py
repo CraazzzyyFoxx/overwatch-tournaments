@@ -222,6 +222,24 @@ class AnalyticsInferRequest(BaseEvent):
     )
 
 
+class FetchRankEvent(BaseEvent):
+    """Event to fetch one battle tag's competitive rank from OverFast.
+
+    Published by: parser-service scheduler (``source="scheduled"``) and the
+    registration hook (``source="registration"``, via the priority queue).
+    Consumed by: parser-service worker.
+    """
+
+    event_type: str = Field(default="fetch_rank", frozen=True)
+    battle_tag_id: int = Field(..., description="players.battle_tag.id to fetch")
+    battle_tag: str = Field(..., description="Full battle tag 'Name#1234'")
+    source: Literal["scheduled", "registration"] = Field(
+        default="scheduled", description="What triggered this fetch"
+    )
+    registration_id: int | None = Field(default=None, description="Registration that triggered it")
+    tournament_id: int | None = Field(default=None, description="Tournament context, when applicable")
+
+
 class AchievementEvaluateEvent(BaseEvent):
     """Event for triggering achievement evaluation after parsing.
 

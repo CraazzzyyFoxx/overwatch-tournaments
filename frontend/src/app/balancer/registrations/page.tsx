@@ -18,6 +18,8 @@ import {
   BadgeInfo,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   ExternalLink,
   Globe,
@@ -38,14 +40,11 @@ import {
   XCircle
 } from "lucide-react";
 
-import FieldLabel from "@/app/(site)/tournaments/[id]/_components/registration/FieldLabel";
-import PublicRoleStep from "@/app/(site)/tournaments/[id]/_components/registration/RoleStep";
-import SmurfTagsInput from "@/app/(site)/tournaments/[id]/_components/registration/SmurfTagsInput";
-import StepIndicator from "@/app/(site)/tournaments/[id]/_components/registration/StepIndicator";
-import type { AdditionalRole } from "@/app/(site)/tournaments/[id]/_components/registration/types";
+import UnifiedRegistrationForm from "@/components/registration/UnifiedRegistrationForm";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import BalancerRegistrationsColumnPicker from "@/app/balancer/registrations/_components/BalancerRegistrationsColumnPicker";
 import RegistrationRowActions from "@/app/balancer/registrations/_components/RegistrationRowActions";
+import BattleTagRankHistory from "@/components/BattleTagRankHistory";
 import {
   type BalancerRegistrationColumnDefinition,
   buildBalancerRegistrationColumns
@@ -92,6 +91,7 @@ import { useToast } from "@/hooks/use-toast";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
 import { ROLE_LABELS, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
+import registrationService from "@/services/registration.service";
 import type {
   AdminGoogleSheetFeed,
   AdminRegistration,
@@ -293,119 +293,7 @@ function CheckInBadge({ registration }: { registration: AdminRegistration }) {
   );
 }
 
-type ManualDraft = {
-  display_name: string;
-  battle_tag: string;
-  smurf_tags: string;
-  discord_nick: string;
-  twitch_nick: string;
-  notes: string;
-  admin_notes: string;
-  is_flex: boolean;
-  stream_pov: boolean;
-  status: string;
-  balancer_status: string;
-  roles: Record<BalancerRoleCode, RoleDraft>;
-};
 
-type RoleDraft = {
-  enabled: boolean;
-  rank_value: string;
-  subrole: BalancerRoleSubtype | "";
-  is_primary: boolean;
-  priority: string;
-};
-
-function createRoleDraft(role: BalancerRoleCode): RoleDraft {
-  return {
-    enabled: false,
-    rank_value: "",
-    subrole: "",
-    is_primary: role === "tank",
-    priority: String(ROLE_OPTIONS.indexOf(role) + 1)
-  };
-}
-
-function createEmptyManualDraft(): ManualDraft {
-  return {
-    display_name: "",
-    battle_tag: "",
-    smurf_tags: "",
-    discord_nick: "",
-    twitch_nick: "",
-    notes: "",
-    admin_notes: "",
-    is_flex: false,
-    stream_pov: false,
-    status: "approved",
-    balancer_status: "not_in_balancer",
-    roles: {
-      tank: createRoleDraft("tank"),
-      dps: createRoleDraft("dps"),
-      support: createRoleDraft("support")
-    }
-  };
-}
-
-function buildManualDraftFromRegistration(registration: AdminRegistration): ManualDraft {
-  const draft = createEmptyManualDraft();
-  draft.display_name = registration.display_name ?? "";
-  draft.battle_tag = registration.battle_tag ?? "";
-  draft.smurf_tags = registration.smurf_tags_json.join(", ");
-  draft.discord_nick = registration.discord_nick ?? "";
-  draft.twitch_nick = registration.twitch_nick ?? "";
-  draft.notes = registration.notes ?? "";
-  draft.admin_notes = registration.admin_notes ?? "";
-  draft.is_flex = registration.is_flex;
-  draft.stream_pov = registration.stream_pov;
-  draft.status = registration.status;
-  draft.balancer_status = registration.balancer_status;
-
-  for (const role of registration.roles) {
-    draft.roles[role.role] = {
-      enabled: role.is_active || role.rank_value !== null,
-      rank_value: role.rank_value != null ? String(role.rank_value) : "",
-      subrole: role.subrole ?? "",
-      is_primary: role.is_primary,
-      priority: String(role.priority + 1)
-    };
-  }
-
-  return draft;
-}
-
-function normalizeSmurfTags(value: string): string[] {
-  return value
-    .split(/[\n,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function buildRolePayload(roles: ManualDraft["roles"], isFlex: boolean): AdminRegistrationRole[] {
-  const enabledRoles = ROLE_OPTIONS.filter((role) => roles[role].enabled).sort((left, right) => {
-    const leftPriority = Number(roles[left].priority) || ROLE_OPTIONS.indexOf(left) + 1;
-    const rightPriority = Number(roles[right].priority) || ROLE_OPTIONS.indexOf(right) + 1;
-    return leftPriority - rightPriority;
-  });
-
-  const explicitPrimary =
-    enabledRoles.find((role) => roles[role].is_primary) ?? enabledRoles[0] ?? null;
-
-  return enabledRoles.map((role, index) => {
-    const draft = roles[role];
-    const parsedRankValue = draft.rank_value.trim() ? Number(draft.rank_value) : null;
-    return {
-      role,
-      subrole: draft.subrole || null,
-      is_primary: isFlex || explicitPrimary === role,
-      priority: Number(draft.priority) || index + 1,
-      rank_value: Number.isFinite(parsedRankValue) ? parsedRankValue : null,
-      is_active: true
-    };
-  });
-}
-
-const EMPTY_MANUAL_DRAFT: ManualDraft = createEmptyManualDraft();
 
 function FeedStatus({ feed }: { feed: AdminGoogleSheetFeed | null | undefined }) {
   if (!feed) {
@@ -467,424 +355,6 @@ function FeedSummaryCard({
   );
 }
 
-function RegistrationProfileForm({
-  draft,
-  setDraft,
-  step,
-  form,
-  registrationStatusOptions,
-  balancerStatusOptions,
-  onStepChange,
-  onCancel,
-  onSubmit,
-  submitPending,
-  submitLabel,
-  submitIcon
-}: {
-  draft: ManualDraft;
-  setDraft: Dispatch<SetStateAction<ManualDraft>>;
-  step: number;
-  form: RegistrationForm;
-  registrationStatusOptions: {
-    system: Array<{ value: string; name: string }>;
-    custom: Array<{ value: string; name: string }>;
-  };
-  balancerStatusOptions: {
-    system: Array<{ value: string; name: string }>;
-    custom: Array<{ value: string; name: string }>;
-  };
-  onStepChange: (step: number) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-  submitPending: boolean;
-  submitLabel: string;
-  submitIcon: ReactNode;
-}) {
-  const updateRoleDraft = (role: BalancerRoleCode, updater: (current: RoleDraft) => RoleDraft) => {
-    setDraft((current) => ({
-      ...current,
-      roles: {
-        ...current.roles,
-        [role]: updater(current.roles[role])
-      }
-    }));
-  };
-
-  const primaryRoleCode: BalancerRoleCode | "" = draft.is_flex
-    ? ""
-    : (ROLE_OPTIONS.find((role) => draft.roles[role].enabled && draft.roles[role].is_primary) ??
-      "");
-  const primarySubrole = primaryRoleCode ? draft.roles[primaryRoleCode].subrole : "";
-  const additionalRoles: AdditionalRole[] = !draft.is_flex
-    ? ROLE_OPTIONS.filter((role) => draft.roles[role].enabled && !draft.roles[role].is_primary).map(
-        (role) => ({
-          code: role,
-          subrole: draft.roles[role].subrole,
-          topHeroes: []
-        })
-      )
-    : [];
-  const isLastStep = step === ADMIN_FORM_STEPS.length - 1;
-  const canAdvance =
-    step === 0
-      ? draft.battle_tag.trim().length > 0
-      : step === 1
-        ? draft.is_flex || primaryRoleCode !== ""
-        : true;
-
-  const selectFlexProfile = () => {
-    setDraft((current) => ({
-      ...current,
-      is_flex: true,
-      roles: Object.fromEntries(
-        ROLE_OPTIONS.map((role) => [
-          role,
-          {
-            ...current.roles[role],
-            enabled: true,
-            is_primary: true
-          }
-        ])
-      ) as ManualDraft["roles"]
-    }));
-  };
-
-  const selectPrimaryRole = (role: BalancerRoleCode) => {
-    setDraft((current) => ({
-      ...current,
-      is_flex: false,
-      roles: Object.fromEntries(
-        ROLE_OPTIONS.map((candidateRole) => [
-          candidateRole,
-          {
-            ...current.roles[candidateRole],
-            enabled: candidateRole === role ? true : current.roles[candidateRole].enabled,
-            is_primary: candidateRole === role
-          }
-        ])
-      ) as ManualDraft["roles"]
-    }));
-  };
-
-  const setAdditionalRolesList = (roles: AdditionalRole[]) => {
-    setDraft((current) => {
-      const currentPrimaryRoleCode = current.is_flex
-        ? ""
-        : (ROLE_OPTIONS.find(
-            (candidateRole) =>
-              current.roles[candidateRole].enabled && current.roles[candidateRole].is_primary
-          ) ?? "");
-
-      return {
-        ...current,
-        roles: Object.fromEntries(
-          ROLE_OPTIONS.map((role) => {
-            const entry = roles.find((candidate) => candidate.code === role);
-            const isPrimary = currentPrimaryRoleCode === role;
-            return [
-              role,
-              {
-                ...current.roles[role],
-                enabled: isPrimary || Boolean(entry),
-                is_primary: isPrimary,
-                subrole: entry?.subrole ?? (isPrimary ? current.roles[role].subrole : "")
-              }
-            ];
-          })
-        ) as ManualDraft["roles"]
-      };
-    });
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-5 border-b border-white/10 pb-5">
-        <StepIndicator steps={ADMIN_FORM_STEPS} current={step} />
-      </div>
-
-      <div className="grid gap-6">
-        {step === 0 ? (
-          <section className="space-y-4">
-            <div className="space-y-2">
-              <FieldLabel label="Accounts" icon={<UserRound className="size-3.5" />} />
-              <div>
-                <h4 className="text-base font-semibold text-white">Identity and contact handles</h4>
-                <p className="text-sm leading-5 text-white/45">
-                  Only the registration identity fields that matter in admin editing.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="space-y-2">
-                <FieldLabel label="Display Name" icon={<UserRound className="size-3.5" />} />
-                <Input
-                  className={ADMIN_INPUT_CLASS}
-                  value={draft.display_name}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, display_name: event.target.value }))
-                  }
-                  placeholder="Display name"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="BattleTag" required icon={<BadgeInfo className="size-3.5" />} />
-                <Input
-                  className={ADMIN_INPUT_CLASS}
-                  value={draft.battle_tag}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, battle_tag: event.target.value }))
-                  }
-                  placeholder="ZOZO#21416"
-                />
-              </div>
-              <div className="space-y-2 lg:col-span-2">
-                <SmurfTagsInput
-                  tags={normalizeSmurfTags(draft.smurf_tags)}
-                  onChange={(tags) =>
-                    setDraft((current) => ({ ...current, smurf_tags: tags.join(", ") }))
-                  }
-                  suggestions={[]}
-                  icon="/battlenet.svg"
-                  label="Smurf BattleTags"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Discord" icon={<MessageSquareText className="size-3.5" />} />
-                <Input
-                  className={ADMIN_INPUT_CLASS}
-                  value={draft.discord_nick}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, discord_nick: event.target.value }))
-                  }
-                  placeholder="Discord nickname"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Twitch" icon={<RadioTower className="size-3.5" />} />
-                <Input
-                  className={ADMIN_INPUT_CLASS}
-                  value={draft.twitch_nick}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, twitch_nick: event.target.value }))
-                  }
-                  placeholder="Twitch channel"
-                />
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {step === 1 ? (
-          <section className="space-y-4">
-            <div className="space-y-2">
-              <FieldLabel label="Roles" icon={<RadioTower className="size-3.5" />} />
-              <div>
-                <h4 className="text-base font-semibold text-white">Role profile</h4>
-                <p className="text-sm leading-5 text-white/45">
-                  This step uses the same role selector as the public registration form.
-                </p>
-              </div>
-            </div>
-
-            <PublicRoleStep
-              isFlex={draft.is_flex}
-              primaryRole={primaryRoleCode}
-              subrole={primarySubrole}
-              additionalRoles={additionalRoles}
-              onSetFlex={(isFlex) => {
-                if (isFlex) {
-                  selectFlexProfile();
-                } else {
-                  setDraft((current) => ({ ...current, is_flex: false }));
-                }
-              }}
-              onSetPrimaryRole={(role) => selectPrimaryRole(role as BalancerRoleCode)}
-              onSetSubrole={(subrole) => {
-                if (!primaryRoleCode) {
-                  return;
-                }
-                updateRoleDraft(primaryRoleCode as BalancerRoleCode, (current) => ({
-                  ...current,
-                  subrole: subrole as BalancerRoleSubtype | ""
-                }));
-              }}
-              onSetAdditionalRoles={setAdditionalRolesList}
-              primaryRoleError={null}
-              secondaryRolesError={null}
-              form={form}
-              hideHelperText
-              allHeroes={[]}
-              topHeroesEnabled={false}
-              maxHeroes={5}
-              flexEnabled={form.built_in_fields?.flex_role?.enabled !== false}
-              primaryRoleHeroes={[]}
-              onSetPrimaryRoleHeroes={() => {}}
-              flexHeroes={[]}
-              onSetFlexHeroes={() => {}}
-            />
-          </section>
-        ) : null}
-
-        {step === 2 ? (
-          <section className="space-y-4">
-            <div className="space-y-2">
-              <FieldLabel label="Details" icon={<MessageSquareText className="size-3.5" />} />
-              <div>
-                <h4 className="text-base font-semibold text-white">Details and notes</h4>
-                <p className="text-sm leading-5 text-white/45">
-                  Final step for notes and stream availability.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="space-y-2">
-                <FieldLabel
-                  label="Public Notes"
-                  icon={<MessageSquareText className="size-3.5" />}
-                />
-                <Textarea
-                  className={ADMIN_TEXTAREA_CLASS}
-                  value={draft.notes}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, notes: event.target.value }))
-                  }
-                  placeholder="Visible notes for balancer-facing context"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Admin Notes" icon={<BadgeInfo className="size-3.5" />} />
-                <Textarea
-                  className={ADMIN_TEXTAREA_CLASS}
-                  value={draft.admin_notes}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, admin_notes: event.target.value }))
-                  }
-                  placeholder="Internal notes for admins only"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Registration Status" icon={<BadgeInfo className="size-3.5" />} />
-                <Select
-                  value={draft.status}
-                  onValueChange={(value) => setDraft((current) => ({ ...current, status: value }))}
-                >
-                  <SelectTrigger className={ADMIN_INPUT_CLASS}>
-                    <SelectValue placeholder="Select registration status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {registrationStatusOptions.system.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.name} · System
-                      </SelectItem>
-                    ))}
-                    {registrationStatusOptions.custom.length > 0
-                      ? registrationStatusOptions.custom.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.name} · Custom
-                          </SelectItem>
-                        ))
-                      : null}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <FieldLabel label="Balancer Status" icon={<BadgeInfo className="size-3.5" />} />
-                <Select
-                  value={draft.balancer_status}
-                  onValueChange={(value) =>
-                    setDraft((current) => ({ ...current, balancer_status: value }))
-                  }
-                >
-                  <SelectTrigger className={ADMIN_INPUT_CLASS}>
-                    <SelectValue placeholder="Select balancer status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {balancerStatusOptions.system.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.name} · System
-                      </SelectItem>
-                    ))}
-                    {balancerStatusOptions.custom.length > 0
-                      ? balancerStatusOptions.custom.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.name} · Custom
-                          </SelectItem>
-                        ))
-                      : null}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-              <div>
-                <FieldLabel label="Stream POV" icon={<RadioTower className="size-3.5" />} />
-                <p className="mt-1 text-sm text-white/45">
-                  Participant can provide a point-of-view stream.
-                </p>
-              </div>
-              <Switch
-                checked={draft.stream_pov}
-                onCheckedChange={(checked) =>
-                  setDraft((current) => ({ ...current, stream_pov: checked }))
-                }
-              />
-            </div>
-          </section>
-        ) : null}
-
-        <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/38">
-              Step {step + 1} of {ADMIN_FORM_STEPS.length}
-            </p>
-            <p className="mt-1 text-sm text-white/52">{ADMIN_FORM_STEPS[step]?.label}</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white"
-              onClick={() => onStepChange(Math.max(step - 1, 0))}
-              disabled={step === 0}
-            >
-              <ArrowLeft className="mr-2 size-4" />
-              Back
-            </Button>
-            {isLastStep ? (
-              <Button
-                className="min-w-[170px] bg-white text-black hover:bg-white/90"
-                onClick={onSubmit}
-                disabled={submitPending || !canAdvance}
-              >
-                {submitPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : submitIcon}
-                {submitLabel}
-              </Button>
-            ) : (
-              <Button
-                className="min-w-[170px] bg-white text-black hover:bg-white/90"
-                onClick={() => onStepChange(step + 1)}
-                disabled={!canAdvance}
-              >
-                Next
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function BalancerRegistrationsPage() {
   const tournamentId = useBalancerTournamentId();
   const queryClient = useQueryClient();
@@ -905,11 +375,19 @@ export default function BalancerRegistrationsPage() {
   );
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
-  const [createStep, setCreateStep] = useState(0);
-  const [manualDraft, setManualDraft] = useState<ManualDraft>(EMPTY_MANUAL_DRAFT);
   const [editingRegistration, setEditingRegistration] = useState<AdminRegistration | null>(null);
-  const [editStep, setEditStep] = useState(0);
-  const [editingDraft, setEditingDraft] = useState<ManualDraft>(EMPTY_MANUAL_DRAFT);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpanded = (registrationId: number) =>
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(registrationId)) {
+        next.delete(registrationId);
+      } else {
+        next.add(registrationId);
+      }
+      return next;
+    });
 
   const registrationsQuery = useQuery({
     queryKey: [
@@ -942,28 +420,29 @@ export default function BalancerRegistrationsPage() {
     enabled: tournamentId !== null
   });
 
+  const publicFormQuery = useQuery({
+    queryKey: ["registration-form-public", tournamentId],
+    queryFn: () => registrationService.getForm(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+
   // Adapt the admin form into the public RegistrationForm shape used by the
   // shared RoleStep / sub-role catalog, so admin role editing is data-driven.
   const roleForm: RegistrationForm = useMemo(() => {
-    const data = formQuery.data;
+    const data = publicFormQuery.data;
     if (!data) {
       return ADMIN_ROLE_FORM;
     }
-    return {
-      id: data.id,
-      tournament_id: data.tournament_id,
-      workspace_id: data.workspace_id,
-      is_open: data.is_open,
-      opens_at: data.opens_at,
-      closes_at: data.closes_at,
-      built_in_fields: data.built_in_fields ?? {},
-      custom_fields: [],
-      subrole_catalog: data.subrole_catalog
-    };
-  }, [formQuery.data]);
+    return data;
+  }, [publicFormQuery.data]);
   const subroleCatalog = roleForm.subrole_catalog;
 
-  const allColumns = useMemo(() => buildBalancerRegistrationColumns(subroleCatalog), [subroleCatalog]);
+  const requireOpenProfile = formQuery.data?.require_open_profile ?? false;
+
+  const allColumns = useMemo(
+    () => buildBalancerRegistrationColumns(subroleCatalog, requireOpenProfile),
+    [subroleCatalog, requireOpenProfile]
+  );
   const { visibleColumns, visibility, toggleColumn, resetToDefaults } = useColumnVisibility(
     "balancer-registrations-table-columns",
     allColumns
@@ -990,24 +469,11 @@ export default function BalancerRegistrationsPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      balancerAdminService.createManualRegistration(tournamentId as number, {
-        display_name: manualDraft.display_name || null,
-        battle_tag: manualDraft.battle_tag || null,
-        smurf_tags_json: normalizeSmurfTags(manualDraft.smurf_tags),
-        discord_nick: manualDraft.discord_nick || null,
-        twitch_nick: manualDraft.twitch_nick || null,
-        notes: manualDraft.notes || null,
-        admin_notes: manualDraft.admin_notes || null,
-        is_flex: manualDraft.is_flex,
-        stream_pov: manualDraft.stream_pov,
-        roles: buildRolePayload(manualDraft.roles, manualDraft.is_flex)
-      }),
+    mutationFn: (payload: any) =>
+      balancerAdminService.createManualRegistration(tournamentId as number, payload),
     onSuccess: async () => {
       await invalidateRegistrations();
       setCreateOpen(false);
-      setCreateStep(0);
-      setManualDraft(createEmptyManualDraft());
       toast({ title: "Manual registration created" });
     },
     onError: (error: Error) => {
@@ -1020,30 +486,15 @@ export default function BalancerRegistrationsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (payload: any) => {
       if (!editingRegistration) {
         throw new Error("No registration selected");
       }
-      return balancerAdminService.updateRegistration(editingRegistration.id, {
-        display_name: editingDraft.display_name || null,
-        battle_tag: editingDraft.battle_tag || null,
-        smurf_tags_json: normalizeSmurfTags(editingDraft.smurf_tags),
-        discord_nick: editingDraft.discord_nick || null,
-        twitch_nick: editingDraft.twitch_nick || null,
-        notes: editingDraft.notes || null,
-        admin_notes: editingDraft.admin_notes || null,
-        is_flex: editingDraft.is_flex,
-        stream_pov: editingDraft.stream_pov,
-        status: editingDraft.status,
-        balancer_status: editingDraft.balancer_status,
-        roles: buildRolePayload(editingDraft.roles, editingDraft.is_flex)
-      });
+      return balancerAdminService.updateRegistration(editingRegistration.id, payload);
     },
     onSuccess: async () => {
       await invalidateRegistrations();
-      setEditStep(0);
       setEditingRegistration(null);
-      setEditingDraft(createEmptyManualDraft());
       toast({ title: "Registration updated" });
     },
     onError: (error: Error) => {
@@ -1217,8 +668,8 @@ export default function BalancerRegistrationsPage() {
     );
   }, [allColumns, registrations, searchQuery]);
   const groupedRegistrations = useMemo(
-    () => groupRegistrations(filteredRegistrations, groupBy),
-    [filteredRegistrations, groupBy]
+    () => groupRegistrations(filteredRegistrations, groupBy, requireOpenProfile),
+    [filteredRegistrations, groupBy, requireOpenProfile]
   );
 
   const selectableIds = useMemo(
@@ -1282,7 +733,6 @@ export default function BalancerRegistrationsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setCreateStep(0);
                   setCreateOpen(true);
                 }}
               >
@@ -1478,29 +928,45 @@ export default function BalancerRegistrationsPage() {
                           STATUS_CONFIG[registration.status] ?? STATUS_CONFIG.pending;
                         const StatusIcon = statusConfig.icon;
                         const inBalancer = registration.balancer_status === "ready";
+                        const isExpanded = expandedIds.has(registration.id);
                         return (
+                          <Fragment key={registration.id}>
                           <tr
-                            key={registration.id}
                             className="border-b border-white/4 transition-colors hover:bg-white/[0.02]"
                           >
                             <td className="px-3 py-2.5 align-top">
-                              {selectable ? (
-                                <Checkbox
-                                  checked={selectedIds.has(registration.id)}
-                                  onCheckedChange={(checked) =>
-                                    setSelectedIds((current) => {
-                                      const next = new Set(current);
-                                      if (checked) {
-                                        next.add(registration.id);
-                                      } else {
-                                        next.delete(registration.id);
-                                      }
-                                      return next;
-                                    })
-                                  }
-                                  aria-label={`Select registration ${registration.id}`}
-                                />
-                              ) : null}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpanded(registration.id)}
+                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/40 hover:bg-white/5 hover:text-white"
+                                  aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                                  aria-expanded={isExpanded}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </button>
+                                {selectable ? (
+                                  <Checkbox
+                                    checked={selectedIds.has(registration.id)}
+                                    onCheckedChange={(checked) =>
+                                      setSelectedIds((current) => {
+                                        const next = new Set(current);
+                                        if (checked) {
+                                          next.add(registration.id);
+                                        } else {
+                                          next.delete(registration.id);
+                                        }
+                                        return next;
+                                      })
+                                    }
+                                    aria-label={`Select registration ${registration.id}`}
+                                  />
+                                ) : null}
+                              </div>
                             </td>
                             {visibleColumns.map((column) => (
                               <td
@@ -1519,11 +985,7 @@ export default function BalancerRegistrationsPage() {
                               <RegistrationRowActions
                                 registration={registration}
                                 onEdit={(selectedRegistration) => {
-                                  setEditStep(0);
                                   setEditingRegistration(selectedRegistration);
-                                  setEditingDraft(
-                                    buildManualDraftFromRegistration(selectedRegistration)
-                                  );
                                 }}
                                 onApprove={(registrationId) =>
                                   approveMutation.mutate(registrationId)
@@ -1619,11 +1081,7 @@ export default function BalancerRegistrationsPage() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => {
-                                          setEditStep(0);
                                           setEditingRegistration(registration);
-                                          setEditingDraft(
-                                            buildManualDraftFromRegistration(registration)
-                                          );
                                         }}
                                       >
                                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -1696,6 +1154,86 @@ export default function BalancerRegistrationsPage() {
                               </>
                             )}
                           </tr>
+                          {isExpanded ? (
+                            <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                              <td colSpan={visibleColumns.length + 2} className="px-4 py-4">
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                                  <div className="space-y-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                      Rank history
+                                    </div>
+                                    <BattleTagRankHistory
+                                      userId={registration.user_id}
+                                      battleTag={registration.battle_tag}
+                                    />
+                                  </div>
+                                  <dl className="space-y-2 text-xs text-white/70">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                      Details
+                                    </div>
+                                    <div>
+                                      <dt className="mb-1 text-white/40">Declared roles</dt>
+                                      <dd>
+                                        <RolesCell roles={registration.roles} catalog={subroleCatalog} />
+                                      </dd>
+                                    </div>
+                                    {registration.smurf_tags_json.length > 0 ? (
+                                      <div className="flex justify-between gap-3">
+                                        <dt className="text-white/40">Smurfs</dt>
+                                        <dd className="text-right">
+                                          {registration.smurf_tags_json.join(", ")}
+                                        </dd>
+                                      </div>
+                                    ) : null}
+                                    {registration.discord_nick || registration.twitch_nick ? (
+                                      <div className="flex justify-between gap-3">
+                                        <dt className="text-white/40">Contact</dt>
+                                        <dd className="text-right">
+                                          {[registration.discord_nick, registration.twitch_nick]
+                                            .filter(Boolean)
+                                            .join(" · ")}
+                                        </dd>
+                                      </div>
+                                    ) : null}
+                                    <div className="flex justify-between gap-3">
+                                      <dt className="text-white/40">Source</dt>
+                                      <dd className="text-right">{registration.source}</dd>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                      <dt className="text-white/40">Submitted</dt>
+                                      <dd className="text-right">
+                                        {formatSubmittedAt(registration.submitted_at)}
+                                      </dd>
+                                    </div>
+                                    {registration.reviewed_at ? (
+                                      <div className="flex justify-between gap-3">
+                                        <dt className="text-white/40">Reviewed</dt>
+                                        <dd className="text-right">
+                                          {formatSubmittedAt(registration.reviewed_at)}
+                                          {registration.reviewed_by_username
+                                            ? ` · ${registration.reviewed_by_username}`
+                                            : ""}
+                                        </dd>
+                                      </div>
+                                    ) : null}
+                                    {registration.notes ? (
+                                      <div>
+                                        <dt className="text-white/40">Notes</dt>
+                                        <dd className="mt-0.5">{registration.notes}</dd>
+                                      </div>
+                                    ) : null}
+                                    {registration.admin_notes ? (
+                                      <div>
+                                        <dt className="text-white/40">Admin notes</dt>
+                                        <dd className="mt-0.5">{registration.admin_notes}</dd>
+                                      </div>
+                                    ) : null}
+                                  </dl>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                          </Fragment>
                         );
                       })}
                     </Fragment>
@@ -1711,10 +1249,6 @@ export default function BalancerRegistrationsPage() {
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);
-          if (!open) {
-            setCreateStep(0);
-            setManualDraft(createEmptyManualDraft());
-          }
         }}
       >
         <DialogContent className="max-w-3xl gap-0 overflow-hidden border-white/10 bg-[#06070c] p-0 text-white shadow-[0_20px_70px_rgba(0,0,0,0.48)] sm:rounded-[20px]">
@@ -1728,23 +1262,18 @@ export default function BalancerRegistrationsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 py-3.5 sm:px-5">
-            <RegistrationProfileForm
-              draft={manualDraft}
-              setDraft={setManualDraft}
-              step={createStep}
-              form={roleForm}
-              registrationStatusOptions={registrationStatusOptions}
-              balancerStatusOptions={balancerStatusOptions}
-              onStepChange={setCreateStep}
+            <UnifiedRegistrationForm
+              mode="admin"
+              tournamentId={tournamentId as number}
+              workspaceId={workspaceId as number}
+              formConfig={roleForm}
+              onSubmit={async (payload) => {
+                await createMutation.mutateAsync(payload);
+              }}
               onCancel={() => {
                 setCreateOpen(false);
-                setCreateStep(0);
-                setManualDraft(createEmptyManualDraft());
               }}
-              onSubmit={() => createMutation.mutate()}
               submitPending={createMutation.isPending}
-              submitLabel="Create"
-              submitIcon={<UserPlus className="mr-2 size-4" />}
             />
           </div>
         </DialogContent>
@@ -1754,9 +1283,7 @@ export default function BalancerRegistrationsPage() {
         open={editingRegistration !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setEditStep(0);
             setEditingRegistration(null);
-            setEditingDraft(createEmptyManualDraft());
           }
         }}
       >
@@ -1771,24 +1298,22 @@ export default function BalancerRegistrationsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 py-3.5 sm:px-5">
-            <RegistrationProfileForm
-              draft={editingDraft}
-              setDraft={setEditingDraft}
-              step={editStep}
-              form={roleForm}
-              registrationStatusOptions={registrationStatusOptions}
-              balancerStatusOptions={balancerStatusOptions}
-              onStepChange={setEditStep}
-              onCancel={() => {
-                setEditStep(0);
-                setEditingRegistration(null);
-                setEditingDraft(createEmptyManualDraft());
-              }}
-              onSubmit={() => updateMutation.mutate()}
-              submitPending={updateMutation.isPending}
-              submitLabel="Save changes"
-              submitIcon={<Pencil className="mr-2 size-4" />}
-            />
+            {editingRegistration && (
+              <UnifiedRegistrationForm
+                mode="admin"
+                tournamentId={tournamentId as number}
+                workspaceId={workspaceId as number}
+                formConfig={roleForm}
+                initialData={editingRegistration}
+                onSubmit={async (payload) => {
+                  await updateMutation.mutateAsync(payload);
+                }}
+                onCancel={() => {
+                  setEditingRegistration(null);
+                }}
+                submitPending={updateMutation.isPending}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

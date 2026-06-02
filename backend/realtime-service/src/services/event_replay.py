@@ -26,7 +26,16 @@ class EventReplayService:
         after_event_id: int | None,
         up_to_event_id: int,
     ) -> list[WorkspaceEvent]:
-        after = int(after_event_id or 0)
+        # A first-time subscriber has no cursor (after_event_id is None) and no
+        # baseline state to reconstruct: realtime events are invalidation nudges,
+        # not a log the client replays. Replaying the whole backlog on every fresh
+        # page load fans each historical event out into a full query invalidation,
+        # producing hundreds of redundant refetches. Start such clients live-only;
+        # only an explicit cursor (a reconnect mid-session) gets catch-up replay.
+        if after_event_id is None:
+            return []
+
+        after = int(after_event_id)
         limit = config.settings.ws_replay_limit
         result = await session.execute(
             sa.select(WorkspaceEvent)

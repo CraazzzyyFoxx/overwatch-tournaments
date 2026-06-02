@@ -29,6 +29,9 @@ from starlette.requests import Request
 
 from src import routes
 from src.core import config, db
+from src.services.overwatch_rank import scheduler as rank_scheduler
+from src.services.overwatch_rank.tasks import close_redis as close_rank_redis
+from src.services.overwatch_rank.tasks import task_router as rank_task_router
 from src.services.standings.recalculation import close_redis as close_recalculation_redis
 from src.services.standings.recalculation import task_router as recalculation_task_router
 
@@ -85,10 +88,15 @@ async def lifespan(_: FastAPI):
     logger.info(f"Starting {config.settings.project_name} - Parser Service...")
     logger.info(f"Environment: {config.settings.environment}")
     logger.info(f"Port: {config.settings.port}")
+    # Periodic OverFast rank collection trigger (Redis leader-locked, no-ops
+    # while disabled in settings).
+    rank_scheduler.start_scheduler()
     yield
+    rank_scheduler.shutdown_scheduler()
     await s3_client.close()
     await auth_client.close()
     await close_recalculation_redis()
+    await close_rank_redis()
 
 
 async def not_found(request: Request, _: Exception):
@@ -137,6 +145,7 @@ cache.setup(f"{config.settings.redis_url}/4", prefix="backend:")
 
 app.include_router(routes.router)
 app.include_router(recalculation_task_router)
+app.include_router(rank_task_router)
 
 
 @app.get("/health/live")

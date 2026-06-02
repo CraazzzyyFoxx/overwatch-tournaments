@@ -82,7 +82,9 @@ import {
   SeedResultRead,
   PlayerSubRole,
   PlayerSubRoleCreateInput,
-  PlayerSubRoleUpdateInput
+  PlayerSubRoleUpdateInput,
+  SettingRead,
+  SettingUpsertInput
 } from "@/types/admin.types";
 
 class AdminService {
@@ -1346,6 +1348,27 @@ class AdminService {
   async challongeSyncLog(tournamentId: number, limit = 50): Promise<ChallongeSyncLogEntry[]> {
     const response = await apiFetch("tournament", `admin/challonge/sync/log/${tournamentId}`, {
       query: { limit }
+    });
+    return response.json();
+  }
+
+  // ─── Global Settings (superuser) ──────────────────────────────────────────
+
+  async getSettings(): Promise<SettingRead[]> {
+    const response = await apiFetch("parser", "admin/settings", { skipWorkspace: true });
+    return response.json();
+  }
+
+  async getSetting(key: string): Promise<SettingRead> {
+    const response = await apiFetch("parser", `admin/settings/${key}`, { skipWorkspace: true });
+    return response.json();
+  }
+
+  async updateSetting(key: string, data: SettingUpsertInput): Promise<SettingRead> {
+    const response = await apiFetch("parser", `admin/settings/${key}`, {
+      method: "PUT",
+      body: data,
+      skipWorkspace: true
     });
     return response.json();
   }

@@ -11,7 +11,7 @@ import {
   heroVariantFromRole,
   type AqtRoleKey
 } from "@/app/(site)/users/components/redesign/atoms";
-import HeroImage from "@/app/(site)/users/components/redesign/HeroImage";
+import HeroImage from "@/components/hero/HeroImage";
 import {
   computeDelta,
   formatDelta,

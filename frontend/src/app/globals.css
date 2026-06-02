@@ -3437,6 +3437,7 @@ body, html {
   padding: 11px 14px;
   background: hsl(0 0% 100% / 0.015);
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 .aqt-tn .data-table th.r {
   text-align: right;

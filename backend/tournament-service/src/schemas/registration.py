@@ -51,6 +51,8 @@ class RegistrationFormRead(BaseModel):
     auto_approve: bool = False
     opens_at: datetime | None = None
     closes_at: datetime | None = None
+    require_open_profile: bool = False
+    open_profile_scope: str = "main"
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
     # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
@@ -64,6 +66,8 @@ class RegistrationFormUpsert(BaseModel):
     auto_approve: bool = False
     opens_at: datetime | None = None
     closes_at: datetime | None = None
+    require_open_profile: bool = False
+    open_profile_scope: str = "main"
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
 
@@ -143,6 +147,9 @@ class RegistrationListRead(RegistrationRead):
     balancer_status: str = "not_in_balancer"
     balancer_status_meta: dict[str, Any] | None = None
     checked_in: bool = False
+    # All-profiles-open verdict (only computed when the tournament requires it):
+    # True = public, False = closed, None = unknown / not required.
+    profiles_open: bool | None = None
     tournament_history: list[TournamentHistoryEntry] = Field(default_factory=list)
 
 

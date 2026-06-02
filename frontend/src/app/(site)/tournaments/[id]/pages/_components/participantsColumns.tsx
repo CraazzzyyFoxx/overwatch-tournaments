@@ -23,12 +23,15 @@ import type {
 } from "@/types/registration.types";
 import type { Hero } from "@/types/hero.types";
 import heroService from "@/services/hero.service";
-import HeroImage from "@/app/(site)/users/components/redesign/HeroImage";
+import HeroImage, { HeroStrip } from "@/components/hero/HeroImage";
 
-import AdmissionBadge from "./AdmissionBadge";
-import BalancerStatusBadge from "./BalancerStatusBadge";
-import CheckInBadge from "./CheckInBadge";
-import StatusBadge from "./StatusBadge";
+import {
+  AdmissionStatusBadge,
+  BalancerStatusBadge,
+  CheckInStatusBadge,
+  ProfileStatusBadge,
+  RegistrationStatusBadge,
+} from "@/components/status/RegistrationBadges";
 import TournamentHistoryCell from "./TournamentHistoryCell";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { formatSubroleSlug } from "@/lib/roles";
@@ -247,17 +250,10 @@ function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
           >
             <PlayerRoleIcon role={ROLE_TO_ICON[role] || role} size={14} />
           </span>
-          <span className="aqt-hero-strip">
-            {heroesByRole[role].map((hero, idx) => (
-              <HeroImage
-                key={`${hero.slug}-${idx}`}
-                hero={hero}
-                size="sm"
-                title={hero.name}
-                className="aqt-hero-av"
-              />
-            ))}
-          </span>
+          <HeroStrip
+            heroes={heroesByRole[role]}
+            size="sm"
+          />
         </div>
       ))}
     </div>
@@ -535,7 +531,7 @@ export function buildParticipantColumns(
         return t("registration.accounts.twitch");
       case "primary_role":
       case "roles":
-        return t("common.roles");
+        return t("common.rolesList");
       case "stream_pov":
         return t("registration.details.streamPov");
       case "notes":
@@ -653,7 +649,7 @@ export function buildParticipantColumns(
     defaultVisible: true,
     responsive: "always",
     align: "center",
-    render: (reg) => <StatusBadge status={reg.status} meta={reg.status_meta} />,
+    render: (reg) => <RegistrationStatusBadge status={reg.status} meta={reg.status_meta} />,
   });
 
   // Meta: balancer status
@@ -675,8 +671,21 @@ export function buildParticipantColumns(
     defaultVisible: true,
     responsive: "md",
     align: "center",
-    render: (reg) => <CheckInBadge checkedIn={reg.checked_in} />,
+    render: (reg) => <CheckInStatusBadge checkedIn={reg.checked_in} />,
   });
+
+  // Meta: profile open/closed — only when the tournament requires it.
+  if (form?.require_open_profile) {
+    columns.push({
+      id: "_profile",
+      label: "Profile",
+      category: "meta",
+      defaultVisible: true,
+      responsive: "always",
+      align: "center",
+      render: (reg) => <ProfileStatusBadge profilesOpen={reg.profiles_open} />,
+    });
+  }
 
   // Meta: admission composite — always last (rightmost)
   columns.push({
@@ -687,10 +696,12 @@ export function buildParticipantColumns(
     responsive: "always",
     align: "center",
     render: (reg) => (
-      <AdmissionBadge
+      <AdmissionStatusBadge
         registrationStatus={reg.status}
         balancerStatus={reg.balancer_status}
         checkedIn={reg.checked_in}
+        requireOpenProfile={form?.require_open_profile ?? false}
+        profilesOpen={reg.profiles_open}
       />
     ),
   });

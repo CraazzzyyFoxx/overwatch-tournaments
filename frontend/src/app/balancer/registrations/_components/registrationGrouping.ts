@@ -21,10 +21,19 @@ const BALANCER_STATUS_ORDER = new Map<string, number>([
   ["not_in_balancer", 2]
 ]);
 
-const isAdmitted = (registration: AdminRegistration): boolean =>
-  registration.status === "approved" &&
-  registration.balancer_status === "ready" &&
-  registration.checked_in;
+const isAdmitted = (registration: AdminRegistration, requireOpenProfile = false): boolean => {
+  if (
+    registration.status !== "approved" ||
+    registration.balancer_status !== "ready" ||
+    registration.checked_in !== true
+  ) {
+    return false;
+  }
+  if (requireOpenProfile && registration.profiles_open === false) {
+    return false;
+  }
+  return true;
+};
 
 const humanizeStatusValue = (value: string): string =>
   value
@@ -35,7 +44,8 @@ const humanizeStatusValue = (value: string): string =>
 
 const getGroupMeta = (
   registration: AdminRegistration,
-  mode: RegistrationGroupingMode
+  mode: RegistrationGroupingMode,
+  requireOpenProfile = false
 ): { key: string; label: string; sortOrder: number } => {
   if (mode === "check_in") {
     return registration.checked_in
@@ -53,7 +63,7 @@ const getGroupMeta = (
   }
 
   if (mode === "admission") {
-    return isAdmitted(registration)
+    return isAdmitted(registration, requireOpenProfile)
       ? { key: "admitted", label: "Admitted", sortOrder: 0 }
       : { key: "not_admitted", label: "Not admitted", sortOrder: 1 };
   }
@@ -70,7 +80,8 @@ export const normalizeRegistrationGroupingMode = (
 
 export const groupRegistrations = (
   registrations: AdminRegistration[],
-  mode: RegistrationGroupingMode
+  mode: RegistrationGroupingMode,
+  requireOpenProfile = false
 ): RegistrationGroup[] => {
   if (mode === "none") {
     return [{ key: "all", label: "All registrations", registrations }];
@@ -82,7 +93,7 @@ export const groupRegistrations = (
   >();
 
   registrations.forEach((registration, index) => {
-    const meta = getGroupMeta(registration, mode);
+    const meta = getGroupMeta(registration, mode, requireOpenProfile);
     const existingGroup = groups.get(meta.key);
 
     if (existingGroup) {

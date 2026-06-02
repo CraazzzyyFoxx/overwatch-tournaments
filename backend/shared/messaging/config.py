@@ -294,3 +294,40 @@ ACHIEVEMENT_EVALUATE_DLQ = RabbitQueue(
     "achievement_evaluate.dlq",
     durable=True,
 )
+
+# ============================================================================
+# OverFast Rank Fetch Queues
+# ============================================================================
+# Two queues give registration-driven checks priority over the bulk sweep
+# (RabbitMQ has no in-queue priority used elsewhere in this codebase). Both feed
+# the same handler; the priority queue is consumed with higher prefetch.
+
+RANK_FETCH_QUEUE = RabbitQueue(
+    "rank_fetch",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "rank_fetch.dlq",
+        "x-message-ttl": 600000,  # 10 minutes
+    },
+)
+
+RANK_FETCH_DLQ = RabbitQueue(
+    "rank_fetch.dlq",
+    durable=True,
+)
+
+RANK_FETCH_PRIORITY_QUEUE = RabbitQueue(
+    "rank_fetch_priority",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "rank_fetch_priority.dlq",
+        "x-message-ttl": 600000,  # 10 minutes
+    },
+)
+
+RANK_FETCH_PRIORITY_DLQ = RabbitQueue(
+    "rank_fetch_priority.dlq",
+    durable=True,
+)

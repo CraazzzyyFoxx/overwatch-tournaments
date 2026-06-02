@@ -41,6 +41,8 @@ class UpsertRegistrationForm:
                 auto_approve=payload.auto_approve,
                 opens_at=payload.opens_at,
                 closes_at=payload.closes_at,
+                require_open_profile=payload.require_open_profile,
+                open_profile_scope=payload.open_profile_scope,
                 built_in_fields_json=built_in_fields_json,
                 custom_fields_json=custom_fields_json,
             )
@@ -50,6 +52,8 @@ class UpsertRegistrationForm:
             form.auto_approve = payload.auto_approve
             form.opens_at = payload.opens_at
             form.closes_at = payload.closes_at
+            form.require_open_profile = payload.require_open_profile
+            form.open_profile_scope = payload.open_profile_scope
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json
 

@@ -1,5 +1,43 @@
 // Admin CRUD Types
 
+// ─── Global Settings (parser.*) ───────────────────────────────────────────────
+
+export interface SettingRead {
+  key: string;
+  value: Record<string, unknown>;
+  description: string | null;
+  updated_at: string | null;
+  updated_by: number | null;
+}
+
+export interface SettingUpsertInput {
+  value: Record<string, unknown>;
+  description?: string | null;
+}
+
+export type RankCollectionScope = "registrations_only" | "all";
+
+export interface RankCollectionConfig {
+  enabled: boolean;
+  interval_seconds: number;
+  batch_size: number;
+  rate_limit_per_minute: number;
+  scope: RankCollectionScope;
+  max_consecutive_failures: number;
+  backoff_base_seconds: number;
+}
+
+export interface RankMappingEntry {
+  division: string;
+  tier: number;
+  rank_value: number;
+}
+
+export interface RankMappingConfig {
+  version: string;
+  entries: RankMappingEntry[];
+}
+
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
 import type {

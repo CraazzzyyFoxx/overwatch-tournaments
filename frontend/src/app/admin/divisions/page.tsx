@@ -42,18 +42,47 @@ import type {
 } from "@/types/workspace.types";
 
 function buildDefaultTiers(): DivisionTier[] {
-  return Array.from({ length: 20 }, (_, index) => {
-    const number = 20 - index;
-    return {
-      slug: `division-${number}`,
-      number,
-      name: `Division ${number}`,
-      sort_order: index,
-      rank_min: number === 1 ? 2000 : index * 100,
-      rank_max: number === 1 ? null : index * 100 + 99,
-      icon_url: `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/default-${number}.png`
-    };
-  }).sort((a, b) => a.number - b.number);
+  const divisions = ["champion", "grandmaster", "master", "diamond", "platinum", "gold", "silver", "bronze"];
+  const bases: Record<string, number> = {
+    bronze: 1000,
+    silver: 1500,
+    gold: 2000,
+    platinum: 2500,
+    diamond: 3000,
+    master: 3500,
+    grandmaster: 4000,
+    champion: 4500,
+  };
+  
+  const tiers: DivisionTier[] = [];
+  let sort_order = 0;
+  let number = 1;
+  
+  for (const div of divisions) {
+    const base = bases[div];
+    for (let tier_num = 1; tier_num <= 5; tier_num++) {
+      const slug = `${div}-${tier_num}`;
+      const name = `${div.charAt(0).toUpperCase() + div.slice(1)} ${tier_num}`;
+      const offset = (5 - tier_num) * 100;
+      const rank_min = base + offset;
+      const rank_max = (div === "champion" && tier_num === 1) ? null : rank_min + 99;
+      const icon_url = `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/${slug}.png`;
+      
+      tiers.push({
+        slug,
+        number,
+        name,
+        sort_order,
+        rank_min,
+        rank_max,
+        icon_url,
+      });
+      sort_order++;
+      number++;
+    }
+  }
+  
+  return tiers.sort((a, b) => a.number - b.number);
 }
 
 function emptyTier(number: number, index: number): DivisionTier {
@@ -62,9 +91,9 @@ function emptyTier(number: number, index: number): DivisionTier {
     number,
     name: `Division ${number}`,
     sort_order: index,
-    rank_min: 0,
-    rank_max: 99,
-    icon_url: `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/default-${number}.png`
+    rank_min: 1000,
+    rank_max: 1099,
+    icon_url: `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/bronze-5.png`
   };
 }
 
