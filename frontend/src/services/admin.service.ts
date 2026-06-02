@@ -87,7 +87,9 @@ import {
   SettingUpsertInput,
   RankCollectionStatusRow,
   CollectTriggerInput,
-  CollectTriggerResult
+  CollectTriggerResult,
+  RankFetchLogRow,
+  RankFetchLogQuery
 } from "@/types/admin.types";
 
 class AdminService {
@@ -1389,6 +1391,19 @@ class AdminService {
     const response = await apiFetch("parser", "admin/rank/collect", {
       method: "POST",
       body: data,
+      skipWorkspace: true
+    });
+    return response.json();
+  }
+
+  async getRankFetchLog(params: RankFetchLogQuery = {}): Promise<RankFetchLogRow[]> {
+    const response = await apiFetch("parser", "admin/rank/fetch-log", {
+      query: {
+        status: params.status,
+        source: params.source,
+        before_id: params.before_id,
+        limit: params.limit ?? 50
+      },
       skipWorkspace: true
     });
     return response.json();

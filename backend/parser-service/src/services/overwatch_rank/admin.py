@@ -50,6 +50,27 @@ async def get_user_collection_status(
     return result
 
 
+async def list_fetch_log(
+    session: AsyncSession,
+    *,
+    status: str | None = None,
+    source: str | None = None,
+    before_id: int | None = None,
+    limit: int = 50,
+) -> list[models.RankFetchLog]:
+    """Most-recent worker fetch attempts (newest first), filterable + cursor-paged."""
+    log = models.RankFetchLog
+    query = sa.select(log).order_by(log.id.desc())
+    if status:
+        query = query.where(log.status == status)
+    if source:
+        query = query.where(log.source == source)
+    if before_id is not None:
+        query = query.where(log.id < before_id)
+    query = query.limit(max(1, min(limit, 200)))
+    return list((await session.scalars(query)).all())
+
+
 async def _resolve_target_tags(
     session: AsyncSession,
     *,

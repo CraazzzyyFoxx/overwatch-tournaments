@@ -14,6 +14,21 @@ router = APIRouter(
 )
 
 
+@router.get("/fetch-log", response_model=list[schemas.FetchLogRead])
+async def get_fetch_log(
+    status: str | None = None,
+    source: str | None = None,
+    before_id: int | None = None,
+    limit: int = 50,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    """Global worker fetch-task history (newest first), filterable + cursor-paged."""
+    rows = await rank_admin.list_fetch_log(
+        session, status=status, source=source, before_id=before_id, limit=limit
+    )
+    return [schemas.FetchLogRead.model_validate(row) for row in rows]
+
+
 @router.get("/users/{user_id}/collection", response_model=list[schemas.CollectionStatusRead])
 async def get_collection_status(
     user_id: int,

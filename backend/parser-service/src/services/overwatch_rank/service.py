@@ -36,6 +36,29 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+async def log_fetch(
+    session: AsyncSession,
+    *,
+    battle_tag_id: int | None,
+    battle_tag: str,
+    status: str,
+    source: str,
+    error: str | None = None,
+    snapshots_written: int = 0,
+) -> None:
+    """Append a worker fetch attempt to the task-history log (caller commits)."""
+    session.add(
+        models.RankFetchLog(
+            battle_tag_id=battle_tag_id,
+            battle_tag=battle_tag,
+            status=str(status),
+            source=source,
+            error=error[:2000] if error else None,
+            snapshots_written=snapshots_written,
+        )
+    )
+
+
 def battle_tag_to_slug(battle_tag: str) -> str:
     return battle_tag.replace("#", "-")
 

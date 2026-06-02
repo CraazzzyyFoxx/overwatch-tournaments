@@ -1,8 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-__all__ = ("CollectionStatusRead", "CollectTriggerRequest", "CollectTriggerResponse")
+__all__ = (
+    "CollectionStatusRead",
+    "CollectTriggerRequest",
+    "CollectTriggerResponse",
+    "FetchLogRead",
+)
 
 
 class CollectionStatusRead(BaseModel):
@@ -24,3 +29,16 @@ class CollectTriggerRequest(BaseModel):
 
 class CollectTriggerResponse(BaseModel):
     enqueued: int
+
+
+class FetchLogRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    battle_tag_id: int | None
+    battle_tag: str
+    status: str
+    source: str
+    error: str | None
+    snapshots_written: int
+    created_at: datetime

@@ -205,10 +205,18 @@ async def process_fetch_rank(
                     error="429 rate limited",
                     config=cfg,
                 )
+                await service.log_fetch(
+                    session,
+                    battle_tag_id=event.battle_tag_id,
+                    battle_tag=event.battle_tag,
+                    status=enums.RankCollectionStatus.rate_limited.value,
+                    source=event.source,
+                    error="429 rate limited",
+                )
                 await session.commit()
                 return
 
-            await service.record_result(
+            written = await service.record_result(
                 session,
                 battle_tag_id=event.battle_tag_id,
                 battle_tag=event.battle_tag,
@@ -217,6 +225,15 @@ async def process_fetch_rank(
                 lookup=lookup,
                 mapping_version=version,
                 config=cfg,
+            )
+            await service.log_fetch(
+                session,
+                battle_tag_id=event.battle_tag_id,
+                battle_tag=event.battle_tag,
+                status=result.status.value,
+                source=event.source,
+                error=result.error,
+                snapshots_written=written,
             )
             await session.commit()
     except OverFastError as exc:
@@ -230,6 +247,14 @@ async def process_fetch_rank(
                 status=enums.RankCollectionStatus.error,
                 error=str(exc),
                 config=cfg,
+            )
+            await service.log_fetch(
+                session,
+                battle_tag_id=event.battle_tag_id,
+                battle_tag=event.battle_tag,
+                status=enums.RankCollectionStatus.error.value,
+                source=event.source,
+                error=str(exc),
             )
             await session.commit()
         raise

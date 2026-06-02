@@ -98,6 +98,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             ),
             patch.object(tasks.mapping, "get_rank_mapping", AsyncMock(return_value=({}, "v1"))),
             patch.object(tasks.service, "record_result", AsyncMock(return_value=3)) as rec,
+            patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
                 {"event_type": "fetch_rank", "battle_tag_id": 7, "battle_tag": "N#1"},
@@ -137,6 +138,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             ),
             patch.object(tasks.mapping, "get_rank_mapping", AsyncMock(return_value=({}, "v1"))),
             patch.object(tasks.service, "record_failure", AsyncMock()) as fail,
+            patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
                 {"event_type": "fetch_rank", "battle_tag_id": 9, "battle_tag": "N#9"},

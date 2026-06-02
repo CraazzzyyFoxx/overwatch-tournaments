@@ -19,6 +19,7 @@ from shared.core import db, enums
 __all__ = (
     "UserRankSnapshot",
     "BattleTagRankState",
+    "RankFetchLog",
 )
 
 #: Logical Postgres schema isolating rank telemetry from player identity.
@@ -134,3 +135,27 @@ class BattleTagRankState(db.TimeStampIntegerMixin):
     last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 0 = background sweep (all users); higher = registration-driven priority.
     priority_tier: Mapped[int] = mapped_column(SmallInteger(), server_default="0")
+
+
+class RankFetchLog(db.TimeStampIntegerMixin):
+    """Append-only log of worker fetch attempts — the global task history.
+
+    One row per processed ``FetchRankEvent``; ``created_at`` (from the mixin) is
+    the completion time. Powers the admin live task feed.
+    """
+
+    __tablename__ = "fetch_log"
+    __table_args__ = (
+        Index("ix_fetch_log_created_at", "created_at"),
+        Index("ix_fetch_log_status_created", "status", "created_at"),
+        {"schema": RANK_SCHEMA},
+    )
+
+    battle_tag_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.battle_tag.id", ondelete="SET NULL"), nullable=True
+    )
+    battle_tag: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32))  # enums.RankCollectionStatus
+    source: Mapped[str] = mapped_column(String(32))  # enums.RankCollectionSource
+    error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    snapshots_written: Mapped[int] = mapped_column(Integer(), server_default="0")

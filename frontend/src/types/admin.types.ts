@@ -62,6 +62,24 @@ export interface CollectTriggerResult {
   enqueued: number;
 }
 
+export interface RankFetchLogRow {
+  id: number;
+  battle_tag_id: number | null;
+  battle_tag: string;
+  status: string;
+  source: string;
+  error: string | null;
+  snapshots_written: number;
+  created_at: string;
+}
+
+export interface RankFetchLogQuery {
+  status?: string;
+  source?: string;
+  before_id?: number;
+  limit?: number;
+}
+
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
 import type {
