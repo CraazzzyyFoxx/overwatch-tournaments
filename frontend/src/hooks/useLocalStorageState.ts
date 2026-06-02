@@ -1,63 +1,63 @@
 "use client";
 
-import { useSyncExternalStore, useCallback } from "react";
-
-const listeners = new Set<() => void>();
-
-function subscribe(callback: () => void) {
-  listeners.add(callback);
-  
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", callback);
-  }
-  
-  return () => {
-    listeners.delete(callback);
-    if (typeof window !== "undefined") {
-      window.removeEventListener("storage", callback);
-    }
-  };
-}
-
-function notifyListeners() {
-  for (const listener of listeners) {
-    listener();
-  }
-}
+import { useState, useEffect, useCallback } from "react";
 
 export function useLocalStorageState<T>(
   key: string,
   defaultValue: T,
 ): [T, (value: T | ((val: T) => T)) => void] {
-  const getSnapshot = useCallback(() => {
-    if (typeof window === "undefined") return JSON.stringify(defaultValue);
+  const [state, setState] = useState<T>(defaultValue);
+
+  // Load from localStorage on mount/key change
+  useEffect(() => {
     try {
       const item = localStorage.getItem(key);
-      return item !== null ? item : JSON.stringify(defaultValue);
-    } catch {
-      return JSON.stringify(defaultValue);
-    }
-  }, [key, defaultValue]);
-
-  const getServerSnapshot = useCallback(() => {
-    return JSON.stringify(defaultValue);
-  }, [defaultValue]);
-
-  const rawValue = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const value = JSON.parse(rawValue) as T;
-
-  const setValue = useCallback(
-    (newValue: T | ((val: T) => T)) => {
-      try {
-        const nextValue = newValue instanceof Function ? newValue(value) : newValue;
-        localStorage.setItem(key, JSON.stringify(nextValue));
-        notifyListeners();
-      } catch (error) {
-        console.warn(`Error setting localStorage key "${key}":`, error);
+      if (item !== null) {
+        const parsed = JSON.parse(item) as T;
+        // Defer updating state to avoid synchronous rendering side-effects/warnings
+        setTimeout(() => {
+          setState(parsed);
+        }, 0);
       }
+    } catch (error) {
+      console.warn(`Error reading localStorage key "${key}":`, error);
+    }
+  }, [key]);
+
+  const setPersistedState = useCallback(
+    (value: T | ((val: T) => T)) => {
+      setState((prev) => {
+        const next = value instanceof Function ? value(prev) : value;
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+          // Dispatch storage event to notify other instances
+          window.dispatchEvent(new Event("storage"));
+        } catch (error) {
+          console.warn(`Error setting localStorage key "${key}":`, error);
+        }
+        return next;
+      });
     },
-    [key, value],
+    [key],
   );
 
-  return [value, setValue];
+  // Subscribe to storage changes (e.g. from other tabs/windows)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const item = localStorage.getItem(key);
+        if (item !== null) {
+          const parsed = JSON.parse(item) as T;
+          setState(parsed);
+        }
+      } catch (error) {
+        console.warn(`Error updating state from storage change for key "${key}":`, error);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [key]);
+
+  return [state, setPersistedState];
 }

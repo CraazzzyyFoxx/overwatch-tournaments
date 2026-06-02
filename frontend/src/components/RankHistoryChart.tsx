@@ -22,6 +22,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart as ChartIcon, Compass } from "lucide-react";
 import { useTranslation } from "@/i18n/LanguageContext";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
+
+type Granularity = "date" | "hour" | "raw";
 
 type GroupBy = "role" | "battle_tag";
 
@@ -67,6 +70,10 @@ export default function RankHistoryChart({
   const platforms = useMemo(() => uniqueBy(series.map((s) => s.platform), (p) => p), [series]);
   const [platform, setPlatform] = useState<string>(platforms.includes("pc") ? "pc" : platforms[0] ?? "pc");
   const [groupBy, setGroupBy] = useState<GroupBy>(defaultGroupBy);
+  const [granularity, setGranularity] = useLocalStorageState<Granularity>(
+    "rank-history-granularity",
+    "date"
+  );
 
   const platformSeries = useMemo(
     () => series.filter((s) => s.platform === platform),
@@ -103,7 +110,18 @@ export default function RankHistoryChart({
       const key = groupBy === "role" ? s.role : `bt${s.battle_tag_id}`;
       for (const p of s.points) {
         if (!p.is_ranked || p.rank_value == null) continue;
-        const dateKey = p.captured_at.split("T")[0] || p.captured_at;
+        
+        let dateKey = p.captured_at;
+        if (granularity === "date") {
+          dateKey = p.captured_at.split("T")[0] || p.captured_at;
+        } else if (granularity === "hour") {
+          if (p.captured_at.includes("T")) {
+            dateKey = p.captured_at.split(":")[0] + ":00";
+          } else {
+            dateKey = p.captured_at.substring(0, 13) + ":00";
+          }
+        }
+        
         const row = rows.get(dateKey) ?? { ts: dateKey };
         row[key] = p.rank_value;
         rows.set(dateKey, row);
@@ -113,7 +131,7 @@ export default function RankHistoryChart({
       (a, b) => new Date(a.ts as string).getTime() - new Date(b.ts as string).getTime()
     );
     return { lines: lineDefs, data: sorted };
-  }, [groupBy, platformSeries, effectiveBattleTagId, effectiveRole]);
+  }, [groupBy, platformSeries, effectiveBattleTagId, effectiveRole, granularity]);
 
   const chartConfig = useMemo<ChartConfig>(() => {
     const cfg: ChartConfig = {};
@@ -219,6 +237,17 @@ export default function RankHistoryChart({
           </Select>
         )}
 
+        <Select value={granularity} onValueChange={(val) => setGranularity(val as Granularity)}>
+          <SelectTrigger className="w-[120px] h-8 text-xs bg-background/50 border-white/[0.08]">
+            <SelectValue placeholder="Granularity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="date" className="text-xs">{isRu ? "По дням" : "Daily"}</SelectItem>
+            <SelectItem value="hour" className="text-xs">{isRu ? "По часам" : "Hourly"}</SelectItem>
+            <SelectItem value="raw" className="text-xs">{isRu ? "Все точки" : "All points"}</SelectItem>
+          </SelectContent>
+        </Select>
+
         {platforms.length > 1 && (
           <Select
             value={platform}
@@ -265,7 +294,23 @@ export default function RankHistoryChart({
                 axisLine={false}
                 tickMargin={6}
                 minTickGap={24}
-                tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                tickFormatter={(value) => {
+                  try {
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) return value;
+                    if (granularity === "date") {
+                      return date.toLocaleDateString();
+                    }
+                    return date.toLocaleString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+                  } catch {
+                    return value;
+                  }
+                }}
               />
               <YAxis
                 tickLine={false}
@@ -281,7 +326,23 @@ export default function RankHistoryChart({
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                    labelFormatter={(value) => {
+                      try {
+                        const date = new Date(value);
+                        if (isNaN(date.getTime())) return value;
+                        if (granularity === "date") {
+                          return date.toLocaleDateString();
+                        }
+                        return date.toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                      } catch {
+                        return value;
+                      }
+                    }}
                     formatter={(value, name, item) => {
                       const rank = Number(value);
                       const tier = getTierForRank(DEFAULT_DIVISION_GRID, rank);
