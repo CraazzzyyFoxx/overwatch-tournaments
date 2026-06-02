@@ -182,7 +182,7 @@ export default class workspaceService {
     rules: DivisionGridMappingRule[];
   }> {
     return apiFetch(
-      "app",
+      "tournament",
       `division-grids/mappings/${sourceVersionId}/${targetVersionId}`
     ).then((r) => r.json());
   }
@@ -209,7 +209,7 @@ export default class workspaceService {
     workspaceId: number
   ): Promise<DivisionGridMarketplaceWorkspace[]> {
     return apiFetch(
-      "app",
+      "tournament",
       `division-grids/by-workspace/${workspaceId}/marketplace/workspaces`
     ).then((r) => r.json());
   }

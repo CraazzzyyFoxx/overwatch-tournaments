@@ -3,7 +3,7 @@
 import { createElement } from "react";
 
 import { getStatusIcon } from "@/lib/status-icons";
-import { cn } from "@/lib/utils";
+import { cn, hexToRgba } from "@/lib/utils";
 import type { StatusMeta } from "@/types/balancer-admin.types";
 
 function getFallbackClasses(scope: string, value: string) {
@@ -16,18 +16,6 @@ function getFallbackClasses(scope: string, value: string) {
   if (value === "ready") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
   if (value === "incomplete") return "border-orange-500/20 bg-orange-500/10 text-orange-400";
   return "border-white/10 bg-white/5 text-white/45";
-}
-
-function hexToRgba(hex: string, alpha: number): string | null {
-  const normalized = hex.trim().replace(/^#/, "");
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
-    return null;
-  }
-
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 type StatusMetaBadgeProps = {

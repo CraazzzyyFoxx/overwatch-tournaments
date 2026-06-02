@@ -130,4 +130,38 @@ describe("registration grouping", () => {
       ["not_admitted", "Not admitted", [2, 3]]
     ]);
   });
+
+  it("groups registrations by computed admission status with requireOpenProfile enabled", () => {
+    const groups = groupRegistrations(
+      [
+        createRegistration(1, {
+          status: "approved",
+          balancer_status: "ready",
+          checked_in: true,
+          profiles_open: true
+        }),
+        createRegistration(2, {
+          status: "approved",
+          balancer_status: "ready",
+          checked_in: true,
+          profiles_open: false
+        }),
+        createRegistration(3, {
+          status: "approved",
+          balancer_status: "ready",
+          checked_in: true,
+          profiles_open: null
+        })
+      ],
+      "admission",
+      true
+    );
+
+    expect(
+      groups.map((group) => [group.key, group.label, group.registrations.map((item) => item.id)])
+    ).toEqual([
+      ["admitted", "Admitted", [1, 3]],
+      ["not_admitted", "Not admitted", [2]]
+    ]);
+  });
 });

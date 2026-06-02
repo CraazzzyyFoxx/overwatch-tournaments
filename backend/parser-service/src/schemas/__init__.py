@@ -7,6 +7,7 @@ from .gamemode import *
 from .hero import *
 from .logs_parser import *
 from .map import *
+from .rank_history import *
 from .stage import *
 from .standing import *
 from .team import *

@@ -1,6 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { invalidateTournamentWorkspace } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
+import {
+  invalidateTournamentResults,
+  invalidateTournamentWorkspace,
+} from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 
 export type TournamentChangedReason = "results_changed" | "structure_changed";
@@ -14,7 +17,12 @@ type TournamentUpdatedMessage = {
 };
 
 export type TournamentRealtimeUpdatePlan = {
-  invalidateAdminWorkspace: true;
+  /**
+   * How much of the tournament workspace to invalidate. `results` touches only
+   * result-derived queries; `full` refreshes structure (teams, registrations,
+   * metadata) as well.
+   */
+  workspaceScope: "results" | "full";
   queryKeys: readonly (readonly unknown[])[];
   shouldRefreshRoute: boolean;
 };
@@ -56,6 +64,35 @@ export function getTournamentRealtimeUpdatePlan(
   workspaceId: number | null | undefined,
   reason: TournamentChangedReason
 ): TournamentRealtimeUpdatePlan {
+  if (reason === "results_changed") {
+    // A score recalculation only moves result-derived data. Refetching team
+    // rosters, registrations, or the tournament list here is pure waste, so the
+    // results scope deliberately omits them.
+    const queryKeys: (readonly unknown[])[] = [
+      tournamentQueryKeys.detail(tournamentId),
+      tournamentQueryKeys.stages(tournamentId),
+      tournamentQueryKeys.heroPlaytime(tournamentId),
+      ["standings", tournamentId],
+      ["standings-table", tournamentId],
+      ["encounters", "tournament", tournamentId],
+    ];
+
+    if (workspaceId != null) {
+      queryKeys.push(
+        ["standings", tournamentId, workspaceId],
+        ["encounters", "tournament", tournamentId, workspaceId]
+      );
+    }
+
+    return {
+      workspaceScope: "results",
+      queryKeys,
+      shouldRefreshRoute: false,
+    };
+  }
+
+  // structure_changed — stages, teams, registrations, or metadata changed;
+  // refresh the full workspace.
   const queryKeys: (readonly unknown[])[] = [
     tournamentQueryKeys.detail(tournamentId),
     tournamentQueryKeys.stages(tournamentId),
@@ -77,9 +114,9 @@ export function getTournamentRealtimeUpdatePlan(
   }
 
   return {
-    invalidateAdminWorkspace: true,
+    workspaceScope: "full",
     queryKeys,
-    shouldRefreshRoute: reason === "structure_changed",
+    shouldRefreshRoute: true,
   };
 }
 
@@ -92,8 +129,10 @@ export function applyTournamentRealtimeUpdate(
 ): void {
   const plan = getTournamentRealtimeUpdatePlan(tournamentId, workspaceId, reason);
 
-  if (plan.invalidateAdminWorkspace) {
+  if (plan.workspaceScope === "full") {
     invalidateTournamentWorkspace(queryClient, tournamentId, workspaceId);
+  } else {
+    invalidateTournamentResults(queryClient, tournamentId, workspaceId);
   }
 
   for (const queryKey of plan.queryKeys) {

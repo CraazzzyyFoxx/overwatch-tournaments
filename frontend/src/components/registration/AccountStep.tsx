@@ -1,9 +1,9 @@
-"use client";
-
 import type { RegistrationForm } from "@/types/registration.types";
 import { useTranslation } from "@/i18n/LanguageContext";
 import AccountCombobox from "./AccountCombobox";
 import SmurfTagsInput from "./SmurfTagsInput";
+import FieldLabel from "./FieldLabel";
+import { UserRound } from "lucide-react";
 
 interface AccountStepProps {
   values: Record<string, string>;
@@ -15,6 +15,9 @@ interface AccountStepProps {
   battleTagSuggestions: string[];
   discordSuggestions: string[];
   twitchSuggestions: string[];
+  mode?: "public" | "admin";
+  displayName?: string;
+  onDisplayNameChange?: (v: string) => void;
 }
 
 export default function AccountStep({
@@ -27,6 +30,9 @@ export default function AccountStep({
   battleTagSuggestions,
   discordSuggestions,
   twitchSuggestions,
+  mode = "public",
+  displayName,
+  onDisplayNameChange,
 }: AccountStepProps) {
   const { t } = useTranslation();
   const fields = form.built_in_fields;
@@ -38,11 +44,28 @@ export default function AccountStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">{t("registration.accounts.title")}</h3>
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+          {mode === "admin" ? "Identity and Contact Handles" : t("registration.accounts.title")}
+        </h3>
         <p className="text-xs leading-5 text-white/42">
-          {t("registration.accounts.desc")}
+          {mode === "admin"
+            ? "Only the registration identity fields that matter in admin editing."
+            : t("registration.accounts.desc")}
         </p>
       </div>
+
+      {mode === "admin" && onDisplayNameChange && (
+        <div className="space-y-1.5">
+          <FieldLabel label="Display Name" icon={<UserRound className="size-3.5 opacity-50" />} />
+          <input
+            type="text"
+            placeholder="Display name"
+            value={displayName ?? ""}
+            onChange={(e) => onDisplayNameChange(e.target.value)}
+            className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20"
+          />
+        </div>
+      )}
 
 
       {showBattleTag && (

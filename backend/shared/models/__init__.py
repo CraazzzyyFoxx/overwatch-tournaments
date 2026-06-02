@@ -27,3 +27,5 @@ from .log_processing import *
 from .user_merge_audit import *
 from .outbox import *
 from .realtime import *
+from .overwatch_rank import *
+from .settings import *

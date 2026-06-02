@@ -2,6 +2,7 @@ export const tournamentQueryKeys = {
   detail: (tournamentId: number) => ["tournament", tournamentId] as const,
   stages: (tournamentId: number) => ["tournament", tournamentId, "stages"] as const,
   teams: (tournamentId: number) => ["teams", tournamentId] as const,
+  teamsCount: (tournamentId: number) => ["teams", tournamentId, "count"] as const,
   heroPlaytime: (tournamentId: number) =>
     ["hero-playtime", "tournament", tournamentId] as const,
   standings: (tournamentId: number, workspaceId?: number | null) =>

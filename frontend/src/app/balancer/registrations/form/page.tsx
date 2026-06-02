@@ -41,6 +41,8 @@ export default function RegistrationFormConfigPage() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
+  const [requireOpenProfile, setRequireOpenProfile] = useState(false);
+  const [openProfileScope, setOpenProfileScope] = useState<"main" | "all">("main");
   const [builtInFields, setBuiltInFields] = useState<Record<string, BuiltInFieldConfig>>(() =>
     getBuiltInConfig({}),
   );
@@ -73,6 +75,8 @@ export default function RegistrationFormConfigPage() {
     startTransition(() => {
       setIsOpen(data.is_open);
       setAutoApprove(data.auto_approve ?? false);
+      setRequireOpenProfile(data.require_open_profile ?? false);
+      setOpenProfileScope((data.open_profile_scope as "main" | "all") ?? "main");
       setBuiltInFields(getBuiltInConfig(data.built_in_fields ?? {}));
       setCustomFields((data.custom_fields ?? []).map(hydrateCustomField));
       setHasChanges(false);
@@ -142,6 +146,8 @@ export default function RegistrationFormConfigPage() {
       const payload: AdminRegistrationFormUpsert = {
         is_open: isOpen,
         auto_approve: autoApprove,
+        require_open_profile: requireOpenProfile,
+        open_profile_scope: openProfileScope,
         built_in_fields: Object.fromEntries(
           Object.entries(builtInFields).map(([key, value]) => [
             key,
@@ -294,18 +300,54 @@ export default function RegistrationFormConfigPage() {
         </TabsList>
 
         <TabsContent value="status">
-          <RegistrationStatusCard
-            isOpen={isOpen}
-            autoApprove={autoApprove}
-            onChangeOpen={(value) => {
-              setIsOpen(value);
-              setHasChanges(true);
-            }}
-            onChangeAutoApprove={(value) => {
-              setAutoApprove(value);
-              setHasChanges(true);
-            }}
-          />
+          <div className="space-y-4">
+            <RegistrationStatusCard
+              isOpen={isOpen}
+              autoApprove={autoApprove}
+              onChangeOpen={(value) => {
+                setIsOpen(value);
+                setHasChanges(true);
+              }}
+              onChangeAutoApprove={(value) => {
+                setAutoApprove(value);
+                setHasChanges(true);
+              }}
+            />
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="font-medium">Admission</div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={requireOpenProfile}
+                  onChange={(event) => {
+                    setRequireOpenProfile(event.target.checked);
+                    setHasChanges(true);
+                  }}
+                />
+                Require open Overwatch profile
+              </label>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Scope</span>
+                <select
+                  className="rounded-md border border-border bg-background px-2 py-1 text-sm disabled:opacity-50"
+                  value={openProfileScope}
+                  disabled={!requireOpenProfile}
+                  onChange={(event) => {
+                    setOpenProfileScope(event.target.value as "main" | "all");
+                    setHasChanges(true);
+                  }}
+                >
+                  <option value="main">Main account only</option>
+                  <option value="all">All accounts (incl. smurfs)</option>
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, players whose Overwatch profile is private are not admitted (blocked at
+                check-in). Unranked players are already excluded separately.
+              </p>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="fields">

@@ -156,6 +156,68 @@ def build_registration_roles(
     return entries
 
 
+async def _find_user_by_battle_tag(session: AsyncSession, battle_tag: str) -> models.User | None:
+    result = await session.execute(
+        sa.select(models.User)
+        .join(models.UserBattleTag, models.User.id == models.UserBattleTag.user_id)
+        .where(sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, battle_tag: str) -> None:
+    if "#" not in battle_tag:
+        return
+    exists = await session.scalar(
+        sa.select(models.UserBattleTag.id).where(
+            sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower()
+        )
+    )
+    if exists is not None:
+        return
+    name, tag = battle_tag.split("#", 1)
+    session.add(models.UserBattleTag(user_id=user.id, battle_tag=battle_tag, name=name, tag=tag))
+
+
+async def ensure_player_identity(
+    session: AsyncSession,
+    registration: models.BalancerRegistration,
+) -> int | None:
+    """Find-or-create the domain player (players.user) for a registration's tags.
+
+    Links ``registration.user_id`` and ensures a ``UserBattleTag`` for the main
+    tag and each smurf. This is what lets first-time registrants — who aren't yet
+    in the analytics system — be picked up by rank collection / the open-profile
+    gate. Dedup is by ``UserBattleTag.battle_tag`` (case-insensitive), so a later
+    log/CSV import reconciles to the same player. Flushes only; caller commits.
+    """
+    battle_tag = registration.battle_tag
+    if not battle_tag:
+        return registration.user_id
+
+    # Respect an already-linked player (e.g. resolved via AuthUserPlayer); only
+    # find-or-create when the registration isn't linked yet.
+    user: models.User | None = None
+    if registration.user_id is not None:
+        user = await session.get(models.User, registration.user_id)
+    if user is None:
+        user = await _find_user_by_battle_tag(session, battle_tag)
+    if user is None:
+        user = models.User(name=battle_tag)
+        session.add(user)
+        await session.flush()
+
+    await _ensure_user_battle_tag(session, user, battle_tag)
+    for smurf in registration.smurf_tags_json or []:
+        if smurf:
+            await _ensure_user_battle_tag(session, user, smurf)
+
+    if registration.user_id != user.id:
+        registration.user_id = user.id
+    return user.id
+
+
 async def create_registration(
     session: AsyncSession,
     *,
@@ -197,6 +259,10 @@ async def create_registration(
     )
     session.add(registration)
     await session.flush()
+    # Provision the domain player identity so first-time registrants are picked
+    # up by rank collection / the open-profile gate. Done before the approval
+    # event so it carries the resolved user_id.
+    await ensure_player_identity(session, registration)
     if auto_approve:
         await enqueue_registration_approved(session, registration)
     else:

@@ -9,6 +9,7 @@ import OverviewMostPlayedHeroes from "@/app/(site)/users/components/redesign/Ove
 import OverviewRecentEncounters from "@/app/(site)/users/components/redesign/OverviewRecentEncounters";
 import OverviewCareerList from "@/app/(site)/users/components/redesign/OverviewCareerList";
 import OverviewTeammatesSynergy from "@/app/(site)/users/components/redesign/OverviewTeammatesSynergy";
+import UserRankHistory from "@/components/UserRankHistory";
 
 export interface OverviewPageProps {
   profile: UserProfile;
@@ -83,6 +84,7 @@ const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPagePro
           userName={user.name}
           tournaments={tournaments}
         />
+        <UserRankHistory userId={user.id} />
       </div>
       <aside className="flex flex-col gap-3.5 xl:sticky xl:top-[88px]">
         <OverviewCareerList profile={profile} />

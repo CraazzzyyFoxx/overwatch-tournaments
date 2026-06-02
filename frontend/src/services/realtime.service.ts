@@ -176,11 +176,16 @@ class RealtimeClient {
   }
 
   private sendSubscribe(topic: string): void {
-    const afterEventId = useRealtimeStore.getState().lastEventIdByTopic[topic] ?? 0;
+    // Only request catch-up replay when we already hold a cursor for this topic
+    // (a reconnect within the same session). A first-time subscribe — including
+    // every fresh page load, where the in-memory cursor store starts empty —
+    // omits after_event_id so the server starts us live-only instead of
+    // replaying the entire persisted backlog into a storm of invalidations.
+    const afterEventId = useRealtimeStore.getState().lastEventIdByTopic[topic];
     this.send({
       op: "subscribe",
       topic,
-      after_event_id: afterEventId
+      ...(afterEventId !== undefined ? { after_event_id: afterEventId } : {})
     });
   }
 

@@ -11,7 +11,7 @@ import {
   ScoreCell,
   StagePill
 } from "@/app/(site)/users/components/redesign/atoms";
-import { HeroStrip } from "@/app/(site)/users/components/redesign/HeroImage";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import type { Hero } from "@/types/hero.types";
 
 interface Props {

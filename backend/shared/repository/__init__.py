@@ -14,6 +14,7 @@ from .registration import (
     RegistrationFormRepository,
     RegistrationStatusRepository,
 )
+from .settings import SettingsRepository
 from .support import (
     AchievementOverrideRepository,
     AchievementRuleRepository,
@@ -60,6 +61,7 @@ __all__ = (
     "RegistrationFormRepository",
     "RegistrationStatusRepository",
     "RoleRepository",
+    "SettingsRepository",
     "StageItemRepository",
     "StageRepository",
     "StandingRepository",

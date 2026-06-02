@@ -9,6 +9,7 @@ import { useDebounce } from "use-debounce";
 import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
@@ -195,20 +196,6 @@ const DivisionHex = ({ role, division, title, size = 36 }: DivisionHexProps) => 
   );
 };
 
-const HeroStrip = ({ heroes }: { heroes: UserOverviewHero[] }) => {
-  if (heroes.length === 0) {
-    return <span className={styles.playerSub}>—</span>;
-  }
-  return (
-    <div className={styles.heroStrip}>
-      {heroes.map((heroRow) => (
-        <div key={heroRow.hero.id} className={styles.heroChip} title={heroRow.hero.name}>
-          <Image src={heroRow.hero.image_path} alt={heroRow.hero.name} width={32} height={32} />
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const UsersRedesignClient = () => {
   const pathname = usePathname();
@@ -760,7 +747,7 @@ const UsersRedesignClient = () => {
                               </td>
 
                               <td className={cn(styles.hideMd, "center")}>
-                                <HeroStrip heroes={topHeroes} />
+                                <HeroStrip heroes={topHeroes.map((h) => h.hero)} />
                               </td>
 
                               <td className="center">

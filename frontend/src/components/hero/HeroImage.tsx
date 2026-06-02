@@ -69,7 +69,7 @@ export const HeroStrip = ({ heroes, size = "sm", limit = 4, className, bare }: H
   return (
     <span className={cn("aqt-hero-strip", className)}>
       {list.map((hero, idx) => (
-        <HeroImage key={`${hero.name}-${idx}`} hero={hero} size={size} bare={bare} />
+        <HeroImage key={`${hero.name}-${idx}`} hero={hero} size={size} bare={bare} className="aqt-hero-av" />
       ))}
     </span>
   );

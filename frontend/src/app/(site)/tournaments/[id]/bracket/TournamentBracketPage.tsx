@@ -17,6 +17,8 @@ import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
@@ -36,6 +38,7 @@ function GroupStagePanel({
   onReport,
   canEdit,
   canReport,
+  bracketTabs,
 }: {
   stage: Stage;
   stageItem?: StageItem;
@@ -45,6 +48,12 @@ function GroupStagePanel({
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  bracketTabs?: Array<{
+    key: string;
+    href: string;
+    label: string;
+    isActive: boolean;
+  }>;
 }) {
   const { t } = useTranslation();
   const hasStandings = standings.length > 0;
@@ -59,12 +68,38 @@ function GroupStagePanel({
       className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
     >
       <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-            {subtitle}
-          </p>
-        </div>
+        {bracketTabs && bracketTabs.length > 1 ? (
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="stage-tabs">
+                {bracketTabs.map((tab) => (
+                  <Link
+                    key={tab.key}
+                    href={tab.href}
+                    className={cn("stage-tab", tab.isActive && "active")}
+                  >
+                    {tab.label}
+                  </Link>
+                ))}
+              </div>
+              {stageItem && (
+                <span className="text-sm font-semibold text-white/35 uppercase tracking-[0.12em]">
+                  / {stageItem.name}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+              {subtitle}
+            </p>
+          </div>
+        ) : (
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+              {subtitle}
+            </p>
+          </div>
+        )}
 
         <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
           {hasStandings && (
@@ -189,6 +224,60 @@ export default function TournamentBracketPage({
       ? [primaryStage]
       : [];
 
+  const bracketTabs = useMemo(() => {
+    const tabs: Array<{
+      key: string;
+      href: string;
+      label: string;
+      isActive: boolean;
+    }> = [];
+
+    const groupScopeCount = groupStages.reduce(
+      (count, stage) => count + Math.max(stage.items.length, 1),
+      0
+    );
+
+    const activeStageId = selectedStageParam ? Number(selectedStageParam) : fallbackStage?.id;
+
+    const isGroupViewActive =
+      viewParam === "groups" ||
+      (!!activeStageId && groupStages.some((stage) => stage.id === activeStageId));
+
+    if (groupScopeCount > 1) {
+      tabs.push({
+        key: "group-stage",
+        href:
+          groupStages.length === 1
+            ? `/tournaments/${tournament.id}/bracket?stage=${groupStages[0].id}`
+            : `/tournaments/${tournament.id}/bracket?view=groups`,
+        label: t("common.groupStage"),
+        isActive: isGroupViewActive,
+      });
+    } else if (groupStages.length === 1) {
+      const stage = groupStages[0];
+      tabs.push({
+        key: `stage-${stage.id}`,
+        href: `/tournaments/${tournament.id}/bracket?stage=${stage.id}`,
+        label: stage.name,
+        isActive: !viewParam && stage.id === activeStageId,
+      });
+    }
+
+    eliminationStages.forEach((stage) => {
+      tabs.push({
+        key: `stage-${stage.id}`,
+        href: `/tournaments/${tournament.id}/bracket?stage=${stage.id}`,
+        label:
+          eliminationStages.length === 1 && groupStages.length > 0
+            ? t("common.playoff")
+            : stage.name,
+        isActive: !viewParam && stage.id === activeStageId,
+      });
+    });
+
+    return tabs;
+  }, [groupStages, eliminationStages, fallbackStage?.id, selectedStageParam, viewParam, tournament.id, t]);
+
   const { data: allEncounters } = useQuery({
     queryKey: ["encounters", "tournament", tournament.id, tournament.workspace_id],
     queryFn: () =>
@@ -279,7 +368,7 @@ export default function TournamentBracketPage({
       {activeStages.length > 0 ? (
         <div className="space-y-6">
           {shouldShowGroupStage
-            ? groupStagePanels.map((panel) => (
+            ? groupStagePanels.map((panel, index) => (
                 <GroupStagePanel
                   key={panel.key}
                   stage={panel.stage}
@@ -290,6 +379,7 @@ export default function TournamentBracketPage({
                   onReport={handleReport}
                   canEdit={canEdit}
                   canReport={canReport}
+                  bracketTabs={index === 0 ? bracketTabs : undefined}
                 />
               ))
             : activeStages.map((stage) => {
@@ -317,12 +407,31 @@ export default function TournamentBracketPage({
                 className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
               >
                 <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-lg font-semibold text-white">{stage.name}</h3>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-                      {stage.stage_type.replace(/_/g, " ")}
-                    </p>
-                  </div>
+                  {bracketTabs.length > 1 ? (
+                    <div className="min-w-0">
+                      <div className="stage-tabs">
+                        {bracketTabs.map((tab) => (
+                          <Link
+                            key={tab.key}
+                            href={tab.href}
+                            className={cn("stage-tab", tab.isActive && "active")}
+                          >
+                            {tab.label}
+                          </Link>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                        {stage.stage_type.replace(/_/g, " ")}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-semibold text-white">{stage.name}</h3>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                        {stage.stage_type.replace(/_/g, " ")}
+                      </p>
+                    </div>
+                  )}
 
                   <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
                     {hasPlayoffStandings && (

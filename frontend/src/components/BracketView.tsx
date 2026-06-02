@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Pencil, FileEdit } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pencil, FileEdit, Maximize2, Minimize2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import type { Encounter } from "@/types/encounter.types";
 import type { StageType } from "@/types/tournament.types";
 import {
@@ -636,10 +637,33 @@ export function BracketView({
   canEdit,
   canReport
 }: BracketViewProps) {
+  const { t } = useTranslation();
   const [hoveredTeamId, setHoveredTeamId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const panRef = useRef({ active: false, startX: 0, startY: 0, left: 0, top: 0 });
   const [isGrabbing, setIsGrabbing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
   const layout = useMemo(() => buildLayout(encounters, type), [encounters, type]);
 
   // Drag-to-pan with the mouse; touch keeps native scrolling.
@@ -679,11 +703,55 @@ export function BracketView({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-bg-2)]">
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-bg-2)] transition-all duration-300",
+        isFullscreen && "fixed inset-0 z-50 rounded-none border-none bg-[var(--aqt-bg)] p-6 flex flex-col h-screen w-screen"
+      )}
+    >
+      {isFullscreen && (
+        <div className="mb-4 flex items-center justify-between border-b border-[var(--aqt-border)] pb-3">
+          <div>
+            <h2 className="text-xl font-bold text-white uppercase tracking-wider">
+              {type === "double_elimination"
+                ? "Double Elimination"
+                : type === "single_elimination"
+                  ? "Single Elimination"
+                  : "Bracket"}
+            </h2>
+            <p className="text-xs text-[var(--aqt-fg-muted)]">
+              {t("common.bracketInstructions")}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] text-[var(--aqt-fg-muted)] hover:text-white transition-colors"
+            onClick={() => setIsFullscreen(false)}
+            title={t("common.bracketExitFullscreen")}
+          >
+            <Minimize2 className="h-4.5 w-4.5" />
+          </button>
+        </div>
+      )}
+
+      {!isFullscreen && (
+        <div className="absolute right-4 top-4 z-10">
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.6)] text-[var(--aqt-fg-muted)] hover:text-white transition-colors"
+            onClick={() => setIsFullscreen(true)}
+            title={t("common.bracketFullscreen")}
+          >
+            <Maximize2 className="h-4.5 w-4.5" />
+          </button>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         className={cn(
-          "max-h-[78vh] select-none overflow-auto",
+          "select-none overflow-auto",
+          isFullscreen ? "flex-1 w-full h-full" : "max-h-[78vh]",
           isGrabbing ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePanStart}

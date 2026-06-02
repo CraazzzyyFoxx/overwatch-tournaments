@@ -343,6 +343,9 @@ class BalancerRegistrationRead(BaseRead):
     reviewed_at: datetime | None = None
     reviewed_by_username: str | None = None
     balancer_profile_overridden_at: datetime | None = None
+    # All-profiles-open admission verdict (only set when the tournament requires it):
+    # True = public, False = closed, None = unknown / not required.
+    profiles_open: bool | None = None
     roles: list[BalancerRegistrationRoleRead] = Field(default_factory=list)
 
 

@@ -277,6 +277,8 @@ export interface AdminRegistrationForm {
   auto_approve: boolean;
   opens_at: string | null;
   closes_at: string | null;
+  require_open_profile?: boolean;
+  open_profile_scope?: "main" | "all";
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
   subrole_catalog?: SubroleCatalog;
@@ -287,6 +289,8 @@ export interface AdminRegistrationFormUpsert {
   auto_approve: boolean;
   opens_at?: string | null;
   closes_at?: string | null;
+  require_open_profile?: boolean;
+  open_profile_scope?: "main" | "all";
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
 }
@@ -385,6 +389,7 @@ export interface AdminRegistration {
   reviewed_at: string | null;
   reviewed_by_username: string | null;
   balancer_profile_overridden_at: string | null;
+  profiles_open?: boolean | null;
 }
 
 export interface AdminRegistrationCreateInput {

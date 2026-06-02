@@ -76,6 +76,7 @@ import {
 } from "@/app/balancer/components/workspace-helpers";
 import { getRegistrationBattleTags } from "./balancer-page-helpers";
 import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
+import BattleTagRankHistory from "@/components/BattleTagRankHistory";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "tank", label: "Tank" },
@@ -1059,6 +1060,13 @@ export function PlayerEditModal({
                 </div>
               </SortableContext>
             </DndContext>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-white">Live rank (OverFast)</Label>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+              <BattleTagRankHistory userId={player.user_id} battleTag={primaryBattleTag} />
+            </div>
           </div>
 
           <div className="space-y-1">

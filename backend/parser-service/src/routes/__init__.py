@@ -7,6 +7,7 @@ from src.routes.hero import router as hero_router
 from src.routes.map import router as map_router
 from src.routes.match_logs import router as logs_router
 from src.routes.match_logs import task_router as logs_task_router
+from src.routes.rank_history import router as rank_history_router
 from src.routes.standing import router as standings_router
 from src.routes.team import router as team_router
 from src.routes.tournament import router as tournament_router
@@ -28,5 +29,6 @@ router.include_router(user_router)
 router.include_router(gamemode_router)
 router.include_router(hero_router)
 router.include_router(map_router)
+router.include_router(rank_history_router)
 router.include_router(admin_router)
 

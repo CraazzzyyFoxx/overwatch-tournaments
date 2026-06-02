@@ -17,7 +17,7 @@ import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
 
 import { useTranslation } from "@/i18n/LanguageContext";
-import RegistrationWizard from "./registration/RegistrationWizard";
+import RegistrationWizard from "@/components/registration/RegistrationWizard";
 
 type Props = {
   workspaceId: number;
