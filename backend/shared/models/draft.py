@@ -53,7 +53,9 @@ class DraftSession(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    # tournament_id index is provided by ix_draft_session_tournament_status +
+    # the partial-unique active index, so no standalone index here.
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="setup", default="setup")
     format: Mapped[str] = mapped_column(String(16), nullable=False, server_default="snake", default="snake")
@@ -96,7 +98,6 @@ class DraftTeam(db.TimeStampIntegerMixin):
     __tablename__ = "draft_team"
     __table_args__ = (
         UniqueConstraint("session_id", "draft_position", name="uq_draft_team_session_position"),
-        Index("ix_draft_team_session", "session_id"),
         {"schema": "balancer"},
     )
 
@@ -127,7 +128,8 @@ class DraftPlayer(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"), index=True)
+    # session_id index is provided by ix_draft_player_session_status (leftmost prefix).
+    session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"))
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -157,13 +159,14 @@ class DraftPlayer(db.TimeStampIntegerMixin):
 class DraftPick(db.TimeStampIntegerMixin):
     __tablename__ = "draft_pick"
     __table_args__ = (
+        # (session_id, overall_no) unique constraint also serves as the
+        # session+order lookup index — no separate ix needed.
         UniqueConstraint("session_id", "overall_no", name="uq_draft_pick_session_overall"),
         Index("ix_draft_pick_session_status", "session_id", "status"),
-        Index("ix_draft_pick_session_overall", "session_id", "overall_no"),
         {"schema": "balancer"},
     )
 
-    session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"))
     overall_no: Mapped[int] = mapped_column(Integer(), nullable=False)
     round_no: Mapped[int] = mapped_column(Integer(), nullable=False)
     pick_in_round: Mapped[int] = mapped_column(Integer(), nullable=False)
