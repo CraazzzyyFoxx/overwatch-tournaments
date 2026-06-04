@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
@@ -35,6 +36,7 @@ from shared.models.workspace import Workspace  # noqa: E402
 from shared.models.draft import DraftPick  # noqa: E402
 from shared.models.realtime import WorkspaceEvent  # noqa: E402
 from src import models  # noqa: E402
+from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
 from src.services.draft import lifecycle, realtime as draft_realtime, selection  # noqa: E402
 
@@ -303,6 +305,33 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.commit()
             with self.assertRaises(Exception):
                 await draft_export.export(s, draft)
+
+    async def test_clock_fires_autopick_when_expired(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            current.clock_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # force overdue
+            await s.commit()
+            pick_id = current.id
+            session_id = draft.id
+
+        fired = await draft_clock.fire_autopick_if_expired(self.Session, None, session_id)
+        self.assertTrue(fired)
+        async with self.Session() as s:
+            pick = await s.get(DraftPick, pick_id)
+            self.assertEqual(pick.status, DraftPickStatus.AUTOPICKED.value)
+            self.assertTrue(pick.is_autopick)
+
+    async def test_clock_noop_when_not_expired(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()  # clock_expires_at ~45s in the future
+            session_id = draft.id
+        fired = await draft_clock.fire_autopick_if_expired(self.Session, None, session_id)
+        self.assertFalse(fired)
 
     async def test_realtime_publisher_persists_event(self) -> None:
         async with self.Session() as s:

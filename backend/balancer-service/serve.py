@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -5,6 +6,7 @@ from faststream import FastStream
 from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
+from redis.asyncio import Redis
 
 from shared.messaging.config import BALANCER_JOBS_QUEUE
 from shared.observability import (
@@ -14,7 +16,9 @@ from shared.observability import (
 )
 from shared.schemas.events import BalancerJobEvent
 from src.composition import build_execute_balance_job_use_case
+from src.core import db
 from src.core.config import config
+from src.services.draft.clock import draft_clock_supervisor
 
 logger = setup_logging(
     service_name="balancer-worker",
@@ -51,6 +55,15 @@ async def setup_worker_observability() -> None:
     )
     start_worker_metrics_server(config.worker_metrics_port)
     logger.info("Balancer worker started")
+
+
+@app.on_startup
+async def start_draft_clock() -> None:
+    # Single server-authoritative clock owner per LIVE draft (guarded by a Redis
+    # lock inside the loop, so multiple worker replicas are safe).
+    redis = Redis.from_url(config.redis_url, decode_responses=True)
+    asyncio.create_task(draft_clock_supervisor(db.async_session_maker, redis))
+    logger.info("Draft clock supervisor started")
 
 
 @broker.subscriber(BALANCER_JOBS_QUEUE, decoder=_decode_balancer_message)

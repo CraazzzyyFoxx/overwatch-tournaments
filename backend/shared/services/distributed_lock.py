@@ -25,6 +25,13 @@ end
 return 0
 """
 
+_RENEW_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("pexpire", KEYS[1], ARGV[2])
+end
+return 0
+"""
+
 
 async def acquire_distributed_lock(
     redis: Any,
@@ -55,6 +62,12 @@ async def acquire_distributed_lock(
 async def release_distributed_lock(redis: Any, token: DistributedLockToken) -> bool:
     released = await redis.eval(_RELEASE_LOCK_SCRIPT, 1, token.key, token.value)
     return bool(released)
+
+
+async def renew_distributed_lock(redis: Any, token: DistributedLockToken, *, ttl_seconds: int) -> bool:
+    """Extend the lock TTL iff we still hold it (token matches). Returns False if lost."""
+    renewed = await redis.eval(_RENEW_LOCK_SCRIPT, 1, token.key, token.value, str(int(ttl_seconds * 1000)))
+    return bool(renewed)
 
 
 @asynccontextmanager
