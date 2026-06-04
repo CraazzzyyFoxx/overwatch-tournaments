@@ -1,0 +1,254 @@
+"""Integration tests for the draft service layer against a real Postgres.
+
+Requires a reachable database via POSTGRES_* env vars (use a disposable DB such
+as anak_dev — NEVER production). Skips cleanly if the DB is unreachable.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+from unittest import IsolatedAsyncioTestCase
+
+# psycopg async cannot run on Windows' default ProactorEventLoop.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
+for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
+    if candidate not in sys.path:
+        sys.path.insert(0, candidate)
+
+os.environ.setdefault("PROJECT_URL", "http://localhost")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+
+import sqlalchemy as sa  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
+
+from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
+from shared.models.user import User  # noqa: E402
+from shared.models.workspace import Workspace  # noqa: E402
+from shared.models.draft import DraftPick  # noqa: E402
+from src.services.draft import lifecycle, selection  # noqa: E402
+
+
+def _async_url() -> str:
+    u = os.environ.get("POSTGRES_USER", "postgres")
+    p = os.environ.get("POSTGRES_PASSWORD", "postgres")
+    h = os.environ.get("POSTGRES_HOST", "localhost")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    db = os.environ.get("POSTGRES_DB", "postgres")
+    return f"postgresql+psycopg://{u}:{p}@{h}:{port}/{db}"
+
+
+_UNIQUE = 0
+
+
+def _uniq() -> int:
+    global _UNIQUE
+    _UNIQUE += 1
+    return _UNIQUE
+
+
+class DraftIntegrationTests(IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.engine = create_async_engine(_async_url(), connect_args={"connect_timeout": 30})
+        try:
+            async with self.engine.connect() as c:
+                db = (await c.execute(sa.text("select current_database()"))).scalar()
+                if db == "anak_v5":  # hard guard: never run against prod
+                    self.skipTest("refusing to run integration tests against production anak_v5")
+        except Exception as exc:  # noqa: BLE001
+            await self.engine.dispose()
+            self.skipTest(f"database unreachable: {exc}")
+
+        self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
+        self._suffix = f"draft-it-{os.getpid()}-{_uniq()}"
+        async with self.Session() as s:
+            ws = Workspace(slug=f"ws-{self._suffix}", name=f"WS {self._suffix}")
+            s.add(ws)
+            await s.flush()
+            tourn = Tournament(workspace_id=ws.id, name=f"T {self._suffix}", status=DraftStatus.SETUP.value)
+            # Tournament.status is TournamentStatus; reuse "draft" value via enum string.
+            tourn.status = "draft"
+            s.add(tourn)
+            await s.flush()
+            users = []
+            for i in range(3):
+                u = User(name=f"cap-{self._suffix}-{i}")
+                s.add(u)
+                users.append(u)
+            await s.flush()
+            self.workspace_id = ws.id
+            self.tournament_id = tourn.id
+            self.captain_user_ids = [u.id for u in users]
+            await s.commit()
+
+    async def asyncTearDown(self) -> None:
+        if not hasattr(self, "Session"):
+            await self.engine.dispose()
+            return
+        async with self.Session() as s:
+            from shared.models.draft import DraftSession
+
+            ids = (
+                await s.scalars(sa.select(DraftSession.id).where(DraftSession.tournament_id == self.tournament_id))
+            ).all()
+            for sid in ids:
+                await s.execute(sa.delete(DraftSession).where(DraftSession.id == sid))
+            await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
+            await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids)))
+            await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
+            await s.commit()
+        await self.engine.dispose()
+
+    def _captains(self) -> list[lifecycle.CaptainSeed]:
+        return [
+            lifecycle.CaptainSeed(name=f"Cap{i}", draft_position=i + 1, user_id=uid)
+            for i, uid in enumerate(self.captain_user_ids)
+        ]
+
+    def _players(self) -> list[lifecycle.PlayerSeed]:
+        roles = [DraftRole.TANK, DraftRole.DPS, DraftRole.SUPPORT]
+        return [
+            lifecycle.PlayerSeed(primary_role=roles[i % 3], rank_value=3000 + i * 50, battle_tag=f"P{i}#1")
+            for i in range(9)
+        ]
+
+    async def _new_session(self, s):
+        draft = await lifecycle.create_session(
+            s,
+            tournament_id=self.tournament_id,
+            workspace_id=self.workspace_id,
+            rounds=2,
+            team_size=3,
+        )
+        await lifecycle.seed(s, draft, captains=self._captains(), players=self._players())
+        await s.commit()
+        return draft
+
+    async def test_seed_creates_snake_picks_and_ready(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            self.assertEqual(draft.status, DraftStatus.READY.value)
+            picks = (await s.scalars(sa.select(DraftPick).where(DraftPick.session_id == draft.id))).all()
+            # 3 teams x 2 rounds = 6 picks
+            self.assertEqual(len(picks), 6)
+            self.assertEqual(sorted(p.overall_no for p in picks), [1, 2, 3, 4, 5, 6])
+            # round 2 is reversed (snake): pick 4 -> team of seat 2 (draft_position 3)
+            by_no = {p.overall_no: p for p in picks}
+            teams = (
+                await s.scalars(sa.select(lifecycle.DraftTeam).where(lifecycle.DraftTeam.session_id == draft.id))
+            ).all()
+            pos_by_team = {t.id: t.draft_position for t in teams}
+            self.assertEqual(pos_by_team[by_no[1].draft_team_id], 1)
+            self.assertEqual(pos_by_team[by_no[4].draft_team_id], 3)
+
+    async def test_start_arms_first_pick(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            self.assertEqual(draft.status, DraftStatus.LIVE.value)
+            self.assertIsNotNone(draft.current_pick_id)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            self.assertEqual(current.status, DraftPickStatus.ON_CLOCK.value)
+            self.assertEqual(current.overall_no, 1)
+            self.assertIsNotNone(current.clock_expires_at)
+
+    async def test_select_advances_board(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            available = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer).where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                )
+            ).all()
+            chosen = available[0]
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=team.captain_user_id,
+                is_admin=False,
+            )
+            await s.commit()
+            self.assertEqual(res.pick.status, DraftPickStatus.COMPLETED.value)
+            self.assertIsNotNone(res.next_pick)
+            self.assertEqual(res.next_pick.overall_no, 2)
+            await s.refresh(chosen)
+            self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
+            self.assertEqual(chosen.drafted_by_team_id, current.draft_team_id)
+
+    async def test_finalize_race_only_one_winner(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            v = current.version
+            won_first = await selection._finalize(
+                s,
+                current.id,
+                status=DraftPickStatus.COMPLETED,
+                player_id=None,
+                picked_by_user_id=None,
+                is_autopick=False,
+                is_admin_override=False,
+                expected_version=v,
+            )
+            # Second writer with the same expected_version must lose.
+            won_second = await selection._finalize(
+                s,
+                current.id,
+                status=DraftPickStatus.AUTOPICKED,
+                player_id=None,
+                picked_by_user_id=None,
+                is_autopick=True,
+                is_admin_override=False,
+                expected_version=v,
+            )
+            await s.commit()
+            self.assertTrue(won_first)
+            self.assertFalse(won_second)
+
+    async def test_autopick_picks_available_and_advances(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            res = await selection.autopick(s, draft, current, expected_version=current.version)
+            await s.commit()
+            self.assertIn(res.pick.status, {DraftPickStatus.AUTOPICKED.value})
+            self.assertIsNotNone(res.pick.picked_player_id)
+            self.assertTrue(res.pick.is_autopick)
+            self.assertIsNotNone(res.next_pick)
+
+    async def test_one_active_draft_per_tournament(self) -> None:
+        async with self.Session() as s:
+            await self._new_session(s)
+        async with self.Session() as s2:
+            with self.assertRaises(Exception):
+                await lifecycle.create_session(
+                    s2,
+                    tournament_id=self.tournament_id,
+                    workspace_id=self.workspace_id,
+                    rounds=2,
+                    team_size=3,
+                )
+                await s2.commit()
