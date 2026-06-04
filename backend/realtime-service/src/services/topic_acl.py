@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from loguru import logger
 from shared.models.auth_user import AuthUser
 from shared.schemas.realtime import TopicPattern
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +17,15 @@ async def _allow_public_bracket(
     return True
 
 
-async def _deny_draft_until_implemented(
+async def _allow_public_draft(
     user: AuthUser | None,
     groups: tuple[str, ...],
     session: AsyncSession,
 ) -> bool:
-    logger.info("Draft realtime ACL not yet implemented", tournament_id=groups[0] if groups else None)
-    return False
+    # Draft spectating is public (anonymous allowed), like the bracket topic.
+    # The WebSocket relay is read-only; every draft mutation is an authenticated
+    # REST call validated in balancer-service, so no write-auth is enforced here.
+    return True
 
 
 async def _allow_workspace_member(
@@ -59,5 +60,5 @@ class TopicAclRegistry:
 
 topic_acl_registry = TopicAclRegistry()
 topic_acl_registry.register("tournament:*:bracket", _allow_public_bracket)
-topic_acl_registry.register("tournament:*:draft", _deny_draft_until_implemented)
+topic_acl_registry.register("tournament:*:draft", _allow_public_draft)
 topic_acl_registry.register("workspace:*:*", _allow_workspace_member)
