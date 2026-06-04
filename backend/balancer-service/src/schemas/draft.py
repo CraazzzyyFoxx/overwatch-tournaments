@@ -99,11 +99,21 @@ class DraftManualPlayerInput(BaseModel):
     rank_value: int | None = None
 
 
+class DraftPoolCaptainInput(BaseModel):
+    """A captain chosen from the existing balancer pool (by balancer.player id)."""
+
+    pool_player_id: int
+    name: str | None = None
+
+
 class DraftSeedRequest(BaseModel):
     source_balance_id: int | None = None
     randomize_seed_order: bool = False
     seed: int | None = None
-    # Only used when the session pool_source is MANUAL.
+    # Pool-derived seeding (preferred): captains picked from the balancer pool;
+    # every other in-pool player becomes available. Roles/ranks come from the pool.
+    pool_captains: list[DraftPoolCaptainInput] = Field(default_factory=list)
+    # Manual seeding fallback.
     captains: list[DraftManualCaptainInput] = Field(default_factory=list)
     players: list[DraftManualPlayerInput] = Field(default_factory=list)
 

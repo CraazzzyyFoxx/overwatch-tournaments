@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from shared.core import draft_state
 from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus
 from shared.core.errors import ApiExc, ApiHTTPException
+from shared.models.balancer import BalancerPlayer
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 
 from src.services.draft.snake_order import generate_pick_order
@@ -36,6 +37,12 @@ class CaptainSeed:
     draft_position: int
     user_id: int | None = None
     battle_tag: str | None = None
+    # Real role/rank when the captain is drawn from the balancer pool.
+    primary_role: DraftRole | None = None
+    sub_role: str | None = None
+    is_flex: bool = False
+    division_number: int | None = None
+    rank_value: int | None = None
 
 
 @dataclass(frozen=True)
@@ -159,7 +166,12 @@ async def seed(
                 session_id=draft_session.id,
                 user_id=cap.user_id,
                 battle_tag=cap.battle_tag,
-                primary_role=DraftRole.TANK.value,  # captain role is unknown at seed; refined on pick
+                # Real role from the pool when available; TANK placeholder otherwise.
+                primary_role=(cap.primary_role or DraftRole.TANK).value,
+                sub_role=cap.sub_role,
+                is_flex=cap.is_flex,
+                division_number=cap.division_number,
+                rank_value=cap.rank_value,
                 is_captain=True,
                 status=DraftPlayerStatus.PICKED.value,
                 drafted_by_team_id=team.id,
@@ -203,6 +215,132 @@ async def seed(
     await session.flush()
     await session.refresh(draft_session)
     return draft_session
+
+
+def _to_draft_role(role: str | None) -> DraftRole | None:
+    if not role:
+        return None
+    normalized = role.strip().lower()
+    if normalized in {"dps", "damage"}:
+        return DraftRole.DPS
+    if normalized == "tank":
+        return DraftRole.TANK
+    if normalized == "support":
+        return DraftRole.SUPPORT
+    return None
+
+
+def _map_pool_player(bp: BalancerPlayer) -> dict:
+    """Derive draft role/rank fields from a balancer pool player's role_entries.
+
+    Reuses the existing balancer pool data (ranks, roles, subtypes, flex) instead
+    of re-entering it: active entries sorted by priority -> primary + secondaries.
+    """
+    entries = sorted(
+        (e for e in (bp.role_entries or []) if e.is_active),
+        key=lambda e: e.priority,
+    )
+    roles: list[DraftRole] = []
+    primary_entry = None
+    for e in entries:
+        role = _to_draft_role(e.role)
+        if role is not None and role not in roles:
+            roles.append(role)
+            if primary_entry is None:
+                primary_entry = e
+    primary = roles[0] if roles else (_to_draft_role(bp.primary_role) or DraftRole.DPS)
+    secondary = [r for r in roles[1:]]
+    rank_value = (primary_entry.rank_value if primary_entry else None) or bp.rank_value
+    division_number = (primary_entry.division_number if primary_entry else None) or bp.division_number
+    sub_role = primary_entry.subtype if primary_entry else None
+    return {
+        "primary_role": primary,
+        "secondary_roles": secondary,
+        "sub_role": sub_role,
+        "rank_value": rank_value,
+        "division_number": division_number,
+        "is_flex": bool(bp.is_flex),
+    }
+
+
+async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerPlayer]:
+    """Load the existing balancer pool (in-pool players) with their role entries."""
+    return list(
+        await session.scalars(
+            sa.select(BalancerPlayer)
+            .where(
+                BalancerPlayer.tournament_id == tournament_id,
+                BalancerPlayer.is_in_pool.is_(True),
+            )
+            .options(selectinload(BalancerPlayer.role_entries))
+            .order_by(BalancerPlayer.battle_tag_normalized.asc())
+        )
+    )
+
+
+async def seed_from_pool(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    *,
+    captain_player_ids: list[int],
+    team_names: dict[int, str] | None = None,
+) -> DraftSession:
+    """Seed a draft from the existing balancer pool.
+
+    ``captain_player_ids`` are ``balancer.player`` ids chosen as captains (seed
+    order = list order). Every other in-pool player becomes an available draft
+    player. Roles/ranks come straight from the balancer pool — no manual entry.
+    """
+    pool = await load_pool(session, draft_session.tournament_id)
+    by_id = {bp.id: bp for bp in pool}
+    if not captain_player_ids:
+        raise _err("draft_no_captains", "Select at least one captain from the pool")
+
+    team_names = team_names or {}
+    captains: list[CaptainSeed] = []
+    for position, pid in enumerate(captain_player_ids, start=1):
+        bp = by_id.get(pid)
+        if bp is None:
+            raise _err(
+                "captain_not_in_pool",
+                f"Captain player {pid} is not in the balancer pool for this tournament",
+                status_code=422,
+            )
+        mapped = _map_pool_player(bp)
+        captains.append(
+            CaptainSeed(
+                name=team_names.get(pid) or bp.battle_tag or f"Team {position}",
+                draft_position=position,
+                user_id=bp.user_id,
+                battle_tag=bp.battle_tag,
+                primary_role=mapped["primary_role"],
+                sub_role=mapped["sub_role"],
+                is_flex=mapped["is_flex"],
+                division_number=mapped["division_number"],
+                rank_value=mapped["rank_value"],
+            )
+        )
+
+    captain_ids = set(captain_player_ids)
+    players: list[PlayerSeed] = []
+    for bp in pool:
+        if bp.id in captain_ids:
+            continue
+        mapped = _map_pool_player(bp)
+        players.append(
+            PlayerSeed(
+                primary_role=mapped["primary_role"],
+                user_id=bp.user_id,
+                battle_tag=bp.battle_tag,
+                secondary_roles=mapped["secondary_roles"],
+                sub_role=mapped["sub_role"],
+                is_flex=mapped["is_flex"],
+                division_number=mapped["division_number"],
+                rank_value=mapped["rank_value"],
+            )
+        )
+
+    return await seed(session, draft_session, captains=captains, players=players)
 
 
 def _arm_clock(pick: DraftPick, pick_time_seconds: int, now: datetime) -> None:

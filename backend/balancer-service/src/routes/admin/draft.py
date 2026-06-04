@@ -260,29 +260,41 @@ async def seed_route(
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
 ) -> DraftSessionRead:
     draft = await _load_session(session, session_id)
-    if not payload.captains:
+    if payload.pool_captains:
+        # Pool-derived seeding: captains chosen from the existing balancer pool,
+        # everyone else becomes available. No manual entry.
+        await lifecycle.seed_from_pool(
+            session,
+            draft,
+            captain_player_ids=[c.pool_player_id for c in payload.pool_captains],
+            team_names={c.pool_player_id: c.name for c in payload.pool_captains if c.name},
+        )
+    elif payload.captains:
+        captains = [
+            lifecycle.CaptainSeed(
+                name=c.name, draft_position=c.draft_position, user_id=c.user_id, battle_tag=c.battle_tag
+            )
+            for c in payload.captains
+        ]
+        players = [
+            lifecycle.PlayerSeed(
+                primary_role=p.primary_role,
+                user_id=p.user_id,
+                battle_tag=p.battle_tag,
+                secondary_roles=p.secondary_roles,
+                sub_role=p.sub_role,
+                is_flex=p.is_flex,
+                division_number=p.division_number,
+                rank_value=p.rank_value,
+            )
+            for p in payload.players
+        ]
+        await lifecycle.seed(session, draft, captains=captains, players=players)
+    else:
         raise HTTPException(
-            status_code=501,
-            detail="Balance-derived seeding is not yet implemented; provide captains/players",
+            status_code=422,
+            detail="Provide pool_captains (from the balancer pool) or manual captains",
         )
-    captains = [
-        lifecycle.CaptainSeed(name=c.name, draft_position=c.draft_position, user_id=c.user_id, battle_tag=c.battle_tag)
-        for c in payload.captains
-    ]
-    players = [
-        lifecycle.PlayerSeed(
-            primary_role=p.primary_role,
-            user_id=p.user_id,
-            battle_tag=p.battle_tag,
-            secondary_roles=p.secondary_roles,
-            sub_role=p.sub_role,
-            is_flex=p.is_flex,
-            division_number=p.division_number,
-            rank_value=p.rank_value,
-        )
-        for p in payload.players
-    ]
-    await lifecycle.seed(session, draft, captains=captains, players=players)
     await draft_rt.publish_draft_event(
         session,
         redis,

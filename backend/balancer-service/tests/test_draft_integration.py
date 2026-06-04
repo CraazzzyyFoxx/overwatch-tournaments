@@ -340,14 +340,15 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         async with self.Session() as s:
             draft = await self._new_session(s)
             await draft_realtime.publish_draft_event(
-                s, None, draft_session=draft, event_type="draft.session_updated",
+                s,
+                None,
+                draft_session=draft,
+                event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},
             )
             await s.commit()
             topic = f"tournament:{self.tournament_id}:draft"
-            max_id = await s.scalar(
-                sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic)
-            )
+            max_id = await s.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic))
             board = await draft_board.build_board(s, draft)
             self.assertIsNotNone(board.last_event_id)
             self.assertEqual(board.last_event_id, max_id)
@@ -380,11 +381,93 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(removed2, 3)
             self.assertEqual(imported2, 3)
             teams = (
-                await s.scalars(
-                    sa.select(models.Team).where(models.Team.tournament_id == self.tournament_id)
-                )
+                await s.scalars(sa.select(models.Team).where(models.Team.tournament_id == self.tournament_id))
             ).all()
             self.assertEqual(len(teams), 3)
+
+    async def _build_balancer_pool(self, s, n: int) -> list[int]:
+        """Create n in-pool BalancerPlayer rows (with role entries). Returns ids."""
+        from shared.models.balancer import (
+            BalancerApplication,
+            BalancerPlayer,
+            BalancerPlayerRoleEntry,
+            BalancerTournamentSheet,
+        )
+
+        sheet = BalancerTournamentSheet(tournament_id=self.tournament_id, source_url="x", sheet_id="x")
+        s.add(sheet)
+        await s.flush()
+        roles = ["tank", "dps", "support"]
+        ids: list[int] = []
+        for i in range(n):
+            tag = f"Pool{self._suffix}-{i}#1"
+            app = BalancerApplication(
+                tournament_id=self.tournament_id,
+                tournament_sheet_id=sheet.id,
+                battle_tag=tag,
+                battle_tag_normalized=tag.lower(),
+            )
+            s.add(app)
+            await s.flush()
+            player = BalancerPlayer(
+                tournament_id=self.tournament_id,
+                application_id=app.id,
+                battle_tag=tag,
+                battle_tag_normalized=tag.lower(),
+                is_in_pool=True,
+                rank_value=3000 + i * 25,
+            )
+            s.add(player)
+            await s.flush()
+            s.add(
+                BalancerPlayerRoleEntry(
+                    player_id=player.id,
+                    role=roles[i % 3],
+                    priority=1,
+                    rank_value=3000 + i * 25,
+                    is_active=True,
+                )
+            )
+            ids.append(player.id)
+        await s.flush()
+        return ids
+
+    async def test_seed_from_pool_uses_existing_balancer_pool(self) -> None:
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, rounds=2, team_size=3
+            )
+            pool_ids = await self._build_balancer_pool(s, 9)
+            captain_ids = pool_ids[:3]
+            await lifecycle.seed_from_pool(s, draft, captain_player_ids=captain_ids)
+            await s.commit()
+
+            self.assertEqual(draft.status, DraftStatus.READY.value)
+            teams = (
+                await s.scalars(sa.select(lifecycle.DraftTeam).where(lifecycle.DraftTeam.session_id == draft.id))
+            ).all()
+            self.assertEqual(len(teams), 3)  # one team per captain
+            players = (
+                await s.scalars(sa.select(lifecycle.DraftPlayer).where(lifecycle.DraftPlayer.session_id == draft.id))
+            ).all()
+            self.assertEqual(len(players), 9)  # 3 captains + 6 pool, all derived from balancer
+            captains = [p for p in players if p.is_captain]
+            self.assertEqual(len(captains), 3)
+            # roles came from the balancer pool (not a TANK placeholder for all)
+            self.assertEqual({p.primary_role for p in players}, {"tank", "dps", "support"})
+            available = [p for p in players if p.status == DraftPlayerStatus.AVAILABLE.value]
+            self.assertEqual(len(available), 6)
+            # ranks carried over from the pool
+            self.assertTrue(all(p.rank_value and p.rank_value >= 3000 for p in players))
+
+    async def test_seed_from_pool_rejects_captain_not_in_pool(self) -> None:
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, rounds=2, team_size=3
+            )
+            await self._build_balancer_pool(s, 4)
+            with self.assertRaises(Exception):
+                await lifecycle.seed_from_pool(s, draft, captain_player_ids=[999999])
 
     async def test_realtime_publisher_persists_event(self) -> None:
         async with self.Session() as s:
