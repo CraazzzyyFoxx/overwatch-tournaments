@@ -115,6 +115,7 @@ export interface TournamentUpdateInput {
   challonge_slug?: string | null;
   is_league?: boolean;
   is_finished?: boolean;
+  team_formation?: string;
   start_date?: string;
   end_date?: string;
   registration_opens_at?: string | null;

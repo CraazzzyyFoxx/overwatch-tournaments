@@ -158,7 +158,8 @@ export function TournamentWorkspaceHeader({
       registration_closes_at: tournamentFormData.registration_closes_at || null,
       check_in_opens_at: tournamentFormData.check_in_opens_at || null,
       check_in_closes_at: tournamentFormData.check_in_closes_at || null,
-      division_grid_version_id: tournamentFormData.division_grid_version_id
+      division_grid_version_id: tournamentFormData.division_grid_version_id,
+      team_formation: tournamentFormData.team_formation
     };
 
     updateTournamentMutation.mutate(payload);

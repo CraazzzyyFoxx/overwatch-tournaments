@@ -39,6 +39,7 @@ export type TournamentFormFieldsValue = {
   draw_points?: number;
   loss_points?: number;
   division_grid_version_id?: number | null;
+  team_formation?: string;
 };
 
 interface TournamentFormFieldsProps<T extends TournamentFormFieldsValue> {
@@ -71,6 +72,8 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
     mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
   const showScoring = mode === "workspace-edit";
   const showPeriods = mode === "workspace-edit";
+  const showTeamFormation =
+    mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
 
   return (
     <div className="space-y-4">
@@ -156,6 +159,27 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
           {mode === "workspace-edit" ? "Treat as league season" : "Is League"}
         </Label>
       </div>
+
+      {showTeamFormation ? (
+        <div>
+          <Label htmlFor={`${idPrefix}-team-formation`}>Team formation</Label>
+          <Select
+            value={value.team_formation ?? "balancer"}
+            onValueChange={(nextValue) => onChange({ ...value, team_formation: nextValue })}
+          >
+            <SelectTrigger id={`${idPrefix}-team-formation`}>
+              <SelectValue placeholder="Select method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="balancer">Auto-balance (Balancer)</SelectItem>
+              <SelectItem value="draft">Live draft</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            How teams are formed for this tournament.
+          </p>
+        </div>
+      ) : null}
 
       {showFinished ? (
         <div className="flex items-center gap-2">
