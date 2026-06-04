@@ -33,7 +33,10 @@ from shared.models.tournament import Tournament  # noqa: E402
 from shared.models.user import User  # noqa: E402
 from shared.models.workspace import Workspace  # noqa: E402
 from shared.models.draft import DraftPick  # noqa: E402
-from src.services.draft import lifecycle, selection  # noqa: E402
+from shared.models.realtime import WorkspaceEvent  # noqa: E402
+from src import models  # noqa: E402
+from src.services.draft import export as draft_export  # noqa: E402
+from src.services.draft import lifecycle, realtime as draft_realtime, selection  # noqa: E402
 
 
 def _async_url() -> str:
@@ -100,6 +103,10 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             ).all()
             for sid in ids:
                 await s.execute(sa.delete(DraftSession).where(DraftSession.id == sid))
+            # Rows created by export() + realtime publisher.
+            await s.execute(sa.delete(WorkspaceEvent).where(WorkspaceEvent.tournament_id == self.tournament_id))
+            await s.execute(sa.delete(models.Player).where(models.Player.tournament_id == self.tournament_id))
+            await s.execute(sa.delete(models.Team).where(models.Team.tournament_id == self.tournament_id))
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
             await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids)))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
@@ -252,3 +259,69 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                     team_size=3,
                 )
                 await s2.commit()
+
+    async def test_full_run_autopick_to_completion_then_export(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+
+            # Autopick every pick until the draft completes.
+            guard = 0
+            while True:
+                await s.refresh(draft)
+                if draft.status != DraftStatus.LIVE.value:
+                    break
+                guard += 1
+                self.assertLess(guard, 50, "draft did not converge")
+                current = await s.get(DraftPick, draft.current_pick_id)
+                await selection.autopick(s, draft, current, expected_version=current.version)
+                await s.commit()
+
+            self.assertEqual(draft.status, DraftStatus.COMPLETED.value)
+
+            _, removed, imported = await draft_export.export(s, draft)
+            await s.commit()
+            self.assertEqual(removed, 0)
+            self.assertEqual(imported, 3)
+            self.assertEqual(draft.export_status, "success")
+            self.assertIsNotNone(draft.exported_at)
+
+            teams = (
+                await s.scalars(sa.select(models.Team).where(models.Team.tournament_id == self.tournament_id))
+            ).all()
+            self.assertEqual(len(teams), 3)
+            dteams = (
+                await s.scalars(sa.select(lifecycle.DraftTeam).where(lifecycle.DraftTeam.session_id == draft.id))
+            ).all()
+            self.assertTrue(all(t.exported_team_id is not None for t in dteams))
+
+    async def test_export_rejects_incomplete_draft(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            with self.assertRaises(Exception):
+                await draft_export.export(s, draft)
+
+    async def test_realtime_publisher_persists_event(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await draft_realtime.publish_draft_event(
+                s,
+                None,  # no redis: only the durable WorkspaceEvent is written
+                draft_session=draft,
+                event_type="draft.session_updated",
+                payload={"session_id": draft.id, "status": draft.status},
+            )
+            await s.commit()
+            topic = f"tournament:{self.tournament_id}:draft"
+            row = await s.scalar(
+                sa.select(WorkspaceEvent).where(
+                    WorkspaceEvent.topic == topic,
+                    WorkspaceEvent.event_type == "draft.session_updated",
+                )
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row.tournament_id, self.tournament_id)
+            self.assertEqual(row.payload["session_id"], draft.id)
