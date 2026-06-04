@@ -174,6 +174,51 @@ class TournamentStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class DraftStatus(StrEnum):
+    SETUP = "setup"
+    READY = "ready"
+    LIVE = "live"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class DraftFormat(StrEnum):
+    SNAKE = "snake"
+    LINEAR = "linear"
+
+
+class DraftPoolSource(StrEnum):
+    BALANCER_BALANCE = "balancer_balance"
+    MANUAL = "manual"
+
+
+class DraftAutopickStrategy(StrEnum):
+    BEST_FIT = "best_fit"
+    BEST_AVAILABLE = "best_available"
+    ROLE_NEED = "role_need"
+
+
+class DraftRole(StrEnum):
+    TANK = "tank"
+    DPS = "dps"
+    SUPPORT = "support"
+
+
+class DraftPlayerStatus(StrEnum):
+    AVAILABLE = "available"
+    PICKED = "picked"
+    REMOVED = "removed"
+
+
+class DraftPickStatus(StrEnum):
+    UPCOMING = "upcoming"
+    ON_CLOCK = "on_clock"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+    AUTOPICKED = "autopicked"
+
+
 class StageType(StrEnum):
     ROUND_ROBIN = "round_robin"
     SINGLE_ELIMINATION = "single_elimination"
