@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import DraftPlayerStatus, DraftStatus
+from shared.core.enums import DraftStatus
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from shared.models.realtime import WorkspaceEvent
 from shared.services import realtime_topics
@@ -59,12 +59,11 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
             sa.select(DraftPick).where(DraftPick.session_id == draft_session.id).order_by(DraftPick.overall_no.asc())
         )
     ).all()
-    available = (
+    players = (
         await session.scalars(
-            sa.select(DraftPlayer).where(
-                DraftPlayer.session_id == draft_session.id,
-                DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
-            )
+            sa.select(DraftPlayer)
+            .where(DraftPlayer.session_id == draft_session.id)
+            .order_by(DraftPlayer.id.asc())
         )
     ).all()
     current = await session.get(DraftPick, draft_session.current_pick_id) if draft_session.current_pick_id else None
@@ -74,7 +73,7 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         session=DraftSessionRead.model_validate(draft_session),
         teams=[DraftTeamRead.model_validate(t) for t in teams],
         picks=[DraftPickRead.model_validate(p) for p in picks],
-        available_players=[DraftPlayerRead.model_validate(p) for p in available],
+        players=[DraftPlayerRead.model_validate(p) for p in players],
         current_pick=DraftPickRead.model_validate(current) if current else None,
         server_time=datetime.now(UTC),
         last_event_id=last_event_id,

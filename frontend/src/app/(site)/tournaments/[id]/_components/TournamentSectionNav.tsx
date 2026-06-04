@@ -8,6 +8,7 @@ import {
   Calendar,
   ClipboardList,
   LayoutGrid,
+  ListOrdered,
   Trophy,
   Users,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const baseItems = [
   { title: "Matches", icon: Calendar, tab: "matches" },
   { title: "Heroes", icon: Trophy, tab: "heroes" },
   { title: "Standings", icon: BarChart3, tab: "standings" },
+  { title: "Draft", icon: ListOrdered, tab: "draft" },
 ] as const;
 
 const phaseLockedTabs = new Set<(typeof baseItems)[number]["tab"]>([

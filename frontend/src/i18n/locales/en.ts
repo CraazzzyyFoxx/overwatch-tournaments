@@ -1,5 +1,6 @@
 export const en = {
   common: {
+    draft: "Draft",
     back: "Back",
     cancel: "Cancel",
     next: "Next",
@@ -228,6 +229,35 @@ export const en = {
       pendingReviewDesc: "The application is currently under review by the tournament organizers.",
       showDetails: "Show details",
       hideDetails: "Hide details"
+    }
+  },
+  draft: {
+    loading: "Loading draft…",
+    notYourPick: "Wait for your turn to pick",
+    round: "Round",
+    pick: "Pick",
+    onTheClock: "On the clock",
+    state: {
+      setup: "Setup",
+      ready: "Ready",
+      live: "Live",
+      paused: "Paused",
+      completed: "Completed",
+      cancelled: "Cancelled"
+    },
+    empty: {
+      title: "No draft yet",
+      body: "The draft hasn’t been set up for this tournament."
+    },
+    roster: { empty: "Empty" },
+    pool: { title: "Available players", empty: "No available players" },
+    actions: { confirm: "Confirm pick" },
+    admin: {
+      start: "Start draft",
+      pause: "Pause",
+      resume: "Resume",
+      cancel: "Cancel draft",
+      export: "Export to teams"
     }
   }
 };

@@ -1,5 +1,6 @@
 export const ru = {
   common: {
+    draft: "Драфт",
     back: "Назад",
     cancel: "Отмена",
     next: "Далее",
@@ -228,6 +229,35 @@ export const ru = {
       pendingReviewDesc: "Заявка находится в статусе рассмотрения организаторами турнира.",
       showDetails: "Подробнее",
       hideDetails: "Скрыть"
+    }
+  },
+  draft: {
+    loading: "Загрузка драфта…",
+    notYourPick: "Дождитесь своей очереди для пика",
+    round: "Раунд",
+    pick: "Пик",
+    onTheClock: "На часах",
+    state: {
+      setup: "Настройка",
+      ready: "Готов",
+      live: "В эфире",
+      paused: "Пауза",
+      completed: "Завершён",
+      cancelled: "Отменён"
+    },
+    empty: {
+      title: "Драфта пока нет",
+      body: "Драфт ещё не настроен для этого турнира."
+    },
+    roster: { empty: "Пусто" },
+    pool: { title: "Доступные игроки", empty: "Нет доступных игроков" },
+    actions: { confirm: "Подтвердить пик" },
+    admin: {
+      start: "Начать драфт",
+      pause: "Пауза",
+      resume: "Продолжить",
+      cancel: "Отменить драфт",
+      export: "Экспорт в команды"
     }
   }
 };
