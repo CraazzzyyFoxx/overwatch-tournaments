@@ -99,9 +99,7 @@ def _build_workspace_cache(
     return workspaces, workspace_rbac
 
 
-async def _resolve_user_from_token(
-    user_id: int, payload: dict[str, Any]
-) -> AuthUser:
+async def _resolve_user_from_token(user_id: int, payload: dict[str, Any]) -> AuthUser:
     roles = _build_roles(payload.get("roles"))
     permissions = _build_permissions(payload.get("permissions"))
     workspaces, workspace_rbac = _build_workspace_cache(payload.get("workspaces"))
@@ -215,9 +213,7 @@ async def _get_player_workspace_id(session: AsyncSession, player_id: int) -> int
 
 async def _get_balance_workspace_id(session: AsyncSession, balance_id: int) -> int:
     workspace_id = await session.scalar(
-        sa.select(
-            sa.func.coalesce(models.BalancerBalance.workspace_id, models.Tournament.workspace_id)
-        )
+        sa.select(sa.func.coalesce(models.BalancerBalance.workspace_id, models.Tournament.workspace_id))
         .join(models.Tournament, models.Tournament.id == models.BalancerBalance.tournament_id)
         .where(models.BalancerBalance.id == balance_id)
     )
@@ -307,6 +303,54 @@ def require_balance_permission(resource: str, action: str):
             workspace_id=workspace_id,
             resource=resource,
             action=action,
+        )
+
+    return permission_checker
+
+
+async def _get_draft_session_workspace_id(session: AsyncSession, session_id: int) -> int:
+    workspace_id = await session.scalar(
+        sa.select(models.DraftSession.workspace_id).where(models.DraftSession.id == session_id)
+    )
+    if workspace_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft session not found")
+    return int(workspace_id)
+
+
+async def _get_pick_workspace_id(session: AsyncSession, pick_id: int) -> int:
+    workspace_id = await session.scalar(
+        sa.select(models.DraftSession.workspace_id)
+        .join(models.DraftPick, models.DraftPick.session_id == models.DraftSession.id)
+        .where(models.DraftPick.id == pick_id)
+    )
+    if workspace_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft pick not found")
+    return int(workspace_id)
+
+
+def require_draft_session_permission(resource: str, action: str):
+    async def permission_checker(
+        session_id: int,
+        session: Annotated[AsyncSession, Depends(db.get_async_session)],
+        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+    ) -> AuthUser:
+        workspace_id = await _get_draft_session_workspace_id(session, session_id)
+        return await _require_workspace_permission(
+            current_user, workspace_id=workspace_id, resource=resource, action=action
+        )
+
+    return permission_checker
+
+
+def require_pick_permission(resource: str, action: str):
+    async def permission_checker(
+        pick_id: int,
+        session: Annotated[AsyncSession, Depends(db.get_async_session)],
+        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+    ) -> AuthUser:
+        workspace_id = await _get_pick_workspace_id(session, pick_id)
+        return await _require_workspace_permission(
+            current_user, workspace_id=workspace_id, resource=resource, action=action
         )
 
     return permission_checker

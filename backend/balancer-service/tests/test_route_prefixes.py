@@ -37,3 +37,12 @@ class BalancerRoutePrefixTests(TestCase):
         self.assertIn("/balancer/tournaments/{tournament_id}/sheet", paths)
         self.assertIn("/ws/{workspace_id}/balancer-statuses", paths)
         self.assertTrue(all(not path.startswith("/admin") for path in paths))
+
+    def test_draft_routes_are_exposed(self) -> None:
+        paths = {route.path for route in organizer_router.routes}
+        # Public reads + admin lifecycle + pick actions, all under /draft.
+        self.assertIn("/draft/tournaments/{tournament_id}/draft", paths)
+        self.assertIn("/draft/sessions/{session_id}/board", paths)
+        self.assertIn("/draft/tournaments/{tournament_id}/sessions/{session_id}/start", paths)
+        self.assertIn("/draft/picks/{pick_id}/select", paths)
+        self.assertIn("/draft/picks/{pick_id}/autopick", paths)
