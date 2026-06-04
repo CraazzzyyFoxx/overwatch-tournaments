@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,15 +45,21 @@ router = APIRouter(prefix="/draft", tags=["draft"])
 
 
 async def get_redis() -> AsyncGenerator[Redis | None, None]:
-    client: Redis | None = None
+    # A yield-dependency must yield EXACTLY once. Never yield inside an except:
+    # FastAPI throws the endpoint's exception into the generator at the yield,
+    # and a second yield raises "generator didn't stop after athrow()", masking
+    # the real error. Redis.from_url builds the client without I/O, so guard it
+    # before the try and yield None on its (rare) failure without re-yielding.
     try:
-        client = Redis.from_url(config.redis_url, decode_responses=True)
-        yield client
+        client: Redis | None = Redis.from_url(config.redis_url, decode_responses=True)
     except Exception:  # noqa: BLE001 — realtime is best-effort; events persist regardless
+        logger.warning("Draft realtime Redis unavailable; events persist but are not broadcast")
         yield None
+        return
+    try:
+        yield client
     finally:
-        if client is not None:
-            await client.aclose()
+        await client.aclose()
 
 
 async def _load_session(session: AsyncSession, session_id: int) -> DraftSession:
