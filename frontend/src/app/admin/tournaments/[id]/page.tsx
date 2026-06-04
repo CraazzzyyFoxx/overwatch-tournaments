@@ -17,7 +17,7 @@ import workspaceService from "@/services/workspace.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { TournamentWorkspaceHeader } from "./components/TournamentWorkspaceHeader";
 
-type TournamentWorkspaceTab = "overview" | "teams" | "matches" | "logs";
+type TournamentWorkspaceTab = "overview" | "teams" | "matches" | "logs" | "draft";
 const TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS = 60_000;
 
 const tabFallback = (
@@ -55,6 +55,14 @@ const TournamentLogsTab = dynamic(
   () =>
     import("./components/TournamentLogsTab").then((module) => ({
       default: module.TournamentLogsTab
+    })),
+  { loading: () => tabFallback }
+);
+
+const DraftSessionDashboard = dynamic(
+  () =>
+    import("./components/DraftSessionDashboard").then((module) => ({
+      default: module.DraftSessionDashboard
     })),
   { loading: () => tabFallback }
 );
@@ -274,6 +282,9 @@ export default function AdminTournamentWorkspacePage() {
           <TabsTrigger value="teams">Teams</TabsTrigger>
           <TabsTrigger value="matches">Play & Results</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          {tournament.team_formation === "draft" ? (
+            <TabsTrigger value="draft">Draft</TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -347,6 +358,14 @@ export default function AdminTournamentWorkspacePage() {
             />
           )}
         </TabsContent>
+
+        {tournament.team_formation === "draft" ? (
+          <TabsContent value="draft" className="space-y-4">
+            {activeTab === "draft" ? (
+              <DraftSessionDashboard tournamentId={tournamentId} canManage={canImportTeams} />
+            ) : null}
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );
