@@ -38,7 +38,7 @@ export default class draftService {
   ): Promise<DraftSession> {
     const res = await apiFetch("balancer", `draft/tournaments/${tournamentId}/sessions`, {
       method: "POST",
-      body: JSON.stringify(body)
+      body
     });
     return res.json();
   }
@@ -51,7 +51,7 @@ export default class draftService {
     const res = await apiFetch(
       "balancer",
       `draft/tournaments/${tournamentId}/sessions/${sessionId}/seed`,
-      { method: "POST", body: JSON.stringify(body) }
+      { method: "POST", body }
     );
     return res.json();
   }
@@ -76,7 +76,7 @@ export default class draftService {
   ): Promise<DraftSession> {
     const res = await apiFetch("balancer", `draft/picks/${pickId}/select`, {
       method: "POST",
-      body: JSON.stringify(body)
+      body
     });
     return res.json();
   }
@@ -87,7 +87,7 @@ export default class draftService {
   ): Promise<DraftSession> {
     const res = await apiFetch("balancer", `draft/picks/${pickId}/autopick`, {
       method: "POST",
-      body: JSON.stringify(body)
+      body
     });
     return res.json();
   }
@@ -98,7 +98,7 @@ export default class draftService {
   ): Promise<DraftSession> {
     const res = await apiFetch("balancer", `draft/picks/${pickId}/override`, {
       method: "POST",
-      body: JSON.stringify(body)
+      body
     });
     return res.json();
   }
