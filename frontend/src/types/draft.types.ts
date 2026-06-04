@@ -152,10 +152,18 @@ export interface DraftSeedPlayerInput {
   rank_value?: number | null;
 }
 
+export interface DraftPoolCaptainInput {
+  pool_player_id: number;
+  name?: string | null;
+}
+
 export interface DraftSeedRequest {
   source_balance_id?: number | null;
   randomize_seed_order?: boolean;
   seed?: number | null;
-  captains: DraftSeedCaptainInput[];
-  players: DraftSeedPlayerInput[];
+  // Preferred: captains chosen from the existing balancer pool.
+  pool_captains?: DraftPoolCaptainInput[];
+  // Manual fallback.
+  captains?: DraftSeedCaptainInput[];
+  players?: DraftSeedPlayerInput[];
 }

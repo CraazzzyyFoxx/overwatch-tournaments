@@ -18,13 +18,10 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
-import type {
-  DraftAutopickStrategy,
-  DraftRole,
-  DraftSeedCaptainInput,
-  DraftSeedPlayerInput,
-} from "@/types/draft.types";
+import type { BalancerPlayerRecord } from "@/types/balancer-admin.types";
+import type { DraftAutopickStrategy } from "@/types/draft.types";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;
@@ -42,6 +39,15 @@ const STATUS_LABEL: Record<string, string> = {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected error";
+}
+
+/** Primary role + rank from a pool player's active role entries (priority order). */
+function poolPlayerSummary(p: BalancerPlayerRecord): { role: string; rank: number | null } {
+  const active = (p.role_entries_json ?? [])
+    .filter((e) => e.is_active)
+    .sort((a, b) => a.priority - b.priority);
+  const primary = active[0];
+  return { role: primary?.role ?? "dps", rank: primary?.rank_value ?? null };
 }
 
 export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionDashboardProps) {
@@ -68,7 +74,7 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
   const createMutation = useMutation({
     mutationFn: () =>
       draftService.createSession(tournamentId, {
-        pool_source: "manual",
+        pool_source: "balancer_balance",
         format: "snake",
         rounds,
         pick_time_seconds: pickTime,
@@ -82,26 +88,20 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
     onError,
   });
 
-  // --- seed inputs ---
-  const [captains, setCaptains] = useState<DraftSeedCaptainInput[]>([
-    { name: "", draft_position: 1, battle_tag: "" },
-  ]);
-  const [players, setPlayers] = useState<DraftSeedPlayerInput[]>([
-    { battle_tag: "", primary_role: "dps", rank_value: 3000 },
-  ]);
+  // --- seed from the existing balancer pool ---
+  const [captainIds, setCaptainIds] = useState<number[]>([]); // ordered = seed order
+  const [teamNames, setTeamNames] = useState<Record<number, string>>({});
 
   const seedMutation = useMutation({
     mutationFn: (sessionId: number) =>
       draftService.seed(tournamentId, sessionId, {
-        captains: captains
-          .filter((c) => c.name.trim())
-          .map((c, i) => ({ ...c, draft_position: i + 1, battle_tag: c.battle_tag || null })),
-        players: players
-          .filter((p) => (p.battle_tag ?? "").trim())
-          .map((p) => ({ ...p })),
+        pool_captains: captainIds.map((id) => ({
+          pool_player_id: id,
+          name: teamNames[id]?.trim() || null,
+        })),
       }),
     onSuccess: () => {
-      toast({ title: "Draft seeded" });
+      toast({ title: "Draft seeded from balancer pool" });
       invalidate();
     },
     onError,
@@ -293,13 +293,19 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
         </CardContent>
       </Card>
 
-      {session.status === "setup" && (
-        <SeedForm
-          captains={captains}
-          players={players}
-          onCaptainsChange={setCaptains}
-          onPlayersChange={setPlayers}
+      {(session.status === "setup" || session.status === "ready") && (
+        <PoolSeedForm
+          tournamentId={tournamentId}
+          captainIds={captainIds}
+          teamNames={teamNames}
+          onToggleCaptain={(id) =>
+            setCaptainIds((prev) =>
+              prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+            )
+          }
+          onTeamName={(id, name) => setTeamNames((prev) => ({ ...prev, [id]: name }))}
           pending={seedMutation.isPending}
+          alreadySeeded={session.status === "ready"}
           onSeed={() => seedMutation.mutate(session.id)}
         />
       )}
@@ -307,148 +313,103 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
   );
 }
 
-interface SeedFormProps {
-  captains: DraftSeedCaptainInput[];
-  players: DraftSeedPlayerInput[];
-  onCaptainsChange: (next: DraftSeedCaptainInput[]) => void;
-  onPlayersChange: (next: DraftSeedPlayerInput[]) => void;
+interface PoolSeedFormProps {
+  tournamentId: number;
+  captainIds: number[];
+  teamNames: Record<number, string>;
+  onToggleCaptain: (id: number) => void;
+  onTeamName: (id: number, name: string) => void;
   pending: boolean;
+  alreadySeeded: boolean;
   onSeed: () => void;
 }
 
-function SeedForm({
-  captains,
-  players,
-  onCaptainsChange,
-  onPlayersChange,
+function PoolSeedForm({
+  tournamentId,
+  captainIds,
+  teamNames,
+  onToggleCaptain,
+  onTeamName,
   pending,
+  alreadySeeded,
   onSeed,
-}: SeedFormProps) {
+}: PoolSeedFormProps) {
+  const poolQuery = useQuery({
+    queryKey: ["balancer", "pool", tournamentId],
+    queryFn: () => balancerAdminService.listPlayers(tournamentId, true),
+  });
+
+  const pool = poolQuery.data ?? [];
+  const captainOrder = (id: number) => captainIds.indexOf(id);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Seed teams & pool</CardTitle>
+        <CardTitle>Seed from balancer pool</CardTitle>
         <CardDescription>
-          Add captains (one per team, in seed order) and the available player pool, then start the
-          draft. Balance-derived seeding is coming later.
+          Captains are chosen from the existing balancer pool — every other in-pool player becomes
+          available. Roles and ranks come from the balancer. Selection order = draft (snake) order.
+          {alreadySeeded ? " Re-seeding will rebuild teams and picks." : ""}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Captains</Label>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                onCaptainsChange([
-                  ...captains,
-                  { name: "", draft_position: captains.length + 1, battle_tag: "" },
-                ])
-              }
-            >
-              + Captain
-            </Button>
-          </div>
-          {captains.map((c, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-              <Input
-                placeholder="Team name"
-                value={c.name}
-                onChange={(e) => {
-                  const next = [...captains];
-                  next[i] = { ...c, name: e.target.value };
-                  onCaptainsChange(next);
-                }}
-              />
-              <Input
-                placeholder="Captain BattleTag#1234"
-                value={c.battle_tag ?? ""}
-                onChange={(e) => {
-                  const next = [...captains];
-                  next[i] = { ...c, battle_tag: e.target.value };
-                  onCaptainsChange(next);
-                }}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onCaptainsChange(captains.filter((_, j) => j !== i))}
-              >
-                ✕
-              </Button>
+      <CardContent className="space-y-4">
+        {poolQuery.isLoading ? (
+          <p className="text-muted-foreground">Loading pool…</p>
+        ) : pool.length === 0 ? (
+          <p className="text-muted-foreground">
+            The balancer pool is empty. Build the pool in the{" "}
+            <Link href="/balancer" className="text-primary underline">
+              balancer panel
+            </Link>{" "}
+            first.
+          </p>
+        ) : (
+          <>
+            <div className="text-sm text-muted-foreground">
+              {captainIds.length} captain(s) selected · {pool.length} players in pool
             </div>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Player pool</Label>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                onPlayersChange([
-                  ...players,
-                  { battle_tag: "", primary_role: "dps", rank_value: 3000 },
-                ])
-              }
-            >
-              + Player
-            </Button>
-          </div>
-          {players.map((p, i) => (
-            <div key={i} className="grid grid-cols-[1fr_120px_120px_auto] gap-2">
-              <Input
-                placeholder="BattleTag#1234"
-                value={p.battle_tag ?? ""}
-                onChange={(e) => {
-                  const next = [...players];
-                  next[i] = { ...p, battle_tag: e.target.value };
-                  onPlayersChange(next);
-                }}
-              />
-              <Select
-                value={p.primary_role}
-                onValueChange={(v) => {
-                  const next = [...players];
-                  next[i] = { ...p, primary_role: v as DraftRole };
-                  onPlayersChange(next);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tank">Tank</SelectItem>
-                  <SelectItem value="dps">DPS</SelectItem>
-                  <SelectItem value="support">Support</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                placeholder="Rank"
-                value={p.rank_value ?? ""}
-                onChange={(e) => {
-                  const next = [...players];
-                  next[i] = { ...p, rank_value: e.target.value ? Number(e.target.value) : null };
-                  onPlayersChange(next);
-                }}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onPlayersChange(players.filter((_, j) => j !== i))}
-              >
-                ✕
-              </Button>
+            <div className="max-h-[55vh] divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
+              {pool.map((p) => {
+                const { role, rank } = poolPlayerSummary(p);
+                const isCaptain = captainIds.includes(p.id);
+                const order = captainOrder(p.id);
+                return (
+                  <div key={p.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isCaptain}
+                      onChange={() => onToggleCaptain(p.id)}
+                      aria-label={`Captain ${p.battle_tag}`}
+                    />
+                    <span className="w-6 text-center text-muted-foreground">
+                      {isCaptain ? order + 1 : ""}
+                    </span>
+                    <span className="flex-1 truncate">{p.battle_tag}</span>
+                    <Badge variant="outline" className="uppercase">
+                      {role}
+                    </Badge>
+                    <span className="w-12 text-right font-mono text-muted-foreground">
+                      {rank ?? "—"}
+                    </span>
+                    {isCaptain ? (
+                      <Input
+                        placeholder="Team name (optional)"
+                        value={teamNames[p.id] ?? ""}
+                        onChange={(e) => onTeamName(p.id, e.target.value)}
+                        className="h-8 w-48"
+                      />
+                    ) : (
+                      <span className="w-48" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-
-        <Button disabled={pending} onClick={onSeed}>
-          Seed & make ready
-        </Button>
+            <Button disabled={pending || captainIds.length === 0} onClick={onSeed}>
+              {alreadySeeded ? "Re-seed" : "Seed"} & make ready ({captainIds.length} teams)
+            </Button>
+          </>
+        )}
       </CardContent>
     </Card>
   );
