@@ -32,20 +32,14 @@ class _ExplodingSession:
 
 class DraftAclTests(IsolatedAsyncioTestCase):
     async def test_anonymous_spectator_allowed(self) -> None:
-        allowed = await topic_acl.topic_acl_registry.allow(
-            None, "tournament:5:draft", _ExplodingSession()
-        )
+        allowed = await topic_acl.topic_acl_registry.allow(None, "tournament:5:draft", _ExplodingSession())
         self.assertTrue(allowed)
 
     async def test_arbitrary_tournament_id_allowed(self) -> None:
-        allowed = await topic_acl.topic_acl_registry.allow(
-            None, "tournament:99999:draft", _ExplodingSession()
-        )
+        allowed = await topic_acl.topic_acl_registry.allow(None, "tournament:99999:draft", _ExplodingSession())
         self.assertTrue(allowed)
 
     async def test_non_draft_unknown_topic_denied(self) -> None:
         # A topic matching no rule is denied by default.
-        allowed = await topic_acl.topic_acl_registry.allow(
-            None, "tournament:5:unknown_topic", _ExplodingSession()
-        )
+        allowed = await topic_acl.topic_acl_registry.allow(None, "tournament:5:unknown_topic", _ExplodingSession())
         self.assertFalse(allowed)
