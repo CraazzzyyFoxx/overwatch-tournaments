@@ -36,6 +36,7 @@ from shared.models.workspace import Workspace  # noqa: E402
 from shared.models.draft import DraftPick  # noqa: E402
 from shared.models.realtime import WorkspaceEvent  # noqa: E402
 from src import models  # noqa: E402
+from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
 from src.services.draft import lifecycle, realtime as draft_realtime, selection  # noqa: E402
@@ -332,6 +333,58 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             session_id = draft.id
         fired = await draft_clock.fire_autopick_if_expired(self.Session, None, session_id)
         self.assertFalse(fired)
+
+    async def test_board_snapshot_carries_event_cursor(self) -> None:
+        # Reconnect/replay correctness: /board reports last_event_id so the
+        # client can subscribe with after_event_id and converge.
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await draft_realtime.publish_draft_event(
+                s, None, draft_session=draft, event_type="draft.session_updated",
+                payload={"session_id": draft.id, "status": draft.status},
+            )
+            await s.commit()
+            topic = f"tournament:{self.tournament_id}:draft"
+            max_id = await s.scalar(
+                sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic)
+            )
+            board = await draft_board.build_board(s, draft)
+            self.assertIsNotNone(board.last_event_id)
+            self.assertEqual(board.last_event_id, max_id)
+            # all pool players present (rosters renderable), not just available
+            self.assertGreater(len(board.players), 0)
+
+    async def test_export_is_idempotent(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            guard = 0
+            while True:
+                await s.refresh(draft)
+                if draft.status != DraftStatus.LIVE.value:
+                    break
+                guard += 1
+                self.assertLess(guard, 50)
+                current = await s.get(DraftPick, draft.current_pick_id)
+                await selection.autopick(s, draft, current, expected_version=current.version)
+                await s.commit()
+
+            _, removed1, imported1 = await draft_export.export(s, draft)
+            await s.commit()
+            self.assertEqual((removed1, imported1), (0, 3))
+
+            # Re-export: prior teams are removed first, then re-created.
+            _, removed2, imported2 = await draft_export.export(s, draft)
+            await s.commit()
+            self.assertEqual(removed2, 3)
+            self.assertEqual(imported2, 3)
+            teams = (
+                await s.scalars(
+                    sa.select(models.Team).where(models.Team.tournament_id == self.tournament_id)
+                )
+            ).all()
+            self.assertEqual(len(teams), 3)
 
     async def test_realtime_publisher_persists_event(self) -> None:
         async with self.Session() as s:
