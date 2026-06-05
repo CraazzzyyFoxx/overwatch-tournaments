@@ -273,7 +273,7 @@ function DraftBoardView({
     onSelectPlayer(null, null);
   };
 
-  const runLifecycle = (action: "start" | "pause" | "resume" | "cancel" | "export") =>
+  const runLifecycle = (action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback") =>
     mutations.lifecycle.mutate({ sessionId: session.id, action });
 
   const runAutopick = () => {
