@@ -416,7 +416,7 @@ interface DraftHeroProps {
   availableCount: number;
   isAdmin: boolean;
   mutations: DraftMutations;
-  onLifecycle: (action: "start" | "pause" | "resume" | "cancel" | "export") => void;
+  onLifecycle: (action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback") => void;
   onAutopick: () => void;
   t: Translate;
 }
