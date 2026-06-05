@@ -5,6 +5,13 @@ import { Search } from "lucide-react";
 
 import { TOURNAMENT_STATUS_ORDER, TOURNAMENT_STATUS_META } from "@/lib/tournament-status";
 import type { TournamentStatus } from "@/types/tournament.types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type StatusFilter = "all" | TournamentStatus;
 export type TypeFilter = "all" | "standard" | "league";
@@ -105,16 +112,16 @@ const TournamentsFilters = ({
         />
       </div>
 
-      <select
-        className="filter-sort"
-        value={sortBy}
-        onChange={(event) => onSortChange(event.target.value as SortBy)}
-        aria-label="Sort tournaments"
-      >
-        <option value="latest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-        <option value="participants">Most participants</option>
-      </select>
+      <Select value={sortBy} onValueChange={(value) => onSortChange(value as SortBy)}>
+        <SelectTrigger className="filter-sort h-8 w-[155px] shadow-none focus:ring-0 focus:ring-offset-0">
+          <SelectValue placeholder="Sort by" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="latest">Newest first</SelectItem>
+          <SelectItem value="oldest">Oldest first</SelectItem>
+          <SelectItem value="participants">Most participants</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 };

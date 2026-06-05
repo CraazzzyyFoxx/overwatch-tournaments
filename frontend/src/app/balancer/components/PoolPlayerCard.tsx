@@ -12,6 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BalancerPlayerRecord, BalancerPlayerRoleEntry, BalancerRoleCode, BalancerRoleSubtype } from "@/types/balancer-admin.types";
+import { useQuery } from "@tanstack/react-query";
+import adminService from "@/services/admin.service";
+import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "tank", label: "Tank" },
@@ -19,17 +22,7 @@ const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "support", label: "Support" },
 ];
 
-const SUBTYPE_OPTIONS: Record<BalancerRoleCode, Array<{ value: BalancerRoleSubtype; label: string }>> = {
-  tank: [],
-  dps: [
-    { value: "hitscan", label: "Hitscan" },
-    { value: "projectile", label: "Projectile" },
-  ],
-  support: [
-    { value: "main_heal", label: "Main Heal" },
-    { value: "light_heal", label: "Light Heal" },
-  ],
-};
+// Dynamic subtype options are fetched from the workspace sub-roles catalog
 
 function resolveRankFromDivision(divisionNumber: number | null): number | null {
   if (divisionNumber == null) {
@@ -94,6 +87,44 @@ type PoolPlayerCardProps = {
 };
 
 export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: PoolPlayerCardProps) {
+  const workspaceId = useCurrentWorkspaceId();
+  const { data: subRoles } = useQuery({
+    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId! }),
+    enabled: Boolean(workspaceId),
+  });
+
+  const subtypeOptions = useMemo(() => {
+    const options: Record<BalancerRoleCode, Array<{ value: string; label: string }>> = {
+      tank: [],
+      dps: [],
+      support: [],
+    };
+
+    if (subRoles) {
+      for (const sr of subRoles) {
+        const roleKey = sr.role === "damage" ? "dps" : (sr.role as BalancerRoleCode);
+        if (options[roleKey]) {
+          options[roleKey].push({
+            value: sr.slug,
+            label: sr.label,
+          });
+        }
+      }
+    } else {
+      // Fallback defaults
+      options.dps = [
+        { value: "hitscan", label: "Hitscan" },
+        { value: "projectile", label: "Projectile" },
+      ];
+      options.support = [
+        { value: "main_heal", label: "Main Heal" },
+        { value: "light_heal", label: "Light Heal" },
+      ];
+    }
+    return options;
+  }, [subRoles]);
+
   const [roleEntries, setRoleEntries] = useState<BalancerPlayerRoleEntry[]>(normalizeRoleEntries(player.role_entries_json));
   const [isInPool, setIsInPool] = useState(player.is_in_pool);
   const [notes, setNotes] = useState(player.admin_notes ?? "");
@@ -236,29 +267,33 @@ export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: Poo
                 </Select>
               </div>
 
-              {SUBTYPE_OPTIONS[entry.role].length > 0 ? (
-                <div className="space-y-1 md:space-y-0">
-                  <span className="text-xs text-muted-foreground md:hidden">Subtype</span>
-                  <Select
-                    value={entry.subtype ?? "none"}
-                    onValueChange={(value) => updateEntry(index, { ...entry, subtype: value === "none" ? null : (value as BalancerRoleSubtype) })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {SUBTYPE_OPTIONS[entry.role].map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="hidden md:block" aria-hidden="true" />
-              )}
+              {(() => {
+                const roleSubtypeOptions = subtypeOptions[entry.role] || [];
+                if (roleSubtypeOptions.length > 0) {
+                  return (
+                    <div className="space-y-1 md:space-y-0">
+                      <span className="text-xs text-muted-foreground md:hidden">Subtype</span>
+                      <Select
+                        value={entry.subtype ?? "none"}
+                        onValueChange={(value) => updateEntry(index, { ...entry, subtype: value === "none" ? null : (value as BalancerRoleSubtype) })}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {roleSubtypeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                }
+                return <div className="hidden md:block" aria-hidden="true" />;
+              })()}
 
               <div className="space-y-1 md:space-y-0">
                 <span className="text-xs text-muted-foreground md:hidden">Division</span>

@@ -44,14 +44,17 @@ const HeroImage = ({ hero, size = "md", className, title, rounded = "full", bare
       className={cn(
         "relative inline-flex items-center justify-center overflow-hidden flex-shrink-0",
         radius,
-        !bare && "border border-[color:var(--aqt-border-2)]",
-        !bare && `aqt-bg-${variant}`,
         className
       )}
-      style={{ width: px, height: px }}
+      style={{ width: px, height: px, background: "none", border: "none" }}
       title={title ?? hero.name}
     >
-      <Image src={hero.image_path} alt={hero.name} fill sizes={`${px}px`} className="object-cover" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={hero.image_path}
+        alt={hero.name}
+        className="w-full h-full object-contain select-none"
+      />
     </span>
   );
 };

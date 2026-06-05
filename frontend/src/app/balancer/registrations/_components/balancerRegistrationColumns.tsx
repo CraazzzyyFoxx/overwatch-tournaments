@@ -352,13 +352,15 @@ export function buildBalancerRegistrationColumns(
           profilesOpen={registration.profiles_open}
         />
       ),
-      searchValue: (registration) =>
-        registration.status === "approved" &&
-        registration.balancer_status === "ready" &&
-        registration.checked_in &&
-        (!requireOpenProfile || registration.profiles_open !== false)
-          ? "admitted"
-          : "not admitted",
+      searchValue: (registration) => {
+        const isProfileClosed = requireOpenProfile && registration.profiles_open === false;
+        const isApprovedAndReady =
+          registration.status === "approved" &&
+          registration.balancer_status === "ready" &&
+          !isProfileClosed;
+        if (!isApprovedAndReady) return "not admitted";
+        return registration.checked_in ? "admitted" : "check-in pending";
+      },
     },
     {
       id: "profile",

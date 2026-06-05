@@ -67,7 +67,7 @@ export function HeroPickerBlock({ heroes, selected, max, roleCode, onChange }: H
                 alt={hero.name}
                 width={36}
                 height={36}
-                className="size-full object-cover"
+                className="size-full object-contain"
               />
             </span>
             {isSelected && (

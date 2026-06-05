@@ -65,4 +65,14 @@ describe("sortStandingsMatches", () => {
 
     expect(sorted.map((encounter) => encounter.round)).toEqual([1, -1, 2, -2, 3]);
   });
+
+  it("sorts playoff final rounds in the correct chronological order", () => {
+    const sorted = sortStandingsMatches([
+      createEncounter(60, 6),   // Grand Final
+      createEncounter(50, 5),   // UB Final
+      createEncounter(55, -8),  // LB Final
+      createEncounter(70, 7),   // Grand Final Reset
+    ]);
+    expect(sorted.map((encounter) => encounter.round)).toEqual([5, -8, 6, 7]);
+  });
 });

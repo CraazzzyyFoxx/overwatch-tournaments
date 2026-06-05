@@ -1,4 +1,4 @@
-import { ArrowLeftRight, FileSpreadsheet, Settings2, type LucideIcon, UserPlus } from "lucide-react";
+import { ArrowLeftRight, ClipboardList, FileSpreadsheet, Settings2, type LucideIcon, UserPlus } from "lucide-react";
 
 import type { AppRole } from "@/hooks/usePermissions";
 
@@ -25,6 +25,12 @@ export const balancerNavigationItems: BalancerNavItem[] = [
     description: "Manage registrations and balancer participation.",
   },
   {
+    title: "Form",
+    href: "/balancer/registrations/form",
+    icon: ClipboardList,
+    description: "Configure form fields and admission requirements.",
+  },
+  {
     title: "Google Sheets",
     href: "/balancer/registrations/feed",
     icon: FileSpreadsheet,
@@ -47,10 +53,16 @@ export function isBalancerNavItemActive(pathname: string, href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
+  if (href === "/balancer/registrations/form") {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   if (href === "/balancer/registrations") {
     return (
       pathname === href ||
-      (pathname.startsWith(`${href}/`) && !pathname.startsWith("/balancer/registrations/feed"))
+      (pathname.startsWith(`${href}/`) &&
+        !pathname.startsWith("/balancer/registrations/feed") &&
+        !pathname.startsWith("/balancer/registrations/form"))
     );
   }
 

@@ -415,7 +415,12 @@ def create_team_with_match_stats(
     )
 
 
-async def get_match(session: AsyncSession, match_id: int, entities: list[str]) -> schemas.MatchRead:
+async def get_match(
+    session: AsyncSession,
+    match_id: int,
+    entities: list[str],
+    workspace_id: int | None = None,
+) -> schemas.MatchRead:
     """
     Retrieves a match by its ID and converts it to a Pydantic schema.
 
@@ -430,7 +435,7 @@ async def get_match(session: AsyncSession, match_id: int, entities: list[str]) -
     Raises:
         errors.ApiHTTPException: If the match is not found.
     """
-    match = await service.get_match(session, match_id, entities)
+    match = await service.get_match(session, match_id, entities, workspace_id=workspace_id)
     if not match:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -439,7 +444,12 @@ async def get_match(session: AsyncSession, match_id: int, entities: list[str]) -
     return await to_pydantic_match(session, match, entities)
 
 
-async def get_match_with_stats(session: AsyncSession, match_id: int, entities: list[str]) -> schemas.MatchReadWithStats:
+async def get_match_with_stats(
+    session: AsyncSession,
+    match_id: int,
+    entities: list[str],
+    workspace_id: int | None = None,
+) -> schemas.MatchReadWithStats:
     """
     Retrieves a match by its ID and converts it to a Pydantic schema with detailed statistics.
 
@@ -458,7 +468,7 @@ async def get_match_with_stats(session: AsyncSession, match_id: int, entities: l
         entities.append("teams")
     if "teams.players" not in entities:
         entities.append("teams.players")
-    match = await get_match(session, match_id, entities)
+    match = await get_match(session, match_id, entities, workspace_id=workspace_id)
     max_round: int = 0
     home_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}
     away_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}

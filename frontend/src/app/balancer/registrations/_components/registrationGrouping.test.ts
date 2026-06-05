@@ -127,7 +127,8 @@ describe("registration grouping", () => {
       groups.map((group) => [group.key, group.label, group.registrations.map((item) => item.id)])
     ).toEqual([
       ["admitted", "Admitted", [1]],
-      ["not_admitted", "Not admitted", [2, 3]]
+      ["pending_check_in", "Check-in pending", [2]],
+      ["not_admitted", "Not admitted", [3]]
     ]);
   });
 

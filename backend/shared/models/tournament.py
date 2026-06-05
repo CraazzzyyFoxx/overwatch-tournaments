@@ -46,6 +46,11 @@ class Tournament(db.TimeStampIntegerMixin):
     is_finished: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false", nullable=False
     )
+    # How teams are formed for this tournament: "balancer" (auto-balance) or
+    # "draft" (live draft). Stored as text (not a PG enum) to stay flexible.
+    team_formation: Mapped[str] = mapped_column(
+        String(), default="balancer", server_default="balancer", nullable=False
+    )
     status: Mapped[enums.TournamentStatus] = mapped_column(
         TOURNAMENT_STATUS_ENUM,
         default=enums.TournamentStatus.DRAFT,

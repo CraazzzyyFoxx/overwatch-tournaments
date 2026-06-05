@@ -492,11 +492,12 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 2px solid var(--u-card);
-  background: var(--u-card-2);
   margin-left: -8px;
   overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .heroChip:first-child {
@@ -646,10 +647,11 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid var(--u-border-2);
-  background: var(--u-card-2);
   overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .heroCardStack {

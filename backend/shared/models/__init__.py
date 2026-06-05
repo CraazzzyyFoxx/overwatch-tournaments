@@ -23,6 +23,7 @@ from .discord_channel import *
 from .rbac import *
 from .oauth import *
 from .balancer import *
+from .draft import *
 from .log_processing import *
 from .user_merge_audit import *
 from .outbox import *

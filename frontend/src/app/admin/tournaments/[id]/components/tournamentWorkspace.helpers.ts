@@ -20,6 +20,7 @@ export type TournamentFormState = {
   check_in_opens_at: string;
   check_in_closes_at: string;
   division_grid_version_id: number | null;
+  team_formation: string;
 };
 
 export type TeamFormState = {
@@ -112,7 +113,8 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     registration_closes_at: toDateTimeInput(tournament.registration_closes_at),
     check_in_opens_at: toDateTimeInput(tournament.check_in_opens_at),
     check_in_closes_at: toDateTimeInput(tournament.check_in_closes_at),
-    division_grid_version_id: tournament.division_grid_version_id ?? null
+    division_grid_version_id: tournament.division_grid_version_id ?? null,
+    team_formation: tournament.team_formation ?? "balancer"
   };
 }
 

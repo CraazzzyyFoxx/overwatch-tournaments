@@ -1,5 +1,6 @@
 export const en = {
   common: {
+    draft: "Draft",
     back: "Back",
     cancel: "Cancel",
     next: "Next",
@@ -37,6 +38,7 @@ export const en = {
     playtimeLabel: "% playtime",
     teamsCount: "{count} teams",
     roundRobin: "round-robin",
+    swiss: "swiss",
     byPlaytime: "By play time",
     byPlacement: "By placement",
     byAvgSr: "By avg SR",
@@ -46,6 +48,8 @@ export const en = {
     groups: "Groups",
     playoff: "Playoff",
     playoffStandings: "Playoff standings",
+    topAdvance: "TOP {count} ADVANCE",
+    buchholz: "Buchholz",
     combined: "Combined",
     groupStage: "Group stage",
     confirmCheckIn: "Confirm check-in?",
@@ -74,6 +78,11 @@ export const en = {
     status: "Status",
     balancer: "Balancer",
     admission: "Admission",
+    admissionStatus: {
+      admitted: "Admitted",
+      notAdmitted: "Not Admitted",
+      pendingCheckIn: "Admitted (Check-in pending)"
+    },
     yes: "Yes",
     no: "No",
     noAccess: "No access",
@@ -228,6 +237,90 @@ export const en = {
       pendingReviewDesc: "The application is currently under review by the tournament organizers.",
       showDetails: "Show details",
       hideDetails: "Hide details"
+    }
+  },
+  draft: {
+    loading: "Loading draft…",
+    notYourPick: "Wait for your turn to pick",
+    round: "Round",
+    pick: "Pick",
+    onTheClock: "On the clock",
+    state: {
+      setup: "Setup",
+      ready: "Ready",
+      live: "Live",
+      paused: "Paused",
+      completed: "Completed",
+      cancelled: "Cancelled"
+    },
+    empty: {
+      title: "No draft yet",
+      body: "The draft hasn’t been set up for this tournament."
+    },
+    roster: { empty: "Empty" },
+    pool: { title: "Available players", empty: "No available players" },
+    actions: { confirm: "Confirm pick" },
+    admin: {
+      start: "Start draft",
+      pause: "Pause",
+      resume: "Resume",
+      cancel: "Cancel draft",
+      export: "Export to teams"
+    }
+  },
+  matchEdit: {
+    title: "Edit Match",
+    pendingConfirmation: "Pending Confirmation",
+    disputed: "Disputed",
+    matchScore: "Match score",
+    manualEntry: "Manual result entry",
+    resultPresets: "Result presets",
+    status: "Status",
+    matchCloseness: "Match closeness",
+    closenessHint: "Only the overall score is edited. Maps will appear after parsing the log files.",
+    cancel: "Cancel",
+    save: "Save",
+    confirming: "Confirming...",
+    confirmResult: "Confirm Result",
+    saving: "Saving...",
+    negativeScoreError: "Match score cannot be negative",
+    matchUpdated: "Match updated",
+    resultConfirmed: "Result confirmed",
+    saveError: "Error",
+    saveErrorMessage: "Failed to save",
+    confirmErrorMessage: "Failed to confirm",
+    presetDescriptions: {
+      "Home sweep": "Home sweep",
+      "Home close win": "Home close win",
+      "Draw": "Draw",
+      "Away close win": "Away close win",
+      "Away sweep": "Away sweep"
+    }
+  },
+  matchReport: {
+    title: "Match Report",
+    quickResult: "Quick result",
+    matchQuality: "Match quality",
+    howClose: "How close was the series",
+    submit: "Submit",
+    submitting: "Submitting...",
+    submittedForConfirmation: "Result submitted for confirmation",
+    submitErrorMessage: "Failed to submit",
+    qualityDescriptions: {
+      1: "One-sided match",
+      2: "Almost one-sided",
+      3: "Weak resistance",
+      4: "Average match",
+      5: "Even game",
+      6: "Slight edge",
+      7: "Good fight",
+      8: "Very close",
+      9: "Intense struggle",
+      10: "To the last breath"
+    },
+    qualityLegend: {
+      oneSided: "1 - one-sided match",
+      toTheEnd: "10 - to the end"
     }
   }
 };

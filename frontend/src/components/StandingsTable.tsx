@@ -1,9 +1,13 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Encounter } from "@/types/encounter.types";
 import { Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament-match-order";
+import { useTranslation } from "@/i18n/LanguageContext";
+import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import tournamentService from "@/services/tournament.service";
 
 export interface StandingTableProps {
   standings: Standings[];
@@ -15,27 +19,6 @@ export interface StandingTableProps {
 }
 
 type ResultKind = "w" | "l" | "t";
-
-const TEAM_GRADIENTS = [
-  "linear-gradient(135deg,hsl(174 72% 60%),hsl(174 60% 32%))",
-  "linear-gradient(135deg,hsl(340 75% 65%),hsl(340 60% 38%))",
-  "linear-gradient(135deg,hsl(270 70% 68%),hsl(270 55% 42%))",
-  "linear-gradient(135deg,hsl(38 95% 62%),hsl(38 80% 42%))",
-  "linear-gradient(135deg,hsl(210 78% 65%),hsl(210 60% 38%))",
-  "linear-gradient(135deg,hsl(142 65% 55%),hsl(142 50% 32%))",
-];
-
-function teamGradient(seed: number): string {
-  return TEAM_GRADIENTS[Math.abs(seed) % TEAM_GRADIENTS.length];
-}
-
-function teamInitials(name?: string | null): string {
-  const cleaned = (name ?? "").trim();
-  if (!cleaned) return "?";
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return cleaned.slice(0, 2).toUpperCase();
-}
 
 function resultOf(teamId: number, encounter: Encounter): ResultKind {
   const teamScore =
@@ -82,9 +65,6 @@ function TeamCell({ standing, showGroup }: { standing: Standings; showGroup: boo
   const groupName = standing.team?.group?.name;
   return (
     <div className="st-team">
-      <span className="av" style={{ background: teamGradient(standing.team_id) }}>
-        {teamInitials(standing.team?.name)}
-      </span>
       <div className="stack">
         <span className="nm">{standing.team?.name ?? "—"}</span>
         {showGroup && groupName && <span className="sub">Group {groupName}</span>}
@@ -99,14 +79,62 @@ const StandingsTable = ({
   advanceCount = 2,
   crownTop = false,
 }: StandingTableProps) => {
+  const { t } = useTranslation();
+
+  const tournamentId = standings[0]?.tournament_id;
+  const stagesQuery = useQuery({
+    queryKey: tournamentQueryKeys.stages(tournamentId),
+    queryFn: () => tournamentService.getStages(tournamentId),
+    enabled: !!tournamentId,
+  });
+  const stages = stagesQuery.data ?? [];
+
+  const stage = standings[0]?.stage;
+  const settings = stage?.settings_json ?? {};
+  let settingsCount =
+    typeof settings.advance_count === "number"
+      ? settings.advance_count
+      : typeof settings.advanceCount === "number"
+        ? settings.advanceCount
+        : typeof settings.top === "number"
+          ? settings.top
+          : null;
+
+  if (settingsCount == null && stage != null && stages.length > 0) {
+    const currentStage = stages.find((s) => s.id === stage.id);
+    const stageItemIds = new Set(currentStage?.items?.map((item) => item.id) ?? []);
+    if (stageItemIds.size > 0) {
+      let maxPos = 0;
+      for (const stg of stages) {
+        for (const item of stg.items ?? []) {
+          for (const input of item.inputs ?? []) {
+            if (
+              input.source_stage_item_id != null &&
+              stageItemIds.has(input.source_stage_item_id) &&
+              input.source_position != null
+            ) {
+              maxPos = Math.max(maxPos, input.source_position);
+            }
+          }
+        }
+      }
+      if (maxPos > 0) {
+        settingsCount = maxPos;
+      }
+    }
+  }
+
+  const resolvedAdvanceCount = settingsCount ?? advanceCount;
+
   const sortedStandings = [...standings].sort((a, b) => {
     const left = is_groups ? a.position : a.overall_position;
     const right = is_groups ? b.position : b.overall_position;
     return left - right;
   });
 
-  const showCut = is_groups && sortedStandings.length > advanceCount;
-  const columnCount = is_groups ? 6 : 7;
+  const hasBuchholz = is_groups && standings.some((s) => s.buchholz != null);
+  const showCut = is_groups && sortedStandings.length > resolvedAdvanceCount;
+  const columnCount = is_groups ? (hasBuchholz ? 7 : 6) : 7;
 
   return (
     <div className="st-scroll">
@@ -116,9 +144,14 @@ const StandingsTable = ({
             <tr>
               <th style={{ width: 48 }}>#</th>
               <th>Team</th>
-              <th className="c" style={{ width: 70 }}>
-                W·L
+              <th className="c" style={{ width: 80 }}>
+                W·D·L
               </th>
+              {hasBuchholz && (
+                <th className="r" style={{ width: 80 }}>
+                  {t("common.buchholz")}
+                </th>
+              )}
               <th className="c" style={{ width: 120 }}>
                 Form
               </th>
@@ -154,7 +187,7 @@ const StandingsTable = ({
             const maps = computeMaps(standing.team_id, history);
             const total = maps.won + maps.lost;
             const wPct = total > 0 ? (maps.won / total) * 100 : 0;
-            const advancing = is_groups && position <= advanceCount;
+            const advancing = is_groups && position <= resolvedAdvanceCount;
             const crowned = !is_groups && crownTop && position === 1;
             const rowClass = crowned ? "crown" : advancing ? "advance" : undefined;
 
@@ -174,9 +207,16 @@ const StandingsTable = ({
                         <span className="st-record">
                           <span className="w">{standing.win}</span>
                           <span className="sep">·</span>
+                          <span className="d">{standing.draw}</span>
+                          <span className="sep">·</span>
                           <span className="l">{standing.lose}</span>
                         </span>
                       </td>
+                      {hasBuchholz && (
+                        <td className="r font-mono text-[var(--fg-dim)]">
+                          {standing.buchholz != null ? standing.buchholz : "—"}
+                        </td>
+                      )}
                       <td className="c">
                         <FormChips results={results} />
                       </td>
@@ -199,6 +239,8 @@ const StandingsTable = ({
                       <td className="c">
                         <span className="st-record">
                           <span className="w">{standing.win}</span>
+                          <span className="sep">·</span>
+                          <span className="d">{standing.draw}</span>
                           <span className="sep">·</span>
                           <span className="l">{standing.lose}</span>
                         </span>
@@ -224,12 +266,12 @@ const StandingsTable = ({
                   )}
                 </tr>
 
-                {showCut && index === advanceCount - 1 && (
+                {showCut && index === resolvedAdvanceCount - 1 && (
                   <tr>
                     <td
                       colSpan={columnCount}
                       className="st-cut"
-                      data-label={`top ${advanceCount} advance`}
+                      data-label={t("common.topAdvance", { count: resolvedAdvanceCount })}
                     />
                   </tr>
                 )}

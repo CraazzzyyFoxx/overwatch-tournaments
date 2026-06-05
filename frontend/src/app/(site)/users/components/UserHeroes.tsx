@@ -253,7 +253,13 @@ const UserHeroes = ({ heroes, filterSlot }: { heroes: HeroWithUserStats[]; filte
       label: item.hero.hero.name,
       item: (
         <div className="flex items-center gap-2">
-          <Image src={item.hero.hero.image_path} alt={item.hero.hero.name} height={24} width={24} />
+          <Image
+            src={item.hero.hero.image_path}
+            alt={item.hero.hero.name}
+            height={24}
+            width={24}
+            className="object-contain select-none"
+          />
           <span className="ml-1">{item.hero.hero.name}</span>
         </div>
       )
@@ -633,7 +639,7 @@ const UserHeroes = ({ heroes, filterSlot }: { heroes: HeroWithUserStats[]; filte
                     style={{ borderColor: selectedHero.hero.color }}
                   >
                     <Image
-                      className="object-cover"
+                      className="object-contain select-none"
                       src={selectedHero.hero.image_path}
                       alt={selectedHero.hero.name}
                       fill

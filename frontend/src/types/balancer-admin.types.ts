@@ -302,6 +302,7 @@ export interface AdminRegistrationRole {
   priority: number;
   rank_value: number | null;
   is_active: boolean;
+  top_heroes?: string[] | null;
 }
 
 export type BalancerStatus = string;

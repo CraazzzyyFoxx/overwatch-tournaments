@@ -68,6 +68,9 @@ def test_parser_api_unmounts_cutover_tournament_routes() -> None:
     assert "/teams/create/balancer" in public_paths
     assert "/encounter/challonge" in public_paths
 
+    allowed_parser_admin_tournament_paths = {
+        "/admin/tournaments/{tournament_id}/discord-channel",
+    }
     removed_admin_prefixes = (
         "/admin/tournaments",
         "/admin/stages",
@@ -76,5 +79,7 @@ def test_parser_api_unmounts_cutover_tournament_routes() -> None:
         "/admin/standings",
         "/admin/player-sub-roles",
     )
-    assert not any(path.startswith(removed_admin_prefixes) for path in admin_paths)
+    unexpected_admin_paths = admin_paths - allowed_parser_admin_tournament_paths
+    assert not any(path.startswith(removed_admin_prefixes) for path in unexpected_admin_paths)
+    assert "/admin/tournaments/{tournament_id}/discord-channel" in admin_paths
     assert "/admin/players" in admin_paths

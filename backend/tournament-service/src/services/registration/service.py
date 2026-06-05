@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from fastapi import HTTPException
 from shared.core import enums
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
-from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
+from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -92,27 +92,8 @@ def _build_hero_entries(
     hero_catalog: HeroCatalog,
     max_heroes: int,
 ) -> list[models.BalancerRegistrationRoleHero]:
-    """Translate ordered hero slugs into ``registration_role_hero`` rows.
+    return build_hero_entries(slugs, hero_catalog=hero_catalog, max_heroes=max_heroes)
 
-    De-duplicates, drops unknown slugs, caps at ``max_heroes`` and assigns a
-    1-based priority (1 = top pick). Validation runs earlier, so this is a
-    defensive, lossless translation of already-clean input.
-    """
-    hero_entries: list[models.BalancerRegistrationRoleHero] = []
-    seen: set[str] = set()
-    for slug in slugs or []:
-        if slug in seen:
-            continue
-        entry = hero_catalog.get(slug)
-        if entry is None:
-            continue
-        seen.add(slug)
-        hero_entries.append(
-            models.BalancerRegistrationRoleHero(hero_id=entry.id, priority=len(hero_entries) + 1)
-        )
-        if len(hero_entries) >= max_heroes:
-            break
-    return hero_entries
 
 
 def build_registration_roles(

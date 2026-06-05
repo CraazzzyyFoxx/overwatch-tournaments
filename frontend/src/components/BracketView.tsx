@@ -446,14 +446,18 @@ function getMatchMeta(encounter: Encounter) {
   const played = (encounter.score?.home ?? 0) + (encounter.score?.away ?? 0);
   const bestOf = encounter.best_of ?? 0;
 
-  let timeLabel = "TBD";
-  if (isCompleted) timeLabel = "Final";
-  else if (isLive) timeLabel = "Live";
-  else if (encounter.scheduled_at) {
-    timeLabel = new Date(encounter.scheduled_at).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric"
-    });
+  let timeLabel = "";
+  if (isLive) {
+    timeLabel = "Live";
+  } else if (!isCompleted) {
+    if (encounter.scheduled_at) {
+      timeLabel = new Date(encounter.scheduled_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric"
+      });
+    } else {
+      timeLabel = "TBD";
+    }
   }
 
   return { isCompleted, isLive, played, bestOf, timeLabel };
@@ -585,24 +589,22 @@ function MatchCard({
             </span>
           )}
         </div>
-        <span
-          className={cn(
-            "flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide",
-            meta.isLive
-              ? "text-[var(--aqt-rose)]"
-              : meta.isCompleted
-                ? "text-[var(--aqt-fg-dim)]"
-                : "text-[var(--aqt-fg-muted)]"
-          )}
-        >
-          {meta.isLive && (
-            <span
-              className="h-1.5 w-1.5 animate-pulse rounded-full"
-              style={{ background: "var(--aqt-rose)" }}
-            />
-          )}
-          {meta.timeLabel}
-        </span>
+        {meta.timeLabel && (
+          <span
+            className={cn(
+              "flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wide",
+              meta.isLive ? "text-[var(--aqt-rose)]" : "text-[var(--aqt-fg-muted)]"
+            )}
+          >
+            {meta.isLive && (
+              <span
+                className="h-1.5 w-1.5 animate-pulse rounded-full"
+                style={{ background: "var(--aqt-rose)" }}
+              />
+            )}
+            {meta.timeLabel}
+          </span>
+        )}
       </div>
     </div>
   );

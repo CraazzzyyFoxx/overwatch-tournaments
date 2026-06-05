@@ -81,6 +81,7 @@ async def to_pydantic(
         number=tournament.number,
         is_league=tournament.is_league,
         is_finished=tournament.is_finished,
+        team_formation=tournament.team_formation,
         status=tournament.status,
         name=tournament.name,
         description=tournament.description,

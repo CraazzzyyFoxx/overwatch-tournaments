@@ -8,6 +8,7 @@ import {
   Calendar,
   ClipboardList,
   LayoutGrid,
+  ListOrdered,
   Trophy,
   Users,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const baseItems = [
   { title: "Matches", icon: Calendar, tab: "matches" },
   { title: "Heroes", icon: Trophy, tab: "heroes" },
   { title: "Standings", icon: BarChart3, tab: "standings" },
+  { title: "Draft", icon: ListOrdered, tab: "draft" },
 ] as const;
 
 const phaseLockedTabs = new Set<(typeof baseItems)[number]["tab"]>([
@@ -64,6 +66,7 @@ type TournamentSectionNavProps = {
   tournamentId: string;
   status: TournamentStatus;
   stages?: Stage[];
+  teamFormation?: string;
   // Retained for call-site compatibility; both variants render the tab bar.
   variant?: "desktop" | "mobile";
   className?: string;
@@ -73,6 +76,7 @@ export default function TournamentSectionNav({
   tournamentId,
   status,
   stages = [],
+  teamFormation,
   className,
 }: TournamentSectionNavProps) {
   const { t } = useTranslation();
@@ -102,6 +106,10 @@ export default function TournamentSectionNav({
       )}
 
       {baseItems.map((item) => {
+        if (item.tab === "draft" && teamFormation !== "draft") {
+          return null;
+        }
+
         const Icon = item.icon;
         const isActive = item.tab === activeTab;
         const disabled = phaseLockedTabs.has(item.tab) && !competitionEnabled;

@@ -105,6 +105,7 @@ export interface Tournament {
   challonge_slug: string | null;
   is_league: boolean;
   is_finished: boolean;
+  team_formation: string;
   status: TournamentStatus;
   registration_opens_at: Date | null;
   registration_closes_at: Date | null;

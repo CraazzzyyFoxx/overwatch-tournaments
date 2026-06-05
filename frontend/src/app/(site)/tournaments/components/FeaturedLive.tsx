@@ -46,6 +46,7 @@ const FeaturedTournamentCard = ({
           <span className="feat-id">
             #{tournament.number}
             {tournament.is_league ? " · League" : ""}
+            {tournament.team_formation && ` · ${tournament.team_formation === "draft" ? "Draft" : "Balancer"}`}
           </span>
           <h3 className="feat-name">{tournament.name}</h3>
         </div>

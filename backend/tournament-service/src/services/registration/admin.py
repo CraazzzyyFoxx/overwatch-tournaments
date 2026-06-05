@@ -11,6 +11,7 @@ import httpx
 import sqlalchemy as sa
 from fastapi import HTTPException, status
 from shared.balancer_registration_statuses import get_builtin_status_values
+from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.player_sub_roles import normalize_sub_role
@@ -724,7 +725,13 @@ async def ensure_unique_battle_tag(
         )
 
 
-def replace_registration_roles(registration: models.BalancerRegistration, roles: list[dict[str, Any]]) -> None:
+def replace_registration_roles(
+    registration: models.BalancerRegistration,
+    roles: list[dict[str, Any]],
+    *,
+    hero_catalog: HeroCatalog | None = None,
+    max_heroes: int | None = None,
+) -> None:
     existing_by_role = {existing.role: existing for existing in registration.roles}
     next_roles: list[models.BalancerRegistrationRole] = []
     seen_roles: set[str] = set()
@@ -745,9 +752,21 @@ def replace_registration_roles(registration: models.BalancerRegistration, roles:
         registration_role.priority = index
         registration_role.rank_value = role.get("rank_value")
         registration_role.is_active = bool(role.get("is_active", role.get("rank_value") is not None))
+
+        if hero_catalog is not None:
+            top_heroes = role.get("top_heroes")
+            if top_heroes is not None:
+                from shared.hero_catalog import build_hero_entries, DEFAULT_MAX_TOP_HEROES
+                registration_role.hero_entries = build_hero_entries(
+                    top_heroes,
+                    hero_catalog=hero_catalog,
+                    max_heroes=max_heroes or DEFAULT_MAX_TOP_HEROES,
+                )
+
         next_roles.append(registration_role)
 
     registration.roles[:] = next_roles
+
 
 
 def _active_roles(registration: models.BalancerRegistration | Any) -> list[Any]:
@@ -821,6 +840,16 @@ async def create_manual_registration(
     battle_tag = normalize_battle_tag(battle_tag)
     await ensure_unique_battle_tag(session, tournament_id=tournament_id, battle_tag=battle_tag)
 
+    form = await get_registration_form(session, tournament_id)
+    config = (form.built_in_fields_json or {}).get("top_heroes") if form else None
+    hero_catalog = None
+    max_heroes = None
+    if config and config.get("enabled", True) is not False:
+        from shared.hero_catalog import resolve_hero_catalog, DEFAULT_MAX_TOP_HEROES
+        hero_catalog = await resolve_hero_catalog(session)
+        raw_max = config.get("max_heroes")
+        max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
+
     registration = models.BalancerRegistration(
         tournament_id=tournament_id,
         workspace_id=workspace_id,
@@ -839,7 +868,7 @@ async def create_manual_registration(
         submitted_at=datetime.now(UTC),
         balancer_profile_overridden_at=datetime.now(UTC),
     )
-    replace_registration_roles(registration, roles)
+    replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
     registration.is_flex = registration.is_flex_computed
     session.add(registration)
     await session.flush()
@@ -918,7 +947,21 @@ async def update_registration_profile(
         registration.is_flex = is_flex
         override_changed = True
     if roles is not None:
-        replace_registration_roles(registration, roles)
+        for r_obj in registration.roles:
+            r_obj.hero_entries.clear()
+        await session.flush()
+
+        form = await get_registration_form(session, registration.tournament_id)
+        config = (form.built_in_fields_json or {}).get("top_heroes") if form else None
+        hero_catalog = None
+        max_heroes = None
+        if config and config.get("enabled", True) is not False:
+            from shared.hero_catalog import resolve_hero_catalog, DEFAULT_MAX_TOP_HEROES
+            hero_catalog = await resolve_hero_catalog(session)
+            raw_max = config.get("max_heroes")
+            max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
+
+        replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
         registration.is_flex = registration.is_flex_computed
         sync_included_balancer_status(registration)
         override_changed = True

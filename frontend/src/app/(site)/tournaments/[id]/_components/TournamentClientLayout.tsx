@@ -141,6 +141,10 @@ export default function TournamentClientLayout({
                 <span className="k">{t("common.format")}</span>
                 <span className="v">{formatLabel(stages, t)}</span>
               </span>
+              <span className="meta-pill">
+                <span className="k">{t("common.teamFormation")}</span>
+                <span className="v">{t(`common.${tournament.team_formation ?? "balancer"}`)}</span>
+              </span>
             </div>
 
             {tournament.description && (
@@ -189,6 +193,7 @@ export default function TournamentClientLayout({
         tournamentId={String(tournamentId)}
         status={tournament.status}
         stages={stages}
+        teamFormation={tournament.team_formation}
       />
 
       <section className="min-w-0">{children}</section>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import HeroImage from "@/components/hero/HeroImage";
 import { PerformanceBadgeWithTooltip } from "@/components/PerformanceBagde";
 import { CircleMinus, CirclePlus } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -87,10 +88,7 @@ const UserTournamentEncounters = ({ tournament, team_id }: UserTournamentEncount
                     <div className="flex flex-row gap-2 xs:w-[140px] md:w-full overflow-hidden">
                       {heroes.map((hero) => {
                         return (
-                          <Avatar key={`hero-${hero}`}>
-                            <AvatarImage src={hero} />
-                            <AvatarFallback>{hero}</AvatarFallback>
-                          </Avatar>
+                          <HeroImage key={`hero-${hero}`} hero={{ name: "", image_path: hero, role: "damage" }} size="sm" bare />
                         );
                       })}
                     </div>

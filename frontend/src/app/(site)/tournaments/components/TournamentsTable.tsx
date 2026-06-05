@@ -49,6 +49,12 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
                 <span className="sep">·</span>League
               </>
             )}
+            {tournament.team_formation && (
+              <>
+                <span className="sep">·</span>
+                {tournament.team_formation === "draft" ? "Draft" : "Balancer"}
+              </>
+            )}
           </span>
         </div>
       </td>

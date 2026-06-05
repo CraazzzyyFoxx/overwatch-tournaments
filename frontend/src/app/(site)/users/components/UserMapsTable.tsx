@@ -22,7 +22,7 @@ import { PaginatedResponse } from "@/types/pagination.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { HeroPlaytime } from "@/types/hero.types";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import HeroImage from "@/components/hero/HeroImage";
 import TableComponent from "@/components/TableComponent";
 
 const columns: ColumnDef<UserMapRead>[] = [
@@ -58,12 +58,7 @@ const columns: ColumnDef<UserMapRead>[] = [
         <div className="flex gap-2 justify-self-start min-w-64">
           {row.getValue<HeroPlaytime[]>("heroes").map((hero) => {
             return (
-              <Avatar key={`hero-${hero.hero.id}`}>
-                <AvatarImage src={hero.hero.image_path} asChild>
-                  <Image src={hero.hero.image_path} alt="Hero" width={128} height={128} />
-                </AvatarImage>
-                <AvatarFallback> </AvatarFallback>
-              </Avatar>
+              <HeroImage key={`hero-${hero.hero.id}`} hero={hero.hero} size="sm" bare />
             );
           })}
         </div>

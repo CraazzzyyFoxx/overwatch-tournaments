@@ -265,6 +265,7 @@ class BalancerRegistrationRoleInput(BaseModel):
     is_primary: bool = False
     rank_value: int | None = None
     is_active: bool = True
+    top_heroes: list[str] | None = None
 
 
 class StatusMetaRead(BaseModel):

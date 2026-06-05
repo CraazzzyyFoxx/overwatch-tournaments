@@ -1,0 +1,286 @@
+"""Draft pick selection, autopick, override, and board advance.
+
+The select-vs-autopick race is resolved by a single conditional UPDATE guarded
+by both ``status='on_clock'`` and the optimistic ``version`` token: exactly one
+writer's ``rowcount`` is 1, the loser gets a 409. Events are published by the
+caller within the same transaction so WorkspaceEvent ids preserve pick order.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared.core.enums import (
+    DraftAutopickStrategy,
+    DraftPickStatus,
+    DraftPlayerStatus,
+    DraftRole,
+    DraftStatus,
+)
+from shared.core.errors import ApiExc, ApiHTTPException
+from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+
+from src.services.draft import suggestions as sug
+
+
+@dataclass(frozen=True)
+class DraftResult:
+    pick: DraftPick
+    next_pick: DraftPick | None
+    completed: bool
+
+
+def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
+    return ApiHTTPException(status_code=status_code, detail=[ApiExc(code=code, msg=msg)])
+
+
+async def _finalize(
+    session: AsyncSession,
+    pick_id: int,
+    *,
+    status: DraftPickStatus,
+    player_id: int | None,
+    picked_by_user_id: int | None,
+    is_autopick: bool,
+    is_admin_override: bool,
+    expected_version: int,
+) -> bool:
+    """Atomic conditional finalize. Returns True iff this writer won the race."""
+    result = await session.execute(
+        sa.update(DraftPick)
+        .where(
+            DraftPick.id == pick_id,
+            DraftPick.version == expected_version,
+            DraftPick.status == DraftPickStatus.ON_CLOCK.value,
+        )
+        .values(
+            status=status.value,
+            picked_player_id=player_id,
+            picked_by_user_id=picked_by_user_id,
+            is_autopick=is_autopick,
+            is_admin_override=is_admin_override,
+            version=DraftPick.version + 1,
+        )
+    )
+    return result.rowcount == 1
+
+
+async def _team_picked_count(session: AsyncSession, team_id: int) -> int:
+    return (
+        await session.scalar(
+            sa.select(sa.func.count())
+            .select_from(DraftPlayer)
+            .where(
+                DraftPlayer.drafted_by_team_id == team_id,
+                DraftPlayer.status == DraftPlayerStatus.PICKED.value,
+            )
+        )
+        or 0
+    )
+
+
+async def _advance(session: AsyncSession, draft_session: DraftSession) -> DraftPick | None:
+    """Move the next UPCOMING pick to ON_CLOCK, or complete the draft."""
+    next_pick = await session.scalar(
+        sa.select(DraftPick)
+        .where(
+            DraftPick.session_id == draft_session.id,
+            DraftPick.status == DraftPickStatus.UPCOMING.value,
+        )
+        .order_by(DraftPick.overall_no.asc())
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    now = datetime.now(UTC)
+    if next_pick is None:
+        draft_session.status = DraftStatus.COMPLETED.value
+        draft_session.current_pick_id = None
+        await session.flush()
+        return None
+    next_pick.status = DraftPickStatus.ON_CLOCK.value
+    next_pick.clock_started_at = now
+    next_pick.clock_expires_at = now + timedelta(seconds=draft_session.pick_time_seconds)
+    next_pick.clock_remaining_ms = None
+    draft_session.current_pick_id = next_pick.id
+    await session.flush()
+    return next_pick
+
+
+async def _apply_won(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    pick: DraftPick,
+    player: DraftPlayer,
+) -> DraftResult:
+    player.status = DraftPlayerStatus.PICKED.value
+    player.drafted_by_team_id = pick.draft_team_id
+    await session.flush()
+    next_pick = await _advance(session, draft_session)
+    await session.refresh(pick)
+    await session.refresh(draft_session)
+    return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
+
+
+def _role_capacity(team_size: int, picked_count: int) -> dict[DraftRole, int]:
+    # Default: no hard role caps beyond roster size — any role may be filled.
+    remaining = max(0, team_size - picked_count)
+    return {role: remaining for role in DraftRole} if remaining > 0 else {}
+
+
+async def _validate_current_pick(draft_session: DraftSession, pick: DraftPick) -> None:
+    if draft_session.status != DraftStatus.LIVE.value:
+        raise _err("draft_not_live", "Draft is not live")
+    if pick.id != draft_session.current_pick_id or pick.status != DraftPickStatus.ON_CLOCK.value:
+        raise _err("pick_not_on_clock", "This is not the current on-clock pick")
+
+
+async def _load_available_player(session: AsyncSession, draft_session_id: int, player_id: int) -> DraftPlayer:
+    player = await session.get(DraftPlayer, player_id)
+    if player is None or player.session_id != draft_session_id:
+        raise _err("player_not_found", "Player not in this draft", status_code=404)
+    if player.status != DraftPlayerStatus.AVAILABLE.value:
+        raise _err("player_unavailable", "Player is not available")
+    return player
+
+
+def _role_is_legal(player: DraftPlayer, target_role: DraftRole | None) -> bool:
+    if target_role is None:
+        return True
+    if player.is_flex:
+        return True
+    playable = {player.primary_role, *(player.secondary_roles_json or [])}
+    return target_role.value in playable
+
+
+async def select(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    pick: DraftPick,
+    *,
+    player_id: int,
+    expected_version: int,
+    target_role: DraftRole | None,
+    actor_user_id: int | None,
+    is_admin: bool,
+) -> DraftResult:
+    await _validate_current_pick(draft_session, pick)
+    team = await session.get(DraftTeam, pick.draft_team_id)
+    if not is_admin and (team is None or team.captain_user_id != actor_user_id):
+        raise _err("not_your_pick", "Only the on-clock captain may pick", status_code=403)
+    player = await _load_available_player(session, draft_session.id, player_id)
+    if not _role_is_legal(player, target_role):
+        raise _err("illegal_role", "Player cannot play the requested role", status_code=422)
+
+    won = await _finalize(
+        session,
+        pick.id,
+        status=DraftPickStatus.COMPLETED,
+        player_id=player.id,
+        picked_by_user_id=actor_user_id,
+        is_autopick=False,
+        is_admin_override=False,
+        expected_version=expected_version,
+    )
+    if not won:
+        raise _err("pick_already_resolved", "Pick was already resolved")
+    if target_role is not None:
+        pick.target_role = target_role.value
+    return await _apply_won(session, draft_session, pick, player)
+
+
+async def autopick(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    pick: DraftPick,
+    *,
+    expected_version: int,
+    actor_user_id: int | None = None,
+) -> DraftResult:
+    await _validate_current_pick(draft_session, pick)
+    available = (
+        await session.scalars(
+            sa.select(DraftPlayer).where(
+                DraftPlayer.session_id == draft_session.id,
+                DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+            )
+        )
+    ).all()
+    picked_count = await _team_picked_count(session, pick.draft_team_id)
+    capacity = _role_capacity(draft_session.team_size, picked_count)
+
+    fit_players = [
+        sug.FitPlayer(
+            player_id=p.id,
+            rank_value=p.rank_value or 0,
+            playable_roles=frozenset(DraftRole(r) for r in ({p.primary_role, *(p.secondary_roles_json or [])})),
+            preference_order=(DraftRole(p.primary_role),),
+            is_flex=p.is_flex,
+            user_id=p.user_id,
+        )
+        for p in available
+    ]
+    choice = sug.best_fit(
+        fit_players,
+        capacity,
+        DraftAutopickStrategy(draft_session.autopick_strategy),
+        sug.FitConfig(),
+    )
+    # Fallback: any available player if fit produced nothing (e.g. no capacity map).
+    chosen_id = choice.player_id if choice is not None else (available[0].id if available else None)
+    chosen_role = choice.role if choice is not None else None
+
+    won = await _finalize(
+        session,
+        pick.id,
+        status=DraftPickStatus.AUTOPICKED if chosen_id is not None else DraftPickStatus.SKIPPED,
+        player_id=chosen_id,
+        picked_by_user_id=None,
+        is_autopick=True,
+        is_admin_override=False,
+        expected_version=expected_version,
+    )
+    if not won:
+        raise _err("pick_already_resolved", "Pick was already resolved")
+    if chosen_id is None:
+        await session.refresh(pick)
+        next_pick = await _advance(session, draft_session)
+        await session.refresh(draft_session)
+        return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
+    if chosen_role is not None:
+        pick.target_role = chosen_role.value
+    player = await session.get(DraftPlayer, chosen_id)
+    return await _apply_won(session, draft_session, pick, player)
+
+
+async def override(
+    session: AsyncSession,
+    draft_session: DraftSession,
+    pick: DraftPick,
+    *,
+    player_id: int | None,
+    expected_version: int,
+    actor_user_id: int | None,
+) -> DraftResult:
+    if not draft_session.allow_admin_override:
+        raise _err("override_disabled", "Admin override is disabled for this draft")
+    await _validate_current_pick(draft_session, pick)
+    if player_id is None:
+        raise _err("override_needs_player", "Override requires a player_id", status_code=422)
+    player = await _load_available_player(session, draft_session.id, player_id)
+    won = await _finalize(
+        session,
+        pick.id,
+        status=DraftPickStatus.COMPLETED,
+        player_id=player.id,
+        picked_by_user_id=actor_user_id,
+        is_autopick=False,
+        is_admin_override=True,
+        expected_version=expected_version,
+    )
+    if not won:
+        raise _err("pick_already_resolved", "Pick was already resolved")
+    return await _apply_won(session, draft_session, pick, player)

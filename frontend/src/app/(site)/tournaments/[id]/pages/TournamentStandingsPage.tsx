@@ -52,7 +52,7 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
     }
 
     return {
-      groups: Array.from(stageStandings.entries()),
+      groups: Array.from(stageStandings.entries()).sort((a, b) => a[0] - b[0]),
       playoffStandings,
     };
   }, [standings]);
@@ -146,7 +146,11 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
                   <div className="stack">
                     <span className="nm">{bucket.name}</span>
                     <span className="sub">
-                      {t("common.teamsCount", { count: bucket.standings.length })} · {t("common.roundRobin")}
+                      {t("common.teamsCount", { count: bucket.standings.length })} · {
+                        bucket.standings[0]?.stage?.stage_type === "swiss"
+                          ? t("common.swiss")
+                          : t("common.roundRobin")
+                      }
                     </span>
                   </div>
                 </div>

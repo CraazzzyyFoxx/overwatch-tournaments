@@ -34,3 +34,32 @@ async def resolve_hero_catalog(session: AsyncSession) -> HeroCatalog:
     """Return ``{hero_slug: HeroCatalogEntry}`` for every hero."""
     rows = (await session.execute(sa.select(models.Hero.id, models.Hero.slug, models.Hero.type))).all()
     return {slug: HeroCatalogEntry(id=hero_id, slug=slug, hero_class=hero_class) for hero_id, slug, hero_class in rows}
+
+
+def build_hero_entries(
+    slugs: list[str] | None,
+    *,
+    hero_catalog: HeroCatalog,
+    max_heroes: int,
+) -> list[models.BalancerRegistrationRoleHero]:
+    """Translate ordered hero slugs into ``registration_role_hero`` rows.
+
+    De-duplicates, drops unknown slugs, caps at ``max_heroes`` and assigns a
+    1-based priority (1 = top pick).
+    """
+    hero_entries: list[models.BalancerRegistrationRoleHero] = []
+    seen: set[str] = set()
+    for slug in slugs or []:
+        if slug in seen:
+            continue
+        entry = hero_catalog.get(slug)
+        if entry is None:
+            continue
+        seen.add(slug)
+        hero_entries.append(
+            models.BalancerRegistrationRoleHero(hero_id=entry.id, priority=len(hero_entries) + 1)
+        )
+        if len(hero_entries) >= max_heroes:
+            break
+    return hero_entries
+

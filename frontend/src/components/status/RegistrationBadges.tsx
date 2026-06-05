@@ -1,6 +1,7 @@
 import React from "react";
-import { CheckCircle2, Circle, Lock, Unlock, XCircle } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Lock, Unlock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import type { StatusMeta } from "@/types/balancer-admin.types";
 
@@ -117,11 +118,28 @@ export function AdmissionStatusBadge({
   profilesOpen,
   className,
 }: AdmissionStatusBadgeProps) {
-  const admitted = isAdmitted(registrationStatus, balancerStatus, checkedIn, {
-    requireOpenProfile,
-    profilesOpen,
-  });
-  const label = admitted ? "Admitted" : "Not Admitted";
+  const { t } = useTranslation();
+
+  const isProfileClosed = requireOpenProfile && profilesOpen === false;
+  const isApprovedAndReady = registrationStatus === "approved" && balancerStatus === "ready" && !isProfileClosed;
+
+  let status: "admitted" | "pending_check_in" | "not_admitted";
+  if (!isApprovedAndReady) {
+    status = "not_admitted";
+  } else if (checkedIn === true) {
+    status = "admitted";
+  } else {
+    status = "pending_check_in";
+  }
+
+  let label = "";
+  if (status === "admitted") {
+    label = t("common.admissionStatus.admitted");
+  } else if (status === "pending_check_in") {
+    label = t("common.admissionStatus.pendingCheckIn");
+  } else {
+    label = t("common.admissionStatus.notAdmitted");
+  }
 
   return (
     <span
@@ -129,15 +147,15 @@ export function AdmissionStatusBadge({
       aria-label={label}
       className={cn(
         "inline-flex size-5 items-center justify-center",
-        admitted ? "text-emerald-400" : "text-red-400",
+        status === "admitted" && "text-emerald-400",
+        status === "pending_check_in" && "text-amber-400",
+        status === "not_admitted" && "text-red-400",
         className,
       )}
     >
-      {admitted ? (
-        <CheckCircle2 className="size-4" />
-      ) : (
-        <XCircle className="size-4" />
-      )}
+      {status === "admitted" && <CheckCircle2 className="size-4" />}
+      {status === "pending_check_in" && <Clock className="size-4" />}
+      {status === "not_admitted" && <XCircle className="size-4" />}
     </span>
   );
 }

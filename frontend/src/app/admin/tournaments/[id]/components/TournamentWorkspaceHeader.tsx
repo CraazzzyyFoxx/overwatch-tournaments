@@ -55,6 +55,7 @@ interface TournamentWorkspaceHeaderProps {
   canToggleFinished: boolean;
   divisionGridVersions: DivisionGridVersion[];
   divisionGridLoading: boolean;
+  onEditClick: () => void;
 }
 
 function formatMetricCount(value: MetricCount, isLoading: boolean) {
@@ -79,40 +80,12 @@ export function TournamentWorkspaceHeader({
   canDeleteTournament,
   canToggleFinished,
   divisionGridVersions,
-  divisionGridLoading
+  divisionGridLoading,
+  onEditClick
 }: TournamentWorkspaceHeaderProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  const [tournamentDialogOpen, setTournamentDialogOpen] = useState(false);
-  const [tournamentDeleteOpen, setTournamentDeleteOpen] = useState(false);
-  const [tournamentFormData, setTournamentFormData] = useState<TournamentFormState>(
-    getTournamentForm(tournament)
-  );
-
-  const resetTournamentDialog = () => {
-    setTournamentDialogOpen(false);
-    setTournamentFormData(getTournamentForm(tournament));
-  };
-
-  const openTournamentDialog = () => {
-    updateTournamentMutation.reset();
-    setTournamentFormData(getTournamentForm(tournament));
-    setTournamentDialogOpen(true);
-  };
-
-  const updateTournamentMutation = useMutation({
-    mutationFn: (data: TournamentUpdateInput) => adminService.updateTournament(tournamentId, data),
-    onSuccess: () => {
-      invalidateTournamentWorkspace(queryClient, tournamentId);
-      resetTournamentDialog();
-      toast({ title: "Tournament updated" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
 
   const toggleFinishedMutation = useMutation({
     mutationFn: () => adminService.toggleTournamentFinished(tournamentId),
@@ -125,48 +98,6 @@ export function TournamentWorkspaceHeader({
     }
   });
 
-  const deleteTournamentMutation = useMutation({
-    mutationFn: () => adminService.deleteTournament(tournamentId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tournaments"] });
-      toast({ title: "Tournament deleted" });
-      router.push("/admin/tournaments");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const handleTournamentSubmit = (event: FormEvent) => {
-    event.preventDefault();
-
-    const payload: TournamentUpdateInput = {
-      number: tournamentFormData.number,
-      name: tournamentFormData.name.trim(),
-      description: tournamentFormData.description.trim() || null,
-      challonge_slug: tournamentFormData.challonge_slug
-        ? normalizeChallongeSlug(tournamentFormData.challonge_slug)
-        : null,
-      is_league: tournamentFormData.is_league,
-      is_finished: tournamentFormData.is_finished,
-      start_date: tournamentFormData.start_date,
-      end_date: tournamentFormData.end_date,
-      win_points: tournamentFormData.win_points,
-      draw_points: tournamentFormData.draw_points,
-      loss_points: tournamentFormData.loss_points,
-      registration_opens_at: tournamentFormData.registration_opens_at || null,
-      registration_closes_at: tournamentFormData.registration_closes_at || null,
-      check_in_opens_at: tournamentFormData.check_in_opens_at || null,
-      check_in_closes_at: tournamentFormData.check_in_closes_at || null,
-      division_grid_version_id: tournamentFormData.division_grid_version_id
-    };
-
-    updateTournamentMutation.mutate(payload);
-  };
-
-  const tournamentFormInitial = getTournamentForm(tournament);
-  const isTournamentDirty =
-    tournamentDialogOpen && hasUnsavedChanges(tournamentFormData, tournamentFormInitial);
 
   return (
     <>
@@ -205,7 +136,7 @@ export function TournamentWorkspaceHeader({
                 </Button>
               ) : null}
               {canUpdateTournament ? (
-                <Button variant="outline" onClick={openTournamentDialog}>
+                <Button variant="outline" onClick={onEditClick}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit Tournament
                 </Button>
@@ -217,16 +148,6 @@ export function TournamentWorkspaceHeader({
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   {tournament.is_finished ? "Reopen Tournament" : "Mark as Finished"}
-                </Button>
-              ) : null}
-              {canDeleteTournament ? (
-                <Button
-                  variant="destructive"
-                  onClick={() => setTournamentDeleteOpen(true)}
-                  disabled={deleteTournamentMutation.isPending}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Tournament
                 </Button>
               ) : null}
             </div>
@@ -265,49 +186,6 @@ export function TournamentWorkspaceHeader({
           </div>
         </CardContent>
       </Card>
-
-      <EntityFormDialog
-        open={tournamentDialogOpen}
-        onOpenChange={(open) => {
-          setTournamentDialogOpen(open);
-          if (!open) {
-            resetTournamentDialog();
-          }
-        }}
-        title="Edit Tournament"
-        description="Update tournament metadata without leaving the workspace."
-        onSubmit={handleTournamentSubmit}
-        isSubmitting={updateTournamentMutation.isPending}
-        submittingLabel="Updating tournament..."
-        errorMessage={
-          updateTournamentMutation.isError ? updateTournamentMutation.error.message : undefined
-        }
-        isDirty={isTournamentDirty}
-      >
-        <TournamentFormFields
-          idPrefix="workspace-tournament"
-          mode="workspace-edit"
-          value={tournamentFormData}
-          onChange={setTournamentFormData}
-          divisionGridVersions={divisionGridVersions}
-          divisionGridLoading={divisionGridLoading}
-        />
-      </EntityFormDialog>
-
-      <DeleteConfirmDialog
-        open={tournamentDeleteOpen}
-        onOpenChange={setTournamentDeleteOpen}
-        onConfirm={() => deleteTournamentMutation.mutate()}
-        title="Delete Tournament"
-        description={`Delete "${tournament.name}"? This removes the tournament and all linked workspace data.`}
-        cascadeInfo={[
-          "Tournament stages",
-          "Teams and players",
-          "Encounters and matches",
-          "Standings rows"
-        ]}
-        isDeleting={deleteTournamentMutation.isPending}
-      />
     </>
   );
 }

@@ -2,11 +2,18 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export type MeResponse = {
+  id: number | null;
   username: string;
   avatar_url?: string | null;
   roles: string[];
   permissions: string[];
   is_superuser: boolean;
+  linked_players: Array<{
+    player_id: number;
+    player_name: string;
+    is_primary: boolean;
+    linked_at: string;
+  }>;
   workspaces: Array<{
     workspace_id: number;
     slug: string;
@@ -50,11 +57,20 @@ export async function GET() {
 
     const me = await response.json();
     const payload: MeResponse = {
+      id: typeof me.id === "number" ? me.id : null,
       username: me.username,
       avatar_url: me.avatar_url ?? null,
       roles: me.roles ?? [],
       permissions: me.permissions ?? [],
       is_superuser: me.is_superuser ?? false,
+      linked_players: (me.linked_players ?? []).map(
+        (player: MeResponse["linked_players"][number]) => ({
+          player_id: player.player_id,
+          player_name: player.player_name,
+          is_primary: player.is_primary,
+          linked_at: player.linked_at,
+        }),
+      ),
       workspaces: (me.workspaces ?? []).map(
         (workspace: MeResponse["workspaces"][number]) => ({
           workspace_id: workspace.workspace_id,

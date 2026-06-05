@@ -16,26 +16,6 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 const COMPLETED_STATUSES = new Set(["completed", "finished", "closed"]);
 const PER_PAGE = 15;
 
-const TEAM_GRADIENTS = [
-  "linear-gradient(135deg,hsl(174 72% 60%),hsl(174 60% 32%))",
-  "linear-gradient(135deg,hsl(340 75% 65%),hsl(340 60% 38%))",
-  "linear-gradient(135deg,hsl(270 70% 68%),hsl(270 55% 42%))",
-  "linear-gradient(135deg,hsl(38 95% 62%),hsl(38 80% 42%))",
-  "linear-gradient(135deg,hsl(210 78% 65%),hsl(210 60% 38%))",
-  "linear-gradient(135deg,hsl(142 65% 55%),hsl(142 50% 32%))",
-];
-
-function teamGradient(seed: number): string {
-  return TEAM_GRADIENTS[Math.abs(seed) % TEAM_GRADIENTS.length];
-}
-
-function teamInitials(name?: string | null): string {
-  const cleaned = (name ?? "").trim();
-  if (!cleaned) return "?";
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return cleaned.slice(0, 2).toUpperCase();
-}
 
 const getStageLabel = (encounter: Encounter) =>
   encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
@@ -187,7 +167,7 @@ const EncountersTable = ({
   }, [currentPage, debouncedSearchValue, pathname]);
 
   const rows = encounters.results ?? [];
-  const columnCount = hideTournament ? 6 : 7;
+  const columnCount = hideTournament ? 7 : 8;
 
   return (
     <div className="aqt-matches flex flex-col gap-4">
@@ -208,6 +188,7 @@ const EncountersTable = ({
                 <th>Matchup</th>
                 {!hideTournament && <th>Tournament</th>}
                 <th className="r">Score</th>
+                <th className="c">Format</th>
                 <th>Closeness</th>
                 <th>Stage</th>
                 <th className="r">When</th>
@@ -251,12 +232,6 @@ const EncountersTable = ({
                               meta.winner === "away" && "loser"
                             )}
                           >
-                            <span
-                              className="av"
-                              style={{ background: teamGradient(encounter.home_team_id) }}
-                            >
-                              {teamInitials(encounter.home_team?.name)}
-                            </span>
                             <span className="nm">{encounter.home_team?.name ?? "TBD"}</span>
                           </div>
                           <div
@@ -266,12 +241,6 @@ const EncountersTable = ({
                               meta.winner === "home" && "loser"
                             )}
                           >
-                            <span
-                              className="av"
-                              style={{ background: teamGradient(encounter.away_team_id) }}
-                            >
-                              {teamInitials(encounter.away_team?.name)}
-                            </span>
                             <span className="nm">{encounter.away_team?.name ?? "TBD"}</span>
                           </div>
                         </div>
@@ -293,6 +262,10 @@ const EncountersTable = ({
                             {encounter.score.away}
                           </span>
                         </div>
+                      </td>
+
+                      <td className="c font-mono text-[var(--fg-dim)] text-[13px]">
+                        Bo{encounter.best_of}
                       </td>
 
                       <td>
