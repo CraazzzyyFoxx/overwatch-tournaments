@@ -66,6 +66,7 @@ type TournamentSectionNavProps = {
   tournamentId: string;
   status: TournamentStatus;
   stages?: Stage[];
+  teamFormation?: string;
   // Retained for call-site compatibility; both variants render the tab bar.
   variant?: "desktop" | "mobile";
   className?: string;
@@ -75,6 +76,7 @@ export default function TournamentSectionNav({
   tournamentId,
   status,
   stages = [],
+  teamFormation,
   className,
 }: TournamentSectionNavProps) {
   const { t } = useTranslation();
@@ -104,6 +106,10 @@ export default function TournamentSectionNav({
       )}
 
       {baseItems.map((item) => {
+        if (item.tab === "draft" && teamFormation !== "draft") {
+          return null;
+        }
+
         const Icon = item.icon;
         const isActive = item.tab === activeTab;
         const disabled = phaseLockedTabs.has(item.tab) && !competitionEnabled;

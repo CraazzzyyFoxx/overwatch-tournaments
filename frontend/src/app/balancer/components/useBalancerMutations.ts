@@ -18,6 +18,7 @@ import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import type {
   BalancerApplication,
+  AdminRegistration,
   AdminRegistrationUpdateInput,
   BalanceExportResponse,
   BalancerPlayerRecord,
@@ -152,17 +153,31 @@ export function useBalancerMutations({
       const registrationPatch: AdminRegistrationUpdateInput = {};
 
       if (payload.role_entries_json !== undefined) {
+        const cachedRegistrations = queryClient.getQueryData<AdminRegistration[]>([
+          "balancer-admin",
+          "registrations",
+          tournamentId
+        ]);
+        const existingReg = cachedRegistrations?.find((r) => r.id === playerId);
+        const existingRolesMap = new Map(
+          existingReg?.roles?.map((r) => [r.role, r.top_heroes ?? []]) ?? []
+        );
+
         const sortedEntries = [...(payload.role_entries_json ?? [])].sort(
           (left, right) => left.priority - right.priority
         );
-        registrationPatch.roles = sortedEntries.map((entry, index) => ({
-          role: entry.role,
-          subrole: entry.subtype,
-          priority: entry.priority,
-          is_primary: payload.is_flex ? true : index === 0,
-          rank_value: entry.rank_value,
-          is_active: entry.is_active
-        }));
+        registrationPatch.roles = sortedEntries.map((entry, index) => {
+          const topHeroes = existingRolesMap.get(entry.role) ?? [];
+          return {
+            role: entry.role,
+            subrole: entry.subtype,
+            priority: entry.priority,
+            is_primary: payload.is_flex ? true : index === 0,
+            rank_value: entry.rank_value,
+            is_active: entry.is_active,
+            ...(topHeroes.length > 0 ? { top_heroes: topHeroes } : {})
+          };
+        });
       }
 
       if (payload.is_flex !== undefined) {

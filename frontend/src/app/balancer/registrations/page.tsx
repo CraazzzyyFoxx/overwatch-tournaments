@@ -15,13 +15,15 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BadgeInfo,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
-  ExternalLink,
   Globe,
   Loader2,
   Lock,
@@ -76,7 +78,6 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -93,7 +94,6 @@ import { ROLE_LABELS, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
 import registrationService from "@/services/registration.service";
 import type {
-  AdminGoogleSheetFeed,
   AdminRegistration,
   AdminRegistrationRole,
   BalancerRoleCode,
@@ -163,68 +163,7 @@ function formatSubmittedAt(value: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
-function RegistrationToggleBar({ tournamentId }: { tournamentId: number }) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
 
-  const formQuery = useQuery({
-    queryKey: ["balancer-admin", "registration-form", tournamentId],
-    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId)
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: (nextValue: boolean) =>
-      balancerAdminService.upsertRegistrationForm(tournamentId, {
-        is_open: nextValue,
-        auto_approve: formQuery.data?.auto_approve ?? false,
-        built_in_fields: formQuery.data?.built_in_fields ?? {},
-        custom_fields: formQuery.data?.custom_fields ?? []
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registration-form", tournamentId]
-      });
-      toast({ title: formQuery.data?.is_open ? "Registration closed" : "Registration opened" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to update form", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const form = formQuery.data;
-  const isOpen = form?.is_open ?? false;
-  const formHref = searchParams.toString()
-    ? `/balancer/registrations/form?${searchParams.toString()}`
-    : "/balancer/registrations/form";
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
-      <div className="flex items-center gap-3">
-        <Badge variant={isOpen ? "default" : "secondary"} className="gap-1.5">
-          {isOpen ? <Globe className="size-3" /> : <Lock className="size-3" />}
-          {isOpen ? "Open" : "Closed"}
-        </Badge>
-        <span className="text-sm text-muted-foreground">
-          {isOpen ? "Players can register for this tournament." : "Registration is closed."}
-        </span>
-      </div>
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={formHref}>
-            <Pencil className="mr-1.5 size-3.5" />
-            Configure form
-          </Link>
-        </Button>
-        <Switch
-          checked={isOpen}
-          onCheckedChange={(checked) => toggleMutation.mutate(checked)}
-          disabled={toggleMutation.isPending || (!form && !isOpen)}
-        />
-      </div>
-    </div>
-  );
-}
 
 function RolesCell({
   roles,
@@ -295,65 +234,7 @@ function CheckInBadge({ registration }: { registration: AdminRegistration }) {
 
 
 
-function FeedStatus({ feed }: { feed: AdminGoogleSheetFeed | null | undefined }) {
-  if (!feed) {
-    return (
-      <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-        No Google Sheets feed configured yet.
-      </div>
-    );
-  }
 
-  return (
-    <div className="rounded-lg border p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline">{feed.last_sync_status ?? "pending"}</Badge>
-        <span className="text-muted-foreground">
-          Last sync:{" "}
-          {feed.last_synced_at ? new Date(feed.last_synced_at).toLocaleString() : "never"}
-        </span>
-      </div>
-      {feed.last_error ? <p className="mt-2 text-sm text-destructive">{feed.last_error}</p> : null}
-      {feed.header_row_json?.length ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Headers detected: {feed.header_row_json.join(", ")}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function FeedSummaryCard({
-  feed,
-  href
-}: {
-  feed: AdminGoogleSheetFeed | null | undefined;
-  href: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>Google Sheets Feed</CardTitle>
-            <CardDescription>
-              Feed configuration and mapping live on a dedicated subpage.
-            </CardDescription>
-          </div>
-          <Button variant="outline" asChild>
-            <Link href={href}>
-              Open feed settings
-              <ExternalLink className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <FeedStatus feed={feed} />
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function BalancerRegistrationsPage() {
   const tournamentId = useBalancerTournamentId();
@@ -389,6 +270,18 @@ export default function BalancerRegistrationsPage() {
       return next;
     });
 
+  const [sortField, setSortField] = useState<string | null>("submitted");
+  const [sortDescending, setSortDescending] = useState<boolean>(true);
+
+  const handleSort = (fieldId: string) => {
+    if (sortField === fieldId) {
+      setSortDescending((prev) => !prev);
+    } else {
+      setSortField(fieldId);
+      setSortDescending(fieldId === "submitted" || fieldId === "reviewed");
+    }
+  };
+
   const registrationsQuery = useQuery({
     queryKey: [
       "balancer-admin",
@@ -408,11 +301,7 @@ export default function BalancerRegistrationsPage() {
     enabled: tournamentId !== null
   });
 
-  const feedQuery = useQuery({
-    queryKey: ["balancer-admin", "sheet", tournamentId],
-    queryFn: () => balancerAdminService.getTournamentSheet(tournamentId as number),
-    enabled: tournamentId !== null
-  });
+
 
   const formQuery = useQuery({
     queryKey: ["balancer-admin", "registration-form", tournamentId],
@@ -654,19 +543,116 @@ export default function BalancerRegistrationsPage() {
   const registrations = registrationsQuery.data ?? [];
   const filteredRegistrations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return registrations;
+    let result = registrations;
+    if (query) {
+      result = registrations.filter((registration) =>
+        allColumns.some((column) => {
+          if (!column.searchValue) {
+            return false;
+          }
+          const value = column.searchValue(registration);
+          return value?.toLowerCase().includes(query) ?? false;
+        })
+      );
     }
-    return registrations.filter((registration) =>
-      allColumns.some((column) => {
-        if (!column.searchValue) {
-          return false;
+
+    if (!sortField) {
+      return result;
+    }
+
+    return [...result].sort((a, b) => {
+      let valA: any = null;
+      let valB: any = null;
+
+      switch (sortField) {
+        case "participant":
+          valA = a.battle_tag || a.display_name || "";
+          valB = b.battle_tag || b.display_name || "";
+          break;
+        case "smurfs":
+          valA = (a.smurf_tags_json || []).join(" ");
+          valB = (b.smurf_tags_json || []).join(" ");
+          break;
+        case "roles": {
+          const getHighestRank = (reg: AdminRegistration) => {
+            const ranks = reg.roles
+              .filter((r) => r.is_active && r.rank_value != null)
+              .map((r) => r.rank_value as number);
+            return ranks.length > 0 ? Math.max(...ranks) : 0;
+          };
+          valA = getHighestRank(a);
+          valB = getHighestRank(b);
+          break;
         }
-        const value = column.searchValue(registration);
-        return value?.toLowerCase().includes(query) ?? false;
-      })
-    );
-  }, [allColumns, registrations, searchQuery]);
+        case "status":
+          valA = a.status || "";
+          valB = b.status || "";
+          break;
+        case "balancer":
+          valA = a.balancer_status || "";
+          valB = b.balancer_status || "";
+          break;
+        case "checkin":
+          valA = a.checked_in ? 1 : 0;
+          valB = b.checked_in ? 1 : 0;
+          break;
+        case "admission": {
+          const getAdmissionScore = (reg: AdminRegistration) => {
+            const isProfileClosed = requireOpenProfile && reg.profiles_open === false;
+            const isApprovedAndReady =
+              reg.status === "approved" &&
+              reg.balancer_status === "ready" &&
+              !isProfileClosed;
+            if (!isApprovedAndReady) return 0;
+            return reg.checked_in ? 2 : 1;
+          };
+          valA = getAdmissionScore(a);
+          valB = getAdmissionScore(b);
+          break;
+        }
+        case "profile":
+          valA = a.profiles_open === true ? 2 : a.profiles_open === false ? 1 : 0;
+          valB = b.profiles_open === true ? 2 : b.profiles_open === false ? 1 : 0;
+          break;
+        case "submitted":
+          valA = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+          valB = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+          break;
+        case "source":
+          valA = a.source || "";
+          valB = b.source || "";
+          break;
+        case "notes":
+          valA = a.notes || "";
+          valB = b.notes || "";
+          break;
+        case "admin_notes":
+          valA = a.admin_notes || "";
+          valB = b.admin_notes || "";
+          break;
+        case "reviewed":
+          valA = a.reviewed_at ? new Date(a.reviewed_at).getTime() : 0;
+          valB = b.reviewed_at ? new Date(b.reviewed_at).getTime() : 0;
+          break;
+        case "excluded":
+          valA = a.exclude_from_balancer ? 1 : 0;
+          valB = b.exclude_from_balancer ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof valA === "string" && typeof valB === "string") {
+        return sortDescending
+          ? valB.localeCompare(valA, undefined, { sensitivity: "base", numeric: true })
+          : valA.localeCompare(valB, undefined, { sensitivity: "base", numeric: true });
+      }
+
+      if (valA < valB) return sortDescending ? 1 : -1;
+      if (valA > valB) return sortDescending ? -1 : 1;
+      return 0;
+    });
+  }, [allColumns, registrations, searchQuery, sortField, sortDescending, requireOpenProfile]);
   const groupedRegistrations = useMemo(
     () => groupRegistrations(filteredRegistrations, groupBy, requireOpenProfile),
     [filteredRegistrations, groupBy, requireOpenProfile]
@@ -687,10 +673,6 @@ export default function BalancerRegistrationsPage() {
   const pendingCount = registrations.filter(
     (registration) => registration.status === "pending"
   ).length;
-  const feedHref = searchParams.toString()
-    ? `/balancer/registrations/feed?${searchParams.toString()}`
-    : "/balancer/registrations/feed";
-
   if (!tournamentId) {
     return (
       <Alert>
@@ -704,9 +686,6 @@ export default function BalancerRegistrationsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      <RegistrationToggleBar tournamentId={tournamentId} />
-      <FeedSummaryCard feed={feedQuery.data} href={feedHref} />
-
       <Card className="flex min-h-0 flex-col overflow-hidden">
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -877,19 +856,44 @@ export default function BalancerRegistrationsPage() {
                       aria-label="Select visible pending registrations"
                     />
                   </th>
-                  {visibleColumns.map((column) => (
-                    <th
-                      key={column.id}
-                      className={cn(
-                        "px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-white/40",
-                        RESPONSIVE_CLASS[column.responsive ?? "always"],
-                        ALIGN_CLASS[column.align ?? "left"],
-                        column.widthClass
-                      )}
-                    >
-                      {column.label}
-                    </th>
-                  ))}
+                  {visibleColumns.map((column) => {
+                    const isSorted = sortField === column.id;
+                    return (
+                      <th
+                        key={column.id}
+                        onClick={() => handleSort(column.id)}
+                        className={cn(
+                          "group cursor-pointer select-none px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-white/40 hover:bg-white/[0.01] hover:text-white/70 transition-colors",
+                          RESPONSIVE_CLASS[column.responsive ?? "always"],
+                          column.widthClass
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "flex items-center gap-1",
+                            ALIGN_CLASS[column.align ?? "left"] === "text-center"
+                              ? "justify-center"
+                              : ALIGN_CLASS[column.align ?? "left"] === "text-right"
+                                ? "justify-end"
+                                : "justify-start"
+                          )}
+                        >
+                          <span>{column.label}</span>
+                          <span className="shrink-0">
+                            {isSorted ? (
+                              sortDescending ? (
+                                <ArrowDown className="size-3 text-emerald-400" />
+                              ) : (
+                                <ArrowUp className="size-3 text-emerald-400" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-white/20" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className="w-[112px] px-3 py-2.5 text-right text-xs font-medium uppercase tracking-wider text-white/40">
                     Actions
                   </th>

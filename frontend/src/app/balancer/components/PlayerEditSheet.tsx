@@ -50,9 +50,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import Cookies from "js-cookie";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { useDivisionGrid, useDivisionGridVersion } from "@/hooks/useCurrentWorkspace";
+import { useCurrentWorkspaceId, useDivisionGrid, useDivisionGridVersion } from "@/hooks/useCurrentWorkspace";
+import { useQuery } from "@tanstack/react-query";
+import adminService from "@/services/admin.service";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 import {
   getDivisionLabel,
   resolveExactRankFromDivision as resolveExactRankFromDivisionInGrid,
@@ -84,20 +88,7 @@ const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "support", label: "Support" }
 ];
 
-const SUBTYPE_OPTIONS: Record<
-  BalancerRoleCode,
-  Array<{ value: BalancerRoleSubtype; label: string }>
-> = {
-  tank: [],
-  dps: [
-    { value: "hitscan", label: "Hitscan" },
-    { value: "projectile", label: "Projectile" }
-  ],
-  support: [
-    { value: "main_heal", label: "Main Heal" },
-    { value: "light_heal", label: "Light Heal" }
-  ]
-};
+// Dynamic subtype options are fetched from the workspace sub-roles catalog
 
 const ROLE_DISPLAY: Record<BalancerRoleCode, string> = {
   tank: "Tank",
@@ -217,16 +208,7 @@ function applyHistoryPreviewToRoleEntries(
   return normalizeRoleEntries(Array.from(byRole.values()));
 }
 
-function getSubtypeLabel(
-  role: BalancerRoleCode,
-  subtype: BalancerRoleSubtype | null
-): string | null {
-  if (!subtype) {
-    return null;
-  }
-
-  return SUBTYPE_OPTIONS[role].find((option) => option.value === subtype)?.label ?? subtype;
-}
+// getSubtypeLabel has been inline-replaced using dynamic subtypeOptions
 
 function getAverageRankValue(entries: BalancerPlayerRoleEntry[]): number | null {
   const rankedEntries = entries.filter((entry) => entry.is_active && entry.rank_value != null);
@@ -327,6 +309,7 @@ type SortableRoleEntryProps = {
   sliderBounds: { min: number; max: number };
   onUpdate: (index: number, next: BalancerPlayerRoleEntry) => void;
   onRemove: (index: number) => void;
+  subtypeOptions: Record<BalancerRoleCode, Array<{ value: string; label: string }>>;
 };
 
 function SortableRoleEntry({
@@ -339,7 +322,8 @@ function SortableRoleEntry({
   divisionTiers,
   sliderBounds,
   onUpdate,
-  onRemove
+  onRemove,
+  subtypeOptions
 }: SortableRoleEntryProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id
@@ -356,8 +340,12 @@ function SortableRoleEntry({
   const divisionNumber = resolveDivision(entry.rank_value);
   const divisionName = getDivisionName(divisionNumber);
   const accent = ROLE_ACCENTS[entry.role];
-  const subtypeLabel = getSubtypeLabel(entry.role, entry.subtype);
-  const hasSubtypeOptions = SUBTYPE_OPTIONS[entry.role].length > 0;
+
+  const roleSubtypeOptions = subtypeOptions[entry.role] || [];
+  const subtypeLabel = entry.subtype
+    ? (roleSubtypeOptions.find((option) => option.value === entry.subtype)?.label ?? entry.subtype)
+    : null;
+  const hasSubtypeOptions = roleSubtypeOptions.length > 0;
   const divisionSliderIndex = getDivisionSliderIndex(
     entry.rank_value,
     divisionTiers,
@@ -462,14 +450,14 @@ function SortableRoleEntry({
               >
                 <SelectValue placeholder="Sub-role" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No sub-role</SelectItem>
-                {SUBTYPE_OPTIONS[entry.role].map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+            <SelectContent>
+              <SelectItem value="none">No sub-role</SelectItem>
+              {roleSubtypeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
             </Select>
           </div>
 
@@ -652,6 +640,8 @@ function HistoryPreviewCard({
   );
 }
 
+const MULTIPLE_WORKSPACES_COOKIE = "aqt-history-multiple-workspaces";
+
 type PlayerEditModalProps = {
   player: BalancerPlayerRecord;
   registration?: AdminRegistration | null;
@@ -696,6 +686,44 @@ export function PlayerEditModal({
 }: PlayerEditModalProps) {
   const divisionGrid = useDivisionGrid();
   const divisionGridVersion = useDivisionGridVersion();
+
+  const workspaceId = useCurrentWorkspaceId();
+  const { data: subRoles } = useQuery({
+    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId! }),
+    enabled: Boolean(workspaceId && open)
+  });
+
+  const subtypeOptions = useMemo(() => {
+    const options: Record<BalancerRoleCode, Array<{ value: string; label: string }>> = {
+      tank: [],
+      dps: [],
+      support: []
+    };
+
+    if (subRoles) {
+      for (const sr of subRoles) {
+        const roleKey = sr.role === "damage" ? "dps" : (sr.role as BalancerRoleCode);
+        if (options[roleKey]) {
+          options[roleKey].push({
+            value: sr.slug,
+            label: sr.label
+          });
+        }
+      }
+    } else {
+      // Fallback defaults
+      options.dps = [
+        { value: "hitscan", label: "Hitscan" },
+        { value: "projectile", label: "Projectile" }
+      ];
+      options.support = [
+        { value: "main_heal", label: "Main Heal" },
+        { value: "light_heal", label: "Light Heal" }
+      ];
+    }
+    return options;
+  }, [subRoles]);
   const resolveDivision = (rankValue: number | null) =>
     resolveDivisionFromRankInGrid(divisionGrid, rankValue);
   const resolveRankFromDivision = (divisionNumber: number | null) =>
@@ -741,6 +769,18 @@ export function PlayerEditModal({
   const [historyPreviewRequested, setHistoryPreviewRequested] = useState(false);
   const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
 
+  const { workspaces } = useWorkspaceStore();
+  const [historyWorkspaceValue, setHistoryWorkspaceValue] = useState<string>(() => {
+    const saved = Cookies.get(MULTIPLE_WORKSPACES_COOKIE);
+    return saved || "current";
+  });
+
+  const getHistoryWorkspaceIdParam = (val: string) => {
+    if (val === "all") return null;
+    if (val === "current") return undefined;
+    return Number(val);
+  };
+
   useEffect(() => {
     const normalized = normalizeRoleEntries(player.role_entries_json);
     setIsInPool(player.is_in_pool);
@@ -762,6 +802,31 @@ export function PlayerEditModal({
   const primaryBattleTag = battleTags[0] ?? player.battle_tag;
   const smurfTags = battleTags.slice(1);
 
+  const checkRanksAndAutoUpdateStatus = (nextEntries: BalancerPlayerRoleEntry[]) => {
+    const activeRoles = nextEntries.filter((e) => e.is_active);
+    const allRanked =
+      activeRoles.length > 0 &&
+      activeRoles.every((e) => e.rank_value !== null && e.rank_value !== undefined && String(e.rank_value).trim() !== "");
+
+    if (allRanked) {
+      setRegistrationBalancerStatus((current) => {
+        if (current === "not_in_balancer" || current === "incomplete") {
+          setIsInPool(true);
+          return "ready";
+        }
+        return current;
+      });
+    } else {
+      setRegistrationBalancerStatus((current) => {
+        if (current === "ready") {
+          setIsInPool(false);
+          return "incomplete";
+        }
+        return current;
+      });
+    }
+  };
+
   const handleLoadFromHistory = async () => {
     setLoadingHistory(true);
     setHistoryPreviewRequested(true);
@@ -771,7 +836,8 @@ export function PlayerEditModal({
       const preview = await fetchPlayerRankHistoryPreview(
         player.battle_tag,
         divisionGridVersion,
-        divisionGrid
+        divisionGrid,
+        getHistoryWorkspaceIdParam(historyWorkspaceValue)
       );
       setHistoryPreview(preview);
     } catch (error) {
@@ -784,6 +850,32 @@ export function PlayerEditModal({
     }
   };
 
+  const handleHistoryWorkspaceChange = async (value: string) => {
+    setHistoryWorkspaceValue(value);
+    Cookies.set(MULTIPLE_WORKSPACES_COOKIE, value, { path: "/", sameSite: "lax" });
+
+    if (historyPreviewRequested) {
+      setLoadingHistory(true);
+      setHistoryLoadError(null);
+      try {
+        const preview = await fetchPlayerRankHistoryPreview(
+          player.battle_tag,
+          divisionGridVersion,
+          divisionGrid,
+          getHistoryWorkspaceIdParam(value)
+        );
+        setHistoryPreview(preview);
+      } catch (error) {
+        setHistoryPreview(null);
+        setHistoryLoadError(
+          error instanceof Error ? error.message : "Failed to load player history."
+        );
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+  };
+
   const handleDismissHistoryPreview = () => {
     setHistoryPreviewRequested(false);
     setHistoryPreview(null);
@@ -791,9 +883,9 @@ export function PlayerEditModal({
   };
 
   const handleApplyHistoryPreview = () => {
-    setRoleEntries((current) =>
-      applyHistoryPreviewToRoleEntries(current, historyPreview, resolveRankFromDivision)
-    );
+    const next = applyHistoryPreviewToRoleEntries(roleEntries, historyPreview, resolveRankFromDivision);
+    setRoleEntries(next);
+    checkRanksAndAutoUpdateStatus(next);
     handleDismissHistoryPreview();
   };
 
@@ -826,31 +918,33 @@ export function PlayerEditModal({
     );
     if (!availableRole) return;
 
-    setRoleEntries((current) => [
-      ...current,
+    const next = [
+      ...roleEntries,
       {
         role: availableRole.value,
         subtype: null,
-        priority: current.length + 1,
+        priority: roleEntries.length + 1,
         division_number: null,
         rank_value: null,
         is_active: true
       }
-    ]);
+    ];
+    setRoleEntries(next);
+    checkRanksAndAutoUpdateStatus(next);
   };
 
   const updateEntry = (index: number, nextEntry: BalancerPlayerRoleEntry) => {
-    setRoleEntries((current) =>
-      normalizeRoleEntries(
-        current.map((entry, currentIndex) => (currentIndex === index ? nextEntry : entry))
-      )
+    const next = normalizeRoleEntries(
+      roleEntries.map((entry, currentIndex) => (currentIndex === index ? nextEntry : entry))
     );
+    setRoleEntries(next);
+    checkRanksAndAutoUpdateStatus(next);
   };
 
   const removeEntry = (index: number) => {
-    setRoleEntries((current) =>
-      normalizeRoleEntries(current.filter((_, currentIndex) => currentIndex !== index))
-    );
+    const next = normalizeRoleEntries(roleEntries.filter((_, currentIndex) => currentIndex !== index));
+    setRoleEntries(next);
+    checkRanksAndAutoUpdateStatus(next);
   };
 
   const handleSave = () => {
@@ -1032,6 +1126,33 @@ export function PlayerEditModal({
                     />
                   ))}
                 </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/8 pt-2.5">
+                  <Label className="text-[11px] text-white/50 select-none">
+                    Load history from:
+                  </Label>
+                  <Select
+                    value={historyWorkspaceValue}
+                    onValueChange={handleHistoryWorkspaceChange}
+                  >
+                    <SelectTrigger className="h-6 w-[180px] border-white/10 bg-black/20 text-[10px] text-white px-2">
+                      <SelectValue placeholder="Select workspace" />
+                    </SelectTrigger>
+                    <SelectContent className="border-white/10 bg-zinc-950 text-white text-[11px]">
+                      <SelectItem value="current" className="text-[11px]">
+                        Current Workspace (Текущий)
+                      </SelectItem>
+                      <SelectItem value="all" className="text-[11px]">
+                        All Workspaces (Все)
+                      </SelectItem>
+                      {workspaces.map((ws) => (
+                        <SelectItem key={ws.id} value={String(ws.id)} className="text-[11px]">
+                          {ws.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             ) : null}
 
@@ -1055,6 +1176,7 @@ export function PlayerEditModal({
                       sliderBounds={sliderBounds}
                       onUpdate={updateEntry}
                       onRemove={removeEntry}
+                      subtypeOptions={subtypeOptions}
                     />
                   ))}
                 </div>

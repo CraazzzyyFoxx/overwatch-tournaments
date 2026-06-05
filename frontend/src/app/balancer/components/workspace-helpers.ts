@@ -517,14 +517,15 @@ const USER_ROLE_TO_BALANCER: Record<UserRoleType, BalancerRoleCode> = {
 export async function fetchPlayerRankHistoryPreview(
   battleTag: string,
   targetGridVersion: DivisionGridVersion | null = null,
-  grid: DivisionGrid = DEFAULT_DIVISION_GRID
+  grid: DivisionGrid = DEFAULT_DIVISION_GRID,
+  workspaceId?: number | null
 ): Promise<PlayerRankHistoryPreview | null> {
   try {
     const lookupName = battleTag.replace("#", "-");
     const user = await userService.getUserByName(lookupName);
     if (!user?.id) return null;
 
-    const tournaments = await userService.getUserTournaments(user.id);
+    const tournaments = await userService.getUserTournaments(user.id, workspaceId);
     if (!tournaments?.length) return null;
 
     // Sort tournaments descending by number so we process newest first.
@@ -554,7 +555,6 @@ export async function fetchPlayerRankHistoryPreview(
       if (!roleCode) continue;
       // Already have a (newer) entry for this role
       if (latestPerRole.has(roleCode)) continue;
-
       // Find this user's own Player record in the roster
       const playerRecord = tournament.players.find((p) => p.user_id === user.id);
       const rankValue = playerRecord?.rank ?? null;

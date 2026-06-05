@@ -78,12 +78,10 @@ const SearchableImageSelect = ({
         >
           <div className="flex items-center gap-2 overflow-hidden">
             {selected?.imageSrc ? (
-              <Image
+              <img
                 src={selected.imageSrc}
                 alt={selected.label}
-                width={22}
-                height={22}
-                className="h-5.5 w-5.5 shrink-0 rounded-md object-cover"
+                className="h-5.5 w-5.5 shrink-0 object-contain select-none"
               />
             ) : null}
             {isLoading ? (
@@ -123,12 +121,10 @@ const SearchableImageSelect = ({
                 >
                   <div className="flex items-center gap-2">
                     {option.imageSrc ? (
-                      <Image
+                      <img
                         src={option.imageSrc}
                         alt={option.label}
-                        width={20}
-                        height={20}
-                        className="h-5 w-5 rounded object-cover"
+                        className="h-5 w-5 object-contain select-none"
                       />
                     ) : null}
                     <span>{option.label}</span>

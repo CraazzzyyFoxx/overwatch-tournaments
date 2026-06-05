@@ -21,7 +21,7 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { DraftAutopickStrategy } from "@/types/draft.types";
+import type { DraftAutopickStrategy, DraftCaptainOrder } from "@/types/draft.types";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;
@@ -107,10 +107,12 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
   // --- seed from the existing balancer pool ---
   const [captainIds, setCaptainIds] = useState<number[]>([]); // ordered = seed order
   const [teamNames, setTeamNames] = useState<Record<number, string>>({});
+  const [captainOrder, setCaptainOrder] = useState<DraftCaptainOrder>("weakest_first");
 
   const seedMutation = useMutation({
     mutationFn: (sessionId: number) =>
       draftService.seed(tournamentId, sessionId, {
+        captain_order: captainOrder,
         pool_captains: captainIds.map((id) => ({
           registration_id: id,
           name: teamNames[id]?.trim() || null,
@@ -320,6 +322,8 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
             )
           }
           onTeamName={(id, name) => setTeamNames((prev) => ({ ...prev, [id]: name }))}
+          captainOrder={captainOrder}
+          onCaptainOrder={setCaptainOrder}
           pending={seedMutation.isPending}
           alreadySeeded={session.status === "ready"}
           onSeed={() => seedMutation.mutate(session.id)}
@@ -335,6 +339,8 @@ interface PoolSeedFormProps {
   teamNames: Record<number, string>;
   onToggleCaptain: (id: number) => void;
   onTeamName: (id: number, name: string) => void;
+  captainOrder: DraftCaptainOrder;
+  onCaptainOrder: (order: DraftCaptainOrder) => void;
   pending: boolean;
   alreadySeeded: boolean;
   onSeed: () => void;
@@ -346,6 +352,8 @@ function PoolSeedForm({
   teamNames,
   onToggleCaptain,
   onTeamName,
+  captainOrder,
+  onCaptainOrder,
   pending,
   alreadySeeded,
   onSeed,
@@ -356,7 +364,7 @@ function PoolSeedForm({
   });
 
   const pool = (poolQuery.data ?? []).filter(isInBalancerPool);
-  const captainOrder = (id: number) => captainIds.indexOf(id);
+  const captainSeat = (id: number) => captainIds.indexOf(id);
 
   return (
     <Card>
@@ -364,7 +372,9 @@ function PoolSeedForm({
         <CardTitle>Seed from balancer pool</CardTitle>
         <CardDescription>
           Captains are chosen from the existing balancer pool — every other in-pool player becomes
-          available. Roles and ranks come from the balancer. Selection order = draft (snake) order.
+          available. Roles and ranks come from the balancer. Draft order controls who picks first
+          (snake then alternates each round); &quot;weakest picks first&quot; seats the lowest-rated
+          captain at the top.
           {alreadySeeded ? " Re-seeding will rebuild teams and picks." : ""}
         </CardDescription>
       </CardHeader>
@@ -383,15 +393,33 @@ function PoolSeedForm({
           </p>
         ) : (
           <>
-            <div className="text-sm text-muted-foreground">
-              {captainIds.length} captain(s) selected · {pool.length} players in pool
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                {captainIds.length} captain(s) selected · {pool.length} players in pool
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="captain-order" className="text-xs text-muted-foreground">
+                  Draft order
+                </Label>
+                <Select value={captainOrder} onValueChange={(v) => onCaptainOrder(v as DraftCaptainOrder)}>
+                  <SelectTrigger id="captain-order" className="h-8 w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weakest_first">Weakest picks first</SelectItem>
+                    <SelectItem value="strongest_first">Strongest picks first</SelectItem>
+                    <SelectItem value="manual">Selection order</SelectItem>
+                    <SelectItem value="random">Random</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="max-h-[55vh] divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
               {pool.map((reg) => {
                 const { role, rank } = registrationSummary(reg);
                 const label = registrationLabel(reg);
                 const isCaptain = captainIds.includes(reg.id);
-                const order = captainOrder(reg.id);
+                const order = captainSeat(reg.id);
                 return (
                   <div key={reg.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <input

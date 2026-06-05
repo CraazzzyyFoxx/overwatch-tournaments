@@ -2449,7 +2449,7 @@ body, html {
   font-size: 10.5px;
   color: var(--fg-dim);
 }
-.aqt-tn .tn-actions {
+.aqt-tn .tn-hero .tn-actions {
   position: absolute;
   top: 24px;
   right: 32px;
@@ -2547,7 +2547,7 @@ body, html {
   .aqt-tn .tn-title {
     font-size: 32px;
   }
-  .aqt-tn .tn-actions {
+  .aqt-tn .tn-hero .tn-actions {
     position: static;
     margin-top: 12px;
   }
@@ -2845,6 +2845,9 @@ body, html {
 }
 .aqt-tn .st-record .w {
   color: var(--emerald);
+}
+.aqt-tn .st-record .d {
+  color: var(--amber);
 }
 .aqt-tn .st-record .sep {
   color: var(--fg-faint);
@@ -3151,18 +3154,18 @@ body, html {
    shared component styles correctly regardless of ancestor.
    ═══════════════════════════════════════════════════════════════════════ */
 .aqt-matches {
-  --card: var(--aqt-card);
-  --border: var(--aqt-border);
-  --border-2: var(--aqt-border-2);
-  --fg: var(--aqt-fg);
-  --fg-muted: var(--aqt-fg-muted);
-  --fg-dim: var(--aqt-fg-dim);
-  --fg-faint: var(--aqt-fg-faint);
-  --teal: var(--aqt-teal);
-  --rose: var(--aqt-rose);
-  --amber: var(--aqt-amber);
-  --mono: var(--aqt-mono);
-  --display: var(--aqt-display);
+  --card: var(--aqt-card, hsl(215 20% 8%));
+  --border: var(--aqt-border, hsl(215 20% 12%));
+  --border-2: var(--aqt-border-2, hsl(215 20% 16%));
+  --fg: var(--aqt-fg, hsl(210 20% 95%));
+  --fg-muted: var(--aqt-fg-muted, hsl(215 12% 60%));
+  --fg-dim: var(--aqt-fg-dim, hsl(215 12% 40%));
+  --fg-faint: var(--aqt-fg-faint, hsl(215 12% 30%));
+  --teal: var(--aqt-teal, hsl(174 72% 46%));
+  --rose: var(--aqt-rose, hsl(340 75% 58%));
+  --amber: var(--aqt-amber, hsl(38 95% 55%));
+  --mono: var(--aqt-mono, "JetBrains Mono", ui-monospace, monospace);
+  --display: var(--aqt-display, "Barlow Condensed", Inter, system-ui, sans-serif);
   color: var(--fg);
 }
 .aqt-matches .m-search {
@@ -3520,20 +3523,10 @@ body, html {
   height: 34px;
   border-radius: 7px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #3a5168, #1c2937);
-  border: 1px solid var(--border-2);
-  background-size: cover;
-  background-position: center;
   position: relative;
-}
-.aqt-tn .hero-name .portrait.tank {
-  background: linear-gradient(135deg, hsl(210 78% 60%), hsl(210 65% 32%));
-}
-.aqt-tn .hero-name .portrait.dps {
-  background: linear-gradient(135deg, hsl(340 78% 60%), hsl(340 65% 32%));
-}
-.aqt-tn .hero-name .portrait.support {
-  background: linear-gradient(135deg, hsl(142 65% 55%), hsl(142 50% 28%));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .aqt-tn .hero-name .stack {
   display: flex;
@@ -3583,14 +3576,14 @@ body, html {
 .aqt-tn .hero-bar .fill.support {
   background: linear-gradient(90deg, hsl(142 65% 52%), hsl(142 50% 38%));
 }
-.aqt-tn .hero-stats {
+.aqt-tn .hero-row .hero-stats {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 1px;
   line-height: 1.2;
 }
-.aqt-tn .hero-stats .val {
+.aqt-tn .hero-row .hero-stats .val {
   font-family: var(--display);
   font-weight: 700;
   font-size: 18px;
@@ -3598,7 +3591,7 @@ body, html {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-.aqt-tn .hero-stats .pct {
+.aqt-tn .hero-row .hero-stats .pct {
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--fg-dim);

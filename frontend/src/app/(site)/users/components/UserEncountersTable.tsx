@@ -15,6 +15,7 @@ import { EncounterWithUserStats, MatchWithUserStats } from "@/types/user.types";
 import { useRouter } from "next/navigation";
 import { PaginationWithLinks } from "@/components/ui/pagination-with-links";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import HeroImage from "@/components/hero/HeroImage";
 import { PerformanceBadgeWithTooltip } from "@/components/PerformanceBagde";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PaginatedResponse } from "@/types/pagination.types";
@@ -80,12 +81,7 @@ const columns: ColumnDef<EncounterWithUserStats>[] = [
         <div className="flex flex-row gap-2">
           {heroes.map((hero) => {
             return (
-              <Avatar key={`hero-${hero}`}>
-                <AvatarImage src={hero} asChild>
-                  <Image src={hero} alt="Hero" width={128} height={128} />
-                </AvatarImage>
-                <AvatarFallback> </AvatarFallback>
-              </Avatar>
+              <HeroImage key={`hero-${hero}`} hero={{ name: "", image_path: hero, role: "damage" }} size="sm" bare />
             );
           })}
         </div>

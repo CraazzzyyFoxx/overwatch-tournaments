@@ -192,6 +192,16 @@ export default function BalancerRegistrationsFeedPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Sync Status</CardTitle>
+          <CardDescription>The current state and sync history of this Google Sheet integration.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FeedStatus feed={feedQuery.data} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Feed Configuration</CardTitle>
           <CardDescription>Saved mapping is authoritative. Use suggest only as a starting point.</CardDescription>
         </CardHeader>
@@ -267,8 +277,6 @@ export default function BalancerRegistrationsFeedPage() {
               Save feed
             </Button>
           </div>
-
-          <FeedStatus feed={feedQuery.data} />
 
           {mappingPreview ? (
             <div className="space-y-2 rounded-lg border p-3">

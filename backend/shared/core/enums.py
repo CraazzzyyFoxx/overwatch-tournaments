@@ -188,6 +188,15 @@ class DraftFormat(StrEnum):
     LINEAR = "linear"
 
 
+class DraftCaptainOrder(StrEnum):
+    """How captains are seeded into draft seats (who picks first)."""
+
+    MANUAL = "manual"  # selection order
+    WEAKEST_FIRST = "weakest_first"  # lowest-rated captain picks first
+    STRONGEST_FIRST = "strongest_first"  # highest-rated captain picks first
+    RANDOM = "random"  # deterministic shuffle (settings_json seed)
+
+
 class DraftPoolSource(StrEnum):
     BALANCER_BALANCE = "balancer_balance"
     MANUAL = "manual"

@@ -447,6 +447,38 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             # ranks carried over from the pool
             self.assertTrue(all(p.rank_value and p.rank_value >= 3000 for p in players))
 
+    async def test_seed_from_pool_weakest_first_orders_seats_by_rank(self) -> None:
+        from shared.core.enums import DraftCaptainOrder
+
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, rounds=2, team_size=3
+            )
+            pool_ids = await self._build_balancer_pool(s, 9)
+            # ranks = 3000 + i*25, so captains[0..2] have ranks 3000 < 3025 < 3050
+            captain_ids = pool_ids[:3]
+            await lifecycle.seed_from_pool(
+                s, draft, captain_registration_ids=captain_ids, captain_order=DraftCaptainOrder.WEAKEST_FIRST
+            )
+            await s.commit()
+
+            teams = (
+                await s.scalars(sa.select(lifecycle.DraftTeam).where(lifecycle.DraftTeam.session_id == draft.id))
+            ).all()
+            captains = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer).where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.is_captain.is_(True),
+                    )
+                )
+            ).all()
+            cap_by_team = {c.drafted_by_team_id: c for c in captains}
+            ordered = sorted(teams, key=lambda team: team.draft_position)
+            ranks_in_seat_order = [cap_by_team[team.id].rank_value for team in ordered]
+            # position 1 picks first = weakest captain
+            self.assertEqual(ranks_in_seat_order, [3000, 3025, 3050])
+
     async def test_seed_from_pool_rejects_captain_not_in_pool(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.create_session(

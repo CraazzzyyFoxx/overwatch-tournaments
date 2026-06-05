@@ -157,10 +157,13 @@ export interface DraftPoolCaptainInput {
   name?: string | null;
 }
 
+export type DraftCaptainOrder = "manual" | "weakest_first" | "strongest_first" | "random";
+
 export interface DraftSeedRequest {
   source_balance_id?: number | null;
-  randomize_seed_order?: boolean;
   seed?: number | null;
+  // Seat order for captains (who picks first).
+  captain_order?: DraftCaptainOrder;
   // Preferred: captains chosen from the existing balancer pool.
   pool_captains?: DraftPoolCaptainInput[];
   // Manual fallback.

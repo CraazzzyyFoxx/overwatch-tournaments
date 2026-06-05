@@ -1,32 +1,35 @@
 import type { Encounter } from "@/types/encounter.types";
 
+export function getDoubleEliminationRoundOrder(roundNum: number): number {
+  if (roundNum === 1) return 1.0;
+  if (roundNum === -1) return 2.0;
+  if (roundNum > 1) return 3.0 * roundNum - 3.0;
+  if (roundNum < -1) {
+    const val = Math.abs(roundNum);
+    if (val % 2 === 0) {
+      const k = val / 2;
+      return 3.0 * k + 1.0;
+    } else {
+      const k = (val - 1) / 2;
+      return 3.0 * k + 2.0;
+    }
+  }
+  return 0.0;
+}
+
 export function sortStandingsMatches(matches: Encounter[]): Encounter[] {
   if (matches.length === 0) {
     return [];
   }
 
-  const maxAbsRound = Math.max(...matches.map((match) => Math.abs(match.round)));
+  const hasNegativeRounds = matches.some((m) => m.round < 0);
 
   return [...matches].sort((left, right) => {
-    const leftFinalFlag = Math.abs(left.round) === maxAbsRound ? 1 : 0;
-    const rightFinalFlag = Math.abs(right.round) === maxAbsRound ? 1 : 0;
+    const leftScore = hasNegativeRounds ? getDoubleEliminationRoundOrder(left.round) : left.round;
+    const rightScore = hasNegativeRounds ? getDoubleEliminationRoundOrder(right.round) : right.round;
 
-    if (leftFinalFlag !== rightFinalFlag) {
-      return leftFinalFlag - rightFinalFlag;
-    }
-
-    const leftAbsRound = Math.abs(left.round);
-    const rightAbsRound = Math.abs(right.round);
-
-    if (leftAbsRound !== rightAbsRound) {
-      return leftAbsRound - rightAbsRound;
-    }
-
-    const leftUpperBracketFirst = left.round > 0 ? 0 : 1;
-    const rightUpperBracketFirst = right.round > 0 ? 0 : 1;
-
-    if (leftUpperBracketFirst !== rightUpperBracketFirst) {
-      return leftUpperBracketFirst - rightUpperBracketFirst;
+    if (leftScore !== rightScore) {
+      return leftScore - rightScore;
     }
 
     return left.id - right.id;

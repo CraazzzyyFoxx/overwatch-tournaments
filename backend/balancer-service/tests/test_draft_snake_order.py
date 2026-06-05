@@ -21,7 +21,8 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-from shared.core.enums import DraftFormat  # noqa: E402
+from shared.core.enums import DraftCaptainOrder, DraftFormat  # noqa: E402
+from src.services.draft.lifecycle import order_captain_ids  # noqa: E402
 from src.services.draft.snake_order import PickSlot, generate_pick_order  # noqa: E402
 
 
@@ -89,3 +90,33 @@ def test_deterministic() -> None:
     a = generate_pick_order(12, 4, DraftFormat.SNAKE)
     b = generate_pick_order(12, 4, DraftFormat.SNAKE)
     assert a == b
+
+
+# ---- captain seat ordering ----
+
+_ENTRIES = [(10, 3000), (11, 3500), (12, 2800), (13, None)]
+
+
+def test_captain_order_manual_keeps_selection_order() -> None:
+    assert order_captain_ids(_ENTRIES, DraftCaptainOrder.MANUAL) == [10, 11, 12, 13]
+
+
+def test_captain_order_weakest_first_sorts_ascending_rank() -> None:
+    # None rank treated as weakest -> id 13 first, then 12 (2800), 10 (3000), 11 (3500)
+    assert order_captain_ids(_ENTRIES, DraftCaptainOrder.WEAKEST_FIRST) == [13, 12, 10, 11]
+
+
+def test_captain_order_strongest_first_sorts_descending_rank() -> None:
+    assert order_captain_ids(_ENTRIES, DraftCaptainOrder.STRONGEST_FIRST)[:3] == [11, 10, 12]
+
+
+def test_captain_order_random_is_deterministic_for_seed() -> None:
+    a = order_captain_ids(_ENTRIES, DraftCaptainOrder.RANDOM, seed=42)
+    b = order_captain_ids(_ENTRIES, DraftCaptainOrder.RANDOM, seed=42)
+    assert a == b
+    assert sorted(a) == [10, 11, 12, 13]  # permutation of all ids
+
+
+def test_captain_order_weakest_first_tiebreak_by_id() -> None:
+    entries = [(20, 3000), (5, 3000), (9, 3000)]
+    assert order_captain_ids(entries, DraftCaptainOrder.WEAKEST_FIRST) == [5, 9, 20]

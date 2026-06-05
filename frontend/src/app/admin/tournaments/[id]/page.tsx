@@ -17,7 +17,7 @@ import workspaceService from "@/services/workspace.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { TournamentWorkspaceHeader } from "./components/TournamentWorkspaceHeader";
 
-type TournamentWorkspaceTab = "overview" | "teams" | "matches" | "logs" | "draft";
+type TournamentWorkspaceTab = "overview" | "teams" | "matches" | "logs" | "draft" | "settings";
 const TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS = 60_000;
 
 const tabFallback = (
@@ -66,6 +66,15 @@ const DraftSessionDashboard = dynamic(
     })),
   { loading: () => tabFallback }
 );
+
+const TournamentSettingsTab = dynamic(
+  () =>
+    import("./components/TournamentSettingsTab").then((module) => ({
+      default: module.TournamentSettingsTab
+    })),
+  { loading: () => tabFallback }
+);
+
 
 function UnauthorizedTournamentWorkspaceState() {
   return (
@@ -270,6 +279,7 @@ export default function AdminTournamentWorkspacePage() {
         canToggleFinished={canUpdateTournament && isSuperuser}
         divisionGridVersions={divisionGridVersions}
         divisionGridLoading={divisionGridsQuery.isLoading}
+        onEditClick={() => setActiveTab("settings")}
       />
 
       <Tabs
@@ -284,6 +294,9 @@ export default function AdminTournamentWorkspacePage() {
           <TabsTrigger value="logs">Logs</TabsTrigger>
           {tournament.team_formation === "draft" ? (
             <TabsTrigger value="draft">Draft</TabsTrigger>
+          ) : null}
+          {canUpdateTournament ? (
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           ) : null}
         </TabsList>
 
@@ -363,6 +376,20 @@ export default function AdminTournamentWorkspacePage() {
           <TabsContent value="draft" className="space-y-4">
             {activeTab === "draft" ? (
               <DraftSessionDashboard tournamentId={tournamentId} canManage={canImportTeams} />
+            ) : null}
+          </TabsContent>
+        ) : null}
+
+        {canUpdateTournament ? (
+          <TabsContent value="settings" className="space-y-4">
+            {activeTab === "settings" ? (
+              <TournamentSettingsTab
+                tournament={tournament}
+                tournamentId={tournamentId}
+                divisionGridVersions={divisionGridVersions}
+                divisionGridLoading={divisionGridsQuery.isLoading}
+                canDeleteTournament={canDeleteTournament}
+              />
             ) : null}
           </TabsContent>
         ) : null}

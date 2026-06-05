@@ -138,3 +138,20 @@ export const decodePlayerSlug = (slug: string): string => {
 
   return decodedSlug.replace(/-(\d+)$/, "#$1");
 };
+
+const LOCAL_HERO_SLUGS = new Set([
+  "ana", "ashe", "baptiste", "bastion", "brigitte", "cassidy", "doomfist", "dva",
+  "genji", "hanzo", "hazard", "illari", "junker-queen", "junkrat", "juno", "kiriko",
+  "lifeweaver", "lucio", "mauga", "mei", "mercy", "moira", "orisa", "pharah",
+  "reaper", "reinhardt", "roadhog", "sigma", "sojourn", "soldier-76", "sombra",
+  "symmetra", "torbjorn", "tracer", "venture", "widowmaker", "winston", "wrecking-ball",
+  "zarya", "zenyatta"
+]);
+
+export const getHeroIconUrl = (slug: string, imagePath?: string | null): string => {
+  if (LOCAL_HERO_SLUGS.has(slug)) {
+    return `/avatar/${slug}.jpg`;
+  }
+  return imagePath || `/avatar/0.png`;
+};
+

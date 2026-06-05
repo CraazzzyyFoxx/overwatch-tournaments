@@ -8,6 +8,7 @@ DB-resumable: absolute ``clock_expires_at`` while live, frozen
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -16,7 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core import draft_state
-from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus
+from shared.core.enums import (
+    DraftCaptainOrder,
+    DraftFormat,
+    DraftPickStatus,
+    DraftPlayerStatus,
+    DraftRole,
+    DraftStatus,
+)
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.balancer import BalancerRegistration
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
@@ -283,18 +291,50 @@ async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerR
     )
 
 
+def order_captain_ids(
+    entries: list[tuple[int, int | None]],
+    strategy: DraftCaptainOrder,
+    seed: int | None = None,
+) -> list[int]:
+    """Return captain ids in seat order (position 1 picks first).
+
+    ``entries`` are (id, rank_value) in selection order. WEAKEST_FIRST sorts by
+    ascending rank (unknown rank treated as weakest), STRONGEST_FIRST descending,
+    RANDOM is a deterministic shuffle, MANUAL keeps selection order. Ties break by
+    id for full determinism.
+    """
+    if strategy == DraftCaptainOrder.MANUAL:
+        return [rid for rid, _ in entries]
+    if strategy == DraftCaptainOrder.RANDOM:
+        rng = random.Random(seed if seed is not None else 0)
+        shuffled = list(entries)
+        rng.shuffle(shuffled)
+        return [rid for rid, _ in shuffled]
+    reverse = strategy == DraftCaptainOrder.STRONGEST_FIRST
+    ordered = sorted(
+        entries,
+        key=lambda e: (e[1] if e[1] is not None else -1, e[0]),
+        reverse=reverse,
+    )
+    return [rid for rid, _ in ordered]
+
+
 async def seed_from_pool(
     session: AsyncSession,
     draft_session: DraftSession,
     *,
     captain_registration_ids: list[int],
     team_names: dict[int, str] | None = None,
+    captain_order: DraftCaptainOrder = DraftCaptainOrder.MANUAL,
+    rng_seed: int | None = None,
 ) -> DraftSession:
     """Seed a draft from the balancer registration pool.
 
     ``captain_registration_ids`` are ``balancer.registration`` ids chosen as
-    captains (seed order = list order). Every other in-pool registration becomes
-    an available draft player. Roles/ranks come straight from the registration.
+    captains. ``captain_order`` decides seat order (who picks first) — e.g.
+    WEAKEST_FIRST seats the lowest-rated captain at position 1. Every other
+    in-pool registration becomes an available draft player; roles/ranks come from
+    the registration.
     """
     pool = await load_pool(session, draft_session.tournament_id)
     by_id = {reg.id: reg for reg in pool}
@@ -302,8 +342,8 @@ async def seed_from_pool(
         raise _err("draft_no_captains", "Select at least one captain from the pool")
 
     team_names = team_names or {}
-    captains: list[CaptainSeed] = []
-    for position, rid in enumerate(captain_registration_ids, start=1):
+    mapped_by_id: dict[int, dict] = {}
+    for rid in captain_registration_ids:
         reg = by_id.get(rid)
         if reg is None:
             raise _err(
@@ -311,7 +351,18 @@ async def seed_from_pool(
                 f"Captain registration {rid} is not in the balancer pool for this tournament",
                 status_code=422,
             )
-        mapped = _map_registration(reg)
+        mapped_by_id[rid] = _map_registration(reg)
+
+    ordered_ids = order_captain_ids(
+        [(rid, mapped_by_id[rid]["rank_value"]) for rid in captain_registration_ids],
+        captain_order,
+        rng_seed,
+    )
+
+    captains: list[CaptainSeed] = []
+    for position, rid in enumerate(ordered_ids, start=1):
+        reg = by_id[rid]
+        mapped = mapped_by_id[rid]
         captains.append(
             CaptainSeed(
                 name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",

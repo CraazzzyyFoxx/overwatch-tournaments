@@ -819,6 +819,7 @@ const UsersRedesignClient = () => {
                                                 alt={heroRow.hero.name}
                                                 width={40}
                                                 height={40}
+                                                className="object-contain select-none"
                                               />
                                             </div>
                                             <div className={styles.heroCardStack}>
@@ -1065,6 +1066,7 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
                   alt={heroRow.hero.name}
                   width={28}
                   height={28}
+                  className="object-contain select-none"
                 />
               </div>
             ))

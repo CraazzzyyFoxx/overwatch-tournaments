@@ -129,3 +129,45 @@ def test_replace_registration_roles_removes_stale_roles_and_adds_new_ones() -> N
     assert roles_by_role["dps"] is existing_dps
     assert roles_by_role["tank"].role == "tank"
     assert roles_by_role["tank"].rank_value == 2000
+
+
+def test_replace_registration_roles_updates_top_heroes() -> None:
+    from shared.hero_catalog import HeroCatalogEntry
+    from shared.core import enums
+
+    hero_catalog = {
+        "ana": HeroCatalogEntry(id=1, slug="ana", hero_class=enums.HeroClass.support),
+        "genji": HeroCatalogEntry(id=4, slug="genji", hero_class=enums.HeroClass.damage),
+    }
+
+    registration = models.BalancerRegistration()
+    existing_dps = models.BalancerRegistrationRole(
+        role="dps",
+        is_primary=True,
+        priority=0,
+        rank_value=1200,
+        is_active=True,
+    )
+    registration.roles = [existing_dps]
+
+    replace_registration_roles(
+        registration,
+        [
+            {
+                "role": "dps",
+                "priority": 0,
+                "rank_value": 1600,
+                "is_active": True,
+                "top_heroes": ["genji"],
+            },
+        ],
+        hero_catalog=hero_catalog,
+        max_heroes=2,
+    )
+
+    assert len(registration.roles) == 1
+    role_dps = registration.roles[0]
+    assert len(role_dps.hero_entries) == 1
+    assert role_dps.hero_entries[0].hero_id == 4
+    assert role_dps.hero_entries[0].priority == 1
+

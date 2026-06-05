@@ -24,9 +24,11 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/i18n/LanguageContext";
 import adminService from "@/services/admin.service";
 import type { EncounterUpdateInput } from "@/types/admin.types";
 import { Encounter } from "@/types/encounter.types";
+import { cn } from "@/lib/utils";
 
 interface EncounterEditDialogProps {
   open: boolean;
@@ -38,7 +40,7 @@ const ENCOUNTER_STATUSES = ["open", "pending", "completed"] as const;
 
 function closenessFloatToStars(closeness: number | null | undefined): number {
   if (closeness == null || closeness <= 0) return 0;
-  return Math.max(1, Math.min(5, Math.round(closeness * 5)));
+  return Math.max(1, Math.min(10, Math.round(closeness * 10)));
 }
 
 export function EncounterEditDialog({ open, onOpenChange, encounter }: EncounterEditDialogProps) {
@@ -65,6 +67,7 @@ function EncounterEditDialogBody({
 }: Omit<EncounterEditDialogProps, "open">) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const homeTeamLabel = encounter.home_team?.name?.trim() || "Home team";
   const awayTeamLabel = encounter.away_team?.name?.trim() || "Away team";
 
@@ -85,10 +88,10 @@ function EncounterEditDialogBody({
 
   const validationError = useMemo(() => {
     if (homeScore < 0 || awayScore < 0) {
-      return "Счет матча не может быть отрицательным";
+      return t("matchEdit.negativeScoreError");
     }
     return null;
-  }, [homeScore, awayScore]);
+  }, [homeScore, awayScore, t]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -96,52 +99,52 @@ function EncounterEditDialogBody({
         home_score: homeScore,
         away_score: awayScore,
         status,
-        closeness: stars > 0 ? stars / 5 : null
+        closeness: stars > 0 ? stars / 10 : null
       };
       await adminService.updateEncounter(encounter.id, encounterPayload);
     },
     onSuccess: async () => {
-      toast({ title: "Матч обновлен" });
+      toast({ title: t("matchEdit.matchUpdated") });
       await refreshEncounterViews();
       onOpenChange(false);
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Не удалось сохранить";
-      toast({ title: "Ошибка", description: message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : t("matchEdit.saveErrorMessage");
+      toast({ title: t("matchEdit.saveError"), description: message, variant: "destructive" });
     }
   });
 
   const confirmMutation = useMutation({
     mutationFn: () => adminService.confirmEncounterResult(encounter.id),
     onSuccess: async () => {
-      toast({ title: "Результат подтверждён" });
+      toast({ title: t("matchEdit.resultConfirmed") });
       await refreshEncounterViews();
       onOpenChange(false);
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Не удалось подтвердить";
-      toast({ title: "Ошибка", description: message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : t("matchEdit.confirmErrorMessage");
+      toast({ title: t("matchEdit.saveError"), description: message, variant: "destructive" });
     }
   });
 
   return (
-    <DialogContent className="max-w-lg">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          Редактировать матч
+    <DialogContent className="max-w-md bg-[#0c0d0f] border-zinc-800/80 text-white rounded-2xl p-6 shadow-2xl [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:hover:bg-zinc-900">
+      <DialogHeader className="space-y-1">
+        <DialogTitle className="flex items-center gap-2 text-white text-lg font-bold tracking-tight">
+          {t("matchEdit.title")}
           {encounter.result_status === "pending_confirmation" && (
-            <Badge className="bg-amber-500/80 text-white">Ожидает подтверждения</Badge>
+            <Badge className="bg-amber-500/80 text-white border-0">{t("matchEdit.pendingConfirmation")}</Badge>
           )}
           {encounter.result_status === "disputed" && (
-            <Badge className="bg-red-500/80 text-white">Спор</Badge>
+            <Badge className="bg-red-500/80 text-white border-0">{t("matchEdit.disputed")}</Badge>
           )}
         </DialogTitle>
-        <DialogDescription>
+        <DialogDescription className="text-zinc-400 text-sm font-semibold mt-1">
           {encounter.home_team?.name} vs {encounter.away_team?.name}
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-4">
+      <div className="space-y-4 mt-2">
         <EncounterScoreControls
           idPrefix={`encounter-edit-${encounter.id}`}
           homeScore={homeScore}
@@ -159,15 +162,15 @@ function EncounterEditDialogBody({
           }}
         />
 
-        <div>
-          <Label className="text-xs">Статус</Label>
+        <div className="space-y-1.5">
+          <Label className="text-[13px] font-bold text-zinc-300">{t("matchEdit.status")}</Label>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full bg-zinc-950 border-zinc-800/85 text-white font-semibold rounded-lg focus:ring-0 focus:ring-offset-0 focus:border-zinc-300">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-[#0c0d0f] border-zinc-800 text-white">
               {ENCOUNTER_STATUSES.map((item) => (
-                <SelectItem key={item} value={item}>
+                <SelectItem key={item} value={item} className="focus:bg-zinc-800 focus:text-white hover:bg-zinc-800 text-zinc-200 cursor-pointer">
                   {item}
                 </SelectItem>
               ))}
@@ -175,56 +178,64 @@ function EncounterEditDialogBody({
           </Select>
         </div>
 
-        <div>
-          <Label className="text-sm">Близость матча</Label>
-          <div className="mt-1 flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map((n) => (
+        <div className="space-y-1.5">
+          <Label className="text-[13px] font-bold text-zinc-300">{t("matchEdit.matchCloseness")}</Label>
+          <div className="flex items-center gap-1.5">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <button
                 key={n}
                 type="button"
                 onClick={() => setStars(n === stars ? 0 : n)}
-                className="p-1"
+                className="p-0.5 hover:scale-110 transition-transform focus-visible:outline-none"
                 aria-label={`${n} звезд`}
               >
                 <Star
-                  className={`h-6 w-6 ${
-                    n <= stars ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                  }`}
+                  className={cn(
+                    "h-5 w-5 transition-colors duration-150",
+                    n <= stars ? "fill-yellow-400 text-yellow-400" : "text-zinc-700 hover:text-zinc-600"
+                  )}
                 />
               </button>
             ))}
-            <span className="ml-2 text-sm text-muted-foreground">
-              {stars > 0 ? `${stars}/5` : "не задано"}
+            <span className="ml-2 text-xs font-bold text-zinc-400">
+              {stars > 0 ? `${stars}/10` : "не задано"}
             </span>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Редактируется только общий результат. Карты появятся после обработки логов.
+          <p className="text-[11px] text-zinc-500 font-medium leading-normal mt-1">
+            {t("matchEdit.closenessHint")}
           </p>
         </div>
 
-        {validationError && <p className="text-sm text-destructive">{validationError}</p>}
+        {validationError && <p className="text-sm text-red-500 font-semibold">{validationError}</p>}
       </div>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Отмена
+      <DialogFooter className="mt-6 flex flex-row items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          className="border-zinc-800 bg-transparent text-white font-semibold rounded-lg hover:bg-zinc-900 hover:text-white transition-colors h-10 px-5"
+        >
+          {t("matchEdit.cancel")}
         </Button>
         {encounter.result_status === "pending_confirmation" && (
           <Button
             variant="secondary"
             onClick={() => confirmMutation.mutate()}
             disabled={confirmMutation.isPending}
+            className="bg-zinc-800 text-white font-semibold rounded-lg hover:bg-zinc-700 transition-colors h-10 px-5"
           >
-            {confirmMutation.isPending ? "Подтверждение..." : "Подтвердить результат"}
+            {confirmMutation.isPending ? t("matchEdit.confirming") : t("matchEdit.confirmResult")}
           </Button>
         )}
         <Button
           onClick={() => saveMutation.mutate()}
           disabled={!!validationError || saveMutation.isPending}
+          className="bg-white text-zinc-950 font-bold rounded-lg hover:bg-zinc-200 transition-colors h-10 px-5"
         >
-          {saveMutation.isPending ? "Сохранение..." : "Сохранить"}
+          {saveMutation.isPending ? t("matchEdit.saving") : t("matchEdit.save")}
         </Button>
       </DialogFooter>
     </DialogContent>
   );
 }
+

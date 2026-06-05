@@ -38,6 +38,7 @@ export const ru = {
     playtimeLabel: "% игр. времени",
     teamsCount: "{count} команд",
     roundRobin: "круговая система",
+    swiss: "швейцарская система",
     byPlaytime: "По игровому времени",
     byPlacement: "По занятому месту",
     byAvgSr: "По среднему SR",
@@ -47,6 +48,8 @@ export const ru = {
     groups: "Группы",
     playoff: "Плей-офф",
     playoffStandings: "Таблица плей-офф",
+    topAdvance: "ТОП {count} ПРОХОДЯТ",
+    buchholz: "Бухгольц",
     combined: "Комбинированная",
     groupStage: "Групповой этап",
     confirmCheckIn: "Подтвердить чек-ин?",
@@ -75,6 +78,11 @@ export const ru = {
     status: "Статус",
     balancer: "Балансировщик",
     admission: "Допуск",
+    admissionStatus: {
+      admitted: "Допущен",
+      notAdmitted: "Не допущен",
+      pendingCheckIn: "Допущен (Ожидает чек-ин)"
+    },
     yes: "Да",
     no: "Нет",
     noAccess: "Нет доступа",
@@ -258,6 +266,61 @@ export const ru = {
       resume: "Продолжить",
       cancel: "Отменить драфт",
       export: "Экспорт в команды"
+    }
+  },
+  matchEdit: {
+    title: "Редактировать матч",
+    pendingConfirmation: "Ожидает подтверждения",
+    disputed: "Спор",
+    matchScore: "Счет матча",
+    manualEntry: "Ручной ввод результата",
+    resultPresets: "Быстрый выбор",
+    status: "Статус",
+    matchCloseness: "Близость матча",
+    closenessHint: "Редактируется только общий результат. Карты появятся после обработки логов.",
+    cancel: "Отмена",
+    save: "Сохранить",
+    confirming: "Подтверждение...",
+    confirmResult: "Подтвердить результат",
+    saving: "Сохранение...",
+    negativeScoreError: "Счет матча не может быть отрицательным",
+    matchUpdated: "Матч обновлен",
+    resultConfirmed: "Результат подтверждён",
+    saveError: "Ошибка",
+    saveErrorMessage: "Не удалось сохранить",
+    confirmErrorMessage: "Не удалось подтвердить",
+    presetDescriptions: {
+      "Home sweep": "Сухая победа хозяев",
+      "Home close win": "Плотная победа хозяев",
+      "Draw": "Ничья",
+      "Away close win": "Плотная победа гостей",
+      "Away sweep": "Сухая победа гостей"
+    }
+  },
+  matchReport: {
+    title: "Репорт матча",
+    quickResult: "Быстрый результат",
+    matchQuality: "Качество матча",
+    howClose: "Насколько близкой была серия",
+    submit: "Отправить",
+    submitting: "Отправка...",
+    submittedForConfirmation: "Результат отправлен на подтверждение",
+    submitErrorMessage: "Не удалось отправить",
+    qualityDescriptions: {
+      1: "В одни ворота",
+      2: "Почти в одну калитку",
+      3: "Слабое сопротивление",
+      4: "Обычный матч",
+      5: "Равная игра",
+      6: "Небольшой перевес",
+      7: "Хорошая борьба",
+      8: "Очень плотно",
+      9: "Жара",
+      10: "До последнего вздоха"
+    },
+    qualityLegend: {
+      oneSided: "1 - односторонний матч",
+      toTheEnd: "10 - до последнего"
     }
   }
 };

@@ -32,7 +32,7 @@ const TournamentsHero = ({
             {workspaceName ? `Workspace · ${workspaceName}` : "Workspace"}
           </p>
           <h1 className="h1">
-            Every <em>tournament</em>, balanced
+            All <em>tournaments</em> in one place
           </h1>
           <p className="lede">
             From draft to crown: track every event your community has run. Live

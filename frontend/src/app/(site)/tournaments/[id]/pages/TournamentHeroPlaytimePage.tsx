@@ -9,6 +9,7 @@ import type { HeroPlaytime } from "@/types/hero.types";
 import heroService from "@/services/hero.service";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { useTranslation } from "@/i18n/LanguageContext";
 
@@ -29,7 +30,7 @@ const TournamentHeroPlaytimePage = ({ tournament }: { tournament: Tournament }) 
   const statsQuery = useQuery({
     queryKey: tournamentQueryKeys.heroPlaytime(tournament.id),
     queryFn: () =>
-      heroService.getHeroPlaytime(1, 20, "all", tournament.id, {
+      heroService.getHeroPlaytime(1, -1, "all", tournament.id, {
         workspaceId: tournament.workspace_id,
       }),
   });
@@ -96,21 +97,29 @@ const TournamentHeroPlaytimePage = ({ tournament }: { tournament: Tournament }) 
               return (
                 <div className="hero-row" key={hero.hero.id}>
                   <div className="hero-name">
-                    <span
-                      className={cn("portrait", role)}
-                      style={
-                        hero.hero.image_path
-                          ? { backgroundImage: `url(${hero.hero.image_path})` }
-                          : undefined
-                      }
-                    />
+                    <Avatar className="h-[34px] w-[34px] bg-transparent border-none">
+                      {hero.hero.image_path && (
+                        <AvatarImage
+                          src={hero.hero.image_path}
+                          alt={hero.hero.name}
+                          className="object-contain"
+                        />
+                      )}
+                      <AvatarFallback className="bg-transparent" />
+                    </Avatar>
                     <div className="stack">
                       <span className="nm">{hero.hero.name}</span>
                       <span className="meta">{t("common.roles." + role)}</span>
                     </div>
                   </div>
                   <div className="hero-bar">
-                    <div className={cn("fill", role)} style={{ width: `${barWidth}%` }} />
+                    <div
+                      className={cn("fill", !hero.hero.color && role)}
+                      style={{
+                        width: `${barWidth}%`,
+                        backgroundColor: hero.hero.color || undefined
+                      }}
+                    />
                   </div>
                   <div className="hero-stats">
                     <span className="val">{sharePct.toFixed(1)}</span>

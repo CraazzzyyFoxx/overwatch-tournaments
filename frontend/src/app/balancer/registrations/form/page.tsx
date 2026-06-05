@@ -1,8 +1,10 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +39,7 @@ export default function RegistrationFormConfigPage() {
   const tournamentId = useBalancerTournamentId();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
   const [isOpen, setIsOpen] = useState(false);
@@ -287,10 +290,29 @@ export default function RegistrationFormConfigPage() {
     );
   }
 
+  const registrationsHref = searchParams.toString()
+    ? `/balancer/registrations?${searchParams.toString()}`
+    : "/balancer/registrations";
+
   const formExists = formQuery.data != null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Form Configuration</h1>
+          <p className="text-sm text-muted-foreground">
+            Configure registration form fields, admission rules, sub-roles, and custom inputs.
+          </p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href={registrationsHref}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to registrations
+          </Link>
+        </Button>
+      </div>
+
       <Tabs defaultValue="status" className="flex min-h-0 flex-1 flex-col">
         <TabsList className="self-start">
           <TabsTrigger value="status">Status</TabsTrigger>

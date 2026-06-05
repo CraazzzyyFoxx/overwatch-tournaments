@@ -320,7 +320,12 @@ def _upcoming_condition(now: datetime) -> sa.ColumnElement[bool]:
     )
 
 
-async def get_match(session: AsyncSession, id: int, entities: list[str]) -> models.Match | None:
+async def get_match(
+    session: AsyncSession,
+    id: int,
+    entities: list[str],
+    workspace_id: int | None = None,
+) -> models.Match | None:
     """
     Retrieves a match by its ID.
 
@@ -333,6 +338,12 @@ async def get_match(session: AsyncSession, id: int, entities: list[str]) -> mode
         models.Match | None: The Match object if found, otherwise None.
     """
     query = sa.select(models.Match).where(sa.and_(models.Match.id == id)).options(*match_entities(entities))
+    if workspace_id is not None:
+        query = query.join(models.Encounter, models.Match.encounter_id == models.Encounter.id).join(
+            models.Tournament,
+            models.Encounter.tournament_id == models.Tournament.id,
+        )
+        query = query.where(models.Tournament.workspace_id == workspace_id)
     result = await session.execute(query)
     return result.unique().scalars().first()
 

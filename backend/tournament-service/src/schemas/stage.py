@@ -43,6 +43,7 @@ class StageSummaryRead(BaseRead):
     order: int
     is_active: bool
     is_completed: bool
+    settings_json: dict | None = None
     challonge_id: int | None = None
     challonge_slug: str | None = None
 

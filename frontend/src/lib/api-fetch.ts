@@ -179,6 +179,9 @@ export async function apiFetch(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<Response> {
+  if (typeof window !== "undefined") {
+    console.log("apiFetch client-side call:", path, "options:", options);
+  }
   const config = SERVICE_CONFIG[service];
   const throwOnError = options.throwOnError ?? true;
 

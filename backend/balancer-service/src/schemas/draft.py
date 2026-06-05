@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from shared.core.enums import (
     DraftAutopickStrategy,
+    DraftCaptainOrder,
     DraftFormat,
     DraftPickStatus,
     DraftPlayerStatus,
@@ -108,8 +109,10 @@ class DraftPoolCaptainInput(BaseModel):
 
 class DraftSeedRequest(BaseModel):
     source_balance_id: int | None = None
-    randomize_seed_order: bool = False
     seed: int | None = None
+    # Seat order for captains (who picks first). WEAKEST_FIRST seats the lowest-
+    # rated captain at position 1; snake then balances across rounds.
+    captain_order: DraftCaptainOrder = DraftCaptainOrder.MANUAL
     # Pool-derived seeding (preferred): captains picked from the balancer pool;
     # every other in-pool player becomes available. Roles/ranks come from the pool.
     pool_captains: list[DraftPoolCaptainInput] = Field(default_factory=list)

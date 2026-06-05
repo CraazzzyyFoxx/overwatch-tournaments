@@ -17,6 +17,7 @@ export type AuthLinkedPlayer = {
 };
 
 export type AuthProfile = {
+  id?: number | null;
   username: string;
   avatarUrl?: string | null;
   roles: string[];
@@ -111,6 +112,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
       }
 
       const data: {
+        id?: number | null;
         username: string;
         avatar_url?: string | null;
         roles?: string[];
@@ -141,6 +143,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
       set({
         status: "authenticated",
         user: {
+          id: data.id ?? null,
           username: data.username,
           avatarUrl: data.avatar_url ?? null,
           roles: data.roles ?? [],

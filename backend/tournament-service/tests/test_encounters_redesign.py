@@ -78,6 +78,17 @@ class _EmptyScalarResult:
         return None
 
 
+class _EmptyMatchResult:
+    def unique(self):
+        return self
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return None
+
+
 class _FakeSession:
     def __init__(self) -> None:
         self.query = None
@@ -88,6 +99,19 @@ class _FakeSession:
 
 
 class EncounterRedesignSerializationTests(IsolatedAsyncioTestCase):
+    async def test_get_match_applies_workspace_filter(self) -> None:
+        session = _FakeSession()
+        session.execute = AsyncMock(return_value=_EmptyMatchResult())
+
+        result = await service.get_match(cast(AsyncSession, session), 6748, [], workspace_id=2)
+
+        self.assertIsNone(result)
+        compiled = str(session.execute.await_args.args[0].compile(compile_kwargs={"literal_binds": True})).lower()
+        self.assertIn("match.id = 6748", compiled)
+        self.assertIn("join tournament.encounter", compiled)
+        self.assertIn("join tournament.tournament", compiled)
+        self.assertIn("tournament.workspace_id = 2", compiled)
+
     async def test_delete_saved_view_is_scoped_to_owner_and_workspace(self) -> None:
         session = _FakeSession()
 

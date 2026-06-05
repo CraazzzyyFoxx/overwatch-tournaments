@@ -35,6 +35,19 @@ const isAdmitted = (registration: AdminRegistration, requireOpenProfile = false)
   return true;
 };
 
+const getAdmissionStatus = (
+  registration: AdminRegistration,
+  requireOpenProfile = false,
+): "admitted" | "pending_check_in" | "not_admitted" => {
+  if (requireOpenProfile && registration.profiles_open === false) {
+    return "not_admitted";
+  }
+  if (registration.status === "approved" && registration.balancer_status === "ready") {
+    return registration.checked_in === true ? "admitted" : "pending_check_in";
+  }
+  return "not_admitted";
+};
+
 const humanizeStatusValue = (value: string): string =>
   value
     .split("_")
@@ -63,9 +76,14 @@ const getGroupMeta = (
   }
 
   if (mode === "admission") {
-    return isAdmitted(registration, requireOpenProfile)
-      ? { key: "admitted", label: "Admitted", sortOrder: 0 }
-      : { key: "not_admitted", label: "Not admitted", sortOrder: 1 };
+    const status = getAdmissionStatus(registration, requireOpenProfile);
+    if (status === "admitted") {
+      return { key: "admitted", label: "Admitted", sortOrder: 0 };
+    }
+    if (status === "pending_check_in") {
+      return { key: "pending_check_in", label: "Check-in pending", sortOrder: 1 };
+    }
+    return { key: "not_admitted", label: "Not admitted", sortOrder: 2 };
   }
 
   return { key: "all", label: "All registrations", sortOrder: 0 };

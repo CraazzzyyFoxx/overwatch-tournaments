@@ -57,8 +57,13 @@ export default class userService {
         return null;
       });
   }
-  static async getUserTournaments(id: number): Promise<UserTournament[]> {
-    return apiFetch("app",`users/${id}/tournaments`).then((res) => res.json());
+  static async getUserTournaments(id: number, workspaceId?: number | null): Promise<UserTournament[]> {
+    const query = workspaceId !== undefined && workspaceId !== null ? { workspace_id: workspaceId } : undefined;
+    const skipWorkspace = workspaceId === null;
+    return apiFetch("app", `users/${id}/tournaments`, {
+      query,
+      skipWorkspace,
+    }).then((res) => res.json());
   }
   static async getUserMaps(
     id: number,

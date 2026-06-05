@@ -123,14 +123,13 @@ export const HeroListItem = ({
     >
       <div className="flex min-w-0 items-center gap-3">
         <div
-          className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl border"
-          style={{ borderColor: hero.hero.color }}
+          className="relative h-10 w-10 shrink-0 overflow-hidden"
         >
           <Image
             src={hero.hero.image_path}
             alt={hero.hero.name}
             fill
-            className="object-cover"
+            className="object-contain select-none"
           />
         </div>
         <div className="min-w-0 flex-1">

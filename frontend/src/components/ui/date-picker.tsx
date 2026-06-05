@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarIcon, ChevronDownIcon } from "lucide-react";
+import { CalendarIcon, ChevronDownIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -157,8 +157,8 @@ export function DateTimePicker({
   const timeValue = getTimeValue(selected);
 
   return (
-    <FieldGroup className="gap-2">
-      <FieldGroup className="flex-col gap-2 sm:flex-row">
+    <div className="flex items-end gap-2 w-full">
+      <div className="flex flex-1 flex-col gap-2 sm:flex-row min-w-0">
         <Field className="min-w-0 flex-1 gap-1.5" data-disabled={disabled}>
           <FieldLabel htmlFor={id}>{dateLabel}</FieldLabel>
           <Popover open={open} onOpenChange={setOpen}>
@@ -214,19 +214,20 @@ export function DateTimePicker({
             }}
           />
         </Field>
-      </FieldGroup>
-      {selected ? (
+      </div>
+      {selected && !disabled ? (
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 w-fit px-2 text-muted-foreground"
-          disabled={disabled}
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={() => onChange("")}
+          title={clearLabel}
         >
-          {clearLabel}
+          <X className="size-4" />
         </Button>
       ) : null}
-    </FieldGroup>
+    </div>
+
   );
 }

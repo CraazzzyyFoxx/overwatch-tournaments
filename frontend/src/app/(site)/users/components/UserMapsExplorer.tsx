@@ -129,7 +129,7 @@ const HeroStatsChip = ({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="h-11 w-11 rounded-full border border-border/60 bg-background/40 p-1 transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-11 w-11 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${heroStats.hero.name} on this map`}
           onPointerEnter={(e) => {
             if (e.pointerType !== "mouse") {
@@ -167,7 +167,7 @@ const HeroStatsChip = ({
             alt={heroStats.hero.name}
             width={40}
             height={40}
-            className="h-full w-full rounded-full"
+            className="h-full w-full object-contain select-none"
           />
         </button>
       </PopoverTrigger>
@@ -188,13 +188,13 @@ const HeroStatsChip = ({
         }}
       >
         <div className="flex items-start gap-3">
-          <div className="h-12 w-12 shrink-0 rounded-xl border border-border/60 bg-muted/20 p-1">
+          <div className="h-12 w-12 shrink-0">
             <Image
               src={heroStats.hero.image_path}
               alt={heroStats.hero.name}
               width={48}
               height={48}
-              className="h-full w-full rounded-lg"
+              className="h-full w-full object-contain select-none"
             />
           </div>
           <div className="min-w-0 flex-1">

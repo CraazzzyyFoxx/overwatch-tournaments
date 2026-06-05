@@ -268,6 +268,8 @@ async def seed_route(
             draft,
             captain_registration_ids=[c.registration_id for c in payload.pool_captains],
             team_names={c.registration_id: c.name for c in payload.pool_captains if c.name},
+            captain_order=payload.captain_order,
+            rng_seed=payload.seed,
         )
     elif payload.captains:
         captains = [
