@@ -41,10 +41,13 @@ class Team(db.TimeStampIntegerMixin):
     )
     tournament: Mapped[Tournament] = relationship()
 
-    players: Mapped[list["Player"]] = relationship(back_populates="team")
+    players: Mapped[list["Player"]] = relationship(
+        back_populates="team",
+        passive_deletes=True,
+    )
     captain: Mapped["User | None"] = relationship()
-    standings: Mapped[list["Standing"]] = relationship()
-    challonge: Mapped[list["ChallongeTeam"]] = relationship()
+    standings: Mapped[list["Standing"]] = relationship(passive_deletes=True)
+    challonge: Mapped[list["ChallongeTeam"]] = relationship(passive_deletes=True)
 
 
 class Player(db.TimeStampIntegerMixin):

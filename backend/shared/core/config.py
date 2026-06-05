@@ -60,6 +60,7 @@ class BaseServiceSettings(BaseSettings):
     db_pool_recycle: int = 1800
     db_pool_pre_ping: bool = True
     db_pool_use_lifo: bool = True
+    db_connect_timeout: float = 10.0
     db_statement_timeout: int = 30000  # milliseconds
 
     # Circuit Breaker

@@ -99,6 +99,7 @@ def create_database(
     pool_recycle: int = 1800,
     pool_pre_ping: bool = True,
     pool_use_lifo: bool = True,
+    connect_timeout: float = 10.0,
     statement_timeout: int = 30000,
 ) -> DatabaseEngines:
     """Factory for creating database engine + session maker pairs.
@@ -111,12 +112,15 @@ def create_database(
         pool_recycle: Seconds after which pooled connections are recycled.
         pool_pre_ping: Test pooled connections before handing them out.
         pool_use_lifo: Prefer recently-used connections to reduce stale idle sockets.
+        connect_timeout: Seconds to wait while opening a new asyncpg connection.
         statement_timeout: Query timeout in milliseconds (0 to disable).
 
     Returns:
         A DatabaseEngines instance with engine and session maker attributes.
     """
     connect_args: dict[str, Any] = {}
+    if connect_timeout > 0:
+        connect_args["timeout"] = connect_timeout
     if statement_timeout > 0:
         connect_args["server_settings"] = {"statement_timeout": str(statement_timeout)}
 

@@ -3,7 +3,7 @@
 Public reads (no auth) for spectating; admin lifecycle keyed by tournament_id;
 pick actions keyed by pick_id. Every mutation commits then publishes a realtime
 event on tournament:{id}:draft. Captain identity for /select is enforced in the
-service; the permission dep only checks workspace membership.
+service after the auth dependency resolves the current user.
 """
 
 from __future__ import annotations
@@ -423,12 +423,17 @@ async def select_route(
     payload: DraftPickSelectRequest,
     session: AsyncSession = Depends(db.get_async_session),
     redis: Redis | None = Depends(get_redis),
-    user: models.AuthUser = Depends(auth.require_pick_permission("team", "import")),
+    user: models.AuthUser = Depends(auth.get_current_active_user),
 ) -> DraftSessionRead:
     draft, pick = await _load_pick(session, pick_id)
-    public_user_id = await session.scalar(
-        sa.select(models.AuthUserPlayer.player_id).where(models.AuthUserPlayer.auth_user_id == user.id)
+    public_user_ids = list(
+        await session.scalars(
+            sa.select(models.AuthUserPlayer.player_id)
+            .where(models.AuthUserPlayer.auth_user_id == user.id)
+            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id.asc())
+        )
     )
+    public_user_id = public_user_ids[0] if public_user_ids else None
     is_admin = user.is_workspace_admin(draft.workspace_id)
     try:
         result = await selection.select(
@@ -439,6 +444,8 @@ async def select_route(
             expected_version=payload.expected_version,
             target_role=payload.target_role,
             actor_user_id=public_user_id,
+            actor_auth_user_id=user.id,
+            actor_player_ids=public_user_ids,
             is_admin=is_admin,
         )
     except ApiHTTPException:

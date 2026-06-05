@@ -19,6 +19,7 @@ _db = create_database(
     pool_recycle=config.settings.db_pool_recycle,
     pool_pre_ping=config.settings.db_pool_pre_ping,
     pool_use_lifo=config.settings.db_pool_use_lifo,
+    connect_timeout=config.settings.db_connect_timeout,
     statement_timeout=config.settings.db_statement_timeout,
 )
 

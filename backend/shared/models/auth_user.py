@@ -15,6 +15,22 @@ if TYPE_CHECKING:
 __all__ = ("AuthUser", "RefreshToken", "AuthUserPlayer")
 
 ADMIN_EQUIVALENT_ROLE_NAMES = {"admin"}
+ADMIN_PANEL_ROLE_NAMES = {"admin", "tournament_organizer", "moderator"}
+
+
+def _permission_grants_admin_panel_access(resource: str, action: str) -> bool:
+    return (resource == "*" and action == "*") or action != "read"
+
+
+def _permission_payload_grants_admin_panel_access(permissions: list[dict[str, str]]) -> bool:
+    for permission in permissions:
+        if not isinstance(permission, dict):
+            continue
+        resource = permission.get("resource", "")
+        action = permission.get("action", "")
+        if _permission_grants_admin_panel_access(resource, action):
+            return True
+    return False
 
 
 class AuthUser(db.TimeStampIntegerMixin):
@@ -139,6 +155,55 @@ class AuthUser(db.TimeStampIntegerMixin):
             role.name in ADMIN_EQUIVALENT_ROLE_NAMES and role.workspace_id is None
             for role in self.roles
         )
+
+    def _has_admin_panel_role(self) -> bool:
+        cached_roles = getattr(self, "_cached_role_names", None)
+        if cached_roles is not None:
+            return any(role_name in ADMIN_PANEL_ROLE_NAMES for role_name in cached_roles)
+
+        return any(
+            role.name in ADMIN_PANEL_ROLE_NAMES and role.workspace_id is None
+            for role in self.roles
+        )
+
+    def _has_global_admin_panel_permission(self) -> bool:
+        cached = getattr(self, "_cached_permissions", None)
+        if cached is not None:
+            return _permission_payload_grants_admin_panel_access(cached)
+
+        for role in self.roles:
+            if role.workspace_id is not None:
+                continue
+            for permission in role.permissions:
+                if _permission_grants_admin_panel_access(permission.resource, permission.action):
+                    return True
+        return False
+
+    def _has_workspace_admin_panel_permission(self, workspace_id: int | None = None) -> bool:
+        ws_rbac: dict = getattr(self, "_cached_workspace_rbac", None) or {}
+        if ws_rbac:
+            workspace_payloads = (
+                [ws_rbac.get(workspace_id)] if workspace_id is not None else ws_rbac.values()
+            )
+            for ws_data in workspace_payloads:
+                if ws_data and _permission_payload_grants_admin_panel_access(ws_data.get("permissions", [])):
+                    return True
+            return False
+
+        for role in self.roles:
+            if role.workspace_id is None:
+                continue
+            if workspace_id is not None and role.workspace_id != workspace_id:
+                continue
+            for permission in role.permissions:
+                if _permission_grants_admin_panel_access(permission.resource, permission.action):
+                    return True
+        return False
+
+    def has_admin_panel_access(self, workspace_id: int | None = None) -> bool:
+        if self.is_superuser or self._has_admin_panel_role():
+            return True
+        return self._has_global_admin_panel_permission() or self._has_workspace_admin_panel_permission(workspace_id)
 
     def has_permission(self, resource: str, action: str) -> bool:
         """Check if user has a specific permission"""

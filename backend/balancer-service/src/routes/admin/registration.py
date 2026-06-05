@@ -27,6 +27,7 @@ from src.schemas.admin.registration_form import (
 router = APIRouter(
     prefix="/balancer",
     tags=["registration"],
+    dependencies=[Depends(auth.require_admin_panel_access())],
 )
 use_cases = build_admin_registration_use_cases()
 

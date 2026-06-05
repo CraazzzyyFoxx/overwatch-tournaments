@@ -194,6 +194,69 @@ def test_auth_user_has_permission_allows_cached_admin_role_without_explicit_perm
     assert current_user.has_permission("team", "import") is True
 
 
+def test_auth_user_admin_panel_access_rejects_read_only_permissions() -> None:
+    current_user = models.AuthUser(
+        email="member@example.com",
+        username="member",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    current_user.set_rbac_cache(
+        role_names=[],
+        permissions=[{"resource": "tournament", "action": "read"}],
+        workspace_rbac={
+            7: {
+                "roles": ["member"],
+                "permissions": [{"resource": "team", "action": "read"}],
+            },
+        },
+    )
+
+    assert current_user.has_admin_panel_access() is False
+    assert current_user.has_admin_panel_access(7) is False
+
+
+def test_auth_user_admin_panel_access_allows_scoped_non_read_permission() -> None:
+    current_user = models.AuthUser(
+        email="operator@example.com",
+        username="operator",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    current_user.set_rbac_cache(
+        role_names=[],
+        permissions=[],
+        workspace_rbac={
+            8: {
+                "roles": ["member"],
+                "permissions": [
+                    {"resource": "team", "action": "read"},
+                    {"resource": "team", "action": "update"},
+                ],
+            },
+        },
+    )
+
+    assert current_user.has_admin_panel_access() is True
+    assert current_user.has_admin_panel_access(8) is True
+    assert current_user.has_admin_panel_access(9) is False
+
+
+def test_auth_user_admin_panel_access_allows_panel_roles() -> None:
+    current_user = models.AuthUser(
+        email="organizer@example.com",
+        username="organizer",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    current_user.set_rbac_cache(role_names=["tournament_organizer"], permissions=[])
+
+    assert current_user.has_admin_panel_access() is True
+
+
 def test_get_auth_user_route_returns_effective_permissions(monkeypatch: pytest.MonkeyPatch) -> None:
     permissions = [
         SimpleNamespace(resource="team", action="read"),

@@ -28,6 +28,7 @@ def test_create_database_passes_pool_tuning_options(monkeypatch):
         pool_recycle=180,
         pool_pre_ping=True,
         pool_use_lifo=True,
+        connect_timeout=3.5,
         statement_timeout=1234,
     )
 
@@ -39,7 +40,7 @@ def test_create_database_passes_pool_tuning_options(monkeypatch):
         "pool_recycle": 180,
         "pool_pre_ping": True,
         "pool_use_lifo": True,
-        "connect_args": {"server_settings": {"statement_timeout": "1234"}},
+        "connect_args": {"timeout": 3.5, "server_settings": {"statement_timeout": "1234"}},
     }
     assert captured["async_sessionmaker_args"] == (async_engine,)
     assert captured["async_sessionmaker_kwargs"] == {
@@ -74,7 +75,26 @@ def test_create_database_omits_statement_timeout_when_disabled(monkeypatch):
         "pool_recycle": 1800,
         "pool_pre_ping": True,
         "pool_use_lifo": True,
-        "connect_args": {},
+        "connect_args": {"timeout": 10.0},
     }
     assert not hasattr(database, "sync_engine")
     assert not hasattr(database, "sync_session_maker")
+
+
+def test_create_database_omits_connect_timeout_when_disabled(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_create_async_engine(*, url, **kwargs):
+        captured["async_kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(db_module, "create_async_engine", fake_create_async_engine)
+    monkeypatch.setattr(db_module, "async_sessionmaker", lambda *args, **kwargs: object())
+
+    db_module.create_database(
+        async_url="postgresql+asyncpg://user:pass@localhost:5432/testdb",
+        connect_timeout=0,
+        statement_timeout=0,
+    )
+
+    assert captured["async_kwargs"]["connect_args"] == {}

@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from src.core import auth
 
 from .challonge import router as challonge_router
 from .encounter import router as encounter_router
@@ -12,7 +14,11 @@ from .team import player_router
 from .team import router as team_router
 from .tournament import router as tournament_router
 
-admin_router = APIRouter(prefix="/admin", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(auth.require_admin_panel_access())],
+)
 
 admin_router.include_router(tournament_router)
 admin_router.include_router(stage_router)

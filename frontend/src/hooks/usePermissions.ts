@@ -119,16 +119,35 @@ function workspaceHasPermission(
   return workspace?.permissions.includes("admin.*") || workspace?.permissions.includes(permission) || false;
 }
 
+function permissionGrantsAdminPanelAccess(permission: string): boolean {
+  return permission === "admin.*" || !permission.endsWith(".read");
+}
+
 function workspaceHasAnyManagementPermission(
   workspace: PermissionProfile["workspaces"][number] | undefined,
 ): boolean {
   if (!workspace) return false;
-  return (
-    workspace.permissions.includes("admin.*") ||
-    workspace.permissions.includes("workspace.update") ||
-    workspace.permissions.includes("workspace_member.read") ||
-    workspace.permissions.includes("role.read")
-  );
+  return workspace.permissions.some(permissionGrantsAdminPanelAccess);
+}
+
+export function hasAdminPanelAccessForProfile(
+  profile: PermissionProfile | undefined,
+  workspaceId?: number | null,
+): boolean {
+  if (!profile) return false;
+  if (profile.isSuperuser || profile.roles.some(isAdminPanelRole)) {
+    return true;
+  }
+  if (profile.permissions.some(permissionGrantsAdminPanelAccess)) {
+    return true;
+  }
+
+  if (workspaceId == null) {
+    return profile.workspaces.some(workspaceHasAnyManagementPermission);
+  }
+
+  const workspace = profile.workspaces.find((candidate) => candidate.workspace_id === workspaceId);
+  return workspaceHasAnyManagementPermission(workspace);
 }
 
 export function hasWorkspacePermissionForProfile(
@@ -269,6 +288,7 @@ export function usePermissions() {
   }: AdminRouteAccessOptions): boolean => {
     if (!isAuthenticated || !user) return false;
     if (superuserOnly) return user.isSuperuser;
+    if (!hasAdminPanelAccessForProfile(user, globalOnly ? null : workspaceId)) return false;
 
     let hasAccess = false;
 
