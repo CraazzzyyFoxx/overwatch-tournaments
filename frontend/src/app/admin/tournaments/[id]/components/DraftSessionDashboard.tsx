@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
-import type { BalancerPlayerRecord } from "@/types/balancer-admin.types";
+import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftAutopickStrategy } from "@/types/draft.types";
 
 interface DraftSessionDashboardProps {
@@ -41,13 +41,29 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected error";
 }
 
-/** Primary role + rank from a pool player's active role entries (priority order). */
-function poolPlayerSummary(p: BalancerPlayerRecord): { role: string; rank: number | null } {
-  const active = (p.role_entries_json ?? [])
-    .filter((e) => e.is_active)
-    .sort((a, b) => a.priority - b.priority);
-  const primary = active[0];
-  return { role: primary?.role ?? "dps", rank: primary?.rank_value ?? null };
+/** A registration is in the balancer pool (mirrors isRegistrationIncludedInBalancer). */
+function isInBalancerPool(r: AdminRegistration): boolean {
+  return (
+    r.status === "approved" &&
+    !r.deleted_at &&
+    !r.exclude_from_balancer &&
+    r.balancer_status !== "not_in_balancer"
+  );
+}
+
+/** Primary role + rank from a registration's active roles (priority order, prefer primary). */
+function registrationSummary(r: AdminRegistration): { role: string; rank: number | null } {
+  const active = (r.roles ?? []).filter((e) => e.is_active).sort((a, b) => a.priority - b.priority);
+  const primary = active.find((e) => e.is_primary) ?? active[0];
+  const ranks = active.map((e) => e.rank_value).filter((v): v is number => v != null);
+  return {
+    role: primary?.role ?? "dps",
+    rank: primary?.rank_value ?? (ranks.length ? Math.max(...ranks) : null),
+  };
+}
+
+function registrationLabel(r: AdminRegistration): string {
+  return r.battle_tag || r.display_name || `#${r.id}`;
 }
 
 export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionDashboardProps) {
@@ -96,7 +112,7 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
     mutationFn: (sessionId: number) =>
       draftService.seed(tournamentId, sessionId, {
         pool_captains: captainIds.map((id) => ({
-          pool_player_id: id,
+          registration_id: id,
           name: teamNames[id]?.trim() || null,
         })),
       }),
@@ -335,11 +351,11 @@ function PoolSeedForm({
   onSeed,
 }: PoolSeedFormProps) {
   const poolQuery = useQuery({
-    queryKey: ["balancer", "pool", tournamentId],
-    queryFn: () => balancerAdminService.listPlayers(tournamentId, true),
+    queryKey: ["balancer", "draft-pool", tournamentId],
+    queryFn: () => balancerAdminService.listRegistrations(tournamentId, { status_filter: "approved" }),
   });
 
-  const pool = poolQuery.data ?? [];
+  const pool = (poolQuery.data ?? []).filter(isInBalancerPool);
   const captainOrder = (id: number) => captainIds.indexOf(id);
 
   return (
@@ -355,9 +371,11 @@ function PoolSeedForm({
       <CardContent className="space-y-4">
         {poolQuery.isLoading ? (
           <p className="text-muted-foreground">Loading pool…</p>
+        ) : poolQuery.isError ? (
+          <p className="text-destructive">Failed to load the balancer pool. Try again.</p>
         ) : pool.length === 0 ? (
           <p className="text-muted-foreground">
-            The balancer pool is empty. Build the pool in the{" "}
+            No approved players in the balancer pool yet. Approve registrations in the{" "}
             <Link href="/balancer" className="text-primary underline">
               balancer panel
             </Link>{" "}
@@ -369,22 +387,23 @@ function PoolSeedForm({
               {captainIds.length} captain(s) selected · {pool.length} players in pool
             </div>
             <div className="max-h-[55vh] divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
-              {pool.map((p) => {
-                const { role, rank } = poolPlayerSummary(p);
-                const isCaptain = captainIds.includes(p.id);
-                const order = captainOrder(p.id);
+              {pool.map((reg) => {
+                const { role, rank } = registrationSummary(reg);
+                const label = registrationLabel(reg);
+                const isCaptain = captainIds.includes(reg.id);
+                const order = captainOrder(reg.id);
                 return (
-                  <div key={p.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <div key={reg.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <input
                       type="checkbox"
                       checked={isCaptain}
-                      onChange={() => onToggleCaptain(p.id)}
-                      aria-label={`Captain ${p.battle_tag}`}
+                      onChange={() => onToggleCaptain(reg.id)}
+                      aria-label={`Captain ${label}`}
                     />
                     <span className="w-6 text-center text-muted-foreground">
                       {isCaptain ? order + 1 : ""}
                     </span>
-                    <span className="flex-1 truncate">{p.battle_tag}</span>
+                    <span className="flex-1 truncate">{label}</span>
                     <Badge variant="outline" className="uppercase">
                       {role}
                     </Badge>
@@ -394,8 +413,8 @@ function PoolSeedForm({
                     {isCaptain ? (
                       <Input
                         placeholder="Team name (optional)"
-                        value={teamNames[p.id] ?? ""}
-                        onChange={(e) => onTeamName(p.id, e.target.value)}
+                        value={teamNames[reg.id] ?? ""}
+                        onChange={(e) => onTeamName(reg.id, e.target.value)}
                         className="h-8 w-48"
                       />
                     ) : (

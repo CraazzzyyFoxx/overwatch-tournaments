@@ -153,7 +153,7 @@ export interface DraftSeedPlayerInput {
 }
 
 export interface DraftPoolCaptainInput {
-  pool_player_id: number;
+  registration_id: number;
   name?: string | null;
 }
 

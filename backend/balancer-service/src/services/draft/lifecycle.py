@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 from shared.core import draft_state
 from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.balancer import BalancerPlayer
+from shared.models.balancer import BalancerRegistration
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 
 from src.services.draft.snake_order import generate_pick_order
@@ -230,50 +230,55 @@ def _to_draft_role(role: str | None) -> DraftRole | None:
     return None
 
 
-def _map_pool_player(bp: BalancerPlayer) -> dict:
-    """Derive draft role/rank fields from a balancer pool player's role_entries.
+def _map_registration(reg: BalancerRegistration) -> dict:
+    """Derive draft role/rank fields from a tournament registration's roles.
 
-    Reuses the existing balancer pool data (ranks, roles, subtypes, flex) instead
-    of re-entering it: active entries sorted by priority -> primary + secondaries.
+    The registration-based pool is the balancer source of truth (3NF). Active
+    role rows sorted by priority -> primary (preferring is_primary) + secondaries;
+    rank/sub-role come from the primary role.
     """
-    entries = sorted(
-        (e for e in (bp.role_entries or []) if e.is_active),
-        key=lambda e: e.priority,
-    )
+    active = sorted((r for r in (reg.roles or []) if r.is_active), key=lambda r: r.priority)
     roles: list[DraftRole] = []
-    primary_entry = None
-    for e in entries:
-        role = _to_draft_role(e.role)
+    for r in active:
+        role = _to_draft_role(r.role)
         if role is not None and role not in roles:
             roles.append(role)
-            if primary_entry is None:
-                primary_entry = e
-    primary = roles[0] if roles else (_to_draft_role(bp.primary_role) or DraftRole.DPS)
-    secondary = [r for r in roles[1:]]
-    rank_value = (primary_entry.rank_value if primary_entry else None) or bp.rank_value
-    division_number = (primary_entry.division_number if primary_entry else None) or bp.division_number
-    sub_role = primary_entry.subtype if primary_entry else None
+    primary_entry = next((r for r in active if r.is_primary and _to_draft_role(r.role)), None)
+    if primary_entry is None and active:
+        primary_entry = active[0]
+    primary = (_to_draft_role(primary_entry.role) if primary_entry else None) or (roles[0] if roles else DraftRole.DPS)
+    secondary = [r for r in roles if r != primary]
+    ranks = [r.rank_value for r in active if r.rank_value is not None]
+    rank_value = (primary_entry.rank_value if primary_entry else None) or (max(ranks) if ranks else None)
+    sub_role = primary_entry.subrole if primary_entry else None
     return {
         "primary_role": primary,
         "secondary_roles": secondary,
         "sub_role": sub_role,
         "rank_value": rank_value,
-        "division_number": division_number,
-        "is_flex": bool(bp.is_flex),
+        "division_number": None,
+        "is_flex": bool(reg.is_flex),
     }
 
 
-async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerPlayer]:
-    """Load the existing balancer pool (in-pool players) with their role entries."""
+async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerRegistration]:
+    """Load the balancer pool = registrations included in the balancer.
+
+    Mirrors the panel's ``isRegistrationIncludedInBalancer``: approved, not
+    deleted, not excluded, and not flagged not_in_balancer.
+    """
     return list(
         await session.scalars(
-            sa.select(BalancerPlayer)
+            sa.select(BalancerRegistration)
             .where(
-                BalancerPlayer.tournament_id == tournament_id,
-                BalancerPlayer.is_in_pool.is_(True),
+                BalancerRegistration.tournament_id == tournament_id,
+                BalancerRegistration.status == "approved",
+                BalancerRegistration.deleted_at.is_(None),
+                BalancerRegistration.exclude_from_balancer.is_(False),
+                BalancerRegistration.balancer_status != "not_in_balancer",
             )
-            .options(selectinload(BalancerPlayer.role_entries))
-            .order_by(BalancerPlayer.battle_tag_normalized.asc())
+            .options(selectinload(BalancerRegistration.roles))
+            .order_by(BalancerRegistration.battle_tag_normalized.asc())
         )
     )
 
@@ -282,37 +287,37 @@ async def seed_from_pool(
     session: AsyncSession,
     draft_session: DraftSession,
     *,
-    captain_player_ids: list[int],
+    captain_registration_ids: list[int],
     team_names: dict[int, str] | None = None,
 ) -> DraftSession:
-    """Seed a draft from the existing balancer pool.
+    """Seed a draft from the balancer registration pool.
 
-    ``captain_player_ids`` are ``balancer.player`` ids chosen as captains (seed
-    order = list order). Every other in-pool player becomes an available draft
-    player. Roles/ranks come straight from the balancer pool — no manual entry.
+    ``captain_registration_ids`` are ``balancer.registration`` ids chosen as
+    captains (seed order = list order). Every other in-pool registration becomes
+    an available draft player. Roles/ranks come straight from the registration.
     """
     pool = await load_pool(session, draft_session.tournament_id)
-    by_id = {bp.id: bp for bp in pool}
-    if not captain_player_ids:
+    by_id = {reg.id: reg for reg in pool}
+    if not captain_registration_ids:
         raise _err("draft_no_captains", "Select at least one captain from the pool")
 
     team_names = team_names or {}
     captains: list[CaptainSeed] = []
-    for position, pid in enumerate(captain_player_ids, start=1):
-        bp = by_id.get(pid)
-        if bp is None:
+    for position, rid in enumerate(captain_registration_ids, start=1):
+        reg = by_id.get(rid)
+        if reg is None:
             raise _err(
                 "captain_not_in_pool",
-                f"Captain player {pid} is not in the balancer pool for this tournament",
+                f"Captain registration {rid} is not in the balancer pool for this tournament",
                 status_code=422,
             )
-        mapped = _map_pool_player(bp)
+        mapped = _map_registration(reg)
         captains.append(
             CaptainSeed(
-                name=team_names.get(pid) or bp.battle_tag or f"Team {position}",
+                name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",
                 draft_position=position,
-                user_id=bp.user_id,
-                battle_tag=bp.battle_tag,
+                user_id=reg.user_id,
+                battle_tag=reg.battle_tag,
                 primary_role=mapped["primary_role"],
                 sub_role=mapped["sub_role"],
                 is_flex=mapped["is_flex"],
@@ -321,17 +326,17 @@ async def seed_from_pool(
             )
         )
 
-    captain_ids = set(captain_player_ids)
+    captain_ids = set(captain_registration_ids)
     players: list[PlayerSeed] = []
-    for bp in pool:
-        if bp.id in captain_ids:
+    for reg in pool:
+        if reg.id in captain_ids:
             continue
-        mapped = _map_pool_player(bp)
+        mapped = _map_registration(reg)
         players.append(
             PlayerSeed(
                 primary_role=mapped["primary_role"],
-                user_id=bp.user_id,
-                battle_tag=bp.battle_tag,
+                user_id=reg.user_id,
+                battle_tag=reg.battle_tag,
                 secondary_roles=mapped["secondary_roles"],
                 sub_role=mapped["sub_role"],
                 is_flex=mapped["is_flex"],

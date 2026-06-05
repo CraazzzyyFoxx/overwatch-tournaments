@@ -266,8 +266,8 @@ async def seed_route(
         await lifecycle.seed_from_pool(
             session,
             draft,
-            captain_player_ids=[c.pool_player_id for c in payload.pool_captains],
-            team_names={c.pool_player_id: c.name for c in payload.pool_captains if c.name},
+            captain_registration_ids=[c.registration_id for c in payload.pool_captains],
+            team_names={c.registration_id: c.name for c in payload.pool_captains if c.name},
         )
     elif payload.captains:
         captains = [

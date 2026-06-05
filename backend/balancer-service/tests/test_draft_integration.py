@@ -386,49 +386,36 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(len(teams), 3)
 
     async def _build_balancer_pool(self, s, n: int) -> list[int]:
-        """Create n in-pool BalancerPlayer rows (with role entries). Returns ids."""
-        from shared.models.balancer import (
-            BalancerApplication,
-            BalancerPlayer,
-            BalancerPlayerRoleEntry,
-            BalancerTournamentSheet,
-        )
+        """Create n approved, in-pool BalancerRegistration rows (with roles). Returns ids."""
+        from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole
 
-        sheet = BalancerTournamentSheet(tournament_id=self.tournament_id, source_url="x", sheet_id="x")
-        s.add(sheet)
-        await s.flush()
         roles = ["tank", "dps", "support"]
         ids: list[int] = []
         for i in range(n):
             tag = f"Pool{self._suffix}-{i}#1"
-            app = BalancerApplication(
+            reg = BalancerRegistration(
                 tournament_id=self.tournament_id,
-                tournament_sheet_id=sheet.id,
+                workspace_id=self.workspace_id,
                 battle_tag=tag,
                 battle_tag_normalized=tag.lower(),
+                display_name=tag,
+                status="approved",
+                balancer_status="ready",
+                exclude_from_balancer=False,
             )
-            s.add(app)
-            await s.flush()
-            player = BalancerPlayer(
-                tournament_id=self.tournament_id,
-                application_id=app.id,
-                battle_tag=tag,
-                battle_tag_normalized=tag.lower(),
-                is_in_pool=True,
-                rank_value=3000 + i * 25,
-            )
-            s.add(player)
+            s.add(reg)
             await s.flush()
             s.add(
-                BalancerPlayerRoleEntry(
-                    player_id=player.id,
+                BalancerRegistrationRole(
+                    registration_id=reg.id,
                     role=roles[i % 3],
+                    is_primary=True,
                     priority=1,
                     rank_value=3000 + i * 25,
                     is_active=True,
                 )
             )
-            ids.append(player.id)
+            ids.append(reg.id)
         await s.flush()
         return ids
 
@@ -439,7 +426,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             )
             pool_ids = await self._build_balancer_pool(s, 9)
             captain_ids = pool_ids[:3]
-            await lifecycle.seed_from_pool(s, draft, captain_player_ids=captain_ids)
+            await lifecycle.seed_from_pool(s, draft, captain_registration_ids=captain_ids)
             await s.commit()
 
             self.assertEqual(draft.status, DraftStatus.READY.value)
@@ -467,7 +454,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             )
             await self._build_balancer_pool(s, 4)
             with self.assertRaises(Exception):
-                await lifecycle.seed_from_pool(s, draft, captain_player_ids=[999999])
+                await lifecycle.seed_from_pool(s, draft, captain_registration_ids=[999999])
 
     async def test_realtime_publisher_persists_event(self) -> None:
         async with self.Session() as s:

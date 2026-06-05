@@ -100,9 +100,9 @@ class DraftManualPlayerInput(BaseModel):
 
 
 class DraftPoolCaptainInput(BaseModel):
-    """A captain chosen from the existing balancer pool (by balancer.player id)."""
+    """A captain chosen from the balancer pool (by balancer.registration id)."""
 
-    pool_player_id: int
+    registration_id: int
     name: str | None = None
 
 
