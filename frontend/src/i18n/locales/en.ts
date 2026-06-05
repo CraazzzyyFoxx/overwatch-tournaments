@@ -21,6 +21,7 @@ export const en = {
     standings: "Standings",
     bracket: "Bracket",
     rolesList: "Roles",
+    ranks: "Ranks",
     bracketInstructions: "Drag to pan the bracket / Press Esc to exit",
     bracketFullscreen: "Fullscreen",
     bracketExitFullscreen: "Exit fullscreen (Esc)",

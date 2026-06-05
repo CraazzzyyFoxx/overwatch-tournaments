@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import {
   Building2,
   CheckSquare,
+  Eye,
   Globe,
   Lock,
   MoreHorizontal,
@@ -205,6 +206,7 @@ export default function AccessAdminRolesPage() {
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
   const [deletingRole, setDeletingRole] = useState<RbacRole | null>(null);
   const [formOverride, setFormOverride] = useState<UpsertRolePayload | null>(emptyRoleForm);
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   const permissionsQuery = useQuery({
     queryKey: ["access-admin", "permissions", effectiveScope],
@@ -316,9 +318,6 @@ export default function AccessAdminRolesPage() {
       header: "",
       cell: ({ row }) => {
         const role = row.original;
-        if (!canUpdateRole && !canDeleteRole) {
-          return null;
-        }
 
         return (
           <DropdownMenu>
@@ -329,30 +328,47 @@ export default function AccessAdminRolesPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              {canUpdateRole ? (
-                <DropdownMenuItem
-                  disabled={role.is_system}
-                  onClick={() => {
-                    updateRoleMutation.reset();
-                    setFormOverride(null);
-                    setEditingRoleId(role.id);
-                  }}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-              ) : null}
-              {canUpdateRole && canDeleteRole ? <DropdownMenuSeparator /> : null}
-              {canDeleteRole ? (
-                <DropdownMenuItem
-                  className="text-destructive"
-                  disabled={role.is_system}
-                  onClick={() => setDeletingRole(role)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              ) : null}
+              <DropdownMenuItem
+                onClick={() => {
+                  updateRoleMutation.reset();
+                  setFormOverride(null);
+                  setEditingRoleId(role.id);
+                  setIsReadOnly(true);
+                }}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                View
+              </DropdownMenuItem>
+              {canUpdateRole && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={role.is_system}
+                    onClick={() => {
+                      updateRoleMutation.reset();
+                      setFormOverride(null);
+                      setEditingRoleId(role.id);
+                      setIsReadOnly(false);
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                </>
+              )}
+              {canDeleteRole && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    disabled={role.is_system}
+                    onClick={() => setDeletingRole(role)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -429,8 +445,8 @@ export default function AccessAdminRolesPage() {
     return { columnChecked, rowChecked, rowSelectedCounts };
   }, [permissionMatrix.columns, permissionMatrix.rows, selectedPermissionIds]);
   const isFormDirty = useMemo(
-    () => (createDialogOpen || isEditing) && hasRoleFormChanges(formData, currentBaseline),
-    [createDialogOpen, currentBaseline, formData, isEditing],
+    () => !isReadOnly && (createDialogOpen || isEditing) && hasRoleFormChanges(formData, currentBaseline),
+    [isReadOnly, createDialogOpen, currentBaseline, formData, isEditing],
   );
 
   const updateFormData = (
@@ -507,6 +523,7 @@ export default function AccessAdminRolesPage() {
                 createRoleMutation.reset();
                 updateRoleMutation.reset();
                 setFormOverride(emptyRoleForm);
+                setIsReadOnly(false);
                 setCreateDialogOpen(true);
               }}
             >
@@ -572,16 +589,12 @@ export default function AccessAdminRolesPage() {
         columns={columns}
         searchPlaceholder="Search roles..."
         emptyMessage="No roles found."
-        onRowDoubleClick={
-          canUpdateRole
-            ? (row) => {
-                if (row.original.is_system) return;
-                updateRoleMutation.reset();
-                setFormOverride(null);
-                setEditingRoleId(row.original.id);
-              }
-            : undefined
-        }
+        onRowDoubleClick={(row) => {
+          updateRoleMutation.reset();
+          setFormOverride(null);
+          setEditingRoleId(row.original.id);
+          setIsReadOnly(row.original.is_system || !canUpdateRole);
+        }}
       />
 
       <EntityFormDialog
@@ -591,11 +604,20 @@ export default function AccessAdminRolesPage() {
             setCreateDialogOpen(false);
             setEditingRoleId(null);
             setFormOverride(emptyRoleForm);
+            setIsReadOnly(false);
           }
         }}
-        title={isEditing ? "Edit Role" : `Create Role (${scopeLabel})`}
+        title={
+          isReadOnly
+            ? `View Role: ${roleDetail?.name ?? ""}`
+            : isEditing
+            ? "Edit Role"
+            : `Create Role (${scopeLabel})`
+        }
         description={
-          isEditing
+          isReadOnly
+            ? "Inspect role metadata and its permission matrix."
+            : isEditing
             ? "Update role metadata and its permission bundle."
             : `Create a new custom role in the ${scopeLabel} scope and attach explicit permissions.`
         }
@@ -608,13 +630,18 @@ export default function AccessAdminRolesPage() {
             : undefined
         }
         isDirty={isFormDirty}
+        isReadOnly={isReadOnly}
         contentClassName="!max-w-[min(96vw,1440px)] sm:!max-h-[94dvh]"
       >
         <div className="space-y-5">
           {roleDetail?.is_system ? (
             <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>System roles are protected. Some edits may be rejected by the API.</span>
+              <span>
+                {isReadOnly
+                  ? "System roles are system-defined and cannot be modified."
+                  : "System roles are protected. Some edits may be rejected by the API."}
+              </span>
             </div>
           ) : null}
 
@@ -626,6 +653,7 @@ export default function AccessAdminRolesPage() {
               onChange={(event) => updateFormData((current) => ({ ...current, name: event.target.value }))}
               placeholder="support_admin"
               required
+              disabled={isReadOnly}
             />
           </div>
 
@@ -636,6 +664,7 @@ export default function AccessAdminRolesPage() {
               value={formData.description || ""}
               onChange={(event) => updateFormData((current) => ({ ...current, description: event.target.value }))}
               placeholder="Describe what this role is allowed to do"
+              disabled={isReadOnly}
             />
           </div>
 
@@ -653,7 +682,7 @@ export default function AccessAdminRolesPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setPermissions(permissionMatrix.allPermissionIds)}
-                  disabled={permissionMatrix.allPermissionIds.length === 0}
+                  disabled={isReadOnly || permissionMatrix.allPermissionIds.length === 0}
                 >
                   <CheckSquare className="h-4 w-4" />
                   Grant all
@@ -663,7 +692,7 @@ export default function AccessAdminRolesPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setPermissions([])}
-                  disabled={formData.permission_ids.length === 0}
+                  disabled={isReadOnly || formData.permission_ids.length === 0}
                 >
                   <XSquare className="h-4 w-4" />
                   Revoke all
@@ -683,7 +712,7 @@ export default function AccessAdminRolesPage() {
                             <MatrixCheckbox
                               checked={permissionSelectionStats.columnChecked.get(column.action) ?? false}
                               label={`Toggle all ${column.action} permissions`}
-                              disabled={column.permissionIds.length === 0}
+                              disabled={isReadOnly || column.permissionIds.length === 0}
                               onChange={(checked) => togglePermissionGroup(column.permissionIds, checked)}
                             />
                             <span className="text-xs capitalize">{formatPermissionLabel(column.action)}</span>
@@ -705,6 +734,7 @@ export default function AccessAdminRolesPage() {
                             <MatrixCheckbox
                               checked={rowChecked}
                               label={`Toggle all ${row.resource} permissions`}
+                              disabled={isReadOnly}
                               onChange={(checked) => togglePermissionGroup(row.permissionIds, checked)}
                             />
                             <div className="min-w-0">
@@ -733,6 +763,7 @@ export default function AccessAdminRolesPage() {
                                 <MatrixCheckbox
                                   checked={selectedPermissionIds.has(permission.id)}
                                   label={`Toggle ${permission.name}`}
+                                  disabled={isReadOnly}
                                   onChange={(checked) => togglePermission(permission.id, checked)}
                                 />
                               </div>

@@ -35,6 +35,9 @@ import {
 import TournamentHistoryCell from "./TournamentHistoryCell";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { formatSubroleSlug } from "@/lib/roles";
+import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
+import type { DivisionGrid } from "@/types/workspace.types";
+import DivisionIcon from "@/components/DivisionIcon";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,8 +97,17 @@ function getSubroleShortLabel(subrole: string): string {
   return SUBROLE_SHORT_LABELS[subrole.toLowerCase()] ?? subrole.toUpperCase();
 }
 
-function RolesCell({ roles }: { roles: RegistrationRole[] }) {
+function RolesCell({
+  roles,
+  grid,
+  showRanks = false,
+}: {
+  roles: RegistrationRole[];
+  grid?: DivisionGrid | null;
+  showRanks?: boolean;
+}) {
   const { t } = useTranslation();
+  const resolvedGrid = grid || DEFAULT_DIVISION_GRID;
   if (!roles || roles.length === 0)
     return <span className="text-white/30">&mdash;</span>;
 
@@ -105,6 +117,7 @@ function RolesCell({ roles }: { roles: RegistrationRole[] }) {
         const roleLabel = getRoleLabel(r.role);
         const subroleLabel = r.subrole ? formatSubroleSlug(r.subrole) : null;
         const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole) : null;
+        const division = r.rank_value != null ? resolveDivisionFromRank(resolvedGrid, r.rank_value) : null;
 
         return (
           <div
@@ -113,6 +126,7 @@ function RolesCell({ roles }: { roles: RegistrationRole[] }) {
             title={[
               roleLabel,
               subroleLabel,
+              showRanks && r.rank_value ? `SR: ${r.rank_value}` : null,
               r.is_primary ? t("registration.roles.primary.title") : null,
             ]
               .filter(Boolean)
@@ -128,13 +142,21 @@ function RolesCell({ roles }: { roles: RegistrationRole[] }) {
             >
               <PlayerRoleIcon
                 role={ROLE_TO_ICON[r.role] ?? r.role}
-                size={20}
+                size={22}
               />
             </span>
             {subroleShortLabel ? (
               <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-white/45 uppercase">
                 {subroleShortLabel}
               </span>
+            ) : null}
+            {showRanks && division != null ? (
+              <DivisionIcon
+                division={division}
+                width={18}
+                height={18}
+                className="shrink-0 mt-0.5"
+              />
             ) : null}
           </div>
         );
@@ -516,6 +538,7 @@ export function buildParticipantColumns(
   form: RegistrationForm | null,
   t: (key: string, variables?: Record<string, string | number>) => string,
   locale: string = "ru",
+  grid?: DivisionGrid | null,
 ): ColumnDefinition[] {
   const columns: ColumnDefinition[] = [];
 
@@ -569,7 +592,9 @@ export function buildParticipantColumns(
         responsive: def.responsive ?? "sm",
         widthClass: def.widthClass,
         align: def.align,
-        render: (reg) => def.render(reg),
+        render: def.id === "roles"
+          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
+          : (reg) => def.render(reg),
         searchValue: def.searchValue,
       });
     }
@@ -586,7 +611,9 @@ export function buildParticipantColumns(
         responsive: def.responsive ?? "sm",
         widthClass: def.widthClass,
         align: def.align,
-        render: (reg) => def.render(reg),
+        render: def.id === "roles"
+          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
+          : (reg) => def.render(reg),
         searchValue: def.searchValue,
       });
     }

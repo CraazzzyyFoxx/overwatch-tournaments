@@ -335,6 +335,7 @@ export interface AdminRegistrationForm {
   closes_at: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
+  show_ranks?: boolean;
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
   subrole_catalog?: SubroleCatalog;
@@ -347,6 +348,7 @@ export interface AdminRegistrationFormUpsert {
   closes_at?: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
+  show_ranks?: boolean;
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
 }

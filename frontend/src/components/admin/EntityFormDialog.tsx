@@ -40,6 +40,7 @@ interface EntityFormDialogProps {
   dirtyDescription?: string;
   contentClassName?: string;
   children: React.ReactNode;
+  isReadOnly?: boolean;
 }
 
 export function EntityFormDialog({
@@ -58,7 +59,8 @@ export function EntityFormDialog({
   dirtyTitle = "Discard unsaved changes?",
   dirtyDescription = "You have unsaved changes in this form. Leave now and the current edits will be lost.",
   contentClassName,
-  children
+  children,
+  isReadOnly = false,
 }: EntityFormDialogProps) {
   const router = useRouter();
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
@@ -66,6 +68,9 @@ export function EntityFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) {
+      return;
+    }
     onSubmit(e);
   };
 
@@ -86,7 +91,7 @@ export function EntityFormDialog({
   }, [isDirty, open]);
 
   useEffect(() => {
-    if (!open || !isDirty || isSubmitting) {
+    if (!open || !isDirty || isSubmitting || isReadOnly) {
       return;
     }
 
@@ -130,7 +135,7 @@ export function EntityFormDialog({
     return () => {
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [isDirty, isSubmitting, open]);
+  }, [isDirty, isSubmitting, open, isReadOnly]);
 
   const closeDialog = () => {
     if (onCancel) {
@@ -145,7 +150,7 @@ export function EntityFormDialog({
       return;
     }
 
-    if (isDirty) {
+    if (isDirty && !isReadOnly) {
       setDiscardDialogOpen(true);
       return;
     }
@@ -207,18 +212,20 @@ export function EntityFormDialog({
 
             <DialogFooter className="mt-4 shrink-0 border-t border-border/60 pt-4">
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isSubmitting}>
-                {cancelLabel}
+                {isReadOnly ? (cancelLabel === "Cancel" ? "Close" : cancelLabel) : cancelLabel}
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    {submittingLabel}
-                  </>
-                ) : (
-                  submitLabel
-                )}
-              </Button>
+              {!isReadOnly && (
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      {submittingLabel}
+                    </>
+                  ) : (
+                    submitLabel
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>

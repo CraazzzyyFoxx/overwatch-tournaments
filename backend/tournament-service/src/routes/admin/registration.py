@@ -58,6 +58,7 @@ async def upsert_registration_form(
             closes_at=data.closes_at,
             require_open_profile=data.require_open_profile,
             open_profile_scope=data.open_profile_scope,
+            show_ranks=data.show_ranks,
             built_in_fields_json=built_in_fields_json,
             custom_fields_json=custom_fields_json,
         )
@@ -69,6 +70,7 @@ async def upsert_registration_form(
         form.closes_at = data.closes_at
         form.require_open_profile = data.require_open_profile
         form.open_profile_scope = data.open_profile_scope
+        form.show_ranks = data.show_ranks
         form.built_in_fields_json = built_in_fields_json
         form.custom_fields_json = custom_fields_json
 

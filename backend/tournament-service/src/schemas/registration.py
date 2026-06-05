@@ -53,6 +53,7 @@ class RegistrationFormRead(BaseModel):
     closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: str = "main"
+    show_ranks: bool = False
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
     # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
@@ -68,6 +69,7 @@ class RegistrationFormUpsert(BaseModel):
     closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: str = "main"
+    show_ranks: bool = False
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
 
@@ -111,6 +113,7 @@ class RegistrationRoleRead(BaseModel):
     subrole: str | None = None
     is_primary: bool = False
     priority: int = 0
+    rank_value: int | None = None
     top_heroes: list[str] = Field(default_factory=list)  # ordered hero slugs
 
 
