@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core.enums import DraftAutopickStrategy, DraftRole
 from shared.core.errors import ApiHTTPException
 from shared.models.draft import DraftPick, DraftSession
-
 from src import models
 from src.core import auth, db
 from src.core.config import config
@@ -28,16 +27,16 @@ from src.schemas.draft import (
     DraftPickAutopickRequest,
     DraftPickOverrideRequest,
     DraftPickSelectRequest,
+    DraftSeedRequest,
     DraftSessionCreateRequest,
     DraftSessionPatchRequest,
     DraftSessionRead,
     DraftSuggestion,
     DraftSuggestionsResponse,
-    DraftSeedRequest,
 )
 from src.services.draft import board as board_svc
-from src.services.draft import lifecycle, selection
 from src.services.draft import export as export_svc
+from src.services.draft import lifecycle, selection
 from src.services.draft import realtime as draft_rt
 from src.services.draft import suggestions as sug
 
@@ -182,8 +181,8 @@ async def get_suggestions(
             )
         )
     ).all()
-    picked_count = await selection._team_picked_count(session, current.draft_team_id)
-    capacity = selection._role_capacity(draft.team_size, picked_count)
+    counts = await selection._team_role_counts(session, current.draft_team_id)
+    capacity = selection._role_capacity(draft.team_size, counts)
     fit_players = [
         sug.FitPlayer(
             player_id=p.id,

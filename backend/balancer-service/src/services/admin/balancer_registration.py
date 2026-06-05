@@ -920,7 +920,8 @@ async def update_registration_profile(
         override_changed = True
     if roles is not None:
         for r_obj in registration.roles:
-            r_obj.hero_entries.clear()
+            if hasattr(r_obj, "hero_entries") and hasattr(r_obj.hero_entries, "clear"):
+                r_obj.hero_entries.clear()
         await session.flush()
 
         form = (

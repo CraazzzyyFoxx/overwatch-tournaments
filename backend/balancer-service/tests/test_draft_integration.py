@@ -40,7 +40,8 @@ from src import models  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
-from src.services.draft import lifecycle, realtime as draft_realtime, selection  # noqa: E402
+from src.services.draft import lifecycle, selection  # noqa: E402
+from src.services.draft import realtime as draft_realtime  # noqa: E402
 
 
 def _async_url() -> str:
@@ -422,7 +423,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         async with self.Session() as s:
             await self._new_session(s)
         async with self.Session() as s2:
-            with self.assertRaises(Exception):
+            with self.assertRaises(ApiHTTPException):
                 await lifecycle.create_session(
                     s2,
                     tournament_id=self.tournament_id,
@@ -473,7 +474,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await self._new_session(s)
             await lifecycle.start(s, draft)
             await s.commit()
-            with self.assertRaises(Exception):
+            with self.assertRaises(ApiHTTPException):
                 await draft_export.export(s, draft)
 
     async def test_clock_fires_autopick_when_expired(self) -> None:
@@ -669,7 +670,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, rounds=2, team_size=3
             )
             await self._build_balancer_pool(s, 4)
-            with self.assertRaises(Exception):
+            with self.assertRaises(ApiHTTPException):
                 await lifecycle.seed_from_pool(s, draft, captain_registration_ids=[999999])
 
     async def test_realtime_publisher_persists_event(self) -> None:

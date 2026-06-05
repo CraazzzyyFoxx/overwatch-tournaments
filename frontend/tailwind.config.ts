@@ -24,7 +24,7 @@ const config = {
       md: "768px",
       lg: "1024px",
       xl: "1280px",
-      "2xl": "1400px",
+      "2xl": "1520px",
       "3xl": "1720px"
     },
     extend: {
@@ -142,7 +142,7 @@ const config = {
         "accordion-up": "accordion-up 0.2s ease-out"
       },
       maxWidth: {
-        "screen-3xl": "1620px"
+        "screen-3xl": "1720px"
       }
     }
   },

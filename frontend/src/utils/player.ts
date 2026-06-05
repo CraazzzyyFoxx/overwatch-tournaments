@@ -149,9 +149,12 @@ const LOCAL_HERO_SLUGS = new Set([
 ]);
 
 export const getHeroIconUrl = (slug: string, imagePath?: string | null): string => {
+  if (imagePath) {
+    return imagePath;
+  }
   if (LOCAL_HERO_SLUGS.has(slug)) {
     return `/avatar/${slug}.jpg`;
   }
-  return imagePath || `/avatar/0.png`;
+  return `/avatar/0.png`;
 };
 
