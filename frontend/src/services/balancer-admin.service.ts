@@ -31,6 +31,8 @@ import {
   BalancerTournamentConfig,
   BalancerTournamentConfigUpsertInput,
   BalancerPlayerUpdateInput,
+  RegistrationRankAutofillRequest,
+  RegistrationRankAutofillResponse,
   DuplicateResolution,
   DuplicateStrategy,
   SavedBalance,
@@ -508,6 +510,36 @@ export default class balancerAdminService {
       {
         method: "POST",
         body: { registration_ids: registrationIds, balancer_status: balancerStatus }
+      }
+    );
+    return response.json();
+  }
+
+  static async previewRegistrationRankAutofill(
+    tournamentId: number,
+    data: RegistrationRankAutofillRequest = {}
+  ): Promise<RegistrationRankAutofillResponse> {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/tournaments/${tournamentId}/registrations/rank-autofill/preview`,
+      {
+        method: "POST",
+        body: data
+      }
+    );
+    return response.json();
+  }
+
+  static async applyRegistrationRankAutofill(
+    tournamentId: number,
+    data: RegistrationRankAutofillRequest = {}
+  ): Promise<RegistrationRankAutofillResponse> {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/tournaments/${tournamentId}/registrations/rank-autofill/apply`,
+      {
+        method: "POST",
+        body: data
       }
     );
     return response.json();

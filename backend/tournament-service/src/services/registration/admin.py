@@ -11,10 +11,10 @@ import httpx
 import sqlalchemy as sa
 from fastapi import HTTPException, status
 from shared.balancer_registration_statuses import get_builtin_status_values
-from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.player_sub_roles import normalize_sub_role
+from shared.hero_catalog import HeroCatalog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -55,6 +55,16 @@ logger = logging.getLogger(__name__)
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
+RANK_ROLE_BY_REGISTRATION_ROLE = {
+    "tank": enums.RankRole.tank.value,
+    "dps": enums.RankRole.damage.value,
+    "support": enums.RankRole.support.value,
+}
+REGISTRATION_ROLE_LABELS = {
+    "tank": "Tank",
+    "dps": "Damage",
+    "support": "Support",
+}
 
 
 def _register_registration_changed(
@@ -794,6 +804,310 @@ def sync_included_balancer_status(registration: models.BalancerRegistration | An
         and current_balancer_status != "not_in_balancer"
     ):
         registration.balancer_status = included_balancer_status(registration)
+
+
+def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | Any | None) -> dict[str, Any]:
+    if snapshot is None:
+        return {
+            "parsed_rank_value": None,
+            "platform": None,
+            "division": None,
+            "tier": None,
+            "season": None,
+            "captured_at": None,
+        }
+    return {
+        "parsed_rank_value": getattr(snapshot, "rank_value", None),
+        "platform": getattr(snapshot, "platform", None),
+        "division": getattr(snapshot, "division", None),
+        "tier": getattr(snapshot, "tier", None),
+        "season": getattr(snapshot, "season", None),
+        "captured_at": getattr(snapshot, "captured_at", None),
+    }
+
+
+def build_registration_rank_autofill_plan(
+    registration: models.BalancerRegistration | Any,
+    rank_snapshots_by_role: dict[str, models.UserRankSnapshot | Any],
+    *,
+    battle_tag_linked: bool,
+    overwrite_existing: bool,
+    applied: bool = False,
+) -> tuple[dict[str, Any], list[tuple[Any, Any]]]:
+    """Build the rank autofill preview row and pending role updates.
+
+    Only active registration roles are considered, and parsed ranks are expected
+    to come from the registration's main battle tag only.
+    """
+
+    display_name = getattr(registration, "display_name", None)
+    battle_tag = getattr(registration, "battle_tag", None)
+    row = {
+        "registration_id": registration.id,
+        "display_name": display_name,
+        "battle_tag": battle_tag,
+        "status": "skipped",
+        "reason": None,
+        "roles": [],
+    }
+
+    if not battle_tag:
+        row["reason"] = "Registration has no main BattleTag."
+        return row, []
+
+    active_roles = sorted(
+        _active_roles(registration),
+        key=lambda role: (getattr(role, "priority", DEFAULT_SORT_PRIORITY_SENTINEL), getattr(role, "role", "")),
+    )
+    if not active_roles:
+        row["reason"] = "Registration has no active roles."
+        return row, []
+
+    if not battle_tag_linked:
+        row["reason"] = "Main BattleTag is not linked to an analytics player account."
+        return row, []
+
+    updates: list[tuple[Any, Any]] = []
+    missing_roles: list[str] = []
+    kept_existing = False
+
+    for role_entry in active_roles:
+        role_code = getattr(role_entry, "role", None)
+        rank_role = RANK_ROLE_BY_REGISTRATION_ROLE.get(role_code)
+        snapshot = rank_snapshots_by_role.get(rank_role or "")
+        current_rank = getattr(role_entry, "rank_value", None)
+        snapshot_payload = _rank_snapshot_payload(snapshot)
+        parsed_rank = snapshot_payload["parsed_rank_value"]
+        role_row = {
+            "role": role_code,
+            "current_rank_value": current_rank,
+            **snapshot_payload,
+            "action": "missing_rank",
+            "reason": "No parsed rank for this registered role on the main account.",
+        }
+
+        if current_rank is not None and not overwrite_existing:
+            kept_existing = True
+            role_row["action"] = "keep_existing"
+            role_row["reason"] = "Existing registration rank is kept. Enable overwrite to replace it."
+        elif parsed_rank is None:
+            missing_roles.append(REGISTRATION_ROLE_LABELS.get(role_code, str(role_code)))
+        elif current_rank == parsed_rank:
+            kept_existing = True
+            role_row["action"] = "keep_existing"
+            role_row["reason"] = "Parsed rank already matches the registration rank."
+        else:
+            role_row["action"] = "overwrite" if current_rank is not None else "set"
+            role_row["reason"] = None
+            updates.append((role_entry, snapshot))
+
+        row["roles"].append(role_row)
+
+    if missing_roles:
+        row["reason"] = f"No parsed rank for registered role(s): {', '.join(missing_roles)}."
+        for role_row in row["roles"]:
+            if role_row["action"] in {"set", "overwrite"}:
+                role_row["action"] = "blocked"
+                role_row["reason"] = "Player skipped because another registered role has no parsed rank."
+        return row, []
+
+    if updates:
+        row["status"] = "applied" if applied else "will_update"
+        return row, updates
+
+    row["status"] = "unchanged"
+    row["reason"] = (
+        "All active registration ranks are already set."
+        if kept_existing and not overwrite_existing
+        else "No rank changes needed."
+    )
+    return row, []
+
+
+def _active_roles_ranked_after_updates(registration: models.BalancerRegistration | Any, updates: list[tuple[Any, Any]]) -> bool:
+    roles = _active_roles(registration)
+    if not roles:
+        return False
+    updated_role_ids = {id(role_entry) for role_entry, _snapshot in updates}
+    return all(getattr(role, "rank_value", None) is not None or id(role) in updated_role_ids for role in roles)
+
+
+def _rank_autofill_balancer_addition(
+    registration: models.BalancerRegistration | Any,
+    updates: list[tuple[Any, Any]],
+    *,
+    add_to_balancer: bool,
+) -> tuple[bool, str | None]:
+    if not add_to_balancer:
+        return False, None
+    if getattr(registration, "status", None) != "approved":
+        return False, "Registration must be approved before it can be added to balancer."
+    if not (
+        getattr(registration, "exclude_from_balancer", False)
+        or getattr(registration, "balancer_status", None) == "not_in_balancer"
+    ):
+        return False, "Registration is already in balancer."
+    if not _active_roles_ranked_after_updates(registration, updates):
+        return False, "Registration will still be missing active role ranks."
+    return True, None
+
+
+async def _load_rank_autofill_registrations(
+    session: AsyncSession,
+    tournament_id: int,
+    registration_ids: list[int] | None,
+) -> list[models.BalancerRegistration]:
+    query = (
+        sa.select(models.BalancerRegistration)
+        .where(
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+        )
+        .options(selectinload(models.BalancerRegistration.roles))
+        .order_by(models.BalancerRegistration.battle_tag_normalized.asc().nullslast(), models.BalancerRegistration.id.asc())
+    )
+    if registration_ids is not None:
+        if not registration_ids:
+            return []
+        query = query.where(models.BalancerRegistration.id.in_(registration_ids))
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def _load_main_battle_tags_by_key(
+    session: AsyncSession,
+    registrations: list[models.BalancerRegistration],
+) -> dict[str, models.UserBattleTag]:
+    tag_keys = {
+        key
+        for registration in registrations
+        if (key := (registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)))
+    }
+    if not tag_keys:
+        return {}
+
+    tag_key_expr = sa.func.replace(sa.func.lower(models.UserBattleTag.battle_tag), " ", "")
+    result = await session.execute(sa.select(models.UserBattleTag).where(tag_key_expr.in_(tag_keys)))
+    return {
+        key: battle_tag
+        for battle_tag in result.scalars().all()
+        if (key := normalize_battle_tag_key(battle_tag.battle_tag))
+    }
+
+
+async def _load_latest_rank_snapshots_by_battle_tag_id(
+    session: AsyncSession,
+    battle_tag_ids: list[int],
+) -> dict[int, dict[str, models.UserRankSnapshot]]:
+    if not battle_tag_ids:
+        return {}
+    result = await session.execute(
+        sa.select(models.UserRankSnapshot)
+        .where(
+            models.UserRankSnapshot.battle_tag_id.in_(battle_tag_ids),
+            models.UserRankSnapshot.role.in_(set(RANK_ROLE_BY_REGISTRATION_ROLE.values())),
+            models.UserRankSnapshot.rank_value.is_not(None),
+            models.UserRankSnapshot.is_ranked.is_(True),
+        )
+        .order_by(models.UserRankSnapshot.captured_at.desc(), models.UserRankSnapshot.id.desc())
+    )
+    snapshots_by_tag_id: dict[int, dict[str, models.UserRankSnapshot]] = {}
+    for snapshot in result.scalars().all():
+        role_map = snapshots_by_tag_id.setdefault(snapshot.battle_tag_id, {})
+        role_map.setdefault(snapshot.role, snapshot)
+    return snapshots_by_tag_id
+
+
+async def autofill_registration_ranks_from_parsed(
+    session: AsyncSession,
+    tournament_id: int,
+    *,
+    registration_ids: list[int] | None = None,
+    overwrite_existing: bool = False,
+    add_to_balancer: bool = False,
+    apply: bool = False,
+) -> dict[str, Any]:
+    if registration_ids is not None:
+        registration_ids = list(dict.fromkeys(int(registration_id) for registration_id in registration_ids))
+
+    registrations = await _load_rank_autofill_registrations(session, tournament_id, registration_ids)
+    battle_tags_by_key = await _load_main_battle_tags_by_key(session, registrations)
+    snapshots_by_tag_id = await _load_latest_rank_snapshots_by_battle_tag_id(
+        session,
+        [battle_tag.id for battle_tag in battle_tags_by_key.values()],
+    )
+
+    players: list[dict[str, Any]] = []
+    applied_registrations = 0
+    role_updates = 0
+    balancer_additions = 0
+    now = datetime.now(UTC)
+
+    for registration in registrations:
+        tag_key = registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)
+        main_battle_tag = battle_tags_by_key.get(tag_key or "")
+        rank_snapshots_by_role = snapshots_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
+        row, updates = build_registration_rank_autofill_plan(
+            registration,
+            rank_snapshots_by_role,
+            battle_tag_linked=main_battle_tag is not None,
+            overwrite_existing=overwrite_existing,
+            applied=apply,
+        )
+        will_add_to_balancer, balancer_reason = _rank_autofill_balancer_addition(
+            registration,
+            updates,
+            add_to_balancer=add_to_balancer,
+        )
+        row["will_add_to_balancer"] = will_add_to_balancer
+        row["balancer_reason"] = balancer_reason
+
+        changed = False
+        if apply and updates:
+            for role_entry, snapshot in updates:
+                role_entry.rank_value = snapshot.rank_value
+                role_updates += 1
+            registration.balancer_profile_overridden_at = now
+            applied_registrations += 1
+            changed = True
+        elif not apply:
+            role_updates += len(updates)
+
+        if apply and will_add_to_balancer:
+            registration.exclude_from_balancer = False
+            registration.exclude_reason = None
+            registration.balancer_status = included_balancer_status(registration)
+            balancer_additions += 1
+            changed = True
+        elif not apply and will_add_to_balancer:
+            balancer_additions += 1
+
+        if apply and changed:
+            if not will_add_to_balancer:
+                sync_included_balancer_status(registration)
+            _register_registration_changed(session, registration)
+
+        players.append(row)
+
+    if apply and (applied_registrations > 0 or balancer_additions > 0):
+        await session.commit()
+
+    updatable_registrations = sum(1 for row in players if row["status"] in {"will_update", "applied"})
+    skipped_registrations = sum(1 for row in players if row["status"] == "skipped")
+    unchanged_registrations = sum(1 for row in players if row["status"] == "unchanged")
+
+    return {
+        "total_registrations": len(players),
+        "updatable_registrations": updatable_registrations,
+        "applied_registrations": applied_registrations,
+        "skipped_registrations": skipped_registrations,
+        "unchanged_registrations": unchanged_registrations,
+        "role_updates": role_updates,
+        "overwrite_existing": overwrite_existing,
+        "add_to_balancer": add_to_balancer,
+        "balancer_additions": balancer_additions,
+        "players": players,
+    }
 
 
 async def validate_registration_status_value(

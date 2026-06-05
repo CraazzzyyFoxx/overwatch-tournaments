@@ -16,6 +16,14 @@ BalancerStatus = str
 StatusScope = Literal["registration", "balancer"]
 StatusKind = Literal["builtin", "custom"]
 RegistrationSource = Literal["manual", "google_sheets"]
+RankAutofillPlayerStatus = Literal["will_update", "applied", "skipped", "unchanged"]
+RankAutofillRoleAction = Literal[
+    "set",
+    "overwrite",
+    "keep_existing",
+    "missing_rank",
+    "blocked",
+]
 
 __all__ = (
     "ApplicationUserExportResponse",
@@ -46,6 +54,10 @@ __all__ = (
     "BalancerRegistrationCreateRequest",
     "BalancerRegistrationExclusionRequest",
     "BalancerRegistrationRead",
+    "BalancerRegistrationRankAutofillRequest",
+    "BalancerRegistrationRankAutofillResponse",
+    "BalancerRegistrationRankAutofillPlayer",
+    "BalancerRegistrationRankAutofillRole",
     "BalancerRegistrationRoleInput",
     "BalancerRegistrationRoleRead",
     "BalancerRegistrationStatusCreate",
@@ -266,6 +278,49 @@ class BalancerRegistrationRoleInput(BaseModel):
     rank_value: int | None = None
     is_active: bool = True
     top_heroes: list[str] | None = None
+
+
+class BalancerRegistrationRankAutofillRequest(BaseModel):
+    registration_ids: list[int] | None = None
+    overwrite_existing: bool = False
+    add_to_balancer: bool = False
+
+
+class BalancerRegistrationRankAutofillRole(BaseModel):
+    role: BalancerRole
+    current_rank_value: int | None = None
+    parsed_rank_value: int | None = None
+    action: RankAutofillRoleAction
+    reason: str | None = None
+    platform: str | None = None
+    division: str | None = None
+    tier: int | None = None
+    season: int | None = None
+    captured_at: datetime | None = None
+
+
+class BalancerRegistrationRankAutofillPlayer(BaseModel):
+    registration_id: int
+    display_name: str | None = None
+    battle_tag: str | None = None
+    status: RankAutofillPlayerStatus
+    reason: str | None = None
+    will_add_to_balancer: bool = False
+    balancer_reason: str | None = None
+    roles: list[BalancerRegistrationRankAutofillRole] = Field(default_factory=list)
+
+
+class BalancerRegistrationRankAutofillResponse(BaseModel):
+    total_registrations: int
+    updatable_registrations: int
+    applied_registrations: int
+    skipped_registrations: int
+    unchanged_registrations: int
+    role_updates: int
+    overwrite_existing: bool
+    add_to_balancer: bool
+    balancer_additions: int
+    players: list[BalancerRegistrationRankAutofillPlayer] = Field(default_factory=list)
 
 
 class StatusMetaRead(BaseModel):

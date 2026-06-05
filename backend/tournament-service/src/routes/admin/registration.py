@@ -299,6 +299,48 @@ async def bulk_add_to_balancer(
 
 
 @router.post(
+    "/tournaments/{tournament_id}/registrations/rank-autofill/preview",
+    response_model=admin_schemas.BalancerRegistrationRankAutofillResponse,
+)
+async def preview_registration_rank_autofill(
+    tournament_id: int,
+    data: admin_schemas.BalancerRegistrationRankAutofillRequest,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
+):
+    result = await registration_service.autofill_registration_ranks_from_parsed(
+        session,
+        tournament_id,
+        registration_ids=data.registration_ids,
+        overwrite_existing=data.overwrite_existing,
+        add_to_balancer=data.add_to_balancer,
+        apply=False,
+    )
+    return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
+
+
+@router.post(
+    "/tournaments/{tournament_id}/registrations/rank-autofill/apply",
+    response_model=admin_schemas.BalancerRegistrationRankAutofillResponse,
+)
+async def apply_registration_rank_autofill(
+    tournament_id: int,
+    data: admin_schemas.BalancerRegistrationRankAutofillRequest,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "update")),
+):
+    result = await registration_service.autofill_registration_ranks_from_parsed(
+        session,
+        tournament_id,
+        registration_ids=data.registration_ids,
+        overwrite_existing=data.overwrite_existing,
+        add_to_balancer=data.add_to_balancer,
+        apply=True,
+    )
+    return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
+
+
+@router.post(
     "/tournaments/{tournament_id}/registrations/export-users",
     response_model=admin_schemas.RegistrationUserExportResponse,
 )
