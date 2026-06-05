@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { DraftAutopickStrategy, DraftCaptainOrder } from "@/types/draft.types";
+import type { DraftAutopickStrategy, DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;
@@ -92,16 +92,19 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
   const [pickTime, setPickTime] = useState(45);
   const [teamSize, setTeamSize] = useState(5);
   const [autopick, setAutopick] = useState<DraftAutopickStrategy>("best_fit");
+  const [draftFormat, setDraftFormat] = useState<DraftFormat>("snake");
+  const [roundRules, setRoundRules] = useState<string[]>(["linear", "linear", "linear", "linear"]);
 
   const createMutation = useMutation({
     mutationFn: () =>
       draftService.createSession(tournamentId, {
         pool_source: "balancer_balance",
-        format: "snake",
+        format: draftFormat,
         rounds,
         pick_time_seconds: pickTime,
         team_size: teamSize,
         autopick_strategy: autopick,
+        settings: draftFormat === "custom" ? { round_rules: roundRules } : {},
       }),
     onSuccess: () => {
       toast({ title: "Draft session created" });
@@ -230,15 +233,49 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div>
               <Label htmlFor="draft-rounds">Rounds</Label>
               <Input
                 id="draft-rounds"
                 type="number"
                 value={rounds}
-                onChange={(e) => setRounds(Number(e.target.value) || 1)}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || 1;
+                  setRounds(val);
+                  setRoundRules((prev) => {
+                    const next = [...prev];
+                    if (next.length < val) {
+                      while (next.length < val) next.push("linear");
+                    } else if (next.length > val) {
+                      next.splice(val);
+                    }
+                    return next;
+                  });
+                }}
               />
+            </div>
+            <div>
+              <Label htmlFor="draft-format">Format</Label>
+              <Select
+                value={draftFormat}
+                onValueChange={(v) => {
+                  const fmt = v as DraftFormat;
+                  setDraftFormat(fmt);
+                  if (fmt === "custom" && roundRules.length !== rounds) {
+                    setRoundRules(Array.from({ length: rounds }, () => "linear"));
+                  }
+                }}
+              >
+                <SelectTrigger id="draft-format">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="snake">Snake</SelectItem>
+                  <SelectItem value="linear">Linear</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="draft-pick-time">Pick time (s)</Label>
@@ -275,6 +312,41 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
               </Select>
             </div>
           </div>
+
+          {draftFormat === "custom" && (
+            <div className="border border-border/40 p-4 rounded-md space-y-3 bg-muted/20">
+              <h4 className="text-sm font-semibold">Configure Round Rules</h4>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {Array.from({ length: rounds }).map((_, index) => (
+                  <div key={index} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Round {index + 1}</Label>
+                    <Select
+                      value={roundRules[index] || "linear"}
+                      onValueChange={(v) => {
+                        setRoundRules((prev) => {
+                          const updated = [...prev];
+                          updated[index] = v;
+                          return updated;
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="linear">Linear (1 ➔ N)</SelectItem>
+                        <SelectItem value="reverse">Reverse Linear (N ➔ 1)</SelectItem>
+                        <SelectItem value="weakest_first">Weakest Captain First</SelectItem>
+                        <SelectItem value="strongest_first">Strongest Captain First</SelectItem>
+                        <SelectItem value="team_avg_asc">Lowest Team Avg First (Dynamic)</SelectItem>
+                        <SelectItem value="team_avg_desc">Highest Team Avg First (Dynamic)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
             <Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
               Create session
             </Button>

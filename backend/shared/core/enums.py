@@ -186,6 +186,16 @@ class DraftStatus(StrEnum):
 class DraftFormat(StrEnum):
     SNAKE = "snake"
     LINEAR = "linear"
+    CUSTOM = "custom"
+
+
+class DraftRoundRule(StrEnum):
+    LINEAR = "linear"
+    REVERSE = "reverse"
+    WEAKEST_FIRST = "weakest_first"
+    STRONGEST_FIRST = "strongest_first"
+    TEAM_AVG_ASC = "team_avg_asc"
+    TEAM_AVG_DESC = "team_avg_desc"
 
 
 class DraftCaptainOrder(StrEnum):

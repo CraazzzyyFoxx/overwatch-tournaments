@@ -37,7 +37,9 @@ _LEGAL_EDGES = {
     (S.LIVE, S.COMPLETED),
     (S.LIVE, S.CANCELLED),
     (S.PAUSED, S.LIVE),
+    (S.PAUSED, S.PAUSED),
     (S.PAUSED, S.CANCELLED),
+    (S.COMPLETED, S.PAUSED),
 }
 
 _ALL_PAIRS = [(a, b) for a in S for b in S if a != b]
@@ -56,12 +58,11 @@ def test_illegal_transitions_rejected(current: DraftStatus, target: DraftStatus)
         draft_state.validate_transition(current, target)
 
 
-def test_terminal_states_have_no_outgoing_edges() -> None:
-    for terminal in (S.COMPLETED, S.CANCELLED):
-        for target in S:
-            if target == terminal:
-                continue
-            assert draft_state.can_transition(terminal, target) is False
+def test_cancelled_state_has_no_outgoing_edges() -> None:
+    for target in S:
+        if target == S.CANCELLED:
+            continue
+        assert draft_state.can_transition(S.CANCELLED, target) is False
 
 
 def test_completed_is_not_reachable_by_admin_only_states() -> None:

@@ -59,7 +59,7 @@ export default class draftService {
   static async lifecycle(
     tournamentId: number,
     sessionId: number,
-    action: "start" | "pause" | "resume" | "cancel" | "export"
+    action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback"
   ): Promise<DraftSession> {
     const res = await apiFetch(
       "balancer",

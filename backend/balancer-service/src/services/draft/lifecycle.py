@@ -23,6 +23,7 @@ from shared.core.enums import (
     DraftPickStatus,
     DraftPlayerStatus,
     DraftRole,
+    DraftRoundRule,
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
@@ -209,21 +210,53 @@ async def seed(
         )
     await session.flush()
 
-    # Pre-create all picks in deterministic snake order.
+    # Pre-create all picks in deterministic order based on round rules.
     seats = [team_by_position[pos] for pos in sorted(team_by_position)]
-    slots = generate_pick_order(len(seats), draft_session.rounds, DraftFormat(draft_session.format))
-    for slot in slots:
-        session.add(
-            DraftPick(
-                session_id=draft_session.id,
-                overall_no=slot.overall_no,
-                round_no=slot.round_no,
-                pick_in_round=slot.pick_in_round,
-                draft_team_id=seats[slot.team_index].id,
-                status=DraftPickStatus.UPCOMING.value,
-                version=0,
+    team_captain_ranks = {
+        team_by_position[cap.draft_position].id: (cap.rank_value if cap.rank_value is not None else -1)
+        for cap in ordered_captains
+    }
+
+    fmt = DraftFormat(draft_session.format)
+    round_rules = draft_session.settings_json.get("round_rules") or []
+
+    overall_no = 1
+    for round_idx in range(draft_session.rounds):
+        round_no = round_idx + 1
+
+        # Determine team ordering for this round
+        if fmt == DraftFormat.SNAKE:
+            reverse = round_idx % 2 == 1
+            round_seats = list(reversed(seats)) if reverse else seats
+        elif fmt == DraftFormat.LINEAR:
+            round_seats = seats
+        elif fmt == DraftFormat.CUSTOM:
+            rule = round_rules[round_idx] if round_idx < len(round_rules) else "linear"
+            if rule == "reverse":
+                round_seats = list(reversed(seats))
+            elif rule == "weakest_first":
+                round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), t.draft_position))
+            elif rule == "strongest_first":
+                round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), -t.draft_position), reverse=True)
+            else:
+                # Dynamic rules (team_avg_asc, team_avg_desc) default to linear order at seeding time
+                round_seats = seats
+        else:
+            round_seats = seats
+
+        for pick_in_round, team in enumerate(round_seats, start=1):
+            session.add(
+                DraftPick(
+                    session_id=draft_session.id,
+                    overall_no=overall_no,
+                    round_no=round_no,
+                    pick_in_round=pick_in_round,
+                    draft_team_id=team.id,
+                    status=DraftPickStatus.UPCOMING.value,
+                    version=0,
+                )
             )
-        )
+            overall_no += 1
 
     draft_session.status = DraftStatus.READY.value
     await session.flush()
@@ -507,3 +540,81 @@ async def cancel(session: AsyncSession, draft_session: DraftSession) -> DraftSes
     await session.flush()
     await session.refresh(draft_session)
     return draft_session
+
+
+async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftSession:
+    """Rollback the last resolved pick, resetting player/pick states and pausing the draft."""
+    draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.PAUSED)
+
+    # Find the last resolved pick (completed, autopicked, or skipped)
+    last_resolved = await session.scalar(
+        sa.select(DraftPick)
+        .where(
+            DraftPick.session_id == draft_session.id,
+            DraftPick.status.in_([
+                DraftPickStatus.COMPLETED.value,
+                DraftPickStatus.AUTOPICKED.value,
+                DraftPickStatus.SKIPPED.value,
+            ]),
+        )
+        .order_by(DraftPick.overall_no.desc())
+        .limit(1)
+    )
+    if last_resolved is None:
+        raise _err("no_picks_to_rollback", "There are no resolved picks to rollback")
+
+    # Find all picks with overall_no >= last_resolved.overall_no
+    picks_to_revert = (
+        await session.scalars(
+            sa.select(DraftPick)
+            .where(
+                DraftPick.session_id == draft_session.id,
+                DraftPick.overall_no >= last_resolved.overall_no,
+            )
+            .order_by(DraftPick.overall_no.asc())
+        )
+    ).all()
+
+    player_ids_to_free = [p.picked_player_id for p in picks_to_revert if p.picked_player_id is not None]
+    if player_ids_to_free:
+        players = (
+            await session.scalars(
+                sa.select(DraftPlayer).where(
+                    DraftPlayer.session_id == draft_session.id,
+                    DraftPlayer.id.in_(player_ids_to_free),
+                )
+            )
+        ).all()
+        for player in players:
+            player.status = DraftPlayerStatus.AVAILABLE.value
+            player.drafted_by_team_id = None
+
+    for pick in picks_to_revert:
+        pick.picked_player_id = None
+        pick.picked_by_user_id = None
+        pick.is_autopick = False
+        pick.is_admin_override = False
+        pick.target_role = None
+        # Increment version to prevent race conditions from pending requests
+        pick.version += 1
+
+        if pick.id == last_resolved.id:
+            pick.status = DraftPickStatus.ON_CLOCK.value
+            pick.clock_remaining_ms = draft_session.pick_time_seconds * 1000
+            pick.clock_started_at = None
+            pick.clock_expires_at = None
+        else:
+            pick.status = DraftPickStatus.UPCOMING.value
+            pick.clock_remaining_ms = None
+            pick.clock_started_at = None
+            pick.clock_expires_at = None
+
+    draft_session.status = DraftStatus.PAUSED.value
+    draft_session.current_pick_id = last_resolved.id
+    draft_session.export_status = None
+    draft_session.exported_at = None
+
+    await session.flush()
+    await session.refresh(draft_session)
+    return draft_session
+

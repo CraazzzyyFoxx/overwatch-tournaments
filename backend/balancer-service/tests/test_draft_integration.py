@@ -694,3 +694,59 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertIsNotNone(row)
             self.assertEqual(row.tournament_id, self.tournament_id)
             self.assertEqual(row.payload["session_id"], draft.id)
+
+    async def test_rollback_reverts_pick_and_players(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+
+            # Execute first pick
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            available = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer).where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                )
+            ).all()
+            chosen = available[0]
+
+            await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=team.captain_user_id,
+                actor_player_ids=[team.captain_user_id],
+                is_admin=True,
+            )
+            await s.commit()
+
+            # Now draft status is LIVE, pick 1 is completed, pick 2 is on_clock
+            await s.refresh(draft)
+            self.assertEqual(draft.status, DraftStatus.LIVE.value)
+            await s.refresh(chosen)
+            self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
+
+            # Rollback
+            await lifecycle.rollback(s, draft)
+            await s.commit()
+
+            # Draft status should be PAUSED, current pick back to pick 1 (on_clock), player status available
+            await s.refresh(draft)
+            self.assertEqual(draft.status, DraftStatus.PAUSED.value)
+            self.assertEqual(draft.current_pick_id, current.id)
+
+            await s.refresh(current)
+            self.assertEqual(current.status, DraftPickStatus.ON_CLOCK.value)
+            self.assertIsNone(current.picked_player_id)
+
+            await s.refresh(chosen)
+            self.assertEqual(chosen.status, DraftPlayerStatus.AVAILABLE.value)
+            self.assertIsNone(chosen.drafted_by_team_id)
+

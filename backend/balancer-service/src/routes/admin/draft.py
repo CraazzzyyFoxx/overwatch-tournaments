@@ -391,6 +391,17 @@ async def cancel_route(
     return await _lifecycle_action(session, redis, session_id, lifecycle.cancel, "draft.cancelled", user)
 
 
+@router.post("/tournaments/{tournament_id}/sessions/{session_id}/rollback", response_model=DraftSessionRead)
+async def rollback_route(
+    tournament_id: int,
+    session_id: int,
+    session: AsyncSession = Depends(db.get_async_session),
+    redis: Redis | None = Depends(get_redis),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
+) -> DraftSessionRead:
+    return await _lifecycle_action(session, redis, session_id, lifecycle.rollback, "draft.rollback", user)
+
+
 @router.post("/tournaments/{tournament_id}/sessions/{session_id}/export", response_model=DraftSessionRead)
 async def export_route(
     tournament_id: int,
