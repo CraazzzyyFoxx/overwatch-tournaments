@@ -118,6 +118,7 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
       board={board}
       tournamentGrid={tournament.division_grid_version}
       myPlayerIds={myPlayerIds}
+      myAuthUserId={user?.id ?? null}
       isAdmin={isAdmin}
       selectedPlayerId={selectedPlayerId}
       onSelectPlayer={handleSelectPlayer}
@@ -133,6 +134,7 @@ interface DraftBoardViewProps {
   board: DraftBoardData;
   tournamentGrid: DivisionGridVersion | null;
   myPlayerIds: number[];
+  myAuthUserId: number | null;
   isAdmin: boolean;
   selectedPlayerId: number | null;
   onSelectPlayer: (id: number | null, role: DraftRole | null) => void;
@@ -146,6 +148,7 @@ function DraftBoardView({
   board,
   tournamentGrid,
   myPlayerIds,
+  myAuthUserId,
   isAdmin,
   selectedPlayerId,
   onSelectPlayer,
@@ -158,7 +161,7 @@ function DraftBoardView({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [searchQuery, setSearchQuery] = useState("");
-  const gating = computeGating(board, myPlayerIds, isAdmin);
+  const gating = computeGating(board, myPlayerIds, myAuthUserId, isAdmin);
 
   const sortedTeams = useMemo(
     () => [...board.teams].sort((a, b) => a.draft_position - b.draft_position || a.id - b.id),

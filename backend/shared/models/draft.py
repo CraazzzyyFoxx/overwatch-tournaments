@@ -105,6 +105,11 @@ class DraftTeam(db.TimeStampIntegerMixin):
     captain_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # The auth account that registered as captain — the reliable "is this me"
+    # signal for captain gating (independent of public-player linking).
+    captain_auth_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255))
     draft_position: Mapped[int] = mapped_column(Integer(), nullable=False)
     exported_team_id: Mapped[int | None] = mapped_column(
