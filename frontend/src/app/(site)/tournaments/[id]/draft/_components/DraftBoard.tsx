@@ -74,7 +74,8 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   const { t } = useTranslation();
   const tournamentId = tournament.id;
   const boardQuery = useDraftBoardQuery(tournamentId);
-  useDraftRealtime(tournamentId);
+  const board = boardQuery.data ?? null;
+  useDraftRealtime(tournamentId, board);
   const mutations = useDraftMutations(tournamentId);
 
   const { user } = useAuthProfile();
@@ -82,7 +83,6 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
   const [selectedRole, setSelectedRole] = useState<DraftRole | null>(null);
 
-  const board = boardQuery.data ?? null;
   const isAdmin = isSuperuser || isWorkspaceAdmin(tournament.workspace_id);
   const myPlayerIds = useMemo(
     () => (user?.linkedPlayers ?? []).map((player) => player.playerId),

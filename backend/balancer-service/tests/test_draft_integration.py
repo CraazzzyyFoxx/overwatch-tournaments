@@ -30,11 +30,12 @@ import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus  # noqa: E402
+from shared.core.errors import ApiHTTPException  # noqa: E402
+from shared.models.draft import DraftPick  # noqa: E402
+from shared.models.realtime import WorkspaceEvent  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
 from shared.models.user import User  # noqa: E402
 from shared.models.workspace import Workspace  # noqa: E402
-from shared.models.draft import DraftPick  # noqa: E402
-from shared.models.realtime import WorkspaceEvent  # noqa: E402
 from src import models  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
@@ -88,10 +89,19 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 u = User(name=f"cap-{self._suffix}-{i}")
                 s.add(u)
                 users.append(u)
+            auth_users = []
+            for i in range(3):
+                au = models.AuthUser(
+                    username=f"auth-cap-{self._suffix}-{i}",
+                    email=f"auth-cap-{self._suffix}-{i}@example.test",
+                )
+                s.add(au)
+                auth_users.append(au)
             await s.flush()
             self.workspace_id = ws.id
             self.tournament_id = tourn.id
             self.captain_user_ids = [u.id for u in users]
+            self.captain_auth_user_ids = [u.id for u in auth_users]
             await s.commit()
 
     async def asyncTearDown(self) -> None:
@@ -111,7 +121,13 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.execute(sa.delete(models.Player).where(models.Player.tournament_id == self.tournament_id))
             await s.execute(sa.delete(models.Team).where(models.Team.tournament_id == self.tournament_id))
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
+            await s.execute(
+                sa.delete(models.AuthUserPlayer).where(
+                    models.AuthUserPlayer.auth_user_id.in_(self.captain_auth_user_ids)
+                )
+            )
             await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids)))
+            await s.execute(sa.delete(models.AuthUser).where(models.AuthUser.id.in_(self.captain_auth_user_ids)))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
             await s.commit()
         await self.engine.dispose()
@@ -194,6 +210,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 expected_version=current.version,
                 target_role=None,
                 actor_user_id=team.captain_user_id,
+                actor_auth_user_id=None,
+                actor_player_ids=[team.captain_user_id],
                 is_admin=False,
             )
             await s.commit()
@@ -203,6 +221,157 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
             self.assertEqual(chosen.drafted_by_team_id, current.draft_team_id)
+
+    async def test_select_allows_captain_auth_user_without_team_import(self) -> None:
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s,
+                tournament_id=self.tournament_id,
+                workspace_id=self.workspace_id,
+                rounds=2,
+                team_size=3,
+            )
+            captains = [
+                lifecycle.CaptainSeed(
+                    name=f"AuthCap{i}",
+                    draft_position=i + 1,
+                    auth_user_id=auth_user_id,
+                )
+                for i, auth_user_id in enumerate(self.captain_auth_user_ids)
+            ]
+            await lifecycle.seed(s, draft, captains=captains, players=self._players())
+            await lifecycle.start(s, draft)
+            await s.commit()
+
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            chosen = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer)
+                    .where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                    .order_by(lifecycle.DraftPlayer.id.asc())
+                )
+            ).first()
+
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                actor_auth_user_id=team.captain_auth_user_id,
+                actor_player_ids=[],
+                is_admin=False,
+            )
+            await s.commit()
+
+            self.assertEqual(res.pick.status, DraftPickStatus.COMPLETED.value)
+            self.assertIsNone(res.pick.picked_by_user_id)
+
+    async def test_select_allows_linked_public_player_id(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            chosen = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer)
+                    .where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                    .order_by(lifecycle.DraftPlayer.id.asc())
+                )
+            ).first()
+
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                actor_auth_user_id=self.captain_auth_user_ids[0],
+                actor_player_ids=[team.captain_user_id],
+                is_admin=False,
+            )
+            await s.commit()
+
+            self.assertEqual(res.pick.status, DraftPickStatus.COMPLETED.value)
+
+    async def test_select_rejects_wrong_captain(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            chosen = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer)
+                    .where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                    .order_by(lifecycle.DraftPlayer.id.asc())
+                )
+            ).first()
+
+            with self.assertRaises(ApiHTTPException) as ctx:
+                await selection.select(
+                    s,
+                    draft,
+                    current,
+                    player_id=chosen.id,
+                    expected_version=current.version,
+                    target_role=None,
+                    actor_user_id=None,
+                    actor_auth_user_id=self.captain_auth_user_ids[-1],
+                    actor_player_ids=[self.captain_user_ids[-1]],
+                    is_admin=False,
+                )
+
+            self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_select_allows_admin_bypass(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            chosen = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer)
+                    .where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                    )
+                    .order_by(lifecycle.DraftPlayer.id.asc())
+                )
+            ).first()
+
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                actor_auth_user_id=None,
+                actor_player_ids=[],
+                is_admin=True,
+            )
+            await s.commit()
+
+            self.assertEqual(res.pick.status, DraftPickStatus.COMPLETED.value)
 
     async def test_finalize_race_only_one_winner(self) -> None:
         async with self.Session() as s:

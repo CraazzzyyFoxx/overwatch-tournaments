@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   canAccessAnyPermissionForProfile,
+  hasAdminPanelAccessForProfile,
   hasWorkspacePermissionForProfile,
   type PermissionProfile,
 } from "@/hooks/usePermissions";
@@ -83,5 +84,51 @@ describe("usePermissions helpers", () => {
     });
 
     expect(hasWorkspacePermissionForProfile(profile, 13, "team.import")).toBe(false);
+  });
+
+  it("does not treat read-only permissions as admin panel access", () => {
+    const profile = createProfile({
+      permissions: ["tournament.read"],
+      workspaces: [
+        {
+          workspace_id: 21,
+          memberRole: "member",
+          permissions: ["workspace.read", "workspace_member.read", "team.read"],
+        },
+      ],
+    });
+
+    expect(canAccessAnyPermissionForProfile(profile, ["tournament.read"], 21)).toBe(true);
+    expect(hasAdminPanelAccessForProfile(profile, 21)).toBe(false);
+    expect(hasAdminPanelAccessForProfile(profile)).toBe(false);
+  });
+
+  it("allows admin panel access when a scoped non-read permission exists", () => {
+    const profile = createProfile({
+      workspaces: [
+        {
+          workspace_id: 22,
+          memberRole: "member",
+          permissions: ["team.read", "team.update"],
+        },
+      ],
+    });
+
+    expect(hasAdminPanelAccessForProfile(profile, 22)).toBe(true);
+    expect(hasAdminPanelAccessForProfile(profile, 23)).toBe(false);
+  });
+
+  it("allows admin panel access for wildcard permissions", () => {
+    const profile = createProfile({
+      workspaces: [
+        {
+          workspace_id: 24,
+          memberRole: "owner",
+          permissions: ["admin.*"],
+        },
+      ],
+    });
+
+    expect(hasAdminPanelAccessForProfile(profile, 24)).toBe(true);
   });
 });

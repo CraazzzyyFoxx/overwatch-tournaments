@@ -90,6 +90,13 @@ class RealtimeClient {
     };
   }
 
+  resubscribe(topic: string): void {
+    if (!this.handlersByTopic.has(topic)) {
+      return;
+    }
+    this.sendSubscribe(topic);
+  }
+
   private ensureSocket(): void {
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       return;
@@ -176,11 +183,9 @@ class RealtimeClient {
   }
 
   private sendSubscribe(topic: string): void {
-    // Only request catch-up replay when we already hold a cursor for this topic
-    // (a reconnect within the same session). A first-time subscribe — including
-    // every fresh page load, where the in-memory cursor store starts empty —
-    // omits after_event_id so the server starts us live-only instead of
-    // replaying the entire persisted backlog into a storm of invalidations.
+    // Request catch-up replay only after a snapshot or prior event seeded a
+    // cursor for this topic. A fresh page without a baseline stays live-only, so
+    // it does not replay the entire persisted backlog into redundant refetches.
     const afterEventId = useRealtimeStore.getState().lastEventIdByTopic[topic];
     this.send({
       op: "subscribe",

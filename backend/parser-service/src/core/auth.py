@@ -69,6 +69,7 @@ get_current_superuser = _auth.get_current_superuser
 require_permission = _auth.require_permission
 require_role = _auth.require_role
 require_any_role = _auth.require_any_role
+require_admin_panel_access = _auth.require_admin_panel_access
 require_workspace_member = _auth.require_workspace_member
 require_workspace_admin = _auth.require_workspace_admin
 

@@ -67,6 +67,7 @@ class AuthDependencies:
     require_permission: Callable[[str, str], Callable]
     require_role: Callable[[str], Callable]
     require_any_role: Callable[..., Callable]
+    require_admin_panel_access: Callable[[], Callable]
     require_workspace_member: Callable[[], Callable]
     require_workspace_admin: Callable[[], Callable]
 
@@ -174,6 +175,19 @@ def create_auth_dependencies(
         return role_checker
 
     # ── require_workspace_member ──────────────────────────────────────
+    def require_admin_panel_access() -> Callable:
+        async def admin_panel_access_checker(
+            current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        ) -> AuthUser:
+            if not current_user.has_admin_panel_access():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin panel access requires a non-read permission",
+                )
+            return current_user
+
+        return admin_panel_access_checker
+
     def require_workspace_member() -> Callable:
         async def workspace_checker(
             workspace_id: int,
@@ -210,6 +224,7 @@ def create_auth_dependencies(
         require_permission=require_permission,
         require_role=require_role,
         require_any_role=require_any_role,
+        require_admin_panel_access=require_admin_panel_access,
         require_workspace_member=require_workspace_member,
         require_workspace_admin=require_workspace_admin,
     )

@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from src.core import auth
 
 from .achievement_rule import library_router as achievement_library_router
 from .achievement_rule import override_router as achievement_override_router
@@ -15,7 +17,11 @@ from .user import router as user_router
 
 # Admin router - aggregates admin CRUD endpoints.
 
-admin_router = APIRouter(prefix="/admin", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(auth.require_admin_panel_access())],
+)
 
 admin_router.include_router(player_router)
 admin_router.include_router(user_router)

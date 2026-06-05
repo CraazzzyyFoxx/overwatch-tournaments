@@ -14,6 +14,7 @@ from src.schemas.admin import balancer as admin_schemas
 router = APIRouter(
     prefix="/ws/{workspace_id}/balancer-statuses",
     tags=["registration-status"],
+    dependencies=[Depends(auth.require_admin_panel_access())],
 )
 use_cases = build_registration_status_use_cases()
 

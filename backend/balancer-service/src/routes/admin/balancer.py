@@ -30,6 +30,7 @@ from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
 router = APIRouter(
     prefix="/balancer",
     tags=["balancer"],
+    dependencies=[Depends(auth.require_admin_panel_access())],
 )
 use_cases = build_admin_balancer_use_cases()
 

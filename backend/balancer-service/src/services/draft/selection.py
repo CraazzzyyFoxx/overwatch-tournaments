@@ -8,6 +8,7 @@ caller within the same transaction so WorkspaceEvent ids preserve pick order.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -156,6 +157,19 @@ def _role_is_legal(player: DraftPlayer, target_role: DraftRole | None) -> bool:
     return target_role.value in playable
 
 
+def _is_on_clock_captain(
+    team: DraftTeam | None,
+    *,
+    actor_auth_user_id: int | None,
+    actor_player_ids: Collection[int],
+) -> bool:
+    if team is None:
+        return False
+    if actor_auth_user_id is not None and team.captain_auth_user_id == actor_auth_user_id:
+        return True
+    return team.captain_user_id is not None and team.captain_user_id in actor_player_ids
+
+
 async def select(
     session: AsyncSession,
     draft_session: DraftSession,
@@ -165,11 +179,20 @@ async def select(
     expected_version: int,
     target_role: DraftRole | None,
     actor_user_id: int | None,
+    actor_auth_user_id: int | None = None,
+    actor_player_ids: Collection[int] = (),
     is_admin: bool,
 ) -> DraftResult:
     await _validate_current_pick(draft_session, pick)
     team = await session.get(DraftTeam, pick.draft_team_id)
-    if not is_admin and (team is None or team.captain_user_id != actor_user_id):
+    player_ids = set(actor_player_ids)
+    if actor_user_id is not None:
+        player_ids.add(actor_user_id)
+    if not is_admin and not _is_on_clock_captain(
+        team,
+        actor_auth_user_id=actor_auth_user_id,
+        actor_player_ids=player_ids,
+    ):
         raise _err("not_your_pick", "Only the on-clock captain may pick", status_code=403)
     player = await _load_available_player(session, draft_session.id, player_id)
     if not _role_is_legal(player, target_role):
