@@ -7,15 +7,14 @@ import { isUrgent, remainingMs } from "../_lib/draft-logic";
 interface DraftClockProps {
   expiresAt: string | null;
   paused: boolean;
+  compact?: boolean;
 }
 
 /**
- * Local countdown from an absolute server deadline — no per-second server
- * ticks. At zero it shows "autopicking…" and waits for the server event.
+ * Local countdown from an absolute server deadline. At zero it waits for the
+ * server event that will commit the autopick.
  */
-export function DraftClock({ expiresAt, paused }: DraftClockProps) {
-  // `now` stays null until the first interval tick (avoids synchronous setState
-  // in the effect and any SSR/hydration time mismatch).
+export function DraftClock({ expiresAt, paused, compact = false }: DraftClockProps) {
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
@@ -25,7 +24,7 @@ export function DraftClock({ expiresAt, paused }: DraftClockProps) {
   }, [paused, expiresAt]);
 
   if (paused) {
-    return <span className="font-mono tabular-nums text-amber-400">paused</span>;
+    return <span className="font-mono tabular-nums text-amber-400">{compact ? "PAUSE" : "paused"}</span>;
   }
   if (!expiresAt || now === null) {
     return <span className="font-mono tabular-nums text-[var(--aqt-fg-muted)]">--</span>;
@@ -33,7 +32,7 @@ export function DraftClock({ expiresAt, paused }: DraftClockProps) {
 
   const ms = remainingMs(expiresAt, now);
   if (ms <= 0) {
-    return <span className="font-mono tabular-nums text-rose-500">autopicking…</span>;
+    return <span className="font-mono tabular-nums text-rose-500">{compact ? "AUTO" : "autopicking..."}</span>;
   }
   const seconds = Math.ceil(ms / 1000);
   const className = isUrgent(ms)

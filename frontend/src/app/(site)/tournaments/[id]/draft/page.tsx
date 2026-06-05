@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, redirect } from "next/navigation";
 
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
 import { DraftBoard } from "./_components/DraftBoard";
@@ -24,6 +24,10 @@ export default function TournamentDraftRoutePage() {
         Tournament not found.
       </div>
     );
+  }
+
+  if (tournamentQuery.data.team_formation !== "draft") {
+    redirect(`/tournaments/${tournamentId}`);
   }
 
   return <DraftBoard tournament={tournamentQuery.data} />;
