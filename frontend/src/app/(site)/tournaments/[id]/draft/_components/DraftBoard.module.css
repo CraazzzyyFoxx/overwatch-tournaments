@@ -569,6 +569,9 @@
   border: 1px solid var(--draft-border);
   border-radius: 12px;
   background: var(--draft-card);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 96px);
 }
 
 .panelHeader {
@@ -597,8 +600,9 @@
 }
 
 .orderBody {
-  max-height: min(76vh, 820px);
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
   padding: 6px;
 }
 
@@ -649,6 +653,12 @@
 
 .pickDone,
 .pickAuto {
+  opacity: 0.65;
+  transition: opacity 0.2s ease;
+}
+
+.pickDone:hover,
+.pickAuto:hover {
   opacity: 1;
 }
 
@@ -845,7 +855,6 @@
   padding: 7px 0;
 }
 
-.selectedEmpty,
 .selectedCard {
   margin-bottom: 10px;
   border: 1px solid hsl(174 72% 46% / 0.26);
@@ -854,6 +863,12 @@
 }
 
 .selectedEmpty {
+  margin-bottom: 10px;
+  border: 1px solid var(--draft-border);
+  border-left: 4px solid var(--draft-teal);
+  border-radius: 12px;
+  background: linear-gradient(135deg, hsl(0 0% 100% / 0.02), hsl(0 0% 100% / 0.01));
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1034,24 +1049,29 @@
   flex-direction: column;
   gap: 12px;
   border: 1px solid var(--draft-border);
+  border-left: 3px solid var(--role-color);
   border-radius: 10px;
   background: var(--draft-card);
   color: var(--draft-fg);
-  padding: 12px;
+  padding: 12px 12px 12px 10px;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .playerCard:hover {
-  border-color: color-mix(in srgb, var(--role-color) 34%, var(--draft-border));
-  background: color-mix(in srgb, var(--role-color) 7%, var(--draft-card));
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--role-color) 45%, var(--draft-border));
+  background: linear-gradient(135deg, var(--draft-card), color-mix(in srgb, var(--role-color) 6%, var(--draft-card)));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--role-color) 12%, transparent);
 }
 
 .playerCardSelected {
-  border-color: color-mix(in srgb, var(--role-color) 62%, var(--draft-border));
-  background: color-mix(in srgb, var(--role-color) 12%, var(--draft-card));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--role-color) 18%, transparent);
+  border-color: var(--role-color);
+  background: linear-gradient(135deg, var(--draft-card), color-mix(in srgb, var(--role-color) 10%, var(--draft-card)));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--role-color) 16%, transparent);
 }
 
 .playerTopline {
@@ -1131,10 +1151,11 @@
 
 .teamsList {
   display: flex;
-  max-height: min(76vh, 820px);
+  flex: 1;
   flex-direction: column;
   gap: 10px;
-  overflow: auto;
+  overflow-y: auto;
+  min-height: 0;
   padding: 10px;
 }
 
@@ -1151,7 +1172,9 @@
 }
 
 .teamCardMine {
-  box-shadow: inset 0 0 0 1px hsl(174 72% 46% / 0.22);
+  border-color: hsl(174 72% 46% / 0.6);
+  background: linear-gradient(135deg, hsl(174 72% 46% / 0.04), var(--draft-card));
+  box-shadow: 0 4px 20px hsl(174 72% 46% / 0.1), inset 0 0 0 1px hsl(174 72% 46% / 0.22);
 }
 
 .teamCardHead {
@@ -1185,7 +1208,28 @@
   justify-content: space-between;
   margin-top: 12px;
   border-top: 1px solid var(--draft-border);
-  padding-top: 10px;
+  padding-top: 12px;
+  gap: 8px;
+}
+
+.teamStats .stat {
+  flex: 1;
+  background: var(--draft-card-2);
+  border: 1px solid var(--draft-border-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+  align-items: center;
+  text-align: center;
+}
+
+.teamStats .stat em {
+  font-size: 8px;
+}
+
+.teamStats .stat strong {
+  font-size: 13px;
+  margin-top: 2px;
 }
 
 .roleMix {
@@ -1200,6 +1244,7 @@
   --role-color: var(--draft-muted);
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   border: 1px solid color-mix(in srgb, var(--role-color) 30%, transparent);
   border-radius: 5px;
   background: color-mix(in srgb, var(--role-color) 10%, transparent);
@@ -1416,12 +1461,16 @@
   .teamsPanel {
     position: static;
     grid-column: 1 / -1;
+    height: auto;
   }
 
   .teamsList {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     max-height: none;
+    flex: none;
+    min-height: auto;
+    overflow-y: visible;
   }
 }
 
@@ -1446,10 +1495,14 @@
 
   .orderPanel {
     position: static;
+    height: auto;
   }
 
   .orderBody {
     max-height: 360px;
+    flex: none;
+    min-height: auto;
+    overflow-y: auto;
   }
 
   .adminControls {
@@ -1509,4 +1562,34 @@
   .actionButton {
     transition: none;
   }
+}
+
+/* Custom scrollbar styling for order body and teams list */
+.orderBody::-webkit-scrollbar,
+.teamsList::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.orderBody::-webkit-scrollbar-track,
+.teamsList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orderBody::-webkit-scrollbar-thumb,
+.teamsList::-webkit-scrollbar-thumb {
+  background: var(--draft-border-3);
+  border-radius: 99px;
+  transition: background 0.15s ease;
+}
+
+.orderBody::-webkit-scrollbar-thumb:hover,
+.teamsList::-webkit-scrollbar-thumb:hover {
+  background: var(--draft-dim);
+}
+
+.orderBody,
+.teamsList {
+  scrollbar-width: thin;
+  scrollbar-color: var(--draft-border-3) transparent;
 }

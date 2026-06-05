@@ -24,7 +24,6 @@ from shared.core.enums import (
 )
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-
 from src.services.draft import suggestions as sug
 
 
@@ -126,10 +125,62 @@ async def _apply_won(
     return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
 
 
-def _role_capacity(team_size: int, picked_count: int) -> dict[DraftRole, int]:
-    # Default: no hard role caps beyond roster size — any role may be filled.
-    remaining = max(0, team_size - picked_count)
-    return {role: remaining for role in DraftRole} if remaining > 0 else {}
+def role_targets(team_size: int) -> dict[DraftRole, int]:
+    if team_size >= 5:
+        return {
+            DraftRole.TANK: 1,
+            DraftRole.DPS: 2,
+            DraftRole.SUPPORT: max(2, team_size - 3),
+        }
+    if team_size <= 0:
+        return {DraftRole.TANK: 0, DraftRole.DPS: 0, DraftRole.SUPPORT: 0}
+    tank = min(1, team_size)
+    dps = min(2, max(team_size - tank, 0))
+    support = max(team_size - tank - dps, 0)
+    return {DraftRole.TANK: tank, DraftRole.DPS: dps, DraftRole.SUPPORT: support}
+
+
+async def _team_role_counts(session: AsyncSession, team_id: int) -> dict[DraftRole, int]:
+    players = (
+        await session.scalars(
+            sa.select(DraftPlayer).where(
+                DraftPlayer.drafted_by_team_id == team_id,
+                DraftPlayer.status == DraftPlayerStatus.PICKED.value,
+            )
+        )
+    ).all()
+    picks = (
+        await session.scalars(
+            sa.select(DraftPick).where(
+                DraftPick.draft_team_id == team_id,
+                DraftPick.status.in_(
+                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
+                ),
+            )
+        )
+    ).all()
+
+    pick_by_player_id = {pk.picked_player_id: pk for pk in picks if pk.picked_player_id is not None}
+    counts = {r: 0 for r in DraftRole}
+    for p in players:
+        pk = pick_by_player_id.get(p.id)
+        role_str = pk.target_role if (pk and pk.target_role) else p.primary_role
+        if role_str:
+            try:
+                role = DraftRole(role_str)
+                counts[role] += 1
+            except ValueError:
+                pass
+    return counts
+
+
+def _role_capacity(team_size: int, counts: dict[DraftRole, int]) -> dict[DraftRole, int]:
+    targets = role_targets(team_size)
+    return {
+        role: max(0, targets.get(role, 0) - counts.get(role, 0))
+        for role in DraftRole
+    }
+
 
 
 async def _validate_current_pick(draft_session: DraftSession, pick: DraftPick) -> None:
@@ -198,6 +249,12 @@ async def select(
     if not _role_is_legal(player, target_role):
         raise _err("illegal_role", "Player cannot play the requested role", status_code=422)
 
+    chosen_role = target_role or DraftRole(player.primary_role)
+    counts = await _team_role_counts(session, pick.draft_team_id)
+    targets = role_targets(draft_session.team_size)
+    if counts.get(chosen_role, 0) >= targets.get(chosen_role, 0):
+        raise _err("role_filled", f"Role {chosen_role.value} is already filled for this team", status_code=422)
+
     won = await _finalize(
         session,
         pick.id,
@@ -232,8 +289,8 @@ async def autopick(
             )
         )
     ).all()
-    picked_count = await _team_picked_count(session, pick.draft_team_id)
-    capacity = _role_capacity(draft_session.team_size, picked_count)
+    counts = await _team_role_counts(session, pick.draft_team_id)
+    capacity = _role_capacity(draft_session.team_size, counts)
 
     fit_players = [
         sug.FitPlayer(

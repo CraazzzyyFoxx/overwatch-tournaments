@@ -38,6 +38,7 @@ import { formatSubroleSlug } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
 import type { DivisionGrid } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
+import { getPlayerSlug } from "@/utils/player";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -429,7 +430,18 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     responsive: "always",
     render: (reg) => (
       <span className="font-medium text-white/80">
-        {reg.battle_tag ?? "\u2014"}
+        {reg.battle_tag ? (
+          <a
+            href={`/users/${getPlayerSlug(reg.battle_tag)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline hover:text-emerald-400 transition"
+          >
+            {reg.battle_tag}
+          </a>
+        ) : (
+          "\u2014"
+        )}
       </span>
     ),
     searchValue: (reg) => reg.battle_tag,

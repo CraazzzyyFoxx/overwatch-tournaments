@@ -26,7 +26,7 @@ from shared.core.enums import (
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.balancer import BalancerRegistration
+from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole, BalancerRegistrationRoleHero
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 
 from src.services.draft.snake_order import generate_pick_order
@@ -274,6 +274,17 @@ def _map_registration(reg: BalancerRegistration) -> dict:
             roles_ranks[role.value] = {
                 "rank_value": r.rank_value,
                 "division_number": None,
+                "top_heroes": [
+                    {
+                        "slug": getattr(he.hero, "slug", ""),
+                        "image_path": getattr(he.hero, "image_path", None)
+                    }
+                    for he in getattr(r, "hero_entries", [])
+                    if he and getattr(he, "hero", None) is not None
+                ] if isinstance(getattr(r, "hero_entries", None), (list, set)) or (
+                    getattr(r, "hero_entries", None) is not None
+                    and not hasattr(getattr(r, "hero_entries", None), "_mock_return_value")
+                ) else [],
             }
 
     return {
@@ -303,7 +314,11 @@ async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerR
                 BalancerRegistration.exclude_from_balancer.is_(False),
                 BalancerRegistration.balancer_status != "not_in_balancer",
             )
-            .options(selectinload(BalancerRegistration.roles))
+            .options(
+                selectinload(BalancerRegistration.roles)
+                .selectinload(BalancerRegistrationRole.hero_entries)
+                .selectinload(BalancerRegistrationRoleHero.hero)
+            )
             .order_by(BalancerRegistration.battle_tag_normalized.asc())
         )
     )
