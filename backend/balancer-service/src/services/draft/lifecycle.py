@@ -44,6 +44,7 @@ class CaptainSeed:
     name: str
     draft_position: int
     user_id: int | None = None
+    auth_user_id: int | None = None
     battle_tag: str | None = None
     # Real role/rank when the captain is drawn from the balancer pool.
     primary_role: DraftRole | None = None
@@ -51,6 +52,7 @@ class CaptainSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
+    anomaly_flags: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ class PlayerSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
+    anomaly_flags: dict = field(default_factory=dict)
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
@@ -159,6 +162,7 @@ async def seed(
         team = DraftTeam(
             session_id=draft_session.id,
             captain_user_id=cap.user_id,
+            captain_auth_user_id=cap.auth_user_id,
             name=cap.name,
             draft_position=cap.draft_position,
         )
@@ -183,6 +187,7 @@ async def seed(
                 is_captain=True,
                 status=DraftPlayerStatus.PICKED.value,
                 drafted_by_team_id=team.id,
+                anomaly_flags=cap.anomaly_flags,
             )
         )
     # Pool players.
@@ -199,6 +204,7 @@ async def seed(
                 division_number=p.division_number,
                 rank_value=p.rank_value,
                 status=DraftPlayerStatus.AVAILABLE.value,
+                anomaly_flags=p.anomaly_flags,
             )
         )
     await session.flush()
@@ -259,6 +265,17 @@ def _map_registration(reg: BalancerRegistration) -> dict:
     ranks = [r.rank_value for r in active if r.rank_value is not None]
     rank_value = (primary_entry.rank_value if primary_entry else None) or (max(ranks) if ranks else None)
     sub_role = primary_entry.subrole if primary_entry else None
+
+    # Save role-specific ranks/divisions inside metadata
+    roles_ranks = {}
+    for r in active:
+        role = _to_draft_role(r.role)
+        if role is not None:
+            roles_ranks[role.value] = {
+                "rank_value": r.rank_value,
+                "division_number": None,
+            }
+
     return {
         "primary_role": primary,
         "secondary_roles": secondary,
@@ -266,6 +283,7 @@ def _map_registration(reg: BalancerRegistration) -> dict:
         "rank_value": rank_value,
         "division_number": None,
         "is_flex": bool(reg.is_flex),
+        "anomaly_flags": {"roles_ranks": roles_ranks},
     }
 
 
@@ -368,12 +386,14 @@ async def seed_from_pool(
                 name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",
                 draft_position=position,
                 user_id=reg.user_id,
+                auth_user_id=reg.auth_user_id,
                 battle_tag=reg.battle_tag,
                 primary_role=mapped["primary_role"],
                 sub_role=mapped["sub_role"],
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
+                anomaly_flags=mapped.get("anomaly_flags") or {},
             )
         )
 
@@ -393,6 +413,7 @@ async def seed_from_pool(
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
+                anomaly_flags=mapped.get("anomaly_flags") or {},
             )
         )
 

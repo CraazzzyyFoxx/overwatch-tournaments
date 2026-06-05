@@ -23,6 +23,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { getRoleIconName, ROLE_LABELS } from "@/lib/roles";
+import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID, getDivisionLabel } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
 import type {
   DraftBoard as DraftBoardData,
@@ -79,6 +80,7 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   const { user } = useAuthProfile();
   const { isSuperuser, isWorkspaceAdmin } = usePermissions();
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
+  const [selectedRole, setSelectedRole] = useState<DraftRole | null>(null);
 
   const board = boardQuery.data ?? null;
   const isAdmin = isSuperuser || isWorkspaceAdmin(tournament.workspace_id);
@@ -86,6 +88,11 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     () => (user?.linkedPlayers ?? []).map((player) => player.playerId),
     [user]
   );
+
+  const handleSelectPlayer = (id: number | null, role: DraftRole | null) => {
+    setSelectedPlayerId(id);
+    setSelectedRole(role);
+  };
 
   if (boardQuery.isLoading) {
     return (
@@ -111,9 +118,12 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
       board={board}
       tournamentGrid={tournament.division_grid_version}
       myPlayerIds={myPlayerIds}
+      myAuthUserId={user?.id ?? null}
       isAdmin={isAdmin}
       selectedPlayerId={selectedPlayerId}
-      onSelectPlayer={setSelectedPlayerId}
+      onSelectPlayer={handleSelectPlayer}
+      selectedRole={selectedRole}
+      onRoleSelect={setSelectedRole}
       mutations={mutations}
       t={t}
     />
@@ -124,9 +134,12 @@ interface DraftBoardViewProps {
   board: DraftBoardData;
   tournamentGrid: DivisionGridVersion | null;
   myPlayerIds: number[];
+  myAuthUserId: number | null;
   isAdmin: boolean;
   selectedPlayerId: number | null;
-  onSelectPlayer: (id: number | null) => void;
+  onSelectPlayer: (id: number | null, role: DraftRole | null) => void;
+  selectedRole: DraftRole | null;
+  onRoleSelect: (role: DraftRole | null) => void;
   mutations: DraftMutations;
   t: Translate;
 }
@@ -135,9 +148,12 @@ function DraftBoardView({
   board,
   tournamentGrid,
   myPlayerIds,
+  myAuthUserId,
   isAdmin,
   selectedPlayerId,
   onSelectPlayer,
+  selectedRole,
+  onRoleSelect,
   mutations,
   t,
 }: DraftBoardViewProps) {
@@ -145,7 +161,7 @@ function DraftBoardView({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [searchQuery, setSearchQuery] = useState("");
-  const gating = computeGating(board, myPlayerIds, isAdmin);
+  const gating = computeGating(board, myPlayerIds, myAuthUserId, isAdmin);
 
   const sortedTeams = useMemo(
     () => [...board.teams].sort((a, b) => a.draft_position - b.draft_position || a.id - b.id),
@@ -182,14 +198,19 @@ function DraftBoardView({
       ? sortedPicks.findIndex((pick) => pick.id === current_pick.id) + 1
       : Math.min(completedCount + 1, Math.max(totalPicks, 1));
 
+  // Admins may pick on behalf of the on-clock captain (backend allows it via the
+  // is_admin bypass), so the confirm UI is enabled for the on-clock captain OR an admin.
+  const canConfirm = (gating.isMyPick || gating.isAdmin) && session.status === "live";
+
   const confirmPick = () => {
-    if (!gating.isMyPick || current_pick == null || selectedPlayerId == null) return;
+    if (!canConfirm || current_pick == null || selectedPlayerId == null) return;
     mutations.makePick.mutate({
       pickId: current_pick.id,
       playerId: selectedPlayerId,
       version: current_pick.version,
+      role: selectedRole,
     });
-    onSelectPlayer(null);
+    onSelectPlayer(null, null);
   };
 
   const runLifecycle = (action: "start" | "pause" | "resume" | "cancel" | "export") =>
@@ -227,6 +248,7 @@ function DraftBoardView({
           picks={sortedPicks}
           teamById={teamById}
           playerById={playerById}
+          tournamentGrid={tournamentGrid}
           t={t}
         />
 
@@ -247,10 +269,12 @@ function DraftBoardView({
           <SelectedPlayerPanel
             selectedPlayer={selectedPlayer}
             tournamentGrid={tournamentGrid}
-            canPick={gating.isMyPick}
+            canPick={canConfirm}
             isPending={mutations.makePick.isPending}
+            selectedRole={selectedRole}
+            onRoleSelect={onRoleSelect}
             onConfirm={confirmPick}
-            onClear={() => onSelectPlayer(null)}
+            onClear={() => onSelectPlayer(null, null)}
             t={t}
           />
 
@@ -258,7 +282,10 @@ function DraftBoardView({
             players={filteredPlayers}
             selectedPlayerId={selectedPlayerId}
             tournamentGrid={tournamentGrid}
-            onSelectPlayer={onSelectPlayer}
+            onSelectPlayer={(id) => {
+              const player = playerById.get(id);
+              onSelectPlayer(id, player ? player.primary_role : null);
+            }}
             t={t}
           />
         </section>
@@ -275,11 +302,21 @@ function DraftBoardView({
         />
       </div>
 
-      {gating.isMyPick && selectedPlayer != null && (
+      {canConfirm && selectedPlayer != null && (
         <div className={styles.floatingBar}>
           <div>
             <span className={styles.floatingLabel}>{label(t, "draft.pool.selected", "Selected")}</span>
             <strong>{playerName(selectedPlayer)}</strong>
+            {(() => {
+              const secondaryRoles = selectedPlayer.secondary_roles_json ?? [];
+              const selectedPlayerRoles = [selectedPlayer.primary_role, ...secondaryRoles];
+              return selectedPlayerRoles.length > 1 && selectedRole ? (
+                <div className="flex items-center gap-1 mt-0.5 text-xs text-white/50">
+                  Drafting as:
+                  <span className="font-bold uppercase text-emerald-400">{roleLabel(selectedRole)}</span>
+                </div>
+              ) : null;
+            })()}
           </div>
           <button
             type="button"
@@ -368,7 +405,6 @@ function DraftHero({
         <div className={styles.heroCell}>
           <div className={styles.label}>{t("draft.onTheClock")}</div>
           <div className={styles.onClock}>
-            <TeamCrest team={onClockTeam} size="large" />
             <div className={styles.onClockInfo}>
               <span className={styles.teamName}>
                 {onClockTeam?.name ?? label(t, "draft.live.noActivePick", "No active pick")}
@@ -637,10 +673,11 @@ interface DraftOrderPanelProps {
   picks: DraftPick[];
   teamById: Map<number, DraftTeam>;
   playerById: Map<number, DraftPlayer>;
+  tournamentGrid: DivisionGridVersion | null;
   t: Translate;
 }
 
-function DraftOrderPanel({ session, picks, teamById, playerById, t }: DraftOrderPanelProps) {
+function DraftOrderPanel({ session, picks, teamById, playerById, tournamentGrid, t }: DraftOrderPanelProps) {
   const groups = useMemo(() => groupPicksByRound(picks), [picks]);
 
   return (
@@ -666,6 +703,7 @@ function DraftOrderPanel({ session, picks, teamById, playerById, t }: DraftOrder
                   pick={pick}
                   team={teamById.get(pick.draft_team_id) ?? null}
                   pickedPlayer={pick.picked_player_id == null ? null : playerById.get(pick.picked_player_id) ?? null}
+                  tournamentGrid={tournamentGrid}
                   t={t}
                 />
               ))}
@@ -681,10 +719,11 @@ interface PickRowProps {
   pick: DraftPick;
   team: DraftTeam | null;
   pickedPlayer: DraftPlayer | null;
+  tournamentGrid: DivisionGridVersion | null;
   t: Translate;
 }
 
-function PickRow({ pick, team, pickedPlayer, t }: PickRowProps) {
+function PickRow({ pick, team, pickedPlayer, tournamentGrid, t }: PickRowProps) {
   const displayPlayer =
     pickedPlayer != null
       ? playerName(pickedPlayer)
@@ -692,16 +731,32 @@ function PickRow({ pick, team, pickedPlayer, t }: PickRowProps) {
         ? t("draft.onTheClock")
         : label(t, "draft.order.pending", "Pending");
   const role = pickedPlayer?.primary_role ?? pick.target_role;
+  const pickedDivision = pickedPlayer
+    ? pickedPlayer.division_number ??
+      (pickedPlayer.rank_value != null
+        ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, pickedPlayer.rank_value)
+        : null)
+    : null;
 
   return (
     <div className={cn(styles.pickRow, pickStatusClass(pick.status))}>
       <span className={styles.pickNum}>{pick.overall_no}</span>
-      <TeamCrest team={team} size="small" />
       <div className={styles.pickMain}>
         <span className={styles.pickName}>{displayPlayer}</span>
         <span className={styles.pickMeta}>
           {team?.name ?? label(t, "draft.team.unknown", "Unknown team")}
-          {pickedPlayer?.rank_value != null && ` / ${formatRank(pickedPlayer.rank_value)}`}
+          {pickedDivision != null && (
+            <span className="inline-flex items-center gap-1 ml-1 align-middle text-white/50" title={formatRank(pickedPlayer?.rank_value)}>
+              <span>/</span>
+              <PlayerDivisionIcon
+                division={pickedDivision}
+                width={16}
+                height={16}
+                tournamentGrid={tournamentGrid}
+              />
+              <span>{getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, pickedDivision)}</span>
+            </span>
+          )}
         </span>
       </div>
       <div className={styles.pickSide}>
@@ -815,6 +870,8 @@ interface SelectedPlayerPanelProps {
   tournamentGrid: DivisionGridVersion | null;
   canPick: boolean;
   isPending: boolean;
+  selectedRole: DraftRole | null;
+  onRoleSelect: (role: DraftRole) => void;
   onConfirm: () => void;
   onClear: () => void;
   t: Translate;
@@ -825,6 +882,8 @@ function SelectedPlayerPanel({
   tournamentGrid,
   canPick,
   isPending,
+  selectedRole,
+  onRoleSelect,
   onConfirm,
   onClear,
   t,
@@ -845,49 +904,96 @@ function SelectedPlayerPanel({
     );
   }
 
-  const division = selectedPlayer.division_number;
+  const division = selectedPlayer.division_number ?? (selectedPlayer.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, selectedPlayer.rank_value) : null);
   const secondaryRoles = selectedPlayer.secondary_roles_json ?? [];
+  const selectedPlayerRoles = [selectedPlayer.primary_role, ...secondaryRoles] as DraftRole[];
 
   return (
-    <section className={styles.selectedCard}>
-      <div className={styles.selectedAvatar}>{playerInitials(selectedPlayer)}</div>
-      <div className={styles.selectedInfo}>
-        <div className={styles.selectedNameRow}>
-          <strong>{playerName(selectedPlayer)}</strong>
-          <RolePill role={selectedPlayer.primary_role} />
-          {selectedPlayer.is_captain && (
-            <span className={styles.captainTag}>
-              <Crown aria-hidden />
-              {label(t, "draft.player.captain", "Captain")}
-            </span>
-          )}
+    <section className={styles.selectedCard} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
+        <div className={styles.selectedInfo}>
+          <div className={styles.selectedNameRow}>
+            <strong>{playerName(selectedPlayer)}</strong>
+            <RolePill role={selectedPlayer.primary_role} />
+            {selectedPlayer.is_captain && (
+              <span className={styles.captainTag}>
+                <Crown aria-hidden />
+                {label(t, "draft.player.captain", "Captain")}
+              </span>
+            )}
+          </div>
+          <div className={styles.selectedTags}>
+            {selectedPlayer.sub_role && (
+              <span>{formatSubRoleLabel(selectedPlayer.sub_role)}</span>
+            )}
+            {selectedPlayer.is_flex && <span>{label(t, "draft.player.flex", "Flex")}</span>}
+            {secondaryRoles.map((role) => (
+              <span key={role}>{roleLabel(role as DraftRole)}</span>
+            ))}
+            {division != null && (
+              <span className={styles.divisionTag}>
+                <PlayerDivisionIcon
+                  division={division}
+                  width={18}
+                  height={18}
+                  tournamentGrid={tournamentGrid}
+                />
+                {getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)}
+              </span>
+            )}
+          </div>
         </div>
-        <div className={styles.selectedTags}>
-          {selectedPlayer.sub_role && (
-            <span>{formatSubRoleLabel(selectedPlayer.sub_role)}</span>
-          )}
-          {selectedPlayer.is_flex && <span>{label(t, "draft.player.flex", "Flex")}</span>}
-          {secondaryRoles.map((role) => (
-            <span key={role}>{roleLabel(role as DraftRole)}</span>
-          ))}
-          {division != null && (
-            <span className={styles.divisionTag}>
-              <PlayerDivisionIcon
-                division={division}
-                width={18}
-                height={18}
-                tournamentGrid={tournamentGrid}
-              />
-              {label(t, "draft.player.division", "Division")} {division}
-            </span>
-          )}
+        <div className={styles.selectedStats}>
+          <Stat
+            label={label(t, "draft.player.rank", "Rank")}
+            value={
+              division != null ? (
+                <div className="flex items-center gap-1.5" title={formatRank(selectedPlayer.rank_value)}>
+                  <PlayerDivisionIcon
+                    division={division}
+                    width={20}
+                    height={20}
+                    tournamentGrid={tournamentGrid}
+                  />
+                  <span className="text-sm font-semibold">
+                    {getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)}
+                  </span>
+                </div>
+              ) : (
+                formatRank(selectedPlayer.rank_value)
+              )
+            }
+          />
+          <Stat label="ID" value={`#${selectedPlayer.id}`} />
         </div>
       </div>
-      <div className={styles.selectedStats}>
-        <Stat label={label(t, "draft.player.rank", "Rank")} value={formatRank(selectedPlayer.rank_value)} />
-        <Stat label="ID" value={`#${selectedPlayer.id}`} />
-      </div>
-      <div className={styles.selectedActions}>
+
+      {/* Draft Role Selector */}
+      {canPick && selectedPlayerRoles.length > 1 && (
+        <div className="flex flex-col gap-1.5 border-t border-white/[0.05] pt-3 w-full">
+          <span className="text-xs font-bold text-white/40">{label(t, "draft.actions.chooseRole", "Draft as role:")}</span>
+          <div className="flex items-center gap-2">
+            {selectedPlayerRoles.map((role) => (
+              <button
+                key={role}
+                type="button"
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition",
+                  selectedRole === role
+                    ? "bg-white/10 border-white/30 text-emerald-400"
+                    : "bg-transparent border-white/5 text-white/40 hover:border-white/10 hover:text-white/60"
+                )}
+                onClick={() => onRoleSelect(role)}
+              >
+                <PlayerRoleIcon role={getRoleIconName(role)} size={12} />
+                <span>{roleLabel(role)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.selectedActions} style={{ display: "flex", justifyContent: "flex-end", marginTop: 0 }}>
         <button type="button" className={styles.ghostButton} onClick={onClear}>
           {label(t, "draft.actions.clear", "Clear")}
         </button>
@@ -956,6 +1062,8 @@ interface PlayerCardProps {
 }
 
 function PlayerCard({ player, selected, tournamentGrid, onSelect }: PlayerCardProps) {
+  const allRoles = [player.primary_role, ...(player.secondary_roles_json ?? [])] as DraftRole[];
+
   return (
     <button
       type="button"
@@ -963,26 +1071,40 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect }: PlayerCardPr
       onClick={onSelect}
     >
       <div className={styles.playerTopline}>
-        <span className={styles.playerAvatar}>{playerInitials(player)}</span>
         <span className={styles.playerIdentity}>
           <strong>{playerName(player)}</strong>
           <em>{formatSubRoleLabel(player.sub_role) ?? roleLabel(player.primary_role)}</em>
         </span>
-        <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={20} />
       </div>
-      <div className={styles.playerMetrics}>
-        <span>{formatRank(player.rank_value)}</span>
-        {player.division_number != null ? (
-          <PlayerDivisionIcon
-            division={player.division_number}
-            width={22}
-            height={22}
-            tournamentGrid={tournamentGrid}
-          />
-        ) : (
-          <span className={styles.noDivision}>DIV -</span>
-        )}
-        {player.is_flex && <span className={styles.flexMark}>FLEX</span>}
+      <div className={styles.playerMetrics} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "6px" }}>
+        {allRoles.map((role) => {
+          const roleRank = getRoleRank(player, role);
+          const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
+          return (
+            <div key={role} className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1">
+                <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
+                <span className="text-[10px] uppercase text-white/40">{roleLabel(role)}</span>
+              </div>
+              {roleDiv != null ? (
+                <div className="flex items-center gap-1" title={formatRank(roleRank.rank_value)}>
+                  <PlayerDivisionIcon
+                    division={roleDiv}
+                    width={18}
+                    height={18}
+                    tournamentGrid={tournamentGrid}
+                  />
+                  <span className="text-[11px] font-semibold text-white/70">
+                    {getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, roleDiv)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs text-white/30">&mdash;</span>
+              )}
+            </div>
+          );
+        })}
+        {player.is_flex && <span className={styles.flexMark} style={{ alignSelf: "flex-start", marginTop: "2px" }}>FLEX</span>}
       </div>
     </button>
   );
@@ -1064,7 +1186,6 @@ function TeamCard({
   return (
     <article className={cn(styles.teamCard, current && styles.teamCardCurrent, mine && styles.teamCardMine)}>
       <div className={styles.teamCardHead}>
-        <TeamCrest team={team} size="medium" />
         <div className={styles.teamTitle}>
           <strong>{team.name}</strong>
           <span>
@@ -1077,7 +1198,28 @@ function TeamCard({
 
       <div className={styles.teamStats}>
         <Stat label={label(t, "draft.team.roster", "Roster")} value={`${roster.length}/${session.team_size}`} />
-        <Stat label={label(t, "draft.team.avgRank", "Avg rank")} value={formatRank(averageRank(roster))} />
+        <Stat
+          label={label(t, "draft.team.avgRank", "Avg rank")}
+          value={
+            (() => {
+              const avgRank = averageRank(roster);
+              const avgDivision = avgRank != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, avgRank) : null;
+              return avgDivision != null ? (
+                <div className="flex items-center gap-1" title={formatRank(avgRank)}>
+                  <PlayerDivisionIcon
+                    division={avgDivision}
+                    width={20}
+                    height={20}
+                    tournamentGrid={tournamentGrid}
+                  />
+                  <span>{getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, avgDivision)}</span>
+                </div>
+              ) : (
+                formatRank(avgRank)
+              );
+            })()
+          }
+        />
         <Stat label={t("draft.pick")} value={`${completedPicks}/${picks.length}`} />
       </div>
 
@@ -1115,27 +1257,35 @@ interface RosterPlayerProps {
 }
 
 function RosterPlayer({ player, tournamentGrid }: RosterPlayerProps) {
+  const allRoles = [player.primary_role, ...(player.secondary_roles_json ?? [])] as DraftRole[];
+  const division = player.division_number ?? (player.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, player.rank_value) : null);
+
   return (
     <div className={styles.rosterPlayer}>
-      <span className={styles.rosterAvatar}>{playerInitials(player)}</span>
       <div>
         <strong>
           {player.is_captain && <Crown aria-hidden />}
           {playerName(player)}
         </strong>
         <span>
-          {roleLabel(player.primary_role)}
+          {allRoles.map(r => roleLabel(r)).join(" / ")}
           {player.sub_role ? ` / ${formatSubRoleLabel(player.sub_role)}` : ""}
         </span>
       </div>
-      <span className={styles.rosterRank}>{formatRank(player.rank_value)}</span>
-      {player.division_number != null && (
-        <PlayerDivisionIcon
-          division={player.division_number}
-          width={20}
-          height={20}
-          tournamentGrid={tournamentGrid}
-        />
+      {division != null ? (
+        <div className="flex items-center gap-1" title={formatRank(player.rank_value)}>
+          <PlayerDivisionIcon
+            division={division}
+            width={20}
+            height={20}
+            tournamentGrid={tournamentGrid}
+          />
+          <span className={styles.rosterRank} style={{ fontSize: "11px" }}>
+            {getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)}
+          </span>
+        </div>
+      ) : (
+        <span className={styles.rosterRank}>{formatRank(player.rank_value)}</span>
       )}
     </div>
   );
@@ -1157,7 +1307,7 @@ function PanelHeader({ title, meta }: PanelHeaderProps) {
 
 interface StatProps {
   label: string;
-  value: string;
+  value: ReactNode;
 }
 
 function Stat({ label: text, value }: StatProps) {
@@ -1211,6 +1361,17 @@ function shortRole(role: DraftRole): string {
   if (role === "tank") return "T";
   if (role === "dps") return "D";
   return "S";
+}
+
+function getRoleRank(player: DraftPlayer, role: DraftRole): { rank_value: number | null; division_number: number | null } {
+  const rolesRanks = player.anomaly_flags?.roles_ranks as Record<string, { rank_value: number | null; division_number: number | null }> | undefined;
+  if (rolesRanks && rolesRanks[role]) {
+    return rolesRanks[role];
+  }
+  if (role === player.primary_role) {
+    return { rank_value: player.rank_value, division_number: player.division_number };
+  }
+  return { rank_value: null, division_number: null };
 }
 
 function playerName(player: DraftPlayer): string {

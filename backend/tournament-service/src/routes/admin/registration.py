@@ -58,6 +58,7 @@ async def upsert_registration_form(
             closes_at=data.closes_at,
             require_open_profile=data.require_open_profile,
             open_profile_scope=data.open_profile_scope,
+            show_ranks=data.show_ranks,
             built_in_fields_json=built_in_fields_json,
             custom_fields_json=custom_fields_json,
         )
@@ -69,6 +70,7 @@ async def upsert_registration_form(
         form.closes_at = data.closes_at
         form.require_open_profile = data.require_open_profile
         form.open_profile_scope = data.open_profile_scope
+        form.show_ranks = data.show_ranks
         form.built_in_fields_json = built_in_fields_json
         form.custom_fields_json = custom_fields_json
 
@@ -296,6 +298,48 @@ async def bulk_add_to_balancer(
         balancer_status=balancer_status,
     )
     return admin_schemas.BulkBalancerStatusResponse(updated=updated, skipped=skipped)
+
+
+@router.post(
+    "/tournaments/{tournament_id}/registrations/rank-autofill/preview",
+    response_model=admin_schemas.BalancerRegistrationRankAutofillResponse,
+)
+async def preview_registration_rank_autofill(
+    tournament_id: int,
+    data: admin_schemas.BalancerRegistrationRankAutofillRequest,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
+):
+    result = await registration_service.autofill_registration_ranks_from_parsed(
+        session,
+        tournament_id,
+        registration_ids=data.registration_ids,
+        overwrite_existing=data.overwrite_existing,
+        add_to_balancer=data.add_to_balancer,
+        apply=False,
+    )
+    return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
+
+
+@router.post(
+    "/tournaments/{tournament_id}/registrations/rank-autofill/apply",
+    response_model=admin_schemas.BalancerRegistrationRankAutofillResponse,
+)
+async def apply_registration_rank_autofill(
+    tournament_id: int,
+    data: admin_schemas.BalancerRegistrationRankAutofillRequest,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "update")),
+):
+    result = await registration_service.autofill_registration_ranks_from_parsed(
+        session,
+        tournament_id,
+        registration_ids=data.registration_ids,
+        overwrite_existing=data.overwrite_existing,
+        add_to_balancer=data.add_to_balancer,
+        apply=True,
+    )
+    return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
 
 
 @router.post(

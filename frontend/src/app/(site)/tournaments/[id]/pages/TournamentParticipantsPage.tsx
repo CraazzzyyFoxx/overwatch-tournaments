@@ -42,6 +42,7 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
 import { useTranslation } from "@/i18n/LanguageContext";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import BattleTagRankHistory from "@/components/BattleTagRankHistory";
 import { getStatusIcon } from "@/lib/status-icons";
@@ -575,10 +576,12 @@ export default function TournamentParticipantsPage({
     myRegistration.checked_in !== true &&
     isCheckInWindowActive(tournament);
 
+  const divisionGrid = useDivisionGrid();
+
   // Dynamic columns
   const allColumns = useMemo(
-    () => buildParticipantColumns(form, t, locale),
-    [form, t, locale],
+    () => buildParticipantColumns(form, t, locale, divisionGrid),
+    [form, t, locale, divisionGrid],
   );
   const { visibleColumns, visibility, toggleColumn, resetToDefaults } =
     useColumnVisibility("participants-table-columns", allColumns);

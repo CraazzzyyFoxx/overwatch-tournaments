@@ -43,6 +43,7 @@ class UpsertRegistrationForm:
                 closes_at=payload.closes_at,
                 require_open_profile=payload.require_open_profile,
                 open_profile_scope=payload.open_profile_scope,
+                show_ranks=payload.show_ranks,
                 built_in_fields_json=built_in_fields_json,
                 custom_fields_json=custom_fields_json,
             )
@@ -54,6 +55,7 @@ class UpsertRegistrationForm:
             form.closes_at = payload.closes_at
             form.require_open_profile = payload.require_open_profile
             form.open_profile_scope = payload.open_profile_scope
+            form.show_ranks = payload.show_ranks
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json
 

@@ -181,6 +181,7 @@ class DraftTeamRead(BaseRead):
 
     session_id: int
     captain_user_id: int | None
+    captain_auth_user_id: int | None
     name: str
     draft_position: int
     exported_team_id: int | None

@@ -78,6 +78,7 @@ def _form_to_read(
         closes_at=form.closes_at,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
+        show_ranks=form.show_ranks,
         built_in_fields=form.built_in_fields_json or {},
         custom_fields=form.custom_fields_json or [],
         subrole_catalog=subrole_catalog or {},
@@ -88,6 +89,7 @@ def _reg_to_read(
     reg: models.BalancerRegistration,
     *,
     status_meta_map: dict[str, dict[str, dict[str, object]]] | None = None,
+    show_ranks: bool = False,
 ) -> RegistrationRead:
     roles = (
         [
@@ -96,6 +98,7 @@ def _reg_to_read(
                 subrole=r.subrole,
                 is_primary=r.is_primary,
                 priority=r.priority,
+                rank_value=r.rank_value if show_ranks else None,
                 top_heroes=[he.hero.slug for he in sorted(r.hero_entries, key=lambda he: he.priority)],
             )
             for r in sorted(reg.roles, key=lambda r: (not r.is_primary, r.priority))
@@ -228,7 +231,7 @@ async def register(
     )
     registration = result.scalar_one()
     status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-    return _reg_to_read(registration, status_meta_map=status_meta_map)
+    return _reg_to_read(registration, status_meta_map=status_meta_map, show_ranks=form.show_ranks)
 
 
 @router.get("/me", response_model=RegistrationRead | None)
@@ -241,8 +244,10 @@ async def get_my_registration(
     reg = await reg_service.get_registration(session, tournament_id, user.id)
     if reg is None:
         return None
+    form = await reg_service.get_registration_form(session, tournament_id)
+    show_ranks = form.show_ranks if form is not None else False
     status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
-    return _reg_to_read(reg, status_meta_map=status_meta_map)
+    return _reg_to_read(reg, status_meta_map=status_meta_map, show_ranks=show_ranks)
 
 
 @router.patch("/me", response_model=RegistrationRead)
@@ -271,7 +276,7 @@ async def update_my_registration(
         **data.model_dump(exclude_unset=True),
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
-    return _reg_to_read(updated, status_meta_map=status_meta_map)
+    return _reg_to_read(updated, status_meta_map=status_meta_map, show_ranks=form.show_ranks)
 
 
 @router.delete("/me", response_model=RegistrationStatusResponse)
@@ -320,7 +325,7 @@ async def check_in_my_registration(
         checked_in_by=user.id,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
-    return _reg_to_read(checked_in, status_meta_map=status_meta_map)
+    return _reg_to_read(checked_in, status_meta_map=status_meta_map, show_ranks=form.show_ranks if form else False)
 
 
 @router.get("/list", response_model=list[RegistrationListRead])
@@ -367,10 +372,11 @@ async def list_registrations(
             if form is not None and form.require_open_profile
             else {}
         )
+        show_ranks = form.show_ranks if form is not None else False
 
         return [
             RegistrationListRead(
-                **_reg_to_read(r, status_meta_map=status_meta_map).model_dump(),
+                **_reg_to_read(r, status_meta_map=status_meta_map, show_ranks=show_ranks).model_dump(),
                 balancer_status=r.balancer_status,
                 balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
                 or build_unknown_status_meta("balancer", r.balancer_status),

@@ -218,6 +218,62 @@ export interface RegistrationUserExportResponse {
   total: number;
 }
 
+export type RegistrationRankAutofillPlayerStatus =
+  | "will_update"
+  | "applied"
+  | "skipped"
+  | "unchanged";
+
+export type RegistrationRankAutofillRoleAction =
+  | "set"
+  | "overwrite"
+  | "keep_existing"
+  | "missing_rank"
+  | "blocked";
+
+export interface RegistrationRankAutofillRequest {
+  registration_ids?: number[] | null;
+  overwrite_existing?: boolean;
+  add_to_balancer?: boolean;
+}
+
+export interface RegistrationRankAutofillRole {
+  role: BalancerRoleCode;
+  current_rank_value: number | null;
+  parsed_rank_value: number | null;
+  action: RegistrationRankAutofillRoleAction;
+  reason: string | null;
+  platform: string | null;
+  division: string | null;
+  tier: number | null;
+  season: number | null;
+  captured_at: string | null;
+}
+
+export interface RegistrationRankAutofillPlayer {
+  registration_id: number;
+  display_name: string | null;
+  battle_tag: string | null;
+  status: RegistrationRankAutofillPlayerStatus;
+  reason: string | null;
+  will_add_to_balancer: boolean;
+  balancer_reason: string | null;
+  roles: RegistrationRankAutofillRole[];
+}
+
+export interface RegistrationRankAutofillResponse {
+  total_registrations: number;
+  updatable_registrations: number;
+  applied_registrations: number;
+  skipped_registrations: number;
+  unchanged_registrations: number;
+  role_updates: number;
+  overwrite_existing: boolean;
+  add_to_balancer: boolean;
+  balancer_additions: number;
+  players: RegistrationRankAutofillPlayer[];
+}
+
 export interface BalancerPlayerUpdateInput {
   role_entries_json?: BalancerPlayerRoleEntry[] | null;
   is_in_pool?: boolean | null;
@@ -279,6 +335,7 @@ export interface AdminRegistrationForm {
   closes_at: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
+  show_ranks?: boolean;
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
   subrole_catalog?: SubroleCatalog;
@@ -291,6 +348,7 @@ export interface AdminRegistrationFormUpsert {
   closes_at?: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
+  show_ranks?: boolean;
   built_in_fields: Record<string, BuiltInFieldConfig>;
   custom_fields: AdminCustomFieldDef[];
 }

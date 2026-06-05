@@ -119,11 +119,16 @@ export interface DraftGating {
 export function computeGating(
   board: DraftBoard,
   myPlayerIds: readonly number[],
+  myAuthUserId: number | null,
   isAdmin: boolean
 ): DraftGating {
   const ids = new Set(myPlayerIds);
+  // Match captaincy by the auth account that registered (reliable) OR by a
+  // linked public-player id (fallback).
   const myTeam = board.teams.find(
-    (t) => t.captain_user_id != null && ids.has(t.captain_user_id)
+    (t) =>
+      (myAuthUserId != null && t.captain_auth_user_id === myAuthUserId) ||
+      (t.captain_user_id != null && ids.has(t.captain_user_id))
   );
   const isCaptain = myTeam != null;
   const onClockTeamId = board.current_pick?.draft_team_id ?? null;

@@ -31,6 +31,7 @@ export interface DraftTeam {
   id: number;
   session_id: number;
   captain_user_id: number | null;
+  captain_auth_user_id: number | null;
   name: string;
   draft_position: number;
   exported_team_id: number | null;

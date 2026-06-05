@@ -46,6 +46,7 @@ export default function RegistrationFormConfigPage() {
   const [autoApprove, setAutoApprove] = useState(false);
   const [requireOpenProfile, setRequireOpenProfile] = useState(false);
   const [openProfileScope, setOpenProfileScope] = useState<"main" | "all">("main");
+  const [showRanks, setShowRanks] = useState(false);
   const [builtInFields, setBuiltInFields] = useState<Record<string, BuiltInFieldConfig>>(() =>
     getBuiltInConfig({}),
   );
@@ -80,6 +81,7 @@ export default function RegistrationFormConfigPage() {
       setAutoApprove(data.auto_approve ?? false);
       setRequireOpenProfile(data.require_open_profile ?? false);
       setOpenProfileScope((data.open_profile_scope as "main" | "all") ?? "main");
+      setShowRanks(data.show_ranks ?? false);
       setBuiltInFields(getBuiltInConfig(data.built_in_fields ?? {}));
       setCustomFields((data.custom_fields ?? []).map(hydrateCustomField));
       setHasChanges(false);
@@ -151,6 +153,7 @@ export default function RegistrationFormConfigPage() {
         auto_approve: autoApprove,
         require_open_profile: requireOpenProfile,
         open_profile_scope: openProfileScope,
+        show_ranks: showRanks,
         built_in_fields: Object.fromEntries(
           Object.entries(builtInFields).map(([key, value]) => [
             key,
@@ -367,6 +370,24 @@ export default function RegistrationFormConfigPage() {
               <p className="text-xs text-muted-foreground">
                 When enabled, players whose Overwatch profile is private are not admitted (blocked at
                 check-in). Unranked players are already excluded separately.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="font-medium">Display Options</div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showRanks}
+                  onChange={(event) => {
+                    setShowRanks(event.target.checked);
+                    setHasChanges(true);
+                  }}
+                />
+                Show player ranks on participants page
+              </label>
+              <p className="text-xs text-muted-foreground">
+                When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads.
               </p>
             </div>
           </div>

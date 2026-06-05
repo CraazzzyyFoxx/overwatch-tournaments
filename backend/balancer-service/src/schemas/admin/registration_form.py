@@ -67,6 +67,7 @@ class RegistrationFormUpsert(BaseModel):
     closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: Literal["main", "all"] = "main"
+    show_ranks: bool = False
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
     custom_fields: list[CustomFieldDef] = Field(default_factory=list)
 
@@ -81,6 +82,7 @@ class RegistrationFormRead(BaseModel):
     closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: Literal["main", "all"] = "main"
+    show_ranks: bool = False
     built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict, validation_alias="built_in_fields_json")
     custom_fields: list[CustomFieldDef] = Field(default_factory=list, validation_alias="custom_fields_json")
     # Workspace sub-role catalog keyed by registration role code (tank/dps/support).

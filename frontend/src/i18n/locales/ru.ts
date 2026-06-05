@@ -21,6 +21,7 @@ export const ru = {
     standings: "Таблица",
     bracket: "Сетка",
     rolesList: "Роли",
+    ranks: "Ранги",
     bracketInstructions: "Перетаскивайте мышкой для перемещения по сетке / Нажмите Esc для выхода",
     bracketFullscreen: "Во весь экран",
     bracketExitFullscreen: "Выйти из полноэкранного режима (Esc)",

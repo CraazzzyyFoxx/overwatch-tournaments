@@ -5,11 +5,17 @@ import type { DraftBoard, DraftEventData, DraftPick, DraftPlayer, DraftTeam } fr
 
 import { applyDraftEvent, computeGating, isUrgent, remainingMs } from "./draft-logic";
 
-function team(id: number, captainUserId: number | null, pos: number): DraftTeam {
+function team(
+  id: number,
+  captainUserId: number | null,
+  pos: number,
+  captainAuthUserId: number | null = null
+): DraftTeam {
   return {
     id,
     session_id: 1,
     captain_user_id: captainUserId,
+    captain_auth_user_id: captainAuthUserId,
     name: `T${id}`,
     draft_position: pos,
     exported_team_id: null,
@@ -174,28 +180,38 @@ describe("applyDraftEvent", () => {
 });
 
 describe("computeGating", () => {
-  it("captain on the clock", () => {
-    const g = computeGating(makeBoard(), [100], false);
+  it("captain on the clock (by linked player id)", () => {
+    const g = computeGating(makeBoard(), [100], null, false);
     expect(g.isCaptain).toBe(true);
     expect(g.myTeamId).toBe(10);
     expect(g.isMyPick).toBe(true);
     expect(g.isSpectator).toBe(false);
   });
 
+  it("captain matched by auth user id (no linked player)", () => {
+    // team 10 captain_auth_user_id = 555, no player linkage
+    const board = makeBoard();
+    board.teams = [team(10, null, 1, 555), team(11, null, 2, 666)];
+    const g = computeGating(board, [], 555, false);
+    expect(g.isCaptain).toBe(true);
+    expect(g.myTeamId).toBe(10);
+    expect(g.isMyPick).toBe(true);
+  });
+
   it("captain not on the clock", () => {
-    const g = computeGating(makeBoard(), [101], false);
+    const g = computeGating(makeBoard(), [101], null, false);
     expect(g.isCaptain).toBe(true);
     expect(g.isMyPick).toBe(false);
   });
 
   it("anonymous spectator", () => {
-    const g = computeGating(makeBoard(), [], false);
+    const g = computeGating(makeBoard(), [], null, false);
     expect(g.isSpectator).toBe(true);
     expect(g.isMyPick).toBe(false);
   });
 
   it("admin is not a spectator and not my-pick", () => {
-    const g = computeGating(makeBoard(), [999], true);
+    const g = computeGating(makeBoard(), [999], null, true);
     expect(g.isAdmin).toBe(true);
     expect(g.isSpectator).toBe(false);
     expect(g.isMyPick).toBe(false);

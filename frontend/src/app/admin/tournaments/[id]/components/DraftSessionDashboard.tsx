@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { useToast } from "@/hooks/use-toast";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { getTierForRank } from "@/lib/division-grid";
+import { getRoleIconName, ROLE_ACCENTS } from "@/lib/roles";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { cn } from "@/lib/utils";
 import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
@@ -140,6 +146,10 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
   const board = boardQuery.data ?? null;
   const session = board?.session ?? null;
   const lifecyclePending = lifecycleMutation.isPending;
+  // Only a non-terminal session blocks creating a new draft. A cancelled or
+  // completed session is kept for read-only views but must NOT trap the admin.
+  const isActiveSession =
+    !!session && ["setup", "ready", "live", "paused"].includes(session.status);
 
   const teamCount = board?.teams.length ?? 0;
   const totalPicks = useMemo(
@@ -168,17 +178,58 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
     );
   }
 
-  // ---- no session: create form ----
-  if (!session) {
+  // ---- no active session (none, or a terminal cancelled/completed one): create form ----
+  if (!isActiveSession) {
+    const previous = session; // terminal session, if any
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Create draft session</CardTitle>
-          <CardDescription>
-            No draft session exists yet. Configure and create one to begin.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="space-y-4">
+        {previous && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Previous draft
+                <Badge variant="secondary">
+                  {STATUS_LABEL[previous.status] ?? previous.status}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                {previous.status === "cancelled"
+                  ? "The previous draft was cancelled. You can create a new one below."
+                  : "The previous draft is complete. You can export it or create a new one below."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Link
+                href={`/tournaments/${tournamentId}/draft`}
+                className="text-sm text-primary underline"
+                target="_blank"
+              >
+                Open board ↗
+              </Link>
+              {previous.status === "completed" && (
+                <Button
+                  size="sm"
+                  disabled={lifecyclePending}
+                  onClick={() =>
+                    lifecycleMutation.mutate({ sessionId: previous.id, action: "export" })
+                  }
+                >
+                  Export to teams
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Create draft session</CardTitle>
+            <CardDescription>
+              {previous
+                ? "Configure and create a new draft session."
+                : "No draft session exists yet. Configure and create one to begin."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <Label htmlFor="draft-rounds">Rounds</Label>
@@ -224,13 +275,16 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
               </Select>
             </div>
           </div>
-          <Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
-            Create session
-          </Button>
-        </CardContent>
-      </Card>
+            <Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
+              Create session
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
+
+  if (!session) return null; // unreachable (isActiveSession implies non-null); narrows for TS
 
   const statusBadge = (
     <Badge variant={session.status === "live" ? "default" : "secondary"}>
@@ -358,12 +412,22 @@ function PoolSeedForm({
   alreadySeeded,
   onSeed,
 }: PoolSeedFormProps) {
+  const divisionGrid = useDivisionGrid();
+
   const poolQuery = useQuery({
     queryKey: ["balancer", "draft-pool", tournamentId],
     queryFn: () => balancerAdminService.listRegistrations(tournamentId, { status_filter: "approved" }),
   });
 
-  const pool = (poolQuery.data ?? []).filter(isInBalancerPool);
+  const pool = useMemo(() => {
+    const data = (poolQuery.data ?? []).filter(isInBalancerPool);
+    return [...data].sort((a, b) => {
+      const rankA = registrationSummary(a).rank ?? -1;
+      const rankB = registrationSummary(b).rank ?? -1;
+      return rankB - rankA;
+    });
+  }, [poolQuery.data]);
+
   const captainSeat = (id: number) => captainIds.indexOf(id);
 
   return (
@@ -420,6 +484,7 @@ function PoolSeedForm({
                 const label = registrationLabel(reg);
                 const isCaptain = captainIds.includes(reg.id);
                 const order = captainSeat(reg.id);
+                const tier = rank != null ? getTierForRank(divisionGrid, rank) : null;
                 return (
                   <div key={reg.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <input
@@ -432,12 +497,40 @@ function PoolSeedForm({
                       {isCaptain ? order + 1 : ""}
                     </span>
                     <span className="flex-1 truncate">{label}</span>
-                    <Badge variant="outline" className="uppercase">
-                      {role}
-                    </Badge>
-                    <span className="w-12 text-right font-mono text-muted-foreground">
-                      {rank ?? "—"}
-                    </span>
+                    <div
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/10",
+                        ROLE_ACCENTS[role]?.tile
+                      )}
+                      title={role.toUpperCase()}
+                    >
+                      <PlayerRoleIcon role={getRoleIconName(role)} size={14} color="currentColor" />
+                    </div>
+                    <div className="flex items-center gap-2 min-w-[140px] justify-end">
+                      {rank != null ? (
+                        <>
+                          {tier && (
+                            <>
+                              <Image
+                                src={tier.icon_url}
+                                alt={tier.name}
+                                width={20}
+                                height={20}
+                                className="shrink-0 object-contain"
+                              />
+                              <span className="text-xs text-muted-foreground truncate font-medium">
+                                {tier.name}
+                              </span>
+                            </>
+                          )}
+                          <span className="font-mono text-xs text-muted-foreground/60 tabular-nums">
+                            ({rank})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/40">—</span>
+                      )}
+                    </div>
                     {isCaptain ? (
                       <Input
                         placeholder="Team name (optional)"

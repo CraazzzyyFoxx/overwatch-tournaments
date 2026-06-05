@@ -108,6 +108,7 @@ def serialize_registration_form(
         closes_at=form.closes_at,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
+        show_ranks=form.show_ranks,
         built_in_fields=form.built_in_fields_json or {},
         custom_fields=form.custom_fields_json or [],
     )
