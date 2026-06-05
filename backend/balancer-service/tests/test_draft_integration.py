@@ -479,6 +479,21 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             # position 1 picks first = weakest captain
             self.assertEqual(ranks_in_seat_order, [3000, 3025, 3050])
 
+    async def test_can_create_new_draft_after_cancel(self) -> None:
+        async with self.Session() as s:
+            first = await self._new_session(s)
+            await lifecycle.cancel(s, first)
+            await s.commit()
+            self.assertEqual(first.status, DraftStatus.CANCELLED.value)
+        # A cancelled draft must not block creating a fresh one.
+        async with self.Session() as s:
+            second = await lifecycle.create_session(
+                s, tournament_id=self.tournament_id, workspace_id=self.workspace_id, rounds=2, team_size=3
+            )
+            await s.commit()
+            self.assertEqual(second.status, DraftStatus.SETUP.value)
+            self.assertNotEqual(second.id, first.id)
+
     async def test_seed_from_pool_rejects_captain_not_in_pool(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.create_session(
