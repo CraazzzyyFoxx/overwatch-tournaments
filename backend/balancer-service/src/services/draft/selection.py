@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import (
     DraftAutopickStrategy,
+    DraftFormat,
     DraftPickStatus,
     DraftPlayerStatus,
     DraftRole,
@@ -95,12 +96,73 @@ async def _advance(session: AsyncSession, draft_session: DraftSession) -> DraftP
         .with_for_update(skip_locked=True)
         .limit(1)
     )
-    now = datetime.now(UTC)
     if next_pick is None:
         draft_session.status = DraftStatus.COMPLETED.value
         draft_session.current_pick_id = None
         await session.flush()
         return None
+
+    # Handle custom round dynamic ordering when a new round starts (first pick of the round)
+    if next_pick.pick_in_round == 1 and draft_session.format == DraftFormat.CUSTOM.value:
+        round_rules = draft_session.settings_json.get("round_rules") or []
+        round_idx = next_pick.round_no - 1
+        if round_idx < len(round_rules):
+            rule = round_rules[round_idx]
+            if rule in ("team_avg_asc", "team_avg_desc"):
+                # Compute average rank_value of picked players for each team
+                stmt = (
+                    sa.select(
+                        DraftPlayer.drafted_by_team_id,
+                        sa.func.avg(sa.func.coalesce(DraftPlayer.rank_value, 0)).label("avg_rank")
+                    )
+                    .where(
+                        DraftPlayer.session_id == draft_session.id,
+                        DraftPlayer.drafted_by_team_id.isnot(None),
+                        DraftPlayer.status == DraftPlayerStatus.PICKED.value
+                    )
+                    .group_by(DraftPlayer.drafted_by_team_id)
+                )
+                team_averages = (await session.execute(stmt)).all()
+                avg_by_team = {t.drafted_by_team_id: t.avg_rank for t in team_averages}
+
+                # Load all teams in this draft session
+                teams = (
+                    await session.scalars(
+                        sa.select(DraftTeam)
+                        .where(DraftTeam.session_id == draft_session.id)
+                    )
+                ).all()
+
+                reverse_sort = rule == "team_avg_desc"
+                sorted_teams = sorted(
+                    teams,
+                    key=lambda t: (avg_by_team.get(t.id, 0.0), t.draft_position),
+                    reverse=reverse_sort
+                )
+                sorted_team_ids = [t.id for t in sorted_teams]
+
+                # Get all picks in this round
+                round_picks = (
+                    await session.scalars(
+                        sa.select(DraftPick)
+                        .where(
+                            DraftPick.session_id == draft_session.id,
+                            DraftPick.round_no == next_pick.round_no
+                        )
+                        .order_by(DraftPick.overall_no.asc())
+                    )
+                ).all()
+
+                # Re-assign teams to the picks of this round
+                for index, pick_to_update in enumerate(round_picks):
+                    if index < len(sorted_team_ids):
+                        pick_to_update.draft_team_id = sorted_team_ids[index]
+
+                await session.flush()
+                # Refresh next_pick's data as its draft_team_id might have changed
+                await session.refresh(next_pick)
+
+    now = datetime.now(UTC)
     next_pick.status = DraftPickStatus.ON_CLOCK.value
     next_pick.clock_started_at = now
     next_pick.clock_expires_at = now + timedelta(seconds=draft_session.pick_time_seconds)

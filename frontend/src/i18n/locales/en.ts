@@ -265,6 +265,7 @@ export const en = {
       start: "Start draft",
       pause: "Pause",
       resume: "Resume",
+      rollback: "Rollback last pick",
       cancel: "Cancel draft",
       export: "Export to teams"
     }

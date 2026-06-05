@@ -66,6 +66,10 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
     topic,
     (event) => {
       if (event.event_type === "draft.presence") return;
+      if (event.event_type === "draft.rollback" || event.event_type === "draft.session_updated") {
+        queryClient.invalidateQueries({ queryKey });
+        return;
+      }
 
       const cachedBoard = queryClient.getQueryData<DraftBoard | null | undefined>(queryKey);
       if (!cachedBoard) {
@@ -124,7 +128,7 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
   }, [connectionState, queryClient, tournamentId]);
 }
 
-export type DraftLifecycleAction = "start" | "pause" | "resume" | "cancel" | "export";
+export type DraftLifecycleAction = "start" | "pause" | "resume" | "cancel" | "export" | "rollback";
 
 export function useDraftMutations(tournamentId: number) {
   const queryClient = useQueryClient();

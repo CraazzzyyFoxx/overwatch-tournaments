@@ -11,8 +11,8 @@ _VALID_TRANSITIONS: dict[DraftStatus, frozenset[DraftStatus]] = {
     DraftStatus.SETUP: frozenset({DraftStatus.READY, DraftStatus.CANCELLED}),
     DraftStatus.READY: frozenset({DraftStatus.SETUP, DraftStatus.LIVE, DraftStatus.CANCELLED}),
     DraftStatus.LIVE: frozenset({DraftStatus.PAUSED, DraftStatus.COMPLETED, DraftStatus.CANCELLED}),
-    DraftStatus.PAUSED: frozenset({DraftStatus.LIVE, DraftStatus.CANCELLED}),
-    DraftStatus.COMPLETED: frozenset(),
+    DraftStatus.PAUSED: frozenset({DraftStatus.LIVE, DraftStatus.PAUSED, DraftStatus.CANCELLED}),
+    DraftStatus.COMPLETED: frozenset({DraftStatus.PAUSED}),
     DraftStatus.CANCELLED: frozenset(),
 }
 

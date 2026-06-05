@@ -2,7 +2,7 @@
 
 export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | "cancelled";
 
-export type DraftFormat = "snake" | "linear";
+export type DraftFormat = "snake" | "linear" | "custom";
 export type DraftPoolSource = "balancer_balance" | "manual";
 export type DraftAutopickStrategy = "best_fit" | "best_available" | "role_need";
 export type DraftRole = "tank" | "dps" | "support";
@@ -25,6 +25,7 @@ export interface DraftSession {
   allow_admin_override: boolean;
   exported_at: string | null;
   export_status: string | null;
+  settings_json: Record<string, any>;
 }
 
 export interface DraftTeam {
@@ -105,7 +106,8 @@ export type DraftEventType =
   | "draft.resumed"
   | "draft.completed"
   | "draft.cancelled"
-  | "draft.presence";
+  | "draft.presence"
+  | "draft.rollback";
 
 export interface DraftEventData {
   session_id: number;

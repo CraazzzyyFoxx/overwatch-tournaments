@@ -10,6 +10,7 @@ import {
   Loader2,
   Pause,
   Play,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -525,6 +526,7 @@ function DraftHero({
           mutations={mutations}
           onLifecycle={onLifecycle}
           onAutopick={onAutopick}
+          completedCount={completedCount}
           t={t}
         />
       </div>
@@ -537,8 +539,9 @@ interface AdminControlsProps {
   session: DraftSession;
   currentPick: DraftPick | null;
   mutations: DraftMutations;
-  onLifecycle: (action: "start" | "pause" | "resume" | "cancel" | "export") => void;
+  onLifecycle: (action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback") => void;
   onAutopick: () => void;
+  completedCount: number;
   t: Translate;
 }
 
@@ -549,6 +552,7 @@ function AdminControls({
   mutations,
   onLifecycle,
   onAutopick,
+  completedCount,
   t,
 }: AdminControlsProps) {
   if (!isAdmin) return null;
@@ -581,6 +585,15 @@ function AdminControls({
       {canAutopick && (
         <AdminButton disabled={autopickBusy} onClick={onAutopick} icon={<Sparkles aria-hidden />}>
           {label(t, "draft.admin.autopick", "Autopick")}
+        </AdminButton>
+      )}
+      {completedCount > 0 && (session.status === "live" || session.status === "paused" || session.status === "completed") && (
+        <AdminButton
+          disabled={lifecycleBusy}
+          onClick={() => onLifecycle("rollback")}
+          icon={<RotateCcw aria-hidden />}
+        >
+          {t("draft.admin.rollback")}
         </AdminButton>
       )}
       {(session.status === "live" || session.status === "paused" || session.status === "ready") && (
@@ -758,14 +771,32 @@ function DraftOrderPanel({ session, picks, teamById, playerById, tournamentGrid,
       />
       <div className={styles.orderBody}>
         {groups.map(([roundNo, roundPicks]) => {
-          const reverse = session.format === "snake" && roundNo % 2 === 0;
+          const getRoundLabel = () => {
+            if (session.format === "custom") {
+              const rules = session.settings_json?.round_rules || [];
+              const rule = rules[roundNo - 1] || "linear";
+              switch (rule) {
+                case "linear": return "FWD";
+                case "reverse": return "REV";
+                case "weakest_first": return "WEAKEST";
+                case "strongest_first": return "STRONGEST";
+                case "team_avg_asc": return "LOW AVG";
+                case "team_avg_desc": return "HIGH AVG";
+                default: return rule.toUpperCase();
+              }
+            }
+            return session.format === "snake" && roundNo % 2 === 0 ? "REV" : "FWD";
+          };
+          const ruleLabel = getRoundLabel();
           return (
             <div key={roundNo} className={styles.roundGroup}>
               <div className={styles.roundHeader}>
                 <span>
                   {t("draft.round")} {roundNo}
                 </span>
-                <span>{reverse ? "REV" : "FWD"}</span>
+                <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
+                  {ruleLabel}
+                </span>
               </div>
               {roundPicks.map((pick) => (
                 <PickRow

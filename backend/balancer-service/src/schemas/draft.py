@@ -241,6 +241,7 @@ class DraftSessionRead(BaseRead):
     allow_admin_override: bool
     exported_at: datetime | None
     export_status: str | None
+    settings_json: dict[str, Any]
 
 
 class DraftBoardSnapshot(BaseModel):
