@@ -568,27 +568,7 @@ function MatchCard({
         className="flex items-center justify-between gap-2 border-t border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5"
         style={{ height: footerHeight }}
       >
-        <div className="flex items-center gap-2">
-          {meta.bestOf > 0 && (
-            <span className="font-mono text-[10px] font-semibold text-[var(--aqt-fg-faint)]">
-              BO{meta.bestOf}
-            </span>
-          )}
-          {meta.bestOf > 0 && (
-            <span className="flex items-center gap-[3px]">
-              {Array.from({ length: meta.bestOf }).map((_, index) => (
-                <span
-                  key={index}
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{
-                    background:
-                      index < meta.played ? "var(--aqt-teal)" : "hsl(0 0% 100% / 0.12)"
-                  }}
-                />
-              ))}
-            </span>
-          )}
-        </div>
+        <div className="flex items-center gap-2" />
         {meta.timeLabel && (
           <span
             className={cn(
