@@ -58,11 +58,11 @@ def get_default_ow2_tiers_write() -> list[schemas.DivisionGridTierWrite]:
         "grandmaster": 4000,
         "champion": 4500,
     }
-    
+
     tiers = []
     sort_order = 0
     number = 1
-    
+
     for div in divisions:
         base = bases[div]
         for tier_num in range(1, 6):
@@ -70,14 +70,14 @@ def get_default_ow2_tiers_write() -> list[schemas.DivisionGridTierWrite]:
             name = f"{div.capitalize()} {tier_num}"
             offset = (5 - tier_num) * 100
             rank_min = base + offset
-            
+
             if div == "champion" and tier_num == 1:
                 rank_max = None
             else:
                 rank_max = rank_min + 99
-                
+
             icon_url = f"https://minio.craazzzyyfoxx.me/aqt/assets/divisions/{slug}.png"
-            
+
             tiers.append(
                 schemas.DivisionGridTierWrite(
                     slug=slug,
@@ -91,7 +91,7 @@ def get_default_ow2_tiers_write() -> list[schemas.DivisionGridTierWrite]:
             )
             sort_order += 1
             number += 1
-            
+
     return tiers
 
 
@@ -135,10 +135,10 @@ async def create_grid(
     )
     session.add(grid)
     await session.flush()
-    
+
     # Auto-seed default Overwatch 2 division grid
     await seed_default_grid_version(session, workspace_id, grid.id)
-    
+
     # Reload/refresh the grid relationship
     await session.refresh(grid)
     return grid

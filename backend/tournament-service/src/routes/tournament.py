@@ -1,4 +1,5 @@
 import sqlalchemy as sa
+from cashews import cache
 from fastapi import APIRouter, Depends, Query
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import DivisionGridNormalizationError
@@ -45,6 +46,7 @@ async def lookup_tournaments(
     f"**Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.**",
     summary="Get tournament by ID",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/{id}:{entities}", prefix="fastapi:")
 async def get_one(
     request: Request,
     id: int,
@@ -61,6 +63,7 @@ async def get_one(
     description="Retrieve stages for a tournament with items and inputs.",
     summary="Get tournament stages",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/{id}/stages", prefix="fastapi:")
 async def get_stages(
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
@@ -85,6 +88,7 @@ async def get_stages(
     f"**Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.**",
     summary="Get tournament standings by ID",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/{id}/standings:{entities}", prefix="fastapi:")
 async def get_standings(
     request: Request,
     id: int,
@@ -117,6 +121,7 @@ async def get_all_tournaments(
     description=f"Retrieve historical statistics for tournaments. \n **Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.**",
     summary="Get tournament statistics (players, closeness, team price) history",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/statistics/history:{workspace_id}", prefix="fastapi:")
 async def get_statistics(
     workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
@@ -130,6 +135,7 @@ async def get_statistics(
     description=f"Retrieve division-based statistics for tournaments. **Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.**",
     summary="Get division statistics",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/statistics/division:{workspace_id}", prefix="fastapi:")
 async def get_avg_div(
     workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
@@ -159,6 +165,7 @@ async def get_avg_div(
     description=f"Retrieve overall tournament statistics. Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.",
     summary="Get overall tournament statistics",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/statistics/overall:{workspace_id}", prefix="fastapi:")
 async def get_most_players(
     workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
@@ -172,6 +179,7 @@ async def get_most_players(
     description=f"Retrieve available OWAL seasons. Cache TTL: {config.settings.tournaments_cache_ttl / 60} minutes.",
     summary="Get OWAL seasons",
 )
+@cache(ttl=config.settings.tournaments_cache_ttl, key="tournaments/league/seasons:{workspace_id}", prefix="fastapi:")
 async def get_owal_seasons(
     workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),

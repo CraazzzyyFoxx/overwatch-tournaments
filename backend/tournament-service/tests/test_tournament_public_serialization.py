@@ -52,6 +52,7 @@ def _tournament() -> models.Tournament:
         win_points=1.0,
         draw_points=0.5,
         loss_points=0.0,
+        team_formation="balancer",
         division_grid_version_id=5,
     )
 
