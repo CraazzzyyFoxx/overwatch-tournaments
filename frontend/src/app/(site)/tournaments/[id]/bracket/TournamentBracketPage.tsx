@@ -200,22 +200,19 @@ export default function TournamentBracketPage({
       stage.stage_type === "double_elimination"
   );
 
-  const fallbackStage = eliminationStages[0] ?? stages[0];
+  const activeStage = stages.find((stage) => stage.is_active);
+  const fallbackStage = activeStage ?? eliminationStages[0] ?? stages[0];
   const requestedStageId = selectedStageParam ? Number(selectedStageParam) : null;
   const requestedStage = stages.find((stage) => stage.id === requestedStageId);
   const primaryStage = requestedStage ?? fallbackStage;
-  const requestedGroupStage =
-    requestedStage && groupStages.some((stage) => stage.id === requestedStage.id)
-      ? requestedStage
-      : null;
   const shouldShowGroupStage =
     viewParam === "groups" ||
-    requestedGroupStage != null;
+    (primaryStage ? groupStages.some((stage) => stage.id === primaryStage.id) : false);
   const activeGroupStages = shouldShowGroupStage
     ? viewParam === "groups"
       ? groupStages
-      : requestedGroupStage
-        ? [requestedGroupStage]
+      : primaryStage
+        ? [primaryStage]
         : []
     : [];
   const activeStages = shouldShowGroupStage
