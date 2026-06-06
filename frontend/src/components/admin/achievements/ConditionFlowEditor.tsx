@@ -955,16 +955,17 @@ export function ConditionFlowEditor(props: ConditionFlowEditorProps) {
 }
 
 function ConditionFlowEditorInner({ value, onChange, readOnly = false }: ConditionFlowEditorProps) {
+  const [prevValue, setPrevValue] = useState(value);
   const [flatNodes, setFlatNodes] = useState<FlatNode[]>(() => {
     _idCounter = 0;
     return treeToFlat(value);
   });
 
-  // Rebuild when value changes from outside
-  useEffect(() => {
+  if (value !== prevValue) {
+    setPrevValue(value);
     _idCounter = 0;
     setFlatNodes(treeToFlat(value));
-  }, [value]);
+  }
 
   const syncTree = useCallback(
     (updated: FlatNode[]) => {

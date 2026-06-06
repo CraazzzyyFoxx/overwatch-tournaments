@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 
 import type { Tournament } from "@/types/tournament.types";
@@ -37,13 +37,6 @@ export function TournamentCombobox({
 }: TournamentComboboxProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    if (!open) return;
-    setContentWidth(triggerRef.current?.offsetWidth);
-  }, [open]);
 
   const selected = useMemo(
     () => tournaments.find((t) => t.id === value),
@@ -65,7 +58,6 @@ export function TournamentCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
           type="button"
           variant="outline"
           role="combobox"
@@ -82,7 +74,7 @@ export function TournamentCombobox({
       <PopoverContent
         align="start"
         className="p-0"
-        style={contentWidth ? { width: `${contentWidth}px` } : undefined}
+        style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command>
           <CommandInput

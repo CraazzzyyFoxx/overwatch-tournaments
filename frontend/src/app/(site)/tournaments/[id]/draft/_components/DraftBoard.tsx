@@ -68,6 +68,7 @@ import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/playe
 
 import { useDraftBoardQuery, useDraftMutations, useDraftRealtime } from "../_hooks/useDraftData";
 import { computeGating, isUrgent, remainingMs } from "../_lib/draft-logic";
+import type { DraftGating } from "../_lib/draft-logic";
 import { DraftClock } from "./DraftClock";
 import styles from "./DraftBoard.module.css";
 
