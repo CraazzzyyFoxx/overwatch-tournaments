@@ -6,7 +6,7 @@ describe("MatchReportDialog", () => {
   it("submits the selected 1..10 closeness score without converting it to a fraction", () => {
     const source = readFileSync(join(import.meta.dir, "MatchReportDialog.tsx"), "utf8");
 
-    expect(source).toContain("closeness\n      })");
+    expect(source).toMatch(/away_score: awayScore,\s+closeness\s+}\)/);
     expect(source).not.toContain("closeness: closeness / 10");
   });
 });
