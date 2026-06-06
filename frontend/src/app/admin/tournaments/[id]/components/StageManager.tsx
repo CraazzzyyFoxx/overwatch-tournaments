@@ -507,7 +507,18 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         top_lb,
         mode
       }),
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
+      // Keep the source group stage's advance_count in sync with the playoff
+      // distribution we just wired (UB + LB seats per group), so the public
+      // "TOP N ADVANCE" cut-line matches what actually advances.
+      const totalAdvancing = variables.top + variables.top_lb;
+      try {
+        await adminService.updateStage(variables.sourceStageId, {
+          advance_count: totalAdvancing
+        });
+      } catch {
+        // Wiring already succeeded; advance_count sync is best-effort.
+      }
       invalidateStageData();
     }
   });
@@ -680,11 +691,17 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         (stage) => GROUP_STAGE_TYPES.includes(stage.stage_type) && stage.id !== selectedStage.id
       )
     : [];
+  const advanceCountForSource = (stageId: number | undefined): number | null => {
+    if (stageId == null) return null;
+    return groupStages.find((stage) => stage.id === stageId)?.advance_count ?? null;
+  };
   const selectedWireDraft =
     selectedStage && BRACKET_STAGE_TYPES.includes(selectedStage.stage_type) && groupStages.length > 0
       ? wireDrafts[selectedStage.id] ?? {
           sourceStageId: groupStages[0]?.id,
-          top: 2,
+          // Seed from the source group stage's configured advance_count so the
+          // Automation defaults match the "Teams Advancing to Playoff" setting.
+          top: advanceCountForSource(groupStages[0]?.id) ?? 2,
           top_lb: 0,
           mode: "cross" as const
         }
@@ -1410,6 +1427,8 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                             <h4 className="text-sm font-semibold">Automation</h4>
                             <p className="text-xs text-muted-foreground">
                               Auto-populate tentative bracket slots from a preceding group stage.
+                              The per-group count is synced with that stage&apos;s &quot;Teams
+                              Advancing to Playoff&quot; setting.
                             </p>
                           </div>
                         </div>
@@ -1424,15 +1443,18 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                         >
                           <Select
                             value={selectedWireDraft.sourceStageId?.toString() ?? ""}
-                            onValueChange={(value) =>
+                            onValueChange={(value) => {
+                              const nextSourceId = Number(value);
+                              const syncedTop = advanceCountForSource(nextSourceId);
                               setWireDrafts((current) => ({
                                 ...current,
                                 [selectedStage.id]: {
                                   ...selectedWireDraft,
-                                  sourceStageId: Number(value)
+                                  sourceStageId: nextSourceId,
+                                  top: syncedTop ?? selectedWireDraft.top
                                 }
-                              }))
-                            }
+                              }));
+                            }}
                           >
                             <SelectTrigger className="h-9">
                               <SelectValue placeholder="Source group stage" />
