@@ -26,6 +26,7 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  padding-bottom: 110px;
 }
 
 .surface button,
@@ -1636,3 +1637,163 @@
   scrollbar-width: thin;
   scrollbar-color: var(--draft-border-3) transparent;
 }
+
+/* Captains Presence Bar */
+.presenceBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--draft-border);
+  padding-bottom: 16px;
+}
+
+.presenceLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.presenceTitle {
+  color: var(--draft-dim);
+  font-family: var(--draft-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.presenceGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.captainBubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--draft-border-2);
+  border-radius: 99px;
+  background: var(--draft-card-2);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--draft-muted);
+  transition: all 0.2s ease;
+}
+
+.captainBubbleActive {
+  border-color: var(--draft-teal);
+  background: color-mix(in srgb, var(--draft-teal) 8%, transparent);
+  color: var(--draft-teal);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--draft-teal) 15%, transparent);
+}
+
+.captainBubbleOffline {
+  opacity: 0.45;
+}
+
+.onlineDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--draft-emerald);
+  box-shadow: 0 0 6px var(--draft-emerald);
+}
+
+.offlineDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--draft-faint);
+}
+
+.captainInitials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--draft-mono);
+  font-size: 9px;
+  font-weight: 900;
+  border-radius: 3px;
+  padding: 1px 3px;
+  background: var(--team-accent, var(--draft-dim));
+  color: hsl(215 22% 8%);
+  line-height: 1;
+}
+
+.presenceRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--draft-muted);
+  font-family: var(--draft-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.presenceRight svg {
+  width: 16px;
+  height: 16px;
+  color: var(--draft-faint);
+}
+
+/* Bottom panel styles */
+.bottomPanel {
+  position: fixed;
+  z-index: 50;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(960px, calc(100% - 32px));
+  border: 1px solid var(--draft-border-2);
+  border-radius: 16px;
+  background: hsl(215 22% 8% / 0.94);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 50px hsl(0 0% 0% / 0.5);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  transition: all 0.3s ease;
+}
+
+.bottomPanelActive {
+  border-color: hsl(174 72% 46% / 0.34);
+  box-shadow: 0 20px 50px hsl(174 72% 46% / 0.15), 0 0 0 1px hsl(174 72% 46% / 0.1);
+}
+
+.bottomTimerRing {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  color: var(--draft-teal);
+  flex-shrink: 0;
+}
+
+.bottomTimerRing svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.bottomTimerTrack,
+.bottomTimerFill {
+  fill: none;
+  stroke-width: 8;
+}
+
+.bottomTimerTrack {
+  stroke: hsl(0 0% 100% / 0.07);
+}
+
+.bottomTimerFill {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.45s linear, color 0.2s ease;
+}
+

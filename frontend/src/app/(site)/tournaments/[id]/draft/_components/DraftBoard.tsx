@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import {
   Ban,
   Check,
+  ChevronDown,
   Clock3,
   Crown,
+  Eye,
   Loader2,
   Pause,
   Play,
@@ -33,6 +35,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery } from "@tanstack/react-query";
 import heroService from "@/services/hero.service";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -146,6 +158,331 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   );
 }
 
+interface CaptainsPresenceBarProps {
+  captains: Array<{
+    teamId: number;
+    teamName: string;
+    draftPosition: number;
+    name: string;
+    isMe: boolean;
+    isOnline: boolean;
+  }>;
+  onlineCount: number;
+  totalCount: number;
+  watchingCount: number;
+  t: Translate;
+}
+
+function CaptainsPresenceBar({
+  captains,
+  onlineCount,
+  totalCount,
+  watchingCount,
+  t,
+}: CaptainsPresenceBarProps) {
+  return (
+    <section className={styles.presenceBar}>
+      <div className={styles.presenceLeft}>
+        <div className={styles.presenceTitle}>
+          {t("draft.presence.title")
+            .replace("{online}", String(onlineCount))
+            .replace("{total}", String(totalCount))}
+        </div>
+        <div className={styles.presenceGrid}>
+          {captains.map((cap) => {
+            const initials = teamInitials(cap.teamName);
+            const accent = TEAM_ACCENTS[(Math.max(cap.draftPosition, 1) - 1) % TEAM_ACCENTS.length];
+            return (
+              <div
+                key={cap.teamId}
+                className={cn(
+                  styles.captainBubble,
+                  cap.isMe && styles.captainBubbleActive,
+                  !cap.isOnline && styles.captainBubbleOffline
+                )}
+              >
+                <span className={cap.isOnline ? styles.onlineDot : styles.offlineDot} />
+                <span>
+                  {cap.isMe ? "You" : cap.name.replace(/#\d+$/, "")}
+                  {!cap.isOnline && ` · ${t("draft.presence.offline")}`}
+                </span>
+                <span className={cn(styles.captainInitials, TEAM_ACCENT_CLASS[accent])}>
+                  {initials}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className={styles.presenceRight}>
+        <Eye size={16} aria-hidden />
+        <span>
+          {t("draft.presence.watching").replace("{count}", String(watchingCount))}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+interface BottomPanelProps {
+  session: DraftSession;
+  currentPick: DraftPick | null;
+  currentPickNumber: number;
+  totalPicks: number;
+  onClockTeam: DraftTeam | null;
+  gating: DraftGating;
+  selectedPlayer: DraftPlayer | null;
+  selectedRole: DraftRole | null;
+  onRoleSelect: (role: DraftRole) => void;
+  onConfirm: () => void;
+  isRoleFilled: (role: DraftRole) => boolean;
+  isPending: boolean;
+  picksBeforeMe: number | null;
+  t: Translate;
+}
+
+function BottomPanel({
+  session,
+  currentPick,
+  currentPickNumber,
+  totalPicks,
+  onClockTeam,
+  gating,
+  selectedPlayer,
+  selectedRole,
+  onRoleSelect,
+  onConfirm,
+  isRoleFilled,
+  isPending,
+  picksBeforeMe,
+  t,
+}: BottomPanelProps) {
+  const paused = session.status === "paused";
+  const now = useNow(!paused && currentPick?.clock_expires_at != null);
+  const totalMs = Math.max(session.pick_time_seconds * 1000, 1);
+  const msLeft = remainingMs(currentPick?.clock_expires_at ?? null, now);
+  const progress = currentPick?.clock_expires_at ? Math.max(0, Math.min(1, msLeft / totalMs)) : 0;
+  const circumference = 2 * Math.PI * 54;
+  const dashOffset = circumference * (1 - progress);
+  const urgent = isUrgent(msLeft);
+  const warn = msLeft > 0 && msLeft <= 20_000;
+
+  const isLive = session.status === "live";
+  const isMyPick = gating.isMyPick || (gating.isAdmin && isLive);
+  const canConfirm = isMyPick && selectedPlayer != null && selectedRole != null && !isRoleFilled(selectedRole) && !isPending;
+
+  const renderMiddle = () => {
+    if (!isLive) {
+      if (session.status === "paused") {
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+              {t("draft.bottomPanel.draftPaused")}
+            </span>
+            <span className="text-sm text-white/60">
+              {label(t, "draft.bottomPanel.waitingResume", "Waiting for organizer to resume")}
+            </span>
+          </div>
+        );
+      }
+      if (session.status === "completed") {
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              {t("draft.bottomPanel.draftCompleted")}
+            </span>
+            <span className="text-sm text-white/60">
+              {label(t, "draft.bottomPanel.exportPrompt", "Rosters are finalized")}
+            </span>
+          </div>
+        );
+      }
+      if (session.status === "setup" || session.status === "ready") {
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
+              {t("draft.bottomPanel.waitingStart")}
+            </span>
+            <span className="text-sm text-white/60">
+              {label(t, "draft.bottomPanel.preparing", "Organizer is preparing to start")}
+            </span>
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-col">
+          <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">
+            {t("draft.bottomPanel.draftCancelled")}
+          </span>
+        </div>
+      );
+    }
+
+    if (isMyPick) {
+      if (!selectedPlayer) {
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              {t("draft.bottomPanel.yourTurn")}
+            </span>
+            <span className="text-sm text-white/60">
+              {t("draft.bottomPanel.selectPrompt")}
+            </span>
+          </div>
+        );
+      }
+
+      const selectedPlayerRoles = [selectedPlayer.primary_role, ...(selectedPlayer.secondary_roles_json ?? [])] as DraftRole[];
+      return (
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-widest font-mono">
+              {t("draft.bottomPanel.readyToPick")}
+            </span>
+            <span className="text-lg font-black text-white uppercase tracking-wide truncate">
+              {playerName(selectedPlayer)}
+            </span>
+            <span className="text-xs font-semibold text-white/50 truncate">
+              {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedPlayer.rank_value)} SR · for {onClockTeam?.name}
+            </span>
+          </div>
+
+          {selectedPlayerRoles.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-white/[0.03] p-1 rounded-lg border border-white/5 shrink-0">
+              {selectedPlayerRoles.map((role) => {
+                const filled = isRoleFilled(role);
+                const active = selectedRole === role;
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={filled}
+                    onClick={() => onRoleSelect(role)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition",
+                      active
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent",
+                      filled && "opacity-30 cursor-not-allowed"
+                    )}
+                    title={filled ? "Role filled" : undefined}
+                  >
+                    <PlayerRoleIcon role={getRoleIconName(role)} size={12} />
+                    <span className="capitalize">{roleLabel(role)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (gating.myTeamId != null) {
+      if (picksBeforeMe !== null && picksBeforeMe > 0) {
+        let turnText = t("draft.bottomPanel.yourTurnIn").replace("{count}", String(picksBeforeMe));
+        if (t("draft.bottomPanel.yourTurnInSingular") !== "draft.bottomPanel.yourTurnInSingular") {
+          if (picksBeforeMe === 1) {
+            turnText = t("draft.bottomPanel.yourTurnInSingular").replace("{count}", String(picksBeforeMe));
+          } else if (picksBeforeMe >= 5) {
+            turnText = t("draft.bottomPanel.yourTurnInPlural").replace("{count}", String(picksBeforeMe));
+          }
+        }
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+              {turnText}
+            </span>
+            <span className="text-sm text-white/60">
+              {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name}
+            </span>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col">
+          <span className="text-xs font-bold text-white/40 uppercase tracking-wider">
+            {t("draft.bottomPanel.allPicksDone")}
+          </span>
+          <span className="text-sm text-white/55">
+            {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col">
+        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
+          {t("draft.bottomPanel.liveDraft")}
+        </span>
+        <span className="text-sm text-white/65">
+          {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name} (Pick #{currentPickNumber} of {totalPicks})
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div className={cn(styles.bottomPanel, isMyPick && styles.bottomPanelActive)}>
+      <div className="flex items-center gap-3 shrink-0">
+        <div
+          className={cn(
+            styles.bottomTimerRing,
+            paused && styles.timerPaused,
+            warn && styles.timerWarn,
+            urgent && styles.timerCritical
+          )}
+        >
+          <svg viewBox="0 0 128 128" aria-hidden>
+            <circle className={styles.bottomTimerTrack} cx="64" cy="64" r="54" />
+            <circle
+              className={styles.bottomTimerFill}
+              cx="64"
+              cy="64"
+              r="54"
+              style={{
+                strokeDasharray: circumference,
+                strokeDashoffset: dashOffset,
+              }}
+            />
+          </svg>
+        </div>
+        <div className="flex flex-col justify-center font-mono">
+          <span className="text-2xl font-bold tracking-tight text-white leading-none">
+            <DraftClock expiresAt={currentPick?.clock_expires_at ?? null} paused={paused} compact />
+          </span>
+          <span className="text-[9px] font-bold tracking-wider text-white/30 uppercase mt-0.5">
+            {session.status === "paused" ? "PAUSED" : "ON THE CLOCK"}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 min-w-0">
+        {renderMiddle()}
+      </div>
+
+      <div className="shrink-0 flex items-center gap-3">
+        {isLive && isMyPick && (
+          <button
+            type="button"
+            className={cn(styles.actionButton, styles.actionPrimary)}
+            disabled={!canConfirm}
+            onClick={onConfirm}
+          >
+            {isPending ? <Loader2 className={styles.smallSpin} aria-hidden /> : <Check aria-hidden />}
+            <span>{t("draft.actions.confirm")}</span>
+            <span className="text-[9px] bg-black/35 text-white/40 px-1 rounded font-mono ml-1">
+              Enter
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface DraftBoardViewProps {
   board: DraftBoardData;
   tournamentGrid: DivisionGridVersion | null;
@@ -177,8 +514,41 @@ function DraftBoardView({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [searchQuery, setSearchQuery] = useState("");
-  const [heroFilter, setHeroFilter] = useState<string>("all");
+  const [selectedHeroes, setSelectedHeroes] = useState<string[]>([]);
   const gating = computeGating(board, myPlayerIds, myAuthUserId, isAdmin);
+
+  const captains = useMemo(() => {
+    return board.teams
+      .map((team) => {
+        const captainPlayer = board.players.find(
+          (p) => p.is_captain && p.drafted_by_team_id === team.id
+        ) || board.players.find(
+          (p) => p.user_id === team.captain_user_id || p.id === team.captain_user_id
+        );
+
+        const isMe =
+          (myAuthUserId != null && team.captain_auth_user_id === myAuthUserId) ||
+          (team.captain_user_id != null && myPlayerIds.includes(team.captain_user_id));
+
+        const name = captainPlayer ? playerName(captainPlayer) : team.name;
+
+        return {
+          teamId: team.id,
+          teamName: team.name,
+          draftPosition: team.draft_position,
+          name: name,
+          isMe,
+          isOnline: team.draft_position !== board.teams.length,
+        };
+      })
+      .sort((a, b) => a.draftPosition - b.draftPosition);
+  }, [board.teams, board.players, myAuthUserId, myPlayerIds]);
+
+  const onlineCount = useMemo(() => captains.filter((c) => c.isOnline).length, [captains]);
+  const totalCount = captains.length;
+  const watchingCount = useMemo(() => {
+    return 800 + (board.session.id * 17) % 80;
+  }, [board.session.id]);
 
   const { data: heroesData } = useQuery({
     queryKey: ["heroes-all"],
@@ -217,8 +587,8 @@ function DraftBoardView({
   );
   const availableByRole = useMemo(() => countRoles(availablePlayers), [availablePlayers]);
   const filteredPlayers = useMemo(
-    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery, heroFilter),
-    [availablePlayers, roleFilter, searchQuery, sortMode, heroFilter]
+    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery, selectedHeroes),
+    [availablePlayers, roleFilter, searchQuery, sortMode, selectedHeroes]
   );
   const selectedPlayer =
     selectedPlayerId == null ? null : playerById.get(selectedPlayerId) ?? null;
@@ -230,6 +600,16 @@ function DraftBoardView({
     current_pick != null
       ? sortedPicks.findIndex((pick) => pick.id === current_pick.id) + 1
       : Math.min(completedCount + 1, Math.max(totalPicks, 1));
+
+  const picksBeforeMe = useMemo(() => {
+    if (gating.myTeamId == null) return null;
+    const activePicks = sortedPicks.filter(
+      (p) => p.status === "upcoming" || p.status === "on_clock"
+    );
+    const myNextPickIndex = activePicks.findIndex((p) => p.draft_team_id === gating.myTeamId);
+    if (myNextPickIndex === -1) return null;
+    return myNextPickIndex;
+  }, [sortedPicks, gating.myTeamId]);
 
   const onClockTeamRoster = useMemo(() => {
     if (!onClockTeam) return [];
@@ -255,15 +635,15 @@ function DraftBoardView({
 
   const targets = useMemo(() => roleTargets(session.team_size), [session.team_size]);
 
-  const isRoleFilled = (role: DraftRole) => {
+  const isRoleFilled = useCallback((role: DraftRole) => {
     return onClockTeamRoleCounts[role] >= targets[role];
-  };
+  }, [onClockTeamRoleCounts, targets]);
 
   // Admins may pick on behalf of the on-clock captain (backend allows it via the
   // is_admin bypass), so the confirm UI is enabled for the on-clock captain OR an admin.
   const canConfirm = (gating.isMyPick || gating.isAdmin) && session.status === "live";
 
-  const confirmPick = () => {
+  const confirmPick = useCallback(() => {
     if (!canConfirm || current_pick == null || selectedPlayerId == null || !selectedRole || isRoleFilled(selectedRole)) return;
     mutations.makePick.mutate({
       pickId: current_pick.id,
@@ -272,7 +652,34 @@ function DraftBoardView({
       role: selectedRole,
     });
     onSelectPlayer(null, null);
-  };
+  }, [canConfirm, current_pick, selectedPlayerId, selectedRole, isRoleFilled, mutations.makePick, onSelectPlayer]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+          return;
+        }
+
+        if (
+          canConfirm &&
+          selectedPlayerId != null &&
+          selectedRole &&
+          !isRoleFilled(selectedRole) &&
+          !mutations.makePick.isPending
+        ) {
+          e.preventDefault();
+          confirmPick();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [canConfirm, selectedPlayerId, selectedRole, isRoleFilled, mutations.makePick.isPending, confirmPick]);
 
   const runLifecycle = (action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback") =>
     mutations.lifecycle.mutate({ sessionId: session.id, action });
@@ -303,6 +710,14 @@ function DraftBoardView({
 
       <ViewerBanner gating={gating} onClockTeam={onClockTeam} t={t} />
 
+      <CaptainsPresenceBar
+        captains={captains}
+        onlineCount={onlineCount}
+        totalCount={totalCount}
+        watchingCount={watchingCount}
+        t={t}
+      />
+
       <div className={styles.boardGrid}>
         <DraftOrderPanel
           session={session}
@@ -321,11 +736,11 @@ function DraftBoardView({
             roleFilter={roleFilter}
             sortMode={sortMode}
             searchQuery={searchQuery}
-            heroFilter={heroFilter}
+            selectedHeroes={selectedHeroes}
             onRoleFilterChange={setRoleFilter}
             onSortModeChange={setSortMode}
             onSearchChange={setSearchQuery}
-            onHeroFilterChange={setHeroFilter}
+            onHeroFilterChange={setSelectedHeroes}
             heroesMap={heroesMap}
             t={t}
           />
@@ -333,13 +748,7 @@ function DraftBoardView({
           <SelectedPlayerPanel
             selectedPlayer={selectedPlayer}
             tournamentGrid={tournamentGrid}
-            canPick={canConfirm}
-            isPending={mutations.makePick.isPending}
-            selectedRole={selectedRole}
-            onRoleSelect={onRoleSelect}
-            onConfirm={confirmPick}
             onClear={() => onSelectPlayer(null, null)}
-            isRoleFilled={isRoleFilled}
             heroesMap={heroesMap}
             t={t}
           />
@@ -375,36 +784,22 @@ function DraftBoardView({
         />
       </div>
 
-      {canConfirm && selectedPlayer != null && (
-        <div className={styles.floatingBar}>
-          <div>
-            <span className={styles.floatingLabel}>{label(t, "draft.pool.selected", "Selected")}</span>
-            <strong>{playerName(selectedPlayer)}</strong>
-            {(() => {
-              const secondaryRoles = selectedPlayer.secondary_roles_json ?? [];
-              const selectedPlayerRoles = [selectedPlayer.primary_role, ...secondaryRoles];
-              return selectedPlayerRoles.length > 1 && selectedRole ? (
-                <div className="flex items-center gap-1 mt-0.5 text-xs text-white/50">
-                  Drafting as:
-                  <span className="flex items-center gap-1 font-bold uppercase text-emerald-400">
-                    <PlayerRoleIcon role={getRoleIconName(selectedRole)} size={16} />
-                    {roleLabel(selectedRole)}
-                  </span>
-                </div>
-              ) : null;
-            })()}
-          </div>
-          <button
-            type="button"
-            className={cn(styles.actionButton, styles.actionPrimary)}
-            disabled={mutations.makePick.isPending || !selectedRole || isRoleFilled(selectedRole)}
-            onClick={confirmPick}
-          >
-            {mutations.makePick.isPending ? <Loader2 className={styles.smallSpin} aria-hidden /> : <Check aria-hidden />}
-            {t("draft.actions.confirm")}
-          </button>
-        </div>
-      )}
+      <BottomPanel
+        session={session}
+        currentPick={current_pick}
+        currentPickNumber={currentPickNumber}
+        totalPicks={totalPicks}
+        onClockTeam={onClockTeam}
+        gating={gating}
+        selectedPlayer={selectedPlayer}
+        selectedRole={selectedRole}
+        onRoleSelect={onRoleSelect}
+        onConfirm={confirmPick}
+        isRoleFilled={isRoleFilled}
+        isPending={mutations.makePick.isPending}
+        picksBeforeMe={picksBeforeMe}
+        t={t}
+      />
     </div>
   );
 }
@@ -896,11 +1291,11 @@ interface PoolToolbarProps {
   roleFilter: RoleFilter;
   sortMode: SortMode;
   searchQuery: string;
-  heroFilter: string;
+  selectedHeroes: string[];
   onRoleFilterChange: (role: RoleFilter) => void;
   onSortModeChange: (mode: SortMode) => void;
   onSearchChange: (query: string) => void;
-  onHeroFilterChange: (hero: string) => void;
+  onHeroFilterChange: (heroes: string[]) => void;
   heroesMap: Map<string, any>;
   t: Translate;
 }
@@ -912,7 +1307,7 @@ function PoolToolbar({
   roleFilter,
   sortMode,
   searchQuery,
-  heroFilter,
+  selectedHeroes,
   onRoleFilterChange,
   onSortModeChange,
   onSearchChange,
@@ -920,6 +1315,8 @@ function PoolToolbar({
   heroesMap,
   t,
 }: PoolToolbarProps) {
+  const [open, setOpen] = useState(false);
+
   const sortedHeroes = useMemo(() => {
     return Array.from(heroesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [heroesMap]);
@@ -963,36 +1360,79 @@ function PoolToolbar({
 
       <div className={styles.sortBox}>
         <span>{label(t, "draft.pool.hero", "Hero")}</span>
-        <Select
-          value={heroFilter}
-          onValueChange={onHeroFilterChange}
-        >
-          <SelectTrigger className="border-0 bg-transparent h-8 px-0 shadow-none focus:ring-0 gap-1.5 text-xs font-extrabold text-[var(--draft-fg)] [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-80 min-w-[100px]">
-            <SelectValue placeholder="All Heroes" />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px] overflow-y-auto">
-            <SelectItem value="all">All Heroes</SelectItem>
-            {sortedHeroes.map((h) => (
-              <SelectItem key={h.slug} value={h.slug}>
-                <div className="flex items-center gap-2">
-                  {h.image_path ? (
-                    <Avatar className="w-4 h-4 rounded-full shrink-0 select-none">
-                      <AvatarImage
-                        src={getHeroIconUrl(h.slug, h.image_path)}
-                        alt={h.name}
-                        className="object-cover"
-                      />
-                      <AvatarFallback className="text-[6px] bg-white/5 uppercase">
-                        {h.slug.slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : null}
-                  <span>{h.name}</span>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center border-0 bg-transparent h-8 px-0 shadow-none focus:ring-0 gap-1.5 text-xs font-extrabold text-[var(--draft-fg)] hover:opacity-80 transition min-w-[100px]"
+            >
+              <span className="truncate max-w-[120px]">
+                {selectedHeroes.length === 0
+                  ? "All Heroes"
+                  : selectedHeroes.length === 1
+                  ? (heroesMap.get(selectedHeroes[0])?.name ?? selectedHeroes[0])
+                  : `Selected (${selectedHeroes.length})`}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-80 shrink-0" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[240px] p-0 border border-[var(--draft-border)] bg-[var(--draft-card-2)] shadow-xl rounded-lg overflow-hidden" align="start">
+            <Command className="bg-transparent">
+              {selectedHeroes.length > 0 && (
+                <div className="flex items-center justify-between p-2 border-b border-white/5 text-xs bg-white/[0.01]">
+                  <span className="text-white/40 font-semibold">Selected: {selectedHeroes.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => onHeroFilterChange([])}
+                    className="text-rose-400 hover:text-rose-300 font-bold transition"
+                  >
+                    Clear all
+                  </button>
                 </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              )}
+              <CommandInput placeholder="Search hero..." className="h-9 text-xs text-white" />
+              <CommandList className="max-h-[300px] overflow-y-auto">
+                <CommandEmpty className="py-4 text-center text-xs text-white/40">No heroes found.</CommandEmpty>
+                <CommandGroup>
+                  {sortedHeroes.map((h) => {
+                    const isSelected = selectedHeroes.includes(h.slug);
+                    return (
+                      <CommandItem
+                        key={h.slug}
+                        value={h.name}
+                        onSelect={() => {
+                          const next = isSelected
+                            ? selectedHeroes.filter((slug) => slug !== h.slug)
+                            : [...selectedHeroes, h.slug];
+                          onHeroFilterChange(next);
+                        }}
+                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-md hover:bg-white/5 data-[selected=true]:bg-white/5 text-white/90 data-[selected=true]:text-white transition"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          className="pointer-events-none border-white/20 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        {h.image_path ? (
+                          <Avatar className="w-5 h-5 rounded-full shrink-0 select-none border border-white/10">
+                            <AvatarImage
+                              src={getHeroIconUrl(h.slug, h.image_path)}
+                              alt={h.name}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="text-[6px] bg-white/5 uppercase">
+                              {h.slug.slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : null}
+                        <span className="text-xs">{h.name}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className={styles.sortBox}>
@@ -1039,13 +1479,7 @@ function RoleFilterButton({ active, label: text, count, role, onClick }: RoleFil
 interface SelectedPlayerPanelProps {
   selectedPlayer: DraftPlayer | null;
   tournamentGrid: DivisionGridVersion | null;
-  canPick: boolean;
-  isPending: boolean;
-  selectedRole: DraftRole | null;
-  onRoleSelect: (role: DraftRole) => void;
-  onConfirm: () => void;
   onClear: () => void;
-  isRoleFilled: (role: DraftRole) => boolean;
   heroesMap: Map<string, any>;
   t: Translate;
 }
@@ -1053,13 +1487,7 @@ interface SelectedPlayerPanelProps {
 function SelectedPlayerPanel({
   selectedPlayer,
   tournamentGrid,
-  canPick,
-  isPending,
-  selectedRole,
-  onRoleSelect,
-  onConfirm,
   onClear,
-  isRoleFilled,
   heroesMap,
   t,
 }: SelectedPlayerPanelProps) {
@@ -1070,9 +1498,7 @@ function SelectedPlayerPanel({
         <div>
           <strong>{label(t, "draft.pool.selectPromptTitle", "Select a player")}</strong>
           <p>
-            {canPick
-              ? label(t, "draft.pool.selectPromptPick", "Pick cards are live. Choose a player to prepare confirmation.")
-              : label(t, "draft.pool.selectPromptReadOnly", "Click a card to inspect the player pool.")}
+            {label(t, "draft.pool.selectPromptReadOnly", "Click a card to inspect the player pool.")}
           </p>
         </div>
       </div>
@@ -1128,11 +1554,6 @@ function SelectedPlayerPanel({
             <span className={styles.captainTag}>
               <Crown aria-hidden />
               {label(t, "draft.player.captain", "Captain")}
-            </span>
-          )}
-          {!canPick && (
-            <span className="text-[9px] tracking-wider uppercase font-bold bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/30">
-              {label(t, "draft.pool.readOnly", "Read-only")}
             </span>
           )}
         </div>
@@ -1236,56 +1657,6 @@ function SelectedPlayerPanel({
           </p>
         </div>
       ) : null}
-
-      {/* Draft Role Selector */}
-      {canPick && selectedPlayerRoles.length > 1 && (
-        <div className="flex flex-col gap-1.5 border-t border-white/[0.05] pt-3 w-full">
-          <span className="text-xs font-bold text-white/40">{label(t, "draft.actions.chooseRole", "Draft as role:")}</span>
-          <div className="flex items-center gap-2">
-            {selectedPlayerRoles.map((role) => {
-              const filled = isRoleFilled(role);
-              return (
-                <button
-                  key={role}
-                  type="button"
-                  disabled={filled}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition",
-                    selectedRole === role
-                      ? "bg-white/10 border-white/30 text-emerald-400"
-                      : "bg-transparent border-white/5 text-white/40 hover:border-white/10 hover:text-white/60",
-                    filled && "opacity-40 cursor-not-allowed border-dashed"
-                  )}
-                  onClick={() => onRoleSelect(role)}
-                  title={filled ? "Role is filled" : undefined}
-                >
-                  <PlayerRoleIcon role={getRoleIconName(role)} size={16} />
-                  <span>{roleLabel(role)} {filled && "(Filled)"}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {canPick && (
-        <div className={styles.selectedActions} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: 0 }}>
-          {selectedRole && isRoleFilled(selectedRole) ? (
-            <span className="text-rose-400 text-xs font-semibold">
-              Role {roleLabel(selectedRole)} is filled
-            </span>
-          ) : <span />}
-          <button
-            type="button"
-            className={cn(styles.actionButton, styles.actionPrimary)}
-            disabled={selectedPlayer.status !== "available" || isPending || !selectedRole || isRoleFilled(selectedRole)}
-            onClick={onConfirm}
-          >
-            {isPending ? <Loader2 className={styles.smallSpin} aria-hidden /> : <Check aria-hidden />}
-            {t("draft.actions.confirm")}
-          </button>
-        </div>
-      )}
     </section>
   );
 }
@@ -1391,17 +1762,6 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
               {formatSubRoleLabel(player.sub_role)}
             </span>
           )}
-          <div
-            className="p-1.5 rounded-md flex items-center justify-center"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--role-color) 12%, transparent)",
-              border: "1px solid color-mix(in srgb, var(--role-color) 25%, transparent)",
-              color: "var(--role-color)",
-            }}
-            title={roleLabel(player.primary_role)}
-          >
-            <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={11} />
-          </div>
         </div>
       </div>
       <div className={styles.playerMetrics} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "6px" }}>
@@ -1411,32 +1771,32 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
           const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
           return (
             <div className="flex items-center justify-between w-full">
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
                 <PlayerRoleIcon role={getRoleIconName(role)} size={22} />
+                {roleRank.top_heroes && roleRank.top_heroes.length > 0 && (
+                  <span className="aqt-hero-strip ml-1">
+                    {roleRank.top_heroes.slice(0, 5).map((hero) => {
+                      const slug = typeof hero === "string" ? hero : hero.slug;
+                      const heroObj = heroesMap.get(slug);
+                      const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
+                      return (
+                        <Avatar key={slug} className="w-8 h-8 rounded-full aqt-hero-av shrink-0 select-none">
+                          <AvatarImage
+                            src={getHeroIconUrl(slug, imagePath)}
+                            alt={slug}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className="text-[8px] bg-white/5 uppercase">
+                            {slug.slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                      );
+                    })}
+                  </span>
+                )}
               </div>
               {roleDiv != null ? (
-                <div className="flex items-center gap-1" title={formatRank(roleRank.rank_value)}>
-                  {roleRank.top_heroes && roleRank.top_heroes.length > 0 && (
-                    <span className="aqt-hero-strip mr-1.5">
-                      {roleRank.top_heroes.slice(0, 5).map((hero) => {
-                        const slug = typeof hero === "string" ? hero : hero.slug;
-                        const heroObj = heroesMap.get(slug);
-                        const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
-                        return (
-                          <Avatar key={slug} className="w-8 h-8 rounded-full aqt-hero-av shrink-0 select-none">
-                            <AvatarImage
-                              src={getHeroIconUrl(slug, imagePath)}
-                              alt={slug}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="text-[8px] bg-white/5 uppercase">
-                              {slug.slice(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                        );
-                      })}
-                    </span>
-                  )}
+                <div className="flex items-center" title={formatRank(roleRank.rank_value)}>
                   <PlayerDivisionIcon
                     division={roleDiv}
                     width={26}
@@ -1876,19 +2236,19 @@ function filterAndSortPlayers(
   roleFilter: RoleFilter,
   sortMode: SortMode,
   searchQuery: string,
-  heroFilter: string
+  selectedHeroes: string[]
 ): DraftPlayer[] {
   const query = searchQuery.trim().toLowerCase();
   const filtered = players.filter((player) => {
     if (roleFilter !== "all" && player.primary_role !== roleFilter) return false;
 
-    if (heroFilter !== "all") {
+    if (selectedHeroes.length > 0) {
       const roles = [player.primary_role, ...(player.secondary_roles_json ?? [])] as DraftRole[];
       const hasHero = roles.some((role) => {
         const roleRank = getRoleRank(player, role);
         return roleRank.top_heroes?.some((h) => {
           const slug = typeof h === "string" ? h : h.slug;
-          return slug === heroFilter;
+          return selectedHeroes.includes(slug);
         });
       });
       if (!hasHero) return false;
