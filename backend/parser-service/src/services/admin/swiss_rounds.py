@@ -6,12 +6,14 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
+from shared.schemas.events import SwissNextRoundEvent
+from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.schemas.events import SwissNextRoundEvent
 from src import models
 from src.core import db
 from src.services.admin import stage as stage_service
+from src.services.standings import recalculation as standings_recalculation
 from src.services.standings import service as standings_service
 from src.services.standings import swiss_auto_round
 
@@ -52,6 +54,13 @@ async def _generate_next_round(
         logger.warning(
             "Swiss auto-round: stage is not active, skipping",
             stage_id=event.stage_id,
+        )
+        return []
+    if swiss_scope_stopped(stage, event.stage_item_id):
+        logger.info(
+            "Swiss auto-round: stopped scope skipped",
+            stage_id=event.stage_id,
+            stage_item_id=event.stage_item_id,
         )
         return []
 
@@ -117,6 +126,20 @@ async def _generate_next_round(
     skeleton = await stage_service._generate_stage_skeleton(
         session, stage, team_ids, event.stage_item_id
     )
+    if not skeleton.pairings:
+        await session.commit()
+        await standings_service.recalculate_for_tournament(session, event.tournament_id)
+        await standings_recalculation.publish_tournament_changed(
+            event.tournament_id,
+            "results_changed",
+        )
+        logger.info(
+            "Swiss auto-round: scope completed because no non-rematch pairing exists",
+            stage_id=event.stage_id,
+            stage_item_id=event.stage_item_id,
+        )
+        return []
+
     encounters = await stage_service._create_encounters_from_skeleton(
         session, stage, skeleton, event.stage_item_id
     )
@@ -131,6 +154,10 @@ async def _generate_next_round(
     )
 
     await standings_service.recalculate_for_tournament(session, event.tournament_id)
+    await standings_recalculation.publish_tournament_changed(
+        event.tournament_id,
+        "results_changed",
+    )
 
     return encounters
 

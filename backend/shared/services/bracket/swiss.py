@@ -5,9 +5,8 @@ The generator keeps Monrad ordering as the primary preference:
 - same-score opponents are preferred over float-down pairings
 - within a score group, top-half vs bottom-half pairings are preferred
 
-Re-matches are avoided whenever a full round can be built without them. When
-that is impossible, the generator falls back to the same search with re-matches
-allowed as the last resort.
+Re-matches are never allowed. When a full round cannot be built without a
+re-match, the Swiss scope must end early.
 """
 
 from __future__ import annotations
@@ -18,6 +17,10 @@ from functools import cache
 from .types import BracketSkeleton, Pairing
 
 _NON_CANONICAL_DISTANCE = 10_000
+
+
+class SwissPairingImpossibleError(ValueError):
+    """Raised when no complete Swiss round can be built without a rematch."""
 
 
 @dataclass(frozen=True)
@@ -47,24 +50,23 @@ class _TeamMeta:
         return self.half_size <= self.pos_in_group < self.half_size * 2
 
 
-def _select_bye_candidate(team_ids: list[int], bye_history: set[int]) -> int | None:
+def _bye_candidates(team_ids: list[int], bye_history: set[int]) -> list[int | None]:
     if len(team_ids) % 2 == 0:
-        return None
+        return [None]
 
-    for team_id in reversed(team_ids):
-        if team_id not in bye_history:
-            return team_id
-    return team_ids[-1]
+    lowest_first = list(reversed(team_ids))
+    without_bye = [team_id for team_id in lowest_first if team_id not in bye_history]
+    return without_bye or lowest_first
 
 
 def _build_team_meta(sorted_teams: list[SwissStanding]) -> dict[int, _TeamMeta]:
     metadata: dict[int, _TeamMeta] = {}
     groups: list[list[SwissStanding]] = []
     current_group: list[SwissStanding] = []
-    group_key: tuple[float, float] | None = None
+    group_key: float | None = None
 
     for standing in sorted_teams:
-        key = (standing.points, standing.buchholz)
+        key = standing.points
         if key != group_key and current_group:
             groups.append(current_group)
             current_group = []
@@ -119,21 +121,16 @@ def _pair_priority(
     candidate_team_id: int,
     *,
     metadata: dict[int, _TeamMeta],
-    played_pairs: set[frozenset[int]],
-    allow_rematches: bool,
-) -> tuple[int, int, int, int, int, int]:
+) -> tuple[int, int, int, int, int]:
     anchor = metadata[anchor_team_id]
     candidate = metadata[candidate_team_id]
-    pair_key = frozenset({anchor_team_id, candidate_team_id})
 
-    rematch_penalty = int(allow_rematches and pair_key in played_pairs)
     group_distance = abs(anchor.group_index - candidate.group_index)
     pair_bucket = _pair_bucket(anchor, candidate)
     canonical_distance = _canonical_distance(anchor, candidate)
     rank_distance = abs(candidate.rank_index - anchor.rank_index)
 
     return (
-        rematch_penalty,
         pair_bucket,
         group_distance,
         canonical_distance,
@@ -147,7 +144,6 @@ def _find_pairings(
     *,
     metadata: dict[int, _TeamMeta],
     played_pairs: set[frozenset[int]],
-    allow_rematches: bool,
 ) -> list[tuple[int, int]] | None:
     ordered_team_ids = tuple(team_ids)
 
@@ -163,14 +159,12 @@ def _find_pairings(
                 anchor_team_id,
                 candidate_team_id,
                 metadata=metadata,
-                played_pairs=played_pairs,
-                allow_rematches=allow_rematches,
             ),
         )
 
         for candidate_team_id in candidates:
             pair_key = frozenset({anchor_team_id, candidate_team_id})
-            if not allow_rematches and pair_key in played_pairs:
+            if pair_key in played_pairs:
                 continue
 
             next_remaining = tuple(
@@ -212,28 +206,27 @@ def generate_round(
     team_ids = [standing.team_id for standing in sorted_teams]
     bye_history = bye_history or set()
 
-    bye_candidate = _select_bye_candidate(team_ids, bye_history)
-    pairing_standings = [
-        standing for standing in sorted_teams if standing.team_id != bye_candidate
-    ]
-    pairing_team_ids = [standing.team_id for standing in pairing_standings]
-    metadata = _build_team_meta(pairing_standings)
-
-    pair_order = _find_pairings(
-        pairing_team_ids,
-        metadata=metadata,
-        played_pairs=played_pairs,
-        allow_rematches=False,
-    )
-    if pair_order is None:
+    bye_candidate: int | None = None
+    pair_order: list[tuple[int, int]] | None = None
+    for candidate in _bye_candidates(team_ids, bye_history):
+        pairing_standings = [
+            standing for standing in sorted_teams if standing.team_id != candidate
+        ]
+        pairing_team_ids = [standing.team_id for standing in pairing_standings]
+        metadata = _build_team_meta(pairing_standings)
         pair_order = _find_pairings(
             pairing_team_ids,
             metadata=metadata,
             played_pairs=played_pairs,
-            allow_rematches=True,
         )
+        if pair_order is not None:
+            bye_candidate = candidate
+            break
+
     if pair_order is None:
-        raise ValueError("Unable to generate Swiss pairings for the provided standings")
+        raise SwissPairingImpossibleError(
+            "Unable to generate a complete Swiss round without rematches"
+        )
 
     pairings = [
         Pairing(
@@ -246,4 +239,8 @@ def generate_round(
         for index, (home_team_id, away_team_id) in enumerate(pair_order, start=1)
     ]
 
-    return BracketSkeleton(pairings=pairings, total_rounds=1)
+    return BracketSkeleton(
+        pairings=pairings,
+        total_rounds=1,
+        bye_team_id=bye_candidate,
+    )

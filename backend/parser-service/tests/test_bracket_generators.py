@@ -264,7 +264,7 @@ class SwissInvariants(TestCase):
 
         self.assertEqual({1: 1, 2: 1, 3: 1, 4: 1}, _appearance_counts(s))
 
-    def test_finds_global_non_rematch_matching_before_allowing_rematch(self) -> None:
+    def test_finds_global_non_rematch_matching(self) -> None:
         standings = [
             swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)
         ]
@@ -279,6 +279,96 @@ class SwissInvariants(TestCase):
 
         self.assertEqual({1: 1, 2: 1, 3: 1, 4: 1}, _appearance_counts(s))
         self.assertNotIn(frozenset({2, 4}), pair_set)
+
+    def test_never_allows_rematches(self) -> None:
+        standings = [
+            swiss.SwissStanding(team_id=1, points=1.0),
+            swiss.SwissStanding(team_id=2, points=0.0),
+        ]
+
+        with self.assertRaises(swiss.SwissPairingImpossibleError):
+            swiss.generate_round(
+                standings,
+                played_pairs={frozenset({1, 2})},
+                round_number=2,
+            )
+
+    def test_groups_by_points_and_uses_buchholz_for_ordering(self) -> None:
+        standings = [
+            swiss.SwissStanding(team_id=1, points=1.0, buchholz=10.0),
+            swiss.SwissStanding(team_id=2, points=1.0, buchholz=9.0),
+            swiss.SwissStanding(team_id=3, points=1.0, buchholz=2.0),
+            swiss.SwissStanding(team_id=4, points=1.0, buchholz=1.0),
+        ]
+
+        skeleton = swiss.generate_round(standings, played_pairs=set(), round_number=2)
+        pairs = {
+            frozenset({pairing.home_team_id, pairing.away_team_id})
+            for pairing in skeleton.pairings
+        }
+
+        self.assertEqual({frozenset({1, 3}), frozenset({2, 4})}, pairs)
+
+    def test_selects_a_different_bye_when_lowest_team_blocks_pairing(self) -> None:
+        standings = [
+            swiss.SwissStanding(team_id=1, points=2.0),
+            swiss.SwissStanding(team_id=2, points=1.0),
+            swiss.SwissStanding(team_id=3, points=0.0),
+        ]
+
+        skeleton = swiss.generate_round(
+            standings,
+            played_pairs={frozenset({1, 2})},
+            round_number=2,
+        )
+
+        self.assertEqual(2, skeleton.bye_team_id)
+        self.assertEqual(
+            frozenset({1, 3}),
+            frozenset(
+                {
+                    skeleton.pairings[0].home_team_id,
+                    skeleton.pairings[0].away_team_id,
+                }
+            ),
+        )
+
+    def test_prefers_team_without_previous_bye(self) -> None:
+        standings = [
+            swiss.SwissStanding(team_id=1, points=2.0),
+            swiss.SwissStanding(team_id=2, points=1.0),
+            swiss.SwissStanding(team_id=3, points=0.0),
+        ]
+
+        skeleton = swiss.generate_round(
+            standings,
+            played_pairs=set(),
+            round_number=2,
+            bye_history={3},
+        )
+
+        self.assertEqual(2, skeleton.bye_team_id)
+
+    def test_does_not_repeat_bye_while_other_teams_have_not_received_one(self) -> None:
+        standings = [
+            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 6)
+        ]
+        played_pairs = {
+            frozenset({1, 3}),
+            frozenset({2, 4}),
+            frozenset({1, 5}),
+            frozenset({2, 3}),
+            frozenset({1, 4}),
+            frozenset({2, 5}),
+        }
+
+        with self.assertRaises(swiss.SwissPairingImpossibleError):
+            swiss.generate_round(
+                standings,
+                played_pairs=played_pairs,
+                round_number=4,
+                bye_history={3, 4, 5},
+            )
 
 
 class EngineDispatchInvariants(TestCase):

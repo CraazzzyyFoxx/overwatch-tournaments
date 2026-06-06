@@ -104,6 +104,55 @@ class StandingsServiceStageItemTests(TestCase):
             standing.stage_item_id for standing in standings
         ])
 
+    def test_swiss_standings_award_configured_bye_points(self) -> None:
+        tournament = models.Tournament(
+            workspace_id=1,
+            number=72,
+            name="Tournament",
+            is_league=False,
+            win_points=1.0,
+            draw_points=0.5,
+            loss_points=0.0,
+        )
+        tournament.id = 104
+        tournament.groups = []
+
+        stage = models.Stage(
+            tournament_id=tournament.id,
+            name="Swiss",
+            stage_type=enums.StageType.SWISS,
+            order=0,
+            settings_json={
+                "swiss_bye_points": 1.5,
+                "swiss_byes": {"149": [30, 30]},
+            },
+        )
+        stage.id = 9
+        stage_item = models.StageItem(
+            stage_id=stage.id,
+            name="Group A",
+            type=enums.StageItemType.GROUP,
+            order=0,
+        )
+        stage_item.id = 149
+        stage_item.inputs = [
+            models.StageItemInput(stage_item_id=stage_item.id, slot=1, team_id=10),
+            models.StageItemInput(stage_item_id=stage_item.id, slot=2, team_id=20),
+            models.StageItemInput(stage_item_id=stage_item.id, slot=3, team_id=30),
+        ]
+
+        standings = standings_service._build_group_stage_standings(
+            tournament,
+            stage,
+            stage_item,
+            [],
+        )
+
+        points_by_team = {standing.team_id: standing.points for standing in standings}
+        matches_by_team = {standing.team_id: standing.matches for standing in standings}
+        self.assertEqual(3.0, points_by_team[30])
+        self.assertEqual(0, matches_by_team[30])
+
     def test_group_stage_standings_ignore_partially_completed_current_round(self) -> None:
         tournament = models.Tournament(
             workspace_id=1,
@@ -609,3 +658,55 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
         await standings_service._update_stage_completion_flags(session, tournament)
 
         self.assertFalse(stage.is_completed)
+
+    async def test_swiss_stage_completion_accepts_scope_stopped_without_rematches(
+        self,
+    ) -> None:
+        tournament = models.Tournament(
+            workspace_id=1,
+            number=74,
+            name="Tournament",
+            is_league=False,
+        )
+        tournament.id = 106
+
+        stage = models.Stage(
+            tournament_id=tournament.id,
+            name="Swiss",
+            stage_type=enums.StageType.SWISS,
+            order=0,
+            settings_json={"swiss_stopped_scopes": ["403"]},
+        )
+        stage.id = 13
+        stage.is_completed = False
+        stage.max_rounds = 5
+
+        item = models.StageItem(
+            stage_id=stage.id,
+            name="Group A",
+            type=enums.StageItemType.GROUP,
+            order=0,
+        )
+        item.id = 403
+        stage.items = [item]
+        tournament.stages = [stage]
+
+        class _CountsResult:
+            def __iter__(self):
+                return iter(
+                    [
+                        SimpleNamespace(
+                            stage_id=stage.id,
+                            stage_item_id=item.id,
+                            total=4,
+                            completed=4,
+                            max_round=2,
+                        )
+                    ]
+                )
+
+        session = SimpleNamespace(execute=AsyncMock(return_value=_CountsResult()))
+
+        await standings_service._update_stage_completion_flags(session, tournament)
+
+        self.assertTrue(stage.is_completed)

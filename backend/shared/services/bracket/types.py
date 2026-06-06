@@ -41,3 +41,4 @@ class BracketSkeleton:
     pairings: list[Pairing]
     total_rounds: int
     advancement_edges: list[AdvancementEdge] = field(default_factory=list)
+    bye_team_id: int | None = None

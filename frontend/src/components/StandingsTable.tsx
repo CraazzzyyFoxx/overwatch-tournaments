@@ -134,7 +134,7 @@ const StandingsTable = ({
 
   const hasBuchholz = is_groups && standings.some((s) => s.buchholz != null);
   const showCut = is_groups && sortedStandings.length > resolvedAdvanceCount;
-  const columnCount = is_groups ? (hasBuchholz ? 7 : 6) : 7;
+  const columnCount = is_groups ? (hasBuchholz ? 10 : 9) : 7;
 
   return (
     <div className="st-scroll">
@@ -147,16 +147,25 @@ const StandingsTable = ({
               <th className="c" style={{ width: 80 }}>
                 W·D·L
               </th>
+              <th className="r" style={{ width: 80 }}>
+                Score
+              </th>
+              <th className="r" style={{ width: 60 }}>
+                TB
+              </th>
+              <th className="r" style={{ width: 60 }}>
+                Pts
+              </th>
               {hasBuchholz && (
                 <th className="r" style={{ width: 80 }}>
                   {t("common.buchholz")}
                 </th>
               )}
+              <th className="r" style={{ width: 80 }}>
+                Pts Δ
+              </th>
               <th className="c" style={{ width: 120 }}>
                 Form
-              </th>
-              <th className="r" style={{ width: 80 }}>
-                Map Δ
               </th>
               <th className="c" style={{ width: 90 }} />
             </tr>
@@ -212,16 +221,23 @@ const StandingsTable = ({
                           <span className="l">{standing.lose}</span>
                         </span>
                       </td>
+                      <td className="r font-mono text-[var(--fg-muted)]">
+                        {standing.points.toFixed(1)}
+                      </td>
+                      <td className="r font-mono text-[var(--fg-dim)]">
+                        {standing.tb ?? "—"}
+                      </td>
+                      <td className="r font-mono text-[var(--fg-dim)]">{maps.won}</td>
                       {hasBuchholz && (
                         <td className="r font-mono text-[var(--fg-dim)]">
-                          {standing.buchholz != null ? standing.buchholz : "—"}
+                          {standing.buchholz != null ? standing.buchholz.toFixed(1) : "—"}
                         </td>
                       )}
-                      <td className="c">
-                        <FormChips results={results} />
-                      </td>
                       <td className="r">
                         <MapDiff diff={maps.diff} />
+                      </td>
+                      <td className="c">
+                        <FormChips results={results} />
                       </td>
                       <td className="c">
                         {advancing ? (

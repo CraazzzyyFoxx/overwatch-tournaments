@@ -7,6 +7,7 @@ from typing import Any
 import sqlalchemy as sa
 from loguru import logger
 from shared.schemas.events import SwissNextRoundEvent
+from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -54,6 +55,13 @@ async def _generate_next_round(
         logger.warning(
             "Swiss auto-round: stage is not active, skipping",
             stage_id=event.stage_id,
+        )
+        return []
+    if swiss_scope_stopped(stage, event.stage_item_id):
+        logger.info(
+            "Swiss auto-round: stopped scope skipped",
+            stage_id=event.stage_id,
+            stage_item_id=event.stage_item_id,
         )
         return []
 
@@ -117,6 +125,18 @@ async def _generate_next_round(
         return []
 
     skeleton = await stage_service._generate_stage_skeleton(session, stage, team_ids, event.stage_item_id)
+    if not skeleton.pairings:
+        await session.commit()
+        await standings_service.recalculate_for_tournament(session, event.tournament_id)
+        await enqueue_tournament_changed(session, event.tournament_id, "results_changed")
+        await session.commit()
+        logger.info(
+            "Swiss auto-round: scope completed because no non-rematch pairing exists",
+            stage_id=event.stage_id,
+            stage_item_id=event.stage_item_id,
+        )
+        return []
+
     team_names_by_id = await stage_service._load_team_names(session, team_ids)
     encounters = await stage_service._create_encounters_from_skeleton(
         session,
@@ -144,6 +164,8 @@ async def _generate_next_round(
     )
 
     await standings_service.recalculate_for_tournament(session, event.tournament_id)
+    await enqueue_tournament_changed(session, event.tournament_id, "results_changed")
+    await session.commit()
 
     return encounters
 
