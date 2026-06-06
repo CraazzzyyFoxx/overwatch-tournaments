@@ -21,7 +21,7 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-events = importlib.import_module("src.services.tournament.recalculation_events")
+events = importlib.import_module("src.services.tournament_events")
 
 
 class TournamentRecalculationEventsTests(IsolatedAsyncioTestCase):
@@ -34,3 +34,13 @@ class TournamentRecalculationEventsTests(IsolatedAsyncioTestCase):
             )
 
         invalidate.assert_awaited_once_with(42)
+
+    async def test_bracket_changed_does_not_invalidate_app_service_caches(self) -> None:
+        invalidate = AsyncMock()
+
+        with patch.object(events, "invalidate_tournament_standings_cache", invalidate):
+            await events.handle_tournament_changed_event(
+                {"tournament_id": 42, "reason": "bracket_changed"}
+            )
+
+        invalidate.assert_not_awaited()

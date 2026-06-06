@@ -119,3 +119,32 @@ export function invalidateTournamentResults(
 
   void Promise.all(invalidations);
 }
+
+/**
+ * Invalidate only encounter collections after an encounter write commits.
+ * Standings and stage completion flags are intentionally left alone until the
+ * asynchronous tournament recalculation publishes `results_changed`.
+ */
+export function invalidateTournamentBracket(
+  queryClient: QueryClient,
+  tournamentId: number,
+  workspaceId?: number | null
+): void {
+  const keys = getTournamentWorkspaceQueryKeys(tournamentId);
+
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: keys.encounters }),
+    queryClient.invalidateQueries({ queryKey: keys.encountersCollection }),
+    queryClient.invalidateQueries({ queryKey: keys.publicEncounters })
+  ];
+
+  if (workspaceId != null) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: ["encounters", "tournament", tournamentId, workspaceId]
+      })
+    );
+  }
+
+  void Promise.all(invalidations);
+}

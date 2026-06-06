@@ -14,16 +14,20 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from src.core import config
+from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 
-TournamentRealtimeReason = Literal["results_changed", "structure_changed"]
+TournamentRealtimeReason = Literal["bracket_changed", "results_changed", "structure_changed"]
 
 _SESSION_KEY = "tournament_realtime_updates"
 _SESSION_EVENTS_KEY = "tournament_realtime_event_objects"
+_BRACKET_CHANGED: TournamentRealtimeReason = "bracket_changed"
 _RESULTS_CHANGED: TournamentRealtimeReason = "results_changed"
 _STRUCTURE_CHANGED: TournamentRealtimeReason = "structure_changed"
 
 
 def _normalize_reason(reason: str) -> TournamentRealtimeReason | None:
+    if reason == _BRACKET_CHANGED:
+        return _BRACKET_CHANGED
     if reason == _RESULTS_CHANGED:
         return _RESULTS_CHANGED
     if reason == _STRUCTURE_CHANGED:
@@ -44,6 +48,8 @@ def _merge_updates(
             merged.append((tournament_id, _STRUCTURE_CHANGED))
         elif _RESULTS_CHANGED in reasons:
             merged.append((tournament_id, _RESULTS_CHANGED))
+        elif _BRACKET_CHANGED in reasons:
+            merged.append((tournament_id, _BRACKET_CHANGED))
     return merged
 
 
@@ -89,6 +95,7 @@ async def publish_tournament_realtime_updates(
 
     for tournament_id, reason in updates:
         try:
+            await invalidate_tournament_cache(tournament_id, reason)
             await publish_tournament_update(tournament_id, reason)
         except Exception:
             logger.exception(
@@ -98,8 +105,14 @@ async def publish_tournament_realtime_updates(
             )
 
 
-async def _publish_persisted_event(topic: str, envelope: WorkspaceEventEnvelope) -> None:
+async def _publish_persisted_event(
+    tournament_id: int,
+    reason: TournamentRealtimeReason,
+    topic: str,
+    envelope: WorkspaceEventEnvelope,
+) -> None:
     try:
+        await invalidate_tournament_cache(tournament_id, reason)
         await publish_event_to_redis_url(str(config.settings.redis_url), topic=topic, envelope=envelope)
     except Exception:
         logger.exception("Failed to publish persisted tournament realtime event", topic=topic)
@@ -143,13 +156,29 @@ def _publish_registered_updates_after_commit(session: Session) -> None:
         return
 
     if events:
-        envelopes: list[tuple[str, WorkspaceEventEnvelope]] = []
+        envelopes: list[tuple[int, TournamentRealtimeReason, str, WorkspaceEventEnvelope]] = []
         for event_obj in events:
             if event_obj.occurred_at is None:
                 event_obj.occurred_at = datetime.now(UTC)
-            envelopes.append((event_obj.topic, event_to_envelope(event_obj)))
-        for topic, envelope in envelopes:
-            loop.create_task(_publish_persisted_event(topic, envelope))
+            reason = _normalize_reason(str(event_obj.payload.get("reason")))
+            if event_obj.tournament_id is None or reason is None:
+                logger.warning(
+                    "Ignoring malformed persisted tournament realtime event",
+                    topic=event_obj.topic,
+                    tournament_id=event_obj.tournament_id,
+                    reason=event_obj.payload.get("reason"),
+                )
+                continue
+            envelopes.append(
+                (
+                    int(event_obj.tournament_id),
+                    reason,
+                    event_obj.topic,
+                    event_to_envelope(event_obj),
+                )
+            )
+        for tournament_id, reason, topic, envelope in envelopes:
+            loop.create_task(_publish_persisted_event(tournament_id, reason, topic, envelope))
 
     if fallback_updates:
         loop.create_task(publish_tournament_realtime_updates(fallback_updates))

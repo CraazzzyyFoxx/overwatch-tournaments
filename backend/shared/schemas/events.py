@@ -87,14 +87,15 @@ class TournamentRecalcEvent(BaseEvent):
     tournament_id: int = Field(..., description="Tournament ID to recalculate")
 
 
-TournamentChangedReason = Literal["results_changed", "structure_changed"]
+TournamentChangedReason = Literal["bracket_changed", "results_changed", "structure_changed"]
 
 
 class TournamentChangedEvent(BaseEvent):
     """Event emitted when tournament bracket-related reads become stale.
 
-    Published by: parser-service worker and parser-service admin stage flows
-    Consumed by: app-service API for cache invalidation and WebSocket fan-out
+    Published by: parser-service worker and tournament-service flows
+    Consumed by: app-service and tournament-service APIs for cache invalidation
+    and realtime fan-out
     """
 
     event_type: str = Field(default="tournament_changed", frozen=True)

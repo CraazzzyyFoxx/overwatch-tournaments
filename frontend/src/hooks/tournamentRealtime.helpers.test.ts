@@ -46,6 +46,35 @@ describe("tournament realtime helpers", () => {
     expect(plan.queryKeys).not.toContainEqual(["registration-form", 7, 42]);
   });
 
+  it("parses bracket-only tournament updates", () => {
+    const message = parseTournamentRealtimeMessage(
+      JSON.stringify({
+        type: "tournament:updated",
+        data: {
+          tournament_id: 42,
+          reason: "bracket_changed",
+        },
+      }),
+      42
+    );
+
+    expect(message).toEqual({
+      tournamentId: 42,
+      reason: "bracket_changed",
+    });
+  });
+
+  it("builds a bracket-scoped plan that refetches encounters only", () => {
+    const plan = getTournamentRealtimeUpdatePlan(42, 7, "bracket_changed");
+
+    expect(plan.workspaceScope).toBe("bracket");
+    expect(plan.shouldRefreshRoute).toBe(false);
+    expect(plan.queryKeys).toContainEqual(["encounters", "tournament", 42]);
+    expect(plan.queryKeys).toContainEqual(["encounters", "tournament", 42, 7]);
+    expect(plan.queryKeys).not.toContainEqual(["standings", 42]);
+    expect(plan.queryKeys).not.toContainEqual(["tournament", 42, "stages"]);
+  });
+
   it("builds a full-scope plan for structure updates and requires a route refresh", () => {
     const plan = getTournamentRealtimeUpdatePlan(42, 7, "structure_changed");
 

@@ -118,21 +118,42 @@ TOURNAMENT_RECALC_DLQ = RabbitQueue(
     durable=True,
 )
 
-TOURNAMENT_CHANGED_QUEUE = RabbitQueue(
-    "tournament_changed",
+TOURNAMENT_CHANGED_TOURNAMENT_QUEUE = RabbitQueue(
+    "tournament_changed_tournament_service",
     durable=True,
     routing_key="tournament.changed.*",
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_changed.dlq",
+        "x-dead-letter-routing-key": "tournament_changed_tournament_service.dlq",
         "x-message-ttl": 300000,  # 5 minutes
     },
 )
 
-TOURNAMENT_CHANGED_DLQ = RabbitQueue(
-    "tournament_changed.dlq",
+TOURNAMENT_CHANGED_TOURNAMENT_DLQ = RabbitQueue(
+    "tournament_changed_tournament_service.dlq",
     durable=True,
 )
+
+TOURNAMENT_CHANGED_APP_QUEUE = RabbitQueue(
+    "tournament_changed_app_service",
+    durable=True,
+    routing_key="tournament.changed.*",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "tournament_changed_app_service.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+TOURNAMENT_CHANGED_APP_DLQ = RabbitQueue(
+    "tournament_changed_app_service.dlq",
+    durable=True,
+)
+
+# Publishers provide an explicit topic routing key, so this queue argument is
+# used only as the observable destination name by the shared publish helper.
+TOURNAMENT_CHANGED_QUEUE = TOURNAMENT_CHANGED_TOURNAMENT_QUEUE
+TOURNAMENT_CHANGED_DLQ = TOURNAMENT_CHANGED_TOURNAMENT_DLQ
 
 TOURNAMENT_EVENTS_EXCHANGE = RabbitExchange(
     "tournament.events",

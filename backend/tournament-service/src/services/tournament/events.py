@@ -33,7 +33,7 @@ async def enqueue_tournament_recalculation(
         exchange=TOURNAMENT_RECALC_EXCHANGE,
         routing_key=f"tournament.recalc.{tournament_id}",
     )
-    register_tournament_realtime_update(session, tournament_id, "results_changed")
+    register_tournament_realtime_update(session, tournament_id, "bracket_changed")
 
 
 async def enqueue_tournament_changed(

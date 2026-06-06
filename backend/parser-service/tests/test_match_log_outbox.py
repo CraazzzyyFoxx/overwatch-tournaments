@@ -47,8 +47,13 @@ class MatchLogOutboxTests(IsolatedAsyncioTestCase):
         with patch.object(flows, "enqueue_outbox_event", AsyncMock()) as enqueue:
             await flows._enqueue_match_log_tournament_events(session, encounter)
 
-        self.assertEqual(2, enqueue.await_count)
-        recalc_call, completed_call = enqueue.await_args_list
+        self.assertEqual(3, enqueue.await_count)
+        changed_call, recalc_call, completed_call = enqueue.await_args_list
+        self.assertIs(changed_call.args[0], session)
+        self.assertEqual("tournament_changed", changed_call.args[1].event_type)
+        self.assertEqual("bracket_changed", changed_call.args[1].reason)
+        self.assertEqual("parser-service", changed_call.args[1].source_service)
+        self.assertEqual("tournament.changed.42", changed_call.kwargs["routing_key"])
         self.assertIs(recalc_call.args[0], session)
         self.assertEqual("tournament_recalc", recalc_call.args[1].event_type)
         self.assertEqual("parser-service", recalc_call.args[1].source_service)
@@ -73,5 +78,8 @@ class MatchLogOutboxTests(IsolatedAsyncioTestCase):
         with patch.object(flows, "enqueue_outbox_event", AsyncMock()) as enqueue:
             await flows._enqueue_match_log_tournament_events(object(), encounter)
 
-        self.assertEqual(1, enqueue.await_count)
-        self.assertEqual("tournament_recalc", enqueue.await_args.args[1].event_type)
+        self.assertEqual(2, enqueue.await_count)
+        changed_call, recalc_call = enqueue.await_args_list
+        self.assertEqual("tournament_changed", changed_call.args[1].event_type)
+        self.assertEqual("bracket_changed", changed_call.args[1].reason)
+        self.assertEqual("tournament_recalc", recalc_call.args[1].event_type)
