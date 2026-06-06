@@ -409,11 +409,12 @@ export function IdentityManagement({
   canDeleteIdentity,
 }: IdentityManagementProps) {
   const [user, setUser] = useState(initialUser);
+  const [prevUserId, setPrevUserId] = useState(initialUser.id);
 
-  // Sync if parent passes a different user (e.g. opening dialog for another row)
-  useEffect(() => {
+  if (initialUser.id !== prevUserId) {
+    setPrevUserId(initialUser.id);
     setUser(initialUser);
-  }, [initialUser.id]);
+  }
 
   const handleUserUpdated = (updatedUser: User) => {
     setUser(updatedUser);
