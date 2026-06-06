@@ -46,9 +46,11 @@ class StandingRead(BaseRead):
     points: float
     buchholz: float | None
     tb: int | None = None
+    score_differential: int | None = None
     ranking_context: dict[str, str | int | float | None] | None = None
     tb_metrics: dict[str, int | float | None] | None = None
     source_rule_profile: str | None = None
+    tiebreak_order: list[str] | None = None
 
     team: TeamRead | None
     stage: StageRead | None

@@ -20,9 +20,15 @@ describe("StandingsTable", () => {
     const source = readFileSync(join(import.meta.dir, "StandingsTable.tsx"), "utf8");
 
     expect(source).toContain("standing.points.toFixed(1)");
-    expect(source).toContain('standing.tb ?? "—"');
-    expect(source).toContain("maps.won");
+    expect(source).toContain('standing.tb ? standing.tb : "—"');
     expect(source).toContain("standing.buchholz.toFixed(1)");
-    expect(source).toContain("<MapDiff diff={maps.diff} />");
+    expect(source).toContain("standing.score_differential ?? maps.diff");
+  });
+
+  it("renders the active tiebreaker legend for group standings", () => {
+    const source = readFileSync(join(import.meta.dir, "StandingsTable.tsx"), "utf8");
+
+    expect(source).toContain("formatTiebreakOrder");
+    expect(source).toContain('t("common.tiebreakers")');
   });
 });

@@ -98,11 +98,10 @@ async def to_pydantic(
             )
         matches_history = _history_for_standing(standing, histories_by_team.get(standing.team_id, []))
 
-    source_rule_profile = None
-    if stage_model is not None and isinstance(stage_model.settings_json, dict):
-        ranking_preset = stage_model.settings_json.get("ranking_preset")
-        if isinstance(ranking_preset, str):
-            source_rule_profile = ranking_preset
+    # Expose the effective rule profile + tie-break order so clients can render
+    # an accurate "ranked by …" legend without duplicating the engine defaults.
+    source_rule_profile = service._rule_profile(stage_model) if stage_model is not None else None
+    tiebreak_order = service._tiebreak_order(stage_model) if stage_model is not None else None
 
     return schemas.StandingRead(
         **standing.to_dict(),
@@ -120,9 +119,10 @@ async def to_pydantic(
             "match_wins": standing.win,
             "head_to_head": standing.tb,
             "median_buchholz": standing.buchholz,
-            "score_differential": standing.win * 2 - standing.lose,
+            "score_differential": standing.score_differential,
         },
         source_rule_profile=source_rule_profile,
+        tiebreak_order=tiebreak_order,
         matches_history=sort_matches(matches_history),
     )
 

@@ -40,6 +40,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { paginateResults, sortArray } from "@/lib/paginate-results";
+import { formatTiebreakOrder } from "@/lib/tiebreakers";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 const TOURNAMENT_QUERY_PARAM = "tournament";
@@ -49,7 +50,9 @@ const emptyStandingForm: StandingUpdateInput = {
   points: 0,
   win: 0,
   draw: 0,
-  lose: 0
+  lose: 0,
+  buchholz: 0,
+  tb: 0
 };
 
 function getStandingForm(standing: Standings | null): StandingUpdateInput {
@@ -62,7 +65,9 @@ function getStandingForm(standing: Standings | null): StandingUpdateInput {
     points: standing.points,
     win: standing.win,
     draw: standing.draw,
-    lose: standing.lose
+    lose: standing.lose,
+    buchholz: standing.buchholz ?? 0,
+    tb: standing.tb ?? 0
   };
 }
 
@@ -143,6 +148,16 @@ export default function StandingsPage() {
       (a, b) =>
         a.stageOrder - b.stageOrder || a.itemOrder - b.itemOrder || a.name.localeCompare(b.name)
     );
+  })();
+
+  // Effective tie-break priority order for the currently selected scope.
+  const activeTiebreakOrder = (() => {
+    if (!allStandings || allStandings.length === 0) return null;
+    const scoped =
+      selectedScopeFilter === "all"
+        ? allStandings
+        : allStandings.filter((standing) => getStandingScopeKey(standing) === selectedScopeFilter);
+    return scoped[0]?.tiebreak_order ?? null;
   })();
 
   // Form state
@@ -310,6 +325,18 @@ export default function StandingsPage() {
       }
     },
     {
+      accessorKey: "tb",
+      header: "TB",
+      cell: ({ row }) => {
+        const tb = row.getValue<number | null>("tb");
+        return tb !== null ? (
+          <div className="text-center text-sm">{tb}</div>
+        ) : (
+          <div className="text-center">—</div>
+        );
+      }
+    },
+    {
       id: "actions",
       cell: ({ row }) =>
         canUpdate || canDelete ? (
@@ -399,6 +426,15 @@ export default function StandingsPage() {
             ))}
           </TabsList>
         </Tabs>
+      ) : null}
+
+      {selectedTournamentId && activeTiebreakOrder && activeTiebreakOrder.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Tiebreakers:{" "}
+          <span className="font-medium text-foreground">
+            {formatTiebreakOrder(activeTiebreakOrder)}
+          </span>
+        </p>
       ) : null}
 
       <AdminDataTable
@@ -510,6 +546,30 @@ export default function StandingsPage() {
                 type="number"
                 value={formData.lose}
                 onChange={(e) => setFormData({ ...formData, lose: parseInt(e.target.value) })}
+                min="0"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="buchholz">Buchholz (median)</Label>
+              <Input
+                id="buchholz"
+                type="number"
+                step="0.01"
+                value={formData.buchholz ?? 0}
+                onChange={(e) => setFormData({ ...formData, buchholz: parseFloat(e.target.value) })}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="tb">Head-to-Head (TB)</Label>
+              <Input
+                id="tb"
+                type="number"
+                value={formData.tb ?? 0}
+                onChange={(e) => setFormData({ ...formData, tb: parseInt(e.target.value) })}
                 min="0"
               />
             </div>

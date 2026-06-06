@@ -29,11 +29,10 @@ async def to_pydantic(session: AsyncSession, standing: models.Standing, entities
     if "tournament" in entities:
         tournament = await tournament_flows.to_pydantic(session, standing.tournament, [])
 
-    source_rule_profile = None
-    if standing.stage is not None and isinstance(standing.stage.settings_json, dict):
-        ranking_preset = standing.stage.settings_json.get("ranking_preset")
-        if isinstance(ranking_preset, str):
-            source_rule_profile = ranking_preset
+    # Expose the effective rule profile + tie-break order so clients can render
+    # an accurate "ranked by …" legend without duplicating the engine defaults.
+    source_rule_profile = service._rule_profile(standing.stage) if standing.stage is not None else None
+    tiebreak_order = service._tiebreak_order(standing.stage) if standing.stage is not None else None
 
     return schemas.StandingRead(
         **standing.to_dict(),
@@ -50,9 +49,10 @@ async def to_pydantic(session: AsyncSession, standing: models.Standing, entities
             "match_wins": standing.win,
             "head_to_head": standing.tb,
             "median_buchholz": standing.buchholz,
-            "score_differential": standing.win * 2 - standing.lose,
+            "score_differential": standing.score_differential,
         },
         source_rule_profile=source_rule_profile,
+        tiebreak_order=tiebreak_order,
     )
 
 

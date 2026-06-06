@@ -11,6 +11,7 @@ import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialo
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
@@ -157,12 +158,14 @@ export default function TournamentBracketPage({
   const selectedStageParam = searchParams.get("stage");
   const viewParam = searchParams.get("view");
 
+  const { isSuperuser, isWorkspaceAdmin } = usePermissions();
   const { status: authStatus, user: authUser } = useAuthProfile();
   const { toast } = useToast();
   const isAuthenticated = authStatus === "authenticated";
   const isAdmin =
     isAuthenticated &&
-    (authUser?.isSuperuser ||
+    (isSuperuser ||
+      isWorkspaceAdmin(tournament.workspace_id) ||
       (authUser?.roles ?? []).some((r) => ADMIN_ROLES.has(r)));
 
   const { t } = useTranslation();
