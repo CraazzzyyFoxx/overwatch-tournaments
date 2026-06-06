@@ -85,7 +85,7 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
       captainService.submitMatchReport(encounter.id, {
         home_score: homeScore,
         away_score: awayScore,
-        closeness: closeness / 10
+        closeness
       }),
     onSuccess: async () => {
       toast({ title: t("matchReport.submittedForConfirmation") });
@@ -196,4 +196,3 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
     </DialogContent>
   );
 }
-

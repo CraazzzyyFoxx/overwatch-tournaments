@@ -36,7 +36,7 @@ class VetoAction(BaseModel):
 class CaptainMatchReport(BaseModel):
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
-    closeness: int = Field(ge=1, le=5)
+    closeness: int = Field(ge=1, le=10)
 
 
 async def _resolve_websocket_viewer(
@@ -134,7 +134,7 @@ async def submit_match_report(
         encounter_id,
         home_score=data.home_score,
         away_score=data.away_score,
-        closeness_stars=data.closeness,
+        closeness_score=data.closeness,
     )
     return {
         "id": encounter.id,
