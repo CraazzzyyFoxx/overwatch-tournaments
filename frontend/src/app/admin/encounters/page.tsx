@@ -21,6 +21,8 @@ import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { EncounterScoreControls } from "@/components/admin/EncounterScoreControls";
+import { TeamCombobox } from "@/components/admin/TeamCombobox";
+import { buildEncounterName } from "@/components/admin/encounter-name";
 import { isGroupStageScoreContext } from "@/components/admin/encounter-score";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -592,52 +594,50 @@ export default function EncountersPage() {
 
           <div>
             <Label htmlFor="home_team_id">Home Team</Label>
-            <Select
-              value={(formData as EncounterCreateInput).home_team_id?.toString() ?? "none"}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  home_team_id: value === "none" ? null : parseInt(value, 10)
+            <TeamCombobox
+              id="home_team_id"
+              teams={teamsData?.results ?? []}
+              value={(formData as EncounterCreateInput).home_team_id}
+              placeholder="Select home team"
+              onSelect={(team) =>
+                setFormData((current) => {
+                  const homeTeamId = team?.id ?? null;
+                  return {
+                    ...current,
+                    name: buildEncounterName(
+                      teamsData?.results ?? [],
+                      homeTeamId,
+                      current.away_team_id
+                    ),
+                    home_team_id: homeTeamId
+                  };
                 })
               }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select home team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">TBD</SelectItem>
-                {teamsData?.results.map((team) => (
-                  <SelectItem key={team.id} value={team.id.toString()}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div>
             <Label htmlFor="away_team_id">Away Team</Label>
-            <Select
-              value={(formData as EncounterCreateInput).away_team_id?.toString() ?? "none"}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  away_team_id: value === "none" ? null : parseInt(value, 10)
+            <TeamCombobox
+              id="away_team_id"
+              teams={teamsData?.results ?? []}
+              value={(formData as EncounterCreateInput).away_team_id}
+              placeholder="Select away team"
+              onSelect={(team) =>
+                setFormData((current) => {
+                  const awayTeamId = team?.id ?? null;
+                  return {
+                    ...current,
+                    name: buildEncounterName(
+                      teamsData?.results ?? [],
+                      current.home_team_id,
+                      awayTeamId
+                    ),
+                    away_team_id: awayTeamId
+                  };
                 })
               }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select away team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">TBD</SelectItem>
-                {teamsData?.results.map((team) => (
-                  <SelectItem key={team.id} value={team.id.toString()}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div>
@@ -789,52 +789,50 @@ export default function EncountersPage() {
 
           <div>
             <Label htmlFor="edit-home_team_id">Home Team</Label>
-            <Select
-              value={(formData as EncounterUpdateInput).home_team_id?.toString() ?? "none"}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  home_team_id: value === "none" ? null : parseInt(value, 10)
+            <TeamCombobox
+              id="edit-home_team_id"
+              teams={teamsData?.results ?? []}
+              value={(formData as EncounterUpdateInput).home_team_id}
+              placeholder="Select home team"
+              onSelect={(team) =>
+                setFormData((current) => {
+                  const homeTeamId = team?.id ?? null;
+                  return {
+                    ...current,
+                    name: buildEncounterName(
+                      teamsData?.results ?? [],
+                      homeTeamId,
+                      current.away_team_id
+                    ),
+                    home_team_id: homeTeamId
+                  };
                 })
               }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select home team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">TBD</SelectItem>
-                {teamsData?.results.map((team) => (
-                  <SelectItem key={team.id} value={team.id.toString()}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div>
             <Label htmlFor="edit-away_team_id">Away Team</Label>
-            <Select
-              value={(formData as EncounterUpdateInput).away_team_id?.toString() ?? "none"}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  away_team_id: value === "none" ? null : parseInt(value, 10)
+            <TeamCombobox
+              id="edit-away_team_id"
+              teams={teamsData?.results ?? []}
+              value={(formData as EncounterUpdateInput).away_team_id}
+              placeholder="Select away team"
+              onSelect={(team) =>
+                setFormData((current) => {
+                  const awayTeamId = team?.id ?? null;
+                  return {
+                    ...current,
+                    name: buildEncounterName(
+                      teamsData?.results ?? [],
+                      current.home_team_id,
+                      awayTeamId
+                    ),
+                    away_team_id: awayTeamId
+                  };
                 })
               }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select away team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">TBD</SelectItem>
-                {teamsData?.results.map((team) => (
-                  <SelectItem key={team.id} value={team.id.toString()}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <EncounterScoreControls
