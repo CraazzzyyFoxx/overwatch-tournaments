@@ -177,6 +177,7 @@ function DraftBoardView({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [searchQuery, setSearchQuery] = useState("");
+  const [heroFilter, setHeroFilter] = useState<string>("all");
   const gating = computeGating(board, myPlayerIds, myAuthUserId, isAdmin);
 
   const { data: heroesData } = useQuery({
@@ -216,8 +217,8 @@ function DraftBoardView({
   );
   const availableByRole = useMemo(() => countRoles(availablePlayers), [availablePlayers]);
   const filteredPlayers = useMemo(
-    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery),
-    [availablePlayers, roleFilter, searchQuery, sortMode]
+    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery, heroFilter),
+    [availablePlayers, roleFilter, searchQuery, sortMode, heroFilter]
   );
   const selectedPlayer =
     selectedPlayerId == null ? null : playerById.get(selectedPlayerId) ?? null;
@@ -320,9 +321,12 @@ function DraftBoardView({
             roleFilter={roleFilter}
             sortMode={sortMode}
             searchQuery={searchQuery}
+            heroFilter={heroFilter}
             onRoleFilterChange={setRoleFilter}
             onSortModeChange={setSortMode}
             onSearchChange={setSearchQuery}
+            onHeroFilterChange={setHeroFilter}
+            heroesMap={heroesMap}
             t={t}
           />
 
@@ -336,6 +340,7 @@ function DraftBoardView({
             onConfirm={confirmPick}
             onClear={() => onSelectPlayer(null, null)}
             isRoleFilled={isRoleFilled}
+            heroesMap={heroesMap}
             t={t}
           />
 
@@ -843,18 +848,20 @@ function PickRow({ pick, team, pickedPlayer, tournamentGrid, t }: PickRowProps) 
     <div className={cn(styles.pickRow, pickStatusClass(pick.status))}>
       <span className={styles.pickNum}>{pick.overall_no}</span>
       <div className={styles.pickMain}>
-        {pickedPlayer?.battle_tag ? (
-          <a
-            href={`/users/${getPlayerSlug(pickedPlayer.battle_tag)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(styles.pickName, "hover:underline hover:text-emerald-400 transition")}
-          >
-            {displayPlayer}
-          </a>
-        ) : (
-          <span className={styles.pickName}>{displayPlayer}</span>
-        )}
+        <span className={styles.pickName}>
+          {pickedPlayer?.battle_tag ? (
+            <a
+              href={`/users/${getPlayerSlug(pickedPlayer.battle_tag)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline hover:text-emerald-400 transition"
+            >
+              {displayPlayer}
+            </a>
+          ) : (
+            displayPlayer
+          )}
+        </span>
         <span className={styles.pickMeta}>
           {team?.name ?? label(t, "draft.team.unknown", "Unknown team")}
           {pickedDivision != null && (
@@ -889,9 +896,12 @@ interface PoolToolbarProps {
   roleFilter: RoleFilter;
   sortMode: SortMode;
   searchQuery: string;
+  heroFilter: string;
   onRoleFilterChange: (role: RoleFilter) => void;
   onSortModeChange: (mode: SortMode) => void;
   onSearchChange: (query: string) => void;
+  onHeroFilterChange: (hero: string) => void;
+  heroesMap: Map<string, any>;
   t: Translate;
 }
 
@@ -902,11 +912,18 @@ function PoolToolbar({
   roleFilter,
   sortMode,
   searchQuery,
+  heroFilter,
   onRoleFilterChange,
   onSortModeChange,
   onSearchChange,
+  onHeroFilterChange,
+  heroesMap,
   t,
 }: PoolToolbarProps) {
+  const sortedHeroes = useMemo(() => {
+    return Array.from(heroesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [heroesMap]);
+
   return (
     <div className={styles.poolToolbar}>
       <div className={styles.toolbarTitle}>
@@ -943,6 +960,40 @@ function PoolToolbar({
           placeholder={label(t, "draft.pool.search", "Search player")}
         />
       </label>
+
+      <div className={styles.sortBox}>
+        <span>{label(t, "draft.pool.hero", "Hero")}</span>
+        <Select
+          value={heroFilter}
+          onValueChange={onHeroFilterChange}
+        >
+          <SelectTrigger className="border-0 bg-transparent h-8 px-0 shadow-none focus:ring-0 gap-1.5 text-xs font-extrabold text-[var(--draft-fg)] [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-80 min-w-[100px]">
+            <SelectValue placeholder="All Heroes" />
+          </SelectTrigger>
+          <SelectContent className="max-h-[300px] overflow-y-auto">
+            <SelectItem value="all">All Heroes</SelectItem>
+            {sortedHeroes.map((h) => (
+              <SelectItem key={h.slug} value={h.slug}>
+                <div className="flex items-center gap-2">
+                  {h.image_path ? (
+                    <Avatar className="w-4 h-4 rounded-full shrink-0 select-none">
+                      <AvatarImage
+                        src={getHeroIconUrl(h.slug, h.image_path)}
+                        alt={h.name}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="text-[6px] bg-white/5 uppercase">
+                        {h.slug.slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : null}
+                  <span>{h.name}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className={styles.sortBox}>
         <span>{label(t, "draft.pool.sort", "Sort")}</span>
@@ -995,6 +1046,7 @@ interface SelectedPlayerPanelProps {
   onConfirm: () => void;
   onClear: () => void;
   isRoleFilled: (role: DraftRole) => boolean;
+  heroesMap: Map<string, any>;
   t: Translate;
 }
 
@@ -1008,6 +1060,7 @@ function SelectedPlayerPanel({
   onConfirm,
   onClear,
   isRoleFilled,
+  heroesMap,
   t,
 }: SelectedPlayerPanelProps) {
   if (!selectedPlayer) {
@@ -1107,6 +1160,81 @@ function SelectedPlayerPanel({
           )}
         </div>
       </div>
+
+      {/* Detailed Roles Breakdown */}
+      <div className="flex flex-col gap-3 border-t border-white/[0.05] pt-3 w-full">
+        <span className="text-xs font-bold text-white/40">{label(t, "draft.inspect.roleDetails", "Role Breakdown:")}</span>
+        <div className="flex flex-col gap-2">
+          {selectedPlayerRoles.map((role) => {
+            const roleRank = getRoleRank(selectedPlayer, role);
+            const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
+            if (roleDiv == null) return null;
+            return (
+              <div key={role} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-2 rounded-lg gap-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn("p-1.5 rounded-md flex items-center justify-center shrink-0", ROLE_CLASS[role])}
+                    style={{
+                      color: "var(--role-color)",
+                      backgroundColor: "color-mix(in srgb, var(--role-color) 12%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--role-color) 25%, transparent)",
+                    }}
+                  >
+                    <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-white capitalize">{roleLabel(role)}</span>
+                    <span className="text-[10px] font-mono text-white/40">{formatRank(roleRank.rank_value)} SR</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {roleRank.top_heroes && roleRank.top_heroes.length > 0 && (
+                    <div className="flex items-center gap-1 bg-black/25 px-1.5 py-0.5 rounded-md">
+                      {roleRank.top_heroes.slice(0, 5).map((hero) => {
+                        const slug = typeof hero === "string" ? hero : hero.slug;
+                        const heroObj = heroesMap.get(slug);
+                        const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
+                        return (
+                          <Avatar key={slug} className="w-8 h-8 rounded-full border border-white/10 shrink-0 select-none hover:scale-105 transition" title={heroObj?.name || slug}>
+                            <AvatarImage
+                              src={getHeroIconUrl(slug, imagePath)}
+                              alt={slug}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="text-[8px] bg-white/5 uppercase">
+                              {slug.slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex items-center" title={getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, roleDiv)}>
+                    <PlayerDivisionIcon
+                      division={roleDiv}
+                      width={32}
+                      height={32}
+                      tournamentGrid={tournamentGrid}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Player Note block */}
+      {selectedPlayer.anomaly_flags?.notes && (
+        <div className={styles.selectedNotesBlock}>
+          <span className={styles.selectedNotesTitle}>{label(t, "draft.inspect.notes", "Player Note")}</span>
+          <p className="italic text-white/80 whitespace-pre-wrap">
+            &ldquo;{selectedPlayer.anomaly_flags.notes}&rdquo;
+          </p>
+        </div>
+      )}
 
       {/* Draft Role Selector */}
       {canPick && selectedPlayerRoles.length > 1 && (
@@ -1276,11 +1404,12 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
         </div>
       </div>
       <div className={styles.playerMetrics} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "6px" }}>
-        {allRoles.map((role) => {
+        {(() => {
+          const role = player.primary_role;
           const roleRank = getRoleRank(player, role);
           const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
           return (
-            <div key={role} className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
                 <PlayerRoleIcon role={getRoleIconName(role)} size={22} />
               </div>
@@ -1319,8 +1448,21 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
               )}
             </div>
           );
-        })}
-        {player.is_flex && <span className={styles.flexMark} style={{ alignSelf: "flex-start", marginTop: "2px" }}>FLEX</span>}
+        })()}
+        {(player.is_flex || (player.secondary_roles_json && player.secondary_roles_json.length > 0)) && (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {player.is_flex && <span className={styles.flexMark}>FLEX</span>}
+            {player.secondary_roles_json && player.secondary_roles_json.length > 0 && (
+              <div className={styles.secondaryRoles} title={`Secondary: ${player.secondary_roles_json.map(roleLabel).join(", ")}`}>
+                {player.secondary_roles_json.map((secRole) => (
+                  <span key={secRole} className={styles.secondaryRoleBadge}>
+                    <PlayerRoleIcon role={getRoleIconName(secRole as DraftRole)} size={10} />
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </button>
   );
@@ -1732,11 +1874,25 @@ function filterAndSortPlayers(
   players: DraftPlayer[],
   roleFilter: RoleFilter,
   sortMode: SortMode,
-  searchQuery: string
+  searchQuery: string,
+  heroFilter: string
 ): DraftPlayer[] {
   const query = searchQuery.trim().toLowerCase();
   const filtered = players.filter((player) => {
     if (roleFilter !== "all" && player.primary_role !== roleFilter) return false;
+
+    if (heroFilter !== "all") {
+      const roles = [player.primary_role, ...(player.secondary_roles_json ?? [])] as DraftRole[];
+      const hasHero = roles.some((role) => {
+        const roleRank = getRoleRank(player, role);
+        return roleRank.top_heroes?.some((h) => {
+          const slug = typeof h === "string" ? h : h.slug;
+          return slug === heroFilter;
+        });
+      });
+      if (!hasHero) return false;
+    }
+
     if (!query) return true;
     return [
       playerName(player),

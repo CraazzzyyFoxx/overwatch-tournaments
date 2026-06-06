@@ -66,6 +66,30 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
             .order_by(DraftPlayer.id.asc())
         )
     ).all()
+
+    # Dynamically inject notes if not already snapshot in anomaly_flags (supports existing drafts)
+    if players:
+        user_ids = [p.user_id for p in players if p.user_id is not None]
+        if user_ids:
+            from shared.models.balancer import BalancerRegistration
+            regs = (
+                await session.execute(
+                    sa.select(BalancerRegistration.user_id, BalancerRegistration.notes)
+                    .where(
+                        BalancerRegistration.tournament_id == draft_session.tournament_id,
+                        BalancerRegistration.user_id.in_(user_ids),
+                        BalancerRegistration.deleted_at.is_(None),
+                    )
+                )
+            ).all()
+            user_notes = {r_user_id: r_notes for r_user_id, r_notes in regs if r_notes}
+            for p in players:
+                if p.user_id in user_notes:
+                    flags = dict(p.anomaly_flags) if p.anomaly_flags else {}
+                    if "notes" not in flags or not flags["notes"]:
+                        flags["notes"] = user_notes[p.user_id]
+                        p.anomaly_flags = flags
+
     current = await session.get(DraftPick, draft_session.current_pick_id) if draft_session.current_pick_id else None
     topic = realtime_topics.draft(draft_session.tournament_id)
     last_event_id = await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic))
