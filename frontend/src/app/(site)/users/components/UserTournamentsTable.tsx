@@ -159,7 +159,14 @@ export const UserTournamentContent = ({ tournament }: { tournament: UserTourname
 
 export const UserTournamentsTable = ({ tournaments }: { tournaments: UserTournament[] }) => {
   const searchParams = useSearchParams();
-  const [selectedTournamentId, setSelectedTournamentId] = React.useState<string | null>(null);
+  const selectedFromUrl = searchParams ? searchParams.get("selectedTournamentId") : null;
+  const [selectedTournamentId, setSelectedTournamentId] = React.useState<string | null>(selectedFromUrl);
+  const [prevSelectedFromUrl, setPrevSelectedFromUrl] = React.useState<string | null>(selectedFromUrl);
+
+  if (selectedFromUrl !== prevSelectedFromUrl) {
+    setPrevSelectedFromUrl(selectedFromUrl);
+    setSelectedTournamentId(selectedFromUrl);
+  }
 
   const newTournaments: (UserTournament | UserTournament[])[] = useMemo(() => {
     const result: (UserTournament | UserTournament[])[] = [];
@@ -194,13 +201,7 @@ export const UserTournamentsTable = ({ tournaments }: { tournaments: UserTournam
     return result;
   }, [tournaments]);
 
-  useEffect(() => {
-    if (searchParams) {
-      const newSearchParams = new URLSearchParams(searchParams);
-      const selectedTournamentId = newSearchParams.get("selectedTournamentId");
-      setSelectedTournamentId(selectedTournamentId ? selectedTournamentId : null);
-    }
-  }, [searchParams]);
+
 
   const onSelect = (value: string) => {
     const newSearchParams = new URLSearchParams(searchParams);

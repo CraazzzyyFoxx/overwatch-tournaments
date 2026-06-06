@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { Check, ChevronsUpDown } from "lucide-react";
 
@@ -49,13 +49,6 @@ const SearchableImageSelect = ({
   disabled = false,
 }: SearchableImageSelectProps) => {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    if (!open) return;
-    setContentWidth(triggerRef.current?.offsetWidth);
-  }, [open]);
 
   const selected = options.find((o) => o.value === value);
 
@@ -68,7 +61,6 @@ const SearchableImageSelect = ({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
           type="button"
           variant="outline"
           role="combobox"
@@ -96,7 +88,7 @@ const SearchableImageSelect = ({
       <PopoverContent
         align="start"
         className="liquid-glass-panel p-0"
-        style={contentWidth ? { width: `${contentWidth}px` } : undefined}
+        style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command className="liquid-glass-surface">
           <CommandInput placeholder={searchPlaceholder} />

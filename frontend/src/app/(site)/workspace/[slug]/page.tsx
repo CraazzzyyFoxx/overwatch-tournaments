@@ -361,38 +361,15 @@ function EventsSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function StatsGrid({ workspaceId }: { workspaceId: number }) {
+  let overall = null;
+  let hasError = false;
   try {
-    const overall = await statisticsService.getOverallStatistics({ workspaceId });
-
-    return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatisticsCard
-          name="Tournaments Held"
-          value={overall.tournaments}
-          icon={<Trophy className="h-4 w-4" />}
-          iconClassName="bg-indigo-500/10 text-indigo-400"
-        />
-        <StatisticsCard
-          name="Teams Balanced"
-          value={overall.teams}
-          icon={<Scale className="h-4 w-4" />}
-          iconClassName="bg-blue-500/10 text-blue-400"
-        />
-        <StatisticsCard
-          name="Players Participated"
-          value={overall.players}
-          icon={<Users className="h-4 w-4" />}
-          iconClassName="bg-emerald-500/10 text-emerald-400"
-        />
-        <StatisticsCard
-          name="Champions"
-          value={overall.champions}
-          icon={<Award className="h-4 w-4" />}
-          iconClassName="bg-amber-500/10 text-amber-400"
-        />
-      </div>
-    );
+    overall = await statisticsService.getOverallStatistics({ workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !overall) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="md:col-span-2 lg:col-span-4 border-destructive/50">
@@ -404,6 +381,35 @@ async function StatsGrid({ workspaceId }: { workspaceId: number }) {
       </div>
     );
   }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <StatisticsCard
+        name="Tournaments Held"
+        value={overall.tournaments}
+        icon={<Trophy className="h-4 w-4" />}
+        iconClassName="bg-indigo-500/10 text-indigo-400"
+      />
+      <StatisticsCard
+        name="Teams Balanced"
+        value={overall.teams}
+        icon={<Scale className="h-4 w-4" />}
+        iconClassName="bg-blue-500/10 text-blue-400"
+      />
+      <StatisticsCard
+        name="Players Participated"
+        value={overall.players}
+        icon={<Users className="h-4 w-4" />}
+        iconClassName="bg-emerald-500/10 text-emerald-400"
+      />
+      <StatisticsCard
+        name="Champions"
+        value={overall.champions}
+        icon={<Award className="h-4 w-4" />}
+        iconClassName="bg-amber-500/10 text-amber-400"
+      />
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -411,14 +417,15 @@ async function StatsGrid({ workspaceId }: { workspaceId: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function TournamentsChartCard({ workspaceId }: { workspaceId: number }) {
+  let tournaments = null;
+  let hasError = false;
   try {
-    const tournaments = await statisticsService.getTournaments({ workspaceId });
-    return (
-      <div className="bg-card/80 backdrop-blur-sm h-full rounded-xl w-full">
-        <TournamentsChart data={tournaments} />
-      </div>
-    );
+    tournaments = await statisticsService.getTournaments({ workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !tournaments) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
         <CardHeader><CardTitle>History of tournament changes</CardTitle></CardHeader>
@@ -428,17 +435,24 @@ async function TournamentsChartCard({ workspaceId }: { workspaceId: number }) {
       </Card>
     );
   }
+
+  return (
+    <div className="bg-card/80 backdrop-blur-sm h-full rounded-xl w-full">
+      <TournamentsChart data={tournaments} />
+    </div>
+  );
 }
 
 async function TournamentsDivisionChartCard({ workspaceId }: { workspaceId: number }) {
+  let data = null;
+  let hasError = false;
   try {
-    const data = await statisticsService.getTournamentsDivision({ workspaceId });
-    return (
-      <div className="bg-card/80 backdrop-blur-sm h-full rounded-xl w-full">
-        <TournamentsDivisionChart data={data} />
-      </div>
-    );
+    data = await statisticsService.getTournamentsDivision({ workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !data) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
         <CardHeader><CardTitle>Average division by roles</CardTitle></CardHeader>
@@ -448,17 +462,24 @@ async function TournamentsDivisionChartCard({ workspaceId }: { workspaceId: numb
       </Card>
     );
   }
+
+  return (
+    <div className="bg-card/80 backdrop-blur-sm h-full rounded-xl w-full">
+      <TournamentsDivisionChart data={data} />
+    </div>
+  );
 }
 
 async function ChampionsTableCard({ workspaceId }: { workspaceId: number }) {
+  let champions = null;
+  let hasError = false;
   try {
-    const champions = await statisticsService.getChampions({ workspaceId });
-    return (
-      <div className="bg-card/80 backdrop-blur-sm rounded-xl h-full border-0">
-        <ChampionsTable champions={champions.results} />
-      </div>
-    );
+    champions = await statisticsService.getChampions({ workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !champions) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
         <CardHeader><CardTitle>Champions</CardTitle></CardHeader>
@@ -466,17 +487,24 @@ async function ChampionsTableCard({ workspaceId }: { workspaceId: number }) {
       </Card>
     );
   }
+
+  return (
+    <div className="bg-card/80 backdrop-blur-sm rounded-xl h-full border-0">
+      <ChampionsTable champions={champions.results} />
+    </div>
+  );
 }
 
 async function TopWinratePlayersTableCard({ workspaceId }: { workspaceId: number }) {
+  let players = null;
+  let hasError = false;
   try {
-    const players = await statisticsService.getTopWinratePlayers({ workspaceId });
-    return (
-      <div className="bg-card/80 backdrop-blur-sm rounded-xl h-full border-0">
-        <TopWinratePlayersTable players={players.results} />
-      </div>
-    );
+    players = await statisticsService.getTopWinratePlayers({ workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !players) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
         <CardHeader><CardTitle>Top Players by Win ratio</CardTitle></CardHeader>
@@ -486,20 +514,24 @@ async function TopWinratePlayersTableCard({ workspaceId }: { workspaceId: number
       </Card>
     );
   }
+
+  return (
+    <div className="bg-card/80 backdrop-blur-sm rounded-xl h-full border-0">
+      <TopWinratePlayersTable players={players.results} />
+    </div>
+  );
 }
 
 async function PopularHeroesCard({ workspaceId }: { workspaceId: number }) {
+  let heroPlaytime = null;
+  let hasError = false;
   try {
-    const heroPlaytime = await heroService.getHeroPlaytime(1, 10, "all", null, { workspaceId });
-    return (
-      <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>Popular Heroes</CardTitle></CardHeader>
-        <CardContent className="p-0 pb-2">
-          <HeroPlaytimeChart heroes={heroPlaytime.results} />
-        </CardContent>
-      </Card>
-    );
+    heroPlaytime = await heroService.getHeroPlaytime(1, 10, "all", null, { workspaceId });
   } catch {
+    hasError = true;
+  }
+
+  if (hasError || !heroPlaytime) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
         <CardHeader><CardTitle>Popular Heroes</CardTitle></CardHeader>
@@ -509,4 +541,13 @@ async function PopularHeroesCard({ workspaceId }: { workspaceId: number }) {
       </Card>
     );
   }
+
+  return (
+    <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
+      <CardHeader><CardTitle>Popular Heroes</CardTitle></CardHeader>
+      <CardContent className="p-0 pb-2">
+        <HeroPlaytimeChart heroes={heroPlaytime.results} />
+      </CardContent>
+    </Card>
+  );
 }

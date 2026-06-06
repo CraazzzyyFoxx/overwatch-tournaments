@@ -100,12 +100,17 @@ interface FlatNode {
 
 // ─── Tree ↔ Flow conversion ─────────────────────────────────────────────────
 
-let _idCounter = 0;
-function nextId(): string {
-  return `node_${++_idCounter}`;
+function getNextNodeId(nodes: FlatNode[], offset = 1): string {
+  const maxId = nodes.reduce((max, node) => {
+    const num = parseInt(node.id.replace("node_", ""), 10);
+    return isNaN(num) ? max : Math.max(max, num);
+  }, 0);
+  return `node_${maxId + offset}`;
 }
 
-function treeToFlat(tree: TreeNode, parentId?: string): FlatNode[] {
+function treeToFlat(tree: TreeNode, parentId?: string, counter = { id: 0 }): FlatNode[] {
+  const nextId = () => `node_${++counter.id}`;
+
   // Empty tree — create a single root AND node
   if (!tree || Object.keys(tree).length === 0) {
     const id = nextId();
@@ -120,7 +125,7 @@ function treeToFlat(tree: TreeNode, parentId?: string): FlatNode[] {
       nodes.push({ id, type: "logical", logicalOp: op, parentId });
       const children = op === "NOT" ? [tree[op] as TreeNode] : (tree[op] as TreeNode[]);
       for (const child of children) {
-        nodes.push(...treeToFlat(child, id));
+        nodes.push(...treeToFlat(child, id, counter));
       }
       return nodes;
     }
@@ -957,13 +962,11 @@ export function ConditionFlowEditor(props: ConditionFlowEditorProps) {
 function ConditionFlowEditorInner({ value, onChange, readOnly = false }: ConditionFlowEditorProps) {
   const [prevValue, setPrevValue] = useState(value);
   const [flatNodes, setFlatNodes] = useState<FlatNode[]>(() => {
-    _idCounter = 0;
     return treeToFlat(value);
   });
 
   if (value !== prevValue) {
     setPrevValue(value);
-    _idCounter = 0;
     setFlatNodes(treeToFlat(value));
   }
 
@@ -1009,9 +1012,10 @@ function ConditionFlowEditorInner({ value, onChange, readOnly = false }: Conditi
 
   const handleAddChild = useCallback((parentId: string, childType: string) => {
     setFlatNodes((prev) => {
+      const newId = getNextNodeId(prev);
       const newNode: FlatNode = childType === "logical"
-        ? { id: nextId(), type: "logical", logicalOp: "AND", parentId }
-        : { id: nextId(), type: "leaf", conditionType: "match_win", params: {}, parentId };
+        ? { id: newId, type: "logical", logicalOp: "AND", parentId }
+        : { id: newId, type: "leaf", conditionType: "match_win", params: {}, parentId };
       const updated = [...prev, newNode];
       const root = updated.find((n) => !n.parentId);
       if (root && onChange) onChange(flatToTree(updated, root.id));
@@ -1098,11 +1102,14 @@ function ConditionFlowEditorInner({ value, onChange, readOnly = false }: Conditi
       // If root is a leaf and we're adding, wrap root in AND first
       let parentId = root.id;
       if (root.type === "leaf") {
-        const newRoot: FlatNode = { id: nextId(), type: "logical", logicalOp: "AND" };
-        const updatedRoot = { ...root, parentId: newRoot.id };
+        const newRootId = getNextNodeId(flatNodes, 1);
+        const newChildId = getNextNodeId(flatNodes, 2);
+
+        const newRoot: FlatNode = { id: newRootId, type: "logical", logicalOp: "AND" };
+        const updatedRoot = { ...root, parentId: newRootId };
         const newChild: FlatNode = item.type === "logical"
-          ? { id: nextId(), type: "logical", logicalOp: item.logicalOp ?? "AND", parentId: newRoot.id }
-          : { id: nextId(), type: "leaf", conditionType: item.conditionType ?? "match_win", params: {}, parentId: newRoot.id };
+          ? { id: newChildId, type: "logical", logicalOp: item.logicalOp ?? "AND", parentId: newRootId }
+          : { id: newChildId, type: "leaf", conditionType: item.conditionType ?? "match_win", params: {}, parentId: newRootId };
         const updated = flatNodes.map((n) => (n.id === root.id ? updatedRoot : n));
         updated.unshift(newRoot);
         updated.push(newChild);
@@ -1111,9 +1118,10 @@ function ConditionFlowEditorInner({ value, onChange, readOnly = false }: Conditi
       }
 
       // Attach to root logical node
+      const newId = getNextNodeId(flatNodes);
       const newNode: FlatNode = item.type === "logical"
-        ? { id: nextId(), type: "logical", logicalOp: item.logicalOp ?? "AND", parentId }
-        : { id: nextId(), type: "leaf", conditionType: item.conditionType ?? "match_win", params: {}, parentId };
+        ? { id: newId, type: "logical", logicalOp: item.logicalOp ?? "AND", parentId }
+        : { id: newId, type: "leaf", conditionType: item.conditionType ?? "match_win", params: {}, parentId };
 
       syncTree([...flatNodes, newNode]);
     },

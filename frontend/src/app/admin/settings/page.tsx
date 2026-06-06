@@ -109,7 +109,12 @@ function RankCollectionSection({
     [setting]
   );
   const [form, setForm] = useState<RankCollectionConfig>(initial);
-  useEffect(() => setForm(initial), [initial]);
+  const [prevInitial, setPrevInitial] = useState<RankCollectionConfig>(initial);
+
+  if (initial !== prevInitial) {
+    setPrevInitial(initial);
+    setForm(initial);
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -269,7 +274,12 @@ function RankMappingSection({
     return { version: value.version ?? "ow2-default-v1", entries: value.entries ?? [] };
   }, [setting]);
   const [cells, setCells] = useState<RankMappingEntry[]>(() => buildMappingCells(initial.entries));
-  useEffect(() => setCells(buildMappingCells(initial.entries)), [initial]);
+  const [prevInitial, setPrevInitial] = useState<RankMappingConfig>(initial);
+
+  if (initial !== prevInitial) {
+    setPrevInitial(initial);
+    setCells(buildMappingCells(initial.entries));
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
