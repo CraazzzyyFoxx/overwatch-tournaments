@@ -48,6 +48,7 @@ function normalizeSegment(segment: string | null): TabId {
 }
 
 function resolveBracketHref(tournamentId: string, stages: Stage[]): string {
+  const active = stages.find((stage) => stage.is_active);
   const elimination = stages.find(
     (stage) =>
       stage.stage_type === "single_elimination" ||
@@ -56,7 +57,7 @@ function resolveBracketHref(tournamentId: string, stages: Stage[]): string {
   const group = stages.find(
     (stage) => stage.stage_type === "round_robin" || stage.stage_type === "swiss"
   );
-  const primary = elimination ?? group ?? stages[0];
+  const primary = active ?? elimination ?? group ?? stages[0];
   return primary
     ? `/tournaments/${tournamentId}/bracket?stage=${primary.id}`
     : `/tournaments/${tournamentId}/bracket`;
