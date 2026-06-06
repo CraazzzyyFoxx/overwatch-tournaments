@@ -40,6 +40,7 @@ class StageSummaryRead(BaseRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
+    advance_count: int | None = None
     order: int
     is_active: bool
     is_completed: bool
@@ -54,6 +55,7 @@ class StageRead(BaseRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
+    advance_count: int | None = None
     order: int
     is_active: bool
     is_completed: bool

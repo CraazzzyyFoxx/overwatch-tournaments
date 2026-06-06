@@ -27,6 +27,7 @@ class StageRead(BaseRead):
     description: str | None
     stage_type: StageType
     max_rounds: int
+    advance_count: int | None = None
     order: int
     is_active: bool
     is_completed: bool

@@ -92,14 +92,18 @@ const StandingsTable = ({
 
   const stage = standings[0]?.stage;
   const settings = stage?.settings_json ?? {};
+  // Prefer the explicit, admin-configured Stage.advance_count column; fall back
+  // to legacy settings_json keys, then to the derived bracket-wiring count.
   let settingsCount =
-    typeof settings.advance_count === "number"
-      ? settings.advance_count
-      : typeof settings.advanceCount === "number"
-        ? settings.advanceCount
-        : typeof settings.top === "number"
-          ? settings.top
-          : null;
+    typeof stage?.advance_count === "number"
+      ? stage.advance_count
+      : typeof settings.advance_count === "number"
+        ? settings.advance_count
+        : typeof settings.advanceCount === "number"
+          ? settings.advanceCount
+          : typeof settings.top === "number"
+            ? settings.top
+            : null;
 
   if (settingsCount == null && stage != null && stages.length > 0) {
     const currentStage = stages.find((s) => s.id === stage.id);

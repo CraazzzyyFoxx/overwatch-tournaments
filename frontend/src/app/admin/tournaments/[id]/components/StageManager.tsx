@@ -226,6 +226,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   >("no_reset");
   const [stageTypeDrafts, setStageTypeDrafts] = useState<Record<number, StageType>>({});
   const [stageMaxRoundDrafts, setStageMaxRoundDrafts] = useState<Record<number, string>>({});
+  const [stageAdvanceCountDrafts, setStageAdvanceCountDrafts] = useState<Record<number, string>>({});
   const [stageDeGfTypeDrafts, setStageDeGfTypeDrafts] = useState<
     Record<number, "no_reset" | "with_reset">
   >({});
@@ -318,6 +319,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
       data: {
         stage_type?: StageType;
         max_rounds?: number;
+        advance_count?: number | null;
         settings_json?: Record<string, unknown> | null;
       };
     }) => adminService.updateStage(stageId, data),
@@ -328,6 +330,11 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         return next;
       });
       setStageMaxRoundDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageAdvanceCountDrafts((current) => {
         const next = { ...current };
         delete next[variables.stageId];
         return next;
@@ -601,10 +608,15 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const maxRoundsDraftValue = selectedStage
     ? normalizeMaxRounds(selectedStageMaxRoundDraft, selectedStage.max_rounds ?? 5)
     : 5;
+  const currentAdvanceCount =
+    selectedStage?.advance_count != null ? String(selectedStage.advance_count) : "";
+  const selectedStageAdvanceCountDraft = selectedStage
+    ? stageAdvanceCountDrafts[selectedStage.id] ?? currentAdvanceCount
+    : "";
   const selectedStageSettings = (selectedStage?.settings_json || {}) as Record<string, any>;
   const selectedStageRankingPresetDraft = selectedStage
-    ? stageRankingPresetDrafts[selectedStage.id] ?? (selectedStageSettings.ranking_preset || "")
-    : "";
+    ? stageRankingPresetDrafts[selectedStage.id] ?? (selectedStageSettings.ranking_preset || "default")
+    : "default";
 
   const defaultTiebreakOrder = selectedStage?.stage_type === "swiss"
     ? DEFAULT_SWISS_TIEBREAKERS
@@ -633,9 +645,10 @@ export function StageManager({ tournamentId }: StageManagerProps) {
     Boolean(selectedStage) &&
     (selectedStageTypeDraft !== selectedStage?.stage_type ||
       maxRoundsDraftValue !== (selectedStage?.max_rounds ?? 5) ||
+      selectedStageAdvanceCountDraft !== currentAdvanceCount ||
       (selectedStageTypeDraft === "double_elimination" &&
         selectedStageDeGfTypeDraft !== currentDeGfType) ||
-      selectedStageRankingPresetDraft !== (selectedStageSettings.ranking_preset || "") ||
+      selectedStageRankingPresetDraft !== (selectedStageSettings.ranking_preset || "default") ||
       selectedStageSwissByePointsDraft !== String(selectedStageSettings.swiss_bye_points ?? "") ||
       selectedStageScoringWinDraft !== String(selectedStageSettings.scoring?.win ?? "") ||
       selectedStageScoringDrawDraft !== String(selectedStageSettings.scoring?.draw ?? "") ||
@@ -1635,7 +1648,28 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                               <>
                                 <div className="border-t border-border/40 pt-3 space-y-3">
                                   <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Standings & Scoring Settings</h5>
-                                  
+
+                                  <div>
+                                    <Label className="text-[10px] text-muted-foreground">Teams Advancing to Playoff (per group)</Label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      placeholder="Auto (derive from bracket)"
+                                      className="h-9 w-full sm:w-[280px]"
+                                      value={selectedStageAdvanceCountDraft}
+                                      onChange={(event) =>
+                                        setStageAdvanceCountDrafts((current) => ({
+                                          ...current,
+                                          [selectedStage.id]: event.target.value
+                                        }))
+                                      }
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Top N from each group advance. Leave empty to auto-derive from the bracket wiring.
+                                    </span>
+                                  </div>
+
                                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
                                       <Label className="text-[10px] text-muted-foreground">Standings Preset</Label>
@@ -1647,7 +1681,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                           <SelectValue placeholder="System Default" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="">System Default (Based on Type)</SelectItem>
+                                          <SelectItem value="default">System Default (Based on Type)</SelectItem>
                                           <SelectItem value="challonge_swiss">Challonge Swiss (Buchholz first)</SelectItem>
                                           <SelectItem value="challonge_round_robin">Challonge Round Robin</SelectItem>
                                           <SelectItem value="bracket_default">Default Bracket</SelectItem>
@@ -1816,7 +1850,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
 
                                   const nextSettings: Record<string, any> = {
                                     ...selectedStageSettings,
-                                    ranking_preset: selectedStageRankingPresetDraft || undefined,
+                                    ranking_preset: selectedStageRankingPresetDraft === "default" ? undefined : (selectedStageRankingPresetDraft || undefined),
                                     tiebreak_order: selectedStageTiebreakOrderDraft,
                                     scoring: Object.keys(scoring).length > 0 ? scoring : undefined,
                                     swiss_bye_points: selectedStageSwissByePointsDraft !== "" ? Number(selectedStageSwissByePointsDraft) : undefined
@@ -1837,6 +1871,10 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                     data: {
                                       stage_type: selectedStageTypeDraft,
                                       max_rounds: maxRoundsDraftValue,
+                                      advance_count:
+                                        selectedStageAdvanceCountDraft !== ""
+                                          ? normalizeMaxRounds(selectedStageAdvanceCountDraft, 1)
+                                          : null,
                                       settings_json: nextSettings
                                     }
                                   });

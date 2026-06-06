@@ -155,7 +155,7 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
                   </div>
                 </div>
               </header>
-              <StandingsTable standings={bucket.standings} is_groups advanceCount={2} />
+              <StandingsTable standings={bucket.standings} is_groups />
             </section>
           ))}
         </div>

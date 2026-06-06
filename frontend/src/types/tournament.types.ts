@@ -80,6 +80,7 @@ export interface Stage {
   description: string | null;
   stage_type: StageType;
   max_rounds: number;
+  advance_count: number | null;
   order: number;
   is_active: boolean;
   is_completed: boolean;

@@ -21,6 +21,7 @@ class StageCreate(BaseModel):
     description: str | None = None
     stage_type: StageType
     max_rounds: int = Field(default=5, ge=1)
+    advance_count: int | None = Field(default=None, ge=1)
     order: int = 0
     settings_json: dict | None = None
     challonge_id: int | None = None
@@ -32,6 +33,7 @@ class StageUpdate(BaseModel):
     description: str | None = None
     stage_type: StageType | None = None
     max_rounds: int | None = Field(default=None, ge=1)
+    advance_count: int | None = Field(default=None, ge=1)
     order: int | None = None
     settings_json: dict | None = None
 

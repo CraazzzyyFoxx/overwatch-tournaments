@@ -52,6 +52,10 @@ class Stage(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     stage_type: Mapped[enums.StageType] = mapped_column(STAGE_TYPE_ENUM)
     max_rounds: Mapped[int] = mapped_column(Integer(), default=5, server_default="5")
+    # How many teams advance from each group of this (group) stage to the next
+    # stage. NULL = not configured → the frontend derives it from bracket wiring
+    # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
+    advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
     is_active: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false"
