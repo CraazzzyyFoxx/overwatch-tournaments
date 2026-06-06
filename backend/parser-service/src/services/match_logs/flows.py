@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from shared.clients.s3 import S3Client
 from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE, TOURNAMENT_RECALC_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
-from shared.schemas.events import EncounterCompletedEvent, TournamentRecalcEvent
+from shared.schemas.events import EncounterCompletedEvent, TournamentChangedEvent, TournamentRecalcEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -44,6 +44,17 @@ async def _enqueue_match_log_tournament_events(
     session: AsyncSession,
     encounter: models.Encounter,
 ) -> None:
+    await enqueue_outbox_event(
+        session,
+        TournamentChangedEvent(
+            tournament_id=encounter.tournament_id,
+            reason="bracket_changed",
+            source_service="parser-service",
+        ),
+        exchange=TOURNAMENT_RECALC_EXCHANGE,
+        routing_key=f"tournament.changed.{encounter.tournament_id}",
+    )
+
     await enqueue_outbox_event(
         session,
         TournamentRecalcEvent(

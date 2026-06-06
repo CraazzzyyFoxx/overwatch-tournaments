@@ -1,12 +1,16 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import {
+  invalidateTournamentBracket,
   invalidateTournamentResults,
   invalidateTournamentWorkspace,
 } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 
-export type TournamentChangedReason = "results_changed" | "structure_changed";
+export type TournamentChangedReason =
+  | "bracket_changed"
+  | "results_changed"
+  | "structure_changed";
 
 type TournamentUpdatedMessage = {
   type: "tournament:updated";
@@ -22,7 +26,7 @@ export type TournamentRealtimeUpdatePlan = {
    * result-derived queries; `full` refreshes structure (teams, registrations,
    * metadata) as well.
    */
-  workspaceScope: "results" | "full";
+  workspaceScope: "bracket" | "results" | "full";
   queryKeys: readonly (readonly unknown[])[];
   shouldRefreshRoute: boolean;
 };
@@ -48,6 +52,7 @@ export function parseTournamentRealtimeMessage(
 
   if (
     message.data.reason !== "results_changed" &&
+    message.data.reason !== "bracket_changed" &&
     message.data.reason !== "structure_changed"
   ) {
     return null;
@@ -64,6 +69,22 @@ export function getTournamentRealtimeUpdatePlan(
   workspaceId: number | null | undefined,
   reason: TournamentChangedReason
 ): TournamentRealtimeUpdatePlan {
+  if (reason === "bracket_changed") {
+    const queryKeys: (readonly unknown[])[] = [
+      ["encounters", "tournament", tournamentId],
+    ];
+
+    if (workspaceId != null) {
+      queryKeys.push(["encounters", "tournament", tournamentId, workspaceId]);
+    }
+
+    return {
+      workspaceScope: "bracket",
+      queryKeys,
+      shouldRefreshRoute: false,
+    };
+  }
+
   if (reason === "results_changed") {
     // A score recalculation only moves result-derived data. Refetching team
     // rosters, registrations, or the tournament list here is pure waste, so the
@@ -131,6 +152,8 @@ export function applyTournamentRealtimeUpdate(
 
   if (plan.workspaceScope === "full") {
     invalidateTournamentWorkspace(queryClient, tournamentId, workspaceId);
+  } else if (plan.workspaceScope === "bracket") {
+    invalidateTournamentBracket(queryClient, tournamentId, workspaceId);
   } else {
     invalidateTournamentResults(queryClient, tournamentId, workspaceId);
   }

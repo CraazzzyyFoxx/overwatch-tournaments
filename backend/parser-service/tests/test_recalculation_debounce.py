@@ -113,5 +113,5 @@ class RecalculationDebounceTests(IsolatedAsyncioTestCase):
         self.assertEqual("tournament_changed", message["event_type"])
         self.assertEqual(42, message["tournament_id"])
         self.assertEqual("results_changed", message["reason"])
-        self.assertEqual("tournament_changed", queue.name)
+        self.assertEqual("tournament_changed_tournament_service", queue.name)
         self.assertEqual("tournament.changed.42", publish_mock.await_args.kwargs["routing_key"])

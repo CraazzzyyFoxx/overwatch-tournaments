@@ -37,7 +37,8 @@ export function useTournamentRealtime({
         !tournamentId ||
         event.event_type !== "tournament.updated" ||
         event.data.tournament_id !== tournamentId ||
-        (event.data.reason !== "results_changed" &&
+        (event.data.reason !== "bracket_changed" &&
+          event.data.reason !== "results_changed" &&
           event.data.reason !== "structure_changed")
       ) {
         return;
