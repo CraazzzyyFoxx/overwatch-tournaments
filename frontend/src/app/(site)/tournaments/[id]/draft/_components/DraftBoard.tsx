@@ -1082,6 +1082,7 @@ function SelectedPlayerPanel({
   const division = selectedPlayer.division_number ?? (selectedPlayer.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, selectedPlayer.rank_value) : null);
   const secondaryRoles = selectedPlayer.secondary_roles_json ?? [];
   const selectedPlayerRoles = [selectedPlayer.primary_role, ...secondaryRoles] as DraftRole[];
+  const playerNote = selectedPlayer.anomaly_flags?.notes as string | undefined;
 
   return (
     <section className={cn(styles.selectedCard, "relative")} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "16px", position: "relative" }}>
@@ -1211,7 +1212,7 @@ function SelectedPlayerPanel({
                     </div>
                   )}
 
-                  <div className="flex items-center" title={getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, roleDiv)}>
+                  <div className="flex items-center" title={getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, roleDiv) ?? undefined}>
                     <PlayerDivisionIcon
                       division={roleDiv}
                       width={32}
@@ -1227,14 +1228,14 @@ function SelectedPlayerPanel({
       </div>
 
       {/* Player Note block */}
-      {selectedPlayer.anomaly_flags?.notes && (
+      {playerNote && playerNote.trim() ? (
         <div className={styles.selectedNotesBlock}>
           <span className={styles.selectedNotesTitle}>{label(t, "draft.inspect.notes", "Player Note")}</span>
           <p className="italic text-white/80 whitespace-pre-wrap">
-            &ldquo;{selectedPlayer.anomaly_flags.notes}&rdquo;
+            &ldquo;{playerNote}&rdquo;
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Draft Role Selector */}
       {canPick && selectedPlayerRoles.length > 1 && (
@@ -1453,7 +1454,7 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
           <div className="flex items-center gap-1.5 mt-0.5">
             {player.is_flex && <span className={styles.flexMark}>FLEX</span>}
             {player.secondary_roles_json && player.secondary_roles_json.length > 0 && (
-              <div className={styles.secondaryRoles} title={`Secondary: ${player.secondary_roles_json.map(roleLabel).join(", ")}`}>
+              <div className={styles.secondaryRoles} title={`Secondary: ${player.secondary_roles_json.map((r) => roleLabel(r as DraftRole)).join(", ")}`}>
                 {player.secondary_roles_json.map((secRole) => (
                   <span key={secRole} className={styles.secondaryRoleBadge}>
                     <PlayerRoleIcon role={getRoleIconName(secRole as DraftRole)} size={10} />
