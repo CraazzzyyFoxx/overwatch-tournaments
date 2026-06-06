@@ -268,6 +268,28 @@ export const ru = {
       rollback: "Откатить последний пик",
       cancel: "Отменить драфт",
       export: "Экспорт в команды"
+    },
+    bottomPanel: {
+      readyToPick: "Готов к выбору",
+      yourTurn: "Ваша очередь выбирать",
+      selectPlayer: "Выберите игрока",
+      selectPrompt: "Выберите игрока из списка ниже, чтобы подготовить пик",
+      waitingTurn: "Ожидание очереди",
+      yourTurnIn: "Ваша очередь через {count} пика(ов)",
+      yourTurnInSingular: "Ваша очередь через {count} пик",
+      yourTurnInPlural: "Ваша очередь через {count} пиков",
+      allPicksDone: "Все ваши пики завершены",
+      liveDraft: "Идет драфт",
+      currentlyPicking: "Сейчас выбирает",
+      draftPaused: "Драфт на паузе",
+      draftCompleted: "Драфт завершен",
+      draftCancelled: "Драфт отменен",
+      waitingStart: "Ожидание начала"
+    },
+    presence: {
+      title: "Капитаны • {online} из {total} в сети",
+      watching: "{count} смотрят",
+      offline: "офлайн"
     }
   },
   matchEdit: {

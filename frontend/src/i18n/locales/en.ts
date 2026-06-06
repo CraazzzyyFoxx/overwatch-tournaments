@@ -268,6 +268,26 @@ export const en = {
       rollback: "Rollback last pick",
       cancel: "Cancel draft",
       export: "Export to teams"
+    },
+    bottomPanel: {
+      readyToPick: "Ready to pick",
+      yourTurn: "Your turn to pick",
+      selectPlayer: "Select a player",
+      selectPrompt: "Select a player from the pool below to prepare your pick",
+      waitingTurn: "Waiting for turn",
+      yourTurnIn: "Your turn in {count} pick(s)",
+      allPicksDone: "All your picks completed",
+      liveDraft: "Live Draft",
+      currentlyPicking: "Currently picking",
+      draftPaused: "Draft paused",
+      draftCompleted: "Draft completed",
+      draftCancelled: "Draft cancelled",
+      waitingStart: "Waiting for start"
+    },
+    presence: {
+      title: "Captains • {online} of {total} online",
+      watching: "{count} watching",
+      offline: "offline"
     }
   },
   matchEdit: {
