@@ -14,6 +14,8 @@ from src.core import db
 from src.services.admin import stage as stage_service
 from src.services.standings import service as standings_service
 from src.services.standings import swiss_auto_round
+from src.services.tournament.cache_invalidation import invalidate_tournament_cache
+from src.services.tournament.events import enqueue_tournament_changed
 
 
 async def process_swiss_next_round_event(
@@ -123,7 +125,15 @@ async def _generate_next_round(
         event.stage_item_id,
         team_names_by_id=team_names_by_id,
     )
+    await enqueue_tournament_changed(session, event.tournament_id, "bracket_changed")
     await session.commit()
+    try:
+        await invalidate_tournament_cache(event.tournament_id, "bracket_changed")
+    except Exception:
+        logger.exception(
+            "Swiss auto-round: failed to invalidate encounter cache",
+            tournament_id=event.tournament_id,
+        )
 
     logger.info(
         "Swiss auto-round: generated %d encounters for round %d",
