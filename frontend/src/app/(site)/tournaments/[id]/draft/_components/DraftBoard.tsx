@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   Ban,
   Check,
+  ChevronDown,
   Clock3,
   Crown,
   Loader2,
@@ -33,6 +34,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery } from "@tanstack/react-query";
 import heroService from "@/services/hero.service";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -177,7 +188,7 @@ function DraftBoardView({
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [searchQuery, setSearchQuery] = useState("");
-  const [heroFilter, setHeroFilter] = useState<string>("all");
+  const [selectedHeroes, setSelectedHeroes] = useState<string[]>([]);
   const gating = computeGating(board, myPlayerIds, myAuthUserId, isAdmin);
 
   const { data: heroesData } = useQuery({
@@ -217,8 +228,8 @@ function DraftBoardView({
   );
   const availableByRole = useMemo(() => countRoles(availablePlayers), [availablePlayers]);
   const filteredPlayers = useMemo(
-    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery, heroFilter),
-    [availablePlayers, roleFilter, searchQuery, sortMode, heroFilter]
+    () => filterAndSortPlayers(availablePlayers, roleFilter, sortMode, searchQuery, selectedHeroes),
+    [availablePlayers, roleFilter, searchQuery, sortMode, selectedHeroes]
   );
   const selectedPlayer =
     selectedPlayerId == null ? null : playerById.get(selectedPlayerId) ?? null;
@@ -321,11 +332,11 @@ function DraftBoardView({
             roleFilter={roleFilter}
             sortMode={sortMode}
             searchQuery={searchQuery}
-            heroFilter={heroFilter}
+            selectedHeroes={selectedHeroes}
             onRoleFilterChange={setRoleFilter}
             onSortModeChange={setSortMode}
             onSearchChange={setSearchQuery}
-            onHeroFilterChange={setHeroFilter}
+            onHeroFilterChange={setSelectedHeroes}
             heroesMap={heroesMap}
             t={t}
           />
@@ -896,11 +907,11 @@ interface PoolToolbarProps {
   roleFilter: RoleFilter;
   sortMode: SortMode;
   searchQuery: string;
-  heroFilter: string;
+  selectedHeroes: string[];
   onRoleFilterChange: (role: RoleFilter) => void;
   onSortModeChange: (mode: SortMode) => void;
   onSearchChange: (query: string) => void;
-  onHeroFilterChange: (hero: string) => void;
+  onHeroFilterChange: (heroes: string[]) => void;
   heroesMap: Map<string, any>;
   t: Translate;
 }
@@ -912,7 +923,7 @@ function PoolToolbar({
   roleFilter,
   sortMode,
   searchQuery,
-  heroFilter,
+  selectedHeroes,
   onRoleFilterChange,
   onSortModeChange,
   onSearchChange,
@@ -920,6 +931,8 @@ function PoolToolbar({
   heroesMap,
   t,
 }: PoolToolbarProps) {
+  const [open, setOpen] = useState(false);
+
   const sortedHeroes = useMemo(() => {
     return Array.from(heroesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [heroesMap]);
@@ -963,36 +976,79 @@ function PoolToolbar({
 
       <div className={styles.sortBox}>
         <span>{label(t, "draft.pool.hero", "Hero")}</span>
-        <Select
-          value={heroFilter}
-          onValueChange={onHeroFilterChange}
-        >
-          <SelectTrigger className="border-0 bg-transparent h-8 px-0 shadow-none focus:ring-0 gap-1.5 text-xs font-extrabold text-[var(--draft-fg)] [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-80 min-w-[100px]">
-            <SelectValue placeholder="All Heroes" />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px] overflow-y-auto">
-            <SelectItem value="all">All Heroes</SelectItem>
-            {sortedHeroes.map((h) => (
-              <SelectItem key={h.slug} value={h.slug}>
-                <div className="flex items-center gap-2">
-                  {h.image_path ? (
-                    <Avatar className="w-4 h-4 rounded-full shrink-0 select-none">
-                      <AvatarImage
-                        src={getHeroIconUrl(h.slug, h.image_path)}
-                        alt={h.name}
-                        className="object-cover"
-                      />
-                      <AvatarFallback className="text-[6px] bg-white/5 uppercase">
-                        {h.slug.slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : null}
-                  <span>{h.name}</span>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center border-0 bg-transparent h-8 px-0 shadow-none focus:ring-0 gap-1.5 text-xs font-extrabold text-[var(--draft-fg)] hover:opacity-80 transition min-w-[100px]"
+            >
+              <span className="truncate max-w-[120px]">
+                {selectedHeroes.length === 0
+                  ? "All Heroes"
+                  : selectedHeroes.length === 1
+                  ? (heroesMap.get(selectedHeroes[0])?.name ?? selectedHeroes[0])
+                  : `Selected (${selectedHeroes.length})`}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-80 shrink-0" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[240px] p-0 border border-[var(--draft-border)] bg-[var(--draft-card-2)] shadow-xl rounded-lg overflow-hidden" align="start">
+            <Command className="bg-transparent">
+              {selectedHeroes.length > 0 && (
+                <div className="flex items-center justify-between p-2 border-b border-white/5 text-xs bg-white/[0.01]">
+                  <span className="text-white/40 font-semibold">Selected: {selectedHeroes.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => onHeroFilterChange([])}
+                    className="text-rose-400 hover:text-rose-300 font-bold transition"
+                  >
+                    Clear all
+                  </button>
                 </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              )}
+              <CommandInput placeholder="Search hero..." className="h-9 text-xs text-white" />
+              <CommandList className="max-h-[300px] overflow-y-auto">
+                <CommandEmpty className="py-4 text-center text-xs text-white/40">No heroes found.</CommandEmpty>
+                <CommandGroup>
+                  {sortedHeroes.map((h) => {
+                    const isSelected = selectedHeroes.includes(h.slug);
+                    return (
+                      <CommandItem
+                        key={h.slug}
+                        value={h.name}
+                        onSelect={() => {
+                          const next = isSelected
+                            ? selectedHeroes.filter((slug) => slug !== h.slug)
+                            : [...selectedHeroes, h.slug];
+                          onHeroFilterChange(next);
+                        }}
+                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-md hover:bg-white/5 data-[selected=true]:bg-white/5 text-white/90 data-[selected=true]:text-white transition"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          className="pointer-events-none border-white/20 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        {h.image_path ? (
+                          <Avatar className="w-5 h-5 rounded-full shrink-0 select-none border border-white/10">
+                            <AvatarImage
+                              src={getHeroIconUrl(h.slug, h.image_path)}
+                              alt={h.name}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="text-[6px] bg-white/5 uppercase">
+                              {h.slug.slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : null}
+                        <span className="text-xs">{h.name}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className={styles.sortBox}>
@@ -1391,17 +1447,6 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
               {formatSubRoleLabel(player.sub_role)}
             </span>
           )}
-          <div
-            className="p-1.5 rounded-md flex items-center justify-center"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--role-color) 12%, transparent)",
-              border: "1px solid color-mix(in srgb, var(--role-color) 25%, transparent)",
-              color: "var(--role-color)",
-            }}
-            title={roleLabel(player.primary_role)}
-          >
-            <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={11} />
-          </div>
         </div>
       </div>
       <div className={styles.playerMetrics} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "6px" }}>
@@ -1411,32 +1456,32 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
           const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
           return (
             <div className="flex items-center justify-between w-full">
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
                 <PlayerRoleIcon role={getRoleIconName(role)} size={22} />
+                {roleRank.top_heroes && roleRank.top_heroes.length > 0 && (
+                  <span className="aqt-hero-strip ml-1">
+                    {roleRank.top_heroes.slice(0, 5).map((hero) => {
+                      const slug = typeof hero === "string" ? hero : hero.slug;
+                      const heroObj = heroesMap.get(slug);
+                      const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
+                      return (
+                        <Avatar key={slug} className="w-8 h-8 rounded-full aqt-hero-av shrink-0 select-none">
+                          <AvatarImage
+                            src={getHeroIconUrl(slug, imagePath)}
+                            alt={slug}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className="text-[8px] bg-white/5 uppercase">
+                            {slug.slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                      );
+                    })}
+                  </span>
+                )}
               </div>
               {roleDiv != null ? (
-                <div className="flex items-center gap-1" title={formatRank(roleRank.rank_value)}>
-                  {roleRank.top_heroes && roleRank.top_heroes.length > 0 && (
-                    <span className="aqt-hero-strip mr-1.5">
-                      {roleRank.top_heroes.slice(0, 5).map((hero) => {
-                        const slug = typeof hero === "string" ? hero : hero.slug;
-                        const heroObj = heroesMap.get(slug);
-                        const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
-                        return (
-                          <Avatar key={slug} className="w-8 h-8 rounded-full aqt-hero-av shrink-0 select-none">
-                            <AvatarImage
-                              src={getHeroIconUrl(slug, imagePath)}
-                              alt={slug}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="text-[8px] bg-white/5 uppercase">
-                              {slug.slice(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                        );
-                      })}
-                    </span>
-                  )}
+                <div className="flex items-center" title={formatRank(roleRank.rank_value)}>
                   <PlayerDivisionIcon
                     division={roleDiv}
                     width={26}
@@ -1876,19 +1921,19 @@ function filterAndSortPlayers(
   roleFilter: RoleFilter,
   sortMode: SortMode,
   searchQuery: string,
-  heroFilter: string
+  selectedHeroes: string[]
 ): DraftPlayer[] {
   const query = searchQuery.trim().toLowerCase();
   const filtered = players.filter((player) => {
     if (roleFilter !== "all" && player.primary_role !== roleFilter) return false;
 
-    if (heroFilter !== "all") {
+    if (selectedHeroes.length > 0) {
       const roles = [player.primary_role, ...(player.secondary_roles_json ?? [])] as DraftRole[];
       const hasHero = roles.some((role) => {
         const roleRank = getRoleRank(player, role);
         return roleRank.top_heroes?.some((h) => {
           const slug = typeof h === "string" ? h : h.slug;
-          return slug === heroFilter;
+          return selectedHeroes.includes(slug);
         });
       });
       if (!hasHero) return false;
