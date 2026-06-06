@@ -18,6 +18,8 @@ def tournament_cache_patterns(
     bracket_patterns = (
         f"fastapi:*encounters*:{tournament_id}*",
         f"*encounters*:{tournament_id}*",
+        "fastapi:*encounters*:None:*",
+        "*encounters*:None:*",
     )
     if reason == "bracket_changed":
         return bracket_patterns

@@ -65,6 +65,9 @@ class AdminEncounterOutboxTests(IsolatedAsyncioTestCase):
         async def fake_enqueue(_session, tournament_id):
             calls.append(f"enqueue:{tournament_id}")
 
+        async def fake_invalidate(tournament_id, reason):
+            calls.append(f"invalidate:{tournament_id}:{reason}")
+
         session = SimpleNamespace(
             execute=AsyncMock(side_effect=fake_execute),
             add=Mock(),
@@ -78,13 +81,76 @@ class AdminEncounterOutboxTests(IsolatedAsyncioTestCase):
             round=1,
         )
 
-        with patch.object(
-            admin_encounter_service,
-            "enqueue_tournament_recalculation",
-            AsyncMock(side_effect=fake_enqueue),
-        ) as enqueue_recalc:
+        with (
+            patch.object(
+                admin_encounter_service,
+                "enqueue_tournament_recalculation",
+                AsyncMock(side_effect=fake_enqueue),
+            ) as enqueue_recalc,
+            patch.object(
+                admin_encounter_service,
+                "invalidate_tournament_cache",
+                AsyncMock(side_effect=fake_invalidate),
+            ) as invalidate_cache,
+        ):
             encounter = await admin_encounter_service.create_encounter(session, payload)
 
         self.assertEqual(encounter.tournament_id, 1)
         enqueue_recalc.assert_awaited_once_with(session, 1)
+        invalidate_cache.assert_awaited_once_with(1, "bracket_changed")
         self.assertLess(calls.index("enqueue:1"), calls.index("commit"))
+        self.assertLess(calls.index("commit"), calls.index("invalidate:1:bracket_changed"))
+
+    async def test_update_encounter_invalidates_cache_after_commit(self) -> None:
+        calls: list[str] = []
+        encounter = SimpleNamespace(
+            id=10,
+            tournament_id=1,
+            stage_id=20,
+            stage_item_id=None,
+            tournament_group_id=None,
+            home_team_id=100,
+            away_team_id=200,
+            home_score=0,
+            away_score=0,
+            status=admin_encounter_service.enums.EncounterStatus.OPEN,
+        )
+        execute_results = iter(
+            [
+                _result(encounter),
+                _result(SimpleNamespace(id=20)),
+                _scalars_result([]),
+            ]
+        )
+
+        async def fake_commit():
+            calls.append("commit")
+
+        async def fake_invalidate(tournament_id, reason):
+            calls.append(f"invalidate:{tournament_id}:{reason}")
+
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=lambda _query: next(execute_results)),
+            commit=AsyncMock(side_effect=fake_commit),
+            refresh=AsyncMock(),
+        )
+        payload = admin_encounter_schema.EncounterUpdate(home_score=2, away_score=1)
+
+        with (
+            patch.object(
+                admin_encounter_service,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ),
+            patch.object(
+                admin_encounter_service,
+                "invalidate_tournament_cache",
+                AsyncMock(side_effect=fake_invalidate),
+            ) as invalidate_cache,
+        ):
+            updated = await admin_encounter_service.update_encounter(session, encounter.id, payload)
+
+        self.assertEqual(updated.home_score, 2)
+        self.assertEqual(updated.away_score, 1)
+        invalidate_cache.assert_awaited_once_with(1, "bracket_changed")
+        self.assertEqual(calls, ["commit", "invalidate:1:bracket_changed"])

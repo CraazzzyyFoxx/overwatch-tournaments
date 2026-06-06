@@ -28,6 +28,7 @@ class TournamentCacheInvalidationTests(TestCase):
         patterns = cache_invalidation.tournament_cache_patterns(42, "bracket_changed")
 
         self.assertTrue(any("encounters" in pattern for pattern in patterns))
+        self.assertTrue(any("encounters*:None:" in pattern for pattern in patterns))
         self.assertFalse(any("tournaments/42" in pattern for pattern in patterns))
         self.assertFalse(any("teams" in pattern for pattern in patterns))
 

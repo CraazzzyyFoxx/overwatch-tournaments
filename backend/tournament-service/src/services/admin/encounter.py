@@ -1,5 +1,7 @@
 """Admin service layer for encounter CRUD operations"""
 
+from collections.abc import Iterable
+
 from fastapi import HTTPException, status
 from loguru import logger
 from sqlalchemy import select
@@ -10,10 +12,23 @@ from src import models
 from src.core import enums
 from src.schemas.admin import encounter as admin_schemas
 from src.services.encounter.finalize import finalize_encounter_score
+from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 from src.services.tournament.events import (
     enqueue_encounter_completed,
     enqueue_tournament_recalculation,
 )
+
+
+async def _invalidate_encounter_reads(tournament_ids: Iterable[int]) -> None:
+    """Clear encounter reads before an admin mutation returns to the client."""
+    for tournament_id in sorted(set(tournament_ids)):
+        try:
+            await invalidate_tournament_cache(tournament_id, "bracket_changed")
+        except Exception:
+            logger.exception(
+                "Failed to invalidate encounter cache after admin write",
+                tournament_id=tournament_id,
+            )
 
 
 async def _resolve_stage_refs(
@@ -168,6 +183,7 @@ async def create_encounter(session: AsyncSession, data: admin_schemas.EncounterC
     session.add(encounter)
     await enqueue_tournament_recalculation(session, data.tournament_id)
     await session.commit()
+    await _invalidate_encounter_reads([data.tournament_id])
     await session.refresh(encounter)
 
     return encounter
@@ -250,6 +266,7 @@ async def update_encounter(
     if completed_by_this_update:
         await enqueue_encounter_completed(session, encounter)
     await session.commit()
+    await _invalidate_encounter_reads([tournament_id])
     await session.refresh(encounter)
 
     return encounter
@@ -291,6 +308,8 @@ async def update_match(
     if tournament_id is not None:
         await enqueue_tournament_recalculation(session, tournament_id)
     await session.commit()
+    if tournament_id is not None:
+        await _invalidate_encounter_reads([tournament_id])
     await session.refresh(match)
 
     return match
@@ -308,6 +327,7 @@ async def delete_encounter(session: AsyncSession, encounter_id: int) -> None:
     await session.delete(encounter)
     await enqueue_tournament_recalculation(session, tournament_id)
     await session.commit()
+    await _invalidate_encounter_reads([tournament_id])
 
 
 async def bulk_update_encounters(
@@ -392,6 +412,7 @@ async def bulk_update_encounters(
         await enqueue_encounter_completed(session, encounter)
 
     await session.commit()
+    await _invalidate_encounter_reads(affected_tournaments)
 
     logger.info(
         "Bulk-updated %d encounters across %d tournaments (%d newly completed)",

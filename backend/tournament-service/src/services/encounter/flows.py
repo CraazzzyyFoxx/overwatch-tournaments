@@ -176,7 +176,11 @@ async def get_encounter(session: AsyncSession, encounter_id: int, entities: list
     return await to_pydantic(session, encounter, entities)
 
 
-@cache(ttl=config.settings.encounters_cache_ttl, key="encounters:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{viewer_auth_user_id}", prefix="fastapi:")
+@cache(
+    ttl=config.settings.encounters_cache_ttl,
+    key="encounters:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.only_count}:{params.query}:{params.fields}:{params.stage_id}:{params.stage_item_id}:{params.best_of}:{params.status}:{params.has_logs}:{params.closeness_min}:{params.closeness_max}:{params.scope}:{viewer_auth_user_id}",
+    prefix="fastapi:",
+)
 async def get_all_encounters(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,
@@ -260,7 +264,11 @@ async def delete_saved_view(
     )
 
 
-@cache(ttl=config.settings.encounters_cache_ttl, key="encounters_overview:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{viewer_auth_user_id}", prefix="fastapi:")
+@cache(
+    ttl=config.settings.encounters_cache_ttl,
+    key="encounters_overview:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.only_count}:{params.query}:{params.fields}:{params.stage_id}:{params.stage_item_id}:{params.best_of}:{params.status}:{params.has_logs}:{params.closeness_min}:{params.closeness_max}:{params.scope}:{viewer_auth_user_id}",
+    prefix="fastapi:",
+)
 async def get_encounters_overview(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,
