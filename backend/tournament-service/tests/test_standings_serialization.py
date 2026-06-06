@@ -48,6 +48,26 @@ def _standing() -> models.Standing:
         points=0.0,
         buchholz=None,
         tb=None,
+        score_differential=None,
+    )
+
+
+def _round_robin_stage() -> models.Stage:
+    return models.Stage(
+        id=10,
+        created_at=datetime.now(UTC),
+        updated_at=None,
+        tournament_id=64,
+        name="Group A",
+        description=None,
+        stage_type=enums.StageType.ROUND_ROBIN,
+        max_rounds=5,
+        order=0,
+        is_active=True,
+        is_completed=False,
+        settings_json=None,
+        challonge_id=None,
+        challonge_slug=None,
     )
 
 
@@ -137,6 +157,31 @@ class StandingSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([10], [encounter.id for encounter in read.matches_history])
         self.assertFalse(hasattr(read.matches_history[0], "matches"))
+
+    async def test_to_pydantic_exposes_persisted_score_differential(self) -> None:
+        standing = _standing()
+        standing.score_differential = 7
+        make_transient_to_detached(standing)
+
+        read = await flows.to_pydantic(cast(AsyncSession, object()), standing, [])
+
+        # The persisted differential is surfaced verbatim — not the old
+        # ``win*2 - lose`` approximation (which would be 0 here).
+        self.assertEqual(7, read.score_differential)
+        assert read.tb_metrics is not None
+        self.assertEqual(7, read.tb_metrics["score_differential"])
+
+    async def test_to_pydantic_exposes_effective_tiebreak_order(self) -> None:
+        standing = _standing()
+        standing.stage = _round_robin_stage()
+
+        read = await flows.to_pydantic(cast(AsyncSession, object()), standing, [])
+
+        self.assertEqual("challonge_round_robin", read.source_rule_profile)
+        self.assertEqual(
+            ["points", "head_to_head", "median_buchholz", "match_wins", "score_differential"],
+            read.tiebreak_order,
+        )
 
 
 class StandingLoadOptionTests(TestCase):

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament-match-order";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { formatTiebreakOrder } from "@/lib/tiebreakers";
 import tournamentService from "@/services/tournament.service";
 
 export interface StandingTableProps {
@@ -132,12 +133,23 @@ const StandingsTable = ({
     return left - right;
   });
 
-  const hasBuchholz = is_groups && standings.some((s) => s.buchholz != null);
   const showCut = is_groups && sortedStandings.length > resolvedAdvanceCount;
-  const columnCount = is_groups ? (hasBuchholz ? 10 : 9) : 7;
+  const columnCount = is_groups ? 9 : 6;
+
+  // "Ranked by …" legend — resolve metric ids through i18n, falling back to the
+  // shared English labels when a key is missing.
+  const labelFor = (id: string) => {
+    const key = `common.tiebreakerMetrics.${id}`;
+    const label = t(key);
+    return label === key ? undefined : label;
+  };
+  const tiebreakLegend = is_groups
+    ? formatTiebreakOrder(sortedStandings[0]?.tiebreak_order, labelFor)
+    : "";
 
   return (
-    <div className="st-scroll">
+    <div>
+      <div className="st-scroll">
       <table className="st">
         <thead>
           {is_groups ? (
@@ -147,22 +159,17 @@ const StandingsTable = ({
               <th className="c" style={{ width: 80 }}>
                 W·D·L
               </th>
-              <th className="r" style={{ width: 80 }}>
-                Score
-              </th>
-              <th className="r" style={{ width: 60 }}>
-                TB
-              </th>
               <th className="r" style={{ width: 60 }}>
                 Pts
               </th>
-              {hasBuchholz && (
-                <th className="r" style={{ width: 80 }}>
-                  {t("common.buchholz")}
-                </th>
-              )}
+              <th className="r" style={{ width: 60 }} title={t("common.headToHead")}>
+                H2H
+              </th>
               <th className="r" style={{ width: 80 }}>
-                Pts Δ
+                {t("common.buchholz")}
+              </th>
+              <th className="r" style={{ width: 70 }} title={t("common.scoreDiff")}>
+                +/−
               </th>
               <th className="c" style={{ width: 120 }}>
                 Form
@@ -225,16 +232,13 @@ const StandingsTable = ({
                         {standing.points.toFixed(1)}
                       </td>
                       <td className="r font-mono text-[var(--fg-dim)]">
-                        {standing.tb ?? "—"}
+                        {standing.tb ? standing.tb : "—"}
                       </td>
-                      <td className="r font-mono text-[var(--fg-dim)]">{maps.won}</td>
-                      {hasBuchholz && (
-                        <td className="r font-mono text-[var(--fg-dim)]">
-                          {standing.buchholz != null ? standing.buchholz.toFixed(1) : "—"}
-                        </td>
-                      )}
+                      <td className="r font-mono text-[var(--fg-dim)]">
+                        {standing.buchholz != null ? standing.buchholz.toFixed(1) : "—"}
+                      </td>
                       <td className="r">
-                        <MapDiff diff={maps.diff} />
+                        <MapDiff diff={standing.score_differential ?? maps.diff} />
                       </td>
                       <td className="c">
                         <FormChips results={results} />
@@ -296,6 +300,12 @@ const StandingsTable = ({
           })}
         </tbody>
       </table>
+      </div>
+      {tiebreakLegend ? (
+        <p className="mt-2 px-1 text-xs text-[var(--fg-faint)]">
+          {t("common.tiebreakers")}: {tiebreakLegend}
+        </p>
+      ) : null}
     </div>
   );
 };

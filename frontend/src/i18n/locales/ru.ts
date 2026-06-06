@@ -51,6 +51,18 @@ export const ru = {
     playoffStandings: "Таблица плей-офф",
     topAdvance: "ТОП {count} ПРОХОДЯТ",
     buchholz: "Бухгольц",
+    headToHead: "Личные встречи",
+    scoreDiff: "Разница карт",
+    tiebreakers: "Тай-брейки",
+    tiebreakerMetrics: {
+      points: "Очки",
+      match_wins: "Победы в матчах",
+      head_to_head: "Личные встречи",
+      median_buchholz: "Медианный Бухгольц",
+      buchholz: "Бухгольц",
+      score_differential: "Разница карт",
+      manual_override: "Ручное переопределение"
+    },
     combined: "Комбинированная",
     groupStage: "Групповой этап",
     confirmCheckIn: "Подтвердить чек-ин?",

@@ -55,6 +55,10 @@ class Standing(db.TimeStampIntegerMixin):
     points: Mapped[float] = mapped_column(Float)
     buchholz: Mapped[float | None] = mapped_column(Float, nullable=True)
     tb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Map/score differential tie-breaker (sum of map-score margins across the
+    # group stage). Persisted so the API can surface an accurate value instead
+    # of approximating it. NULL for elimination-stage standings.
+    score_differential: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="standings")
     group: Mapped[TournamentGroup] = relationship()

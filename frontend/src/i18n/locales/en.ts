@@ -51,6 +51,18 @@ export const en = {
     playoffStandings: "Playoff standings",
     topAdvance: "TOP {count} ADVANCE",
     buchholz: "Buchholz",
+    headToHead: "Head-to-Head",
+    scoreDiff: "Score differential",
+    tiebreakers: "Tiebreakers",
+    tiebreakerMetrics: {
+      points: "Points",
+      match_wins: "Match wins",
+      head_to_head: "Head-to-Head",
+      median_buchholz: "Median Buchholz",
+      buchholz: "Buchholz",
+      score_differential: "Score differential",
+      manual_override: "Manual override"
+    },
     combined: "Combined",
     groupStage: "Group stage",
     confirmCheckIn: "Confirm check-in?",

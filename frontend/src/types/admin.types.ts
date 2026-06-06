@@ -363,6 +363,8 @@ export interface StandingUpdateInput {
   win?: number;
   draw?: number;
   lose?: number;
+  buchholz?: number;
+  tb?: number;
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

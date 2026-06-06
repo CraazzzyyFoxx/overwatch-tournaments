@@ -36,6 +36,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ALL_TIEBREAKERS } from "@/lib/tiebreakers";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
@@ -65,16 +66,6 @@ const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
   bracket_lower: "Lower Bracket",
   single_bracket: "Single Bracket"
 };
-
-const ALL_TIEBREAKERS = [
-  { id: "points", label: "Points" },
-  { id: "head_to_head", label: "Head-to-Head" },
-  { id: "median_buchholz", label: "Median Buchholz" },
-  { id: "buchholz", label: "Buchholz" },
-  { id: "match_wins", label: "Match Wins" },
-  { id: "score_differential", label: "Score Differential" },
-  { id: "manual_override", label: "Manual Override" }
-];
 
 const DEFAULT_SWISS_TIEBREAKERS = [
   "points",
@@ -1823,7 +1814,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                   if (selectedStageScoringDrawDraft !== "") scoring.draw = Number(selectedStageScoringDrawDraft);
                                   if (selectedStageScoringLossDraft !== "") scoring.loss = Number(selectedStageScoringLossDraft);
 
-                                  const nextSettings = {
+                                  const nextSettings: Record<string, any> = {
                                     ...selectedStageSettings,
                                     ranking_preset: selectedStageRankingPresetDraft || undefined,
                                     tiebreak_order: selectedStageTiebreakOrderDraft,

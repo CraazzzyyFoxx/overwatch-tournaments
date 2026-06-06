@@ -199,9 +199,11 @@ export interface Standings {
   points: number;
   buchholz: number | null;
   tb: number | null;
+  score_differential: number | null;
   ranking_context: Record<string, string | number | null> | null;
   tb_metrics: Record<string, number | null> | null;
   source_rule_profile: string | null;
+  tiebreak_order: string[] | null;
 
   team: Team | null;
   tournament: Tournament | null;

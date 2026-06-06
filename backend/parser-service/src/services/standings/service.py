@@ -687,6 +687,7 @@ def _build_group_stage_standings(
                 points=team.points,
                 buchholz=team.median_buchholz,
                 tb=team.head_to_head,
+                score_differential=team.score_differential,
                 stage=stage,
                 stage_item=stage_item,
             )
