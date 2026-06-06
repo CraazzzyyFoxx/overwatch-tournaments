@@ -681,7 +681,6 @@ export default function TournamentParticipantsPage({
               {t("common.checkInDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogContent className="hidden" /> {/* wrapper fix */}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={checkInMutation.isPending}>
               {t("common.cancel")}
