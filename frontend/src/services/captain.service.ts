@@ -10,7 +10,7 @@ import type {
 export interface CaptainMatchReportInput {
   home_score: number;
   away_score: number;
-  closeness: number; // 1..5 stars
+  closeness: number; // 1..10 score
 }
 
 class CaptainService {

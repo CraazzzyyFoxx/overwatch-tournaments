@@ -212,19 +212,19 @@ async def submit_match_report(
     encounter_id: int,
     home_score: int,
     away_score: int,
-    closeness_stars: int,
+    closeness_score: int,
 ) -> models.Encounter:
     """Captain submits the encounter-level result.
 
     Match rows are created by log ingestion only, so manual reports update the
     Encounter record and do not touch ``matches.match`` or map-veto state.
-    - closeness_stars in 1..5 is stored as encounter.closeness = stars / 5.
+    - closeness_score in 1..10 is stored as encounter.closeness = score / 10.
     - Sets result_status = PENDING_CONFIRMATION so the other captain confirms.
     """
-    if not 1 <= closeness_stars <= 5:
+    if not 1 <= closeness_score <= 10:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="closeness must be between 1 and 5",
+            detail="closeness must be between 1 and 10",
         )
     encounter = await _load_encounter(session, encounter_id)
 
@@ -242,7 +242,7 @@ async def submit_match_report(
     now = datetime.now(UTC)
     encounter.home_score = home_score
     encounter.away_score = away_score
-    encounter.closeness = closeness_stars / 5.0
+    encounter.closeness = closeness_score / 10.0
     encounter.result_status = EncounterResultStatus.PENDING_CONFIRMATION
     encounter.submitted_by_id = captain_player_id
     encounter.submitted_at = now

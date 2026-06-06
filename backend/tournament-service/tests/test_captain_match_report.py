@@ -29,6 +29,7 @@ os.environ.setdefault("CHALLONGE_USERNAME", "test")
 os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 captain_service = importlib.import_module("src.services.encounter.captain")
+captain_route = importlib.import_module("src.routes.captain")
 enums = importlib.import_module("shared.core.enums")
 
 
@@ -108,6 +109,15 @@ def _mk_session(
 
 
 class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
+    def test_route_accepts_odd_closeness_score(self) -> None:
+        report = captain_route.CaptainMatchReport(
+            home_score=2,
+            away_score=1,
+            closeness=7,
+        )
+
+        self.assertEqual(report.closeness, 7)
+
     async def test_rejects_closeness_out_of_range(self) -> None:
         session = _mk_session(_mk_encounter(), [100])
         user = _mk_user()
@@ -118,7 +128,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 encounter_id=10,
                 home_score=2,
                 away_score=1,
-                closeness_stars=6,
+                closeness_score=11,
             )
         self.assertEqual(ctx.exception.status_code, 422)
 
@@ -133,7 +143,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 encounter_id=10,
                 home_score=2,
                 away_score=1,
-                closeness_stars=3,
+                closeness_score=3,
             )
         self.assertEqual(ctx.exception.status_code, 403)
 
@@ -153,13 +163,13 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 encounter_id=10,
                 home_score=2,
                 away_score=1,
-                closeness_stars=4,
+                closeness_score=7,
             )
 
         enqueue_recalc.assert_awaited_once_with(session, encounter.tournament_id)
         self.assertEqual(encounter.home_score, 2)
         self.assertEqual(encounter.away_score, 1)
-        self.assertEqual(encounter.closeness, 4 / 5)
+        self.assertEqual(encounter.closeness, 7 / 10)
         self.assertEqual(encounter.result_status, enums.EncounterResultStatus.PENDING_CONFIRMATION)
         self.assertEqual(encounter.submitted_by_id, 100)
         self.assertEqual(session._added, [])
