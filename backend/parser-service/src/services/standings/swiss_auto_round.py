@@ -13,17 +13,18 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from shared.core import enums
 from shared.messaging.config import SWISS_NEXT_ROUND_QUEUE
 from shared.observability import publish_message
 from shared.schemas.events import SwissNextRoundEvent
+from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from shared.services.tournament_utils import (
     completed_encounters_in_finished_rounds,
     has_incomplete_playable_rounds,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from src import models
 
 DEFAULT_STAGE_MAX_ROUNDS = 5
@@ -63,6 +64,8 @@ async def enqueue_swiss_next_rounds(
         if items:
             for item in items:
                 item_encounters = encounters_by_key.get((stage.id, item.id), [])
+                if swiss_scope_stopped(stage, item.id):
+                    continue
                 if stage_item_ready_for_next_round(item_encounters):
                     next_round = next_round_number(item_encounters)
                     if not stage_allows_next_round(stage, next_round):
@@ -84,6 +87,8 @@ async def enqueue_swiss_next_rounds(
                     )
         else:
             stage_encounters = encounters_by_key.get((stage.id, None), [])
+            if swiss_scope_stopped(stage, None):
+                continue
             if stage_item_ready_for_next_round(stage_encounters):
                 next_round = next_round_number(stage_encounters)
                 if not stage_allows_next_round(stage, next_round):

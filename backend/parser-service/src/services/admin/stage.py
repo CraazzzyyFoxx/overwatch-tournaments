@@ -7,7 +7,14 @@ from loguru import logger
 from shared.core import enums
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.engine import generate_bracket
-from shared.services.bracket.swiss import SwissStanding
+from shared.services.bracket.swiss import SwissPairingImpossibleError, SwissStanding
+from shared.services.bracket.swiss_settings import (
+    clear_swiss_byes,
+    clear_swiss_scope_stopped,
+    mark_swiss_scope_stopped,
+    record_swiss_bye,
+    swiss_bye_team_ids,
+)
 from shared.services.bracket.types import BracketSkeleton
 from shared.services.encounter_naming import build_encounter_name_from_ids
 from sqlalchemy import select
@@ -727,7 +734,7 @@ async def _get_swiss_generation_context(
         select(models.Standing).where(
             models.Standing.stage_id == stage_id,
             models.Standing.stage_item_id == stage_item_id,
-        )
+        ).order_by(models.Standing.position, models.Standing.team_id)
     )
     raw_standings = list(standing_result.scalars().all())
     swiss_standings = [
@@ -755,6 +762,8 @@ async def _generate_stage_skeleton(
         swiss_standings, swiss_played_pairs, swiss_round = (
             await _get_swiss_generation_context(session, stage.id, stage_item_id)
         )
+        if swiss_standings is None:
+            clear_swiss_byes(stage, stage_item_id)
         if not swiss_auto_round.stage_allows_next_round(stage, swiss_round):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -766,14 +775,31 @@ async def _generate_stage_skeleton(
         and (stage.settings_json or {}).get("de_grand_final_type") == "with_reset"
     )
 
-    return generate_bracket(
-        stage.stage_type,
-        team_ids,
-        swiss_standings=swiss_standings,
-        swiss_played_pairs=swiss_played_pairs,
-        swiss_round_number=swiss_round,
-        de_include_reset=de_include_reset,
-    )
+    try:
+        skeleton = generate_bracket(
+            stage.stage_type,
+            team_ids,
+            swiss_standings=swiss_standings,
+            swiss_played_pairs=swiss_played_pairs,
+            swiss_round_number=swiss_round,
+            swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
+            de_include_reset=de_include_reset,
+        )
+    except SwissPairingImpossibleError:
+        mark_swiss_scope_stopped(stage, stage_item_id)
+        logger.info(
+            "Swiss scope ended because no complete non-rematch pairing exists",
+            stage_id=stage.id,
+            stage_item_id=stage_item_id,
+            round=swiss_round,
+        )
+        return BracketSkeleton(pairings=[], total_rounds=0)
+
+    if stage.stage_type == enums.StageType.SWISS:
+        clear_swiss_scope_stopped(stage, stage_item_id)
+        if skeleton.bye_team_id is not None:
+            record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id)
+    return skeleton
 
 
 async def _create_encounters_from_skeleton(

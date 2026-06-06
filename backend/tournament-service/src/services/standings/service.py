@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from loguru import logger
 from shared.core import enums
 from shared.core.enums import StageType
+from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
 from shared.services.tournament_utils import (
     completed_encounters as _shared_completed_encounters,
 )
@@ -347,6 +348,8 @@ def prepare_teams_for_groups(
     encounters: typing.Sequence[models.Encounter],
     *,
     seed_team_ids: typing.Sequence[int] | None = None,
+    bye_counts: dict[int, int] | None = None,
+    bye_points: float = 1.0,
     win_points: float = 1.0,
     draw_points: float = 0.5,
     loss_points: float = 0.0,
@@ -389,6 +392,10 @@ def prepare_teams_for_groups(
             home_team.points += draw_points
             away_team.draws += 1
             away_team.points += draw_points
+
+    for team_id, bye_count in (bye_counts or {}).items():
+        team_cache.setdefault(team_id, RankedStageTeam(team_id=team_id))
+        team_cache[team_id].points += max(0, bye_count) * bye_points
 
     _calculate_buchholz(team_cache)
     _calculate_head_to_head(team_cache, completed_encounters)
@@ -647,11 +654,20 @@ def _build_group_stage_standings(
     tiebreak_order = _tiebreak_order(stage)
     manual_positions = _manual_positions(stage)
     win_points, draw_points, loss_points = _scoring(stage, tournament)
+    settings = _stage_settings(stage)
+    bye_points = float(settings.get("swiss_bye_points", win_points))
+    bye_counts = (
+        swiss_bye_counts(stage, stage_item.id if stage_item is not None else None)
+        if stage.stage_type == StageType.SWISS
+        else {}
+    )
     compat_group_id = _resolve_compat_group_id(tournament, stage, stage_item)
 
     teams = prepare_teams_for_groups(
         encounters,
         seed_team_ids=seed_team_ids,
+        bye_counts=bye_counts,
+        bye_points=bye_points,
         win_points=win_points,
         draw_points=draw_points,
         loss_points=loss_points,
@@ -889,21 +905,22 @@ async def _update_stage_completion_flags(session: AsyncSession, tournament: mode
                 stage_item_id: (total, completed, max_round)
                 for stage_item_id, total, completed, max_round in stage_rows
             }
-            item_scopes = [rows_by_item.get(item.id, (0, 0, 0)) for item in (getattr(stage, "items", []) or [])]
+            item_scopes = [
+                (item.id, *rows_by_item.get(item.id, (0, 0, 0)))
+                for item in (getattr(stage, "items", []) or [])
+            ]
             extra_scopes = [
-                (total, completed, max_round)
+                (None, total, completed, max_round)
                 for stage_item_id, total, completed, max_round in stage_rows
                 if stage_item_id is None
             ]
             scopes = item_scopes or extra_scopes
             should_be_completed = bool(scopes) and all(
-                _swiss_scope_completed(
-                    total,
-                    completed,
-                    max_round,
-                    _stage_max_rounds(stage),
+                swiss_scope_stopped(stage, stage_item_id)
+                or _swiss_scope_completed(
+                    total, completed, max_round, _stage_max_rounds(stage)
                 )
-                for total, completed, max_round in scopes
+                for stage_item_id, total, completed, max_round in scopes
             )
             if stage.is_completed != should_be_completed:
                 stage.is_completed = should_be_completed

@@ -98,5 +98,86 @@ class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
                 "changed:999:bracket_changed",
                 "commit",
                 "invalidate:999:bracket_changed",
+                "changed:999:results_changed",
+                "commit",
+            ],
+        )
+
+    async def test_impossible_pairing_completes_scope_without_creating_encounters(self) -> None:
+        calls: list[str] = []
+        event = events.SwissNextRoundEvent(
+            tournament_id=999,
+            stage_id=77,
+            stage_item_id=501,
+            next_round=2,
+        )
+        stage_item = SimpleNamespace(id=501)
+        stage = SimpleNamespace(
+            id=77,
+            is_active=True,
+            items=[stage_item],
+            max_rounds=5,
+            settings_json={},
+        )
+        current_encounters = [
+            SimpleNamespace(
+                home_team_id=1,
+                away_team_id=2,
+                round=1,
+                status=enums.EncounterStatus.COMPLETED,
+                result_status=enums.EncounterResultStatus.NONE,
+            )
+        ]
+        skeleton = SimpleNamespace(pairings=[])
+
+        class _EncounterResult:
+            def scalars(self) -> SimpleNamespace:
+                return SimpleNamespace(all=lambda: current_encounters)
+
+        async def fake_commit():
+            calls.append("commit")
+
+        async def fake_recalculate(_session, tournament_id):
+            calls.append(f"recalculate:{tournament_id}")
+
+        async def fake_changed(_session, tournament_id, reason):
+            calls.append(f"changed:{tournament_id}:{reason}")
+
+        session = SimpleNamespace(
+            execute=AsyncMock(return_value=_EncounterResult()),
+            commit=AsyncMock(side_effect=fake_commit),
+        )
+
+        with (
+            patch.object(swiss_rounds.stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(swiss_rounds.stage_service, "_collect_item_team_ids", Mock(return_value=[1, 2])),
+            patch.object(swiss_rounds.stage_service, "_generate_stage_skeleton", AsyncMock(return_value=skeleton)),
+            patch.object(
+                swiss_rounds.stage_service,
+                "_create_encounters_from_skeleton",
+                AsyncMock(),
+            ) as create_encounters,
+            patch.object(
+                swiss_rounds.standings_service,
+                "recalculate_for_tournament",
+                AsyncMock(side_effect=fake_recalculate),
+            ),
+            patch.object(
+                swiss_rounds,
+                "enqueue_tournament_changed",
+                AsyncMock(side_effect=fake_changed),
+            ),
+        ):
+            result = await swiss_rounds._generate_next_round(session, event)
+
+        self.assertEqual([], result)
+        create_encounters.assert_not_awaited()
+        self.assertEqual(
+            calls,
+            [
+                "commit",
+                "recalculate:999",
+                "changed:999:results_changed",
+                "commit",
             ],
         )
