@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useDebounce } from "use-debounce";
@@ -38,15 +38,8 @@ const UserSearchCombobox = ({
   isLabelLoading = false
 }: UserSearchComboboxProps) => {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined);
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch] = useDebounce(searchValue, 250);
-
-  useEffect(() => {
-    if (!open) return;
-    setContentWidth(triggerRef.current?.offsetWidth);
-  }, [open]);
 
   const normalizedQuery = debouncedSearch.trim();
   const shouldSearch = normalizedQuery.length >= 2;
@@ -89,7 +82,6 @@ const UserSearchCombobox = ({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
           type="button"
           variant="outline"
           role="combobox"
@@ -109,7 +101,7 @@ const UserSearchCombobox = ({
       <PopoverContent
         align="start"
         className="liquid-glass-panel p-0"
-        style={contentWidth ? { width: `${contentWidth}px` } : undefined}
+        style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command className="liquid-glass-surface">
           <CommandInput value={searchValue} onValueChange={setSearchValue} placeholder="Search user..." />

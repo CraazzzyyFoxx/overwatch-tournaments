@@ -57,17 +57,35 @@ const UserSearch = () => {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!canSearch) {
-      setIsSearching(false);
-      setSearchData([]);
-      return;
+  // Render-time state synchronization
+  if (!canSearch) {
+    if (isSearching) setIsSearching(false);
+    if (searchData.length > 0) setSearchData([]);
+  }
+
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
+    if (canSearch) {
+      setIsSearching(true);
     }
+  }
+
+  const targetActiveIndex = (!isOpen || searchData.length === 0)
+    ? -1
+    : (activeIndex < 0 || activeIndex >= searchData.length)
+      ? 0
+      : activeIndex;
+
+  if (targetActiveIndex !== activeIndex) {
+    setActiveIndex(targetActiveIndex);
+  }
+
+  useEffect(() => {
+    if (!canSearch) return;
 
     const controller = new AbortController();
     let isActive = true;
-
-    setIsSearching(true);
 
     userService
       .searchUsers(query, controller.signal)
@@ -99,21 +117,6 @@ const UserSearch = () => {
       controller.abort();
     };
   }, [canSearch, query]);
-
-  useEffect(() => {
-    if (!isOpen || searchData.length === 0) {
-      setActiveIndex(-1);
-      return;
-    }
-
-    setActiveIndex((currentIndex) => {
-      if (currentIndex < 0 || currentIndex >= searchData.length) {
-        return 0;
-      }
-
-      return currentIndex;
-    });
-  }, [isOpen, searchData]);
 
   useEffect(() => {
     if (activeIndex < 0) return;

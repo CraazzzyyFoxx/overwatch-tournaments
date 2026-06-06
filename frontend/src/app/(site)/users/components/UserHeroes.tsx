@@ -77,15 +77,12 @@ const UserHeroes = ({ heroes, filterSlot }: { heroes: HeroWithUserStats[]; filte
   const defaultHeroId = heroesWithPlaytime.items[0]?.hero.hero.id ?? 0;
   const [selectedHeroId, setSelectedHeroId] = useState<number>(() => defaultHeroId);
 
-  useEffect(() => {
-    if (!defaultHeroId) {
-      return;
-    }
-    const exists = heroesWithPlaytime.items.some((item) => item.hero.hero.id === selectedHeroId);
-    if (!exists) {
-      setSelectedHeroId(defaultHeroId);
-    }
-  }, [defaultHeroId, heroesWithPlaytime.items, selectedHeroId]);
+  const exists = heroesWithPlaytime.items.some((item) => item.hero.hero.id === selectedHeroId);
+  const targetHeroId = exists ? selectedHeroId : defaultHeroId;
+
+  if (targetHeroId !== selectedHeroId) {
+    setSelectedHeroId(targetHeroId);
+  }
 
   const selected = useMemo(() => {
     return (
@@ -279,6 +276,10 @@ const UserHeroes = ({ heroes, filterSlot }: { heroes: HeroWithUserStats[]; filte
   const [detailsHeight, setDetailsHeight] = useState<number | null>(null);
   const [isLg, setIsLg] = useState(false);
 
+  if (!isLg && detailsHeight !== null) {
+    setDetailsHeight(null);
+  }
+
   useEffect(() => {
     const mql = window.matchMedia("(min-width: 1024px)");
     const onChange = () => setIsLg(mql.matches);
@@ -288,10 +289,7 @@ const UserHeroes = ({ heroes, filterSlot }: { heroes: HeroWithUserStats[]; filte
   }, []);
 
   useEffect(() => {
-    if (!isLg) {
-      setDetailsHeight(null);
-      return;
-    }
+    if (!isLg) return;
 
     const el = detailsRef.current;
     if (!el) {

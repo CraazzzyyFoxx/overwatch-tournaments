@@ -22,6 +22,21 @@ export interface HeroPlaytimeChartProps {
   iconSize?: number;
 }
 
+// @ts-ignore
+const CustomYAxisTick = ({ x, y, payload, icons, iconSize }) => {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <image
+        href={icons.get(payload.value)}
+        x={-Math.round(iconSize * 0.67)}
+        y={-Math.round(iconSize / 2)}
+        height={iconSize}
+        width={iconSize}
+      />
+    </g>
+  );
+};
+
 const HeroPlaytimeChart = ({
   heroes,
   rowHeight: rowHeightProp,
@@ -57,21 +72,6 @@ const HeroPlaytimeChart = ({
   const minHeight = minHeightProp ?? 240;
   const barSize = barSizeProp ?? 32;
   const iconSize = iconSizeProp ?? (barSize >= 28 ? 30 : 24);
-
-  // @ts-ignore
-  const CustomYAxisTick = ({ x, y, payload }) => {
-    return (
-      <g transform={`translate(${x},${y})`}>
-        <image
-          href={heroesIcons.get(payload.value)}
-          x={-Math.round(iconSize * 0.67)}
-          y={-Math.round(iconSize / 2)}
-          height={iconSize}
-          width={iconSize}
-        />
-      </g>
-    );
-  };
 
   const chartConfig: ChartConfig = useMemo(() => {
     const charData = {
@@ -112,7 +112,7 @@ const HeroPlaytimeChart = ({
           tickMargin={10}
           axisLine={false}
           // @ts-ignore
-          tick={<CustomYAxisTick />}
+          tick={<CustomYAxisTick icons={heroesIcons} iconSize={iconSize} />}
         />
         <XAxis dataKey="value" type="number" hide />
         <ChartTooltip content={<ChartTooltipContent className="w-62.5" indicator="dot" />} />

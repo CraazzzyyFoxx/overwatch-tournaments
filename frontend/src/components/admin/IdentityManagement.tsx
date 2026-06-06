@@ -114,12 +114,19 @@ function IdentityRow({
 
   const displayName = platform.getDisplayName(identity);
 
-  useEffect(() => {
+  const [prevEditing, setPrevEditing] = useState(editing);
+  if (editing !== prevEditing) {
+    setPrevEditing(editing);
     if (editing) {
       setEditValue(displayName);
+    }
+  }
+
+  useEffect(() => {
+    if (editing) {
       setTimeout(() => inputRef.current?.select(), 0);
     }
-  }, [editing, displayName]);
+  }, [editing]);
 
   const updateMutation = useMutation({
     mutationFn: () =>

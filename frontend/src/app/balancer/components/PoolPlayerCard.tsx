@@ -129,13 +129,15 @@ export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: Poo
   const [isInPool, setIsInPool] = useState(player.is_in_pool);
   const [notes, setNotes] = useState(player.admin_notes ?? "");
   const [showNotes, setShowNotes] = useState(Boolean(player.admin_notes));
+  const [prevPlayer, setPrevPlayer] = useState(player);
 
-  useEffect(() => {
+  if (player !== prevPlayer) {
+    setPrevPlayer(player);
     setRoleEntries(normalizeRoleEntries(player.role_entries_json));
     setIsInPool(player.is_in_pool);
     setNotes(player.admin_notes ?? "");
     setShowNotes(Boolean(player.admin_notes));
-  }, [player]);
+  }
 
   const isDirty = useMemo(() => {
     const originalEntries = normalizeRoleEntries(player.role_entries_json);

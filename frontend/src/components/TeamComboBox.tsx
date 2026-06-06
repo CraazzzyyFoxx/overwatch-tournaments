@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,15 +24,8 @@ export interface TeamComboBoxProps {
 
 const TeamComboBox = ({ teams, onSelect, selectedTeam, variant = "default" }: TeamComboBoxProps) => {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined);
 
   const isGlass = variant === "glass";
-
-  useEffect(() => {
-    if (!open) return;
-    setContentWidth(triggerRef.current?.offsetWidth);
-  }, [open]);
 
   const values: { label: string; value: string }[] = useMemo(() => {
     return teams.map((team) => ({
@@ -45,7 +38,6 @@ const TeamComboBox = ({ teams, onSelect, selectedTeam, variant = "default" }: Te
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -67,7 +59,7 @@ const TeamComboBox = ({ teams, onSelect, selectedTeam, variant = "default" }: Te
       <PopoverContent
         align="start"
         className={cn("p-0", isGlass && "liquid-glass-panel")}
-        style={contentWidth ? { width: `${contentWidth}px` } : undefined}
+        style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command className={cn(isGlass && "liquid-glass-surface")}>
           <CommandInput placeholder="Search team..." />
