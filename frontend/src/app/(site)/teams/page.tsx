@@ -76,11 +76,14 @@ const TeamsPage = () => {
   }, [pathname, router, searchParams, tournamentsData?.results, isSuccessTournaments, tournamentId]);
 
   useEffect(() => {
-    setSelectedTeam("");
-    setPreviousElement((el) => {
-      el?.classList.remove("ring-2", "ring-ring", "ring-offset-2", "ring-offset-background");
-      return null;
-    });
+    const handle = setTimeout(() => {
+      setSelectedTeam("");
+      setPreviousElement((el) => {
+        el?.classList.remove("ring-2", "ring-ring", "ring-offset-2", "ring-offset-background");
+        return null;
+      });
+    }, 0);
+    return () => clearTimeout(handle);
   }, [tournamentId]);
 
   const pushTournamentId = useCallback(

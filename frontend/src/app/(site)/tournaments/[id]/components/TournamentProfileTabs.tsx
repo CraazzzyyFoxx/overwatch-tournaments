@@ -16,7 +16,7 @@ const TournamentProfileTabList = () => {
       newSearchParams.set("tab", tab);
       router.push(`${pathname}?${newSearchParams.toString()}`);
     },
-    [searchParams, pathname]
+    [searchParams, pathname, router]
   );
 
   return (
