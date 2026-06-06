@@ -66,6 +66,46 @@ const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
   single_bracket: "Single Bracket"
 };
 
+const ALL_TIEBREAKERS = [
+  { id: "points", label: "Points" },
+  { id: "head_to_head", label: "Head-to-Head" },
+  { id: "median_buchholz", label: "Median Buchholz" },
+  { id: "buchholz", label: "Buchholz" },
+  { id: "match_wins", label: "Match Wins" },
+  { id: "score_differential", label: "Score Differential" },
+  { id: "manual_override", label: "Manual Override" }
+];
+
+const DEFAULT_SWISS_TIEBREAKERS = [
+  "points",
+  "median_buchholz",
+  "buchholz",
+  "match_wins",
+  "score_differential",
+  "head_to_head",
+  "manual_override"
+];
+
+const DEFAULT_RR_TIEBREAKERS = [
+  "points",
+  "head_to_head",
+  "median_buchholz",
+  "match_wins",
+  "score_differential",
+  "buchholz",
+  "manual_override"
+];
+
+const DEFAULT_BRACKET_TIEBREAKERS = [
+  "points",
+  "head_to_head",
+  "median_buchholz",
+  "score_differential",
+  "match_wins",
+  "buchholz",
+  "manual_override"
+];
+
 interface StageManagerProps {
   tournamentId: number;
 }
@@ -198,6 +238,12 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const [stageDeGfTypeDrafts, setStageDeGfTypeDrafts] = useState<
     Record<number, "no_reset" | "with_reset">
   >({});
+  const [stageRankingPresetDrafts, setStageRankingPresetDrafts] = useState<Record<number, string>>({});
+  const [stageTiebreakOrderDrafts, setStageTiebreakOrderDrafts] = useState<Record<number, string[]>>({});
+  const [stageScoringWinDrafts, setStageScoringWinDrafts] = useState<Record<number, string>>({});
+  const [stageScoringDrawDrafts, setStageScoringDrawDrafts] = useState<Record<number, string>>({});
+  const [stageScoringLossDrafts, setStageScoringLossDrafts] = useState<Record<number, string>>({});
+  const [stageSwissByePointsDrafts, setStageSwissByePointsDrafts] = useState<Record<number, string>>({});
   const [stageItemDrafts, setStageItemDrafts] = useState<Record<number, StageItemDraft>>({});
   const [teamDrafts, setTeamDrafts] = useState<Record<number, string>>({});
   const [editingItemTypeId, setEditingItemTypeId] = useState<number | null>(null);
@@ -208,6 +254,11 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const { data: stages = [], isLoading } = useQuery({
     queryKey: ["admin", "stages", tournamentId],
     queryFn: () => adminService.getStages(tournamentId)
+  });
+
+  const { data: tournament } = useQuery({
+    queryKey: ["admin", "tournament", tournamentId],
+    queryFn: () => adminService.getTournament(tournamentId)
   });
 
   const { data: teamsData, isLoading: isTeamsLoading } = useQuery({
@@ -291,6 +342,36 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         return next;
       });
       setStageDeGfTypeDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageRankingPresetDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageTiebreakOrderDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageScoringWinDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageScoringDrawDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageScoringLossDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageSwissByePointsDrafts((current) => {
         const next = { ...current };
         delete next[variables.stageId];
         return next;
@@ -484,6 +565,27 @@ export function StageManager({ tournamentId }: StageManagerProps) {
     createMutation.mutate();
   };
 
+  const handlePresetChange = (stageId: number, value: string) => {
+    setStageRankingPresetDrafts((current) => ({
+      ...current,
+      [stageId]: value
+    }));
+    
+    let newOrder = defaultTiebreakOrder;
+    if (value === "challonge_swiss") {
+      newOrder = DEFAULT_SWISS_TIEBREAKERS;
+    } else if (value === "challonge_round_robin") {
+      newOrder = DEFAULT_RR_TIEBREAKERS;
+    } else if (value === "bracket_default") {
+      newOrder = DEFAULT_BRACKET_TIEBREAKERS;
+    }
+    
+    setStageTiebreakOrderDrafts((current) => ({
+      ...current,
+      [stageId]: newOrder
+    }));
+  };
+
   const selectedStageProgress = selectedStage ? progressByStageId.get(selectedStage.id) : null;
   const selectedStageSlots = selectedStage ? getStageTeamSlots(selectedStage) : 0;
   const selectedStageAssignedTeams = selectedStage ? getStageAssignedTeams(selectedStage) : 0;
@@ -508,12 +610,47 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const maxRoundsDraftValue = selectedStage
     ? normalizeMaxRounds(selectedStageMaxRoundDraft, selectedStage.max_rounds ?? 5)
     : 5;
+  const selectedStageSettings = (selectedStage?.settings_json || {}) as Record<string, any>;
+  const selectedStageRankingPresetDraft = selectedStage
+    ? stageRankingPresetDrafts[selectedStage.id] ?? (selectedStageSettings.ranking_preset || "")
+    : "";
+
+  const defaultTiebreakOrder = selectedStage?.stage_type === "swiss"
+    ? DEFAULT_SWISS_TIEBREAKERS
+    : selectedStage?.stage_type === "round_robin"
+    ? DEFAULT_RR_TIEBREAKERS
+    : DEFAULT_BRACKET_TIEBREAKERS;
+
+  const selectedStageTiebreakOrderDraft = selectedStage
+    ? stageTiebreakOrderDrafts[selectedStage.id] ?? (selectedStageSettings.tiebreak_order || defaultTiebreakOrder)
+    : [];
+
+  const selectedStageScoringWinDraft = selectedStage
+    ? stageScoringWinDrafts[selectedStage.id] ?? String(selectedStageSettings.scoring?.win ?? "")
+    : "";
+  const selectedStageScoringDrawDraft = selectedStage
+    ? stageScoringDrawDrafts[selectedStage.id] ?? String(selectedStageSettings.scoring?.draw ?? "")
+    : "";
+  const selectedStageScoringLossDraft = selectedStage
+    ? stageScoringLossDrafts[selectedStage.id] ?? String(selectedStageSettings.scoring?.loss ?? "")
+    : "";
+  const selectedStageSwissByePointsDraft = selectedStage
+    ? stageSwissByePointsDrafts[selectedStage.id] ?? String(selectedStageSettings.swiss_bye_points ?? "")
+    : "";
+
   const isStageDirty =
     Boolean(selectedStage) &&
     (selectedStageTypeDraft !== selectedStage?.stage_type ||
       maxRoundsDraftValue !== (selectedStage?.max_rounds ?? 5) ||
       (selectedStageTypeDraft === "double_elimination" &&
-        selectedStageDeGfTypeDraft !== currentDeGfType));
+        selectedStageDeGfTypeDraft !== currentDeGfType) ||
+      selectedStageRankingPresetDraft !== (selectedStageSettings.ranking_preset || "") ||
+      selectedStageSwissByePointsDraft !== String(selectedStageSettings.swiss_bye_points ?? "") ||
+      selectedStageScoringWinDraft !== String(selectedStageSettings.scoring?.win ?? "") ||
+      selectedStageScoringDrawDraft !== String(selectedStageSettings.scoring?.draw ?? "") ||
+      selectedStageScoringLossDraft !== String(selectedStageSettings.scoring?.loss ?? "") ||
+      JSON.stringify(selectedStageTiebreakOrderDraft) !== JSON.stringify(selectedStageSettings.tiebreak_order || defaultTiebreakOrder)
+    );
   const selectedItemDraft = selectedStage
     ? stageItemDrafts[selectedStage.id] ?? {
         name: "",
@@ -1399,129 +1536,335 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                       </section>
                     ) : null}
 
-                    {isSuperuser ? (
-                      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                        <section className="rounded-lg border border-dashed border-border/70 bg-muted/5">
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              className="flex h-auto w-full justify-between rounded-lg px-3 py-2.5"
-                            >
-                              <span className="flex items-center gap-2 text-sm font-semibold">
-                                <Shield className="size-4" />
-                                Advanced
+                    <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+                      <section className="rounded-lg border border-dashed border-border/70 bg-muted/5">
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="flex h-auto w-full justify-between rounded-lg px-3 py-2.5"
+                          >
+                            <span className="flex items-center gap-2 text-sm font-semibold">
+                              <Shield className="size-4" />
+                              Advanced
+                            </span>
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                advancedOpen && "rotate-180"
+                              )}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="border-t border-border/60 p-3 space-y-4">
+                            <div className="mb-1 flex items-start gap-2 text-xs text-muted-foreground">
+                              <AlertTriangle className="mt-0.5 size-3.5 text-amber-300" />
+                              <span>
+                                Advanced configurations for bracket generation, standings preset, tiebreaker criteria, and point scoring.
                               </span>
-                              <ChevronDown
-                                className={cn(
-                                  "size-4 transition-transform",
-                                  advancedOpen && "rotate-180"
-                                )}
-                              />
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="border-t border-border/60 p-3">
-                              <div className="mb-3 flex items-start gap-2 text-xs text-muted-foreground">
-                                <AlertTriangle className="mt-0.5 size-3.5 text-amber-300" />
-                                <span>
-                                  Bracket generation override is superuser-only and changes how
-                                  future bracket generation interprets this stage.
-                                </span>
-                              </div>
+                            </div>
 
+                            <div className="space-y-3">
+                              <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stage Properties</h5>
                               <div className="flex flex-col gap-2 sm:flex-row">
-                                <Select
-                                  value={selectedStageTypeDraft}
-                                  onValueChange={(value) =>
-                                    setStageTypeDrafts((current) => ({
-                                      ...current,
-                                      [selectedStage.id]: value as StageType
-                                    }))
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 w-full sm:w-[220px]">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Object.entries(STAGE_TYPE_LABELS).map(([value, label]) => (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {selectedStageTypeDraft === "swiss" ? (
-                                  <Input
-                                    aria-label="Swiss max rounds"
-                                    className="h-9 w-full sm:w-[120px]"
-                                    min={1}
-                                    step={1}
-                                    type="number"
-                                    value={selectedStageMaxRoundDraft}
-                                    onChange={(event) =>
-                                      setStageMaxRoundDrafts((current) => ({
-                                        ...current,
-                                        [selectedStage.id]: event.target.value
-                                      }))
-                                    }
-                                  />
-                                ) : null}
-                                {selectedStageTypeDraft === "double_elimination" ? (
+                                <div className="flex-1">
+                                  <Label className="text-[10px] text-muted-foreground">Stage Type</Label>
                                   <Select
-                                    value={selectedStageDeGfTypeDraft}
+                                    value={selectedStageTypeDraft}
                                     onValueChange={(value) =>
-                                      setStageDeGfTypeDrafts((current) => ({
+                                      setStageTypeDrafts((current) => ({
                                         ...current,
-                                        [selectedStage.id]: value as "no_reset" | "with_reset"
+                                        [selectedStage.id]: value as StageType
                                       }))
                                     }
+                                    disabled={!isSuperuser}
                                   >
-                                    <SelectTrigger className="h-9 w-full sm:w-[160px]">
+                                    <SelectTrigger className="h-9 w-full">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="no_reset">No Reset</SelectItem>
-                                      <SelectItem value="with_reset">With Reset</SelectItem>
+                                      {Object.entries(STAGE_TYPE_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                          {label}
+                                        </SelectItem>
+                                      ))}
                                     </SelectContent>
                                   </Select>
-                                ) : null}
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={
-                                    updateStageMutation.isPending ||
-                                    !isStageDirty ||
-                                    !selectedStage
-                                  }
-                                  onClick={() =>
-                                    updateStageMutation.mutate({
-                                      stageId: selectedStage.id,
-                                      data: {
-                                        stage_type: selectedStageTypeDraft,
-                                        max_rounds: maxRoundsDraftValue,
-                                        settings_json:
-                                          selectedStageTypeDraft === "double_elimination"
-                                            ? { de_grand_final_type: selectedStageDeGfTypeDraft }
-                                            : undefined
+                                  {!isSuperuser && (
+                                    <span className="text-[10px] text-muted-foreground">Only superusers can modify stage type after creation.</span>
+                                  )}
+                                </div>
+                                
+                                {selectedStageTypeDraft === "swiss" ? (
+                                  <div>
+                                    <Label className="text-[10px] text-muted-foreground">Swiss Max Rounds</Label>
+                                    <Input
+                                      aria-label="Swiss max rounds"
+                                      className="h-9 w-full sm:w-[120px]"
+                                      min={1}
+                                      step={1}
+                                      type="number"
+                                      value={selectedStageMaxRoundDraft}
+                                      onChange={(event) =>
+                                        setStageMaxRoundDrafts((current) => ({
+                                          ...current,
+                                          [selectedStage.id]: event.target.value
+                                        }))
                                       }
-                                    })
-                                  }
-                                >
-                                  {updateStageMutation.isPending &&
-                                  updateStageMutation.variables?.stageId === selectedStage.id ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                  ) : null}
-                                  {updateStageMutation.isPending &&
-                                  updateStageMutation.variables?.stageId === selectedStage.id
-                                    ? "Saving..."
-                                    : "Save Override"}
-                                </Button>
+                                    />
+                                  </div>
+                                ) : null}
+
+                                {selectedStageTypeDraft === "double_elimination" ? (
+                                  <div>
+                                    <Label className="text-[10px] text-muted-foreground">Grand Final Format</Label>
+                                    <Select
+                                      value={selectedStageDeGfTypeDraft}
+                                      onValueChange={(value) =>
+                                        setStageDeGfTypeDrafts((current) => ({
+                                          ...current,
+                                          [selectedStage.id]: value as "no_reset" | "with_reset"
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9 w-full sm:w-[160px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="no_reset">No Reset</SelectItem>
+                                        <SelectItem value="with_reset">With Reset</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
-                          </CollapsibleContent>
-                        </section>
-                      </Collapsible>
-                    ) : null}
+
+                            {GROUP_STAGE_TYPES.includes(selectedStageTypeDraft) && (
+                              <>
+                                <div className="border-t border-border/40 pt-3 space-y-3">
+                                  <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Standings & Scoring Settings</h5>
+                                  
+                                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                      <Label className="text-[10px] text-muted-foreground">Standings Preset</Label>
+                                      <Select
+                                        value={selectedStageRankingPresetDraft}
+                                        onValueChange={(value) => handlePresetChange(selectedStage.id, value)}
+                                      >
+                                        <SelectTrigger className="h-9 w-full">
+                                          <SelectValue placeholder="System Default" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="">System Default (Based on Type)</SelectItem>
+                                          <SelectItem value="challonge_swiss">Challonge Swiss (Buchholz first)</SelectItem>
+                                          <SelectItem value="challonge_round_robin">Challonge Round Robin</SelectItem>
+                                          <SelectItem value="bracket_default">Default Bracket</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    {selectedStageTypeDraft === "swiss" ? (
+                                      <div>
+                                        <Label className="text-[10px] text-muted-foreground">Swiss Bye Points</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.5"
+                                          placeholder={String(selectedStageScoringWinDraft || tournament?.win_points || 1.0)}
+                                          className="h-9 w-full"
+                                          value={selectedStageSwissByePointsDraft}
+                                          onChange={(event) =>
+                                            setStageSwissByePointsDrafts((current) => ({
+                                              ...current,
+                                              [selectedStage.id]: event.target.value
+                                            }))
+                                          }
+                                        />
+                                      </div>
+                                    ) : <div></div>}
+                                  </div>
+
+                                  <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-[10px] text-muted-foreground">Win Points Override</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.5"
+                                        placeholder={String(tournament?.win_points ?? 1.0)}
+                                        className="h-9 w-full bg-background/30"
+                                        value={selectedStageScoringWinDraft}
+                                        onChange={(event) =>
+                                          setStageScoringWinDrafts((current) => ({
+                                            ...current,
+                                            [selectedStage.id]: event.target.value
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-[10px] text-muted-foreground">Draw Points Override</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.5"
+                                        placeholder={String(tournament?.draw_points ?? 0.5)}
+                                        className="h-9 w-full bg-background/30"
+                                        value={selectedStageScoringDrawDraft}
+                                        onChange={(event) =>
+                                          setStageScoringDrawDrafts((current) => ({
+                                            ...current,
+                                            [selectedStage.id]: event.target.value
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-[10px] text-muted-foreground">Loss Points Override</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.5"
+                                        placeholder={String(tournament?.loss_points ?? 0.0)}
+                                        className="h-9 w-full bg-background/30"
+                                        value={selectedStageScoringLossDraft}
+                                        onChange={(event) =>
+                                          setStageScoringLossDrafts((current) => ({
+                                            ...current,
+                                            [selectedStage.id]: event.target.value
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-border/40 pt-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tiebreaker Evaluation Order</Label>
+                                    {selectedStageRankingPresetDraft && (
+                                      <Button
+                                        type="button"
+                                        variant="link"
+                                        className="h-auto p-0 text-[10px] text-primary"
+                                        onClick={() => {
+                                          handlePresetChange(selectedStage.id, selectedStageRankingPresetDraft);
+                                        }}
+                                      >
+                                        Reset to Preset Defaults
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col gap-1 rounded-lg border border-border/40 bg-background/30 p-2">
+                                    {selectedStageTiebreakOrderDraft.map((metricId, index) => {
+                                      const metricLabel = ALL_TIEBREAKERS.find(t => t.id === metricId)?.label ?? metricId;
+                                      return (
+                                        <div key={metricId} className="flex items-center justify-between rounded-md border border-border/30 bg-background/60 px-3 py-1 text-xs">
+                                          <span className="font-medium text-muted-foreground">
+                                            {index + 1}. <span className="text-foreground">{metricLabel}</span>
+                                          </span>
+                                          <div className="flex items-center gap-0.5">
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="size-6 text-muted-foreground hover:text-foreground"
+                                              disabled={index === 0}
+                                              onClick={() => {
+                                                const nextOrder = [...selectedStageTiebreakOrderDraft];
+                                                const temp = nextOrder[index - 1];
+                                                nextOrder[index - 1] = nextOrder[index];
+                                                nextOrder[index] = temp;
+                                                setStageTiebreakOrderDrafts((current) => ({
+                                                  ...current,
+                                                  [selectedStage.id]: nextOrder
+                                                }));
+                                              }}
+                                            >
+                                              ▲
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="size-6 text-muted-foreground hover:text-foreground"
+                                              disabled={index === selectedStageTiebreakOrderDraft.length - 1}
+                                              onClick={() => {
+                                                const nextOrder = [...selectedStageTiebreakOrderDraft];
+                                                const temp = nextOrder[index + 1];
+                                                nextOrder[index + 1] = nextOrder[index];
+                                                nextOrder[index] = temp;
+                                                setStageTiebreakOrderDrafts((current) => ({
+                                                  ...current,
+                                                  [selectedStage.id]: nextOrder
+                                                }));
+                                              }}
+                                            >
+                                              ▼
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            <div className="border-t border-border/40 pt-3 flex justify-end">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={
+                                  updateStageMutation.isPending ||
+                                  !isStageDirty ||
+                                  !selectedStage
+                                }
+                                onClick={() => {
+                                  const scoring: Record<string, number> = {};
+                                  if (selectedStageScoringWinDraft !== "") scoring.win = Number(selectedStageScoringWinDraft);
+                                  if (selectedStageScoringDrawDraft !== "") scoring.draw = Number(selectedStageScoringDrawDraft);
+                                  if (selectedStageScoringLossDraft !== "") scoring.loss = Number(selectedStageScoringLossDraft);
+
+                                  const nextSettings = {
+                                    ...selectedStageSettings,
+                                    ranking_preset: selectedStageRankingPresetDraft || undefined,
+                                    tiebreak_order: selectedStageTiebreakOrderDraft,
+                                    scoring: Object.keys(scoring).length > 0 ? scoring : undefined,
+                                    swiss_bye_points: selectedStageSwissByePointsDraft !== "" ? Number(selectedStageSwissByePointsDraft) : undefined
+                                  };
+
+                                  if (!nextSettings.ranking_preset) delete nextSettings.ranking_preset;
+                                  if (!nextSettings.scoring) delete nextSettings.scoring;
+                                  if (nextSettings.swiss_bye_points === undefined) delete nextSettings.swiss_bye_points;
+                                  
+                                  if (selectedStageTypeDraft === "double_elimination") {
+                                    nextSettings.de_grand_final_type = selectedStageDeGfTypeDraft;
+                                  } else {
+                                    delete nextSettings.de_grand_final_type;
+                                  }
+
+                                  updateStageMutation.mutate({
+                                    stageId: selectedStage.id,
+                                    data: {
+                                      stage_type: selectedStageTypeDraft,
+                                      max_rounds: maxRoundsDraftValue,
+                                      settings_json: nextSettings
+                                    }
+                                  });
+                                }}
+                              >
+                                {updateStageMutation.isPending &&
+                                updateStageMutation.variables?.stageId === selectedStage.id ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : null}
+                                {updateStageMutation.isPending &&
+                                updateStageMutation.variables?.stageId === selectedStage.id
+                                  ? "Saving..."
+                                  : "Save Override"}
+                              </Button>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </section>
+                    </Collapsible>
                   </div>
                 </div>
               ) : null}
