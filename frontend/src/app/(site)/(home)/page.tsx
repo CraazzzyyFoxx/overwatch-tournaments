@@ -499,38 +499,14 @@ function CommunitiesSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function StatsGrid() {
+  let overall = null;
   try {
-    const overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
-
-    return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatisticsCard
-          name="Tournaments Held"
-          value={overall.tournaments}
-          icon={<Trophy className="h-4 w-4" />}
-          iconClassName="bg-indigo-500/10 text-indigo-400"
-        />
-        <StatisticsCard
-          name="Teams Balanced"
-          value={overall.teams}
-          icon={<Scale className="h-4 w-4" />}
-          iconClassName="bg-blue-500/10 text-blue-400"
-        />
-        <StatisticsCard
-          name="Players Participated"
-          value={overall.players}
-          icon={<Users className="h-4 w-4" />}
-          iconClassName="bg-emerald-500/10 text-emerald-400"
-        />
-        <StatisticsCard
-          name="Champions"
-          value={overall.champions}
-          icon={<Award className="h-4 w-4" />}
-          iconClassName="bg-amber-500/10 text-amber-400"
-        />
-      </div>
-    );
+    overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
   } catch {
+    // Fail silently
+  }
+
+  if (!overall) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="md:col-span-2 lg:col-span-4 border-destructive/50">
@@ -544,6 +520,35 @@ async function StatsGrid() {
       </div>
     );
   }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <StatisticsCard
+        name="Tournaments Held"
+        value={overall.tournaments}
+        icon={<Trophy className="h-4 w-4" />}
+        iconClassName="bg-indigo-500/10 text-indigo-400"
+      />
+      <StatisticsCard
+        name="Teams Balanced"
+        value={overall.teams}
+        icon={<Scale className="h-4 w-4" />}
+        iconClassName="bg-blue-500/10 text-blue-400"
+      />
+      <StatisticsCard
+        name="Players Participated"
+        value={overall.players}
+        icon={<Users className="h-4 w-4" />}
+        iconClassName="bg-emerald-500/10 text-emerald-400"
+      />
+      <StatisticsCard
+        name="Champions"
+        value={overall.champions}
+        icon={<Award className="h-4 w-4" />}
+        iconClassName="bg-amber-500/10 text-amber-400"
+      />
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -597,53 +602,19 @@ function PlaceBadge({ n }: { n: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function TournamentActivityCard() {
+  let visible = null;
+  let max = 1;
   try {
     const data = await statisticsService.getTournaments({ skipWorkspace: true });
-    if (data.length === 0) throw new Error("empty");
-
-    const visible = data.slice(-24);
-    const max = Math.max(...visible.map((d) => d.players_count), 1);
-
-    return (
-      <>
-        <DashCardHeader>Tournament Activity</DashCardHeader>
-        <div className="px-5 pb-3 pt-5">
-          <div className="flex items-end gap-[4px]" style={{ height: 110 }}>
-            {visible.map((t, i) => (
-              <div
-                key={t.id}
-                className="flex-1 flex flex-col justify-end"
-                style={{ height: "100%" }}
-              >
-                <div
-                  style={{
-                    height: `${(t.players_count / max) * 100}%`,
-                    background:
-                      i === visible.length - 1
-                        ? "hsl(174 72% 46%)"
-                        : "hsl(174 72% 46% / 0.22)",
-                    borderRadius: "3px 3px 0 0",
-                    minHeight: 3,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex mt-1.5">
-            {visible.map((t, i) => (
-              <span
-                key={t.id}
-                className="flex-1 text-center"
-                style={{ fontSize: 9, color: "hsl(215 12% 36%)" }}
-              >
-                {i % Math.ceil(visible.length / 8) === 0 ? `#${t.number}` : ""}
-              </span>
-            ))}
-          </div>
-        </div>
-      </>
-    );
+    if (data.length > 0) {
+      visible = data.slice(-24);
+      max = Math.max(...visible.map((d) => d.players_count), 1);
+    }
   } catch {
+    // Fail silently
+  }
+
+  if (!visible) {
     return (
       <>
         <DashCardHeader>Tournament Activity</DashCardHeader>
@@ -653,91 +624,78 @@ async function TournamentActivityCard() {
       </>
     );
   }
+
+  return (
+    <>
+      <DashCardHeader>Tournament Activity</DashCardHeader>
+      <div className="px-5 pb-3 pt-5">
+        <div className="flex items-end gap-[4px]" style={{ height: 110 }}>
+          {visible.map((t, i) => (
+            <div
+              key={t.id}
+              className="flex-1 flex flex-col justify-end"
+              style={{ height: "100%" }}
+            >
+              <div
+                style={{
+                  height: `${(t.players_count / max) * 100}%`,
+                  background:
+                    i === visible.length - 1
+                      ? "hsl(174 72% 46%)"
+                      : "hsl(174 72% 46% / 0.22)",
+                  borderRadius: "3px 3px 0 0",
+                  minHeight: 3,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex mt-1.5">
+          {visible.map((t, i) => (
+            <span
+              key={t.id}
+              className="flex-1 text-center"
+              style={{ fontSize: 9, color: "hsl(215 12% 36%)" }}
+            >
+              {i % Math.ceil(visible.length / 8) === 0 ? `#${t.number}` : ""}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
 }
 
 async function DivisionRingsCard() {
+  let roles = null;
   try {
     const data = await statisticsService.getTournamentsDivision({
       skipWorkspace: true,
     });
-    if (data.length === 0) throw new Error("empty");
+    if (data.length > 0) {
+      const mean = (vals: (number | null)[]) => {
+        const nums = vals.filter((v): v is number => v != null);
+        return nums.length
+          ? nums.reduce((a, b) => a + b, 0) / nums.length
+          : 0;
+      };
 
-    const mean = (vals: (number | null)[]) => {
-      const nums = vals.filter((v): v is number => v != null);
-      return nums.length
-        ? nums.reduce((a, b) => a + b, 0) / nums.length
-        : 0;
-    };
+      const meanTank = mean(data.map((d) => d.tank_avg_div));
+      const meanDamage = mean(data.map((d) => d.damage_avg_div));
+      const meanSupport = mean(data.map((d) => d.support_avg_div));
+      const globalMax = Math.max(meanTank, meanDamage, meanSupport, 0.001);
 
-    const meanTank = mean(data.map((d) => d.tank_avg_div));
-    const meanDamage = mean(data.map((d) => d.damage_avg_div));
-    const meanSupport = mean(data.map((d) => d.support_avg_div));
-    const globalMax = Math.max(meanTank, meanDamage, meanSupport, 0.001);
-
-    const roles = [
-      { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: 210 },
-      { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: 38 },
-      { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: 174 },
-    ];
-
-    const r = 28;
-    const circum = 2 * Math.PI * r;
-
-    return (
-      <>
-        <DashCardHeader>Avg Division by Role</DashCardHeader>
-        <div className="px-5 py-5 flex gap-4 items-start flex-wrap">
-          {roles.map((role) => (
-            <div
-              key={role.label}
-              className="flex flex-col items-center gap-2 flex-1"
-              style={{ minWidth: 76 }}
-            >
-              <svg width="72" height="72" viewBox="0 0 72 72">
-                <circle
-                  cx="36" cy="36" r={r}
-                  fill="none"
-                  stroke="hsl(215 20% 11%)"
-                  strokeWidth="7"
-                />
-                <circle
-                  cx="36" cy="36" r={r}
-                  fill="none"
-                  stroke={`hsl(${role.color} 72% 46%)`}
-                  strokeWidth="7"
-                  strokeDasharray={`${(circum * role.pct) / 100} ${circum}`}
-                  strokeLinecap="round"
-                  transform="rotate(-90 36 36)"
-                />
-                <text
-                  x="36" y="40"
-                  textAnchor="middle"
-                  fontSize="12"
-                  fontWeight="700"
-                  fontFamily="Barlow Condensed, sans-serif"
-                  fill={`hsl(${role.color} 72% 55%)`}
-                >
-                  {role.val.toFixed(1)}
-                </text>
-              </svg>
-              <span
-                className="text-[12px] font-medium"
-                style={{ color: "hsl(215 12% 50%)" }}
-              >
-                {role.label}
-              </span>
-            </div>
-          ))}
-          <p
-            className="flex-[2] text-[12px] leading-relaxed self-center"
-            style={{ color: "hsl(215 12% 42%)", minWidth: 90 }}
-          >
-            Average division rank per role across all tournaments.
-          </p>
-        </div>
-      </>
-    );
+      roles = [
+        { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: 210 },
+        { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: 38 },
+        { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: 174 },
+      ];
+    }
   } catch {
+    // Fail silently
+  }
+
+  if (!roles) {
     return (
       <>
         <DashCardHeader>Avg Division by Role</DashCardHeader>
@@ -747,45 +705,76 @@ async function DivisionRingsCard() {
       </>
     );
   }
-}
 
-async function ChampionsCard() {
-  try {
-    const data = await statisticsService.getChampions({ skipWorkspace: true });
-    const top = data.results.slice(0, 5);
+  const r = 28;
+  const circum = 2 * Math.PI * r;
 
-    return (
-      <>
-        <DashCardHeader>Most Championships</DashCardHeader>
-        {top.map((p, i) => (
+  return (
+    <>
+      <DashCardHeader>Avg Division by Role</DashCardHeader>
+      <div className="px-5 py-5 flex gap-4 items-start flex-wrap">
+        {roles.map((role) => (
           <div
-            key={p.id}
-            className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
-            style={{
-              borderColor: "hsl(215 20% 9%)",
-              color: "hsl(210 20% 80%)",
-            }}
+            key={role.label}
+            className="flex flex-col items-center gap-2 flex-1"
+            style={{ minWidth: 76 }}
           >
-            <div className="flex items-center gap-2.5">
-              <PlaceBadge n={i + 1} />
-              <Link
-                href={`/users/${p.name.replace("#", "-")}`}
-                className="font-semibold hover:text-foreground transition-colors"
+            <svg width="72" height="72" viewBox="0 0 72 72">
+              <circle
+                cx="36" cy="36" r={r}
+                fill="none"
+                stroke="hsl(215 20% 11%)"
+                strokeWidth="7"
+              />
+              <circle
+                cx="36" cy="36" r={r}
+                fill="none"
+                stroke={`hsl(${role.color} 72% 46%)`}
+                strokeWidth="7"
+                strokeDasharray={`${(circum * role.pct) / 100} ${circum}`}
+                strokeLinecap="round"
+                transform="rotate(-90 36 36)"
+              />
+              <text
+                x="36" y="40"
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="700"
+                fontFamily="Barlow Condensed, sans-serif"
+                fill={`hsl(${role.color} 72% 55%)`}
               >
-                {p.name}
-              </Link>
-            </div>
+                {role.val.toFixed(1)}
+              </text>
+            </svg>
             <span
-              className="font-bold font-mono min-w-[28px] text-right"
-              style={{ color: "hsl(174 72% 55%)" }}
+              className="text-[12px] font-medium"
+              style={{ color: "hsl(215 12% 50%)" }}
             >
-              {p.value}×
+              {role.label}
             </span>
           </div>
         ))}
-      </>
-    );
+        <p
+          className="flex-[2] text-[12px] leading-relaxed self-center"
+          style={{ color: "hsl(215 12% 42%)", minWidth: 90 }}
+        >
+          Average division rank per role across all tournaments.
+        </p>
+      </div>
+    </>
+  );
+}
+
+async function ChampionsCard() {
+  let top = null;
+  try {
+    const data = await statisticsService.getChampions({ skipWorkspace: true });
+    top = data.results.slice(0, 5);
   } catch {
+    // Fail silently
+  }
+
+  if (!top) {
     return (
       <>
         <DashCardHeader>Most Championships</DashCardHeader>
@@ -795,52 +784,52 @@ async function ChampionsCard() {
       </>
     );
   }
+
+  return (
+    <>
+      <DashCardHeader>Most Championships</DashCardHeader>
+      {top.map((p, i) => (
+        <div
+          key={p.id}
+          className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
+          style={{
+            borderColor: "hsl(215 20% 9%)",
+            color: "hsl(210 20% 80%)",
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <PlaceBadge n={i + 1} />
+            <Link
+              href={`/users/${p.name.replace("#", "-")}`}
+              className="font-semibold hover:text-foreground transition-colors"
+            >
+              {p.name}
+            </Link>
+          </div>
+          <span
+            className="font-bold font-mono min-w-[28px] text-right"
+            style={{ color: "hsl(174 72% 55%)" }}
+          >
+            {p.value}×
+          </span>
+        </div>
+      ))}
+    </>
+  );
 }
 
 async function TopWinRateCard() {
+  let top = null;
   try {
     const data = await statisticsService.getTopWinratePlayers({
       skipWorkspace: true,
     });
-    const top = data.results.slice(0, 5);
-
-    return (
-      <>
-        <DashCardHeader>Top Win Rate</DashCardHeader>
-        {top.map((p, i) => (
-          <div
-            key={p.id}
-            className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
-            style={{
-              borderColor: "hsl(215 20% 9%)",
-              color: "hsl(210 20% 80%)",
-            }}
-          >
-            <div className="flex items-center gap-2.5">
-              <span
-                className="font-mono text-[12px] min-w-[22px]"
-                style={{ color: "hsl(215 12% 38%)" }}
-              >
-                #{i + 1}
-              </span>
-              <Link
-                href={`/users/${p.name.replace("#", "-")}`}
-                className="font-semibold hover:text-foreground transition-colors"
-              >
-                {p.name}
-              </Link>
-            </div>
-            <span
-              className="font-bold font-mono min-w-[44px] text-right"
-              style={{ color: "hsl(142 70% 55%)" }}
-            >
-              {(p.value * 100).toFixed(1)}%
-            </span>
-          </div>
-        ))}
-      </>
-    );
+    top = data.results.slice(0, 5);
   } catch {
+    // Fail silently
+  }
+
+  if (!top) {
     return (
       <>
         <DashCardHeader>Top Win Rate</DashCardHeader>
@@ -850,4 +839,41 @@ async function TopWinRateCard() {
       </>
     );
   }
+
+  return (
+    <>
+      <DashCardHeader>Top Win Rate</DashCardHeader>
+      {top.map((p, i) => (
+        <div
+          key={p.id}
+          className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
+          style={{
+            borderColor: "hsl(215 20% 9%)",
+            color: "hsl(210 20% 80%)",
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span
+              className="font-mono text-[12px] min-w-[22px]"
+              style={{ color: "hsl(215 12% 38%)" }}
+            >
+              #{i + 1}
+            </span>
+            <Link
+              href={`/users/${p.name.replace("#", "-")}`}
+              className="font-semibold hover:text-foreground transition-colors"
+            >
+              {p.name}
+            </Link>
+          </div>
+          <span
+            className="font-bold font-mono min-w-[44px] text-right"
+            style={{ color: "hsl(142 70% 55%)" }}
+          >
+            {(p.value * 100).toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </>
+  );
 }

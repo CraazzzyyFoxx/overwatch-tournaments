@@ -85,9 +85,10 @@ const AchievementsPage = () => {
   });
 
   const filtered = useMemo(() => {
-    if (!data?.results) return [];
+    const results = data?.results;
+    if (!results) return [];
 
-    let items = data.results;
+    let items = results;
 
     if (categoryFilter !== "all") {
       items = items.filter((a) => a.category === categoryFilter);
@@ -114,9 +115,9 @@ const AchievementsPage = () => {
   }, [data?.results, categoryFilter, sortBy]);
 
   const stats = useMemo(() => {
-    if (!data?.results) return { total: 0, rarest: 0, avgRarity: 0, totalEarned: 0 };
+    const results = data?.results;
+    if (!results) return { total: 0, rarest: 0, avgRarity: 0, totalEarned: 0 };
 
-    const results = data.results;
     const rarestPct = results.length > 0 ? Math.min(...results.map((a) => a.rarity)) * 100 : 0;
     const avgRarity = results.length > 0
       ? (results.reduce((sum, a) => sum + a.rarity, 0) / results.length) * 100
@@ -132,8 +133,9 @@ const AchievementsPage = () => {
   }, [data?.results]);
 
   const categories = useMemo(() => {
-    if (!data?.results) return new Set<AchievementCategory>();
-    return new Set(data.results.map((a) => a.category).filter(Boolean) as AchievementCategory[]);
+    const results = data?.results;
+    if (!results) return new Set<AchievementCategory>();
+    return new Set(results.map((a) => a.category).filter(Boolean) as AchievementCategory[]);
   }, [data?.results]);
 
   if (isLoading) return <PageSkeleton />;
