@@ -381,7 +381,7 @@ export default function TournamentBracketPage({
               ))
             : activeStages.map((stage) => {
             const encounters = encountersByStage.get(stage.id) ?? [];
-            if (encounters.length === 0) {
+            if (encounters.length === 0 && bracketTabs.length <= 1) {
               return (
                 <div
                   key={stage.id}
@@ -457,14 +457,20 @@ export default function TournamentBracketPage({
                 )}
 
                 <TabsContent value="bracket" className="mt-0 p-4">
-                  <BracketView
-                    encounters={encounters}
-                    type={stage.stage_type}
-                    onEdit={handleEdit}
-                    onReport={handleReport}
-                    canEdit={canEdit}
-                    canReport={canReport}
-                  />
+                  {encounters.length === 0 ? (
+                    <div className="py-8 text-center text-muted-foreground">
+                      {t("common.noMatches", { stage: stage.name })}
+                    </div>
+                  ) : (
+                    <BracketView
+                      encounters={encounters}
+                      type={stage.stage_type}
+                      onEdit={handleEdit}
+                      onReport={handleReport}
+                      canEdit={canEdit}
+                      canReport={canReport}
+                    />
+                  )}
                 </TabsContent>
               </Tabs>
             );
