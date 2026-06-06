@@ -15,4 +15,14 @@ describe("StandingsTable", () => {
     const source = readFileSync(join(import.meta.dir, "StandingsTable.tsx"), "utf8");
     expect(source).toContain("form-chips");
   });
+
+  it("shows every group-stage ranking metric", () => {
+    const source = readFileSync(join(import.meta.dir, "StandingsTable.tsx"), "utf8");
+
+    expect(source).toContain("standing.points.toFixed(1)");
+    expect(source).toContain('standing.tb ?? "—"');
+    expect(source).toContain("maps.won");
+    expect(source).toContain("standing.buchholz.toFixed(1)");
+    expect(source).toContain("<MapDiff diff={maps.diff} />");
+  });
 });
