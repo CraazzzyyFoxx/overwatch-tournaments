@@ -1,9 +1,10 @@
+from cashews import cache
 from shared.division_grid import DivisionGrid
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import errors, pagination, utils
+from src.core import config, errors, pagination, utils
 from src.core.workspace import get_division_grid
 from src.services.tournament import flows as tournament_flows
 from src.services.user import flows as user_flows
@@ -158,6 +159,7 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
     return await to_pydantic(session, team, entities)
 
 
+@cache(ttl=config.settings.teams_cache_ttl, key="teams_by_tournament:{tournament_id}:{entities}", prefix="fastapi:")
 async def get_by_tournament_read(
     session: AsyncSession, tournament_id: int, entities: list[str]
 ) -> list[schemas.TeamRead]:
@@ -174,7 +176,10 @@ async def get_by_tournament_read(
     """
     tournament = await tournament_flows.get(session, tournament_id, [])
     teams = await service.get_by_tournament(session, tournament=tournament, entities=entities)
-    return [await to_pydantic(session, team, entities=entities) for team in teams]
+    grid = None
+    if "players" in entities:
+        grid = await get_division_grid(session, None, tournament_id=tournament_id)
+    return [await to_pydantic(session, team, entities=entities, grid=grid) for team in teams]
 
 
 async def get_by_name_and_tournament(
@@ -289,6 +294,7 @@ async def get_player(session: AsyncSession, player_id: int, entities: list[str])
     return await service.get_player(session, player_id, entities)
 
 
+@cache(ttl=config.settings.teams_cache_ttl, key="teams:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}", prefix="fastapi:")
 async def get_all(
     session: AsyncSession,
     params: schemas.TeamFilterParams,
@@ -309,8 +315,19 @@ async def get_all(
         await tournament_flows.get(session, params.tournament_id, [])
 
     results, total = await service.get_all(session, params, workspace_id=workspace_id)
+    grids = {}
+    results_pydantic = []
+    for result in results:
+        grid = None
+        if "players" in params.entities:
+            t_id = result.tournament_id
+            if t_id not in grids:
+                grids[t_id] = await get_division_grid(session, None, tournament_id=t_id)
+            grid = grids[t_id]
+        results_pydantic.append(await to_pydantic(session, result, entities=params.entities, grid=grid))
+
     return pagination.Paginated(
-        results=[await to_pydantic(session, result, entities=params.entities) for result in results],
+        results=results_pydantic,
         total=total,
         per_page=params.per_page,
         page=params.page,

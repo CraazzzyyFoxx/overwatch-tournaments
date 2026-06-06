@@ -1,8 +1,9 @@
+from cashews import cache
 from shared.services.stage_refs import resolve_stage_refs_from_group
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import enums, errors, pagination, utils
+from src.core import config, enums, errors, pagination, utils
 from src.services.map import flows as map_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
@@ -175,6 +176,7 @@ async def get_encounter(session: AsyncSession, encounter_id: int, entities: list
     return await to_pydantic(session, encounter, entities)
 
 
+@cache(ttl=config.settings.encounters_cache_ttl, key="encounters:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{viewer_auth_user_id}", prefix="fastapi:")
 async def get_all_encounters(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,
@@ -258,6 +260,7 @@ async def delete_saved_view(
     )
 
 
+@cache(ttl=config.settings.encounters_cache_ttl, key="encounters_overview:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{viewer_auth_user_id}", prefix="fastapi:")
 async def get_encounters_overview(
     session: AsyncSession,
     params: schemas.EncounterSearchParams,

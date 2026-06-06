@@ -23,6 +23,8 @@ async def invalidate_tournament_standings_cache(tournament_id: int) -> None:
         f"fastapi:*tournaments/{tournament_id}/standings*",
         f"backend:*tournaments/{tournament_id}/standings*",
         f"*tournaments/{tournament_id}/standings*",
+        f"fastapi:*teams*:{tournament_id}*",
+        f"fastapi:*encounters*:{tournament_id}*",
     )
     for pattern in patterns:
         await cache.delete_match(pattern)

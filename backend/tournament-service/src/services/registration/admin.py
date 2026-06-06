@@ -766,7 +766,7 @@ def replace_registration_roles(
         if hero_catalog is not None:
             top_heroes = role.get("top_heroes")
             if top_heroes is not None:
-                from shared.hero_catalog import build_hero_entries, DEFAULT_MAX_TOP_HEROES
+                from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, build_hero_entries
                 registration_role.hero_entries = build_hero_entries(
                     top_heroes,
                     hero_catalog=hero_catalog,
@@ -1159,7 +1159,7 @@ async def create_manual_registration(
     hero_catalog = None
     max_heroes = None
     if config and config.get("enabled", True) is not False:
-        from shared.hero_catalog import resolve_hero_catalog, DEFAULT_MAX_TOP_HEROES
+        from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
         hero_catalog = await resolve_hero_catalog(session)
         raw_max = config.get("max_heroes")
         max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
@@ -1270,7 +1270,7 @@ async def update_registration_profile(
         hero_catalog = None
         max_heroes = None
         if config and config.get("enabled", True) is not False:
-            from shared.hero_catalog import resolve_hero_catalog, DEFAULT_MAX_TOP_HEROES
+            from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
             hero_catalog = await resolve_hero_catalog(session)
             raw_max = config.get("max_heroes")
             max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
