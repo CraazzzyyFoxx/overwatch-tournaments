@@ -761,6 +761,8 @@ async def _generate_stage_skeleton(
     stage: models.Stage,
     team_ids: list[int],
     stage_item_id: int | None,
+    *,
+    lower_bracket_team_ids: list[int] | None = None,
 ) -> BracketSkeleton:
     swiss_standings = None
     swiss_played_pairs: set[frozenset[int]] | None = None
@@ -791,6 +793,7 @@ async def _generate_stage_skeleton(
             swiss_round_number=swiss_round,
             swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
             de_include_reset=de_include_reset,
+            lower_bracket_team_ids=lower_bracket_team_ids,
         )
     except SwissPairingImpossibleError:
         mark_swiss_scope_stopped(stage, stage_item_id)
@@ -1363,9 +1366,47 @@ async def generate_encounters(
             await _publish_tournament_changed(stage.tournament_id, "structure_changed")
         return encounters
 
-    team_ids: list[int] = []
-    for item in stage.items:
-        team_ids.extend(_collect_item_team_ids(item))
+    sorted_items = sorted(stage.items, key=lambda it: (it.order, it.id))
+    primary_item_id = sorted_items[0].id if sorted_items else None
+
+    # For DE stages: route LB encounters (negative round numbers) to the
+    # BRACKET_LOWER stage item when one exists.
+    lb_item = None
+    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION:
+        lb_item = next(
+            (it for it in sorted_items if it.type == enums.StageItemType.BRACKET_LOWER),
+            None,
+        )
+    lb_stage_item_id = lb_item.id if lb_item is not None else None
+
+    # Decide which advancing teams start in the upper vs the lower bracket.
+    lower_bracket_team_ids: list[int] = []
+    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(
+        stage, "split_lower_bracket", False
+    ):
+        if lb_item is not None:
+            # Separate Upper + Lower bracket items: the lower item's teams
+            # start in the lower bracket.
+            lower_bracket_team_ids = _collect_item_team_ids(lb_item)
+            team_ids = [
+                tid
+                for item in sorted_items
+                if item is not lb_item
+                for tid in _collect_item_team_ids(item)
+            ]
+        else:
+            # Single bracket item: seeds are ordered winners-first, so the first
+            # half start in the upper bracket and the second half in the lower.
+            all_ids: list[int] = []
+            for item in sorted_items:
+                all_ids.extend(_collect_item_team_ids(item))
+            half = len(all_ids) // 2
+            team_ids = all_ids[:half]
+            lower_bracket_team_ids = all_ids[half:]
+    else:
+        team_ids = []
+        for item in sorted_items:
+            team_ids.extend(_collect_item_team_ids(item))
 
     if len(team_ids) < 2:
         raise HTTPException(
@@ -1373,22 +1414,14 @@ async def generate_encounters(
             detail="Need at least 2 teams to generate a bracket",
         )
 
-    sorted_items = sorted(stage.items, key=lambda it: (it.order, it.id))
-    primary_item_id = sorted_items[0].id if sorted_items else None
-
-    # For DE stages: route LB encounters (negative round numbers) to the
-    # BRACKET_LOWER stage item when one exists.
-    lb_stage_item_id: int | None = None
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION:
-        lb_item = next(
-            (it for it in sorted_items if it.type == enums.StageItemType.BRACKET_LOWER),
-            None,
-        )
-        if lb_item is not None:
-            lb_stage_item_id = lb_item.id
-
-    skeleton = await _generate_stage_skeleton(session, stage, team_ids, primary_item_id)
-    team_names_by_id = await _load_team_names(session, team_ids)
+    skeleton = await _generate_stage_skeleton(
+        session,
+        stage,
+        team_ids,
+        primary_item_id,
+        lower_bracket_team_ids=lower_bracket_team_ids,
+    )
+    team_names_by_id = await _load_team_names(session, team_ids + lower_bracket_team_ids)
     encounters = await _create_encounters_from_skeleton(
         session,
         stage,

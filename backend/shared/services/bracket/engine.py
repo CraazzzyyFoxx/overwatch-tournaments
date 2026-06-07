@@ -13,6 +13,7 @@ def generate_bracket(
     swiss_round_number: int = 1,
     swiss_bye_history: set[int] | None = None,
     de_include_reset: bool = False,
+    lower_bracket_team_ids: list[int] | None = None,
 ) -> BracketSkeleton:
     """Dispatch bracket generation to the appropriate algorithm.
 
@@ -30,7 +31,8 @@ def generate_bracket(
     """
     if not team_ids:
         raise ValueError("team_ids must be non-empty")
-    if len(set(team_ids)) != len(team_ids):
+    combined_ids = team_ids + list(lower_bracket_team_ids or [])
+    if len(set(combined_ids)) != len(combined_ids):
         raise ValueError("team_ids must be unique within a stage item")
 
     if stage_type == StageType.ROUND_ROBIN:
@@ -40,7 +42,11 @@ def generate_bracket(
         return single_elimination.generate(team_ids)
 
     if stage_type == StageType.DOUBLE_ELIMINATION:
-        return double_elimination.generate(team_ids, include_reset=de_include_reset)
+        return double_elimination.generate(
+            team_ids,
+            lower_bracket_team_ids=lower_bracket_team_ids,
+            include_reset=de_include_reset,
+        )
 
     if stage_type == StageType.SWISS:
         if swiss_standings is None:

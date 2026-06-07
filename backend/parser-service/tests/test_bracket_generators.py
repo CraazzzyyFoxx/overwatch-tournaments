@@ -169,6 +169,66 @@ class DoubleEliminationInvariants(TestCase):
         self.assertEqual(2, len(gf_incoming))
         self.assertEqual({"home", "away"}, {e.target_slot for e in gf_incoming})
 
+    def test_lower_bracket_seeds_start_in_lower_bracket_2_2(self) -> None:
+        # 2 teams in the upper bracket, 2 seeded directly into the lower bracket.
+        s = double_elimination.generate([1, 2], lower_bracket_team_ids=[3, 4])
+
+        ub_r1 = [p for p in s.pairings if p.round_number == 1]
+        self.assertEqual(1, len(ub_r1))
+        self.assertEqual({1, 2}, {ub_r1[0].home_team_id, ub_r1[0].away_team_id})
+
+        lb_r1 = [p for p in s.pairings if p.round_number == -1]
+        self.assertEqual(1, len(lb_r1))
+        self.assertEqual({3, 4}, {lb_r1[0].home_team_id, lb_r1[0].away_team_id})
+
+        # The lower-bracket seeds never appear in an upper-bracket match.
+        upper_team_ids = {
+            tid
+            for p in s.pairings
+            if p.round_number > 0
+            for tid in (p.home_team_id, p.away_team_id)
+            if tid is not None
+        }
+        self.assertNotIn(3, upper_team_ids)
+        self.assertNotIn(4, upper_team_ids)
+
+        # The UB R1 loser drops into the lower bracket.
+        loser_edges = [
+            e
+            for e in s.advancement_edges
+            if e.source_local_id == ub_r1[0].local_id and e.role == "loser"
+        ]
+        self.assertEqual(1, len(loser_edges))
+
+    def test_lower_bracket_seeds_4_4_structure(self) -> None:
+        s = double_elimination.generate([1, 2, 3, 4], lower_bracket_team_ids=[5, 6, 7, 8])
+
+        lb_r1 = [p for p in s.pairings if p.round_number == -1]
+        self.assertEqual(2, len(lb_r1))
+        lb_r1_teams = {tid for p in lb_r1 for tid in (p.home_team_id, p.away_team_id)}
+        self.assertEqual({5, 6, 7, 8}, lb_r1_teams)
+
+        # local ids unique and every edge references a real pairing.
+        local_ids = [p.local_id for p in s.pairings]
+        self.assertEqual(len(local_ids), len(set(local_ids)))
+        locals_ = set(local_ids)
+        for e in s.advancement_edges:
+            self.assertIn(e.source_local_id, locals_)
+            self.assertIn(e.target_local_id, locals_)
+
+        # Grand Final still receives the UB and LB champions.
+        gf = [p for p in s.pairings if p.name == "Grand Final"][0]
+        gf_incoming = [e for e in s.advancement_edges if e.target_local_id == gf.local_id]
+        self.assertEqual(2, len(gf_incoming))
+
+    def test_no_lower_seeds_keeps_standard_shape(self) -> None:
+        # Regression: without lower seeds, LB R1 stays TBD (filled by UB losers).
+        s = double_elimination.generate([1, 2, 3, 4])
+        lb_r1 = [p for p in s.pairings if p.round_number == -1]
+        for p in lb_r1:
+            self.assertIsNone(p.home_team_id)
+            self.assertIsNone(p.away_team_id)
+
 
 class RoundRobinInvariants(TestCase):
     def test_4_teams_every_pair_plays_once(self) -> None:

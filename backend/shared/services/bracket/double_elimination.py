@@ -31,10 +31,25 @@ import math
 from .types import AdvancementEdge, BracketSkeleton, Pairing
 
 
-def generate(team_ids: list[int], *, include_reset: bool = False) -> BracketSkeleton:
+def generate(
+    team_ids: list[int],
+    *,
+    lower_bracket_team_ids: list[int] | None = None,
+    include_reset: bool = False,
+) -> BracketSkeleton:
+    """Generate a double-elimination skeleton.
+
+    ``team_ids`` seed the upper bracket. ``lower_bracket_team_ids`` (optional)
+    are teams that *start* in the lower bracket: they play each other in LB
+    Round 1, and the upper-bracket Round-1 losers join them in the next LB
+    round ("group winners → Upper, runners-up → Lower"). This works cleanly
+    when the upper and lower counts are equal (an even split).
+    """
     n = len(team_ids)
     if n < 2:
         return BracketSkeleton(pairings=[], total_rounds=0)
+
+    lb_seeds = list(lower_bracket_team_ids or [])
 
     bracket_size = 1 << math.ceil(math.log2(n))
     upper_rounds = int(math.log2(bracket_size))
@@ -149,78 +164,88 @@ def generate(team_ids: list[int], *, include_reset: bool = False) -> BracketSkel
     lb_rounds: list[list[int]] = []
     lb_round_index = 1
 
-    # "carry_in" = list of LB match local_ids whose winners feed the next LB
-    # round's home slots. Starts as losers of UB R1 paired up directly.
-    # For UB R1 losers count = |UB R1| (may include bye-induced absences).
-    #
-    # We model LB R1 as: for every PAIR of UB R1 matches, create one LB R1
-    # match whose home=loser of the first UB R1 match, away=loser of the second.
-    # Byes create phantom losers that are skipped.
-
-    ub_r1_losers_edge_targets: list[int | None] = []  # len = |UB R1|; target LB match
-    if upper_matches:
-        ub_r1 = upper_matches[0]
-        # Pair up UB R1 by 2s for LB R1 matches.
-        for pair_idx in range(0, len(ub_r1), 2):
-            a_local = ub_r1[pair_idx]
-            b_local = ub_r1[pair_idx + 1] if pair_idx + 1 < len(ub_r1) else None
-
-            if a_local is None and b_local is None:
-                ub_r1_losers_edge_targets.extend([None, None])
-                continue
-            if a_local is None:
-                # Only one real loser; that team bye-advances in LB to next round
-                ub_r1_losers_edge_targets.extend([None, None])
-                continue
-            if b_local is None:
-                ub_r1_losers_edge_targets.extend([None, None])
-                continue
-
-            match_idx = len(lb_rounds[0]) + 1 if lb_rounds else 1
-            if not lb_rounds:
-                lb_rounds.append([])
+    if lb_seeds:
+        # Teams seeded directly into the lower bracket play each other in LB R1.
+        # The first dropout round (r=1) then merges their winners with the UB
+        # Round-1 losers; UB R2+ losers drop in later rounds as usual.
+        lb_r1: list[int] = []
+        match_idx = 0
+        i = 0
+        while i < len(lb_seeds):
+            match_idx += 1
             local_id = next_local_id
             next_local_id += 1
             pairings.append(
                 Pairing(
-                    home_team_id=None,
-                    away_team_id=None,
+                    home_team_id=lb_seeds[i],
+                    away_team_id=lb_seeds[i + 1] if i + 1 < len(lb_seeds) else None,
                     round_number=-lb_round_index,
                     name=f"LB R{lb_round_index} Match {match_idx}",
                     local_id=local_id,
                 )
             )
-            lb_rounds[0].append(local_id)
+            lb_r1.append(local_id)
+            i += 2
+        lb_rounds.append(lb_r1)
+        lb_round_index += 1
+        ub_dropout_start = 1
+    else:
+        # Standard LB R1: for every PAIR of UB R1 matches, create one LB R1
+        # match whose home=loser of the first UB R1 match, away=loser of the
+        # second. Byes create phantom losers that are skipped.
+        if upper_matches:
+            ub_r1 = upper_matches[0]
+            for pair_idx in range(0, len(ub_r1), 2):
+                a_local = ub_r1[pair_idx]
+                b_local = ub_r1[pair_idx + 1] if pair_idx + 1 < len(ub_r1) else None
+                if a_local is None or b_local is None:
+                    continue
 
-            edges.append(
-                AdvancementEdge(
-                    source_local_id=a_local,
-                    target_local_id=local_id,
-                    role="loser",
-                    target_slot="home",
+                if not lb_rounds:
+                    lb_rounds.append([])
+                match_idx = len(lb_rounds[0]) + 1
+                local_id = next_local_id
+                next_local_id += 1
+                pairings.append(
+                    Pairing(
+                        home_team_id=None,
+                        away_team_id=None,
+                        round_number=-lb_round_index,
+                        name=f"LB R{lb_round_index} Match {match_idx}",
+                        local_id=local_id,
+                    )
                 )
-            )
-            edges.append(
-                AdvancementEdge(
-                    source_local_id=b_local,
-                    target_local_id=local_id,
-                    role="loser",
-                    target_slot="away",
-                )
-            )
-            ub_r1_losers_edge_targets.extend([local_id, local_id])
+                lb_rounds[0].append(local_id)
 
-    lb_round_index += 1
+                edges.append(
+                    AdvancementEdge(
+                        source_local_id=a_local,
+                        target_local_id=local_id,
+                        role="loser",
+                        target_slot="home",
+                    )
+                )
+                edges.append(
+                    AdvancementEdge(
+                        source_local_id=b_local,
+                        target_local_id=local_id,
+                        role="loser",
+                        target_slot="away",
+                    )
+                )
+
+        lb_round_index += 1
+        ub_dropout_start = 2
 
     # Subsequent LB rounds
-    # Pattern for UB round r (r >= 2):
+    # Pattern for UB round r:
     #   dropout round: size = |UB Rr|, each match has
     #     home = winner of corresponding LB carry round
     #     away = loser of UB Rr match k
     #   reduction round: size = |dropout round| / 2
     prev_lb = lb_rounds[0] if lb_rounds else []
 
-    for r in range(2, upper_rounds + 1):
+    for r in range(ub_dropout_start, upper_rounds + 1):
         ub_round_matches = upper_matches[r - 1]
 
         # Dropout round — pair LB prev winners (by 2 if multiple) with UB losers.
