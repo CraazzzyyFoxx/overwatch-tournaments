@@ -292,12 +292,20 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         generate_encounters.assert_awaited_once_with(session, stage.id, notify=False)
         publish_changed.assert_awaited_once_with(stage.tournament_id, "structure_changed")
 
+    @staticmethod
+    def _upper_lower_items() -> list:
+        return [
+            SimpleNamespace(type=enums.StageItemType.BRACKET_UPPER),
+            SimpleNamespace(type=enums.StageItemType.BRACKET_LOWER),
+        ]
+
     async def test_auto_wire_splits_advancing_teams_for_double_elimination(self) -> None:
         playoff = SimpleNamespace(
             id=20,
             tournament_id=99,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             split_lower_bracket=True,
+            items=self._upper_lower_items(),
         )
         source = SimpleNamespace(id=10, advance_count=4)
         session = SimpleNamespace()
@@ -317,6 +325,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             tournament_id=99,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             split_lower_bracket=True,
+            items=self._upper_lower_items(),
         )
         source = SimpleNamespace(id=10, advance_count=3)
         session = SimpleNamespace()
@@ -330,12 +339,35 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         # advance_count=3 → 2 Upper (extra), 1 Lower.
         wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=1, mode="cross", notify=False)
 
+    async def test_auto_wire_single_bracket_seeds_all_to_one_item(self) -> None:
+        # Double-elimination with a single SINGLE_BRACKET item (no separate
+        # lower bracket): all advancing teams seed the one item even with the
+        # split flag on — the DE engine builds upper/lower rounds internally.
+        playoff = SimpleNamespace(
+            id=20,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            split_lower_bracket=True,
+            items=[SimpleNamespace(type=enums.StageItemType.SINGLE_BRACKET)],
+        )
+        source = SimpleNamespace(id=10, advance_count=4)
+        session = SimpleNamespace()
+
+        with (
+            patch.object(stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service, "wire_from_groups", AsyncMock()) as wire,
+        ):
+            await stage_service._auto_wire_from_groups(session, playoff)
+
+        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="cross", notify=False)
+
     async def test_auto_wire_all_to_upper_when_split_disabled(self) -> None:
         playoff = SimpleNamespace(
             id=20,
             tournament_id=99,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             split_lower_bracket=False,
+            items=self._upper_lower_items(),
         )
         source = SimpleNamespace(id=10, advance_count=4)
         session = SimpleNamespace()

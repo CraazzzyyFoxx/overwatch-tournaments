@@ -1186,7 +1186,18 @@ async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> 
         return
 
     advance = source.advance_count
-    if stage.split_lower_bracket and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION:
+    # Only seed a separate lower bracket when the stage actually has a
+    # BRACKET_LOWER item. A "single bracket" double-elimination (one
+    # SINGLE_BRACKET item) holds the whole UB+LB structure, so all advancing
+    # teams seed that one item — the DE engine builds the rounds internally.
+    has_lower_bracket = any(
+        item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items
+    )
+    if (
+        stage.split_lower_bracket
+        and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
+        and has_lower_bracket
+    ):
         top_lb = advance // 2
         top = advance - top_lb  # odd count → extra team to the Upper bracket
     else:
