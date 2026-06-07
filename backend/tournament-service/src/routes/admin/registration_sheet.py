@@ -64,17 +64,37 @@ async def sync_tournament_sheet(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
 ):
-    feed, created, updated, withdrawn, total = await registration_service.sync_google_sheet_feed(
+    result = await registration_service.sync_google_sheet_feed(
         session,
         tournament_id,
     )
     return admin_schemas.BalancerGoogleSheetFeedSyncResponse(
-        created=created,
-        updated=updated,
-        withdrawn=withdrawn,
-        total=total,
-        feed=serialize_feed(feed),
+        created=result.created,
+        updated=result.updated,
+        withdrawn=result.withdrawn,
+        total=result.total,
+        skipped=result.skipped,
+        errors=[admin_schemas.MappingPreviewFieldError(**error) for error in result.errors],
+        feed=serialize_feed(result.feed),
     )
+
+
+@router.get(
+    "/tournaments/{tournament_id}/sheet/mapping-catalog",
+    response_model=admin_schemas.BalancerGoogleSheetMappingCatalogResponse,
+)
+async def get_sheet_mapping_catalog(
+    tournament_id: int,
+    include_headers: bool = False,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
+):
+    catalog = await registration_service.get_mapping_catalog(
+        session,
+        tournament_id,
+        include_headers=include_headers,
+    )
+    return admin_schemas.BalancerGoogleSheetMappingCatalogResponse(**catalog)
 
 
 @router.post(
@@ -114,6 +134,7 @@ async def preview_sheet_mapping(
         source_url=data.source_url,
         mapping_config_json=data.mapping_config_json,
         value_mapping_json=data.value_mapping_json,
+        sample_rows=data.sample_rows,
     )
     return admin_schemas.BalancerGoogleSheetMappingPreviewResponse(**preview)
 

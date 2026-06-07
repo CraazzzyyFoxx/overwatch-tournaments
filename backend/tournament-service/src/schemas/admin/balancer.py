@@ -37,10 +37,17 @@ __all__ = (
     "BalancerGoogleSheetFeedRead",
     "BalancerGoogleSheetFeedSyncResponse",
     "BalancerGoogleSheetFeedUpsert",
+    "BalancerGoogleSheetMappingCatalogResponse",
     "BalancerGoogleSheetMappingPreviewRequest",
     "BalancerGoogleSheetMappingPreviewResponse",
     "BalancerGoogleSheetMappingSuggestRequest",
     "BalancerGoogleSheetMappingSuggestResponse",
+    "MappingParserRead",
+    "MappingPreviewFieldError",
+    "MappingPreviewRow",
+    "MappingTargetRead",
+    "MappingValidationError",
+    "MappingValueCategoryRead",
     "BalancerPlayerCreateRequest",
     "BalancerPlayerExportResponse",
     "BalancerPlayerImportDuplicate",
@@ -231,11 +238,27 @@ class BalancerGoogleSheetFeedRead(BaseRead):
     last_error: str | None
 
 
+class MappingPreviewFieldError(BaseModel):
+    target: str
+    column: str | None = None
+    message: str
+    row_index: int | None = None
+
+
+class MappingValidationError(BaseModel):
+    code: str
+    message: str
+    target: str | None = None
+    column: str | None = None
+
+
 class BalancerGoogleSheetFeedSyncResponse(BaseModel):
     created: int
     updated: int
     withdrawn: int
     total: int
+    skipped: int = 0
+    errors: list[MappingPreviewFieldError] = Field(default_factory=list)
     feed: BalancerGoogleSheetFeedRead
 
 
@@ -252,12 +275,58 @@ class BalancerGoogleSheetMappingPreviewRequest(BaseModel):
     source_url: str | None = None
     mapping_config_json: dict[str, Any] | None = None
     value_mapping_json: dict[str, Any] | None = None
+    sample_rows: int = 5
+
+
+class MappingPreviewRow(BaseModel):
+    row_index: int
+    sample_raw_row: dict[str, str] = Field(default_factory=dict)
+    parsed_fields: dict[str, Any] = Field(default_factory=dict)
+    errors: list[MappingPreviewFieldError] = Field(default_factory=list)
+    warnings: list[MappingPreviewFieldError] = Field(default_factory=list)
+    disposition: Literal["create", "update", "skip"]
 
 
 class BalancerGoogleSheetMappingPreviewResponse(BaseModel):
     headers: list[str] = Field(default_factory=list)
+    header_keys: list[str] = Field(default_factory=list)
+    rows: list[MappingPreviewRow] = Field(default_factory=list)
+    create_count: int = 0
+    update_count: int = 0
+    skip_count: int = 0
+    # Back-compat single-row fields (populated from the first preview row).
     sample_raw_row: dict[str, str] = Field(default_factory=dict)
     parsed_fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class MappingTargetRead(BaseModel):
+    key: str
+    label: str
+    group: str
+    accepted_parsers: list[str] = Field(default_factory=list)
+    default_parser: str
+    multi_column: bool = False
+    required: bool = False
+
+
+class MappingParserRead(BaseModel):
+    parser: str
+    label: str
+    cardinality: Literal["single", "multi"]
+    produces: str
+
+
+class MappingValueCategoryRead(BaseModel):
+    category: Literal["booleans", "roles", "subroles", "divisions"]
+    entries: dict[str, Any] = Field(default_factory=dict)
+
+
+class BalancerGoogleSheetMappingCatalogResponse(BaseModel):
+    targets: list[MappingTargetRead] = Field(default_factory=list)
+    parsers: list[MappingParserRead] = Field(default_factory=list)
+    value_categories: list[MappingValueCategoryRead] = Field(default_factory=list)
+    custom_fields: list[dict[str, Any]] = Field(default_factory=list)
+    header_keys: list[str] = Field(default_factory=list)
 
 
 class BalancerRegistrationRoleRead(BaseModel):

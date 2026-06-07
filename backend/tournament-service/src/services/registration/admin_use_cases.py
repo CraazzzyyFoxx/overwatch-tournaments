@@ -303,6 +303,7 @@ class PreviewTournamentSheetMapping:
             source_url=payload.source_url,
             mapping_config_json=payload.mapping_config_json,
             value_mapping_json=payload.value_mapping_json,
+            sample_rows=getattr(payload, "sample_rows", 5),
         )
 
 

@@ -510,11 +510,20 @@ export interface AdminGoogleSheetFeedUpsertInput {
   value_mapping_json?: Record<string, unknown> | null;
 }
 
+export interface AdminGoogleSheetSyncError {
+  target: string | null;
+  column: string | null;
+  message: string;
+  row_index?: number | null;
+}
+
 export interface AdminGoogleSheetFeedSyncResponse {
   created: number;
   updated: number;
   withdrawn: number;
   total: number;
+  skipped: number;
+  errors: AdminGoogleSheetSyncError[];
   feed: AdminGoogleSheetFeed;
 }
 
@@ -537,4 +546,113 @@ export interface AdminGoogleSheetMappingPreviewResponse {
   headers: string[];
   sample_raw_row: Record<string, string>;
   parsed_fields: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Google Sheets mapping — catalog + multi-row preview (v2)
+// ---------------------------------------------------------------------------
+
+/** A single target the mapper can populate from the sheet. */
+export type MappingTargetGroup = "identity" | "profile" | "roles" | "custom_fields";
+
+export interface MappingTargetDef {
+  key: string;
+  label: string;
+  group: MappingTargetGroup;
+  accepted_parsers: string[];
+  default_parser: string;
+  multi_column: boolean;
+  required: boolean;
+}
+
+export type MappingParserCardinality = "single" | "multi";
+
+export interface MappingParserDef {
+  parser: string;
+  label: string;
+  cardinality: MappingParserCardinality;
+  produces: string;
+}
+
+export type MappingValueCategoryName = "booleans" | "roles" | "subroles" | "divisions";
+
+export interface MappingValueCategory {
+  category: MappingValueCategoryName;
+  entries: Record<string, unknown>;
+}
+
+export interface MappingCatalog {
+  targets: MappingTargetDef[];
+  parsers: MappingParserDef[];
+  value_categories: MappingValueCategory[];
+  custom_fields: AdminCustomFieldDef[];
+  header_keys: string[];
+}
+
+/** A per-target validation error returned by PUT (422) / preview / sync. */
+export interface MappingFieldError {
+  target: string | null;
+  column: string | null;
+  message: string;
+  code?: string;
+}
+
+export type MappingPreviewDisposition = "create" | "update" | "skip";
+
+export interface MappingPreviewRow {
+  row_index: number;
+  sample_raw_row: Record<string, string>;
+  parsed_fields: Record<string, unknown>;
+  errors: MappingFieldError[];
+  warnings: MappingFieldError[];
+  disposition: MappingPreviewDisposition;
+}
+
+export interface MappingPreviewResponseV2 {
+  headers: string[];
+  header_keys: string[];
+  rows: MappingPreviewRow[];
+  create_count: number;
+  update_count: number;
+  skip_count: number;
+  /** Back-compat single-row fields (preview row 0). */
+  sample_raw_row: Record<string, string>;
+  parsed_fields: Record<string, unknown>;
+}
+
+export interface AdminGoogleSheetMappingPreviewInputV2 extends AdminGoogleSheetMappingPreviewInput {
+  sample_rows?: number;
+}
+
+/** Body returned by PUT `.../sheet` when the mapping is invalid (HTTP 422). */
+export interface AdminGoogleSheetMappingValidationError {
+  message: string;
+  errors: MappingFieldError[];
+}
+
+// ---------------------------------------------------------------------------
+// Local mapper UI state (not sent verbatim; serialized at save/preview)
+// ---------------------------------------------------------------------------
+
+export type MappingTargetMode = "columns" | "constant" | "disabled";
+
+export interface MappingTargetState {
+  mode: MappingTargetMode;
+  columns: string[];
+  value?: string;
+  parser?: string;
+}
+
+export interface ValueMapRow {
+  /** Stable client id so rows survive key edits without remounting inputs. */
+  id: string;
+  key: string;
+  value: string;
+}
+
+export interface ValueMappingState {
+  booleans: ValueMapRow[];
+  roles: ValueMapRow[];
+  subroles: ValueMapRow[];
+  divisions: ValueMapRow[];
 }

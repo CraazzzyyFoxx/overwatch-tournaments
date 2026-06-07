@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -19,6 +20,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from src import models
+from src.schemas.registration import CustomFieldDefinition
+from src.services.registration.mapping_catalog import (
+    DEFAULT_MAPPING_TARGETS,  # noqa: F401 - compatibility re-export
+    PARSER_CATALOG,
+    ParsedRowResult,
+    build_target_specs,
+    classify_row_disposition,
+    coerce_custom_field_value,
+    custom_field_target_key,
+    target_spec_map,
+    validate_mapping_config,
+)
 from src.services.registration.utils import (
     DEFAULT_BOOLEAN_TRUE_VALUES,
     DEFAULT_ROLE_VALUE_MAP,
@@ -74,35 +87,6 @@ def _register_registration_changed(
     register_tournament_realtime_update(session, registration.tournament_id, "structure_changed")
 
 BATTLE_TAG_RE = re.compile(r"[\w][\w ]{0,30}#[0-9]{3,}", re.UNICODE)
-DEFAULT_MAPPING_TARGETS = (
-    "source_record_key",
-    "display_name",
-    "battle_tag",
-    "submitted_at",
-    "smurf_tags",
-    "discord_nick",
-    "twitch_nick",
-    "stream_pov",
-    "notes",
-    "source_roles.primary",
-    "source_roles.additional",
-    "is_flex",
-    "admin_notes",
-    "roles.tank.rank_value",
-    "roles.tank.division_input",
-    "roles.tank.is_active",
-    "roles.tank.priority",
-    "roles.dps.rank_value",
-    "roles.dps.division_input",
-    "roles.dps.subrole",
-    "roles.dps.is_active",
-    "roles.dps.priority",
-    "roles.support.rank_value",
-    "roles.support.division_input",
-    "roles.support.subrole",
-    "roles.support.is_active",
-    "roles.support.priority",
-)
 
 
 async def fetch_google_sheet_rows(
@@ -182,6 +166,7 @@ def build_default_value_mapping() -> dict[str, Any]:
         "booleans": dict.fromkeys(sorted(DEFAULT_BOOLEAN_TRUE_VALUES), True),
         "roles": DEFAULT_ROLE_VALUE_MAP,
         "subroles": DEFAULT_SUBROLE_VALUE_MAP,
+        "divisions": {},
     }
 
 
@@ -189,85 +174,49 @@ def default_mapping_target(parser: str) -> dict[str, Any]:
     return {"mode": "disabled", "parser": parser}
 
 
-def _set_target(mapping: dict[str, Any], target_key: str, *, parser: str, columns: list[str] | None = None) -> None:
-    if columns:
-        mapping["targets"][target_key] = {"mode": "columns", "columns": columns, "parser": parser}
+def suggest_mapping_from_headers(
+    headers: list[str],
+    *,
+    custom_fields: list[CustomFieldDefinition] | None = None,
+) -> dict[str, Any]:
+    """Suggest a starting mapping by matching headers against target aliases.
 
-
-def suggest_mapping_from_headers(headers: list[str]) -> dict[str, Any]:
+    Language-agnostic: each target carries lowercased alias substrings (English
+    and Russian alike) in the catalog, so no header strings are hardcoded here.
+    Unmatched targets are returned as disabled hints. Suggestions are only a
+    starting point - the saved mapping is authoritative.
+    """
     header_keys = build_header_keys(headers)
-    mapping = {
-        "targets": {
-            "source_record_key": default_mapping_target("battle_tag"),
-            "display_name": default_mapping_target("string"),
-            "battle_tag": default_mapping_target("battle_tag"),
-            "submitted_at": default_mapping_target("datetime"),
-            "smurf_tags": default_mapping_target("battle_tag_list"),
-            "discord_nick": default_mapping_target("string"),
-            "twitch_nick": default_mapping_target("string"),
-            "stream_pov": default_mapping_target("boolean"),
-            "notes": default_mapping_target("join_lines"),
-            "source_roles.primary": default_mapping_target("role_token"),
-            "source_roles.additional": default_mapping_target("role_token_list"),
-            "is_flex": default_mapping_target("boolean"),
-            "admin_notes": default_mapping_target("join_lines"),
-        }
-    }
-    for role in ("tank", "dps", "support"):
-        mapping["targets"][f"roles.{role}.rank_value"] = default_mapping_target("integer")
-        mapping["targets"][f"roles.{role}.division_input"] = default_mapping_target("division_to_rank")
-        mapping["targets"][f"roles.{role}.is_active"] = default_mapping_target("boolean")
-        mapping["targets"][f"roles.{role}.priority"] = default_mapping_target("integer")
-        if role != "tank":
-            mapping["targets"][f"roles.{role}.subrole"] = default_mapping_target("subrole_token")
+    normalized_headers = [normalize_header(header) for header in headers]
+    specs = build_target_specs(custom_fields)
+    targets: dict[str, Any] = {spec.key: default_mapping_target(spec.default_parser) for spec in specs}
 
-    def find_first(predicate: Any) -> str | None:
-        for index, header in enumerate(headers):
-            if predicate(normalize_header(header)):
-                return header_keys[index]
-        return None
+    def matching_columns(spec: Any) -> list[str]:
+        return [
+            header_keys[index]
+            for index, normalized in enumerate(normalized_headers)
+            if any(normalize_header(alias) in normalized for alias in spec.aliases)
+        ]
 
-    def find_all(predicate: Any) -> list[str]:
-        return [header_keys[index] for index, header in enumerate(headers) if predicate(normalize_header(header))]
+    for spec in specs:
+        if not spec.aliases:
+            continue
+        found = matching_columns(spec)
+        if not found:
+            continue
+        columns = found if spec.multi_column else [found[0]]
+        targets[spec.key] = {"mode": "columns", "columns": columns, "parser": spec.default_parser}
 
-    battle_tag_column = find_first(lambda header: header.startswith("Ð²Ð°Ñˆ battle tag") or "battle tag" in header)
-    if battle_tag_column:
-        _set_target(mapping, "source_record_key", parser="battle_tag", columns=[battle_tag_column])
-        _set_target(mapping, "display_name", parser="string", columns=[battle_tag_column])
-        _set_target(mapping, "battle_tag", parser="battle_tag", columns=[battle_tag_column])
+    # The battle-tag column also seeds the dedup key and the display name, matching
+    # the legacy behavior where a single column drives all three identity fields.
+    battle_tag_config = targets.get("battle_tag")
+    if battle_tag_config and battle_tag_config.get("mode") == "columns":
+        column = battle_tag_config["columns"][0]
+        targets["source_record_key"] = {"mode": "columns", "columns": [column], "parser": "battle_tag"}
+        if targets.get("display_name", {}).get("mode") != "columns":
+            targets["display_name"] = {"mode": "columns", "columns": [column], "parser": "string"}
 
-    _set_target(
-        mapping,
-        "submitted_at",
-        parser="datetime",
-        columns=[find_first(lambda header: "Ð¾Ñ‚Ð¼ÐµÑ‚ÐºÐ° Ð²Ñ€ÐµÐ¼ÐµÐ½Ð¸" in header)],
-    )
-    _set_target(
-        mapping, "smurf_tags", parser="battle_tag_list", columns=[find_first(lambda header: "ÑÐ¼ÑƒÑ€Ñ„" in header)]
-    )
-    _set_target(mapping, "discord_nick", parser="string", columns=[find_first(lambda header: "Ð´Ð¸ÑÐºÐ¾Ñ€" in header)])
-    _set_target(mapping, "twitch_nick", parser="string", columns=[find_first(lambda header: "Ñ‚Ð²Ð¸Ñ‡" in header)])
-    _set_target(mapping, "stream_pov", parser="boolean", columns=[find_first(lambda header: "ÑÑ‚Ñ€Ð¸Ð¼" in header)])
-    _set_target(
-        mapping,
-        "notes",
-        parser="join_lines",
-        columns=[find_first(lambda header: "Ð»ÑŽÐ±Ð°Ñ Ð´Ð¾Ð¿." in header or "Ð¿Ñ€Ð¸Ð¼ÐµÑ‡" in header)],
-    )
-    _set_target(
-        mapping,
-        "source_roles.primary",
-        parser="role_token",
-        columns=[find_first(lambda header: header.startswith("ÑƒÐºÐ°Ð¶Ð¸Ñ‚Ðµ Ð²Ð°ÑˆÑƒ Ñ€Ð¾Ð»ÑŒ"))],
-    )
-
-    additional_role_columns = find_all(
-        lambda header: header.startswith("Ð´Ð¾Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð°Ñ Ð¸Ð³Ñ€Ð¾Ð²Ð°Ñ Ñ€Ð¾Ð»ÑŒ")
-    )
-    if additional_role_columns:
-        _set_target(mapping, "source_roles.additional", parser="role_token_list", columns=additional_role_columns)
-
-    return mapping
+    return {"targets": targets}
 
 
 def serialize_datetime(value: datetime | None) -> str | None:
@@ -340,7 +289,16 @@ def parse_target_value(*, parser: str, values: list[str], value_mapping: dict[st
     if parser == "subrole_token":
         return map_subrole_token(values[0] if values else None, value_mapping)
     if parser == "division_to_rank":
-        division_number = parse_integer(values[0] if values else None)
+        raw_value = values[0] if values else None
+        normalized = normalize_header(raw_value)
+        division_map = {
+            normalize_header(key): str(mapped_value)
+            for key, mapped_value in (value_mapping.get("divisions") or {}).items()
+        }
+        mapped_rank = parse_integer(division_map.get(normalized))
+        if mapped_rank is not None:
+            return mapped_rank
+        division_number = parse_integer(raw_value)
         return grid.resolve_rank_from_division(division_number) if division_number is not None else None
     if parser == "join_lines":
         return "\n".join(value.strip() for value in values if value.strip()) or None
@@ -384,38 +342,53 @@ async def get_tournament_grid(session: AsyncSession, tournament_id: int) -> Divi
     return get_tournament_grid_from_rows(tournament_row, workspace_row, fallback_version)
 
 
-def parse_sheet_row(
+def parse_sheet_row_detailed(
     *,
     headers: list[str],
     row: list[str],
     mapping_config: dict[str, Any] | None,
     value_mapping: dict[str, Any] | None,
     grid: DivisionGrid,
-) -> dict[str, Any] | None:
-    effective_mapping = mapping_config or suggest_mapping_from_headers(headers)
+    custom_fields: list[CustomFieldDefinition] | None = None,
+) -> ParsedRowResult:
+    """Parse one sheet row into the structured registration payload.
+
+    Collects per-target ``errors`` and ``warnings`` (chiefly from custom-field
+    coercion) so a single bad cell never aborts the whole row. Returns
+    ``fields=None`` when the row produces no identity key (caller skips it).
+    """
+    effective_mapping = mapping_config or suggest_mapping_from_headers(headers, custom_fields=custom_fields)
     targets = effective_mapping.get("targets") or {}
     row_json = row_to_json(headers, row)
     effective_value_mapping = {**build_default_value_mapping(), **(value_mapping or {})}
+    errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
 
     flat_values: dict[str, Any] = {}
-    for target_key in DEFAULT_MAPPING_TARGETS:
+    for target_key, spec in target_spec_map(custom_fields).items():
+        if spec.group == "custom_fields":
+            continue
         target_config = targets.get(target_key)
         values = get_selector_values(target_config, row_json)
-        parser = (target_config or {}).get("parser", "string")
-        flat_values[target_key] = parse_target_value(
-            parser=parser,
-            values=values,
-            value_mapping=effective_value_mapping,
-            grid=grid,
-        )
+        parser = (target_config or {}).get("parser", spec.default_parser)
+        try:
+            flat_values[target_key] = parse_target_value(
+                parser=parser,
+                values=values,
+                value_mapping=effective_value_mapping,
+                grid=grid,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface per-field instead of failing the row
+            flat_values[target_key] = None
+            errors.append({"target": target_key, "column": None, "message": str(exc)})
 
     source_record_key = flat_values.get("source_record_key") or flat_values.get("battle_tag")
     if isinstance(source_record_key, str):
         source_record_key = normalize_battle_tag_key(source_record_key) or source_record_key.strip()
     if not source_record_key:
-        return None
+        return ParsedRowResult(fields=None, errors=errors, warnings=warnings)
 
-    return {
+    parsed: dict[str, Any] = {
         "source_record_key": str(source_record_key),
         "display_name": flat_values.get("display_name") or flat_values.get("battle_tag"),
         "battle_tag": normalize_battle_tag(flat_values.get("battle_tag")),
@@ -453,6 +426,45 @@ def parse_sheet_row(
             },
         },
     }
+
+    custom_values: dict[str, Any] = {}
+    for field_def in custom_fields or []:
+        target_config = targets.get(custom_field_target_key(field_def.key))
+        values = get_selector_values(target_config, row_json)
+        if not values:
+            continue
+        result = coerce_custom_field_value(field_def, values[0], value_mapping=effective_value_mapping)
+        target_key = custom_field_target_key(field_def.key)
+        if result.error:
+            errors.append({"target": target_key, "column": None, "message": result.error})
+            continue
+        if result.warning:
+            warnings.append({"target": target_key, "column": None, "message": result.warning})
+        if result.value is not None:
+            custom_values[field_def.key] = result.value
+    if custom_values:
+        parsed["custom_fields"] = custom_values
+
+    return ParsedRowResult(fields=parsed, errors=errors, warnings=warnings)
+
+
+def parse_sheet_row(
+    *,
+    headers: list[str],
+    row: list[str],
+    mapping_config: dict[str, Any] | None,
+    value_mapping: dict[str, Any] | None,
+    grid: DivisionGrid,
+    custom_fields: list[CustomFieldDefinition] | None = None,
+) -> dict[str, Any] | None:
+    return parse_sheet_row_detailed(
+        headers=headers,
+        row=row,
+        mapping_config=mapping_config,
+        value_mapping=value_mapping,
+        grid=grid,
+        custom_fields=custom_fields,
+    ).fields
 
 
 def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict[str, Any]]:
@@ -536,6 +548,28 @@ async def get_registration_form(
     return result.scalar_one_or_none()
 
 
+def form_custom_field_defs(
+    form: models.BalancerRegistrationForm | None,
+) -> list[CustomFieldDefinition]:
+    """Coerce a form's stored custom-field JSON into typed definitions."""
+    raw = getattr(form, "custom_fields_json", None) or []
+    defs: list[CustomFieldDefinition] = []
+    for value in raw:
+        if isinstance(value, CustomFieldDefinition):
+            defs.append(value)
+        else:
+            defs.append(CustomFieldDefinition.model_validate(value or {}))
+    return defs
+
+
+async def get_form_custom_field_defs(
+    session: AsyncSession,
+    tournament_id: int,
+) -> list[CustomFieldDefinition]:
+    form = await get_registration_form(session, tournament_id)
+    return form_custom_field_defs(form)
+
+
 async def get_google_sheet_feed(
     session: AsyncSession,
     tournament_id: int,
@@ -558,6 +592,53 @@ async def require_google_sheet_feed(
     return feed
 
 
+async def _resolve_header_keys(
+    source_url: str,
+    feed: models.BalancerRegistrationGoogleSheetFeed | None,
+) -> list[str] | None:
+    """Header keys from a cached header row, else a best-effort live fetch.
+
+    Returns ``None`` when headers can't be determined (so validation falls back
+    to mode/parser/identity checks without column-existence).
+    """
+    if feed is not None and feed.source_url == source_url and feed.header_row_json:
+        return build_header_keys(feed.header_row_json)
+    try:
+        rows = await fetch_google_sheet_rows(source_url)
+    except (HTTPException, httpx.HTTPError):
+        return None
+    return build_header_keys(rows[0]) if rows else None
+
+
+async def _validate_feed_mapping(
+    session: AsyncSession,
+    tournament_id: int,
+    *,
+    source_url: str,
+    existing_feed: models.BalancerRegistrationGoogleSheetFeed | None,
+    mapping_config_json: dict[str, Any],
+) -> None:
+    custom_fields = await get_form_custom_field_defs(session, tournament_id)
+    target_specs = target_spec_map(custom_fields)
+    header_keys = await _resolve_header_keys(source_url, existing_feed)
+    issues = validate_mapping_config(
+        mapping_config_json,
+        target_specs=target_specs,
+        header_keys=header_keys,
+    )
+    if issues:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Invalid mapping configuration",
+                "errors": [
+                    {"code": issue.code, "target": issue.target, "column": issue.column, "message": issue.message}
+                    for issue in issues
+                ],
+            },
+        )
+
+
 async def upsert_google_sheet_feed(
     session: AsyncSession,
     tournament_id: int,
@@ -572,6 +653,14 @@ async def upsert_google_sheet_feed(
     tournament = await ensure_tournament_exists(session, tournament_id)
     sheet_id, gid = extract_sheet_source(source_url)
     feed = await get_google_sheet_feed(session, tournament_id)
+    if mapping_config_json is not None:
+        await _validate_feed_mapping(
+            session,
+            tournament_id,
+            source_url=source_url,
+            existing_feed=feed,
+            mapping_config_json=mapping_config_json,
+        )
     if feed is None:
         feed = models.BalancerRegistrationGoogleSheetFeed(
             tournament_id=tournament.id,
@@ -615,7 +704,78 @@ async def suggest_google_sheet_mapping(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets URL is required")
     rows = await fetch_google_sheet_rows(url)
     headers = rows[0]
-    return feed, headers, suggest_mapping_from_headers(headers)
+    custom_fields = await get_form_custom_field_defs(session, tournament_id)
+    return feed, headers, suggest_mapping_from_headers(headers, custom_fields=custom_fields)
+
+
+def build_mapping_catalog(
+    custom_fields: list[CustomFieldDefinition],
+    *,
+    value_mapping: dict[str, Any] | None = None,
+    header_keys: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble the frontend mapping catalog (targets, parsers, value maps)."""
+    specs = build_target_specs(custom_fields)
+    default_value_mapping = build_default_value_mapping()
+    saved_value_mapping = value_mapping or {}
+    effective_value_mapping = {
+        category: {
+            **(default_value_mapping.get(category) or {}),
+            **(saved_value_mapping.get(category) or {}),
+        }
+        for category in ("booleans", "roles", "subroles", "divisions")
+    }
+    return {
+        "targets": [
+            {
+                "key": spec.key,
+                "label": spec.label,
+                "group": spec.group,
+                "accepted_parsers": list(spec.accepted_parsers),
+                "default_parser": spec.default_parser,
+                "multi_column": spec.multi_column,
+                "required": spec.required,
+            }
+            for spec in specs
+        ],
+        "parsers": [
+            {
+                "parser": parser.parser,
+                "label": parser.label,
+                "cardinality": parser.cardinality,
+                "produces": parser.produces,
+            }
+            for parser in PARSER_CATALOG
+        ],
+        "value_categories": [
+            {"category": category, "entries": effective_value_mapping.get(category) or {}}
+            for category in ("booleans", "roles", "subroles", "divisions")
+        ],
+        "custom_fields": [field_def.model_dump() for field_def in custom_fields],
+        "header_keys": header_keys or [],
+    }
+
+
+async def get_mapping_catalog(
+    session: AsyncSession,
+    tournament_id: int,
+    *,
+    include_headers: bool = False,
+) -> dict[str, Any]:
+    await ensure_tournament_exists(session, tournament_id)
+    feed = await get_google_sheet_feed(session, tournament_id)
+    custom_fields = await get_form_custom_field_defs(session, tournament_id)
+    header_keys: list[str] | None = None
+    if include_headers and feed is not None:
+        if feed.header_row_json:
+            header_keys = build_header_keys(feed.header_row_json)
+        elif feed.source_url:
+            header_keys = await _resolve_header_keys(feed.source_url, feed)
+    return build_mapping_catalog(
+        custom_fields,
+        value_mapping=feed.value_mapping_json if feed else None,
+        header_keys=header_keys,
+    )
 
 
 async def preview_google_sheet_mapping(
@@ -625,28 +785,101 @@ async def preview_google_sheet_mapping(
     source_url: str | None = None,
     mapping_config_json: dict[str, Any] | None = None,
     value_mapping_json: dict[str, Any] | None = None,
+    sample_rows: int = 5,
 ) -> dict[str, Any]:
     feed = await get_google_sheet_feed(session, tournament_id)
     url = source_url or (feed.source_url if feed else None)
     if not url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets URL is required")
 
+    limit = max(1, min(int(sample_rows or 1), 50))
     rows = await fetch_google_sheet_rows(url)
     headers = rows[0]
-    sample_row = rows[1] if len(rows) > 1 else []
+    header_keys = build_header_keys(headers)
+    data_rows = rows[1 : 1 + limit]
     grid = await get_tournament_grid(session, tournament_id)
-    parsed = parse_sheet_row(
-        headers=headers,
-        row=sample_row,
-        mapping_config=mapping_config_json or (feed.mapping_config_json if feed else None),
-        value_mapping=value_mapping_json or (feed.value_mapping_json if feed else None),
-        grid=grid,
-    )
+    custom_fields = await get_form_custom_field_defs(session, tournament_id)
+    effective_mapping = mapping_config_json or (feed.mapping_config_json if feed else None)
+    effective_value_mapping = value_mapping_json or (feed.value_mapping_json if feed else None)
+
+    known_source_keys, known_battle_tag_keys = await _existing_match_keys(session, tournament_id, feed)
+
+    preview_rows: list[dict[str, Any]] = []
+    create_count = 0
+    update_count = 0
+    skip_count = 0
+    for index, data_row in enumerate(data_rows):
+        result = parse_sheet_row_detailed(
+            headers=headers,
+            row=data_row,
+            mapping_config=effective_mapping,
+            value_mapping=effective_value_mapping,
+            grid=grid,
+            custom_fields=custom_fields,
+        )
+        fields = result.fields
+        source_record_key = fields.get("source_record_key") if fields else None
+        battle_tag_key = normalize_battle_tag_key(fields.get("battle_tag")) if fields else None
+        disposition = classify_row_disposition(
+            source_record_key,
+            battle_tag_key,
+            known_source_keys=known_source_keys,
+            known_battle_tag_keys=known_battle_tag_keys,
+        )
+        if disposition == "create":
+            create_count += 1
+        elif disposition == "update":
+            update_count += 1
+        else:
+            skip_count += 1
+        preview_rows.append(
+            {
+                "row_index": index,
+                "sample_raw_row": row_to_json(headers, data_row),
+                "parsed_fields": serialize_parsed_fields(fields or {}),
+                "errors": result.errors,
+                "warnings": result.warnings,
+                "disposition": disposition,
+            }
+        )
+
+    first = preview_rows[0] if preview_rows else {}
     return {
         "headers": headers,
-        "sample_raw_row": row_to_json(headers, sample_row),
-        "parsed_fields": serialize_parsed_fields(parsed or {}),
+        "header_keys": header_keys,
+        "rows": preview_rows,
+        "create_count": create_count,
+        "update_count": update_count,
+        "skip_count": skip_count,
+        # Back-compat single-row fields (populated from the first row).
+        "sample_raw_row": first.get("sample_raw_row", {}),
+        "parsed_fields": first.get("parsed_fields", {}),
     }
+
+
+async def _existing_match_keys(
+    session: AsyncSession,
+    tournament_id: int,
+    feed: models.BalancerRegistrationGoogleSheetFeed | None,
+) -> tuple[set[str], set[str]]:
+    """Existing source-record keys (bound rows) and battle-tag keys for disposition."""
+    battle_tag_result = await session.execute(
+        sa.select(models.BalancerRegistration.battle_tag_normalized).where(
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+            models.BalancerRegistration.battle_tag_normalized.is_not(None),
+        )
+    )
+    battle_tag_keys = set(battle_tag_result.scalars().all())
+    source_keys: set[str] = set()
+    if feed is not None:
+        source_result = await session.execute(
+            sa.select(models.BalancerRegistrationGoogleSheetBinding.source_record_key).where(
+                models.BalancerRegistrationGoogleSheetBinding.feed_id == feed.id
+            )
+        )
+        source_keys = set(source_result.scalars().all())
+    return source_keys, battle_tag_keys
 
 
 async def list_registrations(
@@ -1530,6 +1763,12 @@ def apply_sheet_fields_to_registration(
     registration.stream_pov = bool(parsed_fields.get("stream_pov", False))
     registration.notes = parsed_fields.get("notes")
 
+    parsed_custom = parsed_fields.get("custom_fields")
+    if parsed_custom:
+        merged = dict(registration.custom_fields_json or {})
+        merged.update(parsed_custom)
+        registration.custom_fields_json = merged or None
+
     if allow_balancer_overwrite:
         registration.admin_notes = parsed_fields.get("admin_notes")
         replace_registration_roles(registration, build_registration_role_payloads(parsed_fields))
@@ -1537,33 +1776,55 @@ def apply_sheet_fields_to_registration(
         sync_included_balancer_status(registration)
 
 
+SYNC_ERROR_SAMPLE_LIMIT = 20
+
+
+@dataclass
+class SheetSyncResult:
+    feed: models.BalancerRegistrationGoogleSheetFeed
+    created: int
+    updated: int
+    withdrawn: int
+    total: int
+    skipped: int = 0
+    errors: list[dict[str, Any]] = field(default_factory=list)
+
+
 async def sync_google_sheet_feed(
     session: AsyncSession,
     tournament_id: int,
-) -> tuple[models.BalancerRegistrationGoogleSheetFeed, int, int, int, int]:
+) -> SheetSyncResult:
     feed = await require_google_sheet_feed(session, tournament_id)
     grid = await get_tournament_grid(session, tournament_id)
     tournament = await ensure_tournament_exists(session, tournament_id)
+    custom_fields = await get_form_custom_field_defs(session, tournament_id)
     now = datetime.now(UTC)
 
     try:
         rows = await fetch_google_sheet_rows(feed.source_url, sheet_id=feed.sheet_id, gid=feed.gid)
         headers = rows[0]
-        mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(headers)
+        mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(headers, custom_fields=custom_fields)
         value_mapping = feed.value_mapping_json or build_default_value_mapping()
 
         parsed_rows: dict[str, tuple[dict[str, str], dict[str, Any]]] = {}
-        for row in rows[1:]:
-            parsed_fields = parse_sheet_row(
+        skipped = 0
+        row_errors: list[dict[str, Any]] = []
+        for row_index, row in enumerate(rows[1:]):
+            result = parse_sheet_row_detailed(
                 headers=headers,
                 row=row,
                 mapping_config=mapping_config,
                 value_mapping=value_mapping,
                 grid=grid,
+                custom_fields=custom_fields,
             )
-            if not parsed_fields:
+            for entry in result.errors:
+                if len(row_errors) < SYNC_ERROR_SAMPLE_LIMIT:
+                    row_errors.append({**entry, "row_index": row_index})
+            if not result.fields:
+                skipped += 1
                 continue
-            parsed_rows[parsed_fields["source_record_key"]] = (row_to_json(headers, row), parsed_fields)
+            parsed_rows[result.fields["source_record_key"]] = (row_to_json(headers, row), result.fields)
 
         existing_bindings_result = await session.execute(
             sa.select(models.BalancerRegistrationGoogleSheetBinding)
@@ -1615,6 +1876,7 @@ async def sync_google_sheet_feed(
                     stream_pov=bool(parsed_fields.get("stream_pov", False)),
                     notes=parsed_fields.get("notes"),
                     admin_notes=parsed_fields.get("admin_notes"),
+                    custom_fields_json=parsed_fields.get("custom_fields") or None,
                     is_flex=bool(parsed_fields.get("is_flex", False)),
                     status="approved",
                     exclude_from_balancer=False,
@@ -1664,12 +1926,26 @@ async def sync_google_sheet_feed(
             feed.value_mapping_json = value_mapping
         feed.last_synced_at = now
         feed.last_sync_status = "success"
-        feed.last_error = None
+        if skipped or row_errors:
+            summary = f"Synced with {skipped} skipped row(s)"
+            if row_errors:
+                summary += f" and {len(row_errors)} field error(s)"
+            feed.last_error = summary
+        else:
+            feed.last_error = None
         if created or updated or withdrawn:
             register_tournament_realtime_update(session, tournament_id, "structure_changed")
         await session.commit()
         await session.refresh(feed)
-        return feed, created, updated, withdrawn, len(parsed_rows)
+        return SheetSyncResult(
+            feed=feed,
+            created=created,
+            updated=updated,
+            withdrawn=withdrawn,
+            total=len(parsed_rows),
+            skipped=skipped,
+            errors=row_errors,
+        )
     except HTTPException as exc:
         feed.last_synced_at = now
         feed.last_sync_status = "failed"
@@ -1707,15 +1983,16 @@ async def sync_due_google_sheet_feeds(
             continue
         async with session_factory() as session:
             try:
-                _, created, updated, withdrawn, total = await sync_google_sheet_feed(session, feed.tournament_id)
+                sync_result = await sync_google_sheet_feed(session, feed.tournament_id)
                 results.append(
                     {
                         "tournament_id": feed.tournament_id,
                         "status": "success",
-                        "created": created,
-                        "updated": updated,
-                        "withdrawn": withdrawn,
-                        "total": total,
+                        "created": sync_result.created,
+                        "updated": sync_result.updated,
+                        "withdrawn": sync_result.withdrawn,
+                        "total": sync_result.total,
+                        "skipped": sync_result.skipped,
                     }
                 )
             except Exception as exc:  # noqa: BLE001
@@ -1741,6 +2018,9 @@ async def list_active_registrations_for_balancer(
             models.BalancerRegistration.deleted_at.is_(None),
             models.BalancerRegistration.status == "approved",
             models.BalancerRegistration.exclude_from_balancer.is_(False),
+            # Mirror the panel's "in balancer" rule (load_pool): a registration is
+            # part of the pool only once it has been added (balancer_status set).
+            models.BalancerRegistration.balancer_status != "not_in_balancer",
         )
         .options(selectinload(models.BalancerRegistration.roles))
         .order_by(models.BalancerRegistration.battle_tag_normalized.asc().nullslast())

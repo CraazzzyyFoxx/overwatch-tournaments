@@ -14,9 +14,13 @@ import {
   AdminGoogleSheetFeedSyncResponse,
   AdminGoogleSheetFeedUpsertInput,
   AdminGoogleSheetMappingPreviewInput,
+  AdminGoogleSheetMappingPreviewInputV2,
   AdminGoogleSheetMappingPreviewResponse,
   AdminGoogleSheetMappingSuggestInput,
   AdminGoogleSheetMappingSuggestResponse,
+  AdminGoogleSheetMappingValidationError,
+  MappingCatalog,
+  MappingPreviewResponseV2,
   ApplicationUserExportResponse,
   RegistrationUserExportResponse,
   BalanceExportResponse,
@@ -102,6 +106,107 @@ export default class balancerAdminService {
       }
     );
     return response.json();
+  }
+
+  /**
+   * Multi-row preview (v2). Returns a per-row breakdown with parsed fields,
+   * field-level errors/warnings, and create/update/skip dispositions.
+   */
+  static async previewTournamentSheetMappingRows(
+    tournamentId: number,
+    data: AdminGoogleSheetMappingPreviewInputV2
+  ): Promise<MappingPreviewResponseV2> {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/tournaments/${tournamentId}/sheet/preview`,
+      {
+        method: "POST",
+        body: data
+      }
+    );
+    return response.json();
+  }
+
+  /**
+   * Catalog that drives the visual mapper: available targets, parsers, value
+   * categories, custom fields, and (optionally) the deduped header keys.
+   */
+  static async getTournamentSheetMappingCatalog(
+    tournamentId: number,
+    includeHeaders = true
+  ): Promise<MappingCatalog> {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/tournaments/${tournamentId}/sheet/mapping-catalog`,
+      {
+        query: { include_headers: includeHeaders }
+      }
+    );
+    return response.json();
+  }
+
+  /**
+   * Upsert the feed, surfacing the structured HTTP 422 mapping-validation body
+   * instead of throwing. Callers map `errors` onto per-target inline messages.
+   */
+  static async upsertTournamentSheetWithValidation(
+    tournamentId: number,
+    data: AdminGoogleSheetFeedUpsertInput
+  ): Promise<
+    | { ok: true; feed: AdminGoogleSheetFeed }
+    | { ok: false; status: number; error: AdminGoogleSheetMappingValidationError }
+  > {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/tournaments/${tournamentId}/sheet`,
+      {
+        method: "PUT",
+        body: data,
+        throwOnError: false
+      }
+    );
+
+    if (response.ok) {
+      return { ok: true, feed: (await response.json()) as AdminGoogleSheetFeed };
+    }
+    if (response.status !== 422) {
+      throw new Error(`Failed to save Google Sheets feed (${response.status}).`);
+    }
+
+    let error: AdminGoogleSheetMappingValidationError = {
+      message: "Mapping validation failed.",
+      errors: []
+    };
+    try {
+      // FastAPI wraps a custom `HTTPException(detail=...)` as `{ detail: ... }`.
+      // Our mapping validator passes `detail = { message, errors }`, so the
+      // structured payload lives under `detail`. Fall back to legacy shapes.
+      const body = (await response.json()) as {
+        detail?: unknown;
+        message?: unknown;
+        errors?: unknown;
+      };
+      const detail = body.detail;
+      const source =
+        detail && typeof detail === "object" && !Array.isArray(detail)
+          ? (detail as { message?: unknown; errors?: unknown })
+          : body;
+      error = {
+        message:
+          typeof source.message === "string"
+            ? source.message
+            : typeof detail === "string"
+              ? detail
+              : "Mapping validation failed.",
+        errors: Array.isArray(source.errors)
+          ? (source.errors as AdminGoogleSheetMappingValidationError["errors"])
+          : []
+      };
+    } catch {
+      error = { message: "Mapping validation failed.", errors: [] };
+    }
+
+    return { ok: false, status: response.status, error };
   }
 
   static async listApplications(

@@ -1378,6 +1378,9 @@ async def list_active_registrations_for_balancer(
             models.BalancerRegistration.deleted_at.is_(None),
             models.BalancerRegistration.status == "approved",
             models.BalancerRegistration.exclude_from_balancer.is_(False),
+            # Mirror the panel's "in balancer" rule (draft load_pool): a registration
+            # is part of the pool only once it has been added (balancer_status set).
+            models.BalancerRegistration.balancer_status != "not_in_balancer",
         )
         .options(selectinload(models.BalancerRegistration.roles))
         .order_by(models.BalancerRegistration.battle_tag_normalized.asc().nullslast())
