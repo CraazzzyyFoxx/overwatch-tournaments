@@ -1275,13 +1275,18 @@ async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> 
         top = advance
         top_lb = 0
 
+    # The bracket engine applies standard 1-vs-N seeding (``_seeding_order``)
+    # internally, which already spreads the top seeds across the bracket. Feeding
+    # it a plain group-major order ("snake": A1, B1, …, A2, B2, …) therefore
+    # avoids same-group round-1 rematches; the "cross" order double-crosses and
+    # reunites group opponents in round 1.
     await wire_from_groups(
         session,
         stage.id,
         source.id,
         top,
         top_lb=top_lb,
-        mode="cross",
+        mode="snake",
         notify=False,
     )
 

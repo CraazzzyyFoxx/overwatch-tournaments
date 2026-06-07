@@ -33,6 +33,9 @@ stage_service = importlib.import_module("src.services.admin.stage")
 admin_schemas_module = importlib.import_module("src.schemas.admin.stage")
 enums = importlib.import_module("shared.core.enums")
 
+stage_service._publish_tournament_changed = AsyncMock()
+
+
 
 def _group_stage(
     *, stage_id: int, tournament_id: int, num_groups: int

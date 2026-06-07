@@ -317,7 +317,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             await stage_service._auto_wire_from_groups(session, playoff)
 
         # advance_count=4 split evenly → 2 Upper, 2 Lower (cross seeding).
-        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=2, mode="cross", notify=False)
+        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=2, mode="snake", notify=False)
 
     async def test_auto_wire_odd_count_sends_extra_to_upper(self) -> None:
         playoff = SimpleNamespace(
@@ -337,7 +337,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             await stage_service._auto_wire_from_groups(session, playoff)
 
         # advance_count=3 → 2 Upper (extra), 1 Lower.
-        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=1, mode="cross", notify=False)
+        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=1, mode="snake", notify=False)
 
     async def test_auto_wire_single_bracket_seeds_all_to_one_item(self) -> None:
         # Double-elimination with a single SINGLE_BRACKET item (no separate
@@ -359,7 +359,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         ):
             await stage_service._auto_wire_from_groups(session, playoff)
 
-        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="cross", notify=False)
+        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="snake", notify=False)
 
     async def test_auto_wire_all_to_upper_when_split_disabled(self) -> None:
         playoff = SimpleNamespace(
@@ -378,7 +378,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         ):
             await stage_service._auto_wire_from_groups(session, playoff)
 
-        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="cross", notify=False)
+        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="snake", notify=False)
 
     async def test_auto_wire_noop_without_advance_count(self) -> None:
         playoff = SimpleNamespace(
@@ -397,6 +397,30 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             await stage_service._auto_wire_from_groups(session, playoff)
 
         wire.assert_not_awaited()
+
+    def test_auto_wire_seeding_avoids_same_group_round_one(self) -> None:
+        # The seeding the auto-wire feeds the bracket ("snake" / group-major)
+        # must not reunite two teams from the same group in Round 1, once the
+        # engine applies its internal 1-vs-N seeding. Each (group, position) is
+        # mapped to a synthetic team id `group_id * 100 + position`.
+        from shared.services.bracket import single_elimination
+
+        for group_ids, top in [((10, 11), 2), ((10, 11, 12, 13), 2)]:
+            items = [SimpleNamespace(id=gid, order=idx) for idx, gid in enumerate(group_ids)]
+            seeding = stage_service._build_seeding(items, top, "snake", 0)
+            team_ids = [gid * 100 + pos for gid, pos in seeding]
+            skeleton = single_elimination.generate(team_ids)
+            r1 = [
+                (p.home_team_id, p.away_team_id)
+                for p in skeleton.pairings
+                if p.round_number == 1
+            ]
+            for home, away in r1:
+                self.assertNotEqual(
+                    home // 100,
+                    away // 100,
+                    f"same-group round-1 rematch {home} vs {away} (groups={group_ids})",
+                )
 
     async def test_delete_stage_removes_encounters_and_standings(self) -> None:
         stage = SimpleNamespace(id=7, tournament_id=99)
