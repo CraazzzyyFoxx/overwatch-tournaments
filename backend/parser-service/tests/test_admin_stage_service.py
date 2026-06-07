@@ -23,6 +23,8 @@ os.environ.setdefault("S3_ACCESS_KEY", "test")
 os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
+os.environ.setdefault("CHALLONGE_USERNAME", "test")
+os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 stage_service = importlib.import_module("src.services.admin.stage")
 admin_schemas = importlib.import_module("src.schemas.admin.stage")
@@ -30,76 +32,6 @@ enums = importlib.import_module("shared.core.enums")
 
 
 class AdminStageServiceTests(IsolatedAsyncioTestCase):
-    async def test_generate_round_robin_encounters_per_group_item(self) -> None:
-        stage = SimpleNamespace(
-            id=7,
-            tournament_id=99,
-            stage_type=enums.StageType.ROUND_ROBIN,
-            items=[
-                SimpleNamespace(
-                    id=10,
-                    inputs=[
-                        SimpleNamespace(slot=1, team_id=1),
-                        SimpleNamespace(slot=2, team_id=2),
-                    ],
-                ),
-                SimpleNamespace(
-                    id=11,
-                    inputs=[
-                        SimpleNamespace(slot=1, team_id=3),
-                        SimpleNamespace(slot=2, team_id=4),
-                    ],
-                ),
-            ],
-        )
-        created_encounters: list = []
-
-        def _fake_add(obj):
-            # Simulate autoincrement: any added Encounter gets an id so that
-            # persist_advancement_edges can build its local→id map.
-            if not hasattr(obj, "id") or obj.id is None:
-                obj.id = len(created_encounters) + 100
-            created_encounters.append(obj)
-
-        session = SimpleNamespace(
-            add=Mock(side_effect=_fake_add),
-            flush=AsyncMock(),
-            commit=AsyncMock(),
-        )
-
-        with (
-            patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(
-                stage_service,
-                "_load_team_names",
-                AsyncMock(
-                    side_effect=[
-                        {1: "Team One", 2: "Team Two"},
-                        {3: "Team Three", 4: "Team Four"},
-                    ]
-                ),
-            ),
-            patch.object(
-                stage_service.standings_service,
-                "recalculate_for_tournament",
-                AsyncMock(),
-            ),
-            patch.object(stage_service, "_publish_tournament_changed", AsyncMock()),
-        ):
-            encounters = await stage_service.generate_encounters(session, stage.id)
-
-        self.assertEqual(2, len(encounters))
-        self.assertEqual([10, 11], [encounter.stage_item_id for encounter in encounters])
-        self.assertEqual([(1, 2), (3, 4)], [
-            (encounter.home_team_id, encounter.away_team_id)
-            for encounter in encounters
-        ])
-        self.assertEqual(
-            ["Team One vs Team Two", "Team Three vs Team Four"],
-            [encounter.name for encounter in encounters],
-        )
-        session.commit.assert_awaited_once_with()
-
     async def test_create_stage_item_creates_compat_group_and_recalculates_standings(self) -> None:
         stage = SimpleNamespace(
             id=7,
@@ -123,8 +55,8 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
             patch.object(stage_service, "get_stage_item", AsyncMock(return_value="created")),
             patch.object(
-                stage_service.standings_service,
-                "recalculate_for_tournament",
+                stage_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
                 AsyncMock(),
             ) as recalculate,
             patch.object(stage_service, "_publish_tournament_changed", AsyncMock()),
@@ -136,7 +68,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual("Group A", added_group.name)
         self.assertEqual(stage.id, added_group.stage_id)
         self.assertTrue(added_group.is_groups)
-        recalculate.assert_awaited_once_with(session, stage.tournament_id)
+        recalculate.assert_awaited_once_with(stage.tournament_id)
 
     async def test_update_stage_item_input_swaps_with_existing_stage_team(self) -> None:
         stage = SimpleNamespace(id=7, tournament_id=99)
@@ -176,8 +108,8 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         )
 
         with patch.object(
-            stage_service.standings_service,
-            "recalculate_for_tournament",
+            stage_service.standings_recalculation,
+            "enqueue_tournament_recalculation",
             AsyncMock(),
         ) as recalculate, patch.object(
             stage_service,
@@ -190,7 +122,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(22, current_input.team_id)
         self.assertEqual(11, other_input.team_id)
         self.assertEqual(enums.StageItemInputType.FINAL, current_input.input_type)
-        recalculate.assert_awaited_once_with(session, stage.tournament_id)
+        recalculate.assert_awaited_once_with(stage.tournament_id)
         session.commit.assert_awaited_once_with()
         session.refresh.assert_awaited_once_with(current_input)
 
@@ -224,8 +156,8 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         )
 
         with patch.object(
-            stage_service.standings_service,
-            "recalculate_for_tournament",
+            stage_service.standings_recalculation,
+            "enqueue_tournament_recalculation",
             AsyncMock(),
         ) as recalculate, patch.object(
             stage_service,
@@ -239,7 +171,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(33, current_input.team_id)
         self.assertIsNone(current_input.source_stage_item_id)
         self.assertIsNone(current_input.source_position)
-        recalculate.assert_awaited_once_with(session, stage.tournament_id)
+        recalculate.assert_awaited_once_with(stage.tournament_id)
 
     async def test_seed_teams_publishes_structure_changed_event(self) -> None:
         stage = SimpleNamespace(
@@ -265,32 +197,40 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
-            patch.object(stage_service.standings_service, "recalculate_for_tournament", AsyncMock()),
+            patch.object(
+                stage_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ),
             patch.object(stage_service, "_publish_tournament_changed", AsyncMock()) as publish_changed,
         ):
             await stage_service.seed_teams(session, stage.id, [1, 2], mode="snake_sr")
 
         publish_changed.assert_awaited_once_with(stage.tournament_id, "structure_changed")
 
-    async def test_activate_and_generate_publishes_single_structure_changed_event(self) -> None:
+    async def test_activate_and_generate_returns_empty_encounters(self) -> None:
+        """parser-service's activate_and_generate no longer generates encounters
+        (that responsibility moved to tournament-service). Verify it still activates
+        the stage and returns an empty encounter list.
+        """
         session = SimpleNamespace()
         stage = SimpleNamespace(id=7, tournament_id=99)
-        encounters = [SimpleNamespace(id=101)]
 
         with (
             patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
             patch.object(stage_service, "_auto_wire_from_groups", AsyncMock()),
+            patch.object(stage_service, "_check_upstream_stages_completed", AsyncMock(return_value=[])),
             patch.object(stage_service, "activate_stage", AsyncMock(return_value=stage)) as activate_stage,
-            patch.object(stage_service, "generate_encounters", AsyncMock(return_value=encounters)) as generate_encounters,
-            patch.object(stage_service, "_publish_tournament_changed", AsyncMock()) as publish_changed,
         ):
-            result_stage, result_encounters = await stage_service.activate_and_generate(session, stage.id, force=True)
+            result_stage, result_encounters = await stage_service.activate_and_generate(
+                session, stage.id, force=True
+            )
 
         self.assertIs(result_stage, stage)
-        self.assertEqual(encounters, result_encounters)
+        # parser-service no longer generates encounters — bracket generation
+        # is tournament-service's responsibility.
+        self.assertEqual([], result_encounters)
         activate_stage.assert_awaited_once_with(session, stage.id, notify=False)
-        generate_encounters.assert_awaited_once_with(session, stage.id, notify=False)
-        publish_changed.assert_awaited_once_with(stage.tournament_id, "structure_changed")
 
     @staticmethod
     def _upper_lower_items() -> list:

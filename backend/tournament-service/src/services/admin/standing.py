@@ -1,16 +1,14 @@
 """Admin service layer for standing management"""
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src import models
 from src.schemas.admin import standing as admin_schemas
-from src.services.tournament.events import (
-    enqueue_tournament_changed,
-    enqueue_tournament_recalculation,
-)
+from src.services.computation.jobs import request_standings_recalculation
+from src.services.tournament.events import enqueue_tournament_changed
 
 
 async def get_standing(session: AsyncSession, standing_id: int) -> models.Standing:
@@ -73,11 +71,13 @@ async def delete_standing(session: AsyncSession, standing_id: int) -> None:
     await session.commit()
 
 
-async def recalculate_standings(session: AsyncSession, tournament_id: int) -> dict:
-    """
-    Recalculate all standings for a tournament.
-    This deletes existing standings and triggers recalculation.
-    """
+async def recalculate_standings(
+    session: AsyncSession,
+    tournament_id: int,
+    *,
+    requested_by_user_id: int | None = None,
+) -> models.TournamentComputationJob:
+    """Schedule a durable standings recalculation without exposing empty data."""
     # Verify tournament exists
     result = await session.execute(select(models.Tournament).where(models.Tournament.id == tournament_id))
     tournament = result.scalar_one_or_none()
@@ -85,16 +85,10 @@ async def recalculate_standings(session: AsyncSession, tournament_id: int) -> di
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-    # Delete existing standings for this tournament
-    await session.execute(delete(models.Standing).where(models.Standing.tournament_id == tournament_id))
-    await enqueue_tournament_recalculation(session, tournament_id)
+    job = await request_standings_recalculation(
+        session,
+        tournament_id,
+        requested_by_user_id=requested_by_user_id,
+    )
     await session.commit()
-
-    # Note: Actual recalculation logic should be triggered via the existing
-    # standing calculation service. This endpoint just clears the standings.
-    # The frontend should call POST /standing/create after this.
-
-    return {
-        "message": "Standings cleared. Call POST /standing/create to recalculate.",
-        "tournament_id": tournament_id,
-    }
+    return job

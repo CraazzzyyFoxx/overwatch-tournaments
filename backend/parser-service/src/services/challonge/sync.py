@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 
 from loguru import logger
+from redis import asyncio as redis_async
 from shared.core import enums
 from shared.services.distributed_lock import distributed_lock
 from shared.services.encounter_naming import build_encounter_name
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src import models, schemas
+from src.core import config
 from src.services.challonge import service as challonge_service
 from src.services.encounter.finalize import finalize_encounter_score
 from src.services.standings import recalculation as standings_recalculation
@@ -113,14 +115,31 @@ class _ChallongeLinkSpec:
 
 SYNC_LOCK_TTL_SECONDS = 5 * 60
 
+_redis_client: redis_async.Redis | None = None
+
 
 def _source_lookup_key(source: _ImportSource) -> int:
     return source.source_id if source.source_id is not None else -source.challonge_id
 
 
+async def _get_redis() -> redis_async.Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis_async.from_url(str(config.settings.redis_url), decode_responses=True)
+    return _redis_client
+
+
+async def close_redis() -> None:
+    global _redis_client
+    if _redis_client is None:
+        return
+    await _redis_client.aclose()
+    _redis_client = None
+
+
 @asynccontextmanager
 async def _sync_job_lock(tournament_id: int, direction: str) -> AsyncIterator[str]:
-    redis = await standings_recalculation.get_redis()
+    redis = await _get_redis()
     key = f"challonge:sync:{tournament_id}:{direction}"
     async with distributed_lock(redis, key, ttl_seconds=SYNC_LOCK_TTL_SECONDS) as token:
         yield token.value

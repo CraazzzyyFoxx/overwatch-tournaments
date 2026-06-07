@@ -15,7 +15,7 @@ from unittest import TestCase
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "parser-service"))
+sys.path.insert(0, str(backend_root / "tournament-service"))
 
 os.environ.setdefault("PROJECT_URL", "http://localhost")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -24,10 +24,6 @@ os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
 os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
-os.environ.setdefault("S3_ACCESS_KEY", "test")
-os.environ.setdefault("S3_SECRET_KEY", "test")
-os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
-os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 from shared.core.enums import StageType  # noqa: E402
 from shared.services.bracket import (  # noqa: E402

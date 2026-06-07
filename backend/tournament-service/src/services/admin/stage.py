@@ -618,7 +618,13 @@ async def update_stage_item_input(
     return inp
 
 
-async def activate_stage(session: AsyncSession, stage_id: int, *, notify: bool = True) -> models.Stage:
+async def activate_stage(
+    session: AsyncSession,
+    stage_id: int,
+    *,
+    notify: bool = True,
+    commit: bool = True,
+) -> models.Stage:
     """Activate a stage, resolving tentative inputs from previous stages."""
     stage = await get_stage(session, stage_id)
 
@@ -655,7 +661,10 @@ async def activate_stage(session: AsyncSession, stage_id: int, *, notify: bool =
 
     if notify:
         await _publish_tournament_changed(session, stage.tournament_id, "structure_changed")
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     return await get_stage(session, stage.id)
 
 
@@ -1229,6 +1238,8 @@ async def activate_and_generate(
     *,
     force: bool = False,
     notify: bool = True,
+    commit: bool = True,
+    schedule_standings: bool = True,
 ) -> tuple[models.Stage, list[models.Encounter]]:
     """Combined endpoint: activate a stage (resolving TENTATIVE inputs) and
     immediately generate bracket encounters. Single click for the admin.
@@ -1258,15 +1269,31 @@ async def activate_and_generate(
                 },
             )
 
-    stage = await activate_stage(session, stage_id, notify=False)
-    encounters = await generate_encounters(session, stage_id, notify=False)
+    stage = await activate_stage(session, stage_id, notify=False, commit=False)
+    encounters = await generate_encounters(
+        session,
+        stage_id,
+        notify=False,
+        commit=False,
+        schedule_standings=schedule_standings,
+    )
     if notify:
         await _publish_tournament_changed(session, stage.tournament_id, "structure_changed")
+    if commit:
         await session.commit()
+    else:
+        await session.flush()
     return stage, encounters
 
 
-async def generate_encounters(session: AsyncSession, stage_id: int, *, notify: bool = True) -> list[models.Encounter]:
+async def generate_encounters(
+    session: AsyncSession,
+    stage_id: int,
+    *,
+    notify: bool = True,
+    commit: bool = True,
+    schedule_standings: bool = True,
+) -> list[models.Encounter]:
     """Generate bracket encounters for a stage based on its type and team inputs."""
     stage = await get_stage(session, stage_id)
 
@@ -1294,10 +1321,14 @@ async def generate_encounters(session: AsyncSession, stage_id: int, *, notify: b
                 )
             )
 
-        await enqueue_tournament_recalculation(session, stage.tournament_id)
+        if schedule_standings:
+            await enqueue_tournament_recalculation(session, stage.tournament_id)
         if notify:
             await _publish_tournament_changed(session, stage.tournament_id, "structure_changed")
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return encounters
 
     sorted_items = sorted(stage.items, key=lambda it: (it.order, it.id))
@@ -1365,8 +1396,12 @@ async def generate_encounters(session: AsyncSession, stage_id: int, *, notify: b
         lb_stage_item_id=lb_stage_item_id,
     )
 
-    await enqueue_tournament_recalculation(session, stage.tournament_id)
+    if schedule_standings:
+        await enqueue_tournament_recalculation(session, stage.tournament_id)
     if notify:
         await _publish_tournament_changed(session, stage.tournament_id, "structure_changed")
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     return encounters

@@ -76,15 +76,18 @@ class BalancerJobEvent(BaseEvent):
     job_id: str = Field(..., description="Balancer job identifier")
 
 
-class TournamentRecalcEvent(BaseEvent):
-    """Event for scheduling standings recalculation for one tournament.
+class TournamentComputationJobEvent(BaseModel):
+    """Dispatch one persisted tournament computation job."""
 
-    Published by: parser-service API
-    Consumed by: parser-service worker
-    """
+    job_id: int = Field(..., description="tournament.computation_job.id")
 
-    event_type: str = Field(default="tournament_recalc", frozen=True)
-    tournament_id: int = Field(..., description="Tournament ID to recalculate")
+
+class TournamentStandingsInvalidatedEvent(BaseEvent):
+    """Domain event requesting a durable standings generation increment."""
+
+    event_type: str = Field(default="tournament_standings_invalidated", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID whose results changed")
+    reason: str = Field(default="results_changed", description="Source/reason for observability")
 
 
 TournamentChangedReason = Literal["bracket_changed", "results_changed", "structure_changed"]
@@ -149,23 +152,6 @@ class TournamentStateChangedEvent(BaseEvent):
     workspace_id: int | None = Field(default=None, description="Workspace ID")
     old_status: str | None = Field(default=None, description="Previous tournament status")
     new_status: str = Field(..., description="New tournament status")
-
-
-class SwissNextRoundEvent(BaseEvent):
-    """Event for generating the next Swiss round for one stage item.
-
-    Published by: parser-service (after all encounters in a round complete)
-    Consumed by: parser-service worker
-    """
-
-    event_type: str = Field(default="swiss_next_round", frozen=True)
-    stage_id: int = Field(..., description="Stage ID")
-    stage_item_id: int | None = Field(..., description="StageItem ID (None for ungrouped stage)")
-    tournament_id: int = Field(..., description="Tournament ID")
-    next_round: int | None = Field(
-        default=None,
-        description="Round number this event is expected to generate",
-    )
 
 
 class AnalyticsJobRequested(BaseEvent):

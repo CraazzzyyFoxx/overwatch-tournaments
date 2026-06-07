@@ -68,6 +68,7 @@ import {
   EvaluationRunRead,
   HardResetResultRead,
   BulkOperationResult,
+  TournamentComputationJob,
   CsvUserImportParams,
   UserMergePreviewRequest,
   UserMergePreviewResponse,
@@ -93,6 +94,40 @@ import {
 } from "@/types/admin.types";
 
 class AdminService {
+  private async getTournamentJob(jobId: number): Promise<TournamentComputationJob> {
+    const response = await apiFetch("tournament", `admin/tournament-jobs/${jobId}`);
+    return response.json();
+  }
+
+  private async waitForTournamentJob(
+    initialJob: TournamentComputationJob,
+    timeoutMs = 120_000
+  ): Promise<TournamentComputationJob> {
+    const deadline = Date.now() + timeoutMs;
+    let job = initialJob;
+
+    while (job.status === "pending" || job.status === "running") {
+      if (Date.now() >= deadline) {
+        throw new Error(`Tournament computation job ${job.id} timed out`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      job = await this.getTournamentJob(job.id);
+    }
+
+    if (job.status !== "succeeded") {
+      const message = job.error || `Tournament computation job ${job.id} ${job.status}`;
+      const error = new Error(message) as Error & {
+        detail?: { code: string; message: string };
+      };
+      if (message.includes("upstream_stages_not_completed")) {
+        error.detail = { code: "upstream_stages_not_completed", message };
+      }
+      throw error;
+    }
+
+    return job;
+  }
+
   // ─── Tournament CRUD ───────────────────────────────────────────────────────
 
   async createTournament(data: TournamentCreateInput): Promise<Tournament> {
@@ -359,18 +394,19 @@ class AdminService {
   }
 
   async calculateStandings(tournamentId: number): Promise<BulkOperationResult> {
-    const response = await apiFetch("parser", "standing/create", {
-      method: "POST",
-      query: { tournament_id: tournamentId }
-    });
-    return response.json();
+    return this.recalculateStandings(tournamentId);
   }
 
   async recalculateStandings(tournamentId: number): Promise<BulkOperationResult> {
     const response = await apiFetch("tournament", `admin/standings/recalculate/${tournamentId}`, {
       method: "POST"
     });
-    return response.json();
+    const job = (await response.json()) as TournamentComputationJob;
+    const completed = await this.waitForTournamentJob(job);
+    return {
+      success: true,
+      count: Number(completed.result_json?.standing_count ?? 0)
+    };
   }
 
   // ─── User CRUD ─────────────────────────────────────────────────────────────
@@ -1228,7 +1264,9 @@ class AdminService {
     const response = await apiFetch("tournament", `admin/stages/${stageId}/generate`, {
       method: "POST"
     });
-    return response.json();
+    const job = (await response.json()) as TournamentComputationJob;
+    const completed = await this.waitForTournamentJob(job);
+    return { generated: Number(completed.result_json?.generated ?? 0) };
   }
 
   async wireFromGroups(
@@ -1250,14 +1288,16 @@ class AdminService {
   async activateAndGenerateStage(
     stageId: number,
     opts?: { force?: boolean }
-  ): Promise<{ stage: Stage; generated: number }> {
+  ): Promise<{ generated: number }> {
     const qs = opts?.force ? "?force=true" : "";
     const response = await apiFetch(
       "tournament",
       `admin/stages/${stageId}/activate-and-generate${qs}`,
       { method: "POST" }
     );
-    return response.json();
+    const job = (await response.json()) as TournamentComputationJob;
+    const completed = await this.waitForTournamentJob(job);
+    return { generated: Number(completed.result_json?.generated ?? 0) };
   }
 
   async seedTeams(

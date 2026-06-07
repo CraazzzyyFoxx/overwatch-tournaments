@@ -467,6 +467,88 @@ services:
           cpus: '0.10'
           memory: 128M
 
+  tournament-bracket-worker:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: faststream run serve_bracket:app --reload --reload-dir /app/tournament-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9103
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      tournament:
+        condition: service_healthy
+    volumes:
+      - ./backend/tournament-service:/app/tournament-service
+      - ./backend/shared:/app/shared
+      - ./logs/tournament-bracket-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  tournament-standings-worker:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: faststream run serve_standings:app --reload --reload-dir /app/tournament-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9103
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      tournament:
+        condition: service_healthy
+    volumes:
+      - ./backend/tournament-service:/app/tournament-service
+      - ./backend/shared:/app/shared
+      - ./logs/tournament-standings-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
     profiles: ["workers"]

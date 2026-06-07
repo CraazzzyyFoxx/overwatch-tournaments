@@ -17,5 +17,7 @@ Current scope:
 - Redis realtime publish for multi-replica WebSocket broadcast through realtime-service
 - transactional outbox publication for captain/admin tournament changes, recalculation, encounter completion, registration approvals/rejections, and tournament state changes
 - outbox sweeper in `serve.py`
-- worker consumers for `tournament_recalc` and `swiss_next_round`
+- durable computation jobs with history/status API under `/admin/tournament-jobs`
+- bracket worker consuming `tournament_bracket_jobs`
+- standings worker consuming `tournament_standings_jobs`
 - worker scheduler for registration Google Sheets sync

@@ -53,8 +53,10 @@ class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
     async def test_recalculation_outbox_event_registers_bracket_realtime_update(self) -> None:
         session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock())
 
-        await tournament_events.enqueue_tournament_recalculation(session, 42)
+        with patch.object(tournament_events, "request_standings_recalculation", AsyncMock()) as request:
+            await tournament_events.enqueue_tournament_recalculation(session, 42)
 
+        request.assert_awaited_once_with(session, 42)
         updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
         self.assertEqual(updates, [(42, "bracket_changed")])
 

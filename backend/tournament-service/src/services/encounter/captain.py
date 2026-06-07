@@ -6,10 +6,9 @@ from fastapi import HTTPException, status
 from shared.core.enums import EncounterResultStatus
 from shared.messaging.config import (
     TOURNAMENT_EVENTS_EXCHANGE,
-    TOURNAMENT_RECALC_EXCHANGE,
 )
 from shared.messaging.outbox import enqueue_outbox_event
-from shared.schemas.events import EncounterCompletedEvent, TournamentRecalcEvent
+from shared.schemas.events import EncounterCompletedEvent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,23 +16,14 @@ from sqlalchemy.orm import selectinload
 from src import models
 from src.services.challonge import sync as challonge_sync
 from src.services.encounter.finalize import finalize_encounter_score
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
+from src.services.tournament.events import enqueue_tournament_recalculation
 
 
 async def _enqueue_tournament_recalculation(
     session: AsyncSession,
     tournament_id: int,
 ) -> None:
-    await enqueue_outbox_event(
-        session,
-        TournamentRecalcEvent(
-            tournament_id=tournament_id,
-            source_service="tournament-service",
-        ),
-        exchange=TOURNAMENT_RECALC_EXCHANGE,
-        routing_key=f"tournament.recalc.{tournament_id}",
-    )
-    register_tournament_realtime_update(session, tournament_id, "bracket_changed")
+    await enqueue_tournament_recalculation(session, tournament_id)
 
 
 async def _enqueue_encounter_completed(

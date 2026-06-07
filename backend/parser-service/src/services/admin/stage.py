@@ -5,18 +5,7 @@ from collections.abc import Sequence
 from fastapi import HTTPException, status
 from loguru import logger
 from shared.core import enums
-from shared.services.bracket.advancement import persist_advancement_edges
-from shared.services.bracket.engine import generate_bracket
-from shared.services.bracket.swiss import SwissPairingImpossibleError, SwissStanding
-from shared.services.bracket.swiss_settings import (
-    clear_swiss_byes,
-    clear_swiss_scope_stopped,
-    mark_swiss_scope_stopped,
-    record_swiss_bye,
-    swiss_bye_team_ids,
-)
-from shared.services.bracket.types import BracketSkeleton
-from shared.services.encounter_naming import build_encounter_name_from_ids
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,7 +13,6 @@ from sqlalchemy.orm import selectinload
 from src import models
 from src.schemas.admin import stage as admin_schemas
 from src.services.standings import recalculation as standings_recalculation
-from src.services.standings import service as standings_service
 from src.services.standings import swiss_auto_round
 
 GROUPED_GENERATION_STAGE_TYPES = {
@@ -436,7 +424,7 @@ async def merge_group_stages(
         removed_stage_ids=set(unique_source_stage_ids),
     )
     await session.commit()
-    await standings_service.recalculate_for_tournament(session, target_stage.tournament_id)
+    await standings_recalculation.enqueue_tournament_recalculation(target_stage.tournament_id)
     await _publish_tournament_changed(target_stage.tournament_id, "structure_changed")
 
     logger.info(
@@ -484,7 +472,7 @@ async def create_stage_item(
     await _ensure_stage_item_compat_group(session, stage, item)
     await session.commit()
     item_id = item.id
-    await standings_service.recalculate_for_tournament(session, tournament_id)
+    await standings_recalculation.enqueue_tournament_recalculation(tournament_id)
     await _publish_tournament_changed(tournament_id, "structure_changed")
     return await get_stage_item(session, item_id)
 
@@ -530,7 +518,7 @@ async def create_stage_item_input(
     session.add(inp)
     await session.commit()
     await session.refresh(inp)
-    await standings_service.recalculate_for_tournament(session, tournament_id)
+    await standings_recalculation.enqueue_tournament_recalculation(tournament_id)
     await _publish_tournament_changed(tournament_id, "structure_changed")
     await session.refresh(inp)
     return inp
@@ -643,7 +631,7 @@ async def update_stage_item_input(
     inp.source_position = next_source_position
 
     await session.commit()
-    await standings_service.recalculate_for_tournament(session, tournament_id)
+    await standings_recalculation.enqueue_tournament_recalculation(tournament_id)
     await _publish_tournament_changed(tournament_id, "structure_changed")
     await session.refresh(inp)
     return inp
@@ -712,162 +700,6 @@ async def _load_team_names(
         select(models.Team.id, models.Team.name).where(models.Team.id.in_(unique_team_ids))
     )
     return dict(result.all())
-
-
-async def _get_swiss_generation_context(
-    session: AsyncSession,
-    stage_id: int,
-    stage_item_id: int | None,
-) -> tuple[list[SwissStanding] | None, set[frozenset[int]] | None, int]:
-    existing_encounters = await session.execute(
-        select(models.Encounter).where(
-            models.Encounter.stage_id == stage_id,
-            models.Encounter.stage_item_id == stage_item_id,
-        )
-    )
-    existing = list(existing_encounters.scalars().all())
-    if not existing:
-        return None, None, 1
-
-    swiss_round = max(e.round for e in existing) + 1
-    swiss_played_pairs: set[frozenset[int]] = set()
-    for encounter in existing:
-        if encounter.home_team_id and encounter.away_team_id:
-            swiss_played_pairs.add(
-                frozenset({encounter.home_team_id, encounter.away_team_id})
-            )
-
-    standing_result = await session.execute(
-        select(models.Standing).where(
-            models.Standing.stage_id == stage_id,
-            models.Standing.stage_item_id == stage_item_id,
-        ).order_by(models.Standing.position, models.Standing.team_id)
-    )
-    raw_standings = list(standing_result.scalars().all())
-    swiss_standings = [
-        SwissStanding(
-            team_id=standing.team_id,
-            points=standing.points,
-            buchholz=standing.buchholz or 0.0,
-        )
-        for standing in raw_standings
-    ]
-
-    return swiss_standings, swiss_played_pairs, swiss_round
-
-
-async def _generate_stage_skeleton(
-    session: AsyncSession,
-    stage: models.Stage,
-    team_ids: list[int],
-    stage_item_id: int | None,
-    *,
-    lower_bracket_team_ids: list[int] | None = None,
-) -> BracketSkeleton:
-    swiss_standings = None
-    swiss_played_pairs: set[frozenset[int]] | None = None
-    swiss_round = 1
-    if stage.stage_type == enums.StageType.SWISS:
-        swiss_standings, swiss_played_pairs, swiss_round = (
-            await _get_swiss_generation_context(session, stage.id, stage_item_id)
-        )
-        if swiss_standings is None:
-            clear_swiss_byes(stage, stage_item_id)
-        if not swiss_auto_round.stage_allows_next_round(stage, swiss_round):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Swiss stage reached max_rounds",
-            )
-
-    de_include_reset = (
-        stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-        and (stage.settings_json or {}).get("de_grand_final_type") == "with_reset"
-    )
-
-    try:
-        skeleton = generate_bracket(
-            stage.stage_type,
-            team_ids,
-            swiss_standings=swiss_standings,
-            swiss_played_pairs=swiss_played_pairs,
-            swiss_round_number=swiss_round,
-            swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
-            de_include_reset=de_include_reset,
-            lower_bracket_team_ids=lower_bracket_team_ids,
-        )
-    except SwissPairingImpossibleError:
-        mark_swiss_scope_stopped(stage, stage_item_id)
-        logger.info(
-            "Swiss scope ended because no complete non-rematch pairing exists",
-            stage_id=stage.id,
-            stage_item_id=stage_item_id,
-            round=swiss_round,
-        )
-        return BracketSkeleton(pairings=[], total_rounds=0)
-
-    if stage.stage_type == enums.StageType.SWISS:
-        clear_swiss_scope_stopped(stage, stage_item_id)
-        if skeleton.bye_team_id is not None:
-            record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id)
-    return skeleton
-
-
-async def _create_encounters_from_skeleton(
-    session: AsyncSession,
-    stage: models.Stage,
-    skeleton: BracketSkeleton,
-    stage_item_id: int | None,
-    *,
-    team_names_by_id: dict[int, str],
-    lb_stage_item_id: int | None = None,
-) -> list[models.Encounter]:
-    """Persist bracket pairings as Encounter rows and wire up EncounterLink
-    records for advancement edges.
-
-    For double-elimination stages, ``lb_stage_item_id`` routes encounters with
-    negative round numbers (lower bracket) to a separate stage item.
-    """
-    encounters: list[models.Encounter] = []
-    local_to_encounter: dict[int, models.Encounter] = {}
-    for pairing in skeleton.pairings:
-        # LB rounds use negative round numbers; route to LB item when present.
-        item_id = (
-            lb_stage_item_id
-            if lb_stage_item_id is not None and pairing.round_number < 0
-            else stage_item_id
-        )
-        encounter = models.Encounter(
-            name=build_encounter_name_from_ids(
-                pairing.home_team_id,
-                pairing.away_team_id,
-                team_names_by_id,
-            ),
-            home_team_id=pairing.home_team_id,
-            away_team_id=pairing.away_team_id,
-            home_score=0,
-            away_score=0,
-            round=pairing.round_number,
-            tournament_id=stage.tournament_id,
-            stage_id=stage.id,
-            stage_item_id=item_id,
-            status=enums.EncounterStatus.OPEN,
-        )
-        session.add(encounter)
-        encounters.append(encounter)
-        local_to_encounter[pairing.local_id] = encounter
-
-    # Flush to obtain encounter.id values before persisting links.
-    await session.flush()
-
-    local_to_id = {
-        local_id: encounter.id for local_id, encounter in local_to_encounter.items()
-    }
-    await persist_advancement_edges(
-        session,
-        edges=skeleton.advancement_edges,
-        local_to_encounter_id=local_to_id,
-    )
-    return encounters
 
 
 async def seed_teams(
@@ -1001,7 +833,7 @@ async def seed_teams(
         )
 
     await session.commit()
-    await standings_service.recalculate_for_tournament(session, stage.tournament_id)
+    await standings_recalculation.enqueue_tournament_recalculation(stage.tournament_id)
     if notify:
         await _publish_tournament_changed(stage.tournament_id, "structure_changed")
 
@@ -1327,117 +1159,5 @@ async def activate_and_generate(
             )
 
     stage = await activate_stage(session, stage_id, notify=False)
-    encounters = await generate_encounters(session, stage_id, notify=False)
-    if notify:
-        await _publish_tournament_changed(stage.tournament_id, "structure_changed")
-    return stage, encounters
-
-
-async def generate_encounters(
-    session: AsyncSession, stage_id: int, *, notify: bool = True
-) -> list[models.Encounter]:
-    """Generate bracket encounters for a stage based on its type and team inputs."""
-    stage = await get_stage(session, stage_id)
-
-    should_generate_by_item = (
-        stage.stage_type in GROUPED_GENERATION_STAGE_TYPES and len(stage.items) > 1
-    )
-
-    if should_generate_by_item:
-        encounters: list[models.Encounter] = []
-        for item in stage.items:
-            team_ids = _collect_item_team_ids(item)
-            if len(team_ids) < 2:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Each group needs at least 2 teams to generate a bracket",
-                )
-
-            skeleton = await _generate_stage_skeleton(session, stage, team_ids, item.id)
-            team_names_by_id = await _load_team_names(session, team_ids)
-            encounters.extend(
-                await _create_encounters_from_skeleton(
-                    session,
-                    stage,
-                    skeleton,
-                    item.id,
-                    team_names_by_id=team_names_by_id,
-                )
-            )
-
-        await session.commit()
-        await standings_service.recalculate_for_tournament(session, stage.tournament_id)
-        if notify:
-            await _publish_tournament_changed(stage.tournament_id, "structure_changed")
-        return encounters
-
-    sorted_items = sorted(stage.items, key=lambda it: (it.order, it.id))
-    primary_item_id = sorted_items[0].id if sorted_items else None
-
-    # For DE stages: route LB encounters (negative round numbers) to the
-    # BRACKET_LOWER stage item when one exists.
-    lb_item = None
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION:
-        lb_item = next(
-            (it for it in sorted_items if it.type == enums.StageItemType.BRACKET_LOWER),
-            None,
-        )
-    lb_stage_item_id = lb_item.id if lb_item is not None else None
-
-    # Decide which advancing teams start in the upper vs the lower bracket.
-    lower_bracket_team_ids: list[int] = []
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(
-        stage, "split_lower_bracket", False
-    ):
-        if lb_item is not None:
-            # Separate Upper + Lower bracket items: the lower item's teams
-            # start in the lower bracket.
-            lower_bracket_team_ids = _collect_item_team_ids(lb_item)
-            team_ids = [
-                tid
-                for item in sorted_items
-                if item is not lb_item
-                for tid in _collect_item_team_ids(item)
-            ]
-        else:
-            # Single bracket item: seeds are ordered winners-first, so the first
-            # half start in the upper bracket and the second half in the lower.
-            all_ids: list[int] = []
-            for item in sorted_items:
-                all_ids.extend(_collect_item_team_ids(item))
-            half = len(all_ids) // 2
-            team_ids = all_ids[:half]
-            lower_bracket_team_ids = all_ids[half:]
-    else:
-        team_ids = []
-        for item in sorted_items:
-            team_ids.extend(_collect_item_team_ids(item))
-
-    if len(team_ids) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Need at least 2 teams to generate a bracket",
-        )
-
-    skeleton = await _generate_stage_skeleton(
-        session,
-        stage,
-        team_ids,
-        primary_item_id,
-        lower_bracket_team_ids=lower_bracket_team_ids,
-    )
-    team_names_by_id = await _load_team_names(session, team_ids + lower_bracket_team_ids)
-    encounters = await _create_encounters_from_skeleton(
-        session,
-        stage,
-        skeleton,
-        primary_item_id,
-        team_names_by_id=team_names_by_id,
-        lb_stage_item_id=lb_stage_item_id,
-    )
-
-    await session.commit()
-    await standings_service.recalculate_for_tournament(session, stage.tournament_id)
-    if notify:
-        await _publish_tournament_changed(stage.tournament_id, "structure_changed")
-    return encounters
+    # Bracket generation moved to tournament service
+    return stage, []

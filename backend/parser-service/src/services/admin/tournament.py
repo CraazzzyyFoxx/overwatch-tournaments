@@ -8,6 +8,7 @@ from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
+from shared.services.tournament_computation import request_bracket_job
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -236,10 +237,24 @@ async def _maybe_auto_start_group_stage(
     if not active_stage:
         if not has_encounters and not _stage_has_ready_inputs(target_stage):
             return
-        await stage_service.activate_stage(session, target_stage.id)
+        if has_encounters:
+            await stage_service.activate_stage(session, target_stage.id)
+        else:
+            await request_bracket_job(
+                session,
+                tournament_id=tournament.id,
+                stage_id=target_stage.id,
+                operation="activate_and_generate",
+            )
+            return
 
     if not has_encounters and _stage_has_ready_inputs(target_stage):
-        await stage_service.generate_encounters(session, target_stage.id)
+        await request_bracket_job(
+            session,
+            tournament_id=tournament.id,
+            stage_id=target_stage.id,
+            operation="generate_stage",
+        )
 
 
 async def toggle_finished(session: AsyncSession, tournament_id: int) -> models.Tournament:

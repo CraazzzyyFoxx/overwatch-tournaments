@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from src.core import auth
 
 from .challonge import router as challonge_router
+from .computation import router as computation_router
 from .encounter import router as encounter_router
 from .player_sub_role import router as player_sub_role_router
 from .registration import router as registration_router
@@ -28,6 +29,7 @@ admin_router.include_router(encounter_router)
 admin_router.include_router(standing_router)
 admin_router.include_router(player_sub_role_router)
 admin_router.include_router(challonge_router)
+admin_router.include_router(computation_router)
 admin_router.include_router(registration_router)
 admin_router.include_router(registration_status_router)
 admin_router.include_router(registration_sheet_router)

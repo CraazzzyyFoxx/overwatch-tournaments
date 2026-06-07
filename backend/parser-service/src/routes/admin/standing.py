@@ -39,11 +39,11 @@ async def delete_standing(
     await admin_service.delete_standing(session, standing_id)
 
 
-@router.post("/recalculate/{tournament_id}")
+@router.post("/recalculate/{tournament_id}", status_code=202)
 async def recalculate_standings(
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("standing", "recalculate")),
 ):
-    """Clear standings for recalculation (admin/organizer only)"""
+    """Schedule standings recalculation (admin/organizer only)."""
     return await admin_service.recalculate_standings(session, tournament_id)

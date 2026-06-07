@@ -52,6 +52,7 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
         self.assertIn("/admin/tournaments", paths)
         self.assertIn("/admin/stages/tournament/{tournament_id}", paths)
         self.assertIn("/admin/stages/{stage_id}/merge-group-stages", paths)
+        self.assertIn("/admin/tournament-jobs/{job_id}", paths)
         self.assertIn("/admin/teams", paths)
         self.assertIn("/admin/encounters/bulk", paths)
         self.assertIn("/admin/standings/recalculate/{tournament_id}", paths)
@@ -67,8 +68,10 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
 
     async def test_worker_queue_handlers_are_registered(self) -> None:
         worker = importlib.import_module("serve")
+        bracket_worker = importlib.import_module("serve_bracket")
+        standings_worker = importlib.import_module("serve_standings")
 
-        self.assertTrue(callable(worker.process_tournament_recalculation))
-        self.assertTrue(callable(worker.process_swiss_next_round))
         self.assertTrue(callable(worker.drain_outbox))
         self.assertTrue(callable(worker.sync_registration_google_sheet_feeds))
+        self.assertTrue(callable(bracket_worker.consume_bracket_job))
+        self.assertTrue(callable(standings_worker.consume_standings_job))

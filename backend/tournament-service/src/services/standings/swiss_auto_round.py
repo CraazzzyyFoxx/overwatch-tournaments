@@ -9,14 +9,10 @@ candidate filter here.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
 from shared.core import enums
-from shared.messaging.config import SWISS_NEXT_ROUND_QUEUE
-from shared.observability import publish_message
-from shared.schemas.events import SwissNextRoundEvent
 from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from shared.services.tournament_utils import (
     completed_encounters_in_finished_rounds,
@@ -26,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src import models
+from src.services.computation import jobs as computation_jobs
 
 DEFAULT_STAGE_MAX_ROUNDS = 5
 
@@ -33,10 +30,8 @@ DEFAULT_STAGE_MAX_ROUNDS = 5
 async def enqueue_swiss_next_rounds(
     session: AsyncSession,
     tournament_id: int,
-    *,
-    broker: Any | None = None,
-) -> list[SwissNextRoundEvent]:
-    """Queue Swiss next rounds only when the current playable round is closed."""
+) -> list[models.TournamentComputationJob]:
+    """Create bracket jobs for Swiss scopes whose current round is closed."""
     result = await session.execute(
         sa.select(models.Stage)
         .where(
@@ -58,7 +53,7 @@ async def enqueue_swiss_next_rounds(
     for encounter in encounters_result.scalars().all():
         encounters_by_key[(encounter.stage_id, encounter.stage_item_id)].append(encounter)
 
-    events: list[SwissNextRoundEvent] = []
+    requests: list[tuple[int, int | None, int]] = []
     for stage in swiss_stages:
         items = stage.items or []
         if items:
@@ -77,14 +72,7 @@ async def enqueue_swiss_next_rounds(
                             max_rounds=stage_max_rounds(stage),
                         )
                         continue
-                    events.append(
-                        SwissNextRoundEvent(
-                            stage_id=stage.id,
-                            stage_item_id=item.id,
-                            tournament_id=tournament_id,
-                            next_round=next_round,
-                        )
-                    )
+                    requests.append((stage.id, item.id, next_round))
         else:
             stage_encounters = encounters_by_key.get((stage.id, None), [])
             if swiss_scope_stopped(stage, None):
@@ -100,51 +88,31 @@ async def enqueue_swiss_next_rounds(
                         max_rounds=stage_max_rounds(stage),
                     )
                     continue
-                events.append(
-                    SwissNextRoundEvent(
-                        stage_id=stage.id,
-                        stage_item_id=None,
-                        tournament_id=tournament_id,
-                        next_round=next_round,
-                    )
-                )
+                requests.append((stage.id, None, next_round))
 
-    if not events:
+    if not requests:
         return []
 
-    if broker is None:
-        logger.warning(
-            "swiss_auto_round: no broker available, skipping enqueue",
+    jobs: list[models.TournamentComputationJob] = []
+    for stage_id, stage_item_id, next_round in requests:
+        job = await computation_jobs.request_bracket_job(
+            session,
             tournament_id=tournament_id,
+            stage_id=stage_id,
+            stage_item_id=stage_item_id,
+            operation="generate_next_swiss_round",
+            payload={"next_round": next_round},
         )
-        return []
-
-    for event in events:
-        try:
-            await publish_message(
-                broker,
-                event.model_dump(),
-                SWISS_NEXT_ROUND_QUEUE,
-                logger=logger.bind(
-                    stage_id=event.stage_id,
-                    stage_item_id=event.stage_item_id,
-                    tournament_id=tournament_id,
-                ),
-            )
-            logger.info(
-                "Enqueued swiss next round",
-                stage_id=event.stage_id,
-                stage_item_id=event.stage_item_id,
-                tournament_id=tournament_id,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to enqueue swiss next round",
-                stage_id=event.stage_id,
-                stage_item_id=event.stage_item_id,
-            )
-
-    return events
+        jobs.append(job)
+        logger.info(
+            "Enqueued Swiss next round bracket job",
+            job_id=job.id,
+            stage_id=stage_id,
+            stage_item_id=stage_item_id,
+            tournament_id=tournament_id,
+            next_round=next_round,
+        )
+    return jobs
 
 
 def stage_item_ready_for_next_round(

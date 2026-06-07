@@ -7,6 +7,7 @@ from src import models, schemas
 from src.core import auth, db
 from src.schemas.admin import stage as admin_schemas
 from src.services.admin import stage as stage_service
+from src.services.computation import jobs as computation_jobs
 
 router = APIRouter(
     prefix="/stages",
@@ -202,15 +203,27 @@ async def activate_stage(
     return schemas.StageRead.model_validate(stage, from_attributes=True)
 
 
-@router.post("/{stage_id}/generate")
+@router.post(
+    "/{stage_id}/generate",
+    response_model=schemas.admin.computation.TournamentComputationJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def generate_encounters(
     stage_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_stage_permission("stage", "update")),
 ):
     """Generate bracket encounters for a stage based on its type and assigned teams."""
-    encounters = await stage_service.generate_encounters(session, stage_id)
-    return {"generated": len(encounters)}
+    stage = await stage_service.get_stage(session, stage_id)
+    job = await computation_jobs.request_bracket_job(
+        session,
+        tournament_id=stage.tournament_id,
+        stage_id=stage.id,
+        operation="generate_stage",
+        requested_by_user_id=int(user.id),
+    )
+    await session.commit()
+    return job
 
 
 @router.post("/{stage_id}/wire-from-groups", response_model=schemas.StageRead)
@@ -238,7 +251,11 @@ async def wire_from_groups(
     return schemas.StageRead.model_validate(stage, from_attributes=True)
 
 
-@router.post("/{stage_id}/activate-and-generate")
+@router.post(
+    "/{stage_id}/activate-and-generate",
+    response_model=schemas.admin.computation.TournamentComputationJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def activate_and_generate(
     stage_id: int,
     force: bool = False,
@@ -252,15 +269,17 @@ async def activate_and_generate(
     prevent locking in playoff seeds prematurely). Pass ``force=true`` to
     override this safety check.
     """
-    stage, encounters = await stage_service.activate_and_generate(
+    stage = await stage_service.get_stage(session, stage_id)
+    job = await computation_jobs.request_bracket_job(
         session,
-        stage_id,
-        force=force,
+        tournament_id=stage.tournament_id,
+        stage_id=stage.id,
+        operation="activate_and_generate",
+        payload={"force": force},
+        requested_by_user_id=int(user.id),
     )
-    return {
-        "stage": schemas.StageRead.model_validate(stage, from_attributes=True),
-        "generated": len(encounters),
-    }
+    await session.commit()
+    return job
 
 
 @router.post("/{stage_id}/seed-teams", response_model=schemas.StageRead)

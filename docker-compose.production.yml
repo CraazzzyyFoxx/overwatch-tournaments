@@ -615,6 +615,76 @@ services:
       start_period: 40s
     restart: always
 
+  tournament-bracket-worker:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: faststream run serve_bracket:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - WORKER_METRICS_PORT=9103
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      tournament:
+        condition: service_healthy
+    volumes:
+      - ./logs/tournament-bracket-worker:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  tournament-standings-worker:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: faststream run serve_standings:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - WORKER_METRICS_PORT=9103
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      tournament:
+        condition: service_healthy
+    volumes:
+      - ./logs/tournament-standings-worker:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:latest
     build:

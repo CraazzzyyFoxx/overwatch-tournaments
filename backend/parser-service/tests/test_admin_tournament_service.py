@@ -182,15 +182,10 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                admin_tournament_service.stage_service,
-                "activate_stage",
+                admin_tournament_service,
+                "request_bracket_job",
                 AsyncMock(),
-            ) as activate_stage,
-            patch.object(
-                admin_tournament_service.stage_service,
-                "generate_encounters",
-                AsyncMock(return_value=["encounter"]),
-            ) as generate_encounters,
+            ) as request_bracket_job,
             patch.object(
                 admin_tournament_service,
                 "get_tournament",
@@ -207,8 +202,12 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(enums.TournamentStatus.LIVE, tournament.status)
         self.assertFalse(tournament.is_finished)
         session.commit.assert_awaited_once_with()
-        activate_stage.assert_awaited_once_with(session, 11)
-        generate_encounters.assert_awaited_once_with(session, 11)
+        request_bracket_job.assert_awaited_once_with(
+            session,
+            tournament_id=123,
+            stage_id=11,
+            operation="activate_and_generate",
+        )
         get_tournament.assert_awaited_once_with(session, tournament.id)
 
     async def test_transition_to_live_generates_for_already_active_group_stage(self) -> None:
@@ -248,15 +247,10 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                admin_tournament_service.stage_service,
-                "activate_stage",
+                admin_tournament_service,
+                "request_bracket_job",
                 AsyncMock(),
-            ) as activate_stage,
-            patch.object(
-                admin_tournament_service.stage_service,
-                "generate_encounters",
-                AsyncMock(return_value=["encounter"]),
-            ) as generate_encounters,
+            ) as request_bracket_job,
             patch.object(
                 admin_tournament_service,
                 "get_tournament",
@@ -269,5 +263,9 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
                 enums.TournamentStatus.LIVE,
             )
 
-        activate_stage.assert_not_awaited()
-        generate_encounters.assert_awaited_once_with(session, 11)
+        request_bracket_job.assert_awaited_once_with(
+            session,
+            tournament_id=123,
+            stage_id=11,
+            operation="generate_stage",
+        )

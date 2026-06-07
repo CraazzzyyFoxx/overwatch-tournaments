@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 
-from src import schemas
-from src.core import db, enums, auth
-
-from src.services.standings import flows as standing_flows
+from src import models
+from src.core import auth, db, enums
+from src.services.standings import recalculation
 
 router = APIRouter(
     prefix="/standing",
@@ -12,15 +12,20 @@ router = APIRouter(
 )
 
 
-@router.post(path="/create", response_model=list[schemas.StandingRead])
+@router.post(path="/create", status_code=202)
 async def create_from_tournament(
     tournament_id: int,
     rewrite: bool = False,
     session=Depends(db.get_async_session),
 ):
-    return await standing_flows.bulk_create_for_tournament(session, tournament_id, rewrite)
+    del rewrite, session
+    await recalculation.enqueue_tournament_recalculation(tournament_id)
+    return {"scheduled": True, "tournament_id": tournament_id}
 
 
-@router.post(path="/create/bulk")
+@router.post(path="/create/bulk", status_code=202)
 async def bulk_create_from_tournament(session=Depends(db.get_async_session)):
-    return await standing_flows.bulk_create(session)
+    tournament_ids = list(await session.scalars(select(models.Tournament.id)))
+    for tournament_id in tournament_ids:
+        await recalculation.enqueue_tournament_recalculation(tournament_id)
+    return {"scheduled": len(tournament_ids)}

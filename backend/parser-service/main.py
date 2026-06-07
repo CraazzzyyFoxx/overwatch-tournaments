@@ -29,6 +29,7 @@ from starlette.requests import Request
 
 from src import routes
 from src.core import config, db
+from src.services.challonge.sync import close_redis as close_challonge_redis
 from src.services.overwatch_rank import scheduler as rank_scheduler
 from src.services.overwatch_rank.tasks import close_redis as close_rank_redis
 from src.services.overwatch_rank.tasks import task_router as rank_task_router
@@ -95,6 +96,7 @@ async def lifespan(_: FastAPI):
     rank_scheduler.shutdown_scheduler()
     await s3_client.close()
     await auth_client.close()
+    await close_challonge_redis()
     await close_recalculation_redis()
     await close_rank_redis()
 

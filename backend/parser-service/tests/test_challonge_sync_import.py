@@ -152,8 +152,8 @@ def _team_lookup(
 class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.get_redis_patcher = patch.object(
-            sync.standings_recalculation,
-            "get_redis",
+            sync,
+            "_get_redis",
             AsyncMock(return_value=_FakeRedis()),
         )
         self.get_redis_patcher.start()

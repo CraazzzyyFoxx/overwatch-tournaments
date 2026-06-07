@@ -30,3 +30,4 @@ from .outbox import *
 from .realtime import *
 from .overwatch_rank import *
 from .settings import *
+from .tournament_computation import *

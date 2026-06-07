@@ -855,6 +855,33 @@ export interface BulkOperationResult {
   errors?: string[];
 }
 
+export type TournamentComputationJobStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "superseded";
+
+export interface TournamentComputationJob {
+  id: number;
+  kind: "bracket" | "standings";
+  operation: string;
+  tournament_id: number;
+  stage_id: number | null;
+  stage_item_id: number | null;
+  status: TournamentComputationJobStatus;
+  payload_json: Record<string, unknown>;
+  result_json: Record<string, unknown> | null;
+  error: string | null;
+  requested_by_user_id: number | null;
+  idempotency_key: string;
+  attempts: number;
+  created_at: string;
+  updated_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export interface CsvUserImportParams {
   battle_tag_row: number;
   discord_row: number | null;

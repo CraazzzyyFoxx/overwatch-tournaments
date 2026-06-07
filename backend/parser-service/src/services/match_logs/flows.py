@@ -5,9 +5,16 @@ import sqlalchemy as sa
 from loguru import logger
 from pydantic import ValidationError
 from shared.clients.s3 import S3Client
-from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE, TOURNAMENT_RECALC_EXCHANGE
+from shared.messaging.config import (
+    TOURNAMENT_CHANGED_EXCHANGE,
+    TOURNAMENT_EVENTS_EXCHANGE,
+)
 from shared.messaging.outbox import enqueue_outbox_event
-from shared.schemas.events import EncounterCompletedEvent, TournamentChangedEvent, TournamentRecalcEvent
+from shared.schemas.events import (
+    EncounterCompletedEvent,
+    TournamentChangedEvent,
+    TournamentStandingsInvalidatedEvent,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -51,18 +58,18 @@ async def _enqueue_match_log_tournament_events(
             reason="bracket_changed",
             source_service="parser-service",
         ),
-        exchange=TOURNAMENT_RECALC_EXCHANGE,
+        exchange=TOURNAMENT_CHANGED_EXCHANGE,
         routing_key=f"tournament.changed.{encounter.tournament_id}",
     )
 
     await enqueue_outbox_event(
         session,
-        TournamentRecalcEvent(
+        TournamentStandingsInvalidatedEvent(
             tournament_id=encounter.tournament_id,
             source_service="parser-service",
         ),
-        exchange=TOURNAMENT_RECALC_EXCHANGE,
-        routing_key=f"tournament.recalc.{encounter.tournament_id}",
+        exchange=TOURNAMENT_EVENTS_EXCHANGE,
+        routing_key="tournament.standings.invalidated",
     )
 
     if not _encounter_is_completed(encounter):

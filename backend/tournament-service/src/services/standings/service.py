@@ -175,6 +175,8 @@ async def get_tournament_for_standings(
 async def recalculate_for_tournament(
     session: AsyncSession,
     tournament_id: int,
+    *,
+    commit: bool = True,
 ) -> typing.Sequence[models.Standing]:
     """Delete + rebuild standings for a tournament atomically.
 
@@ -184,9 +186,12 @@ async def recalculate_for_tournament(
     await delete_by_tournament(session, tournament_id, commit=False)
     tournament = await get_tournament_for_standings(session, tournament_id)
     if tournament is None:
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         return []
-    return await calculate_for_tournament(session, tournament)
+    return await calculate_for_tournament(session, tournament, commit=commit)
 
 
 def _completed_encounters(
@@ -935,7 +940,10 @@ async def _update_stage_completion_flags(session: AsyncSession, tournament: mode
 
 
 async def calculate_for_tournament(
-    session: AsyncSession, tournament: models.Tournament
+    session: AsyncSession,
+    tournament: models.Tournament,
+    *,
+    commit: bool = True,
 ) -> typing.Sequence[models.Standing]:
     stages = sorted(getattr(tournament, "stages", []) or [], key=lambda stage: stage.order)
     all_standings: list[models.Standing] = []
@@ -960,6 +968,9 @@ async def calculate_for_tournament(
     # Phase P0.4: auto-flip Stage.is_completed to reflect encounter progress
     # in the same transaction as the standings write.
     await _update_stage_completion_flags(session, tournament)
-    await session.commit()
-    logger.info(f"Stage-first standings calculated and committed for tournament {tournament.id}")
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
+    logger.info(f"Stage-first standings calculated for tournament {tournament.id}")
     return await get_by_tournament(session, tournament, ["team", "stage", "stage_item"])

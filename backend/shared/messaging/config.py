@@ -1,10 +1,4 @@
-"""RabbitMQ queue and exchange configurations with dead letter support.
-
-All queues are configured with:
-- Dead letter exchange for failed messages
-- 5-minute message TTL
-- Durable persistence
-"""
+"""RabbitMQ queue and exchange configurations with dead letter support."""
 
 from faststream.rabbit import ExchangeType, RabbitExchange, RabbitQueue
 
@@ -93,28 +87,48 @@ BALANCER_JOBS_DLQ = RabbitQueue(
 )
 
 # ============================================================================
-# Tournament Recalculation Events
+# Tournament computation jobs
 # ============================================================================
 
-TOURNAMENT_RECALC_EXCHANGE = RabbitExchange(
-    "tournament.recalc",
+TOURNAMENT_COMPUTE_EXCHANGE = RabbitExchange(
+    "tournament.compute",
     type=ExchangeType.TOPIC,
     durable=True,
 )
 
-TOURNAMENT_RECALC_QUEUE = RabbitQueue(
-    "tournament_recalc",
+TOURNAMENT_BRACKET_JOBS_QUEUE = RabbitQueue(
+    "tournament_bracket_jobs",
     durable=True,
-    routing_key="tournament.recalc.*",
+    routing_key="tournament.compute.bracket",
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_recalc.dlq",
-        "x-message-ttl": 900000,  # 15 minutes
+        "x-dead-letter-routing-key": "tournament_bracket_jobs.dlq",
     },
 )
 
-TOURNAMENT_RECALC_DLQ = RabbitQueue(
-    "tournament_recalc.dlq",
+TOURNAMENT_BRACKET_JOBS_DLQ = RabbitQueue(
+    "tournament_bracket_jobs.dlq",
+    durable=True,
+)
+
+TOURNAMENT_STANDINGS_JOBS_QUEUE = RabbitQueue(
+    "tournament_standings_jobs",
+    durable=True,
+    routing_key="tournament.compute.standings",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "tournament_standings_jobs.dlq",
+    },
+)
+
+TOURNAMENT_STANDINGS_JOBS_DLQ = RabbitQueue(
+    "tournament_standings_jobs.dlq",
+    durable=True,
+)
+
+TOURNAMENT_CHANGED_EXCHANGE = RabbitExchange(
+    "tournament.changed",
+    type=ExchangeType.TOPIC,
     durable=True,
 )
 
@@ -225,22 +239,18 @@ TOURNAMENT_STATE_CHANGED_DLQ = RabbitQueue(
     durable=True,
 )
 
-# ============================================================================
-# Swiss Next Round Queue
-# ============================================================================
-
-SWISS_NEXT_ROUND_QUEUE = RabbitQueue(
-    "swiss_next_round",
+TOURNAMENT_STANDINGS_INVALIDATED_QUEUE = RabbitQueue(
+    "tournament_standings_invalidated",
     durable=True,
+    routing_key="tournament.standings.invalidated",
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "swiss_next_round.dlq",
-        "x-message-ttl": 300000,  # 5 minutes
+        "x-dead-letter-routing-key": "tournament_standings_invalidated.dlq",
     },
 )
 
-SWISS_NEXT_ROUND_DLQ = RabbitQueue(
-    "swiss_next_round.dlq",
+TOURNAMENT_STANDINGS_INVALIDATED_DLQ = RabbitQueue(
+    "tournament_standings_invalidated.dlq",
     durable=True,
 )
 

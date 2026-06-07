@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from shared.messaging.config import (
+    TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_EVENTS_EXCHANGE,
-    TOURNAMENT_RECALC_EXCHANGE,
 )
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
@@ -11,12 +11,12 @@ from shared.schemas.events import (
     RegistrationRejectedEvent,
     TournamentChangedEvent,
     TournamentChangedReason,
-    TournamentRecalcEvent,
     TournamentStateChangedEvent,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.services.computation.jobs import request_standings_recalculation
 from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
 
@@ -24,15 +24,7 @@ async def enqueue_tournament_recalculation(
     session: AsyncSession,
     tournament_id: int,
 ) -> None:
-    await enqueue_outbox_event(
-        session,
-        TournamentRecalcEvent(
-            tournament_id=tournament_id,
-            source_service="tournament-service",
-        ),
-        exchange=TOURNAMENT_RECALC_EXCHANGE,
-        routing_key=f"tournament.recalc.{tournament_id}",
-    )
+    await request_standings_recalculation(session, tournament_id)
     register_tournament_realtime_update(session, tournament_id, "bracket_changed")
 
 
@@ -48,7 +40,7 @@ async def enqueue_tournament_changed(
             reason=reason,
             source_service="tournament-service",
         ),
-        exchange=TOURNAMENT_RECALC_EXCHANGE,
+        exchange=TOURNAMENT_CHANGED_EXCHANGE,
         routing_key=f"tournament.changed.{tournament_id}",
     )
     register_tournament_realtime_update(session, tournament_id, reason)

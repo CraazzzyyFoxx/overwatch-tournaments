@@ -30,15 +30,17 @@ async def enqueue_outbox_event(
     *,
     exchange: Any,
     routing_key: str,
+    event_id: str | None = None,
+    event_type: str | None = None,
 ) -> EventOutbox:
     payload = _event_payload(event)
-    event_id = str(payload.get("event_id") or "")
-    if not event_id:
+    resolved_event_id = str(event_id or payload.get("event_id") or "")
+    if not resolved_event_id:
         raise ValueError("Outbox events require payload.event_id")
 
     row = EventOutbox(
-        event_id=event_id,
-        event_type=str(payload.get("event_type") or event.__class__.__name__),
+        event_id=resolved_event_id,
+        event_type=str(event_type or payload.get("event_type") or event.__class__.__name__),
         exchange=_name(exchange),
         routing_key=routing_key,
         payload_json=payload,

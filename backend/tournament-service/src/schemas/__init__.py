@@ -17,3 +17,4 @@ from .user import *
 from .achievement import *
 from .analytics import *
 from .workspace import *
+from . import admin as admin

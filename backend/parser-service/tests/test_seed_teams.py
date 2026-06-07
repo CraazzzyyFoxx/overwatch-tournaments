@@ -25,6 +25,8 @@ os.environ.setdefault("S3_ACCESS_KEY", "test")
 os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
+os.environ.setdefault("CHALLONGE_USERNAME", "test")
+os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 stage_service = importlib.import_module("src.services.admin.stage")
 enums = importlib.import_module("shared.core.enums")
@@ -88,10 +90,10 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         session = _mk_session(teams)
 
         with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_service, "recalculate_for_tournament", AsyncMock()
+            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
         ):
             await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr"
+                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
             )
 
         # 16 inputs added, all FINAL
@@ -140,10 +142,10 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         session = _mk_session(teams)
 
         with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_service, "recalculate_for_tournament", AsyncMock()
+            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
         ):
             await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr"
+                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
             )
 
         group_totals: dict[int, float] = {}
@@ -215,14 +217,14 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         session = _mk_session(teams)
 
         with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_service, "recalculate_for_tournament", AsyncMock()
+            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
         ):
             await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr"
+                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
             )
 
         counts: dict[int, int] = {}
         for inp in session._added_inputs:
             counts[inp.stage_item_id] = counts.get(inp.stage_item_id, 0) + 1
 
-        self.assertEqual({3, 2, 2}, set(counts.values()))
+        self.assertEqual({2, 3}, set(counts.values()))

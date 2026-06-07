@@ -1,6 +1,6 @@
 """Admin routes for standing management"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -37,11 +37,19 @@ async def delete_standing(
     await admin_service.delete_standing(session, standing_id)
 
 
-@router.post("/recalculate/{tournament_id}")
+@router.post(
+    "/recalculate/{tournament_id}",
+    response_model=schemas.admin.computation.TournamentComputationJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def recalculate_standings(
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("standing", "recalculate")),
 ):
-    """Clear standings for recalculation (admin/organizer only)"""
-    return await admin_service.recalculate_standings(session, tournament_id)
+    """Schedule standings recalculation (admin/organizer only)."""
+    return await admin_service.recalculate_standings(
+        session,
+        tournament_id,
+        requested_by_user_id=int(user.id),
+    )

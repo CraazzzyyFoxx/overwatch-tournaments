@@ -25,93 +25,28 @@ os.environ.setdefault("S3_ACCESS_KEY", "test")
 os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
+os.environ.setdefault("CHALLONGE_USERNAME", "test")
+os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 recalculation = importlib.import_module("src.services.standings.recalculation")
 
 
-class FakeRedis:
-    def __init__(self) -> None:
-        self.keys: set[str] = set()
-
-    async def set(self, key: str, value: str, *, nx: bool = False, ex: int | None = None) -> bool:
-        del value, ex
-        if nx and key in self.keys:
-            return False
-        self.keys.add(key)
-        return True
-
-    async def delete(self, key: str) -> int:
-        existed = key in self.keys
-        self.keys.discard(key)
-        return int(existed)
-
-
-class RecalculationDebounceTests(IsolatedAsyncioTestCase):
-    async def test_enqueue_publishes_only_first_message_while_tournament_is_pending(self) -> None:
-        redis = FakeRedis()
+class RecalculationDomainEventTests(IsolatedAsyncioTestCase):
+    async def test_each_invalidation_publishes_domain_event_without_redis_lock(self) -> None:
         broker = SimpleNamespace()
-        publish_mock = AsyncMock()
 
-        with patch.object(recalculation, "publish_message", publish_mock):
-            first = await recalculation.enqueue_tournament_recalculation(42, broker=broker, redis=redis)
-            second = await recalculation.enqueue_tournament_recalculation(42, broker=broker, redis=redis)
+        with patch.object(recalculation, "publish_message", AsyncMock()) as publish:
+            first = await recalculation.enqueue_tournament_recalculation(42, broker=broker)
+            second = await recalculation.enqueue_tournament_recalculation(42, broker=broker)
 
         self.assertTrue(first)
-        self.assertFalse(second)
-        self.assertEqual(1, publish_mock.await_count)
+        self.assertTrue(second)
+        self.assertEqual(2, publish.await_count)
+        _, payload, queue, *_ = publish.await_args.args
+        self.assertEqual("tournament_standings_invalidated", payload["event_type"])
+        self.assertEqual(42, payload["tournament_id"])
+        self.assertEqual("tournament_standings_invalidated", queue.name)
+        self.assertEqual("tournament.standings.invalidated", publish.await_args.kwargs["routing_key"])
 
-        _, message, _, *_ = publish_mock.await_args.args
-        self.assertEqual(42, message["tournament_id"])
-        self.assertEqual("tournament_recalc", publish_mock.await_args.args[2].name)
-        self.assertEqual("tournament.recalc.42", publish_mock.await_args.kwargs["routing_key"])
-        self.assertEqual(
-            "tournament-recalc:42",
-            publish_mock.await_args.kwargs["headers"]["x-deduplication-header"],
-        )
-
-    async def test_enqueue_clears_pending_marker_when_publish_fails(self) -> None:
-        redis = FakeRedis()
-        broker = SimpleNamespace()
-
-        with patch.object(recalculation, "publish_message", AsyncMock(side_effect=RuntimeError("broker down"))):
-            with self.assertRaises(RuntimeError):
-                await recalculation.enqueue_tournament_recalculation(42, broker=broker, redis=redis)
-
-        self.assertNotIn("tournament_recalc:pending:42", redis.keys)
-
-    async def test_process_event_publishes_tournament_changed_results_event(self) -> None:
-        redis = FakeRedis()
-        broker = SimpleNamespace()
-        publish_mock = AsyncMock()
-        recalculate = AsyncMock()
-
-        class _SessionFactory:
-            def __call__(self):
-                return self
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, exc_type, exc, tb):
-                return False
-
-        with (
-            patch.object(recalculation, "publish_message", publish_mock),
-            patch.object(recalculation.swiss_auto_round, "enqueue_swiss_next_rounds", AsyncMock()),
-        ):
-            processed = await recalculation.process_tournament_recalculation_event(
-                {"tournament_id": 42},
-                broker=broker,
-                redis=redis,
-                session_factory=_SessionFactory(),
-                recalculate=recalculate,
-            )
-
-        self.assertTrue(processed)
-        self.assertEqual(1, publish_mock.await_count)
-        _, message, queue, *_ = publish_mock.await_args.args
-        self.assertEqual("tournament_changed", message["event_type"])
-        self.assertEqual(42, message["tournament_id"])
-        self.assertEqual("results_changed", message["reason"])
-        self.assertEqual("tournament_changed_tournament_service", queue.name)
-        self.assertEqual("tournament.changed.42", publish_mock.await_args.kwargs["routing_key"])
+    async def test_close_redis_is_compatibility_noop(self) -> None:
+        await recalculation.close_redis()
