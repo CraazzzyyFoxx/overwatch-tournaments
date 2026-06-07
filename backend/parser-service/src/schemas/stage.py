@@ -28,6 +28,7 @@ class StageRead(BaseRead):
     stage_type: StageType
     max_rounds: int
     advance_count: int | None = None
+    split_lower_bracket: bool = False
     order: int
     is_active: bool
     is_completed: bool

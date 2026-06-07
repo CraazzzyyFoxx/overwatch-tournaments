@@ -2708,7 +2708,11 @@ body, html {
 }
 .aqt-tn .st-scroll {
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.aqt-tn .st-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .aqt-tn table.st {
@@ -2718,11 +2722,11 @@ body, html {
 .aqt-tn table.st th {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fg-faint);
   text-align: left;
-  padding: 11px 14px;
+  padding: 10px 10px;
   background: hsl(0 0% 100% / 0.015);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -2734,10 +2738,66 @@ body, html {
   text-align: center;
 }
 .aqt-tn table.st td {
-  padding: 14px 14px;
+  padding: 11px 10px;
   border-bottom: 1px solid hsl(215 20% 10%);
-  font-size: 13.5px;
+  font-size: 13px;
   vertical-align: middle;
+}
+
+.aqt-tn .st-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: hsl(0 0% 100% / 0.012);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+.aqt-tn .st-footer .label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-faint);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.aqt-tn .st-footer .label svg {
+  color: var(--teal);
+  opacity: 0.8;
+}
+.aqt-tn .st-footer .items {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.aqt-tn .st-footer .sep {
+  color: var(--fg-faint);
+  font-size: 10px;
+}
+.aqt-tn .st-footer .badge {
+  background: hsl(0 0% 100% / 0.03);
+  border: 1px solid hsl(0 0% 100% / 0.06);
+  color: var(--fg-dim);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.15s;
+  cursor: default;
+}
+.aqt-tn .st-footer .badge:hover {
+  background: hsl(174 72% 46% / 0.08);
+  border-color: hsl(174 72% 46% / 0.2);
+  color: var(--teal);
+}
+@media (max-width: 640px) {
+  .aqt-tn .st-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 .aqt-tn table.st tbody tr {
   transition: 0.12s;
@@ -2785,7 +2845,7 @@ body, html {
   font-size: 22px;
   color: var(--fg-faint);
   line-height: 1;
-  min-width: 30px;
+  min-width: 24px;
   font-variant-numeric: tabular-nums;
   display: inline-block;
 }
@@ -2799,7 +2859,7 @@ body, html {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 180px;
+  min-width: 130px;
 }
 .aqt-tn .st-team .av {
   width: 34px;

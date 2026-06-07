@@ -17,7 +17,7 @@ from shared.services.bracket.swiss_settings import (
 )
 from shared.services.bracket.types import BracketSkeleton
 from shared.services.encounter_naming import build_encounter_name_from_ids
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -191,6 +191,13 @@ async def update_stage(
 async def delete_stage(session: AsyncSession, stage_id: int) -> None:
     stage = await get_stage(session, stage_id)
     tournament_id = stage.tournament_id
+    # Encounter.stage_id and Standing.stage_id reference Stage with ON DELETE
+    # SET NULL, so deleting the stage alone would orphan its matches and
+    # standings rather than remove them. Delete that derived data explicitly
+    # first; the encounter's dependents (maps, match rows, links, mappings)
+    # cascade from the encounter delete.
+    await session.execute(delete(models.Encounter).where(models.Encounter.stage_id == stage_id))
+    await session.execute(delete(models.Standing).where(models.Standing.stage_id == stage_id))
     await session.delete(stage)
     await session.commit()
     await _publish_tournament_changed(tournament_id, "structure_changed")
@@ -1213,6 +1220,58 @@ async def _check_upstream_stages_completed(
     return [s.id for s in result.scalars().all() if not s.is_completed]
 
 
+async def _preceding_group_stage(session: AsyncSession, stage: models.Stage) -> models.Stage | None:
+    """The group stage immediately before ``stage`` in stage order — the source
+    used for auto-wiring playoff seeds."""
+    result = await session.execute(
+        select(models.Stage)
+        .where(
+            models.Stage.tournament_id == stage.tournament_id,
+            models.Stage.stage_type.in_(GROUPED_GENERATION_STAGE_TYPES),
+            models.Stage.order < stage.order,
+        )
+        .order_by(models.Stage.order.desc())
+    )
+    return result.scalars().first()
+
+
+async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> None:
+    """Derive playoff seeding from the preceding group stage's ``advance_count``
+    and this stage's ``split_lower_bracket`` flag, then wire TENTATIVE inputs
+    (cross seeding). Replaces the manual Automation block.
+
+    No-op when the stage is not a bracket, has no preceding group stage, or the
+    source group stage has no ``advance_count`` configured — keeping manually
+    wired playoffs working unchanged.
+    """
+    if stage.stage_type not in {
+        enums.StageType.SINGLE_ELIMINATION,
+        enums.StageType.DOUBLE_ELIMINATION,
+    }:
+        return
+    source = await _preceding_group_stage(session, stage)
+    if source is None or not source.advance_count or source.advance_count <= 0:
+        return
+
+    advance = source.advance_count
+    if stage.split_lower_bracket and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION:
+        top_lb = advance // 2
+        top = advance - top_lb  # odd count → extra team to the Upper bracket
+    else:
+        top = advance
+        top_lb = 0
+
+    await wire_from_groups(
+        session,
+        stage.id,
+        source.id,
+        top,
+        top_lb=top_lb,
+        mode="cross",
+        notify=False,
+    )
+
+
 async def activate_and_generate(
     session: AsyncSession,
     stage_id: int,
@@ -1227,6 +1286,11 @@ async def activate_and_generate(
     still has pending encounters — prevents freezing playoff seeds before
     groups are actually finished.
     """
+    stage = await get_stage(session, stage_id)
+    # Auto-wire playoff seeds from the preceding group stage (replaces the manual
+    # Automation block). Runs BEFORE the upstream-completion check so that check
+    # sees the freshly created TENTATIVE inputs.
+    await _auto_wire_from_groups(session, stage)
     stage = await get_stage(session, stage_id)
     if not force:
         pending = await _check_upstream_stages_completed(session, stage)

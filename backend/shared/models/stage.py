@@ -56,6 +56,13 @@ class Stage(db.TimeStampIntegerMixin):
     # stage. NULL = not configured → the frontend derives it from bracket wiring
     # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
     advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Double-elimination playoff stages only: when true, the teams advancing from
+    # each group (advance_count) are split evenly between the Upper and Lower
+    # bracket (extra team → Upper on an odd count). When false, all advancing
+    # teams seed the Upper bracket. Drives the auto-wire on activate-and-generate.
+    split_lower_bracket: Mapped[bool] = mapped_column(
+        Boolean(), default=False, server_default="false"
+    )
     order: Mapped[int] = mapped_column(Integer(), default=0)
     is_active: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false"

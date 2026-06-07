@@ -141,6 +141,7 @@ export interface StageCreateInput {
   stage_type: StageType;
   max_rounds?: number;
   advance_count?: number | null;
+  split_lower_bracket?: boolean;
   order?: number;
   settings_json?: Record<string, unknown> | null;
 }
@@ -151,6 +152,7 @@ export interface StageUpdateInput {
   stage_type?: StageType;
   max_rounds?: number;
   advance_count?: number | null;
+  split_lower_bracket?: boolean;
   order?: number;
   settings_json?: Record<string, unknown> | null;
 }

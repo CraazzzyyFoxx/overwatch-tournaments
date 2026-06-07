@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament-match-order";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { formatTiebreakOrder } from "@/lib/tiebreakers";
+import { formatTiebreakOrder, tiebreakerLabel } from "@/lib/tiebreakers";
 import tournamentService from "@/services/tournament.service";
 
 export interface StandingTableProps {
@@ -158,27 +158,27 @@ const StandingsTable = ({
         <thead>
           {is_groups ? (
             <tr>
-              <th style={{ width: 48 }}>#</th>
+              <th style={{ width: 36 }}>#</th>
               <th>Team</th>
-              <th className="c" style={{ width: 80 }}>
+              <th className="c" style={{ width: 70 }}>
                 W·D·L
               </th>
-              <th className="r" style={{ width: 60 }}>
+              <th className="r" style={{ width: 48 }}>
                 Pts
               </th>
-              <th className="r" style={{ width: 60 }} title={t("common.headToHead")}>
+              <th className="r" style={{ width: 48 }} title={t("common.headToHead")}>
                 H2H
               </th>
-              <th className="r" style={{ width: 80 }}>
+              <th className="r" style={{ width: 72 }}>
                 {t("common.buchholz")}
               </th>
-              <th className="r" style={{ width: 70 }} title={t("common.scoreDiff")}>
+              <th className="r" style={{ width: 54 }} title={t("common.scoreDiff")}>
                 +/−
               </th>
-              <th className="c" style={{ width: 120 }}>
+              <th className="c" style={{ width: 110 }}>
                 Form
               </th>
-              <th className="c" style={{ width: 90 }} />
+              <th className="c" style={{ width: 80 }} />
             </tr>
           ) : (
             <tr>
@@ -305,10 +305,41 @@ const StandingsTable = ({
         </tbody>
       </table>
       </div>
-      {tiebreakLegend ? (
-        <p className="mt-2 px-1 text-xs text-[var(--fg-faint)]">
-          {t("common.tiebreakers")}: {tiebreakLegend}
-        </p>
+      {is_groups && sortedStandings[0]?.tiebreak_order && sortedStandings[0].tiebreak_order.length > 0 ? (
+        <div className="st-footer">
+          <span className="label">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: 'inline-block', verticalAlign: 'middle' }}
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="16" y2="12" />
+              <line x1="12" x2="12.01" y1="8" y2="8" />
+            </svg>
+            <span>{t("common.tiebreakers")}</span>
+          </span>
+          <div className="items">
+            {sortedStandings[0].tiebreak_order.map((metricId, idx) => {
+              const label = tiebreakerLabel(metricId, labelFor);
+              return (
+                <React.Fragment key={metricId}>
+                  {idx > 0 && <span className="sep">→</span>}
+                  <span className="badge" title={`Priority ${idx + 1}`}>
+                    {label}
+                  </span>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
     </div>
   );

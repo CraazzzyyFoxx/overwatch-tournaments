@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, FileEdit, Maximize2, Minimize2 } from "lucide-react";
+import { Pencil, FileEdit, Maximize2, Minimize2, Search } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
@@ -568,7 +569,19 @@ function MatchCard({
         className="flex items-center justify-between gap-2 border-t border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5"
         style={{ height: footerHeight }}
       >
-        <div className="flex items-center gap-2" />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/encounters/${encounter.id}`}
+            className="flex items-center justify-center rounded p-0.5 text-[var(--aqt-fg-muted)] hover:bg-white/10 hover:text-[var(--aqt-fg)] transition-colors"
+            title="Посмотреть матч"
+            onClick={(e) => {
+              // Предотвращаем срабатывание других кликов на карточке, если они будут добавлены
+              e.stopPropagation();
+            }}
+          >
+            <Search className="size-3.5" />
+          </Link>
+        </div>
         {meta.timeLabel && (
           <span
             className={cn(

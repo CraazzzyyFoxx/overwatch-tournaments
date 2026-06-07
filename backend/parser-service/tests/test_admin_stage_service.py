@@ -279,6 +279,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service, "_auto_wire_from_groups", AsyncMock()),
             patch.object(stage_service, "activate_stage", AsyncMock(return_value=stage)) as activate_stage,
             patch.object(stage_service, "generate_encounters", AsyncMock(return_value=encounters)) as generate_encounters,
             patch.object(stage_service, "_publish_tournament_changed", AsyncMock()) as publish_changed,
@@ -290,3 +291,100 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         activate_stage.assert_awaited_once_with(session, stage.id, notify=False)
         generate_encounters.assert_awaited_once_with(session, stage.id, notify=False)
         publish_changed.assert_awaited_once_with(stage.tournament_id, "structure_changed")
+
+    async def test_auto_wire_splits_advancing_teams_for_double_elimination(self) -> None:
+        playoff = SimpleNamespace(
+            id=20,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            split_lower_bracket=True,
+        )
+        source = SimpleNamespace(id=10, advance_count=4)
+        session = SimpleNamespace()
+
+        with (
+            patch.object(stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service, "wire_from_groups", AsyncMock()) as wire,
+        ):
+            await stage_service._auto_wire_from_groups(session, playoff)
+
+        # advance_count=4 split evenly → 2 Upper, 2 Lower (cross seeding).
+        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=2, mode="cross", notify=False)
+
+    async def test_auto_wire_odd_count_sends_extra_to_upper(self) -> None:
+        playoff = SimpleNamespace(
+            id=20,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            split_lower_bracket=True,
+        )
+        source = SimpleNamespace(id=10, advance_count=3)
+        session = SimpleNamespace()
+
+        with (
+            patch.object(stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service, "wire_from_groups", AsyncMock()) as wire,
+        ):
+            await stage_service._auto_wire_from_groups(session, playoff)
+
+        # advance_count=3 → 2 Upper (extra), 1 Lower.
+        wire.assert_awaited_once_with(session, 20, 10, 2, top_lb=1, mode="cross", notify=False)
+
+    async def test_auto_wire_all_to_upper_when_split_disabled(self) -> None:
+        playoff = SimpleNamespace(
+            id=20,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            split_lower_bracket=False,
+        )
+        source = SimpleNamespace(id=10, advance_count=4)
+        session = SimpleNamespace()
+
+        with (
+            patch.object(stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service, "wire_from_groups", AsyncMock()) as wire,
+        ):
+            await stage_service._auto_wire_from_groups(session, playoff)
+
+        wire.assert_awaited_once_with(session, 20, 10, 4, top_lb=0, mode="cross", notify=False)
+
+    async def test_auto_wire_noop_without_advance_count(self) -> None:
+        playoff = SimpleNamespace(
+            id=20,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            split_lower_bracket=True,
+        )
+        source = SimpleNamespace(id=10, advance_count=None)
+        session = SimpleNamespace()
+
+        with (
+            patch.object(stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(stage_service, "wire_from_groups", AsyncMock()) as wire,
+        ):
+            await stage_service._auto_wire_from_groups(session, playoff)
+
+        wire.assert_not_awaited()
+
+    async def test_delete_stage_removes_encounters_and_standings(self) -> None:
+        stage = SimpleNamespace(id=7, tournament_id=99)
+        executed: list = []
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=lambda stmt: executed.append(stmt)),
+            delete=AsyncMock(),
+            commit=AsyncMock(),
+        )
+
+        with (
+            patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service, "_publish_tournament_changed", AsyncMock()),
+        ):
+            await stage_service.delete_stage(session, stage.id)
+
+        # The stage's matches and standings must be removed explicitly, since
+        # their FKs to Stage are ON DELETE SET NULL (would otherwise orphan).
+        sqls = [str(stmt) for stmt in executed]
+        self.assertTrue(any("DELETE FROM tournament.encounter" in sql for sql in sqls))
+        self.assertTrue(any("DELETE FROM tournament.standing" in sql for sql in sqls))
+        session.delete.assert_awaited_once_with(stage)
+        session.commit.assert_awaited_once_with()

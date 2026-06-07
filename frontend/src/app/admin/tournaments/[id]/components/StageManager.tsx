@@ -106,13 +106,6 @@ interface StageItemDraft {
   type: StageItemType;
 }
 
-type WireDraft = {
-  sourceStageId?: number;
-  top: number;
-  top_lb: number;
-  mode: "cross" | "snake";
-};
-
 function getStageTeamSlots(stage: Stage) {
   return stage.items.reduce((acc, item) => acc + item.inputs.length, 0);
 }
@@ -241,7 +234,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const [editingItemTypeId, setEditingItemTypeId] = useState<number | null>(null);
   const [editingInputId, setEditingInputId] = useState<number | null>(null);
   const [editingInputTeamDraft, setEditingInputTeamDraft] = useState("");
-  const [wireDrafts, setWireDrafts] = useState<Record<number, WireDraft>>({});
+  const [stageSplitLbDrafts, setStageSplitLbDrafts] = useState<Record<number, boolean>>({});
 
   const { data: stages = [], isLoading } = useQuery({
     queryKey: ["admin", "stages", tournamentId],
@@ -320,6 +313,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         stage_type?: StageType;
         max_rounds?: number;
         advance_count?: number | null;
+        split_lower_bracket?: boolean;
         settings_json?: Record<string, unknown> | null;
       };
     }) => adminService.updateStage(stageId, data),
@@ -340,6 +334,11 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         return next;
       });
       setStageDeGfTypeDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageId];
+        return next;
+      });
+      setStageSplitLbDrafts((current) => {
         const next = { ...current };
         delete next[variables.stageId];
         return next;
@@ -487,42 +486,6 @@ export function StageManager({ tournamentId }: StageManagerProps) {
     }
   });
 
-  const wireFromGroupsMutation = useMutation({
-    mutationFn: ({
-      targetStageId,
-      sourceStageId,
-      top,
-      top_lb,
-      mode
-    }: {
-      targetStageId: number;
-      sourceStageId: number;
-      top: number;
-      top_lb: number;
-      mode: "cross" | "snake";
-    }) =>
-      adminService.wireFromGroups(targetStageId, {
-        source_stage_id: sourceStageId,
-        top,
-        top_lb,
-        mode
-      }),
-    onSuccess: async (_data, variables) => {
-      // Keep the source group stage's advance_count in sync with the playoff
-      // distribution we just wired (UB + LB seats per group), so the public
-      // "TOP N ADVANCE" cut-line matches what actually advances.
-      const totalAdvancing = variables.top + variables.top_lb;
-      try {
-        await adminService.updateStage(variables.sourceStageId, {
-          advance_count: totalAdvancing
-        });
-      } catch {
-        // Wiring already succeeded; advance_count sync is best-effort.
-      }
-      invalidateStageData();
-    }
-  });
-
   const activateAndGenerateMutation = useMutation({
     mutationFn: async (stageId: number) => {
       try {
@@ -616,6 +579,10 @@ export function StageManager({ tournamentId }: StageManagerProps) {
   const selectedStageDeGfTypeDraft = selectedStage
     ? stageDeGfTypeDrafts[selectedStage.id] ?? currentDeGfType
     : "no_reset";
+  const currentSplitLowerBracket = selectedStage?.split_lower_bracket ?? false;
+  const selectedStageSplitLbDraft = selectedStage
+    ? stageSplitLbDrafts[selectedStage.id] ?? currentSplitLowerBracket
+    : false;
   const maxRoundsDraftValue = selectedStage
     ? normalizeMaxRounds(selectedStageMaxRoundDraft, selectedStage.max_rounds ?? 5)
     : 5;
@@ -659,6 +626,8 @@ export function StageManager({ tournamentId }: StageManagerProps) {
       selectedStageAdvanceCountDraft !== currentAdvanceCount ||
       (selectedStageTypeDraft === "double_elimination" &&
         selectedStageDeGfTypeDraft !== currentDeGfType) ||
+      (selectedStageTypeDraft === "double_elimination" &&
+        selectedStageSplitLbDraft !== currentSplitLowerBracket) ||
       selectedStageRankingPresetDraft !== (selectedStageSettings.ranking_preset || "default") ||
       selectedStageSwissByePointsDraft !== String(selectedStageSettings.swiss_bye_points ?? "") ||
       selectedStageScoringWinDraft !== String(selectedStageSettings.scoring?.win ?? "") ||
@@ -686,26 +655,6 @@ export function StageManager({ tournamentId }: StageManagerProps) {
         )
       : [];
   const mergedStageName = selectedStage ? getDefaultMergedStageName(selectedStage) : "Groups";
-  const groupStages = selectedStage
-    ? orderedStages.filter(
-        (stage) => GROUP_STAGE_TYPES.includes(stage.stage_type) && stage.id !== selectedStage.id
-      )
-    : [];
-  const advanceCountForSource = (stageId: number | undefined): number | null => {
-    if (stageId == null) return null;
-    return groupStages.find((stage) => stage.id === stageId)?.advance_count ?? null;
-  };
-  const selectedWireDraft =
-    selectedStage && BRACKET_STAGE_TYPES.includes(selectedStage.stage_type) && groupStages.length > 0
-      ? wireDrafts[selectedStage.id] ?? {
-          sourceStageId: groupStages[0]?.id,
-          // Seed from the source group stage's configured advance_count so the
-          // Automation defaults match the "Teams Advancing to Playoff" setting.
-          top: advanceCountForSource(groupStages[0]?.id) ?? 2,
-          top_lb: 0,
-          mode: "cross" as const
-        }
-      : null;
   const createStageDirty =
     newStageName.trim().length > 0 ||
     newStageType !== "round_robin" ||
@@ -1417,151 +1366,6 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                       </div>
                     </section>
 
-                    {BRACKET_STAGE_TYPES.includes(selectedStage.stage_type) &&
-                    selectedWireDraft &&
-                    groupStages.length > 0 ? (
-                      <section className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-                        <div className="mb-3 flex items-start gap-2">
-                          <Link2 className="mt-0.5 size-4 text-primary" />
-                          <div>
-                            <h4 className="text-sm font-semibold">Automation</h4>
-                            <p className="text-xs text-muted-foreground">
-                              Auto-populate tentative bracket slots from a preceding group stage.
-                              The per-group count is synced with that stage&apos;s &quot;Teams
-                              Advancing to Playoff&quot; setting.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div
-                          className={cn(
-                            "grid gap-2",
-                            selectedStage.stage_type === "double_elimination"
-                              ? "sm:grid-cols-[minmax(0,1fr)_80px_80px_120px_auto]"
-                              : "sm:grid-cols-[minmax(0,1fr)_100px_120px_auto]"
-                          )}
-                        >
-                          <Select
-                            value={selectedWireDraft.sourceStageId?.toString() ?? ""}
-                            onValueChange={(value) => {
-                              const nextSourceId = Number(value);
-                              const syncedTop = advanceCountForSource(nextSourceId);
-                              setWireDrafts((current) => ({
-                                ...current,
-                                [selectedStage.id]: {
-                                  ...selectedWireDraft,
-                                  sourceStageId: nextSourceId,
-                                  top: syncedTop ?? selectedWireDraft.top
-                                }
-                              }));
-                            }}
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Source group stage" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {groupStages.map((stage) => (
-                                <SelectItem key={stage.id} value={stage.id.toString()}>
-                                  {stage.name} ({STAGE_TYPE_LABELS[stage.stage_type]})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-
-                          <Input
-                            type="number"
-                            min={1}
-                            max={16}
-                            className="h-9"
-                            value={selectedWireDraft.top}
-                            onChange={(event) =>
-                              setWireDrafts((current) => ({
-                                ...current,
-                                [selectedStage.id]: {
-                                  ...selectedWireDraft,
-                                  top: Math.max(1, Number(event.target.value) || 1)
-                                }
-                              }))
-                            }
-                            title="Teams from each group to Upper Bracket"
-                          />
-
-                          {selectedStage.stage_type === "double_elimination" ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              max={16}
-                              className="h-9"
-                              value={selectedWireDraft.top_lb}
-                              onChange={(event) =>
-                                setWireDrafts((current) => ({
-                                  ...current,
-                                  [selectedStage.id]: {
-                                    ...selectedWireDraft,
-                                    top_lb: Math.max(0, Number(event.target.value) || 0)
-                                  }
-                                }))
-                              }
-                              title="Teams from each group to Lower Bracket (0 = none)"
-                            />
-                          ) : null}
-
-                          <Select
-                            value={selectedWireDraft.mode}
-                            onValueChange={(value) =>
-                              setWireDrafts((current) => ({
-                                ...current,
-                                [selectedStage.id]: {
-                                  ...selectedWireDraft,
-                                  mode: value as "cross" | "snake"
-                                }
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="cross">Cross</SelectItem>
-                              <SelectItem value="snake">Snake</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={
-                              (wireFromGroupsMutation.isPending &&
-                                wireFromGroupsMutation.variables?.targetStageId ===
-                                  selectedStage.id) ||
-                              !selectedWireDraft.sourceStageId
-                            }
-                            onClick={() =>
-                              selectedWireDraft.sourceStageId &&
-                              wireFromGroupsMutation.mutate({
-                                targetStageId: selectedStage.id,
-                                sourceStageId: selectedWireDraft.sourceStageId,
-                                top: selectedWireDraft.top,
-                                top_lb: selectedWireDraft.top_lb,
-                                mode: selectedWireDraft.mode
-                              })
-                            }
-                          >
-                            {wireFromGroupsMutation.isPending &&
-                            wireFromGroupsMutation.variables?.targetStageId === selectedStage.id ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <Link2 className="size-4" />
-                            )}
-                            {wireFromGroupsMutation.isPending &&
-                            wireFromGroupsMutation.variables?.targetStageId === selectedStage.id
-                              ? "Wiring..."
-                              : "Wire"}
-                          </Button>
-                        </div>
-                      </section>
-                    ) : null}
-
                     <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
                       <section className="rounded-lg border border-dashed border-border/70 bg-muted/5">
                         <CollapsibleTrigger asChild>
@@ -1661,6 +1465,32 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                         <SelectItem value="with_reset">With Reset</SelectItem>
                                       </SelectContent>
                                     </Select>
+                                  </div>
+                                ) : null}
+
+                                {selectedStageTypeDraft === "double_elimination" ? (
+                                  <div>
+                                    <Label className="text-[10px] text-muted-foreground">Group seeding</Label>
+                                    <Select
+                                      value={selectedStageSplitLbDraft ? "split" : "all_upper"}
+                                      onValueChange={(value) =>
+                                        setStageSplitLbDrafts((current) => ({
+                                          ...current,
+                                          [selectedStage.id]: value === "split"
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9 w-full sm:w-[220px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all_upper">All advancing → Upper bracket</SelectItem>
+                                        <SelectItem value="split">Split: half Upper, half Lower</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Uses the group stage&apos;s &quot;Teams Advancing to Playoff&quot; count; auto-wired on Activate &amp; Generate.
+                                    </span>
                                   </div>
                                 ) : null}
                               </div>
@@ -1897,6 +1727,10 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                         selectedStageAdvanceCountDraft !== ""
                                           ? normalizeMaxRounds(selectedStageAdvanceCountDraft, 1)
                                           : null,
+                                      split_lower_bracket:
+                                        selectedStageTypeDraft === "double_elimination"
+                                          ? selectedStageSplitLbDraft
+                                          : false,
                                       settings_json: nextSettings
                                     }
                                   });
