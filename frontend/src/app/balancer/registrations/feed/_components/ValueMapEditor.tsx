@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import type { ValueMapRow } from "@/types/balancer-admin.types";
 
-export type ValueEditorKind = "boolean" | "role" | "text" | "number";
+export type ValueEditorKind = "boolean" | "role" | "text" | "number" | "role_subrole";
 
 interface ValueMapEditorProps {
   title: string;
@@ -40,6 +40,36 @@ const ROLE_OPTIONS = [
   { value: "support", label: "Support" },
 ] as const;
 
+const ROLE_SUBROLE_ROLE_OPTIONS = [
+  { value: "flex", label: "Flex (all roles)" },
+  { value: "tank", label: "Tank" },
+  { value: "dps", label: "DPS" },
+  { value: "support", label: "Support" },
+] as const;
+
+const ROLE_SUBROLE_SUBROLE_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  dps: [
+    { value: "hitscan", label: "Hitscan" },
+    { value: "projectile", label: "Projectile" },
+  ],
+  support: [
+    { value: "main_heal", label: "Main heal" },
+    { value: "light_heal", label: "Light heal" },
+  ],
+};
+
+function parseRoleSubroleValue(value: string): { role: string; subrole: string | null } {
+  try {
+    const parsed = JSON.parse(value) as { role?: unknown; subrole?: unknown };
+    return {
+      role: typeof parsed.role === "string" ? parsed.role : "",
+      subrole: typeof parsed.subrole === "string" ? parsed.subrole : null,
+    };
+  } catch {
+    return { role: "", subrole: null };
+  }
+}
+
 function ValueInput({
   kind,
   row,
@@ -58,6 +88,53 @@ function ValueInput({
         placeholder={kind === "number" ? "Rank value" : "Mapped value"}
         className="h-9"
       />
+    );
+  }
+
+  if (kind === "role_subrole") {
+    const { role, subrole } = parseRoleSubroleValue(row.value);
+    const subroleOptions = ROLE_SUBROLE_SUBROLE_OPTIONS[role] ?? [];
+
+    const handleRoleChange = (newRole: string) => {
+      const newSubrole = ROLE_SUBROLE_SUBROLE_OPTIONS[newRole] ? subrole : null;
+      onUpdate(row.id, { value: JSON.stringify({ role: newRole, subrole: newSubrole }) });
+    };
+
+    const handleSubroleChange = (newSubrole: string) => {
+      onUpdate(row.id, { value: JSON.stringify({ role, subrole: newSubrole || null }) });
+    };
+
+    return (
+      <div className="grid grid-cols-2 gap-1.5">
+        <Select value={role || undefined} onValueChange={handleRoleChange}>
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            {ROLE_SUBROLE_ROLE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={subrole ?? undefined}
+          onValueChange={handleSubroleChange}
+          disabled={subroleOptions.length === 0}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder={subroleOptions.length === 0 ? "—" : "Sub-role"} />
+          </SelectTrigger>
+          <SelectContent>
+            {subroleOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     );
   }
 
@@ -115,7 +192,7 @@ export function ValueMapEditor({
         <p className="text-xs italic text-muted-foreground/60">No mappings yet.</p>
       ) : (
         <div className="space-y-2">
-          <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+          <div className={`grid items-center gap-2 ${kind === "role_subrole" ? "grid-cols-[1fr_2fr_auto]" : "grid-cols-[1fr_1fr_auto]"}`}>
             <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/75">
               Sheet text
             </Label>
@@ -125,7 +202,7 @@ export function ValueMapEditor({
             <span />
           </div>
           {rows.map((row) => (
-            <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+            <div key={row.id} className={`grid items-center gap-2 ${kind === "role_subrole" ? "grid-cols-[1fr_2fr_auto]" : "grid-cols-[1fr_1fr_auto]"}`}>
               <Input
                 value={row.key}
                 onChange={(event) => onUpdate(row.id, { key: event.target.value })}

@@ -34,6 +34,8 @@ from src.services.registration.mapping_catalog import (
 )
 from src.services.registration.utils import (
     DEFAULT_BOOLEAN_TRUE_VALUES,
+    DEFAULT_ROLE_SUBROLE_VALUE_MAP,
+    RoleSubroleEntry,
     DEFAULT_ROLE_VALUE_MAP,
     DEFAULT_SORT_PRIORITY_SENTINEL,
     DEFAULT_SUBROLE_VALUE_MAP,
@@ -42,6 +44,7 @@ from src.services.registration.utils import (
     MIN_SYNC_INTERVAL_SECONDS,
     ROLE_ORDER,
     UNKNOWN_PRIORITY_SENTINEL,
+    VALID_ROLES,
     build_csv_export_url,
     build_header_keys,
     extract_sheet_source,
@@ -151,6 +154,39 @@ def map_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> str |
     return DEFAULT_SUBROLE_VALUE_MAP.get(normalized)
 
 
+def map_role_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> RoleSubroleEntry | None:
+    if value is None:
+        return None
+    normalized = normalize_header(value)
+    custom_map = {
+        normalize_header(k): v
+        for k, v in (value_mapping.get("role_subroles") or {}).items()
+    }
+    entry = custom_map.get(normalized) or DEFAULT_ROLE_SUBROLE_VALUE_MAP.get(normalized)
+    if isinstance(entry, dict):
+        role = entry.get("role")
+        if role == "flex" or role in VALID_ROLES:
+            return {"role": role, "subrole": entry.get("subrole")}
+    role_code = map_role_token(value, value_mapping)
+    if role_code:
+        return {"role": role_code, "subrole": None}
+    return None
+
+
+def _parse_sr_value(raw: str | None, value_mapping: dict[str, Any]) -> int | None:
+    if not raw:
+        return None
+    normalized = normalize_header(raw)
+    division_map = {
+        normalize_header(k): int(v)
+        for k, v in (value_mapping.get("divisions") or {}).items()
+        if str(v).lstrip("-").isdigit()
+    }
+    if normalized in division_map:
+        return division_map[normalized]
+    return parse_integer(raw)
+
+
 def parse_role_token_list(values: list[str], value_mapping: dict[str, Any]) -> list[str]:
     roles: list[str] = []
     for value in values:
@@ -166,6 +202,7 @@ def build_default_value_mapping() -> dict[str, Any]:
         "booleans": dict.fromkeys(sorted(DEFAULT_BOOLEAN_TRUE_VALUES), True),
         "roles": DEFAULT_ROLE_VALUE_MAP,
         "subroles": DEFAULT_SUBROLE_VALUE_MAP,
+        "role_subroles": DEFAULT_ROLE_SUBROLE_VALUE_MAP,
         "divisions": {},
     }
 
@@ -302,6 +339,10 @@ def parse_target_value(*, parser: str, values: list[str], value_mapping: dict[st
         return grid.resolve_rank_from_division(division_number) if division_number is not None else None
     if parser == "join_lines":
         return "\n".join(value.strip() for value in values if value.strip()) or None
+    if parser == "role_subrole_token":
+        return map_role_subrole_token(values[0] if values else None, value_mapping)
+    if parser == "sr_value":
+        return _parse_sr_value(values[0] if values else None, value_mapping)
     return values[0] if values else None
 
 
@@ -468,27 +509,54 @@ def parse_sheet_row(
 
 
 def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict[str, Any]]:
-    payloads: list[dict[str, Any]] = []
     source_primary = parsed_fields.get("source_roles", {}).get("primary")
     source_additional = parsed_fields.get("source_roles", {}).get("additional") or []
     is_full_flex = bool(parsed_fields.get("is_flex", False))
+
+    def _role_code(v: Any) -> str | None:
+        if isinstance(v, dict):
+            code = v.get("role")
+            return code if code in VALID_ROLES else None
+        return v if v in VALID_ROLES else None
+
+    def _subrole(v: Any) -> str | None:
+        return v.get("subrole") if isinstance(v, dict) else None
+
+    if isinstance(source_primary, dict) and source_primary.get("role") == "flex":
+        is_full_flex = True
+
+    primary_code = _role_code(source_primary)
+    declared_order: list[str] = []
+    if primary_code:
+        declared_order.append(primary_code)
+    for item in source_additional:
+        code = _role_code(item)
+        if code and code not in declared_order:
+            declared_order.append(code)
+    source_priority = {code: i for i, code in enumerate(declared_order)}
+
+    payloads: list[dict[str, Any]] = []
+    additional_role_codes = {_role_code(r) for r in source_additional} - {None}
     for fallback_priority, role_code in enumerate(ROLE_ORDER):
         role_data = parsed_fields.get("roles", {}).get(role_code) or {}
         rank_value = role_data.get("rank_value")
-        subrole = role_data.get("subrole")
+        explicit_subrole = role_data.get("subrole")
         is_active = role_data.get("is_active")
         priority = role_data.get("priority")
-        declared_in_source = source_primary == role_code or role_code in source_additional
-        if rank_value is None and not is_active and not subrole and priority is None and not declared_in_source:
+
+        token_subrole = _subrole(source_primary) if primary_code == role_code else None
+        effective_subrole = explicit_subrole or token_subrole
+
+        declared_in_source = primary_code == role_code or role_code in additional_role_codes
+        if rank_value is None and not is_active and not effective_subrole and priority is None and not declared_in_source and not is_full_flex:
             continue
+
         payloads.append(
             {
                 "role": role_code,
-                "subrole": subrole,
-                "is_primary": is_full_flex
-                or source_primary == role_code
-                or (source_primary is None and fallback_priority == 0),
-                "priority": int(priority) if isinstance(priority, int) else fallback_priority,
+                "subrole": effective_subrole,
+                "is_primary": is_full_flex or primary_code == role_code or (primary_code is None and fallback_priority == 0),
+                "priority": int(priority) if isinstance(priority, int) else source_priority.get(role_code, fallback_priority),
                 "rank_value": rank_value,
                 "is_active": bool(is_active) if is_active is not None else rank_value is not None,
             }
@@ -723,7 +791,7 @@ def build_mapping_catalog(
             **(default_value_mapping.get(category) or {}),
             **(saved_value_mapping.get(category) or {}),
         }
-        for category in ("booleans", "roles", "subroles", "divisions")
+        for category in ("booleans", "roles", "subroles", "role_subroles", "divisions")
     }
     return {
         "targets": [
@@ -749,7 +817,7 @@ def build_mapping_catalog(
         ],
         "value_categories": [
             {"category": category, "entries": effective_value_mapping.get(category) or {}}
-            for category in ("booleans", "roles", "subroles", "divisions")
+            for category in ("booleans", "roles", "subroles", "role_subroles", "divisions")
         ],
         "custom_fields": [field_def.model_dump() for field_def in custom_fields],
         "header_keys": header_keys or [],

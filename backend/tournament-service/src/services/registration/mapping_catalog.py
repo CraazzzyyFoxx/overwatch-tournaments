@@ -40,6 +40,8 @@ PARSER_ROLE_TOKEN_LIST = "role_token_list"
 PARSER_SUBROLE_TOKEN = "subrole_token"
 PARSER_DIVISION_TO_RANK = "division_to_rank"
 PARSER_JOIN_LINES = "join_lines"
+PARSER_ROLE_SUBROLE_TOKEN = "role_subrole_token"
+PARSER_SR_VALUE = "sr_value"
 
 VALID_MODES = ("columns", "disabled", "constant")
 
@@ -66,6 +68,8 @@ PARSER_CATALOG: tuple[ParserSpec, ...] = (
     ParserSpec(PARSER_SUBROLE_TOKEN, "Sub-role", "single", "subrole"),
     ParserSpec(PARSER_DIVISION_TO_RANK, "Division → rank", "single", "int"),
     ParserSpec(PARSER_JOIN_LINES, "Joined text", "multi", "string"),
+    ParserSpec(PARSER_ROLE_SUBROLE_TOKEN, "Role + sub-role token", "single", "role_subrole"),
+    ParserSpec(PARSER_SR_VALUE, "SR / rank text", "single", "int"),
 )
 
 VALID_PARSERS = frozenset(spec.parser for spec in PARSER_CATALOG)
@@ -193,7 +197,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             key="source_roles.primary",
             label="Primary role",
             group="roles",
-            accepted_parsers=(PARSER_ROLE_TOKEN,),
+            accepted_parsers=(PARSER_ROLE_TOKEN, PARSER_ROLE_SUBROLE_TOKEN),
             default_parser=PARSER_ROLE_TOKEN,
             aliases=("your role", "primary role", "main role", "укажите вашу роль"),
         ),
@@ -201,7 +205,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             key="source_roles.additional",
             label="Additional roles",
             group="roles",
-            accepted_parsers=(PARSER_ROLE_TOKEN_LIST,),
+            accepted_parsers=(PARSER_ROLE_TOKEN_LIST, PARSER_ROLE_SUBROLE_TOKEN),
             default_parser=PARSER_ROLE_TOKEN_LIST,
             multi_column=True,
             aliases=("additional role", "secondary role", "дополнительная игровая роль"),
@@ -215,7 +219,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
                 key=f"roles.{role_code}.rank_value",
                 label=f"{label} rank (SR)",
                 group="roles",
-                accepted_parsers=(PARSER_INTEGER, PARSER_DIVISION_TO_RANK),
+                accepted_parsers=(PARSER_INTEGER, PARSER_DIVISION_TO_RANK, PARSER_SR_VALUE),
                 default_parser=PARSER_INTEGER,
             )
         )

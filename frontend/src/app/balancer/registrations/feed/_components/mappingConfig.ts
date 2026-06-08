@@ -205,6 +205,11 @@ export function buildMappingConfigJson(state: Record<string, MappingTargetState>
   return { targets };
 }
 
+export interface RoleSubroleEntry {
+  role: string;
+  subrole: string | null;
+}
+
 /**
  * `value_mapping_json` shape. Includes an index signature so it remains
  * assignable to the `Record<string, unknown>` payload field on the inputs.
@@ -213,6 +218,7 @@ export type ValueMappingJson = {
   booleans: Record<string, boolean>;
   roles: Record<string, string>;
   subroles: Record<string, string>;
+  role_subroles: Record<string, RoleSubroleEntry>;
   divisions: Record<string, number>;
 } & Record<string, unknown>;
 
@@ -242,6 +248,23 @@ function rowsToStrings(rows: ValueMapRow[]): Record<string, string> {
   return result;
 }
 
+function rowsToRoleSubroles(rows: ValueMapRow[]): Record<string, RoleSubroleEntry> {
+  const result: Record<string, RoleSubroleEntry> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    try {
+      const parsed = JSON.parse(row.value) as RoleSubroleEntry;
+      if (parsed && typeof parsed.role === "string") {
+        result[key] = { role: parsed.role, subrole: parsed.subrole ?? null };
+      }
+    } catch {
+      // skip malformed rows
+    }
+  }
+  return result;
+}
+
 function rowsToNumbers(rows: ValueMapRow[]): Record<string, number> {
   const result: Record<string, number> = {};
   for (const row of rows) {
@@ -262,6 +285,7 @@ export function buildValueMappingJson(state: ValueMappingState): ValueMappingJso
     booleans: rowsToBooleans(state.booleans),
     roles: rowsToStrings(state.roles),
     subroles: rowsToStrings(state.subroles),
+    role_subroles: rowsToRoleSubroles(state.role_subroles),
     divisions: rowsToNumbers(state.divisions),
   };
 }

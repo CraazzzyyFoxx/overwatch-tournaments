@@ -12,6 +12,7 @@ import csv
 import io
 import re
 from datetime import UTC, datetime
+from typing import TypedDict
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import HTTPException, status
@@ -78,6 +79,13 @@ DEFAULT_ROLE_VALUE_MAP: dict[str, str | None] = {
     "дд": "dps",
 }
 
+class RoleSubroleEntry(TypedDict):
+    """Structured role + optional sub-role token — mirrors Pydantic/SQL model shape."""
+
+    role: str  # "tank" | "dps" | "support" | "flex"
+    subrole: str | None
+
+
 # Subrole token mapping (used by registration sheet sync)
 DEFAULT_SUBROLE_VALUE_MAP: dict[str, str | None] = {
     "hitscan": "hitscan",
@@ -90,6 +98,23 @@ DEFAULT_SUBROLE_VALUE_MAP: dict[str, str | None] = {
     "light_heal": "light_heal",
     "light heal": "light_heal",
     "лайт хил": "light_heal",
+}
+
+# Combined role+subrole token mapping (used by registration sheet sync)
+DEFAULT_ROLE_SUBROLE_VALUE_MAP: dict[str, RoleSubroleEntry] = {
+    "хитскан дпс":     {"role": "dps",     "subrole": "hitscan"},
+    "хитскан дд":      {"role": "dps",     "subrole": "hitscan"},
+    "hitscan dps":     {"role": "dps",     "subrole": "hitscan"},
+    "проджектайл дпс": {"role": "dps",     "subrole": "projectile"},
+    "projectile dps":  {"role": "dps",     "subrole": "projectile"},
+    "мейн хил":        {"role": "support", "subrole": "main_heal"},
+    "main heal":       {"role": "support", "subrole": "main_heal"},
+    "лайт хил":        {"role": "support", "subrole": "light_heal"},
+    "light heal":      {"role": "support", "subrole": "light_heal"},
+    "флекс":           {"role": "flex",    "subrole": None},
+    "flex":            {"role": "flex",    "subrole": None},
+    "я флекс":         {"role": "flex",    "subrole": None},
+    "full flex":       {"role": "flex",    "subrole": None},
 }
 
 # Boolean true values for parsing sheet data

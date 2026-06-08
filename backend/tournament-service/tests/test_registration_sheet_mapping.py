@@ -109,6 +109,7 @@ def test_mapping_catalog_includes_all_value_mapping_categories():
         "booleans",
         "roles",
         "subroles",
+        "role_subroles",
         "divisions",
     }
 
@@ -393,3 +394,163 @@ def test_parse_sheet_row_skip_without_identity_returns_none_fields():
         custom_fields=[],
     )
     assert result.fields is None
+
+
+# ---------------------------------------------------------------------------
+# New parsers: role_subrole_token and sr_value
+# ---------------------------------------------------------------------------
+
+
+def test_role_subrole_token_russian_hitscan():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Хитскан ДПС"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == {"role": "dps", "subrole": "hitscan"}
+
+
+def test_role_subrole_token_russian_flex():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Флекс"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == {"role": "flex", "subrole": None}
+
+
+def test_role_subrole_token_custom_map_overrides_default():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["heal"],
+        value_mapping={"role_subroles": {"heal": {"role": "support", "subrole": "main_heal"}}},
+        grid=_grid(),
+    )
+    assert result == {"role": "support", "subrole": "main_heal"}
+
+
+def test_role_subrole_token_falls_back_to_plain_role():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["tank"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == {"role": "tank", "subrole": None}
+
+
+def test_role_subrole_token_unknown_returns_none():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["unknown_value_xyz"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result is None
+
+
+def test_sr_value_numeric_string():
+    result = admin.parse_target_value(
+        parser="sr_value",
+        values=["2500"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == 2500
+
+
+def test_sr_value_text_label_from_divisions_map():
+    result = admin.parse_target_value(
+        parser="sr_value",
+        values=["Gold 3"],
+        value_mapping={"divisions": {"Gold 3": 2800}},
+        grid=_grid(),
+    )
+    assert result == 2800
+
+
+def test_sr_value_empty_returns_none():
+    result = admin.parse_target_value(
+        parser="sr_value",
+        values=[],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# build_registration_role_payloads: priority order and flex detection
+# ---------------------------------------------------------------------------
+
+
+def _make_parsed(primary, additional=None, is_flex=False, roles=None):
+    return {
+        "source_roles": {"primary": primary, "additional": additional or []},
+        "is_flex": is_flex,
+        "roles": roles or {},
+    }
+
+
+def test_priority_follows_declaration_order():
+    parsed = _make_parsed(
+        primary="dps",
+        additional=["support"],
+        roles={
+            "dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
+            "support": {"rank_value": 2300, "subrole": None, "is_active": True, "priority": None},
+        },
+    )
+    payloads = admin.build_registration_role_payloads(parsed)
+    by_role = {p["role"]: p for p in payloads}
+    assert by_role["dps"]["priority"] == 0
+    assert by_role["support"]["priority"] == 1
+
+
+def test_flex_token_in_primary_sets_is_full_flex():
+    parsed = _make_parsed(
+        primary={"role": "flex", "subrole": None},
+        roles={
+            "tank": {"rank_value": 2000, "subrole": None, "is_active": True, "priority": None},
+            "dps": {"rank_value": 2200, "subrole": None, "is_active": True, "priority": None},
+            "support": {"rank_value": 2100, "subrole": None, "is_active": True, "priority": None},
+        },
+    )
+    payloads = admin.build_registration_role_payloads(parsed)
+    assert all(p["is_primary"] for p in payloads)
+
+
+def test_subrole_from_token_propagates_to_payload():
+    parsed = _make_parsed(
+        primary={"role": "dps", "subrole": "hitscan"},
+        roles={"dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None}},
+    )
+    payloads = admin.build_registration_role_payloads(parsed)
+    dps_payload = next(p for p in payloads if p["role"] == "dps")
+    assert dps_payload["subrole"] == "hitscan"
+
+
+def test_explicit_subrole_wins_over_token_subrole():
+    parsed = _make_parsed(
+        primary={"role": "dps", "subrole": "hitscan"},
+        roles={"dps": {"rank_value": 2500, "subrole": "projectile", "is_active": True, "priority": None}},
+    )
+    payloads = admin.build_registration_role_payloads(parsed)
+    dps_payload = next(p for p in payloads if p["role"] == "dps")
+    assert dps_payload["subrole"] == "projectile"
+
+
+def test_role_subrole_token_accepted_for_primary_and_additional():
+    primary_spec = catalog.target_spec_map({})["source_roles.primary"]
+    additional_spec = catalog.target_spec_map({})["source_roles.additional"]
+    assert catalog.PARSER_ROLE_SUBROLE_TOKEN in primary_spec.accepted_parsers
+    assert catalog.PARSER_ROLE_SUBROLE_TOKEN in additional_spec.accepted_parsers
+
+
+def test_sr_value_accepted_for_all_rank_value_targets():
+    specs = catalog.target_spec_map({})
+    for role_code in ("tank", "dps", "support"):
+        spec = specs[f"roles.{role_code}.rank_value"]
+        assert catalog.PARSER_SR_VALUE in spec.accepted_parsers

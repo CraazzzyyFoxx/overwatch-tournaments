@@ -574,7 +574,7 @@ export interface MappingParserDef {
   produces: string;
 }
 
-export type MappingValueCategoryName = "booleans" | "roles" | "subroles" | "divisions";
+export type MappingValueCategoryName = "booleans" | "roles" | "subroles" | "role_subroles" | "divisions";
 
 export interface MappingValueCategory {
   category: MappingValueCategoryName;
@@ -654,5 +654,6 @@ export interface ValueMappingState {
   booleans: ValueMapRow[];
   roles: ValueMapRow[];
   subroles: ValueMapRow[];
+  role_subroles: ValueMapRow[];
   divisions: ValueMapRow[];
 }

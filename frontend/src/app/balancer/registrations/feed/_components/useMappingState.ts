@@ -51,6 +51,15 @@ function entriesToRows(entries: Record<string, unknown> | undefined): ValueMapRo
   }));
 }
 
+function roleSubroleEntriesToRows(entries: Record<string, unknown> | undefined): ValueMapRow[] {
+  if (!isRecord(entries)) return [];
+  return Object.entries(entries).map(([key, value]) => ({
+    id: nextRowId(),
+    key,
+    value: isRecord(value) ? JSON.stringify(value) : "",
+  }));
+}
+
 function buildInitialMappingState(
   catalog: MappingCatalog,
   feed: AdminGoogleSheetFeed | null,
@@ -103,6 +112,7 @@ function buildInitialValueState(feed: AdminGoogleSheetFeed | null): ValueMapping
     booleans: entriesToRows(isRecord(raw?.booleans) ? (raw?.booleans as Record<string, unknown>) : undefined),
     roles: entriesToRows(isRecord(raw?.roles) ? (raw?.roles as Record<string, unknown>) : undefined),
     subroles: entriesToRows(isRecord(raw?.subroles) ? (raw?.subroles as Record<string, unknown>) : undefined),
+    role_subroles: roleSubroleEntriesToRows(isRecord(raw?.role_subroles) ? (raw?.role_subroles as Record<string, unknown>) : undefined),
     divisions: entriesToRows(isRecord(raw?.divisions) ? (raw?.divisions as Record<string, unknown>) : undefined),
   };
 }
@@ -111,7 +121,7 @@ function buildInitialValueState(feed: AdminGoogleSheetFeed | null): ValueMapping
 // Hook
 // ---------------------------------------------------------------------------
 
-const EMPTY_VALUE_STATE: ValueMappingState = { booleans: [], roles: [], subroles: [], divisions: [] };
+const EMPTY_VALUE_STATE: ValueMappingState = { booleans: [], roles: [], subroles: [], role_subroles: [], divisions: [] };
 
 export interface UseMappingStateResult {
   mappingState: Record<string, MappingTargetState>;

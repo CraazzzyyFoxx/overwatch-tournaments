@@ -41,6 +41,7 @@ export function ValueMappingTab({
   const booleanDefaults = categoryEntries(valueCategories, "booleans");
   const roleDefaults = categoryEntries(valueCategories, "roles");
   const subroleDefaults = categoryEntries(valueCategories, "subroles");
+  const roleSubroleDefaults = categoryEntries(valueCategories, "role_subroles");
   const divisionDefaults = categoryEntries(valueCategories, "divisions");
 
   return (
@@ -85,6 +86,17 @@ export function ValueMappingTab({
           onUpdate={(id, updates) => onUpdate("subroles", id, updates)}
           onRemove={(id) => onRemove("subroles", id)}
           onSeedDefaults={() => onSeedDefaults("subroles", subroleDefaults)}
+        />
+        <ValueMapEditor
+          title="Role + Sub-role combined"
+          description={`Map a single cell value that encodes both a role and sub-role (e.g. "Хитскан ДПС"). Select the role; optionally select a sub-role (DPS / Support only). Use "Flex" for full-flex tokens.`}
+          kind="role_subrole"
+          rows={valueState.role_subroles}
+          canSeed={Object.keys(roleSubroleDefaults).length > 0}
+          onAdd={() => onAdd("role_subroles")}
+          onUpdate={(id, updates) => onUpdate("role_subroles", id, updates)}
+          onRemove={(id) => onRemove("role_subroles", id)}
+          onSeedDefaults={() => onSeedDefaults("role_subroles", roleSubroleDefaults)}
         />
         <ValueMapEditor
           title="Divisions"
