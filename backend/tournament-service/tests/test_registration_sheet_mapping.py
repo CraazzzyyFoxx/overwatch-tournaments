@@ -114,11 +114,11 @@ def test_mapping_catalog_includes_all_value_mapping_categories():
     }
 
 
-def test_mapping_catalog_merges_saved_value_maps_with_defaults():
+def test_mapping_catalog_merges_saved_value_maps():
     built = admin.build_mapping_catalog([], value_mapping={"roles": {"healer": "support"}})
     categories = {category["category"]: category["entries"] for category in built["value_categories"]}
     assert categories["roles"]["healer"] == "support"
-    assert categories["roles"]["tank"] == "tank"
+    assert "tank" not in categories["roles"]
 
 
 # ---------------------------------------------------------------------------
@@ -401,27 +401,27 @@ def test_parse_sheet_row_skip_without_identity_returns_none_fields():
 # ---------------------------------------------------------------------------
 
 
-def test_role_subrole_token_russian_hitscan():
+def test_role_subrole_token_custom_hitscan():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["Хитскан ДПС"],
-        value_mapping={},
+        value_mapping={"role_subroles": {"хитскан дпс": {"role": "dps", "subrole": "hitscan"}}},
         grid=_grid(),
     )
     assert result == {"role": "dps", "subrole": "hitscan"}
 
 
-def test_role_subrole_token_russian_flex():
+def test_role_subrole_token_custom_flex():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["Флекс"],
-        value_mapping={},
+        value_mapping={"role_subroles": {"флекс": {"role": "flex", "subrole": None}}},
         grid=_grid(),
     )
     assert result == {"role": "flex", "subrole": None}
 
 
-def test_role_subrole_token_custom_map_overrides_default():
+def test_role_subrole_token_custom_map():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["heal"],
@@ -431,14 +431,24 @@ def test_role_subrole_token_custom_map_overrides_default():
     assert result == {"role": "support", "subrole": "main_heal"}
 
 
-def test_role_subrole_token_falls_back_to_plain_role():
+def test_role_subrole_token_explicit_role_no_subrole():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["tank"],
+        value_mapping={"role_subroles": {"tank": {"role": "tank", "subrole": None}}},
+        grid=_grid(),
+    )
+    assert result == {"role": "tank", "subrole": None}
+
+
+def test_role_subrole_token_no_mapping_returns_none():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["tank"],
         value_mapping={},
         grid=_grid(),
     )
-    assert result == {"role": "tank", "subrole": None}
+    assert result is None
 
 
 def test_role_subrole_token_unknown_returns_none():
@@ -576,11 +586,14 @@ def test_sr_value_accepted_for_all_rank_value_targets():
 # ---------------------------------------------------------------------------
 
 
+_ROLE_MAP = {"roles": {"dps": "dps", "support": "support", "tank": "tank"}}
+
+
 def test_role_token_is_list_multiple_values():
     result = admin.parse_target_value(
         parser="role_token",
         values=["dps", "support"],
-        value_mapping={},
+        value_mapping=_ROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
@@ -591,7 +604,7 @@ def test_role_token_is_list_splits_comma_separated():
     result = admin.parse_target_value(
         parser="role_token",
         values=["tank,dps"],
-        value_mapping={},
+        value_mapping=_ROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
@@ -602,22 +615,70 @@ def test_role_token_is_list_skips_empty_values():
     result = admin.parse_target_value(
         parser="role_token",
         values=["", "support", ""],
-        value_mapping={},
+        value_mapping=_ROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
     assert result == ["support"]
 
 
+_ROLE_SUBROLE_MAP = {
+    "role_subroles": {
+        "хитскан дпс": {"role": "dps", "subrole": "hitscan"},
+        "мейн хил": {"role": "support", "subrole": "main_heal"},
+        "лайт хил (мерси, кирико)": {"role": "support", "subrole": "light_heal"},
+        "проджектайл дд (генджи, фара, ханзо, торбьерн, джанкрет, эхо, мей, рипер, сомбра, симметра, трейсер)": {"role": "dps", "subrole": "projectile"},
+        "хитскан дд (маккри, вдова, солдат76, эш)": {"role": "dps", "subrole": "hitscan"},
+        "support": {"role": "support", "subrole": None},
+        "dps": {"role": "dps", "subrole": None},
+    }
+}
+
+
 def test_role_subrole_token_is_list_multiple_columns():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["Хитскан ДПС", "Мейн хил"],
-        value_mapping={},
+        value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
     assert result == [{"role": "dps", "subrole": "hitscan"}, {"role": "support", "subrole": "main_heal"}]
+
+
+def test_role_subrole_token_verbose_google_forms_label():
+    # Google Forms option label with hero list in parentheses — each cell is one
+    # complete token matched exactly against the configured value_mapping.
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Проджектайл ДД (Генджи, Фара, Ханзо, Торбьерн, Джанкрет, Эхо, Мей, Рипер, Сомбра, Симметра, Трейсер)"],
+        value_mapping=_ROLE_SUBROLE_MAP,
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "dps", "subrole": "projectile"}]
+
+
+def test_role_subrole_token_verbose_hitscan_label():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Хитскан ДД (Маккри, Вдова, Солдат76, Эш)"],
+        value_mapping=_ROLE_SUBROLE_MAP,
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "dps", "subrole": "hitscan"}]
+
+
+def test_role_subrole_token_verbose_light_heal_label():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Лайт хил (Мерси, Кирико)"],
+        value_mapping=_ROLE_SUBROLE_MAP,
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "support", "subrole": "light_heal"}]
 
 
 def test_role_subrole_token_is_list_first_column_empty():
@@ -626,7 +687,7 @@ def test_role_subrole_token_is_list_first_column_empty():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["support"],
-        value_mapping={},
+        value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
@@ -637,7 +698,7 @@ def test_role_subrole_token_is_list_deduplicates_by_role():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["dps", "dps"],
-        value_mapping={},
+        value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
@@ -648,7 +709,7 @@ def test_role_subrole_token_no_is_list_unchanged():
     result = admin.parse_target_value(
         parser="role_subrole_token",
         values=["Хитскан ДПС"],
-        value_mapping={},
+        value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
     )
     assert result == {"role": "dps", "subrole": "hitscan"}
@@ -659,11 +720,11 @@ def test_additional_roles_spec_has_default_is_list():
     assert spec.default_is_list is True
 
 
-def test_role_token_list_backward_compat():
+def test_role_token_list_with_explicit_mapping():
     result = admin.parse_target_value(
         parser="role_token_list",
         values=["dps", "support"],
-        value_mapping={},
+        value_mapping=_ROLE_MAP,
         grid=_grid(),
     )
     assert result == ["dps", "support"]

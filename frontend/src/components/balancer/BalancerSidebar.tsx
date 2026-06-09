@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowUpRight, Check, ChevronsUpDown, Trophy } from "lucide-react";
+import { Check, ChevronsUpDown, Trophy } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -21,13 +21,12 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  SidebarSeparator
+  SidebarRail
 } from "@/components/ui/sidebar";
 import {
   balancerNavigationItems,
@@ -35,36 +34,14 @@ import {
 } from "@/components/balancer/balancer-navigation";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { usePermissions } from "@/hooks/usePermissions";
-import { getAuthProfileHref } from "@/lib/auth-profile-links";
 import tournamentService from "@/services/tournament.service";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
+import { SidebarBackToSite, SidebarUserDropdown } from "@/components/sidebar/sidebar-shared";
 import { cn } from "@/lib/utils";
-import type { Workspace } from "@/types/workspace.types";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Workspace switcher (header)
 // ---------------------------------------------------------------------------
-
-function getRoleLabel({
-  isSuperuser,
-  isAdmin,
-  isOrganizer
-}: {
-  isSuperuser: boolean;
-  isAdmin: boolean;
-  isOrganizer: boolean;
-}) {
-  if (isSuperuser) return "Superuser";
-  if (isAdmin) return "Admin";
-  if (isOrganizer) return "Organizer";
-  return "Operator";
-}
-
-function getInitials(name?: string | null) {
-  if (!name) return "AQ";
-  return name.slice(0, 2).toUpperCase();
-}
 
 function getWorkspaceInitials(name: string): string {
   return name
@@ -85,10 +62,6 @@ const FALLBACK_COLORS = [
   "bg-indigo-600",
   "bg-pink-600"
 ];
-
-// ---------------------------------------------------------------------------
-// WorkspaceSwitcher (sidebar-embedded)
-// ---------------------------------------------------------------------------
 
 function SidebarWorkspaceSwitcher() {
   const {
@@ -209,7 +182,7 @@ function SidebarWorkspaceSwitcher() {
 }
 
 // ---------------------------------------------------------------------------
-// TournamentSwitcher (sidebar-embedded)
+// Tournament switcher
 // ---------------------------------------------------------------------------
 
 function SidebarTournamentSwitcher() {
@@ -230,7 +203,6 @@ function SidebarTournamentSwitcher() {
   const tournaments = tournamentsQuery.data?.results ?? [];
   const current = tournaments.find((t) => t.id === validSelectedId);
 
-  // Auto-select the most recent tournament when none is selected
   useEffect(() => {
     if (validSelectedId !== null || tournaments.length === 0) return;
     const latest = tournaments[0];
@@ -316,11 +288,6 @@ function SidebarTournamentSwitcher() {
 export function BalancerSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useAuthProfile();
-  const { isSuperuser, isAdmin, isOrganizer } = usePermissions();
-
-  const roleLabel = getRoleLabel({ isSuperuser, isAdmin, isOrganizer });
-  const profileHref = getAuthProfileHref(user);
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -329,95 +296,69 @@ export function BalancerSidebar() {
         <SidebarWorkspaceSwitcher />
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-0 group-data-[collapsible=icon]:px-0">
+      <SidebarContent className="px-2 pt-1 group-data-[collapsible=icon]:px-1">
         {/* Tournament switcher */}
-        <SidebarGroup className="py-2 group-data-[collapsible=icon]:px-0">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
-            Tournament
-          </SidebarGroupLabel>
-          <SidebarTournamentSwitcher />
+        <SidebarGroup className="px-0 py-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 group-data-[collapsible=icon]:hidden">
+            <span className="text-[11px] font-medium text-sidebar-foreground/30">Tournament</span>
+          </div>
+          <SidebarGroupContent>
+            <SidebarTournamentSwitcher />
+          </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
+        <div className="mx-2 my-2 h-px bg-sidebar-border/40 group-data-[collapsible=icon]:mx-1" />
 
         {/* Navigation */}
-        <SidebarGroup className="py-2 group-data-[collapsible=icon]:px-0">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
-            Navigation
-          </SidebarGroupLabel>
-          <SidebarMenu>
-            {balancerNavigationItems.map((item) => {
-              const isActive = isBalancerNavItemActive(pathname, item.href);
-              const query = searchParams.toString();
-              const href = query ? `${item.href}?${query}` : item.href;
+        <SidebarGroup className="px-0 py-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 group-data-[collapsible=icon]:hidden">
+            <span className="text-[11px] font-medium text-sidebar-foreground/30">Navigation</span>
+          </div>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {balancerNavigationItems.map((item) => {
+                const isActive = isBalancerNavItemActive(pathname, item.href);
+                const query = searchParams.toString();
+                const href = query ? `${item.href}?${query}` : item.href;
 
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive}
-                    tooltip={item.title}
-                    className="h-9 rounded-lg px-2.5 text-sidebar-foreground/78 hover:text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border))]"
-                  >
-                    <Link href={href}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.title}
+                      className={cn(
+                        "relative h-[30px] rounded-md px-2.5 text-[13px] transition-all",
+                        "text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/60",
+                        isActive && [
+                          "bg-sidebar-accent text-sidebar-foreground font-medium",
+                          "before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2",
+                          "before:h-4 before:w-[2px] before:rounded-full before:bg-sidebar-primary"
+                        ]
+                      )}
+                    >
+                      <Link href={href}>
+                        <item.icon
+                          className={cn(
+                            "size-5",
+                            isActive ? "text-sidebar-primary" : "text-sidebar-foreground/40"
+                          )}
+                        />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      {/* User footer */}
-      <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2.5 group-data-[collapsible=icon]:px-0">
-        {/* Back to site */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="sm"
-              tooltip="Back to site"
-              className="h-8 rounded-lg px-2.5 text-sidebar-foreground/50 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
-            >
-              <Link href="/">
-                <ArrowLeft className="size-4 text-sidebar-foreground/40" />
-                <span>Back to site</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="lg"
-              tooltip={user?.username ?? "Profile"}
-              className="h-11 rounded-lg px-2.5 text-sidebar-foreground/82 group-data-[collapsible=icon]:justify-center"
-            >
-              <Link href={profileHref}>
-                <Avatar className="size-7 rounded-lg">
-                  <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.username ?? "User"} />
-                  <AvatarFallback className="rounded-lg">
-                    {getInitials(user?.username)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-sm font-medium text-sidebar-foreground">
-                    {user?.username ?? "User"}
-                  </span>
-                  <span className="truncate text-[11px] text-sidebar-foreground/58">
-                    {roleLabel}
-                  </span>
-                </div>
-                <ArrowUpRight className="ml-auto size-4 text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden" />
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarFooter className="px-2 pb-2 pt-0 group-data-[collapsible=icon]:px-1">
+        <div className="mx-2 mb-1.5 h-px bg-sidebar-border/40" />
+        <SidebarBackToSite />
+        <SidebarUserDropdown />
       </SidebarFooter>
 
       <SidebarRail />

@@ -34,11 +34,8 @@ from src.services.registration.mapping_catalog import (
 )
 from src.services.registration.utils import (
     DEFAULT_BOOLEAN_TRUE_VALUES,
-    DEFAULT_ROLE_SUBROLE_VALUE_MAP,
     RoleSubroleEntry,
-    DEFAULT_ROLE_VALUE_MAP,
     DEFAULT_SORT_PRIORITY_SENTINEL,
-    DEFAULT_SUBROLE_VALUE_MAP,
     DEFAULT_SYNC_INTERVAL_SECONDS,
     GOOGLE_SHEET_FETCH_TIMEOUT,
     MIN_SYNC_INTERVAL_SECONDS,
@@ -132,12 +129,6 @@ def map_role_token(value: str | None, value_mapping: dict[str, Any]) -> str | No
     if normalized in custom_map:
         mapped = custom_map[normalized]
         return mapped if mapped in {"tank", "dps", "support"} else None
-    if normalized in {"tank", "Ñ‚Ð°Ð½Ðº"} or "Ñ‚Ð°Ð½Ðº" in normalized:
-        return "tank"
-    if normalized in {"dps", "damage"} or "Ð´Ð´" in normalized or "damage" in normalized:
-        return "dps"
-    if normalized in {"support", "ÑÐ°Ð¿", "Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶ÐºÐ°"} or "Ñ…Ð¸Ð»" in normalized or "support" in normalized:
-        return "support"
     return None
 
 
@@ -151,7 +142,7 @@ def map_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> str |
     mapped = custom_map.get(normalized)
     if mapped:
         return normalize_sub_role(mapped)
-    return DEFAULT_SUBROLE_VALUE_MAP.get(normalized)
+    return None
 
 
 def map_role_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> RoleSubroleEntry | None:
@@ -162,14 +153,11 @@ def map_role_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> 
         normalize_header(k): v
         for k, v in (value_mapping.get("role_subroles") or {}).items()
     }
-    entry = custom_map.get(normalized) or DEFAULT_ROLE_SUBROLE_VALUE_MAP.get(normalized)
+    entry = custom_map.get(normalized)
     if isinstance(entry, dict):
         role = entry.get("role")
         if role == "flex" or role in VALID_ROLES:
             return {"role": role, "subrole": entry.get("subrole")}
-    role_code = map_role_token(value, value_mapping)
-    if role_code:
-        return {"role": role_code, "subrole": None}
     return None
 
 
@@ -190,6 +178,14 @@ def _parse_sr_value(raw: str | None, value_mapping: dict[str, Any]) -> int | Non
 def parse_role_token_list(values: list[str], value_mapping: dict[str, Any]) -> list[str]:
     roles: list[str] = []
     for value in values:
+        stripped = value.strip()
+        if not stripped:
+            continue
+        # Try the whole cell value first — handles custom mappings that include commas.
+        role_code = map_role_token(stripped, value_mapping)
+        if role_code:
+            roles.append(role_code)
+            continue
         for token in re.split(r"[,/\n]+", value):
             role_code = map_role_token(token, value_mapping)
             if role_code:
@@ -198,25 +194,30 @@ def parse_role_token_list(values: list[str], value_mapping: dict[str, Any]) -> l
 
 
 def parse_role_subrole_token_list(values: list[str], value_mapping: dict[str, Any]) -> list[RoleSubroleEntry]:
+    """Parse a list of role+subrole tokens, one per value (column).
+
+    Each value is treated as a single complete token — no splitting by separators.
+    This matches the column-mapping model where every cell holds exactly one role
+    option (e.g. a Google Forms checkbox selection).
+    """
     entries: list[RoleSubroleEntry] = []
     seen_roles: set[str] = set()
     for value in values:
-        for token in re.split(r"[,/\n]+", value):
-            entry = map_role_subrole_token(token.strip() or None, value_mapping)
-            if entry:
-                role = entry.get("role") or ""
-                if role and role not in seen_roles:
-                    seen_roles.add(role)
-                    entries.append(entry)
+        entry = map_role_subrole_token(value.strip() or None, value_mapping)
+        if entry:
+            role = entry.get("role") or ""
+            if role and role not in seen_roles:
+                seen_roles.add(role)
+                entries.append(entry)
     return entries
 
 
 def build_default_value_mapping() -> dict[str, Any]:
     return {
         "booleans": dict.fromkeys(sorted(DEFAULT_BOOLEAN_TRUE_VALUES), True),
-        "roles": DEFAULT_ROLE_VALUE_MAP,
-        "subroles": DEFAULT_SUBROLE_VALUE_MAP,
-        "role_subroles": DEFAULT_ROLE_SUBROLE_VALUE_MAP,
+        "roles": {},
+        "subroles": {},
+        "role_subroles": {},
         "divisions": {},
     }
 

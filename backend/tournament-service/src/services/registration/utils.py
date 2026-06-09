@@ -46,76 +46,12 @@ VALID_ROLE_SUBTYPES = LEGACY_ROLE_SUBTYPES
 
 ROLE_ORDER = ("tank", "dps", "support")
 
-# Legacy verbose Russian role mapping (used by legacy sheet sync in balancer.py)
-DEFAULT_ROLE_MAPPING: dict[str, str | None] = {
-    "Лайт хил (Мерси, Кирико)": "support",
-    "Лайт хил (Мерси, Зен, Люсио, Брига, Мойра)": "support",
-    "Лайт хил (Мерси, Зен, Люсио, Брига)": "support",
-    "Лайт хил (Мерси, Иллари, Зен, Люсио, Брига, Мойра)": "support",
-    "Оба Подкласса Хила": "support",
-    "Мейн хил (Ана, Батист, Мойра)": "support",
-    "Мейн хил (Юнона, Ана, Батист, Мойра)": "support",
-    "Танк": "tank",
-    "Танк.": "tank",
-    "Оба Подкласса Танка.": "tank",
-    "ОффТанк (Заря, Дива, Хог, Сигма)": "tank",
-    "МейнТанк (Рейнхард, Винстон, Ориса, Хэммонд)": "tank",
-    "Оба Подкласса ДД": "dps",
-    "Dps": "dps",
-    "Проджектайл ДД (Генджи, Фара, Ханзо, Торбьерн, Джанкрет, Эхо, Мей, Рипер, Сомбра, Симметра, Трейсер)": "dps",
-    "Хитскан ДД (Маккри, Вдова, Солдат76, Эш)": "dps",
-    "Хитскан ДД (Кэс, Вдова, Солдат76, Эш)": "dps",
-    "Я флекс, могу играть абсолютно на всем": None,
-}
-
-# Short-token role mapping (used by registration sheet sync in balancer_registration.py)
-DEFAULT_ROLE_VALUE_MAP: dict[str, str | None] = {
-    "support": "support",
-    "поддержка": "support",
-    "танк": "tank",
-    "tank": "tank",
-    "dps": "dps",
-    "damage": "dps",
-    "дд": "dps",
-}
-
 class RoleSubroleEntry(TypedDict):
     """Structured role + optional sub-role token — mirrors Pydantic/SQL model shape."""
 
     role: str  # "tank" | "dps" | "support" | "flex"
     subrole: str | None
 
-
-# Subrole token mapping (used by registration sheet sync)
-DEFAULT_SUBROLE_VALUE_MAP: dict[str, str | None] = {
-    "hitscan": "hitscan",
-    "хитскан": "hitscan",
-    "projectile": "projectile",
-    "проджектайл": "projectile",
-    "main_heal": "main_heal",
-    "main heal": "main_heal",
-    "мейн хил": "main_heal",
-    "light_heal": "light_heal",
-    "light heal": "light_heal",
-    "лайт хил": "light_heal",
-}
-
-# Combined role+subrole token mapping (used by registration sheet sync)
-DEFAULT_ROLE_SUBROLE_VALUE_MAP: dict[str, RoleSubroleEntry] = {
-    "хитскан дпс":     {"role": "dps",     "subrole": "hitscan"},
-    "хитскан дд":      {"role": "dps",     "subrole": "hitscan"},
-    "hitscan dps":     {"role": "dps",     "subrole": "hitscan"},
-    "проджектайл дпс": {"role": "dps",     "subrole": "projectile"},
-    "projectile dps":  {"role": "dps",     "subrole": "projectile"},
-    "мейн хил":        {"role": "support", "subrole": "main_heal"},
-    "main heal":       {"role": "support", "subrole": "main_heal"},
-    "лайт хил":        {"role": "support", "subrole": "light_heal"},
-    "light heal":      {"role": "support", "subrole": "light_heal"},
-    "флекс":           {"role": "flex",    "subrole": None},
-    "flex":            {"role": "flex",    "subrole": None},
-    "я флекс":         {"role": "flex",    "subrole": None},
-    "full flex":       {"role": "flex",    "subrole": None},
-}
 
 # Boolean true values for parsing sheet data
 DEFAULT_BOOLEAN_TRUE_VALUES = {
