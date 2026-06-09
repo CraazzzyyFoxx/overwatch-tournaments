@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 
@@ -16,13 +16,19 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+  getDefaultDivisionGrid,
   getTierForRank,
   resolveDivisionFromRank,
   resolveExactRankFromDivision,
   sortTiersDescending
 } from "@/lib/division-grid";
+import {
+  buildMappingCells,
+  defaultRankForCell,
+  OW2_DIVISIONS_DESC
+} from "@/lib/ow-rank-mapping";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type {
@@ -35,6 +41,9 @@ import type {
 const RANK_COLLECTION_KEY = "parser.rank_collection";
 const RANK_MAPPING_KEY = "parser.rank_mapping";
 
+const TABS = [{ value: "rank-collection", label: "Rank Collection" }] as const;
+type TabValue = (typeof TABS)[number]["value"];
+
 const DEFAULT_COLLECTION: RankCollectionConfig = {
   enabled: false,
   interval_seconds: 900,
@@ -46,18 +55,6 @@ const DEFAULT_COLLECTION: RankCollectionConfig = {
   backoff_base_seconds: 60
 };
 
-// Default OverFast SR-aligned lower bound per division (tier 5 = base, +100 per tier up).
-const DIVISION_BASE: Record<string, number> = {
-  bronze: 1000,
-  silver: 1500,
-  gold: 2000,
-  platinum: 2500,
-  diamond: 3000,
-  master: 3500,
-  grandmaster: 4000,
-  // OverFast labels the top division "ultimate" (in-game "Champion").
-  ultimate: 4500
-};
 
 function findSetting(settings: SettingRead[] | undefined, key: string): SettingRead | undefined {
   return settings?.find((s) => s.key === key);
@@ -65,10 +62,14 @@ function findSetting(settings: SettingRead[] | undefined, key: string): SettingR
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabValue>("rank-collection");
+
   const settingsQuery = useQuery({
     queryKey: ["admin", "settings"],
     queryFn: () => adminService.getSettings()
   });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
 
   return (
     <div className="space-y-6">
@@ -77,22 +78,36 @@ export default function SettingsPage() {
         <p className="text-muted-foreground mt-2">Global system settings (superuser only)</p>
       </div>
 
+      <ToggleGroup
+        type="single"
+        value={activeTab}
+        onValueChange={(value) => { if (value) setActiveTab(value as TabValue); }}
+        variant="outline"
+        size="sm"
+      >
+        {TABS.map((tab) => (
+          <ToggleGroupItem key={tab.value} value={tab.value}>
+            {tab.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
       {settingsQuery.isLoading ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : settingsQuery.isError ? (
         <p className="text-destructive">Failed to load settings.</p>
-      ) : (
+      ) : activeTab === "rank-collection" ? (
         <>
           <RankCollectionSection
             setting={findSetting(settingsQuery.data, RANK_COLLECTION_KEY)}
-            onSaved={() => queryClient.invalidateQueries({ queryKey: ["admin", "settings"] })}
+            onSaved={invalidate}
           />
           <RankMappingSection
             setting={findSetting(settingsQuery.data, RANK_MAPPING_KEY)}
-            onSaved={() => queryClient.invalidateQueries({ queryKey: ["admin", "settings"] })}
+            onSaved={invalidate}
           />
         </>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -131,7 +146,7 @@ function RankCollectionSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Rank collection (OverFast)</CardTitle>
+        <CardTitle>Rank Collection</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2">
@@ -226,38 +241,6 @@ function RankCollectionSection({
   );
 }
 
-// OverFast competitive ladder, top rank first ("ultimate" = in-game "Champion").
-const OW2_DIVISIONS_DESC = [
-  "ultimate",
-  "grandmaster",
-  "master",
-  "diamond",
-  "platinum",
-  "gold",
-  "silver",
-  "bronze"
-];
-
-function defaultRankForCell(division: string, tier: number): number {
-  return (DIVISION_BASE[division] ?? 0) + (5 - tier) * 100;
-}
-
-/** All 40 OverFast cells (high→low), merging stored overrides over defaults. */
-function buildMappingCells(stored: RankMappingEntry[]): RankMappingEntry[] {
-  const byKey = new Map(stored.map((e) => [`${e.division.toLowerCase()}-${e.tier}`, e]));
-  const cells: RankMappingEntry[] = [];
-  for (const division of OW2_DIVISIONS_DESC) {
-    for (let tier = 1; tier <= 5; tier++) {
-      const existing = byKey.get(`${division}-${tier}`);
-      cells.push({
-        division,
-        tier,
-        rank_value: existing?.rank_value ?? defaultRankForCell(division, tier)
-      });
-    }
-  }
-  return cells;
-}
 
 function RankMappingSection({
   setting,
@@ -266,7 +249,7 @@ function RankMappingSection({
   setting: SettingRead | undefined;
   onSaved: () => void;
 }) {
-  const grid = useDivisionGrid();
+  const grid = getDefaultDivisionGrid();
   const internalTiers = useMemo(() => sortTiersDescending(grid), [grid]);
 
   const initial = useMemo<RankMappingConfig>(() => {
@@ -306,11 +289,11 @@ function RankMappingSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Rank mapping (OverFast → internal division)</CardTitle>
+        <CardTitle>Rank Mapping</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Map each OverFast competitive rank to an internal division from the workspace grid. The
+          Map each competitive rank to an internal division from the workspace grid. The
           division&apos;s lower bound is stored as the rank value.
         </p>
 

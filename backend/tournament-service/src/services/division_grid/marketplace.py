@@ -415,6 +415,8 @@ async def import_division_grids(
                         rank_min=source_tier.rank_min,
                         rank_max=source_tier.rank_max,
                         icon_url=copied.public_url,
+                        ow_rank_min=source_tier.ow_rank_min,
+                        ow_rank_max=source_tier.ow_rank_max,
                     )
                     session.add(target_tier)
                     await session.flush()

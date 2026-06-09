@@ -101,6 +101,8 @@ class DivisionGridTier(db.TimeStampIntegerMixin):
     rank_min: Mapped[int] = mapped_column(BigInteger(), nullable=False)
     rank_max: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     icon_url: Mapped[str] = mapped_column(String(), nullable=False)
+    ow_rank_min: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    ow_rank_max: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
     version: Mapped["DivisionGridVersion"] = relationship(back_populates="tiers")
 

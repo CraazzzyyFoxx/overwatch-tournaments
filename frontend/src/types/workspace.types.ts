@@ -7,6 +7,8 @@ export interface DivisionTier {
   rank_max: number | null;
   sort_order?: number;
   icon_url: string;
+  ow_rank_min?: number | null;
+  ow_rank_max?: number | null;
 }
 
 export interface DivisionGrid {

@@ -35,6 +35,8 @@ class DivisionGridTierRead(BaseRead):
     rank_min: int
     rank_max: int | None
     icon_url: str
+    ow_rank_min: int | None = None
+    ow_rank_max: int | None = None
 
 
 class DivisionGridVersionRead(BaseRead):
@@ -79,6 +81,8 @@ class DivisionGridTierWrite(BaseModel):
     rank_min: int
     rank_max: int | None
     icon_url: str = Field(..., min_length=1, max_length=2048)
+    ow_rank_min: int | None = None
+    ow_rank_max: int | None = None
 
 
 class DivisionGridMappingRuleRead(BaseRead):

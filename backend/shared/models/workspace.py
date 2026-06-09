@@ -28,7 +28,6 @@ class Workspace(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-
     members: Mapped[list["WorkspaceMember"]] = relationship(
         back_populates="workspace", passive_deletes=True
     )

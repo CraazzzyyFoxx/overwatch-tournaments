@@ -219,6 +219,8 @@ async def create_version(
                 rank_min=tier.rank_min,
                 rank_max=tier.rank_max,
                 icon_url=tier.icon_url,
+                ow_rank_min=tier.ow_rank_min,
+                ow_rank_max=tier.ow_rank_max,
             )
         )
 
@@ -281,6 +283,42 @@ async def publish_version(session: AsyncSession, version_id: int) -> models.Divi
     return await get_version(session, version_id)
 
 
+async def update_version(
+    session: AsyncSession,
+    version_id: int,
+    data: schemas.DivisionGridVersionUpdate,
+) -> models.DivisionGridVersion:
+    version = await get_version(session, version_id)
+    if version.status != "draft":
+        raise HTTPException(status_code=400, detail="Only draft versions can be updated in-place")
+    if data.label is not None:
+        version.label = data.label
+    if data.tiers is not None:
+        _validate_version_payload(data.tiers)
+        await session.execute(
+            sa.delete(models.DivisionGridTier).where(models.DivisionGridTier.version_id == version_id)
+        )
+        for tier in data.tiers:
+            session.add(
+                models.DivisionGridTier(
+                    version_id=version_id,
+                    slug=tier.slug,
+                    number=tier.number,
+                    name=tier.name,
+                    sort_order=tier.sort_order,
+                    rank_min=tier.rank_min,
+                    rank_max=tier.rank_max,
+                    icon_url=tier.icon_url,
+                    ow_rank_min=tier.ow_rank_min,
+                    ow_rank_max=tier.ow_rank_max,
+                )
+            )
+    await session.flush()
+    updated = await get_version(session, version_id)
+    await division_grid_cache.invalidate_grid_version(version_id)
+    return updated
+
+
 async def clone_version(session: AsyncSession, version_id: int, *, label: str | None = None) -> models.DivisionGridVersion:
     version = await get_version(session, version_id)
     cloned = await create_version(
@@ -298,6 +336,8 @@ async def clone_version(session: AsyncSession, version_id: int, *, label: str | 
                     rank_min=tier.rank_min,
                     rank_max=tier.rank_max,
                     icon_url=tier.icon_url,
+                    ow_rank_min=tier.ow_rank_min,
+                    ow_rank_max=tier.ow_rank_max,
                 )
                 for tier in version.tiers
             ],

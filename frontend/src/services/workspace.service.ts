@@ -129,6 +129,8 @@ export default class workspaceService {
         rank_min: number;
         rank_max: number | null;
         icon_url: string;
+        ow_rank_min: number | null;
+        ow_rank_max: number | null;
       }>;
     }
   ): Promise<DivisionGridVersion> {
@@ -154,6 +156,29 @@ export default class workspaceService {
 
   static async deleteDivisionGridVersion(versionId: number): Promise<void> {
     await apiFetch("tournament", `division-grids/versions/${versionId}`, { method: "DELETE" });
+  }
+
+  static async updateDivisionGridVersion(
+    versionId: number,
+    data: {
+      label?: string;
+      tiers?: Array<{
+        slug: string;
+        number: number;
+        name: string;
+        sort_order: number;
+        rank_min: number;
+        rank_max: number | null;
+        icon_url: string;
+        ow_rank_min: number | null;
+        ow_rank_max: number | null;
+      }>;
+    }
+  ): Promise<DivisionGridVersion> {
+    return apiFetch("tournament", `division-grids/versions/${versionId}`, {
+      method: "PATCH",
+      body: data
+    }).then((r) => r.json());
   }
 
   static async uploadDivisionIcon(

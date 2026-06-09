@@ -93,11 +93,16 @@ function emptyTier(number: number, index: number): DivisionTier {
     sort_order: index,
     rank_min: 1000,
     rank_max: 1099,
-    icon_url: `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/bronze-5.png`
+    icon_url: `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/bronze-5.png`,
+    ow_rank_min: null,
+    ow_rank_max: null
   };
 }
 
-function buildEditorState(selectedVersion: DivisionGridVersion | null): {
+function buildEditorState(
+  selectedVersion: DivisionGridVersion | null,
+  isDraftMode: boolean
+): {
   label: string;
   tiers: DivisionTier[];
 } {
@@ -109,7 +114,7 @@ function buildEditorState(selectedVersion: DivisionGridVersion | null): {
   }
 
   return {
-    label: `${selectedVersion.label} Copy`,
+    label: isDraftMode ? selectedVersion.label : `${selectedVersion.label} Copy`,
     tiers: [...selectedVersion.tiers]
       .sort((a, b) => a.number - b.number)
       .map((tier, index) => ({ ...tier, sort_order: tier.sort_order ?? index }))
@@ -124,8 +129,8 @@ type DivisionGridEditorCardProps = {
   onSaved: () => Promise<void>;
 };
 
-// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max
-const NAV_COLS = 4;
+// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max, 4=ow_rank_min, 5=ow_rank_max
+const NAV_COLS = 6;
 const DEFAULT_RANK_STEP = 100;
 
 function toSafeInteger(value: number, fallback = 0) {
@@ -186,7 +191,7 @@ const TierEditorRow = memo(function TierEditorRow({
   );
 
   return (
-    <div className="grid min-w-[820px] grid-cols-[40px_56px_48px_minmax(180px,1fr)_240px_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
+    <div className="grid min-w-[1060px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_200px_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
       <div className="flex items-center justify-center">
         <Checkbox
           checked={isSelected}
@@ -251,6 +256,41 @@ const TierEditorRow = memo(function TierEditorRow({
           disabled={!canEdit}
         />
       </div>
+      <div className="flex items-center gap-1.5">
+        <Input
+          ref={setInputRef(4)}
+          inputMode="numeric"
+          className="h-8 w-20 tabular-nums"
+          placeholder="min"
+          value={tier.ow_rank_min ?? ""}
+          onChange={(event) =>
+            onUpdate(
+              rowIndex,
+              "ow_rank_min",
+              event.target.value === "" ? null : parseIntegerInput(event.target.value)
+            )
+          }
+          onKeyDown={(event) => onKeyDown(event, rowIndex, 4)}
+          disabled={!canEdit}
+        />
+        <span className="shrink-0 text-xs text-muted-foreground">-</span>
+        <Input
+          ref={setInputRef(5)}
+          inputMode="numeric"
+          className="h-8 w-20 tabular-nums"
+          placeholder="max"
+          value={tier.ow_rank_max ?? ""}
+          onChange={(event) =>
+            onUpdate(
+              rowIndex,
+              "ow_rank_max",
+              event.target.value === "" ? null : parseIntegerInput(event.target.value)
+            )
+          }
+          onKeyDown={(event) => onKeyDown(event, rowIndex, 5)}
+          disabled={!canEdit}
+        />
+      </div>
       <label className="inline-flex cursor-pointer items-center justify-center">
         <input
           type="file"
@@ -289,7 +329,11 @@ function DivisionGridEditorCard({
   onSaved
 }: DivisionGridEditorCardProps) {
   const { toast } = useToast();
-  const initialState = useMemo(() => buildEditorState(selectedVersion), [selectedVersion]);
+  const isDraftMode = selectedVersion?.status === "draft";
+  const initialState = useMemo(
+    () => buildEditorState(selectedVersion, !!isDraftMode),
+    [selectedVersion, isDraftMode]
+  );
   const [label, setLabel] = useState(initialState.label);
   const [tiers, setTiers] = useState<DivisionTier[]>(initialState.tiers);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(() => new Set());
@@ -340,23 +384,38 @@ function DivisionGridEditorCard({
     []
   );
 
+  const tiersPayload = useMemo(
+    () =>
+      tiers.map((tier, index) => ({
+        slug: tier.slug || `division-${tier.number}`,
+        number: tier.number,
+        name: tier.name,
+        sort_order: index,
+        rank_min: tier.rank_min,
+        rank_max: tier.rank_max,
+        icon_url: tier.icon_url,
+        ow_rank_min: tier.ow_rank_min ?? null,
+        ow_rank_max: tier.ow_rank_max ?? null
+      })),
+    [tiers]
+  );
+
   const saveVersionMutation = useMutation({
-    mutationFn: async () =>
-      workspaceService.createDivisionGridVersion(workspaceId, gridId, {
+    mutationFn: async () => {
+      if (isDraftMode && selectedVersion) {
+        return workspaceService.updateDivisionGridVersion(selectedVersion.id, {
+          label,
+          tiers: tiersPayload
+        });
+      }
+      return workspaceService.createDivisionGridVersion(workspaceId, gridId, {
         label,
-        tiers: tiers.map((tier, index) => ({
-          slug: tier.slug || `division-${tier.number}`,
-          number: tier.number,
-          name: tier.name,
-          sort_order: index,
-          rank_min: tier.rank_min,
-          rank_max: tier.rank_max,
-          icon_url: tier.icon_url
-        }))
-      }),
+        tiers: tiersPayload
+      });
+    },
     onSuccess: async () => {
       await onSaved();
-      toast({ title: "Draft version created" });
+      toast({ title: isDraftMode ? "Draft saved" : "Draft version created" });
     },
     onError: (error: Error) =>
       toast({ title: "Error", description: error.message, variant: "destructive" })
@@ -493,8 +552,12 @@ function DivisionGridEditorCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Draft Editor</CardTitle>
-        <CardDescription>Create a new immutable version from the current tier set.</CardDescription>
+        <CardTitle>{isDraftMode ? "Edit Draft" : "Draft Editor"}</CardTitle>
+        <CardDescription>
+          {isDraftMode
+            ? "Edit the current draft version. Changes are saved in-place."
+            : "Create a new draft version from the selected tiers."}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Input
@@ -621,7 +684,7 @@ function DivisionGridEditorCard({
         </div>
 
         <div className="overflow-x-auto rounded-md border">
-          <div className="grid min-w-[820px] grid-cols-[40px_56px_48px_minmax(180px,1fr)_240px_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <div className="grid min-w-[1060px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_200px_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
             <div className="flex items-center justify-center">
               <Checkbox
                 checked={someRowsSelected ? "indeterminate" : allRowsSelected}
@@ -634,6 +697,7 @@ function DivisionGridEditorCard({
             <span>Icon</span>
             <span>Name</span>
             <span>Rank Range</span>
+            <span>OW Range</span>
             <span>Upload</span>
             <span />
           </div>
@@ -660,7 +724,7 @@ function DivisionGridEditorCard({
             disabled={!canEdit || saveVersionMutation.isPending}
           >
             <Save className="mr-2 h-4 w-4" />
-            Save New Version
+            {isDraftMode ? "Save Draft" : "Create New Draft"}
           </Button>
         </div>
       </CardContent>
@@ -889,7 +953,7 @@ export default function DivisionsAdminPage() {
                     disabled={cloneMutation.isPending}
                   >
                     <CopyPlus className="mr-2 h-4 w-4" />
-                    Clone Version
+                    {selectedVersion?.status === "published" ? "Fork to New Draft" : "Clone Version"}
                   </Button>
                   <Button
                     variant="outline"

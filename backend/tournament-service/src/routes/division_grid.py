@@ -195,6 +195,20 @@ async def get_division_grid_version(
     return schemas.DivisionGridVersionRead.model_validate(version, from_attributes=True)
 
 
+@router.patch("/versions/{version_id}", response_model=schemas.DivisionGridVersionRead)
+async def update_division_grid_version(
+    version_id: int,
+    data: schemas.DivisionGridVersionUpdate,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.get_current_active_user),
+):
+    version = await division_grid_service.get_version(session, version_id)
+    await _require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="update")
+    version = await division_grid_service.update_version(session, version_id, data)
+    await session.commit()
+    return schemas.DivisionGridVersionRead.model_validate(version, from_attributes=True)
+
+
 @router.delete("/versions/{version_id}", status_code=204)
 async def delete_division_grid_version(
     version_id: int,
