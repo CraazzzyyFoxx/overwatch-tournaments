@@ -410,8 +410,9 @@ def parse_sheet_row_detailed(
         if spec.group == "custom_fields":
             continue
         target_config = targets.get(target_key)
-        mode = (target_config or {}).get("mode") or spec.default_mode
-        if mode == "auto":
+        raw_mode = (target_config or {}).get("mode") or spec.default_mode
+        effective_mode = "auto" if raw_mode in ("auto", "disabled") and spec.default_mode == "auto" else raw_mode
+        if effective_mode == "auto":
             continue
         values = get_selector_values(target_config, row_json)
         parser = (target_config or {}).get("parser", spec.default_parser)
@@ -564,6 +565,10 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
                 "is_active": bool(is_active) if is_active is not None else (rank_value is not None or declared_in_source),
             }
         )
+
+    if payloads and not is_full_flex and not any(p["is_primary"] for p in payloads):
+        payloads[0]["is_primary"] = True
+
     return payloads
 
 
