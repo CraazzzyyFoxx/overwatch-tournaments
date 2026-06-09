@@ -1,16 +1,19 @@
 "use client";
 
 import { Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import type {
   MappingCatalog,
+  MappingTargetGroup,
   MappingTargetMode,
   MappingTargetState,
 } from "@/types/balancer-admin.types";
 
 import { MappingGroupSection } from "./MappingGroupSection";
-import { GROUP_ORDER, targetsByGroup } from "./mappingConfig";
+import { GROUP_LABELS, GROUP_ORDER, targetsByGroup } from "./mappingConfig";
 
 interface ColumnMappingTabProps {
   catalog: MappingCatalog;
@@ -42,6 +45,16 @@ export function ColumnMappingTab({
   const grouped = targetsByGroup(catalog);
   const hasHeaders = headerKeys.length > 0;
 
+  const visibleGroups = GROUP_ORDER.filter((g) => grouped[g].length > 0);
+  const [activeGroup, setActiveGroup] = useState<MappingTargetGroup>(
+    visibleGroups[0] ?? "identity",
+  );
+
+  const safeActive = visibleGroups.includes(activeGroup) ? activeGroup : (visibleGroups[0] ?? "identity");
+
+  const hasErrors = (group: MappingTargetGroup) =>
+    grouped[group].some((t) => errorsByTarget[t.key]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
@@ -72,11 +85,28 @@ export function ColumnMappingTab({
           </p>
         </div>
       ) : (
-        GROUP_ORDER.map((group) => (
+        <>
+          <ButtonGroup>
+            {visibleGroups.map((group) => (
+              <Button
+                key={group}
+                variant={safeActive === group ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveGroup(group)}
+                className="relative"
+              >
+                {GROUP_LABELS[group]}
+                {hasErrors(group) && (
+                  <span className="ml-1.5 inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
+                )}
+              </Button>
+            ))}
+          </ButtonGroup>
+
           <MappingGroupSection
-            key={group}
-            group={group}
-            targets={grouped[group]}
+            key={safeActive}
+            group={safeActive}
+            targets={grouped[safeActive]}
             mappingState={mappingState}
             headerKeys={headerKeys}
             parsers={catalog.parsers}
@@ -87,7 +117,7 @@ export function ColumnMappingTab({
             onValueChange={onValueChange}
             onParserChange={onParserChange}
           />
-        ))
+        </>
       )}
     </div>
   );
