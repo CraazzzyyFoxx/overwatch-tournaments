@@ -207,8 +207,8 @@ def build_default_value_mapping() -> dict[str, Any]:
     }
 
 
-def default_mapping_target(parser: str) -> dict[str, Any]:
-    return {"mode": "disabled", "parser": parser}
+def default_mapping_target(parser: str, mode: str = "disabled") -> dict[str, Any]:
+    return {"mode": mode, "parser": parser}
 
 
 def suggest_mapping_from_headers(
@@ -226,7 +226,7 @@ def suggest_mapping_from_headers(
     header_keys = build_header_keys(headers)
     normalized_headers = [normalize_header(header) for header in headers]
     specs = build_target_specs(custom_fields)
-    targets: dict[str, Any] = {spec.key: default_mapping_target(spec.default_parser) for spec in specs}
+    targets: dict[str, Any] = {spec.key: default_mapping_target(spec.default_parser, spec.default_mode) for spec in specs}
 
     def matching_columns(spec: Any) -> list[str]:
         return [
@@ -294,7 +294,7 @@ def get_selector_values(target_config: dict[str, Any] | None, row_json: dict[str
     if not target_config:
         return []
     mode = target_config.get("mode")
-    if mode == "disabled":
+    if mode in ("disabled", "auto"):
         return []
     if mode == "constant":
         value = target_config.get("value")
@@ -410,6 +410,9 @@ def parse_sheet_row_detailed(
         if spec.group == "custom_fields":
             continue
         target_config = targets.get(target_key)
+        mode = (target_config or {}).get("mode") or spec.default_mode
+        if mode == "auto":
+            continue
         values = get_selector_values(target_config, row_json)
         parser = (target_config or {}).get("parser", spec.default_parser)
         try:
@@ -449,20 +452,20 @@ def parse_sheet_row_detailed(
             "tank": {
                 "rank_value": flat_values.get("roles.tank.rank_value") or flat_values.get("roles.tank.division_input"),
                 "subrole": None,
-                "is_active": bool(flat_values.get("roles.tank.is_active", False)),
+                "is_active": flat_values.get("roles.tank.is_active"),
                 "priority": flat_values.get("roles.tank.priority"),
             },
             "dps": {
                 "rank_value": flat_values.get("roles.dps.rank_value") or flat_values.get("roles.dps.division_input"),
                 "subrole": flat_values.get("roles.dps.subrole"),
-                "is_active": bool(flat_values.get("roles.dps.is_active", False)),
+                "is_active": flat_values.get("roles.dps.is_active"),
                 "priority": flat_values.get("roles.dps.priority"),
             },
             "support": {
                 "rank_value": flat_values.get("roles.support.rank_value")
                 or flat_values.get("roles.support.division_input"),
                 "subrole": flat_values.get("roles.support.subrole"),
-                "is_active": bool(flat_values.get("roles.support.is_active", False)),
+                "is_active": flat_values.get("roles.support.is_active"),
                 "priority": flat_values.get("roles.support.priority"),
             },
         },
@@ -558,7 +561,7 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
                 "is_primary": is_full_flex or primary_code == role_code or (primary_code is None and fallback_priority == 0),
                 "priority": int(priority) if isinstance(priority, int) else source_priority.get(role_code, fallback_priority),
                 "rank_value": rank_value,
-                "is_active": bool(is_active) if is_active is not None else rank_value is not None,
+                "is_active": bool(is_active) if is_active is not None else (rank_value is not None or declared_in_source),
             }
         )
     return payloads

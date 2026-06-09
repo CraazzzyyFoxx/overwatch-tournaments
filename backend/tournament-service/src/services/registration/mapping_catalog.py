@@ -43,7 +43,7 @@ PARSER_JOIN_LINES = "join_lines"
 PARSER_ROLE_SUBROLE_TOKEN = "role_subrole_token"
 PARSER_SR_VALUE = "sr_value"
 
-VALID_MODES = ("columns", "disabled", "constant")
+VALID_MODES = ("columns", "disabled", "constant", "auto")
 
 
 @dataclass(frozen=True)
@@ -90,6 +90,7 @@ class MappingTargetSpec:
     group: str  # "identity" | "profile" | "roles" | "custom_fields"
     accepted_parsers: tuple[str, ...]
     default_parser: str
+    default_mode: str = "disabled"
     multi_column: bool = False
     required: bool = False
     aliases: tuple[str, ...] = ()
@@ -239,6 +240,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
                 group="roles",
                 accepted_parsers=(PARSER_BOOLEAN,),
                 default_parser=PARSER_BOOLEAN,
+                default_mode="auto",
             )
         )
         specs.append(
