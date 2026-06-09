@@ -192,7 +192,7 @@ const TierEditorRow = memo(function TierEditorRow({
   );
 
   return (
-    <div className="grid min-w-[1100px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_1fr_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
+    <div className="grid min-w-[900px] grid-cols-[40px_56px_48px_180px_220px_1fr_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
       <div className="flex items-center justify-center">
         <Checkbox
           checked={isSelected}
@@ -687,7 +687,7 @@ function DivisionGridEditorCard({
         </div>
 
         <div className="overflow-x-auto rounded-md border">
-          <div className="grid min-w-[1100px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_1fr_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <div className="grid min-w-[900px] grid-cols-[40px_56px_48px_180px_220px_1fr_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
             <div className="flex items-center justify-center">
               <Checkbox
                 checked={someRowsSelected ? "indeterminate" : allRowsSelected}
