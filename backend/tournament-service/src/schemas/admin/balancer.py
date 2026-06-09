@@ -317,7 +317,7 @@ class MappingParserRead(BaseModel):
 
 
 class MappingValueCategoryRead(BaseModel):
-    category: Literal["booleans", "roles", "subroles", "divisions"]
+    category: Literal["booleans", "roles", "subroles", "role_subroles", "divisions"]
     entries: dict[str, Any] = Field(default_factory=dict)
 
 
