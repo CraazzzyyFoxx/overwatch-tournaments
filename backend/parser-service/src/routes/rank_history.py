@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from src import schemas
 from src.core import db
@@ -9,7 +9,26 @@ from src.services.overwatch_rank import read_service
 
 router = APIRouter(tags=["Rank History"])
 
-Granularity = Literal["raw", "daily"]
+Granularity = Literal["raw", "daily", "hourly"]
+
+
+def _resolve_date_range(
+    granularity: Granularity,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> tuple[datetime, datetime]:
+    """Apply per-granularity defaults and enforce max range for hourly/raw."""
+    now = datetime.now(tz=UTC)
+    resolved_to = date_to or now
+    default_days = 7 if granularity == "daily" else 3
+    max_days = None if granularity == "daily" else 7
+    resolved_from = date_from or (resolved_to - timedelta(days=default_days))
+    if max_days is not None and (resolved_to - resolved_from).total_seconds() > max_days * 86400:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Date range for '{granularity}' granularity must not exceed {max_days} days.",
+        )
+    return resolved_from, resolved_to
 
 
 @router.get("/users/{user_id}/rank-history", response_model=schemas.RankHistoryResponse)
@@ -20,10 +39,12 @@ async def get_user_rank_history(
     battle_tag_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    granularity: Granularity = "raw",
+    granularity: Granularity = "daily",
     session=Depends(db.get_async_session),
 ) -> schemas.RankHistoryResponse:
     """Rank history for a user across all their battle.net accounts."""
+    date_from, date_to = _resolve_date_range(granularity, date_from, date_to)
+    service_granularity = "daily" if granularity == "daily" else "raw"
     series = await read_service.get_rank_series(
         session,
         user_id=user_id,
@@ -32,7 +53,7 @@ async def get_user_rank_history(
         role=role,
         date_from=date_from,
         date_to=date_to,
-        granularity=granularity,
+        granularity=service_granularity,
     )
     return schemas.RankHistoryResponse(
         user_id=user_id, series=series, generated_at=datetime.now(UTC)
@@ -46,10 +67,12 @@ async def get_battle_tag_rank_history(
     role: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    granularity: Granularity = "raw",
+    granularity: Granularity = "daily",
     session=Depends(db.get_async_session),
 ) -> schemas.RankHistoryResponse:
     """Rank history for a single battle.net account."""
+    date_from, date_to = _resolve_date_range(granularity, date_from, date_to)
+    service_granularity = "daily" if granularity == "daily" else "raw"
     series = await read_service.get_rank_series(
         session,
         battle_tag_id=battle_tag_id,
@@ -57,7 +80,7 @@ async def get_battle_tag_rank_history(
         role=role,
         date_from=date_from,
         date_to=date_to,
-        granularity=granularity,
+        granularity=service_granularity,
     )
     return schemas.RankHistoryResponse(
         user_id=None, series=series, generated_at=datetime.now(UTC)

@@ -1,11 +1,22 @@
 "use client";
 
+import { useMemo } from "react";
 import { AlertCircle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import RankHistoryChart, { RankHistorySkeleton } from "@/components/RankHistoryChart";
 import { useUserRankHistory } from "@/hooks/useRankHistory";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { useTranslation } from "@/i18n/LanguageContext";
+
+type Granularity = "date" | "hour" | "raw";
+
+function getDefaultDateFrom(g: Granularity): string {
+  const days = g === "date" ? 14 : 3;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
 
 interface UserRankHistoryProps {
   userId: number;
@@ -20,7 +31,13 @@ interface UserRankHistoryProps {
  */
 export default function UserRankHistory({ userId, title = "Rank history", className }: UserRankHistoryProps) {
   const { locale } = useTranslation();
-  const { data, isLoading, isError } = useUserRankHistory(userId);
+  const [granularity, setGranularity] = useLocalStorageState<Granularity>("rank-history-granularity", "date");
+  const dateFrom = useMemo(() => getDefaultDateFrom(granularity), [granularity]);
+  const backendGranularity = granularity === "date" ? "daily" : granularity === "hour" ? "hourly" : "raw";
+  const { data, isLoading, isError } = useUserRankHistory(userId, {
+    granularity: backendGranularity,
+    dateFrom,
+  });
   const series = data?.series ?? [];
 
   return (
@@ -44,7 +61,7 @@ export default function UserRankHistory({ userId, title = "Rank history", classN
             </p>
           </div>
         ) : (
-          <RankHistoryChart series={series} />
+          <RankHistoryChart series={series} granularity={granularity} onGranularityChange={setGranularity} />
         )}
       </CardContent>
     </Card>

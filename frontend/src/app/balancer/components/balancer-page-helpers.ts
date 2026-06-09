@@ -116,7 +116,7 @@ export const TEAM_BADGE_ACCENTS = [
 export const BALANCE_ROSTER_KEYS: BalancerRosterKey[] = ["Tank", "Damage", "Support"];
 
 export const PANEL_CLASS =
-  "rounded-[28px] border border-white/8 bg-[#11101f] shadow-[0_18px_60px_rgba(0,0,0,0.24)]";
+  "rounded-xl border border-border bg-card";
 
 export const MUTED_BUTTON_CLASS =
   "rounded-xl border-white/10 bg-black/15 text-white/70 hover:bg-white/[0.05] hover:text-white";

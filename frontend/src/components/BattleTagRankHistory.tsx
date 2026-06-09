@@ -1,12 +1,23 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link2Off, AlertCircle } from "lucide-react";
 
 import RankHistoryChart, { RankHistorySkeleton } from "@/components/RankHistoryChart";
 import { useUserRankHistory } from "@/hooks/useRankHistory";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import userService from "@/services/user.service";
 import { useTranslation } from "@/i18n/LanguageContext";
+
+type Granularity = "date" | "hour" | "raw";
+
+function getDefaultDateFrom(g: Granularity): string {
+  const days = g === "date" ? 14 : 3;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
 
 interface BattleTagRankHistoryProps {
   /** Domain user id, when already known (preferred — avoids a lookup). */
@@ -40,8 +51,15 @@ export default function BattleTagRankHistory({
     enabled: userId != null || Boolean(battleTag)
   });
 
+  const [granularity, setGranularity] = useLocalStorageState<Granularity>("rank-history-granularity", "date");
+  const dateFrom = useMemo(() => getDefaultDateFrom(granularity), [granularity]);
+  const backendGranularity = granularity === "date" ? "daily" : granularity === "hour" ? "hourly" : "raw";
+
   const resolvedUserId = resolve.data ?? null;
-  const history = useUserRankHistory(typeof resolvedUserId === "number" ? resolvedUserId : NaN);
+  const history = useUserRankHistory(typeof resolvedUserId === "number" ? resolvedUserId : NaN, {
+    granularity: backendGranularity,
+    dateFrom,
+  });
 
   if (resolve.isLoading || (resolvedUserId != null && history.isLoading)) {
     return <RankHistorySkeleton className={className} />;
@@ -79,5 +97,5 @@ export default function BattleTagRankHistory({
     );
   }
 
-  return <RankHistoryChart series={history.data?.series ?? []} className={className} />;
+  return <RankHistoryChart series={history.data?.series ?? []} className={className} granularity={granularity} onGranularityChange={setGranularity} />;
 }

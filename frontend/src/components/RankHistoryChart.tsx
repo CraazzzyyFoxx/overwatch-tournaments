@@ -47,6 +47,9 @@ interface RankHistoryChartProps {
   /** Default grouping mode. */
   defaultGroupBy?: GroupBy;
   className?: string;
+  /** Controlled granularity — when provided the chart becomes a controlled component. */
+  granularity?: Granularity;
+  onGranularityChange?: (g: Granularity) => void;
 }
 
 function uniqueBy<T, K>(items: T[], keyOf: (item: T) => K): T[] {
@@ -65,15 +68,22 @@ function uniqueBy<T, K>(items: T[], keyOf: (item: T) => K): T[] {
 export default function RankHistoryChart({
   series,
   defaultGroupBy = "role",
-  className
+  className,
+  granularity: granularityProp,
+  onGranularityChange
 }: RankHistoryChartProps) {
   const platforms = useMemo(() => uniqueBy(series.map((s) => s.platform), (p) => p), [series]);
   const [platform, setPlatform] = useState<string>(platforms.includes("pc") ? "pc" : platforms[0] ?? "pc");
   const [groupBy, setGroupBy] = useState<GroupBy>(defaultGroupBy);
-  const [granularity, setGranularity] = useLocalStorageState<Granularity>(
+  const [localGranularity, setLocalGranularity] = useLocalStorageState<Granularity>(
     "rank-history-granularity",
     "date"
   );
+  const granularity = granularityProp ?? localGranularity;
+  const setGranularity = (g: Granularity) => {
+    setLocalGranularity(g);
+    onGranularityChange?.(g);
+  };
 
   const platformSeries = useMemo(
     () => series.filter((s) => s.platform === platform),

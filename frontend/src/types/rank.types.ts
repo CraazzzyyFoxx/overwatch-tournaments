@@ -54,5 +54,5 @@ export interface RankHistoryQuery {
   battleTagId?: number;
   dateFrom?: string;
   dateTo?: string;
-  granularity?: "raw" | "daily";
+  granularity?: "raw" | "daily" | "hourly";
 }
