@@ -259,15 +259,15 @@ const TierEditorRow = memo(function TierEditorRow({
       </div>
       <div className="flex items-center gap-1.5">
         <Select
-          value={tier.ow_rank_min?.toString() ?? ""}
-          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_min", v === "" ? null : Number(v))}
+          value={tier.ow_rank_min?.toString() ?? "__none__"}
+          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_min", v === "__none__" ? null : Number(v))}
           disabled={!canEdit}
         >
           <SelectTrigger className="h-8 flex-1 min-w-0">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">—</SelectItem>
+            <SelectItem value="__none__">—</SelectItem>
             {OW2_RANK_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value.toString()}>
                 {opt.label}
@@ -277,15 +277,15 @@ const TierEditorRow = memo(function TierEditorRow({
         </Select>
         <span className="shrink-0 text-xs text-muted-foreground">–</span>
         <Select
-          value={tier.ow_rank_max?.toString() ?? ""}
-          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_max", v === "" ? null : Number(v))}
+          value={tier.ow_rank_max?.toString() ?? "__none__"}
+          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_max", v === "__none__" ? null : Number(v))}
           disabled={!canEdit}
         >
           <SelectTrigger className="h-8 flex-1 min-w-0">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">—</SelectItem>
+            <SelectItem value="__none__">—</SelectItem>
             {OW2_RANK_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value.toString()}>
                 {opt.label}
