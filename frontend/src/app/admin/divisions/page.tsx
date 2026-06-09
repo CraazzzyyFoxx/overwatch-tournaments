@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { OW2_RANK_OPTIONS } from "@/lib/ow-rank-mapping";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type {
@@ -129,8 +130,8 @@ type DivisionGridEditorCardProps = {
   onSaved: () => Promise<void>;
 };
 
-// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max, 4=ow_rank_min, 5=ow_rank_max
-const NAV_COLS = 6;
+// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max (OW cols use Select, no nav)
+const NAV_COLS = 4;
 const DEFAULT_RANK_STEP = 100;
 
 function toSafeInteger(value: number, fallback = 0) {
@@ -191,7 +192,7 @@ const TierEditorRow = memo(function TierEditorRow({
   );
 
   return (
-    <div className="grid min-w-[1060px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_200px_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
+    <div className="grid min-w-[1100px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_1fr_40px_36px] gap-2 border-b px-4 py-1.5 last:border-b-0">
       <div className="flex items-center justify-center">
         <Checkbox
           checked={isSelected}
@@ -257,39 +258,41 @@ const TierEditorRow = memo(function TierEditorRow({
         />
       </div>
       <div className="flex items-center gap-1.5">
-        <Input
-          ref={setInputRef(4)}
-          inputMode="numeric"
-          className="h-8 w-20 tabular-nums"
-          placeholder="min"
-          value={tier.ow_rank_min ?? ""}
-          onChange={(event) =>
-            onUpdate(
-              rowIndex,
-              "ow_rank_min",
-              event.target.value === "" ? null : parseIntegerInput(event.target.value)
-            )
-          }
-          onKeyDown={(event) => onKeyDown(event, rowIndex, 4)}
+        <Select
+          value={tier.ow_rank_min?.toString() ?? ""}
+          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_min", v === "" ? null : Number(v))}
           disabled={!canEdit}
-        />
-        <span className="shrink-0 text-xs text-muted-foreground">-</span>
-        <Input
-          ref={setInputRef(5)}
-          inputMode="numeric"
-          className="h-8 w-20 tabular-nums"
-          placeholder="max"
-          value={tier.ow_rank_max ?? ""}
-          onChange={(event) =>
-            onUpdate(
-              rowIndex,
-              "ow_rank_max",
-              event.target.value === "" ? null : parseIntegerInput(event.target.value)
-            )
-          }
-          onKeyDown={(event) => onKeyDown(event, rowIndex, 5)}
+        >
+          <SelectTrigger className="h-8 flex-1 min-w-0">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">—</SelectItem>
+            {OW2_RANK_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value.toString()}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="shrink-0 text-xs text-muted-foreground">–</span>
+        <Select
+          value={tier.ow_rank_max?.toString() ?? ""}
+          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_max", v === "" ? null : Number(v))}
           disabled={!canEdit}
-        />
+        >
+          <SelectTrigger className="h-8 flex-1 min-w-0">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">—</SelectItem>
+            {OW2_RANK_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value.toString()}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <label className="inline-flex cursor-pointer items-center justify-center">
         <input
@@ -684,7 +687,7 @@ function DivisionGridEditorCard({
         </div>
 
         <div className="overflow-x-auto rounded-md border">
-          <div className="grid min-w-[1060px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_200px_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <div className="grid min-w-[1100px] grid-cols-[40px_56px_48px_minmax(160px,1fr)_220px_1fr_40px_36px] gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
             <div className="flex items-center justify-center">
               <Checkbox
                 checked={someRowsSelected ? "indeterminate" : allRowsSelected}
