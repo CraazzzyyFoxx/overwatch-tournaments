@@ -561,7 +561,6 @@ def parse_sheet_row(
 def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict[str, Any]]:
     source_primary = parsed_fields.get("source_roles", {}).get("primary")
     source_additional = parsed_fields.get("source_roles", {}).get("additional") or []
-    is_full_flex = bool(parsed_fields.get("is_flex", False))
 
     def _role_code(v: Any) -> str | None:
         if isinstance(v, dict):
@@ -572,8 +571,13 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
     def _subrole(v: Any) -> str | None:
         return v.get("subrole") if isinstance(v, dict) else None
 
-    if isinstance(source_primary, dict) and source_primary.get("role") == "flex":
-        is_full_flex = True
+    # Full flex only when primary is the "flex" token AND no additional roles are listed.
+    # Having additional roles means the player has explicit preferences — not a true full flex.
+    is_full_flex = (
+        isinstance(source_primary, dict)
+        and source_primary.get("role") == "flex"
+        and not source_additional
+    )
 
     primary_code = _role_code(source_primary)
     declared_order: list[str] = []
