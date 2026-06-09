@@ -542,6 +542,21 @@ def test_explicit_subrole_wins_over_token_subrole():
     assert dps_payload["subrole"] == "projectile"
 
 
+def test_subrole_from_additional_token_propagates_to_payload():
+    parsed = _make_parsed(
+        primary={"role": "dps", "subrole": "hitscan"},
+        additional=[{"role": "support", "subrole": "main_heal"}],
+        roles={
+            "dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
+            "support": {"rank_value": 2300, "subrole": None, "is_active": True, "priority": None},
+        },
+    )
+    payloads = admin.build_registration_role_payloads(parsed)
+    by_role = {p["role"]: p for p in payloads}
+    assert by_role["dps"]["subrole"] == "hitscan"
+    assert by_role["support"]["subrole"] == "main_heal"
+
+
 def test_role_subrole_token_accepted_for_primary_and_additional():
     primary_spec = catalog.target_spec_map({})["source_roles.primary"]
     additional_spec = catalog.target_spec_map({})["source_roles.additional"]

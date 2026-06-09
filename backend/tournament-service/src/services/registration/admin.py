@@ -566,6 +566,16 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
             declared_order.append(code)
     source_priority = {code: i for i, code in enumerate(declared_order)}
 
+    # Map role codes to their source entries so subroles can be looked up for
+    # both the primary role and additional roles.
+    source_entry_by_role: dict[str, Any] = {}
+    if primary_code:
+        source_entry_by_role[primary_code] = source_primary
+    for item in source_additional:
+        code = _role_code(item)
+        if code and code not in source_entry_by_role:
+            source_entry_by_role[code] = item
+
     payloads: list[dict[str, Any]] = []
     additional_role_codes = {_role_code(r) for r in source_additional} - {None}
     for fallback_priority, role_code in enumerate(ROLE_ORDER):
@@ -575,7 +585,7 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
         is_active = role_data.get("is_active")
         priority = role_data.get("priority")
 
-        token_subrole = _subrole(source_primary) if primary_code == role_code else None
+        token_subrole = _subrole(source_entry_by_role.get(role_code))
         effective_subrole = explicit_subrole or token_subrole
 
         declared_in_source = primary_code == role_code or role_code in additional_role_codes
