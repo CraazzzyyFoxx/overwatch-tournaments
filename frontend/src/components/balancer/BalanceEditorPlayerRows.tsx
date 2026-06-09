@@ -71,7 +71,7 @@ export function BalanceEditorPlayerPreviewRow({
   onSelectPlayer,
 }: BalanceEditorPlayerPreviewRowProps) {
   return (
-    <div className="w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#101116] shadow-2xl shadow-black/40">
+    <div className="w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/40">
       <table className="w-full caption-bottom text-sm">
         <tbody>
           <BalanceEditorPlayerTableRow

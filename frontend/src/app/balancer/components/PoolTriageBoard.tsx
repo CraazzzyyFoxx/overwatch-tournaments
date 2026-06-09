@@ -257,7 +257,7 @@ function TriagePlayerCard({
             onSelectPlayer(state.player.id);
           }}
           className={cn(
-            "cursor-pointer rounded-xl border border-white/8 bg-[#171626] p-2.5 shadow-[0_16px_36px_rgba(0,0,0,0.18)] transition",
+            "cursor-pointer rounded-xl border border-border bg-card p-2.5 transition",
             isSelected && "border-violet-300/45 bg-violet-500/[0.08]",
             isDragging && "z-50 scale-[1.02] opacity-80 shadow-[0_22px_56px_rgba(0,0,0,0.34)]",
           )}
@@ -499,7 +499,7 @@ export function PoolTriageBoard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-white/10 bg-[#11101f] p-0 text-white shadow-2xl shadow-black/50">
+      <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50">
         <DialogHeader className="shrink-0 border-b border-white/8 px-5 py-4">
           <DialogTitle className="text-base text-white">Balancing Pool Triage</DialogTitle>
           <DialogDescription className="text-xs text-white/42">

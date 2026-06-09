@@ -320,7 +320,7 @@ function RankAutofillDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden border-white/10 bg-[#06070c] p-0 text-white shadow-[0_20px_70px_rgba(0,0,0,0.48)] sm:rounded-[20px]">
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
         <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
           <DialogTitle className="text-xl font-semibold tracking-tight text-white">
             Autofill parsed ranks
@@ -1686,7 +1686,7 @@ export default function BalancerRegistrationsPage() {
           setCreateOpen(open);
         }}
       >
-        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-white/10 bg-[#06070c] p-0 text-white shadow-[0_20px_70px_rgba(0,0,0,0.48)] sm:rounded-[20px]">
+        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
           <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
             <DialogTitle className="text-xl font-semibold tracking-tight text-white">
               Create Manual Registration
@@ -1722,7 +1722,7 @@ export default function BalancerRegistrationsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-white/10 bg-[#06070c] p-0 text-white shadow-[0_20px_70px_rgba(0,0,0,0.48)] sm:rounded-[20px]">
+        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
           <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
             <DialogTitle className="text-xl font-semibold tracking-tight text-white">
               Edit Registration

@@ -294,7 +294,7 @@ export function BalancerConfigDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-white/10 bg-[#11101f] p-0 text-white sm:max-w-2xl">
+      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white sm:max-w-2xl">
         <SheetHeader className="border-b border-white/10 px-5 py-4">
           <SheetTitle className="text-white">Balancer settings</SheetTitle>
           <SheetDescription className="text-white/52">
