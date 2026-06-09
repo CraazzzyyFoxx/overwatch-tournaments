@@ -305,6 +305,8 @@ class MappingTargetRead(BaseModel):
     group: str
     accepted_parsers: list[str] = Field(default_factory=list)
     default_parser: str
+    default_mode: str = "disabled"
+    default_is_list: bool = False
     multi_column: bool = False
     required: bool = False
 

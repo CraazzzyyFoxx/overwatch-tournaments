@@ -7,17 +7,20 @@ const MODE_LABELS: Record<MappingTargetMode, string> = {
   columns: "Map",
   constant: "Constant",
   disabled: "Disabled",
+  auto: "Auto",
 };
 
-const MODE_ORDER: MappingTargetMode[] = ["columns", "constant", "disabled"];
+const DEFAULT_MODES: MappingTargetMode[] = ["columns", "constant", "disabled"];
 
 interface ModeToggleProps {
   value: MappingTargetMode;
   onChange: (mode: MappingTargetMode) => void;
+  availableModes?: MappingTargetMode[];
   disabled?: boolean;
 }
 
-export function ModeToggle({ value, onChange, disabled }: ModeToggleProps) {
+export function ModeToggle({ value, onChange, availableModes, disabled }: ModeToggleProps) {
+  const modes = availableModes ?? DEFAULT_MODES;
   return (
     <ToggleGroup
       type="single"
@@ -30,7 +33,7 @@ export function ModeToggle({ value, onChange, disabled }: ModeToggleProps) {
       variant="outline"
       size="sm"
     >
-      {MODE_ORDER.map((mode) => (
+      {modes.map((mode) => (
         <ToggleGroupItem key={mode} value={mode} disabled={disabled} className="px-3 text-xs">
           {MODE_LABELS[mode]}
         </ToggleGroupItem>

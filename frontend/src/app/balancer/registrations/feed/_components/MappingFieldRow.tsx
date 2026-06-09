@@ -1,5 +1,6 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,12 +13,16 @@ import { cn } from "@/lib/utils";
 import type {
   MappingParserDef,
   MappingTargetDef,
+  MappingTargetMode,
   MappingTargetState,
 } from "@/types/balancer-admin.types";
 
 import { HeaderCombobox } from "./HeaderCombobox";
 import { HeaderMultiCombobox } from "./HeaderMultiCombobox";
 import { ModeToggle } from "./ModeToggle";
+
+const AUTO_FIELD_MODES: MappingTargetMode[] = ["auto", "columns"];
+const STANDARD_FIELD_MODES: MappingTargetMode[] = ["columns", "constant", "disabled"];
 
 interface MappingFieldRowProps {
   target: MappingTargetDef;
@@ -33,6 +38,7 @@ interface MappingFieldRowProps {
   onColumnsChange: (columns: string[]) => void;
   onValueChange: (value: string) => void;
   onParserChange: (parser: string) => void;
+  onIsListChange: (is_list: boolean) => void;
 }
 
 function parserLabel(parsers: MappingParserDef[], parser: string): string {
@@ -51,10 +57,13 @@ export function MappingFieldRow({
   onColumnsChange,
   onValueChange,
   onParserChange,
+  onIsListChange,
 }: MappingFieldRowProps) {
   const acceptedParsers = parsers.filter((def) => target.accepted_parsers.includes(def.parser));
-  const showParser = state.mode !== "disabled" && acceptedParsers.length > 1;
+  const showParser = state.mode !== "disabled" && state.mode !== "auto" && acceptedParsers.length > 1;
   const activeParser = state.parser ?? target.default_parser;
+  const availableModes = target.default_mode === "auto" ? AUTO_FIELD_MODES : STANDARD_FIELD_MODES;
+  const showIsListToggle = target.default_is_list && state.mode === "columns";
 
   return (
     <div className={cn("px-4 py-3", error && "bg-destructive/5")}>
@@ -78,7 +87,12 @@ export function MappingFieldRow({
 
         {/* Mode toggle */}
         <div className="pt-0.5">
-          <ModeToggle value={state.mode} onChange={onModeChange} disabled={disabled} />
+          <ModeToggle
+            value={state.mode}
+            onChange={onModeChange}
+            availableModes={availableModes}
+            disabled={disabled}
+          />
         </div>
 
         {/* Mode-specific input + parser + preview + error */}
@@ -113,6 +127,21 @@ export function MappingFieldRow({
 
           {state.mode === "disabled" ? (
             <p className="text-xs italic text-muted-foreground/60">Not synced.</p>
+          ) : null}
+
+          {state.mode === "auto" ? (
+            <p className="text-xs italic text-muted-foreground/60">Derived automatically.</p>
+          ) : null}
+
+          {showIsListToggle ? (
+            <label className="flex cursor-pointer items-center gap-2 text-xs">
+              <Checkbox
+                checked={state.is_list ?? target.default_is_list}
+                onCheckedChange={(checked) => onIsListChange(checked === true)}
+                disabled={disabled}
+              />
+              <span className="text-muted-foreground">Parse as list</span>
+            </label>
           ) : null}
 
           {showParser ? (

@@ -27,6 +27,7 @@ interface ColumnMappingTabProps {
   onColumnsChange: (key: string, columns: string[]) => void;
   onValueChange: (key: string, value: string) => void;
   onParserChange: (key: string, parser: string) => void;
+  onIsListChange: (key: string, is_list: boolean) => void;
 }
 
 export function ColumnMappingTab({
@@ -41,6 +42,7 @@ export function ColumnMappingTab({
   onColumnsChange,
   onValueChange,
   onParserChange,
+  onIsListChange,
 }: ColumnMappingTabProps) {
   const grouped = targetsByGroup(catalog);
   const hasHeaders = headerKeys.length > 0;
@@ -116,6 +118,7 @@ export function ColumnMappingTab({
             onColumnsChange={onColumnsChange}
             onValueChange={onValueChange}
             onParserChange={onParserChange}
+            onIsListChange={onIsListChange}
           />
         </>
       )}

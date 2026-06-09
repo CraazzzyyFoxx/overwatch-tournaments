@@ -22,6 +22,7 @@ export interface MappingRowHandlers {
   onColumnsChange: (key: string, columns: string[]) => void;
   onValueChange: (key: string, value: string) => void;
   onParserChange: (key: string, parser: string) => void;
+  onIsListChange: (key: string, is_list: boolean) => void;
 }
 
 interface MappingGroupSectionProps extends MappingRowHandlers {
@@ -48,6 +49,7 @@ export function MappingGroupSection({
   onColumnsChange,
   onValueChange,
   onParserChange,
+  onIsListChange,
 }: MappingGroupSectionProps) {
   if (targets.length === 0) {
     return null;
@@ -72,6 +74,7 @@ export function MappingGroupSection({
         onColumnsChange={(columns) => onColumnsChange(target.key, columns)}
         onValueChange={(value) => onValueChange(target.key, value)}
         onParserChange={(parser) => onParserChange(target.key, parser)}
+        onIsListChange={(is_list) => onIsListChange(target.key, is_list)}
       />
     );
   };

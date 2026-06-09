@@ -561,6 +561,8 @@ export interface MappingTargetDef {
   group: MappingTargetGroup;
   accepted_parsers: string[];
   default_parser: string;
+  default_mode: string;
+  default_is_list: boolean;
   multi_column: boolean;
   required: boolean;
 }
@@ -634,13 +636,14 @@ export interface AdminGoogleSheetMappingValidationError {
 // Local mapper UI state (not sent verbatim; serialized at save/preview)
 // ---------------------------------------------------------------------------
 
-export type MappingTargetMode = "columns" | "constant" | "disabled";
+export type MappingTargetMode = "columns" | "constant" | "disabled" | "auto";
 
 export interface MappingTargetState {
   mode: MappingTargetMode;
   columns: string[];
   value?: string;
   parser?: string;
+  is_list?: boolean;
 }
 
 export interface ValueMapRow {

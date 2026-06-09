@@ -154,7 +154,7 @@ export function targetsByGroup(catalog: MappingCatalog): Record<MappingTargetGro
 // ---------------------------------------------------------------------------
 
 export type MappingTargetEntry =
-  | { mode: "columns"; columns: string[]; parser?: string }
+  | { mode: "columns"; columns: string[]; parser?: string; is_list?: boolean }
   | { mode: "constant"; value: string; parser?: string };
 
 /**
@@ -174,7 +174,7 @@ export function buildMappingConfigJson(state: Record<string, MappingTargetState>
   const targets: Record<string, MappingTargetEntry> = {};
 
   for (const [key, target] of Object.entries(state)) {
-    if (target.mode === "disabled") {
+    if (target.mode === "disabled" || target.mode === "auto") {
       continue;
     }
 
@@ -199,6 +199,7 @@ export function buildMappingConfigJson(state: Record<string, MappingTargetState>
       mode: "columns",
       columns,
       ...(parser ? { parser } : {}),
+      ...(target.is_list !== undefined ? { is_list: target.is_list } : {}),
     };
   }
 

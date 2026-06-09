@@ -335,6 +335,7 @@ export default function BalancerRegistrationsFeedPage() {
               onColumnsChange={mapping.setTargetColumns}
               onValueChange={mapping.setTargetValue}
               onParserChange={mapping.setTargetParser}
+              onIsListChange={mapping.setTargetIsList}
             />
           </TabsContent>
 

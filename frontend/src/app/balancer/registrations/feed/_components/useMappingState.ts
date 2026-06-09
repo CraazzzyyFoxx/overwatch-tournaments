@@ -21,6 +21,7 @@ interface PersistedTargetEntry {
   columns?: unknown;
   value?: unknown;
   parser?: unknown;
+  is_list?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,12 +74,13 @@ function buildInitialMappingState(
   for (const target of catalog.targets) {
     const persisted = persistedTargets[target.key];
     if (!persisted) {
-      // Not configured yet: disabled by default, parser seeded from the catalog.
+      // Not configured yet: seed from catalog defaults.
       state[target.key] = {
-        mode: "disabled",
+        mode: (target.default_mode || "disabled") as MappingTargetMode,
         columns: [],
         value: "",
         parser: target.default_parser,
+        is_list: target.default_is_list,
       };
       continue;
     }
@@ -86,20 +88,30 @@ function buildInitialMappingState(
     const mode: MappingTargetMode =
       persisted.mode === "constant"
         ? "constant"
-        : persisted.mode === "disabled"
-          ? "disabled"
-          : "columns";
+        : persisted.mode === "auto"
+          ? "auto"
+          : persisted.mode === "disabled"
+            ? "disabled"
+            : "columns";
 
     const parser =
       typeof persisted.parser === "string" && persisted.parser.length > 0
         ? persisted.parser
         : target.default_parser;
 
+    const is_list =
+      persisted.is_list === true
+        ? true
+        : persisted.is_list === false
+          ? false
+          : target.default_is_list;
+
     state[target.key] = {
       mode,
       columns: toStringArray(persisted.columns),
       value: typeof persisted.value === "string" ? persisted.value : persisted.value == null ? "" : String(persisted.value),
       parser,
+      is_list,
     };
   }
 
@@ -135,6 +147,7 @@ export interface UseMappingStateResult {
   setTargetColumns: (key: string, columns: string[]) => void;
   setTargetValue: (key: string, value: string) => void;
   setTargetParser: (key: string, parser: string) => void;
+  setTargetIsList: (key: string, is_list: boolean) => void;
   addValueRow: (category: MappingValueCategoryName) => void;
   updateValueRow: (category: MappingValueCategoryName, id: string, updates: Partial<Pick<ValueMapRow, "key" | "value">>) => void;
   removeValueRow: (category: MappingValueCategoryName, id: string) => void;
@@ -250,6 +263,17 @@ export function useMappingState(): UseMappingStateResult {
     setHasChanges(true);
   }, []);
 
+  const setTargetIsList = useCallback((key: string, is_list: boolean) => {
+    setMappingState((prev) => {
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      return { ...prev, [key]: { ...current, is_list } };
+    });
+    setHasChanges(true);
+  }, []);
+
   const addValueRow = useCallback((category: MappingValueCategoryName) => {
     setValueState((prev) => ({
       ...prev,
@@ -310,6 +334,7 @@ export function useMappingState(): UseMappingStateResult {
     setTargetColumns,
     setTargetValue,
     setTargetParser,
+    setTargetIsList,
     addValueRow,
     updateValueRow,
     removeValueRow,

@@ -836,6 +836,8 @@ def build_mapping_catalog(
                 "group": spec.group,
                 "accepted_parsers": list(spec.accepted_parsers),
                 "default_parser": spec.default_parser,
+                "default_mode": spec.default_mode,
+                "default_is_list": spec.default_is_list,
                 "multi_column": spec.multi_column,
                 "required": spec.required,
             }
