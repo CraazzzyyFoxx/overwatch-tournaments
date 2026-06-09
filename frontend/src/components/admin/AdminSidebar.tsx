@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
@@ -22,22 +21,19 @@ import {
   getVisibleAdminNavigationGroups
 } from "@/components/admin/admin-navigation";
 import { AdminCommandPalette, useCommandPalette } from "@/components/admin/AdminCommandPalette";
-import { SITE_FAVICON, SITE_NAME } from "@/config/site";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
-import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
-import { SidebarBackToSite, SidebarUserDropdown } from "@/components/sidebar/sidebar-shared";
+import { useWorkspaceStore } from "@/stores/workspace.store";
+import {
+  SidebarBackToSite,
+  SidebarUserDropdown,
+  SidebarWorkspaceLogoItem
+} from "@/components/sidebar/sidebar-shared";
 import { cn } from "@/lib/utils";
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const { user, status } = useAuthProfile();
   const { canAccessAdminRoute } = usePermissions();
-
-  const { workspaces: allWorkspaces, currentWorkspaceId } = useWorkspaceStore();
-  const workspaces = filterAccessibleWorkspaces(allWorkspaces, status, user);
-  const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+  const { currentWorkspaceId } = useWorkspaceStore();
 
   const navigationGroups = getVisibleAdminNavigationGroups((item) =>
     canAccessAdminRoute({
@@ -61,46 +57,7 @@ export function AdminSidebar() {
     <Sidebar collapsible="icon" variant="inset">
       {/* ── HEADER: Logo + search hint ─────────────────── */}
       <SidebarHeader className="px-3 pt-3 pb-2 group-data-[collapsible=icon]:px-1">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="lg"
-              className="h-9 rounded-lg px-2 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
-            >
-              <Link href="/admin">
-                {currentWorkspace?.icon_url ? (
-                  <div className="flex size-7 items-center justify-center">
-                    <Image
-                      src={currentWorkspace.icon_url}
-                      alt={currentWorkspace.name}
-                      width={20}
-                      height={20}
-                      unoptimized
-                      className="size-5 rounded-md object-contain"
-                    />
-                  </div>
-                ) : currentWorkspace ? (
-                  <WorkspaceAvatar workspace={currentWorkspace} size="md" />
-                ) : (
-                  <div className="flex size-7 items-center justify-center">
-                    <Image
-                      src={SITE_FAVICON}
-                      alt={SITE_NAME}
-                      width={20}
-                      height={20}
-                      unoptimized
-                      className="size-5 object-contain"
-                    />
-                  </div>
-                )}
-                <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-                  {currentWorkspace?.name ?? SITE_NAME}
-                </span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarWorkspaceLogoItem href="/admin" />
 
         {/* Search trigger */}
         <button

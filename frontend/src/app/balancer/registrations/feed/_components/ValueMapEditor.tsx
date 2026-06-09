@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Sprout, Trash2 } from "lucide-react";
+import { Minus, Plus, Sprout, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,16 +58,119 @@ const ROLE_SUBROLE_SUBROLE_OPTIONS: Record<string, { value: string; label: strin
   ],
 };
 
-function parseRoleSubroleValue(value: string): { role: string; subrole: string | null } {
+type RoleSubroleItem = { role: string; subrole: string | null };
+
+function parseRoleSubroleItems(value: string): RoleSubroleItem[] {
   try {
-    const parsed = JSON.parse(value) as { role?: unknown; subrole?: unknown };
-    return {
-      role: typeof parsed.role === "string" ? parsed.role : "",
-      subrole: typeof parsed.subrole === "string" ? parsed.subrole : null,
-    };
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const items = parsed.map((e) =>
+        e && typeof e === "object" && typeof (e as Record<string, unknown>).role === "string"
+          ? { role: (e as Record<string, unknown>).role as string, subrole: typeof (e as Record<string, unknown>).subrole === "string" ? (e as Record<string, unknown>).subrole as string : null }
+          : null,
+      ).filter((e): e is RoleSubroleItem => e !== null);
+      return items.length > 0 ? items : [{ role: "", subrole: null }];
+    }
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      return [{ role: typeof obj.role === "string" ? obj.role : "", subrole: typeof obj.subrole === "string" ? obj.subrole : null }];
+    }
   } catch {
-    return { role: "", subrole: null };
+    // fall through
   }
+  return [{ role: "", subrole: null }];
+}
+
+function serializeRoleSubroleItems(items: RoleSubroleItem[]): string {
+  if (items.length === 1) return JSON.stringify({ role: items[0].role, subrole: items[0].subrole });
+  return JSON.stringify(items.map((e) => ({ role: e.role, subrole: e.subrole })));
+}
+
+function RoleSubroleSubForm({
+  row,
+  onUpdate,
+}: {
+  row: ValueMapRow;
+  onUpdate: (id: string, updates: Partial<Pick<ValueMapRow, "key" | "value">>) => void;
+}) {
+  const items = parseRoleSubroleItems(row.value);
+
+  const commit = (next: RoleSubroleItem[]) => {
+    onUpdate(row.id, { value: serializeRoleSubroleItems(next) });
+  };
+
+  const updateItem = (index: number, field: "role" | "subrole", val: string | null) => {
+    commit(
+      items.map((item, i) => {
+        if (i !== index) return item;
+        if (field === "role") {
+          return { role: val ?? "", subrole: ROLE_SUBROLE_SUBROLE_OPTIONS[val ?? ""] ? item.subrole : null };
+        }
+        return { ...item, subrole: val };
+      }),
+    );
+  };
+
+  const addItem = () => commit([...items, { role: "", subrole: null }]);
+
+  const removeItem = (index: number) => {
+    if (items.length <= 1) return;
+    commit(items.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {items.map((item, index) => {
+        const subroleOptions = ROLE_SUBROLE_SUBROLE_OPTIONS[item.role] ?? [];
+        return (
+          <div key={index} className="flex items-center gap-1.5">
+            <Select value={item.role || undefined} onValueChange={(v) => updateItem(index, "role", v)}>
+              <SelectTrigger className="h-8 flex-1">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_SUBROLE_ROLE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={item.subrole ?? undefined}
+              onValueChange={(v) => updateItem(index, "subrole", v)}
+              disabled={subroleOptions.length === 0}
+            >
+              <SelectTrigger className="h-8 flex-1">
+                <SelectValue placeholder={subroleOptions.length === 0 ? "—" : "Sub-role"} />
+              </SelectTrigger>
+              <SelectContent>
+                {subroleOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0 text-muted-foreground/60 hover:text-destructive"
+              onClick={() => removeItem(index)}
+              disabled={items.length <= 1}
+              title="Remove role"
+            >
+              <Minus className="size-3.5" />
+            </Button>
+          </div>
+        );
+      })}
+      <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground" onClick={addItem}>
+        <Plus className="size-3" />
+        Add role
+      </Button>
+    </div>
+  );
 }
 
 function ValueInput({
@@ -92,50 +195,7 @@ function ValueInput({
   }
 
   if (kind === "role_subrole") {
-    const { role, subrole } = parseRoleSubroleValue(row.value);
-    const subroleOptions = ROLE_SUBROLE_SUBROLE_OPTIONS[role] ?? [];
-
-    const handleRoleChange = (newRole: string) => {
-      const newSubrole = ROLE_SUBROLE_SUBROLE_OPTIONS[newRole] ? subrole : null;
-      onUpdate(row.id, { value: JSON.stringify({ role: newRole, subrole: newSubrole }) });
-    };
-
-    const handleSubroleChange = (newSubrole: string) => {
-      onUpdate(row.id, { value: JSON.stringify({ role, subrole: newSubrole || null }) });
-    };
-
-    return (
-      <div className="grid grid-cols-2 gap-1.5">
-        <Select value={role || undefined} onValueChange={handleRoleChange}>
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Role" />
-          </SelectTrigger>
-          <SelectContent>
-            {ROLE_SUBROLE_ROLE_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={subrole ?? undefined}
-          onValueChange={handleSubroleChange}
-          disabled={subroleOptions.length === 0}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder={subroleOptions.length === 0 ? "—" : "Sub-role"} />
-          </SelectTrigger>
-          <SelectContent>
-            {subroleOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
+    return <RoleSubroleSubForm row={row} onUpdate={onUpdate} />;
   }
 
   const options = kind === "boolean" ? BOOLEAN_OPTIONS : ROLE_OPTIONS;
@@ -202,7 +262,7 @@ export function ValueMapEditor({
             <span />
           </div>
           {rows.map((row) => (
-            <div key={row.id} className={`grid items-center gap-2 ${kind === "role_subrole" ? "grid-cols-[1fr_2fr_auto]" : "grid-cols-[1fr_1fr_auto]"}`}>
+            <div key={row.id} className={`grid gap-2 ${kind === "role_subrole" ? "grid-cols-[1fr_2fr_auto] items-start" : "grid-cols-[1fr_1fr_auto] items-center"}`}>
               <Input
                 value={row.key}
                 onChange={(event) => onUpdate(row.id, { key: event.target.value })}
@@ -213,7 +273,7 @@ export function ValueMapEditor({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 shrink-0 text-destructive hover:text-destructive"
+                className={`size-9 shrink-0 text-destructive hover:text-destructive${kind === "role_subrole" ? " mt-0.5" : ""}`}
                 onClick={() => onRemove(row.id)}
                 title="Remove row"
               >

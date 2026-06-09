@@ -715,6 +715,46 @@ def test_role_subrole_token_no_is_list_unchanged():
     assert result == {"role": "dps", "subrole": "hitscan"}
 
 
+def test_role_subrole_token_multi_role_mapping_expands():
+    # A single cell value that maps to a list — e.g. "Флекс, Танк или Сап"
+    # expands into two role entries without splitting on commas.
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Флекс, Танк или Сап"],
+        value_mapping={
+            "role_subroles": {
+                "флекс, танк или сап": [
+                    {"role": "tank", "subrole": None},
+                    {"role": "support", "subrole": None},
+                ]
+            }
+        },
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "tank", "subrole": None}, {"role": "support", "subrole": None}]
+
+
+def test_role_subrole_token_multi_role_deduplicates_across_columns():
+    # Multi-role from one cell + explicit tank from another column — tank deduped.
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Флекс, Танк или Сап", "Танк"],
+        value_mapping={
+            "role_subroles": {
+                "флекс, танк или сап": [
+                    {"role": "tank", "subrole": None},
+                    {"role": "support", "subrole": None},
+                ],
+                "танк": {"role": "tank", "subrole": None},
+            }
+        },
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "tank", "subrole": None}, {"role": "support", "subrole": None}]
+
+
 def test_additional_roles_spec_has_default_is_list():
     spec = catalog.target_spec_map({})["source_roles.additional"]
     assert spec.default_is_list is True

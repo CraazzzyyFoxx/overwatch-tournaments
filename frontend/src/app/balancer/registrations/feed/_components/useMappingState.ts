@@ -57,7 +57,7 @@ function roleSubroleEntriesToRows(entries: Record<string, unknown> | undefined):
   return Object.entries(entries).map(([key, value]) => ({
     id: nextRowId(),
     key,
-    value: isRecord(value) ? JSON.stringify(value) : "",
+    value: isRecord(value) || Array.isArray(value) ? JSON.stringify(value) : "",
   }));
 }
 

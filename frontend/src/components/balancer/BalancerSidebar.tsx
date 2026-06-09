@@ -19,6 +19,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -29,7 +30,11 @@ import {
   isBalancerNavItemActive
 } from "@/components/balancer/balancer-navigation";
 import tournamentService from "@/services/tournament.service";
-import { SidebarBackToSite, SidebarUserDropdown } from "@/components/sidebar/sidebar-shared";
+import {
+  SidebarBackToSite,
+  SidebarUserDropdown,
+  SidebarWorkspaceLogoItem
+} from "@/components/sidebar/sidebar-shared";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -142,6 +147,10 @@ export function BalancerSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="inset">
+      <SidebarHeader className="px-3 pt-3 pb-2 group-data-[collapsible=icon]:px-1">
+        <SidebarWorkspaceLogoItem href="/balancer" />
+      </SidebarHeader>
+
       <SidebarContent className="px-2 pt-1 group-data-[collapsible=icon]:px-1">
         {/* Tournament switcher */}
         <SidebarGroup className="px-0 py-0">

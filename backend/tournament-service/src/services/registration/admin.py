@@ -145,20 +145,39 @@ def map_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> str |
     return None
 
 
-def map_role_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> RoleSubroleEntry | None:
-    if value is None:
+def _valid_role_subrole_entry(entry: Any) -> RoleSubroleEntry | None:
+    if not isinstance(entry, dict):
         return None
+    role = entry.get("role")
+    if role == "flex" or role in VALID_ROLES:
+        return {"role": role, "subrole": entry.get("subrole")}
+    return None
+
+
+def map_role_subrole_tokens(value: str | None, value_mapping: dict[str, Any]) -> list[RoleSubroleEntry]:
+    """Return all role+subrole entries for a single cell value.
+
+    A value_mapping entry may be a single dict or a list of dicts (multi-role
+    mapping), allowing one cell option like "Флекс, Танк или Сап" to expand
+    into multiple role entries.
+    """
+    if value is None:
+        return []
     normalized = normalize_header(value)
     custom_map = {
         normalize_header(k): v
         for k, v in (value_mapping.get("role_subroles") or {}).items()
     }
-    entry = custom_map.get(normalized)
-    if isinstance(entry, dict):
-        role = entry.get("role")
-        if role == "flex" or role in VALID_ROLES:
-            return {"role": role, "subrole": entry.get("subrole")}
-    return None
+    raw = custom_map.get(normalized)
+    if isinstance(raw, list):
+        return [e for e in (_valid_role_subrole_entry(item) for item in raw) if e is not None]
+    entry = _valid_role_subrole_entry(raw)
+    return [entry] if entry else []
+
+
+def map_role_subrole_token(value: str | None, value_mapping: dict[str, Any]) -> RoleSubroleEntry | None:
+    entries = map_role_subrole_tokens(value, value_mapping)
+    return entries[0] if entries else None
 
 
 def _parse_sr_value(raw: str | None, value_mapping: dict[str, Any]) -> int | None:
@@ -203,8 +222,7 @@ def parse_role_subrole_token_list(values: list[str], value_mapping: dict[str, An
     entries: list[RoleSubroleEntry] = []
     seen_roles: set[str] = set()
     for value in values:
-        entry = map_role_subrole_token(value.strip() or None, value_mapping)
-        if entry:
+        for entry in map_role_subrole_tokens(value.strip() or None, value_mapping):
             role = entry.get("role") or ""
             if role and role not in seen_roles:
                 seen_roles.add(role)

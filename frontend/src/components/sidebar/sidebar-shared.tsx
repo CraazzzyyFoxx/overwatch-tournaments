@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Check, ChevronsUpDown, LogOut } from "lucide-react";
 
@@ -22,6 +23,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { getAuthProfileHref } from "@/lib/auth-profile-links";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
+import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 
 export function getRoleLabel({
   isSuperuser,
@@ -44,6 +46,56 @@ export function getRoleLabel({
 export function getInitials(username?: string | null) {
   if (!username) return "AQ";
   return username.slice(0, 2).toUpperCase();
+}
+
+export function SidebarWorkspaceLogoItem({ href }: { href: string }) {
+  const { user, status } = useAuthProfile();
+  const { workspaces: allWorkspaces, currentWorkspaceId } = useWorkspaceStore();
+  const workspaces = filterAccessibleWorkspaces(allWorkspaces, status, user);
+  const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          asChild
+          size="lg"
+          className="h-9 rounded-lg px-2 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
+        >
+          <Link href={href}>
+            {currentWorkspace?.icon_url ? (
+              <div className="flex size-7 items-center justify-center">
+                <Image
+                  src={currentWorkspace.icon_url}
+                  alt={currentWorkspace.name}
+                  width={20}
+                  height={20}
+                  unoptimized
+                  className="size-5 rounded-md object-contain"
+                />
+              </div>
+            ) : currentWorkspace ? (
+              <WorkspaceAvatar workspace={currentWorkspace} size="md" />
+            ) : (
+              <div className="flex size-7 items-center justify-center">
+                <Image
+                  src={SITE_FAVICON}
+                  alt={SITE_NAME}
+                  width={20}
+                  height={20}
+                  unoptimized
+                  className="size-5 object-contain"
+                />
+              </div>
+            )}
+            <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+              {currentWorkspace?.name ?? SITE_NAME}
+            </span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
 }
 
 export function SidebarBackToSite() {

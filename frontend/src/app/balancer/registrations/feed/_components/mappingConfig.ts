@@ -211,6 +211,9 @@ export interface RoleSubroleEntry {
   subrole: string | null;
 }
 
+/** A role_subroles value can be a single entry or a list (multi-role mapping). */
+export type RoleSubroleValue = RoleSubroleEntry | RoleSubroleEntry[];
+
 /**
  * `value_mapping_json` shape. Includes an index signature so it remains
  * assignable to the `Record<string, unknown>` payload field on the inputs.
@@ -219,7 +222,7 @@ export type ValueMappingJson = {
   booleans: Record<string, boolean>;
   roles: Record<string, string>;
   subroles: Record<string, string>;
-  role_subroles: Record<string, RoleSubroleEntry>;
+  role_subroles: Record<string, RoleSubroleValue>;
   divisions: Record<string, number>;
 } & Record<string, unknown>;
 
@@ -249,15 +252,29 @@ function rowsToStrings(rows: ValueMapRow[]): Record<string, string> {
   return result;
 }
 
-function rowsToRoleSubroles(rows: ValueMapRow[]): Record<string, RoleSubroleEntry> {
-  const result: Record<string, RoleSubroleEntry> = {};
+function parseRoleSubroleEntry(raw: unknown): RoleSubroleEntry | null {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.role === "string") {
+      return { role: obj.role, subrole: typeof obj.subrole === "string" ? obj.subrole : null };
+    }
+  }
+  return null;
+}
+
+function rowsToRoleSubroles(rows: ValueMapRow[]): Record<string, RoleSubroleValue> {
+  const result: Record<string, RoleSubroleValue> = {};
   for (const row of rows) {
     const key = row.key.trim();
     if (!key) continue;
     try {
-      const parsed = JSON.parse(row.value) as RoleSubroleEntry;
-      if (parsed && typeof parsed.role === "string") {
-        result[key] = { role: parsed.role, subrole: parsed.subrole ?? null };
+      const parsed: unknown = JSON.parse(row.value);
+      if (Array.isArray(parsed)) {
+        const entries = parsed.map(parseRoleSubroleEntry).filter((e): e is RoleSubroleEntry => e !== null);
+        if (entries.length > 0) result[key] = entries.length === 1 ? entries[0] : entries;
+      } else {
+        const entry = parseRoleSubroleEntry(parsed);
+        if (entry) result[key] = entry;
       }
     } catch {
       // skip malformed rows

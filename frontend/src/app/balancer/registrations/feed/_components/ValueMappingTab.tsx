@@ -89,7 +89,7 @@ export function ValueMappingTab({
         />
         <ValueMapEditor
           title="Role + Sub-role combined"
-          description={`Map a single cell value that encodes both a role and sub-role (e.g. "Хитскан ДПС"). Select the role; optionally select a sub-role (DPS / Support only). Use "Flex" for full-flex tokens.`}
+          description={`Map a single cell value to one or more roles (e.g. "Хитскан ДПС" → DPS/Hitscan, or "Флекс, Танк или Сап" → Tank + Support). Use "Add role" to expand a value into multiple roles.`}
           kind="role_subrole"
           rows={valueState.role_subroles}
           canSeed={Object.keys(roleSubroleDefaults).length > 0}
