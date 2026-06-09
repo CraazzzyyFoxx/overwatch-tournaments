@@ -271,98 +271,100 @@ export default function BalancerRegistrationsFeedPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Google Sheets Feed</h1>
-          <p className="text-sm text-muted-foreground">
-            Configure the source, map columns visually, translate values, and preview parsed rows.
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Google Sheets Feed</h1>
+            <p className="text-sm text-muted-foreground">
+              Configure the source, map columns visually, translate values, and preview parsed rows.
+            </p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href={registrationsHref}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to registrations
+            </Link>
+          </Button>
         </div>
-        <Button variant="outline" asChild>
-          <Link href={registrationsHref}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to registrations
-          </Link>
-        </Button>
+
+        {formError ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Mapping could not be saved</AlertTitle>
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <Tabs defaultValue="source" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="self-start">
+            <TabsTrigger value="source">Source &amp; Sync</TabsTrigger>
+            <TabsTrigger value="columns">Column Mapping</TabsTrigger>
+            <TabsTrigger value="values">Value Mapping</TabsTrigger>
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="source">
+            <SourceSyncTab
+              feed={feedQuery.data}
+              sourceUrl={sourceUrl}
+              title={title}
+              autoSyncEnabled={autoSyncEnabled}
+              autoSyncIntervalSeconds={autoSyncIntervalSeconds}
+              syncResult={syncResult}
+              isSyncing={syncMutation.isPending}
+              canSync={canSync}
+              onChangeSourceUrl={changeSourceUrl}
+              onChangeTitle={changeTitle}
+              onChangeAutoSyncEnabled={changeAutoSyncEnabled}
+              onChangeAutoSyncIntervalSeconds={changeAutoSyncIntervalSeconds}
+              onSync={() => syncMutation.mutate()}
+            />
+          </TabsContent>
+
+          <TabsContent value="columns">
+            <ColumnMappingTab
+              catalog={catalogQuery.data}
+              mappingState={mapping.mappingState}
+              headerKeys={headerKeys}
+              previewByTarget={previewByTarget}
+              errorsByTarget={fieldErrors}
+              isSuggesting={suggestMutation.isPending}
+              onSuggest={() => suggestMutation.mutate()}
+              onModeChange={mapping.setTargetMode}
+              onColumnsChange={mapping.setTargetColumns}
+              onValueChange={mapping.setTargetValue}
+              onParserChange={mapping.setTargetParser}
+            />
+          </TabsContent>
+
+          <TabsContent value="values">
+            <ValueMappingTab
+              valueState={mapping.valueState}
+              valueCategories={catalogQuery.data.value_categories}
+              onAdd={mapping.addValueRow}
+              onUpdate={mapping.updateValueRow}
+              onRemove={mapping.removeValueRow}
+              onSeedDefaults={mapping.seedValueDefaults}
+            />
+          </TabsContent>
+
+          <TabsContent value="preview">
+            <PreviewTab
+              catalog={catalogQuery.data}
+              mappingState={mapping.mappingState}
+              preview={preview}
+              activeRowIndex={activeRowIndex}
+              isRefreshing={previewMutation.isPending}
+              canPreview={canPreview}
+              onRefresh={() => previewMutation.mutate()}
+              onChangeRow={setActiveRowIndex}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {formError ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Mapping could not be saved</AlertTitle>
-          <AlertDescription>{formError}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <Tabs defaultValue="source" className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="self-start">
-          <TabsTrigger value="source">Source &amp; Sync</TabsTrigger>
-          <TabsTrigger value="columns">Column Mapping</TabsTrigger>
-          <TabsTrigger value="values">Value Mapping</TabsTrigger>
-          <TabsTrigger value="preview">Preview</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="source">
-          <SourceSyncTab
-            feed={feedQuery.data}
-            sourceUrl={sourceUrl}
-            title={title}
-            autoSyncEnabled={autoSyncEnabled}
-            autoSyncIntervalSeconds={autoSyncIntervalSeconds}
-            syncResult={syncResult}
-            isSyncing={syncMutation.isPending}
-            canSync={canSync}
-            onChangeSourceUrl={changeSourceUrl}
-            onChangeTitle={changeTitle}
-            onChangeAutoSyncEnabled={changeAutoSyncEnabled}
-            onChangeAutoSyncIntervalSeconds={changeAutoSyncIntervalSeconds}
-            onSync={() => syncMutation.mutate()}
-          />
-        </TabsContent>
-
-        <TabsContent value="columns">
-          <ColumnMappingTab
-            catalog={catalogQuery.data}
-            mappingState={mapping.mappingState}
-            headerKeys={headerKeys}
-            previewByTarget={previewByTarget}
-            errorsByTarget={fieldErrors}
-            isSuggesting={suggestMutation.isPending}
-            onSuggest={() => suggestMutation.mutate()}
-            onModeChange={mapping.setTargetMode}
-            onColumnsChange={mapping.setTargetColumns}
-            onValueChange={mapping.setTargetValue}
-            onParserChange={mapping.setTargetParser}
-          />
-        </TabsContent>
-
-        <TabsContent value="values">
-          <ValueMappingTab
-            valueState={mapping.valueState}
-            valueCategories={catalogQuery.data.value_categories}
-            onAdd={mapping.addValueRow}
-            onUpdate={mapping.updateValueRow}
-            onRemove={mapping.removeValueRow}
-            onSeedDefaults={mapping.seedValueDefaults}
-          />
-        </TabsContent>
-
-        <TabsContent value="preview">
-          <PreviewTab
-            catalog={catalogQuery.data}
-            mappingState={mapping.mappingState}
-            preview={preview}
-            activeRowIndex={activeRowIndex}
-            isRefreshing={previewMutation.isPending}
-            canPreview={canPreview}
-            onRefresh={() => previewMutation.mutate()}
-            onChangeRow={setActiveRowIndex}
-          />
-        </TabsContent>
-      </Tabs>
-
-      <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         {hasChanges ? (
           <span className="text-xs text-muted-foreground">Unsaved changes</span>
         ) : null}
