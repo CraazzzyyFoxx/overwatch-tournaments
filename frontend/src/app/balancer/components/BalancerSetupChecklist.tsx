@@ -48,7 +48,7 @@ function WorkflowStep({
             status === "done"
               ? "bg-emerald-500/20 text-emerald-300 ring-emerald-500/8"
               : status === "active"
-                ? "bg-violet-500/25 text-violet-300 ring-violet-500/10"
+                ? "bg-primary/25 text-primary ring-primary/10"
                 : "bg-white/5 text-white/20 ring-white/3",
           )}
         >
@@ -89,7 +89,7 @@ function WorkflowStep({
             className={cn(
               "mt-3 rounded-lg",
               action.variant === "primary"
-                ? "bg-violet-500 text-white hover:bg-violet-400"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "border border-white/10 bg-black/15 text-white/70 hover:bg-white/5 hover:text-white",
             )}
           >

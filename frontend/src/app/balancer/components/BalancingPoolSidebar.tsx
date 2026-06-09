@@ -539,7 +539,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                       onClick={() => onAddFromApplication(application)}
                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-50"
                     >
-                      <Plus className="h-3.5 w-3.5 shrink-0 text-violet-400" />
+                      <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
                       <span className="min-w-0 flex-1 truncate text-sm text-white/80">{application.battle_tag}</span>
                       <span className="shrink-0 text-[10px] text-white/30">Include</span>
                     </button>

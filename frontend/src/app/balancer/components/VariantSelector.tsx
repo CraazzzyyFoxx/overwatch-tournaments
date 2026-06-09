@@ -52,7 +52,7 @@ export function VariantSelector({
             className={cn(
               "group rounded-xl border px-3 py-2 text-left transition",
               isActive
-                ? "border-violet-400/35 bg-violet-500/[0.12] text-white"
+                ? "border-primary/35 bg-primary/[0.12] text-white"
                 : "border-white/8 bg-white/[0.02] text-white/55 hover:bg-white/[0.05] hover:text-white"
             )}
           >
@@ -104,7 +104,7 @@ export function VariantSelector({
                   title="Sub-role collisions"
                   className={cn(
                     "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
-                    collisions > 0 ? "text-violet-300/90" : "text-white/30"
+                    collisions > 0 ? "text-primary/90" : "text-white/30"
                   )}
                 >
                   <Shuffle className="h-3 w-3" />

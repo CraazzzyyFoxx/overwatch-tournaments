@@ -206,7 +206,7 @@ export function BalanceImageExportDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex h-[min(860px,calc(100vh-2rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-white/10 bg-[#090a10] p-0 text-white shadow-2xl shadow-black/60">
+        <DialogContent className="flex h-[min(860px,calc(100vh-2rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/60">
           <DialogHeader className="shrink-0 border-b border-white/8 px-5 py-4 text-left">
             <div className="flex flex-col gap-3 pr-8 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -270,7 +270,7 @@ export function BalanceImageExportDialog({
                 {images.map((image, index) => (
                   <div
                     key={image.id}
-                    className="overflow-hidden rounded-2xl border border-white/8 bg-[#101116] shadow-[0_16px_48px_rgba(0,0,0,0.28)]"
+                    className="overflow-hidden rounded-xl border border-border bg-card"
                   >
                     <div className="flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5">
                       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
@@ -287,7 +287,7 @@ export function BalanceImageExportDialog({
                         Copy
                       </Button>
                     </div>
-                    <div className="bg-[#090a10] p-2">
+                    <div className="bg-background p-2">
                       <Image
                         src={image.url}
                         alt={`${image.label} preview`}

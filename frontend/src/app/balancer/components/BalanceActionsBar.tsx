@@ -147,13 +147,13 @@ export function BalanceActionsBar({
         {activeVariantStats?.feasibility && activeVariantStats.feasibility.flex_player_count > 0 ? (
           <Badge
             title={`${activeVariantStats.feasibility.flex_player_count} flex players in the pool — they can fill any role they can play without counting as off-role.`}
-            className="rounded-full border-violet-400/20 bg-violet-500/10 text-violet-200 hover:bg-violet-500/10"
+            className="rounded-full border-primary/20 bg-primary/10 text-primary-foreground/80 hover:bg-primary/10"
           >
             Flex {activeVariantStats.feasibility.flex_player_count}
           </Badge>
         ) : null}
         {activeVariantStats?.sub_role_collision_count != null ? (
-          <Badge className="rounded-full border-violet-400/20 bg-violet-500/10 text-violet-200 hover:bg-violet-500/10">
+          <Badge className="rounded-full border-primary/20 bg-primary/10 text-primary-foreground/80 hover:bg-primary/10">
             <Shuffle className="mr-1.5 h-3.5 w-3.5" />
             Collisions {activeVariantStats.sub_role_collision_count}
           </Badge>
@@ -188,7 +188,7 @@ export function BalanceActionsBar({
         </Button>
         <Button
           type="button"
-          className="rounded-xl bg-violet-500 text-white hover:bg-violet-400"
+          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
           onClick={onSaveBalance}
           disabled={!activeVariant || isSavePending || isExportPending}
         >

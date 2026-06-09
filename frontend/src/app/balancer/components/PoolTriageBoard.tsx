@@ -258,7 +258,7 @@ function TriagePlayerCard({
           }}
           className={cn(
             "cursor-pointer rounded-xl border border-border bg-card p-2.5 transition",
-            isSelected && "border-violet-300/45 bg-violet-500/[0.08]",
+            isSelected && "border-primary/45 bg-primary/[0.08]",
             isDragging && "z-50 scale-[1.02] opacity-80 shadow-[0_22px_56px_rgba(0,0,0,0.34)]",
           )}
           title="Double-click to edit player"
@@ -413,7 +413,7 @@ function TriageLaneColumn({
       className={cn(
         "flex min-h-0 flex-col rounded-2xl border p-3 transition",
         LANE_ACCENTS[lane],
-        isOver && "border-violet-300/60 bg-violet-500/[0.12]",
+        isOver && "border-primary/60 bg-primary/[0.12]",
       )}
     >
       <div className="mb-3 flex items-start justify-between gap-3">

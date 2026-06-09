@@ -482,7 +482,7 @@ function SortableRoleEntry({
               min={sliderBounds.min}
               max={sliderBounds.max}
               className={cn(
-                "h-7 border-white/12 bg-black/15 px-2 text-xs text-white shadow-none focus-visible:ring-1 focus-visible:ring-violet-400/40",
+                "h-7 border-white/12 bg-black/15 px-2 text-xs text-white shadow-none focus-visible:ring-1 focus-visible:ring-primary/40",
                 !entry.is_active && "text-white/45"
               )}
               value={entry.rank_value ?? ""}
@@ -993,7 +993,7 @@ export function PlayerEditModal({
               className={cn(
                 "rounded-lg border px-3 py-2",
                 isInPool
-                  ? "border-violet-400/20 bg-violet-500/[0.08]"
+                  ? "border-primary/20 bg-primary/[0.08]"
                   : "border-white/10 bg-white/[0.03]"
               )}
             >
@@ -1074,7 +1074,7 @@ export function PlayerEditModal({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-white">History preview</span>
                     {historyPreviewAverage != null ? (
-                      <Badge className="h-5 border-violet-400/20 bg-violet-400/10 px-2 text-[10px] text-violet-200 hover:bg-violet-400/10">
+                      <Badge className="h-5 border-primary/20 bg-primary/10 px-2 text-[10px] text-primary-foreground/80 hover:bg-primary/10">
                         Avg {historyPreviewAverage}
                       </Badge>
                     ) : null}
@@ -1084,7 +1084,7 @@ export function PlayerEditModal({
                       <Button
                         type="button"
                         size="sm"
-                        className="h-7 bg-violet-500/90 px-2.5 text-[11px] text-white hover:bg-violet-400"
+                        className="h-7 bg-primary px-2.5 text-[11px] text-primary-foreground hover:bg-primary/90"
                         onClick={handleApplyHistoryPreview}
                       >
                         Apply history values
@@ -1264,7 +1264,7 @@ export function PlayerEditModal({
             <Button
               onClick={handleSave}
               disabled={saving}
-              className="h-8 bg-violet-500 px-3 text-xs text-white hover:bg-violet-400"
+              className="h-8 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
             >
               <Save className="mr-1 h-3.5 w-3.5" />
               Save

@@ -121,7 +121,7 @@ export function PresetRunPanel({
       <Button
         onClick={onRunBalance}
         disabled={!canRunBalance}
-        className="h-8 rounded-lg bg-violet-500 px-3 text-sm font-semibold text-white hover:bg-violet-400"
+        className="h-8 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
       >
         {isRunPending ? (
           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

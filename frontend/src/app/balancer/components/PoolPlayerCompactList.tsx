@@ -275,7 +275,7 @@ export function PoolPlayerCompactList({
                   className={cn(
                     "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-all sm:grid-cols-[24px_minmax(0,1fr)_auto]",
                     "border-white/6 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.04]",
-                    isSelected && "border-violet-400/45 bg-violet-500/[0.08] shadow-[0_0_0_1px_rgba(139,92,246,0.18)]",
+                    isSelected && "border-primary/45 bg-primary/[0.08]",
                     isBulkSelected && !isSelected && "border-cyan-400/35 bg-cyan-500/[0.06]",
                   )}
                 >
