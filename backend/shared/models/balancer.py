@@ -452,8 +452,8 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
 
     @hybrid_property
     def is_flex_computed(self) -> bool:
-        """True when the player selected at least one role and all selected roles are primary."""
-        return bool(self.roles) and all(role.is_primary for role in self.roles)
+        """True when the player has more than one role and all are primary (full flex)."""
+        return len(self.roles) > 1 and all(role.is_primary for role in self.roles)
 
 
 class BalancerRegistrationRole(db.TimeStampIntegerMixin):

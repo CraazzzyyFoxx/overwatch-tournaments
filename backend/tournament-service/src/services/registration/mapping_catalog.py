@@ -64,7 +64,6 @@ PARSER_CATALOG: tuple[ParserSpec, ...] = (
     ParserSpec(PARSER_INTEGER, "Number", "single", "int"),
     ParserSpec(PARSER_DATETIME, "Date / time", "single", "datetime"),
     ParserSpec(PARSER_ROLE_TOKEN, "Role", "single", "role"),
-    ParserSpec(PARSER_ROLE_TOKEN_LIST, "Role list", "multi", "list"),
     ParserSpec(PARSER_SUBROLE_TOKEN, "Sub-role", "single", "subrole"),
     ParserSpec(PARSER_DIVISION_TO_RANK, "Division → rank", "single", "int"),
     ParserSpec(PARSER_JOIN_LINES, "Joined text", "multi", "string"),
@@ -72,7 +71,7 @@ PARSER_CATALOG: tuple[ParserSpec, ...] = (
     ParserSpec(PARSER_SR_VALUE, "SR / rank text", "single", "int"),
 )
 
-VALID_PARSERS = frozenset(spec.parser for spec in PARSER_CATALOG)
+VALID_PARSERS = frozenset(spec.parser for spec in PARSER_CATALOG) | {PARSER_ROLE_TOKEN_LIST}
 
 
 @dataclass(frozen=True)
@@ -91,6 +90,7 @@ class MappingTargetSpec:
     accepted_parsers: tuple[str, ...]
     default_parser: str
     default_mode: str = "disabled"
+    default_is_list: bool = False
     multi_column: bool = False
     required: bool = False
     aliases: tuple[str, ...] = ()
@@ -206,8 +206,9 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             key="source_roles.additional",
             label="Additional roles",
             group="roles",
-            accepted_parsers=(PARSER_ROLE_TOKEN_LIST, PARSER_ROLE_SUBROLE_TOKEN),
-            default_parser=PARSER_ROLE_TOKEN_LIST,
+            accepted_parsers=(PARSER_ROLE_TOKEN, PARSER_ROLE_SUBROLE_TOKEN, PARSER_ROLE_TOKEN_LIST),
+            default_parser=PARSER_ROLE_TOKEN,
+            default_is_list=True,
             multi_column=True,
             aliases=("additional role", "secondary role", "дополнительная игровая роль"),
         ),

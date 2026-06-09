@@ -197,6 +197,20 @@ def parse_role_token_list(values: list[str], value_mapping: dict[str, Any]) -> l
     return unique_strings(roles)
 
 
+def parse_role_subrole_token_list(values: list[str], value_mapping: dict[str, Any]) -> list[RoleSubroleEntry]:
+    entries: list[RoleSubroleEntry] = []
+    seen_roles: set[str] = set()
+    for value in values:
+        for token in re.split(r"[,/\n]+", value):
+            entry = map_role_subrole_token(token.strip() or None, value_mapping)
+            if entry:
+                role = entry.get("role") or ""
+                if role and role not in seen_roles:
+                    seen_roles.add(role)
+                    entries.append(entry)
+    return entries
+
+
 def build_default_value_mapping() -> dict[str, Any]:
     return {
         "booleans": dict.fromkeys(sorted(DEFAULT_BOOLEAN_TRUE_VALUES), True),
@@ -306,7 +320,14 @@ def get_selector_values(target_config: dict[str, Any] | None, row_json: dict[str
     ]
 
 
-def parse_target_value(*, parser: str, values: list[str], value_mapping: dict[str, Any], grid: DivisionGrid) -> Any:
+def parse_target_value(
+    *,
+    parser: str,
+    values: list[str],
+    value_mapping: dict[str, Any],
+    grid: DivisionGrid,
+    is_list: bool = False,
+) -> Any:
     if parser == "string":
         return values[0].strip() if values else None
     if parser == "battle_tag":
@@ -320,8 +341,10 @@ def parse_target_value(*, parser: str, values: list[str], value_mapping: dict[st
     if parser == "datetime":
         return parse_datetime(values[0] if values else None)
     if parser == "role_token":
+        if is_list:
+            return parse_role_token_list(values, value_mapping)
         return map_role_token(values[0] if values else None, value_mapping)
-    if parser == "role_token_list":
+    if parser == "role_token_list":  # backward compat — treated as role_token + is_list=True
         return parse_role_token_list(values, value_mapping)
     if parser == "subrole_token":
         return map_subrole_token(values[0] if values else None, value_mapping)
@@ -340,6 +363,8 @@ def parse_target_value(*, parser: str, values: list[str], value_mapping: dict[st
     if parser == "join_lines":
         return "\n".join(value.strip() for value in values if value.strip()) or None
     if parser == "role_subrole_token":
+        if is_list:
+            return parse_role_subrole_token_list(values, value_mapping)
         return map_role_subrole_token(values[0] if values else None, value_mapping)
     if parser == "sr_value":
         return _parse_sr_value(values[0] if values else None, value_mapping)
@@ -416,12 +441,14 @@ def parse_sheet_row_detailed(
             continue
         values = get_selector_values(target_config, row_json)
         parser = (target_config or {}).get("parser", spec.default_parser)
+        is_list = bool((target_config or {}).get("is_list", spec.default_is_list))
         try:
             flat_values[target_key] = parse_target_value(
                 parser=parser,
                 values=values,
                 value_mapping=effective_value_mapping,
                 grid=grid,
+                is_list=is_list,
             )
         except Exception as exc:  # noqa: BLE001 - surface per-field instead of failing the row
             flat_values[target_key] = None
@@ -562,7 +589,7 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
                 "is_primary": is_full_flex or primary_code == role_code or (primary_code is None and fallback_priority == 0),
                 "priority": int(priority) if isinstance(priority, int) else source_priority.get(role_code, fallback_priority),
                 "rank_value": rank_value,
-                "is_active": bool(is_active) if is_active is not None else (rank_value is not None or declared_in_source),
+                "is_active": bool(is_active) if is_active is not None else (rank_value is not None or declared_in_source or is_full_flex),
             }
         )
 

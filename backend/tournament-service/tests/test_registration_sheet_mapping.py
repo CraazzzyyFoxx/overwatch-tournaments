@@ -554,3 +554,101 @@ def test_sr_value_accepted_for_all_rank_value_targets():
     for role_code in ("tank", "dps", "support"):
         spec = specs[f"roles.{role_code}.rank_value"]
         assert catalog.PARSER_SR_VALUE in spec.accepted_parsers
+
+
+# ---------------------------------------------------------------------------
+# is_list flag: role_token and role_subrole_token list mode
+# ---------------------------------------------------------------------------
+
+
+def test_role_token_is_list_multiple_values():
+    result = admin.parse_target_value(
+        parser="role_token",
+        values=["dps", "support"],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == ["dps", "support"]
+
+
+def test_role_token_is_list_splits_comma_separated():
+    result = admin.parse_target_value(
+        parser="role_token",
+        values=["tank,dps"],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == ["tank", "dps"]
+
+
+def test_role_token_is_list_skips_empty_values():
+    result = admin.parse_target_value(
+        parser="role_token",
+        values=["", "support", ""],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == ["support"]
+
+
+def test_role_subrole_token_is_list_multiple_columns():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Хитскан ДПС", "Мейн хил"],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "dps", "subrole": "hitscan"}, {"role": "support", "subrole": "main_heal"}]
+
+
+def test_role_subrole_token_is_list_first_column_empty():
+    # Simulates 3 mapped columns where column 1 is empty — get_selector_values already
+    # filters empty cells, so parse_target_value receives only the non-empty values.
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["support"],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "support", "subrole": None}]
+
+
+def test_role_subrole_token_is_list_deduplicates_by_role():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["dps", "dps"],
+        value_mapping={},
+        grid=_grid(),
+        is_list=True,
+    )
+    assert result == [{"role": "dps", "subrole": None}]
+
+
+def test_role_subrole_token_no_is_list_unchanged():
+    result = admin.parse_target_value(
+        parser="role_subrole_token",
+        values=["Хитскан ДПС"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == {"role": "dps", "subrole": "hitscan"}
+
+
+def test_additional_roles_spec_has_default_is_list():
+    spec = catalog.target_spec_map({})["source_roles.additional"]
+    assert spec.default_is_list is True
+
+
+def test_role_token_list_backward_compat():
+    result = admin.parse_target_value(
+        parser="role_token_list",
+        values=["dps", "support"],
+        value_mapping={},
+        grid=_grid(),
+    )
+    assert result == ["dps", "support"]
