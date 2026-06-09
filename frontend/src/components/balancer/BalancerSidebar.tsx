@@ -1,19 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Trophy } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
@@ -22,7 +19,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -32,154 +28,9 @@ import {
   balancerNavigationItems,
   isBalancerNavItemActive
 } from "@/components/balancer/balancer-navigation";
-import { SITE_FAVICON, SITE_NAME } from "@/config/site";
-import { useAuthProfile } from "@/hooks/useAuthProfile";
 import tournamentService from "@/services/tournament.service";
-import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SidebarBackToSite, SidebarUserDropdown } from "@/components/sidebar/sidebar-shared";
 import { cn } from "@/lib/utils";
-
-// ---------------------------------------------------------------------------
-// Workspace switcher (header)
-// ---------------------------------------------------------------------------
-
-function getWorkspaceInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
-
-const FALLBACK_COLORS = [
-  "bg-violet-600",
-  "bg-blue-600",
-  "bg-emerald-600",
-  "bg-amber-600",
-  "bg-rose-600",
-  "bg-cyan-600",
-  "bg-indigo-600",
-  "bg-pink-600"
-];
-
-function SidebarWorkspaceSwitcher() {
-  const {
-    workspaces: allWorkspaces,
-    currentWorkspaceId,
-    fetchWorkspaces,
-    setCurrentWorkspace
-  } = useWorkspaceStore();
-  const { status, user } = useAuthProfile();
-
-  useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
-
-  const workspaces = filterAccessibleWorkspaces(allWorkspaces, status, user);
-  const current = workspaces.find((w) => w.id === currentWorkspaceId);
-
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="h-11 rounded-xl bg-sidebar-accent/70 px-2.5 hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent group-data-[collapsible=icon]:justify-center"
-            >
-              {current?.icon_url ? (
-                <Avatar className="size-8 rounded-lg">
-                  <AvatarImage src={current.icon_url} alt={current.name} />
-                  <AvatarFallback
-                    className={cn(
-                      "rounded-lg text-white font-semibold text-xs",
-                      FALLBACK_COLORS[current.id % FALLBACK_COLORS.length]
-                    )}
-                  >
-                    {getWorkspaceInitials(current.name)}
-                  </AvatarFallback>
-                </Avatar>
-              ) : current ? (
-                <div
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-lg text-white font-semibold text-xs",
-                    FALLBACK_COLORS[current.id % FALLBACK_COLORS.length]
-                  )}
-                >
-                  {getWorkspaceInitials(current.name)}
-                </div>
-              ) : (
-                <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar/80">
-                  <Image
-                    src={SITE_FAVICON}
-                    alt={SITE_NAME}
-                    width={20}
-                    height={20}
-                    unoptimized
-                    className="size-5 object-contain"
-                  />
-                </div>
-              )}
-              <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-sm font-semibold text-sidebar-foreground">
-                  {current?.name ?? "Balancer"}
-                </span>
-                <span className="truncate text-[11px] text-sidebar-foreground/60">Workspace</span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56"
-            side="bottom"
-            align="start"
-            sideOffset={6}
-          >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Workspaces
-            </DropdownMenuLabel>
-            {workspaces.map((ws) => {
-              const isActive = ws.id === currentWorkspaceId;
-              return (
-                <DropdownMenuItem
-                  key={ws.id}
-                  onClick={() => setCurrentWorkspace(ws.id)}
-                  className="gap-2.5 px-2 py-1.5"
-                >
-                  {ws.icon_url ? (
-                    <Avatar className="size-5 rounded-md">
-                      <AvatarImage src={ws.icon_url} alt={ws.name} />
-                      <AvatarFallback
-                        className={cn(
-                          "rounded-md text-white font-semibold text-[10px]",
-                          FALLBACK_COLORS[ws.id % FALLBACK_COLORS.length]
-                        )}
-                      >
-                        {getWorkspaceInitials(ws.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <div
-                      className={cn(
-                        "flex size-5 items-center justify-center rounded-md text-white font-semibold text-[10px]",
-                        FALLBACK_COLORS[ws.id % FALLBACK_COLORS.length]
-                      )}
-                    >
-                      {getWorkspaceInitials(ws.name)}
-                    </div>
-                  )}
-                  <span className="flex-1 truncate text-sm font-medium">{ws.name}</span>
-                  {isActive && <Check className="size-4 shrink-0" />}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Tournament switcher
@@ -291,11 +142,6 @@ export function BalancerSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="inset">
-      {/* Workspace switcher */}
-      <SidebarHeader className="px-2.5 py-2.5 group-data-[collapsible=icon]:px-0">
-        <SidebarWorkspaceSwitcher />
-      </SidebarHeader>
-
       <SidebarContent className="px-2 pt-1 group-data-[collapsible=icon]:px-1">
         {/* Tournament switcher */}
         <SidebarGroup className="px-0 py-0">
