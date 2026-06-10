@@ -1351,11 +1351,15 @@ async def _load_tournament_for_autofill(
 
 
 def _build_ow2_rank_data(snapshot: models.UserRankSnapshot, grid: DivisionGrid) -> _RankData:
-    """Map a raw OW2 rank snapshot to a tournament division rank via ow_rank_min/ow_rank_max."""
+    """Map a raw OW2 rank snapshot to a tournament division rank via ow_rank_min/ow_rank_max.
+
+    Returns rank_value=None when the OW2 SR does not fall within any configured tier range,
+    so that unmapped ranks are skipped rather than written as raw OW2 SR values.
+    """
     ow_rank = getattr(snapshot, "rank_value", None)
     if ow_rank is not None:
         tier = grid.resolve_division_from_ow_rank(ow_rank)
-        rank_value = tier.rank_min if tier is not None else ow_rank
+        rank_value = tier.rank_min if tier is not None else None
     else:
         rank_value = None
     return _RankData(
@@ -1551,13 +1555,16 @@ async def autofill_registration_ranks_from_parsed(
                         source="balancer",
                     )
                 else:
+                    # Analytics fallback: snapshot.rank_value is raw OW2 SR, must be mapped
+                    # through the division grid the same way OW2 Ranks mode does.
+                    ow2_data = _build_ow2_rank_data(snapshot, grid)
                     rank_data_by_role[role] = _RankData(
-                        rank_value=getattr(snapshot, "rank_value", None),
-                        platform=getattr(snapshot, "platform", None),
-                        division=getattr(snapshot, "division", None),
-                        tier=getattr(snapshot, "tier", None),
-                        season=getattr(snapshot, "season", None),
-                        captured_at=getattr(snapshot, "captured_at", None),
+                        rank_value=ow2_data.rank_value,
+                        platform=ow2_data.platform,
+                        division=ow2_data.division,
+                        tier=ow2_data.tier,
+                        season=ow2_data.season,
+                        captured_at=ow2_data.captured_at,
                         source="analytics",
                     )
         else:
