@@ -101,7 +101,16 @@ function splitBattleTag(battleTag: string): { name: string; suffix: string | nul
 }
 
 function getIssueChipLabel(issue: PlayerValidationIssue): string {
-  return issue.code === "missing_ranked_role" ? "No ranked roles" : "Role mismatch";
+  if (issue.code === "missing_ranked_role") {
+    return "No ranked roles";
+  }
+
+  if (issue.code === "rank_delta_warning") {
+    const match = issue.message.match(/Rank delta (\S+) (\d+)/);
+    return match ? `Δ ${match[1]} ${match[2]}` : "Rank Δ";
+  }
+
+  return "Role mismatch";
 }
 
 function flattenStatusOptions(statusOptions?: StatusOptionGroups): StatusMeta[] {

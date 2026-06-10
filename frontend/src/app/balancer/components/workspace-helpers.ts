@@ -245,13 +245,23 @@ function roleSequencesMatch(
   return left.every((roleCode) => right.includes(roleCode));
 }
 
-export function computePrimaryRankDelta(player: BalancerPlayerRecord): number | null {
-  const sorted = sortRoleEntries(player.role_entries_json);
-  const primary = sorted.find((e) => isRoleEntryActive(e) && e.rank_value !== null) ?? null;
-  if (primary?.rank_value == null || primary.ow_rank_value == null) {
-    return null;
-  }
-  return Math.abs(primary.rank_value - primary.ow_rank_value);
+export interface RoleRankDelta {
+  role: BalancerRoleCode;
+  delta: number;
+}
+
+/**
+ * Absolute rank-point delta between the balancer rank and the (grid-normalised) OW rank for
+ * every active ranked role that has both values. `ow_rank_value` is normalised to the workspace
+ * grid server-side, so it shares the same scale as `rank_value` and subtraction is valid.
+ */
+export function computeRankDeltasByRole(player: BalancerPlayerRecord): RoleRankDelta[] {
+  return getActiveRoleEntries(player.role_entries_json)
+    .filter((entry) => entry.rank_value !== null && entry.ow_rank_value !== null)
+    .map((entry) => ({
+      role: entry.role,
+      delta: Math.abs((entry.rank_value as number) - (entry.ow_rank_value as number))
+    }));
 }
 
 export function getPlayerValidationIssues(
@@ -283,11 +293,15 @@ export function getPlayerValidationIssues(
   }
 
   if (workspaceConfig?.rank_delta_threshold != null) {
-    const delta = computePrimaryRankDelta(player);
-    if (delta !== null && delta > workspaceConfig.rank_delta_threshold) {
+    const threshold = workspaceConfig.rank_delta_threshold;
+    const violating = computeRankDeltasByRole(player)
+      .filter((entry) => entry.delta > threshold)
+      .sort((a, b) => b.delta - a.delta);
+    if (violating.length > 0) {
+      const worst = violating[0];
       issues.push({
         code: "rank_delta_warning",
-        message: `Rank delta ${delta} exceeds threshold ${workspaceConfig.rank_delta_threshold}`
+        message: `Rank delta ${ROLE_LABELS[worst.role]} ${worst.delta} exceeds threshold ${threshold}`
       });
     }
   }

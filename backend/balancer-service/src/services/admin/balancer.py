@@ -1133,6 +1133,27 @@ async def fetch_latest_ow_ranks_by_user_ids(
     return out
 
 
+def normalize_ow_ranks_to_grid(
+    raw_by_user: dict[int, dict[str, int]],
+    grid: DivisionGrid,
+) -> dict[int, dict[str, int]]:
+    """Map raw OW2 SR values to workspace-grid rank points (tier.rank_min).
+
+    Mirrors the registration autofill mapping (``_build_ow2_rank_data``): a raw OW2 SR is
+    resolved to a tier via ``ow_rank_min``/``ow_rank_max`` and replaced with that tier's
+    ``rank_min`` so it lives on the same scale as the balancer ``rank_value``. Entries whose
+    SR does not fall into any configured tier are dropped (so ``ow_rank_value`` stays ``None``
+    and no spurious delta is computed).
+    """
+    out: dict[int, dict[str, int]] = {}
+    for user_id, by_role in raw_by_user.items():
+        for role, ow_rank in by_role.items():
+            tier = grid.resolve_division_from_ow_rank(ow_rank)
+            if tier is not None:
+                out.setdefault(user_id, {})[role] = tier.rank_min
+    return out
+
+
 async def get_workspace_balancer_config(
     session: AsyncSession,
     workspace_id: int,

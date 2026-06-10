@@ -28,7 +28,11 @@ from src.presentation.http.admin_balancer_serializers import (
 )
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
-from src.services.admin.balancer import fetch_latest_ow_ranks_by_user_ids
+from src.services.admin.balancer import (
+    fetch_latest_ow_ranks_by_user_ids,
+    normalize_ow_ranks_to_grid,
+)
+from src.services.admin.balancer_registration import get_tournament_grid
 
 router = APIRouter(
     prefix="/balancer",
@@ -175,7 +179,9 @@ async def list_players(
         in_pool_only=in_pool_only,
     )
     user_ids = [p.user_id for p in players if p.user_id is not None]
+    grid = await get_tournament_grid(session, tournament_id)
     ow_ranks = await fetch_latest_ow_ranks_by_user_ids(session, user_ids)
+    ow_ranks = normalize_ow_ranks_to_grid(ow_ranks, grid)
     return [_serialize_player(p, ow_ranks.get(p.user_id)) for p in players]
 
 
