@@ -1074,7 +1074,7 @@ export function PlayerEditModal({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-white">History preview</span>
                     {historyPreviewAverage != null ? (
-                      <Badge className="h-5 border-primary/20 bg-primary/10 px-2 text-[10px] text-primary-foreground/80 hover:bg-primary/10">
+                      <Badge className="h-5 border-primary/20 bg-primary/10 px-2 text-[10px] text-white hover:bg-primary/10">
                         Avg {historyPreviewAverage}
                       </Badge>
                     ) : null}
@@ -1140,10 +1140,10 @@ export function PlayerEditModal({
                     </SelectTrigger>
                     <SelectContent className="border-white/10 bg-zinc-950 text-white text-[11px]">
                       <SelectItem value="current" className="text-[11px]">
-                        Current Workspace (Текущий)
+                        Current Workspace
                       </SelectItem>
                       <SelectItem value="all" className="text-[11px]">
-                        All Workspaces (Все)
+                        All Workspaces
                       </SelectItem>
                       {workspaces.map((ws) => (
                         <SelectItem key={ws.id} value={String(ws.id)} className="text-[11px]">
