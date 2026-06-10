@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -72,7 +73,12 @@ VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
 
 @dataclass
 class _RankData:
-    """Resolved rank value for autofill, abstracting over snapshot and balancer history."""
+    """Resolved rank value for autofill, abstracting over snapshot and balancer history.
+
+    ``rank_value`` is the *chosen* (suggested) value. The ``*_rank_value`` breakdown fields
+    carry every candidate signal that was considered so the UI can surface why a value was
+    picked, and ``used_source`` names the candidate that won.
+    """
 
     rank_value: int | None
     platform: str | None = None
@@ -81,6 +87,20 @@ class _RankData:
     season: int | None = None
     captured_at: datetime | None = None
     source: str = "analytics"
+    division_history_rank_value: int | None = None
+    ow_peak_rank_value: int | None = None
+    ow_current_rank_value: int | None = None
+    ow_peak_season: int | None = None
+    used_source: str | None = None
+
+
+@dataclass
+class _OwRankSignals:
+    """OW rank-history signals for a single (battle_tag, role): current + current-season peak."""
+
+    current_snapshot: models.UserRankSnapshot | Any | None = None
+    peak_snapshot: models.UserRankSnapshot | Any | None = None
+    current_season: int | None = None
 
 
 RANK_ROLE_BY_REGISTRATION_ROLE = {
@@ -1202,6 +1222,11 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
             "season": None,
             "captured_at": None,
             "source": "analytics",
+            "division_history_rank_value": None,
+            "ow_peak_rank_value": None,
+            "ow_current_rank_value": None,
+            "ow_peak_season": None,
+            "used_source": None,
         }
     return {
         "parsed_rank_value": getattr(snapshot, "rank_value", None),
@@ -1211,6 +1236,11 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
         "season": getattr(snapshot, "season", None),
         "captured_at": getattr(snapshot, "captured_at", None),
         "source": getattr(snapshot, "source", "analytics"),
+        "division_history_rank_value": getattr(snapshot, "division_history_rank_value", None),
+        "ow_peak_rank_value": getattr(snapshot, "ow_peak_rank_value", None),
+        "ow_current_rank_value": getattr(snapshot, "ow_current_rank_value", None),
+        "ow_peak_season": getattr(snapshot, "ow_peak_season", None),
+        "used_source": getattr(snapshot, "used_source", None),
     }
 
 
@@ -1356,29 +1386,6 @@ async def _load_tournament_for_autofill(
     return result.scalar_one_or_none()
 
 
-def _build_ow2_rank_data(snapshot: models.UserRankSnapshot, grid: DivisionGrid) -> _RankData:
-    """Map a raw OW2 rank snapshot to a tournament division rank via ow_rank_min/ow_rank_max.
-
-    Returns rank_value=None when the OW2 SR does not fall within any configured tier range,
-    so that unmapped ranks are skipped rather than written as raw OW2 SR values.
-    """
-    ow_rank = getattr(snapshot, "rank_value", None)
-    if ow_rank is not None:
-        tier = grid.resolve_division_from_ow_rank(ow_rank)
-        rank_value = tier.rank_min if tier is not None else None
-    else:
-        rank_value = None
-    return _RankData(
-        rank_value=rank_value,
-        platform=getattr(snapshot, "platform", None),
-        division=getattr(snapshot, "division", None),
-        tier=getattr(snapshot, "tier", None),
-        season=getattr(snapshot, "season", None),
-        captured_at=getattr(snapshot, "captured_at", None),
-        source="analytics",
-    )
-
-
 async def _load_latest_ranks_from_balancer_history(
     session: AsyncSession,
     user_ids: list[int],
@@ -1475,10 +1482,16 @@ async def _load_main_battle_tags_by_key(
     }
 
 
-async def _load_latest_rank_snapshots_by_battle_tag_id(
+async def _load_ow_rank_signals_by_battle_tag_id(
     session: AsyncSession,
     battle_tag_ids: list[int],
-) -> dict[int, dict[str, models.UserRankSnapshot]]:
+) -> dict[int, dict[str, _OwRankSignals]]:
+    """Return per (battle_tag_id, rank_role) OW signals: latest snapshot + current-season peak.
+
+    Current season is the most recent ``season`` observed for that (tag, role); the peak is the
+    highest-SR snapshot within that season. When ``season`` is null on the snapshots, the peak
+    degrades to the all-time maximum for that role.
+    """
     if not battle_tag_ids:
         return {}
     result = await session.execute(
@@ -1491,11 +1504,102 @@ async def _load_latest_rank_snapshots_by_battle_tag_id(
         )
         .order_by(models.UserRankSnapshot.captured_at.desc(), models.UserRankSnapshot.id.desc())
     )
-    snapshots_by_tag_id: dict[int, dict[str, models.UserRankSnapshot]] = {}
-    for snapshot in result.scalars().all():
-        role_map = snapshots_by_tag_id.setdefault(snapshot.battle_tag_id, {})
-        role_map.setdefault(snapshot.role, snapshot)
-    return snapshots_by_tag_id
+    return _group_ow_rank_signals(result.scalars().all())
+
+
+def _group_ow_rank_signals(
+    snapshots_newest_first: Iterable[models.UserRankSnapshot | Any],
+) -> dict[int, dict[str, _OwRankSignals]]:
+    """Group newest-first snapshots into per (battle_tag_id, role) current + current-season peak.
+
+    Pure (no DB) so the season/peak logic can be unit-tested. The first snapshot seen for a
+    (tag, role) is the current one and pins the current season; the peak is the highest-SR
+    snapshot within that season (null season => all-time peak).
+    """
+    signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
+    for snapshot in snapshots_newest_first:
+        role_map = signals_by_tag_id.setdefault(snapshot.battle_tag_id, {})
+        signals = role_map.get(snapshot.role)
+        if signals is None:
+            signals = _OwRankSignals(
+                current_snapshot=snapshot,
+                peak_snapshot=snapshot,
+                current_season=getattr(snapshot, "season", None),
+            )
+            role_map[snapshot.role] = signals
+            continue
+
+        in_current_season = (
+            signals.current_season is None
+            or getattr(snapshot, "season", None) == signals.current_season
+        )
+        if in_current_season:
+            peak_value = getattr(signals.peak_snapshot, "rank_value", None) or 0
+            if (getattr(snapshot, "rank_value", None) or 0) > peak_value:
+                signals.peak_snapshot = snapshot
+    return signals_by_tag_id
+
+
+def _build_blended_rank_data(
+    signals: _OwRankSignals | None,
+    division_history_rank: int | None,
+    grid: DivisionGrid,
+) -> _RankData | None:
+    """Blend division history + OW peak (current season) + OW current into one suggestion.
+
+    Chosen value = max(division_history, ow_peak). OW current is contextual only. Returns None
+    when no signal yields a usable tournament rank (the role is then treated as missing).
+    """
+    current_snapshot = signals.current_snapshot if signals else None
+    peak_snapshot = signals.peak_snapshot if signals else None
+
+    ow_peak_rank = _map_ow_snapshot_rank(peak_snapshot, grid)
+    ow_current_rank = _map_ow_snapshot_rank(current_snapshot, grid)
+
+    candidates: dict[str, int] = {}
+    if division_history_rank is not None:
+        candidates["division_history"] = division_history_rank
+    if ow_peak_rank is not None:
+        candidates["ow_peak"] = ow_peak_rank
+
+    if not candidates:
+        return None
+
+    # Tie → prefer division_history (the platform's own prior assignment).
+    used_source = max(
+        candidates,
+        key=lambda source: (candidates[source], 1 if source == "division_history" else 0),
+    )
+    chosen = candidates[used_source]
+
+    # Primary display reflects the OW snapshot we leaned on (peak if available, else current).
+    display_snapshot = peak_snapshot or current_snapshot
+    source = "balancer" if used_source == "division_history" else "analytics"
+    return _RankData(
+        rank_value=chosen,
+        platform=getattr(display_snapshot, "platform", None),
+        division=getattr(display_snapshot, "division", None),
+        tier=getattr(display_snapshot, "tier", None),
+        season=getattr(display_snapshot, "season", None),
+        captured_at=getattr(display_snapshot, "captured_at", None),
+        source=source,
+        division_history_rank_value=division_history_rank,
+        ow_peak_rank_value=ow_peak_rank,
+        ow_current_rank_value=ow_current_rank,
+        ow_peak_season=getattr(peak_snapshot, "season", None),
+        used_source=used_source,
+    )
+
+
+def _map_ow_snapshot_rank(snapshot: models.UserRankSnapshot | Any | None, grid: DivisionGrid) -> int | None:
+    """Map a raw OW2 SR snapshot to a tournament division rank via the grid, or None if unmapped."""
+    if snapshot is None:
+        return None
+    ow_rank = getattr(snapshot, "rank_value", None)
+    if ow_rank is None:
+        return None
+    tier = grid.resolve_division_from_ow_rank(ow_rank)
+    return tier.rank_min if tier is not None else None
 
 
 async def autofill_registration_ranks_from_parsed(
@@ -1505,7 +1609,6 @@ async def autofill_registration_ranks_from_parsed(
     registration_ids: list[int] | None = None,
     overwrite_existing: bool = False,
     add_to_balancer: bool = False,
-    mode: str = "ow2_ranks",
     apply: bool = False,
 ) -> dict[str, Any]:
     if registration_ids is not None:
@@ -1516,14 +1619,14 @@ async def autofill_registration_ranks_from_parsed(
 
     registrations = await _load_rank_autofill_registrations(session, tournament_id, registration_ids)
     battle_tags_by_key = await _load_main_battle_tags_by_key(session, registrations)
-    snapshots_by_tag_id = await _load_latest_rank_snapshots_by_battle_tag_id(
+    ow_signals_by_tag_id = await _load_ow_rank_signals_by_battle_tag_id(
         session,
         [battle_tag.id for battle_tag in battle_tags_by_key.values()],
     )
 
-    # For division_history mode: load balancer history keyed by user_id
+    # Division history is always part of the blend, keyed by user_id then registration role.
     balancer_history_by_user_id: dict[int, dict[str, int]] = {}
-    if mode == "division_history" and tournament is not None:
+    if tournament is not None:
         user_ids = [
             battle_tag.user_id
             for battle_tag in battle_tags_by_key.values()
@@ -1545,36 +1648,22 @@ async def autofill_registration_ranks_from_parsed(
     for registration in registrations:
         tag_key = registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)
         main_battle_tag = battle_tags_by_key.get(tag_key or "")
-        raw_snapshots = snapshots_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
+        ow_signals_by_role = ow_signals_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
+        user_id = getattr(main_battle_tag, "user_id", None) if main_battle_tag else None
+        balancer_by_role = balancer_history_by_user_id.get(user_id or -1, {})
 
+        # Build one blended suggestion per rank-role, keyed the way the plan builder expects.
+        # Division history is stored under registration-role codes (tank/dps/support); OW
+        # snapshots use rank-role codes (tank/damage/support) — bridge via the mapping.
         rank_data_by_role: dict[str, _RankData | Any] = {}
-        if mode == "ow2_ranks":
-            for role, snapshot in raw_snapshots.items():
-                rank_data_by_role[role] = _build_ow2_rank_data(snapshot, grid)
-        elif mode == "division_history":
-            user_id = getattr(main_battle_tag, "user_id", None) if main_battle_tag else None
-            balancer_by_role = balancer_history_by_user_id.get(user_id or -1, {})
-            for role, snapshot in raw_snapshots.items():
-                if role in balancer_by_role:
-                    rank_data_by_role[role] = _RankData(
-                        rank_value=balancer_by_role[role],
-                        source="balancer",
-                    )
-                else:
-                    # Analytics fallback: snapshot.rank_value is raw OW2 SR, must be mapped
-                    # through the division grid the same way OW2 Ranks mode does.
-                    ow2_data = _build_ow2_rank_data(snapshot, grid)
-                    rank_data_by_role[role] = _RankData(
-                        rank_value=ow2_data.rank_value,
-                        platform=ow2_data.platform,
-                        division=ow2_data.division,
-                        tier=ow2_data.tier,
-                        season=ow2_data.season,
-                        captured_at=ow2_data.captured_at,
-                        source="analytics",
-                    )
-        else:
-            rank_data_by_role = dict(raw_snapshots)
+        for registration_role, rank_role in RANK_ROLE_BY_REGISTRATION_ROLE.items():
+            blended = _build_blended_rank_data(
+                ow_signals_by_role.get(rank_role),
+                balancer_by_role.get(registration_role),
+                grid,
+            )
+            if blended is not None:
+                rank_data_by_role[rank_role] = blended
 
         row, updates = build_registration_rank_autofill_plan(
             registration,

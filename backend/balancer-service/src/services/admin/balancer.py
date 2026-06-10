@@ -1139,7 +1139,7 @@ def normalize_ow_ranks_to_grid(
 ) -> dict[int, dict[str, int]]:
     """Map raw OW2 SR values to workspace-grid rank points (tier.rank_min).
 
-    Mirrors the registration autofill mapping (``_build_ow2_rank_data``): a raw OW2 SR is
+    Mirrors the registration autofill mapping (``_map_ow_snapshot_rank``): a raw OW2 SR is
     resolved to a tier via ``ow_rank_min``/``ow_rank_max`` and replaced with that tier's
     ``rank_min`` so it lives on the same scale as the balancer ``rank_value``. Entries whose
     SR does not fall into any configured tier are dropped (so ``ow_rank_value`` stays ``None``

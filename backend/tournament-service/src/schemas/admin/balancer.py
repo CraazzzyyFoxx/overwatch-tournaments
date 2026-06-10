@@ -24,8 +24,8 @@ RankAutofillRoleAction = Literal[
     "missing_rank",
     "blocked",
 ]
-RankAutofillMode = Literal["ow2_ranks", "division_history"]
 RankAutofillSource = Literal["analytics", "balancer"]
+RankAutofillUsedSource = Literal["division_history", "ow_peak", "ow_current"]
 
 __all__ = (
     "ApplicationUserExportResponse",
@@ -357,7 +357,6 @@ class BalancerRegistrationRankAutofillRequest(BaseModel):
     registration_ids: list[int] | None = None
     overwrite_existing: bool = False
     add_to_balancer: bool = False
-    mode: RankAutofillMode = "ow2_ranks"
 
 
 class BalancerRegistrationRankAutofillRole(BaseModel):
@@ -372,6 +371,11 @@ class BalancerRegistrationRankAutofillRole(BaseModel):
     season: int | None = None
     captured_at: datetime | None = None
     source: RankAutofillSource = "analytics"
+    division_history_rank_value: int | None = None
+    ow_peak_rank_value: int | None = None
+    ow_current_rank_value: int | None = None
+    ow_peak_season: int | None = None
+    used_source: RankAutofillUsedSource | None = None
 
 
 class BalancerRegistrationRankAutofillPlayer(BaseModel):

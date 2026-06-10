@@ -236,13 +236,15 @@ export type RegistrationRankAutofillRoleAction =
   | "missing_rank"
   | "blocked";
 
-export type RegistrationRankAutofillMode = "ow2_ranks" | "division_history";
+export type RegistrationRankAutofillUsedSource =
+  | "division_history"
+  | "ow_peak"
+  | "ow_current";
 
 export interface RegistrationRankAutofillRequest {
   registration_ids?: number[] | null;
   overwrite_existing?: boolean;
   add_to_balancer?: boolean;
-  mode?: RegistrationRankAutofillMode;
 }
 
 export interface RegistrationRankAutofillRole {
@@ -257,6 +259,11 @@ export interface RegistrationRankAutofillRole {
   season: number | null;
   captured_at: string | null;
   source: "analytics" | "balancer";
+  division_history_rank_value: number | null;
+  ow_peak_rank_value: number | null;
+  ow_current_rank_value: number | null;
+  ow_peak_season: number | null;
+  used_source: RegistrationRankAutofillUsedSource | null;
 }
 
 export interface RegistrationRankAutofillPlayer {

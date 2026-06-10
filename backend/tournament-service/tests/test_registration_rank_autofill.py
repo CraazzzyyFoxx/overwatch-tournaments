@@ -190,3 +190,144 @@ def test_autofill_does_not_add_unapproved_player_to_balancer() -> None:
 
     assert will_add is False
     assert reason == "Registration must be approved before it can be added to balancer."
+
+
+# ── Blended suggestion (division history + OW peak/current) ──────────────────────────────────
+
+
+class _FakeGrid:
+    """Identity grid for SR in [1000, 4900]; everything else is unmapped (None)."""
+
+    def resolve_division_from_ow_rank(self, ow_rank: int | None):
+        if ow_rank is None or ow_rank < 1000 or ow_rank > 4900:
+            return None
+        return SimpleNamespace(rank_min=ow_rank)
+
+
+def _signals(*, peak: int | None, current: int | None, season: int | None = 15) -> SimpleNamespace:
+    peak_snapshot = _snapshot(peak) if peak is not None else None
+    current_snapshot = _snapshot(current) if current is not None else None
+    if peak_snapshot is not None:
+        peak_snapshot.season = season
+    if current_snapshot is not None:
+        current_snapshot.season = season
+    return reg_admin._OwRankSignals(
+        current_snapshot=current_snapshot,
+        peak_snapshot=peak_snapshot,
+        current_season=season,
+    )
+
+
+def test_blend_division_history_only() -> None:
+    data = reg_admin._build_blended_rank_data(None, 3400, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 3400
+    assert data.used_source == "division_history"
+    assert data.source == "balancer"
+    assert data.division_history_rank_value == 3400
+    assert data.ow_peak_rank_value is None
+    assert data.ow_current_rank_value is None
+
+
+def test_blend_ow_only_uses_peak() -> None:
+    data = reg_admin._build_blended_rank_data(
+        _signals(peak=3450, current=3200), None, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 3450
+    assert data.used_source == "ow_peak"
+    assert data.source == "analytics"
+    assert data.ow_peak_rank_value == 3450
+    assert data.ow_current_rank_value == 3200  # reported but not chosen
+
+
+def test_blend_peak_beats_lower_division_history() -> None:
+    data = reg_admin._build_blended_rank_data(
+        _signals(peak=3450, current=3200), 3400, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 3450
+    assert data.used_source == "ow_peak"
+
+
+def test_blend_division_history_beats_lower_peak() -> None:
+    data = reg_admin._build_blended_rank_data(
+        _signals(peak=3450, current=3200), 3500, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 3500
+    assert data.used_source == "division_history"
+
+
+def test_blend_tie_prefers_division_history() -> None:
+    data = reg_admin._build_blended_rank_data(
+        _signals(peak=3400, current=3400), 3400, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 3400
+    assert data.used_source == "division_history"
+
+
+def test_blend_unmapped_ow_falls_back_to_division_history() -> None:
+    data = reg_admin._build_blended_rank_data(
+        _signals(peak=5000, current=5000), 3400, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 3400
+    assert data.used_source == "division_history"
+    assert data.ow_peak_rank_value is None
+
+
+def test_blend_returns_none_when_no_signal() -> None:
+    assert reg_admin._build_blended_rank_data(None, None, _FakeGrid()) is None
+    # OW present but unmapped, no division history → still nothing usable.
+    assert (
+        reg_admin._build_blended_rank_data(_signals(peak=5000, current=5000), None, _FakeGrid())
+        is None
+    )
+
+
+# ── OW signal grouping (current + current-season peak) ───────────────────────────────────────
+
+
+def _tagged(rank_value: int, *, season: int, role: str = "damage", tag_id: int = 7) -> SimpleNamespace:
+    snapshot = _snapshot(rank_value, role=role)
+    snapshot.season = season
+    snapshot.battle_tag_id = tag_id
+    return snapshot
+
+
+def test_group_peak_is_current_season_only() -> None:
+    # Newest-first: current is season 15 @ 3200; a higher 3900 sits in the older season 14.
+    snapshots = [
+        _tagged(3200, season=15),
+        _tagged(3100, season=15),
+        _tagged(3900, season=14),  # higher, but old season → ignored for peak
+    ]
+
+    grouped = reg_admin._group_ow_rank_signals(snapshots)
+    signals = grouped[7]["damage"]
+
+    assert signals.current_season == 15
+    assert signals.current_snapshot.rank_value == 3200
+    assert signals.peak_snapshot.rank_value == 3200  # 3100 lower, 3900 wrong season
+
+
+def test_group_peak_picks_highest_within_current_season() -> None:
+    snapshots = [
+        _tagged(3200, season=15),
+        _tagged(3600, season=15),  # in-season peak
+        _tagged(3400, season=15),
+    ]
+
+    grouped = reg_admin._group_ow_rank_signals(snapshots)
+    signals = grouped[7]["damage"]
+
+    assert signals.current_snapshot.rank_value == 3200
+    assert signals.peak_snapshot.rank_value == 3600
