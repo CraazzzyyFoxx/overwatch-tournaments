@@ -17,7 +17,7 @@ export type PlayerValidationState = {
 
 export type PoolLane = "excluded" | "needs_fix" | "ready";
 export type PoolDropPatch = { is_in_pool: boolean };
-export type PoolView = "all" | "needs_fix" | "ready" | "excluded";
+export type PoolView = "all" | "needs_fix" | "ready" | "excluded" | "rank_delta";
 export type PoolSortValue =
   | "added_desc"
   | "added_asc"

@@ -73,6 +73,7 @@ function normalizeRoleEntries(entries: BalancerPlayerRoleEntry[]): BalancerPlaye
       division_number: divisionNumber,
       rank_value: entry.rank_value ?? resolveRankFromDivision(divisionNumber),
       is_active: entry.is_active ?? true,
+      ow_rank_value: entry.ow_rank_value ?? null,
     });
   }
 
@@ -184,6 +185,7 @@ export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: Poo
           division_number: null,
           rank_value: null,
           is_active: true,
+          ow_rank_value: null,
         },
       ]);
   };

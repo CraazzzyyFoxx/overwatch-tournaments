@@ -46,6 +46,7 @@ export interface BalancerPlayerRoleEntry {
   division_number: number | null;
   rank_value: number | null;
   is_active: boolean;
+  ow_rank_value: number | null;
 }
 
 export interface BalancerApplication {
@@ -533,6 +534,19 @@ export interface AdminGoogleSheetFeedSyncResponse {
   skipped: number;
   errors: AdminGoogleSheetSyncError[];
   feed: AdminGoogleSheetFeed;
+}
+
+export interface WorkspaceBalancerConfig {
+  id: number;
+  workspace_id: number;
+  rank_delta_threshold: number | null;
+  rank_delta_hide_from_pool: boolean;
+  updated_by: number | null;
+}
+
+export interface WorkspaceBalancerConfigUpsert {
+  rank_delta_threshold: number | null;
+  rank_delta_hide_from_pool: boolean;
 }
 
 export interface AdminGoogleSheetMappingSuggestInput {

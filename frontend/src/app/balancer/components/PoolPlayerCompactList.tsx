@@ -94,6 +94,11 @@ function getIssueChipLabel(issue: PlayerValidationIssue): string {
     return "No ranked roles";
   }
 
+  if (issue.code === "rank_delta_warning") {
+    const match = issue.message.match(/Rank delta (\d+)/);
+    return match ? `Δ${match[1]}` : "Rank Δ";
+  }
+
   return "Role mismatch";
 }
 

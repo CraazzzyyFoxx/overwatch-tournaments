@@ -4,7 +4,7 @@ import json
 from typing import Literal
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +28,7 @@ from src.presentation.http.admin_balancer_serializers import (
 )
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
+from src.services.admin.balancer import fetch_latest_ow_ranks_by_user_ids
 
 router = APIRouter(
     prefix="/balancer",
@@ -173,7 +174,9 @@ async def list_players(
         tournament_id=tournament_id,
         in_pool_only=in_pool_only,
     )
-    return [_serialize_player(player) for player in players]
+    user_ids = [p.user_id for p in players if p.user_id is not None]
+    ow_ranks = await fetch_latest_ow_ranks_by_user_ids(session, user_ids)
+    return [_serialize_player(p, ow_ranks.get(p.user_id)) for p in players]
 
 
 @router.get("/users/{user_id}/players", response_model=list[admin_schemas.BalancerPlayerHistoryRead])
@@ -401,6 +404,62 @@ async def export_balance(
         imported_teams=imported_teams,
         balance_id=balance.id,
     )
+
+
+def _config_to_read(
+    cfg: models.WorkspaceBalancerConfig | None,
+    workspace_id: int,
+) -> admin_schemas.WorkspaceBalancerConfigRead:
+    if cfg is None:
+        return admin_schemas.WorkspaceBalancerConfigRead(
+            id=0,
+            workspace_id=workspace_id,
+            rank_delta_threshold=None,
+            rank_delta_hide_from_pool=False,
+            updated_by=None,
+        )
+    payload = cfg.config_json or {}
+    return admin_schemas.WorkspaceBalancerConfigRead(
+        id=cfg.id,
+        workspace_id=cfg.workspace_id,
+        rank_delta_threshold=payload.get("rank_delta_threshold"),
+        rank_delta_hide_from_pool=bool(payload.get("rank_delta_hide_from_pool", False)),
+        updated_by=cfg.updated_by,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/config",
+    response_model=admin_schemas.WorkspaceBalancerConfigRead,
+)
+async def get_workspace_balancer_config(
+    workspace_id: int,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_workspace_permission("workspace", "read")),
+):
+    cfg = await use_cases.get_workspace_balancer_config.execute(
+        session=session, workspace_id=workspace_id
+    )
+    return _config_to_read(cfg, workspace_id)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/config",
+    response_model=admin_schemas.WorkspaceBalancerConfigRead,
+)
+async def upsert_workspace_balancer_config(
+    workspace_id: int,
+    data: admin_schemas.WorkspaceBalancerConfigUpsert,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_workspace_permission("workspace", "admin")),
+):
+    cfg = await use_cases.upsert_workspace_balancer_config.execute(
+        session=session,
+        workspace_id=workspace_id,
+        payload=data,
+        updated_by=user.id,
+    )
+    return _config_to_read(cfg, workspace_id)
 
 
 @router.post("/tournaments/{tournament_id}/teams/import")

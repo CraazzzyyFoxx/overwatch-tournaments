@@ -137,7 +137,8 @@ function normalizeRoleEntries(entries: BalancerPlayerRoleEntry[]): BalancerPlaye
       priority: normalized.length + 1,
       division_number: entry.division_number ?? null,
       rank_value: entry.rank_value,
-      is_active: entry.is_active ?? true
+      is_active: entry.is_active ?? true,
+      ow_rank_value: entry.ow_rank_value ?? null
     });
   }
 
@@ -201,7 +202,8 @@ function applyHistoryPreviewToRoleEntries(
       priority: entries.length + byRole.size,
       division_number: historyEntry.division_number,
       rank_value: normalizedRank,
-      is_active: true
+      is_active: true,
+      ow_rank_value: null
     });
   }
 
@@ -944,7 +946,8 @@ export function PlayerEditModal({
         priority: roleEntries.length + 1,
         division_number: null,
         rank_value: null,
-        is_active: true
+        is_active: true,
+        ow_rank_value: null
       }
     ];
     setRoleEntries(next);

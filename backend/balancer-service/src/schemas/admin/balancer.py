@@ -58,6 +58,8 @@ __all__ = (
     "BalancerTournamentSheetRead",
     "BalancerTournamentSheetUpsert",
     "BulkApproveResponse",
+    "WorkspaceBalancerConfigRead",
+    "WorkspaceBalancerConfigUpsert",
     "BulkBalancerStatusResponse",
     "CheckInRequest",
     "SetBalancerStatusRequest",
@@ -79,6 +81,7 @@ class BalancerPlayerRoleEntry(BaseModel):
     division_number: int | None = None
     rank_value: int | None = None
     is_active: bool = True
+    ow_rank_value: int | None = None
 
 
 class BalancerPlayerRead(BaseRead):
@@ -433,6 +436,23 @@ class BalancerTournamentConfigRead(BaseRead):
     config_json: dict[str, Any]
     updated_by: int | None = None
     updated_at: datetime | None = None
+
+
+class WorkspaceBalancerConfigUpsert(BaseModel):
+    rank_delta_threshold: int | None = Field(
+        default=None,
+        ge=1,
+        le=10000,
+        description="Absolute rank-point delta above which a player is flagged. Null disables the feature.",
+    )
+    rank_delta_hide_from_pool: bool = False
+
+
+class WorkspaceBalancerConfigRead(BaseRead):
+    workspace_id: int
+    rank_delta_threshold: int | None
+    rank_delta_hide_from_pool: bool
+    updated_by: int | None = None
 
 
 class BalanceRead(BaseRead):

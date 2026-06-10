@@ -44,6 +44,10 @@ export type PlayerValidationIssue =
       message: string;
       applicationRoleCodes: BalancerRoleCode[];
       playerRoleCodes: BalancerRoleCode[];
+    }
+  | {
+      code: "rank_delta_warning";
+      message: string;
     };
 
 export type PlayerRankHistoryPreviewEntry = {
@@ -241,9 +245,19 @@ function roleSequencesMatch(
   return left.every((roleCode) => right.includes(roleCode));
 }
 
+export function computePrimaryRankDelta(player: BalancerPlayerRecord): number | null {
+  const sorted = sortRoleEntries(player.role_entries_json);
+  const primary = sorted.find((e) => isRoleEntryActive(e) && e.rank_value !== null) ?? null;
+  if (primary?.rank_value == null || primary.ow_rank_value == null) {
+    return null;
+  }
+  return Math.abs(primary.rank_value - primary.ow_rank_value);
+}
+
 export function getPlayerValidationIssues(
   player: BalancerPlayerRecord,
-  application: BalancerApplication | null | undefined
+  application: BalancerApplication | null | undefined,
+  workspaceConfig?: { rank_delta_threshold: number | null } | null
 ): PlayerValidationIssue[] {
   const issues: PlayerValidationIssue[] = [];
 
@@ -264,6 +278,16 @@ export function getPlayerValidationIssues(
         message: `Application: ${formatRoleCodes(applicationRoleCodes)}; balancer: ${formatRoleCodes(playerRoleCodes)}`,
         applicationRoleCodes,
         playerRoleCodes
+      });
+    }
+  }
+
+  if (workspaceConfig?.rank_delta_threshold != null) {
+    const delta = computePrimaryRankDelta(player);
+    if (delta !== null && delta > workspaceConfig.rank_delta_threshold) {
+      issues.push({
+        code: "rank_delta_warning",
+        message: `Rank delta ${delta} exceeds threshold ${workspaceConfig.rank_delta_threshold}`
       });
     }
   }
@@ -396,7 +420,8 @@ export function createSyntheticPlayerFromRegistration(
       priority: role.priority,
       division_number: resolveDivisionFromRankHelper(role.rank_value, grid),
       rank_value: role.rank_value,
-      is_active: role.is_active
+      is_active: role.is_active,
+      ow_rank_value: null
     })),
     is_flex: isFlex,
     is_in_pool: isRegistrationIncludedInBalancer(registration),
@@ -499,7 +524,8 @@ export function buildRoleEntriesFromRankHistory(
       priority: priority++,
       rank_value: rankValue,
       division_number: resolveDivisionFromRankHelper(rankValue, grid),
-      is_active: true
+      is_active: true,
+      ow_rank_value: null
     });
   }
   return entries;

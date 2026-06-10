@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
   Plus,
   PlusCircle,
+  Settings2,
   ShieldX,
   Tag,
   X,
@@ -25,13 +26,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { AdminRegistration, BalancerApplication, StatusMeta } from "@/types/balancer-admin.types";
+import type { AdminRegistration, BalancerApplication, StatusMeta, WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
 import type { PlayerValidationState, PoolView, PoolSortValue } from "./balancer-page-helpers";
 import { PANEL_CLASS, sortPlayerStates } from "./balancer-page-helpers";
 import { buildPlayerSearchIndex } from "./workspace-helpers";
 import { PoolSearchCombobox } from "./PoolSearchCombobox";
 import { PoolPlayerCompactList } from "./PoolPlayerCompactList";
 import { PoolTriageBoard } from "./PoolTriageBoard";
+import { WorkspaceBalancerConfigDialog } from "./WorkspaceBalancerConfigDialog";
 
 export type BalancingPoolSidebarHandle = {
   focusNeedsFixView: () => void;
@@ -59,6 +61,8 @@ type BalancingPoolSidebarProps = {
   isAddingPlayer: boolean;
   actionsDisabled?: boolean;
   missingRankCount?: number;
+  workspaceId?: number;
+  workspaceBalancerConfig?: WorkspaceBalancerConfig | null;
 };
 
 function flattenStatusOptions(statusOptions?: StatusOptionGroups): StatusMeta[] {
@@ -130,10 +134,13 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       isAddingPlayer,
       actionsDisabled = false,
       missingRankCount = 0,
+      workspaceId,
+      workspaceBalancerConfig,
     },
     ref,
   ) {
     const [poolView, setPoolView] = useState<PoolView>("all");
+    const [configDialogOpen, setConfigDialogOpen] = useState(false);
     const [poolSort, setPoolSort] = useState<PoolSortValue>("added_asc");
     const [sidebarSearchQuery, setSidebarSearchQuery] = useState("");
     const [sidebarSearchMode, setSidebarSearchMode] = useState<"default" | "applications">("default");
@@ -174,15 +181,27 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       () => poolPlayers.filter((s) => s.issues.length > 0),
       [poolPlayers],
     );
+    const rankDeltaPlayers = useMemo(
+      () => poolPlayers.filter((s) => s.issues.some((i) => i.code === "rank_delta_warning")),
+      [poolPlayers],
+    );
 
     const normalizedSearchQuery = sidebarSearchQuery.trim().toLowerCase();
 
     const filteredPoolPlayerStates = useMemo(() => {
+      const hideFromPool =
+        workspaceBalancerConfig?.rank_delta_threshold != null &&
+        workspaceBalancerConfig.rank_delta_hide_from_pool;
+
       const nextStates = allPlayerValidationStates.filter((state) => {
+        if (poolView === "rank_delta") {
+          return state.issues.some((i) => i.code === "rank_delta_warning");
+        }
         if (poolView === "excluded") {
           if (state.player.is_in_pool) return false;
-        } else if (!state.player.is_in_pool) {
-          return false;
+        } else {
+          if (!state.player.is_in_pool) return false;
+          if (hideFromPool && state.issues.some((i) => i.code === "rank_delta_warning")) return false;
         }
         if (poolView === "ready" && state.issues.length > 0) return false;
         if (poolView === "needs_fix" && state.issues.length === 0) return false;
@@ -193,7 +212,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
         ).includes(normalizedSearchQuery);
       });
       return sortPlayerStates(nextStates, poolSort);
-    }, [allPlayerValidationStates, applicationsById, normalizedSearchQuery, poolSort, poolView]);
+    }, [allPlayerValidationStates, applicationsById, normalizedSearchQuery, poolSort, poolView, workspaceBalancerConfig]);
 
     const sidebarPlayerCount = poolView === "excluded" ? excludedPlayers.length : poolPlayers.length;
 
@@ -202,6 +221,9 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       { value: "excluded", label: "Excluded", count: excludedPlayers.length },
       { value: "needs_fix", label: "Need Fix", count: invalidPlayers.length },
       { value: "ready", label: "Ready", count: readyPlayers.length },
+      ...(workspaceBalancerConfig?.rank_delta_threshold != null
+        ? [{ value: "rank_delta" as PoolView, label: "Rank Δ", count: rankDeltaPlayers.length }]
+        : []),
     ];
 
     const filteredPoolEmptyState = useMemo(() => {
@@ -326,17 +348,32 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
               {poolPlayers.length} players
             </div>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
-            onClick={onToggleCollapsed}
-          >
-            <PanelLeftClose className="mr-1 h-3.5 w-3.5" />
-            Collapse
-            <ChevronLeft className="ml-1 h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {workspaceId != null ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg border border-white/8 bg-black/15 text-white/55 hover:bg-white/5 hover:text-white"
+                title="Pool rank-delta settings"
+                onClick={() => setConfigDialogOpen(true)}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                <span className="sr-only">Pool rank-delta settings</span>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+              onClick={onToggleCollapsed}
+            >
+              <PanelLeftClose className="mr-1 h-3.5 w-3.5" />
+              Collapse
+              <ChevronLeft className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
         <div className="space-y-2.5">
           {/* Missing rank alert */}
@@ -594,6 +631,15 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
           onSetBalancerStatus={onSetBalancerStatus}
           actionsDisabled={quickActionsDisabled}
         />
+
+        {workspaceId != null ? (
+          <WorkspaceBalancerConfigDialog
+            workspaceId={workspaceId}
+            config={workspaceBalancerConfig}
+            open={configDialogOpen}
+            onOpenChange={setConfigDialogOpen}
+          />
+        ) : null}
       </div>
     );
   },

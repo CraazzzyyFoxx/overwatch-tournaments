@@ -32,6 +32,7 @@ __all__ = (
     "BalancerTeamSlot",
     "BalancerTournamentConfig",
     "BalancerTournamentSheet",
+    "WorkspaceBalancerConfig",
 )
 
 
@@ -142,6 +143,18 @@ class BalancerTournamentConfig(db.TimeStampIntegerMixin):
     tournament: Mapped["Tournament"] = relationship()
     workspace: Mapped["Workspace"] = relationship()
     updater: Mapped["AuthUser | None"] = relationship()
+
+
+class WorkspaceBalancerConfig(db.TimeStampIntegerMixin):
+    __tablename__ = "workspace_config"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", name="uq_balancer_workspace_config_workspace"),
+        {"schema": "balancer"},
+    )
+
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
 
 
 class BalancerBalance(db.TimeStampIntegerMixin):

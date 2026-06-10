@@ -60,6 +60,7 @@ import {
   buildTeamNamesText,
   buildVariantFromSavedBalance,
   downloadPlayersExport,
+  getPlayerValidationIssues,
   type BalanceVariant
 } from "./workspace-helpers";
 
@@ -184,6 +185,12 @@ export function BalancerMainPageClient() {
     enabled: workspaceId !== null
   });
 
+  const workspaceBalancerConfigQuery = useQuery({
+    queryKey: ["workspace-balancer-config", workspaceId],
+    queryFn: () => balancerAdminService.getWorkspaceBalancerConfig(workspaceId as number),
+    enabled: workspaceId !== null
+  });
+
   /* eslint-disable react-hooks/set-state-in-effect -- Local balancer state intentionally resets when the selected tournament or saved balance changes. */
   useEffect(() => {
     setVariants([]);
@@ -251,6 +258,7 @@ export function BalancerMainPageClient() {
   const {
     registrationsById,
     applications,
+    applicationsById,
     addableApplications,
     allPlayerValidationStates,
     players,
@@ -262,6 +270,20 @@ export function BalancerMainPageClient() {
   } = useMemo(
     () => buildBalancerPageCollections(registrations, divisionGrid),
     [divisionGrid, registrations]
+  );
+
+  const workspaceBalancerConfig = workspaceBalancerConfigQuery.data ?? null;
+  const enrichedPlayerValidationStates = useMemo(
+    () =>
+      allPlayerValidationStates.map((state) => ({
+        player: state.player,
+        issues: getPlayerValidationIssues(
+          state.player,
+          applicationsById.get(state.player.application_id) ?? null,
+          workspaceBalancerConfig
+        )
+      })),
+    [allPlayerValidationStates, applicationsById, workspaceBalancerConfig]
   );
 
   const activeVariant = useMemo(
@@ -695,7 +717,7 @@ export function BalancerMainPageClient() {
             key={tournamentId}
             collapsed={isPoolSidebarCollapsed}
             onToggleCollapsed={() => setIsPoolSidebarCollapsed((current) => !current)}
-            allPlayerValidationStates={allPlayerValidationStates}
+            allPlayerValidationStates={enrichedPlayerValidationStates}
             applications={applications}
             addableApplications={addableApplications}
             registrationsById={registrationsById}
@@ -710,6 +732,8 @@ export function BalancerMainPageClient() {
             isAddingPlayer={addPlayerMutation.isPending}
             actionsDisabled={quickPoolActionsPending}
             missingRankCount={missingRankPlayerStates.length}
+            workspaceId={workspaceId ?? undefined}
+            workspaceBalancerConfig={workspaceBalancerConfig}
           />
 
           <div className="flex min-h-0 flex-col gap-3">

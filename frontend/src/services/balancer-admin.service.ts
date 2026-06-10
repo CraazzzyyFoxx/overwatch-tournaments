@@ -41,7 +41,9 @@ import {
   DuplicateResolution,
   DuplicateStrategy,
   SavedBalance,
-  StatusScope
+  StatusScope,
+  WorkspaceBalancerConfig,
+  WorkspaceBalancerConfigUpsert
 } from "@/types/balancer-admin.types";
 
 export default class balancerAdminService {
@@ -353,6 +355,29 @@ export default class balancerAdminService {
     const response = await apiFetch(
       "balancer",
       `balancer/tournaments/${tournamentId}/config`,
+      {
+        method: "PUT",
+        body: data
+      }
+    );
+    return response.json();
+  }
+
+  static async getWorkspaceBalancerConfig(workspaceId: number): Promise<WorkspaceBalancerConfig> {
+    const response = await apiFetch(
+      "balancer",
+      `balancer/workspaces/${workspaceId}/config`
+    );
+    return response.json();
+  }
+
+  static async upsertWorkspaceBalancerConfig(
+    workspaceId: number,
+    data: WorkspaceBalancerConfigUpsert
+  ): Promise<WorkspaceBalancerConfig> {
+    const response = await apiFetch(
+      "balancer",
+      `balancer/workspaces/${workspaceId}/config`,
       {
         method: "PUT",
         body: data

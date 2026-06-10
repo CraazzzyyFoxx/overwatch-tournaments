@@ -14,6 +14,8 @@ from sqlalchemy.orm import selectinload
 
 from shared.division_grid import DEFAULT_GRID, DivisionGrid
 from shared.domain.player_sub_roles import normalize_sub_role
+from shared.models.balancer import WorkspaceBalancerConfig
+from shared.models.overwatch_rank import UserRankSnapshot
 from shared.services.division_grid_resolution import resolve_tournament_division
 from src import models
 from src.domain.balancer.config_provider import normalize_tournament_config_payload, serialize_saved_config_payload
@@ -1090,6 +1092,84 @@ async def create_players_from_applications(
         .order_by(models.BalancerPlayer.battle_tag_normalized.asc())
     )
     return list(result.scalars().all())
+
+
+async def fetch_latest_ow_ranks_by_user_ids(
+    session: AsyncSession,
+    user_ids: list[int],
+) -> dict[int, dict[str, int]]:
+    """Return the latest mapped rank_value per (user_id, role).
+
+    Result shape: {user_id: {role_code: rank_value}}.
+    Only entries where rank_value IS NOT NULL are included.
+    """
+    if not user_ids:
+        return {}
+
+    subq = (
+        sa.select(
+            UserRankSnapshot.user_id,
+            UserRankSnapshot.role,
+            UserRankSnapshot.rank_value,
+            sa.func.row_number()
+            .over(
+                partition_by=[UserRankSnapshot.user_id, UserRankSnapshot.role],
+                order_by=UserRankSnapshot.captured_at.desc(),
+            )
+            .label("rn"),
+        )
+        .where(
+            UserRankSnapshot.user_id.in_(user_ids),
+            UserRankSnapshot.rank_value.is_not(None),
+        )
+        .subquery()
+    )
+    query = sa.select(subq.c.user_id, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
+    result = await session.execute(query)
+
+    out: dict[int, dict[str, int]] = {}
+    for uid, role, rank_value in result:
+        out.setdefault(uid, {})[role] = rank_value
+    return out
+
+
+async def get_workspace_balancer_config(
+    session: AsyncSession,
+    workspace_id: int,
+) -> WorkspaceBalancerConfig | None:
+    result = await session.execute(
+        sa.select(WorkspaceBalancerConfig).where(
+            WorkspaceBalancerConfig.workspace_id == workspace_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def upsert_workspace_balancer_config(
+    session: AsyncSession,
+    workspace_id: int,
+    rank_delta_threshold: int | None,
+    rank_delta_hide_from_pool: bool,
+    updated_by: int | None,
+) -> WorkspaceBalancerConfig:
+    config = await get_workspace_balancer_config(session, workspace_id)
+    payload: dict[str, Any] = {
+        "rank_delta_threshold": rank_delta_threshold,
+        "rank_delta_hide_from_pool": rank_delta_hide_from_pool,
+    }
+    if config is None:
+        config = WorkspaceBalancerConfig(
+            workspace_id=workspace_id,
+            config_json=payload,
+            updated_by=updated_by,
+        )
+        session.add(config)
+    else:
+        config.config_json = payload
+        config.updated_by = updated_by
+    await session.flush()
+    await session.refresh(config)
+    return config
 
 
 async def list_players(

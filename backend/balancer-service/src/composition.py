@@ -12,6 +12,7 @@ from src.application.admin.balancer_use_cases import (
     GetSavedBalance,
     GetTournamentConfig,
     GetTournamentSheet,
+    GetWorkspaceBalancerConfig,
     ImportPlayers,
     ImportTeamsFromJson,
     ListApplications,
@@ -25,6 +26,7 @@ from src.application.admin.balancer_use_cases import (
     UpdatePlayer,
     UpsertTournamentConfig,
     UpsertTournamentSheet,
+    UpsertWorkspaceBalancerConfig,
 )
 from src.application.admin.registration_status_use_cases import (
     CreateCustomStatus,
@@ -164,6 +166,8 @@ def build_admin_balancer_use_cases():
         save_balance=SaveBalance(balancer_service=balancer_service),
         export_balance=ExportBalance(balancer_service=balancer_service),
         import_teams_from_json=ImportTeamsFromJson(team_flows=team_gateway),
+        get_workspace_balancer_config=GetWorkspaceBalancerConfig(balancer_service=balancer_service),
+        upsert_workspace_balancer_config=UpsertWorkspaceBalancerConfig(balancer_service=balancer_service),
     )
 
 

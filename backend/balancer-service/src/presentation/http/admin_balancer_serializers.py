@@ -19,6 +19,7 @@ def loaded_relationship_or_none(instance: object, attribute: str):
 
 def serialize_role_entries(
     player: models.BalancerPlayer,
+    ow_ranks_for_player: dict[str, int] | None = None,
 ) -> list[admin_schemas.BalancerPlayerRoleEntry]:
     loaded_role_entries = loaded_relationship_or_none(player, "role_entries")
     if loaded_role_entries is not None:
@@ -36,14 +37,18 @@ def serialize_role_entries(
     else:
         normalized_entries = normalize_role_entries(player.role_entries_json)
 
-    return [
-        admin_schemas.BalancerPlayerRoleEntry.model_validate(entry)
-        for entry in normalized_entries
-    ]
+    result = []
+    ow_ranks = ow_ranks_for_player or {}
+    for entry in normalized_entries:
+        role_key = entry["role"] if isinstance(entry, dict) else entry.role
+        validated = admin_schemas.BalancerPlayerRoleEntry.model_validate(entry)
+        result.append(validated.model_copy(update={"ow_rank_value": ow_ranks.get(role_key)}))
+    return result
 
 
 def serialize_player(
     player: models.BalancerPlayer,
+    ow_ranks_for_player: dict[str, int] | None = None,
 ) -> admin_schemas.BalancerPlayerRead:
     return admin_schemas.BalancerPlayerRead(
         id=player.id,
@@ -52,7 +57,7 @@ def serialize_player(
         battle_tag=player.battle_tag,
         battle_tag_normalized=player.battle_tag_normalized,
         user_id=player.user_id,
-        role_entries_json=serialize_role_entries(player),
+        role_entries_json=serialize_role_entries(player, ow_ranks_for_player),
         is_flex=player.is_flex,
         is_in_pool=player.is_in_pool,
         admin_notes=player.admin_notes,
