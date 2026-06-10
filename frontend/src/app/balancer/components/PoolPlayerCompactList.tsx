@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord, BalancerRoleCode, StatusMeta } from "@/types/balancer-admin.types";
 import { getRegistrationBattleTags } from "./balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
+import { IssueChip } from "./IssueChip";
 import {
   ROLE_LABELS,
   isRoleEntryActive,
@@ -87,18 +88,6 @@ function uniqueRoleCodes(roleCodes: BalancerRoleCode[]): BalancerRoleCode[] {
 
 function roleIconTitle(roleCode: BalancerRoleCode): string {
   return ROLE_LABELS[roleCode];
-}
-
-function getIssueChipLabel(issue: PlayerValidationIssue): string {
-  if (issue.code === "missing_ranked_role") {
-    return "No ranked roles";
-  }
-
-  if (issue.code === "rank_delta_warning") {
-    return issue.message;
-  }
-
-  return "Role mismatch";
 }
 
 function flattenStatusOptions(statusOptions?: StatusOptionGroups): StatusMeta[] {
@@ -320,13 +309,7 @@ export function PoolPlayerCompactList({
                           </span>
                         ) : null}
                         {issues.map((issue) => (
-                          <span
-                            key={`${player.id}-${issue.code}`}
-                            className="shrink-0 rounded-full border border-amber-300/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/80"
-                            title={issue.message}
-                          >
-                            {getIssueChipLabel(issue)}
-                          </span>
+                          <IssueChip key={`${player.id}-${issue.code}`} issue={issue} />
                         ))}
                         <SmurfTagStrip smurfTags={smurfTags} />
                       </div>

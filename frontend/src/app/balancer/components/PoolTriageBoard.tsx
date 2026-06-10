@@ -46,7 +46,8 @@ import {
   type PoolLane,
 } from "./balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
-import { ROLE_LABELS, isRoleEntryActive, type PlayerValidationIssue } from "./workspace-helpers";
+import { ROLE_LABELS, isRoleEntryActive } from "./workspace-helpers";
+import { IssueChip } from "./IssueChip";
 
 type StatusOptionGroups = {
   system: StatusMeta[];
@@ -98,18 +99,6 @@ function splitBattleTag(battleTag: string): { name: string; suffix: string | nul
     return { name: battleTag, suffix: null };
   }
   return { name: battleTag.slice(0, hashIndex), suffix: battleTag.slice(hashIndex) };
-}
-
-function getIssueChipLabel(issue: PlayerValidationIssue): string {
-  if (issue.code === "missing_ranked_role") {
-    return "No ranked roles";
-  }
-
-  if (issue.code === "rank_delta_warning") {
-    return issue.message;
-  }
-
-  return "Role mismatch";
 }
 
 function flattenStatusOptions(statusOptions?: StatusOptionGroups): StatusMeta[] {
@@ -310,13 +299,7 @@ function TriagePlayerCard({
                     </span>
                   ) : null}
                   {state.issues.map((issue) => (
-                    <span
-                      key={`${state.player.id}-${issue.code}`}
-                      className="shrink-0 rounded-full border border-amber-300/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/80"
-                      title={issue.message}
-                    >
-                      {getIssueChipLabel(issue)}
-                    </span>
+                    <IssueChip key={`${state.player.id}-${issue.code}`} issue={issue} />
                   ))}
                   <SmurfTagStrip smurfTags={smurfTags} compact />
                 </div>

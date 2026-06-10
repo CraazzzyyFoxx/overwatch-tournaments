@@ -47,10 +47,10 @@ export type PlayerValidationIssue =
       code: "rank_delta_warning";
       message: string;
       role: BalancerRoleCode;
-      /** Balancer rank for the role, as a division label (e.g. "Gold 3"). */
-      currentRankLabel: string;
-      /** OW2 rank converted into the workspace grid, as a division label. */
-      owRankLabel: string;
+      /** Division number of the balancer rank, in the workspace grid (for the icon). */
+      currentDivision: number | null;
+      /** Division number of the OW2 rank converted into the workspace grid (for the icon). */
+      owDivision: number | null;
       /** Absolute rank-point delta between the two. */
       delta: number;
     };
@@ -311,18 +311,17 @@ export function getPlayerValidationIssues(
       .sort((a, b) => b.delta - a.delta);
     if (violating.length > 0) {
       const worst = violating[0];
-      const currentRankLabel =
-        getDivisionLabel(grid, resolveDivisionFromRank(grid, worst.currentRank)) ??
-        String(worst.currentRank);
-      const owRankLabel =
-        getDivisionLabel(grid, resolveDivisionFromRank(grid, worst.owRank)) ?? String(worst.owRank);
+      const currentDivision = resolveDivisionFromRank(grid, worst.currentRank);
+      const owDivision = resolveDivisionFromRank(grid, worst.owRank);
+      const currentLabel = getDivisionLabel(grid, currentDivision) ?? String(worst.currentRank);
+      const owLabel = getDivisionLabel(grid, owDivision) ?? String(worst.owRank);
       issues.push({
         code: "rank_delta_warning",
         role: worst.role,
-        currentRankLabel,
-        owRankLabel,
+        currentDivision,
+        owDivision,
         delta: worst.delta,
-        message: `${ROLE_LABELS[worst.role]}: ${currentRankLabel} → ${owRankLabel} (Δ${worst.delta} pts)`
+        message: `${ROLE_LABELS[worst.role]}: ${currentLabel} → ${owLabel} (Δ${worst.delta} pts)`
       });
     }
   }
