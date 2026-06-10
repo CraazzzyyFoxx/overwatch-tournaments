@@ -15,7 +15,7 @@ from fastapi import HTTPException, status
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
-from shared.domain.player_sub_roles import normalize_sub_role
+from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, normalize_sub_role
 from shared.hero_catalog import HeroCatalog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -103,11 +103,9 @@ class _OwRankSignals:
     current_season: int | None = None
 
 
-RANK_ROLE_BY_REGISTRATION_ROLE = {
-    "tank": enums.RankRole.tank.value,
-    "dps": enums.RankRole.damage.value,
-    "support": enums.RankRole.support.value,
-}
+# Registration role code -> canonical RankRole value (e.g. dps -> damage). Single source of
+# truth is shared.domain.player_sub_roles; aliased here for the autofill snapshot lookups.
+RANK_ROLE_BY_REGISTRATION_ROLE = dict(REGISTRATION_TO_CANONICAL)
 REGISTRATION_ROLE_LABELS = {
     "tank": "Tank",
     "dps": "Damage",
@@ -1601,60 +1599,6 @@ def _map_ow_snapshot_rank(snapshot: models.UserRankSnapshot | Any | None, grid: 
         return None
     tier = grid.resolve_division_from_ow_rank(ow_rank)
     return tier.rank_min if tier is not None else None
-
-
-# Inverse of RANK_ROLE_BY_REGISTRATION_ROLE: snapshot RankRole -> registration role code.
-_REGISTRATION_ROLE_BY_RANK_ROLE = {
-    rank_role: registration_role for registration_role, rank_role in RANK_ROLE_BY_REGISTRATION_ROLE.items()
-}
-
-
-async def fetch_latest_ow_ranks_for_registrations(
-    session: AsyncSession,
-    user_ids: list[int],
-    grid: DivisionGrid,
-) -> dict[int, dict[str, int]]:
-    """Latest OW rank per (user_id, registration role), normalised to the workspace grid.
-
-    Result shape: ``{user_id: {registration_role: grid_rank_value}}`` keyed by registration
-    role codes ("tank"/"dps"/"support"). Roles whose latest OW2 SR maps to no grid tier are
-    omitted, so the corresponding ``ow_rank_value`` stays ``None`` and no spurious delta shows.
-    """
-    if not user_ids:
-        return {}
-
-    subq = (
-        sa.select(
-            models.UserRankSnapshot.user_id,
-            models.UserRankSnapshot.role,
-            models.UserRankSnapshot.rank_value,
-            sa.func.row_number()
-            .over(
-                partition_by=[models.UserRankSnapshot.user_id, models.UserRankSnapshot.role],
-                order_by=models.UserRankSnapshot.captured_at.desc(),
-            )
-            .label("rn"),
-        )
-        .where(
-            models.UserRankSnapshot.user_id.in_(user_ids),
-            models.UserRankSnapshot.role.in_(list(RANK_ROLE_BY_REGISTRATION_ROLE.values())),
-            models.UserRankSnapshot.rank_value.is_not(None),
-            models.UserRankSnapshot.is_ranked.is_(True),
-        )
-        .subquery()
-    )
-    query = sa.select(subq.c.user_id, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
-    result = await session.execute(query)
-
-    out: dict[int, dict[str, int]] = {}
-    for user_id, rank_role, ow_rank in result:
-        registration_role = _REGISTRATION_ROLE_BY_RANK_ROLE.get(rank_role)
-        if registration_role is None:
-            continue
-        tier = grid.resolve_division_from_ow_rank(ow_rank)
-        if tier is not None:
-            out.setdefault(user_id, {})[registration_role] = tier.rank_min
-    return out
 
 
 async def autofill_registration_ranks_from_parsed(

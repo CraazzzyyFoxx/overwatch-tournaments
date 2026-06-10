@@ -9,9 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.division_grid import DivisionGrid
 from shared.models.balancer import WorkspaceBalancerConfig
-from shared.models.overwatch_rank import UserRankSnapshot
 from src import models
 from src.domain.balancer.config_provider import normalize_tournament_config_payload, serialize_saved_config_payload
 from src.domain.balancer.public_contract import normalize_balance_response_payload
@@ -78,72 +76,6 @@ async def upsert_tournament_config(
 
     await session.commit()
     return tournament_config
-
-
-# UserRankSnapshot.role uses RankRole ("tank"/"damage"/"support"); the balancer uses
-# "tank"/"dps"/"support". Translate so per-role lookups in the serializer match.
-_SNAPSHOT_ROLE_TO_BALANCER = {"tank": "tank", "damage": "dps", "support": "support"}
-
-
-async def fetch_latest_ow_ranks_by_user_ids(
-    session: AsyncSession,
-    user_ids: list[int],
-) -> dict[int, dict[str, int]]:
-    """Return the latest mapped rank_value per (user_id, balancer_role_code).
-
-    Result shape: {user_id: {role_code: rank_value}} keyed by balancer role codes
-    ("tank"/"dps"/"support"). Only entries where rank_value IS NOT NULL are included.
-    """
-    if not user_ids:
-        return {}
-
-    subq = (
-        sa.select(
-            UserRankSnapshot.user_id,
-            UserRankSnapshot.role,
-            UserRankSnapshot.rank_value,
-            sa.func.row_number()
-            .over(
-                partition_by=[UserRankSnapshot.user_id, UserRankSnapshot.role],
-                order_by=UserRankSnapshot.captured_at.desc(),
-            )
-            .label("rn"),
-        )
-        .where(
-            UserRankSnapshot.user_id.in_(user_ids),
-            UserRankSnapshot.rank_value.is_not(None),
-        )
-        .subquery()
-    )
-    query = sa.select(subq.c.user_id, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
-    result = await session.execute(query)
-
-    out: dict[int, dict[str, int]] = {}
-    for uid, role, rank_value in result:
-        balancer_role = _SNAPSHOT_ROLE_TO_BALANCER.get(role, role)
-        out.setdefault(uid, {})[balancer_role] = rank_value
-    return out
-
-
-def normalize_ow_ranks_to_grid(
-    raw_by_user: dict[int, dict[str, int]],
-    grid: DivisionGrid,
-) -> dict[int, dict[str, int]]:
-    """Map raw OW2 SR values to workspace-grid rank points (tier.rank_min).
-
-    Mirrors the registration autofill mapping (``_map_ow_snapshot_rank``): a raw OW2 SR is
-    resolved to a tier via ``ow_rank_min``/``ow_rank_max`` and replaced with that tier's
-    ``rank_min`` so it lives on the same scale as the balancer ``rank_value``. Entries whose
-    SR does not fall into any configured tier are dropped (so ``ow_rank_value`` stays ``None``
-    and no spurious delta is computed).
-    """
-    out: dict[int, dict[str, int]] = {}
-    for user_id, by_role in raw_by_user.items():
-        for role, ow_rank in by_role.items():
-            tier = grid.resolve_division_from_ow_rank(ow_rank)
-            if tier is not None:
-                out.setdefault(user_id, {})[role] = tier.rank_min
-    return out
 
 
 async def get_workspace_balancer_config(

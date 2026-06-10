@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, status
 from shared.balancer_registration_statuses import get_status_metas_map
+from shared.services.rank_snapshots import fetch_latest_ow_ranks, normalize_ow_ranks_to_grid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -102,7 +103,7 @@ async def list_registrations(
     )
     user_ids = [r.user_id for r in registrations if r.user_id is not None]
     grid = await registration_service.get_tournament_grid(session, tournament_id)
-    ow_ranks = await registration_service.fetch_latest_ow_ranks_for_registrations(session, user_ids, grid)
+    ow_ranks = normalize_ow_ranks_to_grid(await fetch_latest_ow_ranks(session, user_ids), grid)
     return [
         serialize_registration(
             registration,

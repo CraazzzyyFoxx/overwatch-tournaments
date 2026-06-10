@@ -34,8 +34,8 @@ class BalancerRoutePrefixTests(TestCase):
     def test_organizer_routes_are_exposed_without_admin_prefix(self) -> None:
         paths = {route.path for route in organizer_router.routes}
 
-        self.assertIn("/balancer/tournaments/{tournament_id}/sheet", paths)
-        self.assertIn("/ws/{workspace_id}/balancer-statuses", paths)
+        self.assertIn("/balancer/tournaments/{tournament_id}/config", paths)
+        self.assertIn("/balancer/tournaments/{tournament_id}/balance", paths)
         self.assertTrue(all(not path.startswith("/admin") for path in paths))
 
     def test_draft_routes_are_exposed(self) -> None:

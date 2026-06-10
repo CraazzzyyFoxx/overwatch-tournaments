@@ -13,9 +13,6 @@ from src.presentation.http.admin_balancer_serializers import (
     serialize_balance as _serialize_balance,
 )
 from src.presentation.http.admin_balancer_serializers import (
-    serialize_feed as _serialize_feed,
-)
-from src.presentation.http.admin_balancer_serializers import (
     serialize_tournament_config as _serialize_tournament_config,
 )
 from src.schemas.admin import balancer as admin_schemas
@@ -27,110 +24,6 @@ router = APIRouter(
     dependencies=[Depends(auth.require_admin_panel_access())],
 )
 use_cases = build_admin_balancer_use_cases()
-
-
-@router.get(
-    "/tournaments/{tournament_id}/sheet",
-    response_model=admin_schemas.BalancerGoogleSheetFeedRead | None,
-)
-async def get_tournament_sheet(
-    tournament_id: int,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
-):
-    feed = await use_cases.get_tournament_sheet.execute(session=session, tournament_id=tournament_id)
-    if feed is None:
-        return None
-    return _serialize_feed(feed)
-
-
-@router.put(
-    "/tournaments/{tournament_id}/sheet",
-    response_model=admin_schemas.BalancerGoogleSheetFeedRead,
-)
-async def upsert_tournament_sheet(
-    tournament_id: int,
-    data: admin_schemas.BalancerGoogleSheetFeedUpsert,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
-):
-    feed = await use_cases.upsert_tournament_sheet.execute(
-        session=session,
-        tournament_id=tournament_id,
-        payload=data,
-    )
-    return _serialize_feed(feed)
-
-
-@router.post(
-    "/tournaments/{tournament_id}/sheet/sync",
-    response_model=admin_schemas.BalancerGoogleSheetFeedSyncResponse,
-)
-async def sync_tournament_sheet(
-    tournament_id: int,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
-):
-    feed, created, updated, withdrawn, total = await use_cases.sync_tournament_sheet.execute(
-        session=session,
-        tournament_id=tournament_id,
-    )
-    return admin_schemas.BalancerGoogleSheetFeedSyncResponse(
-        created=created,
-        updated=updated,
-        withdrawn=withdrawn,
-        total=total,
-        feed=_serialize_feed(feed),
-    )
-
-
-@router.post(
-    "/tournaments/{tournament_id}/sheet/suggest-mapping",
-    response_model=admin_schemas.BalancerGoogleSheetMappingSuggestResponse,
-)
-async def suggest_sheet_mapping(
-    tournament_id: int,
-    data: admin_schemas.BalancerGoogleSheetMappingSuggestRequest,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
-):
-    _, headers, mapping = await use_cases.suggest_tournament_sheet_mapping.execute(
-        session=session,
-        tournament_id=tournament_id,
-        payload=data,
-    )
-    return admin_schemas.BalancerGoogleSheetMappingSuggestResponse(
-        headers=headers,
-        mapping_config_json=mapping,
-    )
-
-
-@router.post(
-    "/tournaments/{tournament_id}/sheet/preview",
-    response_model=admin_schemas.BalancerGoogleSheetMappingPreviewResponse,
-)
-async def preview_sheet_mapping(
-    tournament_id: int,
-    data: admin_schemas.BalancerGoogleSheetMappingPreviewRequest,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
-):
-    preview = await use_cases.preview_tournament_sheet_mapping.execute(
-        session=session,
-        tournament_id=tournament_id,
-        payload=data,
-    )
-    return admin_schemas.BalancerGoogleSheetMappingPreviewResponse(**preview)
-
-
-@router.get("/tournaments/{tournament_id}/players/export", response_model=admin_schemas.BalancerPlayerExportResponse)
-async def export_players(
-    tournament_id: int,
-    session: AsyncSession = Depends(db.get_async_session),
-    user: models.AuthUser = Depends(auth.require_tournament_permission("player", "read")),
-):
-    payload = await use_cases.export_players.execute(session=session, tournament_id=tournament_id)
-    return admin_schemas.BalancerPlayerExportResponse(**payload)
 
 
 @router.get(

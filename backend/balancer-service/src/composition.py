@@ -2,49 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.application.admin.background_use_cases import SyncDueRegistrationSheets
 from src.application.admin.balancer_use_cases import (
     ExportBalance,
-    ExportPlayers,
     GetSavedBalance,
     GetTournamentConfig,
-    GetTournamentSheet,
     GetWorkspaceBalancerConfig,
     ImportTeamsFromJson,
-    PreviewTournamentSheetMapping,
     SaveBalance,
-    SuggestTournamentSheetMapping,
-    SyncTournamentSheet,
     UpsertTournamentConfig,
-    UpsertTournamentSheet,
     UpsertWorkspaceBalancerConfig,
-)
-from src.application.admin.registration_status_use_cases import (
-    CreateCustomStatus,
-    DeleteCustomStatus,
-    ListCustomStatuses,
-    ListStatusCatalog,
-    ResetBuiltinOverride,
-    UpdateCustomStatus,
-    UpsertBuiltinOverride,
-)
-from src.application.admin.registration_use_cases import (
-    ApproveRegistration,
-    BulkAddToBalancer,
-    BulkApproveRegistrations,
-    CreateRegistration,
-    DeleteRegistration,
-    ExportRegistrationsToUsers,
-    GetRegistrationForm,
-    ListRegistrations,
-    RejectRegistration,
-    RestoreRegistration,
-    SetBalancerStatus,
-    SetRegistrationExclusion,
-    ToggleCheckIn,
-    UpdateRegistration,
-    UpsertRegistrationForm,
-    WithdrawRegistration,
 )
 from src.application.balancer.public_use_cases import (
     CreateBalanceJob,
@@ -57,8 +23,6 @@ from src.application.balancer.public_use_cases import (
 from src.domain.balancer.config_provider import BalancerConfigService
 from src.infrastructure.gateways.service_gateways import (
     BalancerAdminGateway,
-    RegistrationAdminGateway,
-    RegistrationStatusGateway,
     TeamGateway,
 )
 from src.infrastructure.parsers.balancer_request_parser import BalancerRequestParser
@@ -68,9 +32,7 @@ from src.infrastructure.security.api_key_limiter import get_api_key_limiter
 from src.infrastructure.security.workspace_access_policy import WorkspaceAccessPolicy
 from src.infrastructure.solvers.moo_balance_solver import MooBalanceSolver
 
-registration_service = RegistrationAdminGateway()
 balancer_service = BalancerAdminGateway()
-status_service = RegistrationStatusGateway()
 team_gateway = TeamGateway()
 
 
@@ -113,35 +75,8 @@ def build_execute_balance_job_use_case(*, broker) -> ExecuteBalanceJob:
     )
 
 
-def build_admin_registration_use_cases():
-    return SimpleNamespace(
-        get_registration_form=GetRegistrationForm(),
-        upsert_registration_form=UpsertRegistrationForm(registration_service=registration_service),
-        list_registrations=ListRegistrations(registration_service=registration_service),
-        create_registration=CreateRegistration(registration_service=registration_service),
-        update_registration=UpdateRegistration(registration_service=registration_service),
-        approve_registration=ApproveRegistration(registration_service=registration_service),
-        reject_registration=RejectRegistration(registration_service=registration_service),
-        set_registration_exclusion=SetRegistrationExclusion(registration_service=registration_service),
-        withdraw_registration=WithdrawRegistration(registration_service=registration_service),
-        restore_registration=RestoreRegistration(registration_service=registration_service),
-        delete_registration=DeleteRegistration(registration_service=registration_service),
-        bulk_approve_registrations=BulkApproveRegistrations(registration_service=registration_service),
-        set_balancer_status=SetBalancerStatus(registration_service=registration_service),
-        bulk_add_to_balancer=BulkAddToBalancer(registration_service=registration_service),
-        toggle_check_in=ToggleCheckIn(registration_service=registration_service),
-        export_registrations_to_users=ExportRegistrationsToUsers(registration_service=registration_service),
-    )
-
-
 def build_admin_balancer_use_cases():
     return SimpleNamespace(
-        get_tournament_sheet=GetTournamentSheet(registration_service=registration_service),
-        upsert_tournament_sheet=UpsertTournamentSheet(registration_service=registration_service),
-        sync_tournament_sheet=SyncTournamentSheet(registration_service=registration_service),
-        suggest_tournament_sheet_mapping=SuggestTournamentSheetMapping(registration_service=registration_service),
-        preview_tournament_sheet_mapping=PreviewTournamentSheetMapping(registration_service=registration_service),
-        export_players=ExportPlayers(registration_service=registration_service),
         get_tournament_config=GetTournamentConfig(balancer_service=balancer_service),
         upsert_tournament_config=UpsertTournamentConfig(balancer_service=balancer_service),
         get_saved_balance=GetSavedBalance(balancer_service=balancer_service),
@@ -151,19 +86,3 @@ def build_admin_balancer_use_cases():
         get_workspace_balancer_config=GetWorkspaceBalancerConfig(balancer_service=balancer_service),
         upsert_workspace_balancer_config=UpsertWorkspaceBalancerConfig(balancer_service=balancer_service),
     )
-
-
-def build_registration_status_use_cases():
-    return SimpleNamespace(
-        list_status_catalog=ListStatusCatalog(status_service=status_service),
-        list_custom_statuses=ListCustomStatuses(status_service=status_service),
-        create_custom_status=CreateCustomStatus(status_service=status_service),
-        update_custom_status=UpdateCustomStatus(status_service=status_service),
-        delete_custom_status=DeleteCustomStatus(status_service=status_service),
-        upsert_builtin_override=UpsertBuiltinOverride(status_service=status_service),
-        reset_builtin_override=ResetBuiltinOverride(status_service=status_service),
-    )
-
-
-def build_due_registration_sheet_sync_use_case():
-    return SyncDueRegistrationSheets(registration_service=registration_service)

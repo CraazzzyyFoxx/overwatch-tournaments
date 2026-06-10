@@ -23,15 +23,15 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 
 reg_admin = importlib.import_module("src.services.registration.admin")
 serializers = importlib.import_module("src.services.registration.serializers")
+player_sub_roles = importlib.import_module("shared.domain.player_sub_roles")
 
 
-def test_inverse_role_map_translates_damage_to_dps() -> None:
-    # The snapshot uses RankRole ("damage"); the registration uses "dps".
-    assert reg_admin._REGISTRATION_ROLE_BY_RANK_ROLE == {
-        "tank": "tank",
-        "damage": "dps",
-        "support": "support",
-    }
+def test_snapshot_role_translates_damage_to_dps() -> None:
+    # The snapshot uses the canonical RankRole ("damage"); the registration uses "dps".
+    # Translation now lives in shared and is used by shared.services.rank_snapshots.
+    assert player_sub_roles.canonical_to_registration_role("damage") == "dps"
+    assert player_sub_roles.canonical_to_registration_role("tank") == "tank"
+    assert player_sub_roles.canonical_to_registration_role("support") == "support"
 
 
 def _role_model(role: str, rank_value: int | None):

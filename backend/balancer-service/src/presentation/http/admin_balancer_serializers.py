@@ -16,27 +16,6 @@ def loaded_relationship_or_none(instance: object, attribute: str):
     return loaded_value
 
 
-def serialize_feed(
-    feed: models.BalancerRegistrationGoogleSheetFeed,
-) -> admin_schemas.BalancerGoogleSheetFeedRead:
-    return admin_schemas.BalancerGoogleSheetFeedRead(
-        id=feed.id,
-        tournament_id=feed.tournament_id,
-        source_url=feed.source_url,
-        sheet_id=feed.sheet_id,
-        gid=feed.gid,
-        title=feed.title,
-        header_row_json=feed.header_row_json,
-        mapping_config_json=feed.mapping_config_json,
-        value_mapping_json=feed.value_mapping_json,
-        auto_sync_enabled=feed.auto_sync_enabled,
-        auto_sync_interval_seconds=feed.auto_sync_interval_seconds,
-        last_synced_at=feed.last_synced_at,
-        last_sync_status=feed.last_sync_status,
-        last_error=feed.last_error,
-    )
-
-
 def serialize_balance(
     balance: models.BalancerBalance,
 ) -> admin_schemas.BalanceRead:
