@@ -100,7 +100,19 @@ async def list_registrations(
     status_meta_map = (
         await get_status_metas_map(session, workspace_id=registrations[0].workspace_id) if registrations else None
     )
-    return [serialize_registration(registration, status_meta_map=status_meta_map) for registration in registrations]
+    user_ids = [r.user_id for r in registrations if r.user_id is not None]
+    grid = await registration_service.get_tournament_grid(session, tournament_id)
+    ow_ranks = await registration_service.fetch_latest_ow_ranks_for_registrations(session, user_ids, grid)
+    return [
+        serialize_registration(
+            registration,
+            status_meta_map=status_meta_map,
+            ow_ranks_for_user=(
+                ow_ranks.get(registration.user_id) if registration.user_id is not None else None
+            ),
+        )
+        for registration in registrations
+    ]
 
 
 @router.post(
