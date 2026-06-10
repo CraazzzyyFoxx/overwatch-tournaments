@@ -15,16 +15,21 @@ from shared.domain.player_sub_roles import canonical_to_registration_role
 from shared.models.overwatch_rank import UserRankSnapshot
 
 
-async def fetch_latest_ow_ranks(
+async def fetch_latest_ow_ranks_by_account(
     session: AsyncSession,
     user_ids: list[int],
-) -> dict[int, dict[str, int]]:
-    """Latest mapped OW2 rank per (user, role), keyed by registration role code.
+) -> dict[int, dict[str, dict[str, int]]]:
+    """Latest raw OW2 rank per (user, battle_tag, role), keyed by registration role code.
 
-    Returns ``{user_id: {registration_role: rank_value}}`` where ``registration_role`` is one of
-    ``tank``/``dps``/``support`` (snapshot stores the canonical ``RankRole`` value, e.g. ``damage``,
-    which is translated to ``dps`` here). Only ranked snapshots with a non-null ``rank_value`` are
-    considered, and only the newest per (user, role) by ``captured_at``.
+    Returns ``{user_id: {battle_tag: {registration_role: rank_value}}}`` where ``battle_tag`` is the
+    snapshot's denormalized ``Name#1234`` and ``registration_role`` is one of ``tank``/``dps``/
+    ``support`` (the snapshot stores the canonical ``RankRole`` value, e.g. ``damage``, which is
+    translated to ``dps`` here). Only ranked snapshots with a non-null ``rank_value`` are considered,
+    and only the newest per **(user, battle_tag, role)** by ``captured_at``.
+
+    Keeping one entry per account (rather than collapsing by user) lets callers prefer main accounts
+    over declared smurfs and take the maximum rank across accounts. The raw OW SR is returned as-is;
+    grid normalisation stays in :func:`normalize_ow_ranks_to_grid`.
     """
     if not user_ids:
         return {}
@@ -32,11 +37,16 @@ async def fetch_latest_ow_ranks(
     subq = (
         sa.select(
             UserRankSnapshot.user_id,
+            UserRankSnapshot.battle_tag,
             UserRankSnapshot.role,
             UserRankSnapshot.rank_value,
             sa.func.row_number()
             .over(
-                partition_by=[UserRankSnapshot.user_id, UserRankSnapshot.role],
+                partition_by=[
+                    UserRankSnapshot.user_id,
+                    UserRankSnapshot.battle_tag_id,
+                    UserRankSnapshot.role,
+                ],
                 order_by=UserRankSnapshot.captured_at.desc(),
             )
             .label("rn"),
@@ -48,15 +58,17 @@ async def fetch_latest_ow_ranks(
         )
         .subquery()
     )
-    query = sa.select(subq.c.user_id, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
+    query = sa.select(
+        subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value
+    ).where(subq.c.rn == 1)
     result = await session.execute(query)
 
-    out: dict[int, dict[str, int]] = {}
-    for user_id, role, rank_value in result:
+    out: dict[int, dict[str, dict[str, int]]] = {}
+    for user_id, battle_tag, role, rank_value in result:
         registration_role = canonical_to_registration_role(role)
         if registration_role is None:
             continue
-        out.setdefault(user_id, {})[registration_role] = rank_value
+        out.setdefault(user_id, {}).setdefault(battle_tag, {})[registration_role] = rank_value
     return out
 
 

@@ -6,7 +6,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, status
 from shared.balancer_registration_statuses import get_status_metas_map
-from shared.services.rank_snapshots import fetch_latest_ow_ranks, normalize_ow_ranks_to_grid
+from shared.services.rank_snapshots import (
+    fetch_latest_ow_ranks_by_account,
+    normalize_ow_ranks_to_grid,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -14,6 +17,7 @@ from src.core import auth, db
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.registration import RegistrationFormRead, RegistrationFormUpsert
 from src.services.registration import admin as registration_service
+from src.services.registration.ow_rank_selection import select_main_account_ow_ranks
 from src.services.registration.serializers import (
     serialize_registration,
     serialize_registration_form,
@@ -103,14 +107,22 @@ async def list_registrations(
     )
     user_ids = [r.user_id for r in registrations if r.user_id is not None]
     grid = await registration_service.get_tournament_grid(session, tournament_id)
-    ow_ranks = normalize_ow_ranks_to_grid(await fetch_latest_ow_ranks(session, user_ids), grid)
+    accounts_by_user = await fetch_latest_ow_ranks_by_account(session, user_ids)
+    # Per registration, prefer the player's main (non-smurf) accounts and take the max rank.
+    raw_ow_ranks_by_registration = {
+        registration.id: select_main_account_ow_ranks(
+            accounts_by_user.get(registration.user_id, {}),
+            registration.smurf_tags_json,
+        )
+        for registration in registrations
+        if registration.user_id is not None
+    }
+    ow_ranks = normalize_ow_ranks_to_grid(raw_ow_ranks_by_registration, grid)
     return [
         serialize_registration(
             registration,
             status_meta_map=status_meta_map,
-            ow_ranks_for_user=(
-                ow_ranks.get(registration.user_id) if registration.user_id is not None else None
-            ),
+            ow_ranks_for_user=ow_ranks.get(registration.id),
         )
         for registration in registrations
     ]
