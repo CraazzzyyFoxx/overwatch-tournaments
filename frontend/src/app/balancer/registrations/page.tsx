@@ -300,14 +300,14 @@ function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) 
           {isUpdate && role.current_rank_value != null && (
             <>
               {currentDivision != null && (
-                <PlayerDivisionIcon division={currentDivision} width={13} height={13} />
+                <PlayerDivisionIcon division={currentDivision} width={16} height={16} />
               )}
               <span className="tabular-nums opacity-50">{role.current_rank_value}</span>
               <span className="opacity-40">→</span>
             </>
           )}
           {primaryDivision != null && (
-            <PlayerDivisionIcon division={primaryDivision} width={13} height={13} />
+            <PlayerDivisionIcon division={primaryDivision} width={16} height={16} />
           )}
           <span className="tabular-nums">
             {primaryRank ?? "-"}
@@ -354,261 +354,268 @@ function RankAutofillDialog({
   const skippedPlayers = preview?.players.filter((player) => player.status === "skipped") ?? [];
   const unchangedPlayers = preview?.players.filter((player) => player.status === "unchanged") ?? [];
 
+  const isApplyDisabled =
+    !preview ||
+    (preview.role_updates === 0 && preview.balancer_additions === 0) ||
+    !assignmentConfirmed ||
+    loadingPreview ||
+    applying;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
-        <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
-          <DialogTitle className="text-xl font-semibold tracking-tight text-white">
-            Autofill parsed ranks
-          </DialogTitle>
-          <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-white/50">
-            Uses only the main BattleTag from each registration. Smurf accounts are ignored.
-          </DialogDescription>
+      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
+
+        {/* ── Header ── */}
+        <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-3.5 text-left">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle className="text-lg font-semibold tracking-tight text-white">
+                Autofill parsed ranks
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 text-xs text-white/40">
+                Main BattleTag only — smurf accounts are ignored.
+              </DialogDescription>
+            </div>
+            {/* Stats strip — visible once preview loads */}
+            {preview && !loadingPreview && (
+              <div className="flex shrink-0 items-center divide-x divide-white/10 rounded-lg border border-white/10 bg-white/[0.03]">
+                {[
+                  { label: "Players", value: preview.total_registrations, color: "" },
+                  { label: "Update", value: preview.updatable_registrations, color: "text-emerald-300" },
+                  { label: "Ranks", value: preview.role_updates, color: "text-emerald-300" },
+                  { label: "→ Balancer", value: preview.balancer_additions, color: "text-cyan-300" },
+                  { label: "Skipped", value: preview.skipped_registrations, color: preview.skipped_registrations > 0 ? "text-orange-300" : "" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="px-3 py-2 text-center">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-white/35">{label}</div>
+                    <div className={cn("text-base font-semibold tabular-nums", color || "text-white/80")}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
-        <div className="max-h-[calc(100vh-14rem)] space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
-          <div className="space-y-1.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">Rank source</div>
-            <div className="flex gap-2">
+        {/* ── Settings strip ── */}
+        <div className="shrink-0 border-b border-white/10 bg-white/[0.02] px-5 py-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-white/10 p-0.5">
               {(
                 [
-                  { value: "ow2_ranks", label: "OW2 Ranks", description: "Maps OW2 SR through division grid" },
-                  { value: "division_history", label: "Division History", description: "Balancer history → analytics fallback" }
-                ] as { value: RegistrationRankAutofillMode; label: string; description: string }[]
-              ).map(({ value, label, description }) => (
+                  { value: "ow2_ranks", label: "OW2 Ranks" },
+                  { value: "division_history", label: "Division History" },
+                ] as { value: RegistrationRankAutofillMode; label: string }[]
+              ).map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => onModeChange(value)}
                   disabled={loadingPreview || applying}
                   className={cn(
-                    "flex-1 rounded-xl border p-3 text-left transition-colors",
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                     mode === value
-                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
-                      : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/20 hover:text-white/80"
+                      ? "bg-indigo-500/20 text-indigo-200"
+                      : "text-white/50 hover:text-white/80"
                   )}
                 >
-                  <div className="text-sm font-medium">{label}</div>
-                  <div className="mt-0.5 text-xs text-white/40">{description}</div>
+                  {label}
                 </button>
               ))}
             </div>
+
+            <div className="h-4 w-px bg-white/10" />
+
+            {/* Overwrite checkbox */}
+            <label className="flex cursor-pointer items-center gap-2">
+              <Checkbox
+                checked={overwriteExisting}
+                onCheckedChange={(checked) => onOverwriteChange(checked === true)}
+                disabled={loadingPreview || applying}
+                aria-label="Overwrite existing ranks"
+              />
+              <span className="text-xs text-white/65 select-none">Overwrite existing ranks</span>
+            </label>
+
+            {/* Add to balancer checkbox */}
+            <label className="flex cursor-pointer items-center gap-2">
+              <Checkbox
+                checked={addToBalancer}
+                onCheckedChange={(checked) => onAddToBalancerChange(checked === true)}
+                disabled={loadingPreview || applying}
+                aria-label="Move eligible players to balancer"
+              />
+              <span className="text-xs text-white/65 select-none">Move eligible to balancer</span>
+            </label>
+
+            {loadingPreview && (
+              <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading preview…
+              </div>
+            )}
           </div>
+        </div>
 
-          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <Checkbox
-              checked={overwriteExisting}
-              onCheckedChange={(checked) => onOverwriteChange(checked === true)}
-              disabled={loadingPreview || applying}
-              aria-label="Overwrite existing ranks"
-            />
-            <span className="space-y-1">
-              <span className="block text-sm font-medium text-white/85">Overwrite existing ranks</span>
-              <span className="block text-xs leading-5 text-white/45">
-                Disabled by default. Existing registration ranks are kept unless this is enabled before applying.
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <Checkbox
-              checked={addToBalancer}
-              onCheckedChange={(checked) => onAddToBalancerChange(checked === true)}
-              disabled={loadingPreview || applying}
-              aria-label="Move eligible players to balancer"
-            />
-            <span className="space-y-1">
-              <span className="block text-sm font-medium text-white/85">Move eligible players to balancer</span>
-              <span className="block text-xs leading-5 text-white/45">
-                Approved registrations with complete active role ranks will be moved from Not Added to the computed
-                balancer status.
-              </span>
-            </span>
-          </label>
-
-          {loadingPreview ? (
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading rank preview...
+        {/* ── Scrollable content ── */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {!preview && !loadingPreview ? (
+            <div className="flex h-32 items-center justify-center text-sm text-white/30">
+              Preview is not loaded.
             </div>
           ) : preview ? (
-            <>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                {[
-                  ["Players", preview.total_registrations],
-                  ["Will update", preview.updatable_registrations],
-                  ["Role ranks", preview.role_updates],
-                  ["To balancer", preview.balancer_additions],
-                  ["Skipped", preview.skipped_registrations]
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/35">
-                      {label}
-                    </div>
-                    <div className="mt-1 text-2xl font-semibold tabular-nums text-white/90">
-                      {value}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="divide-y divide-white/[0.06]">
 
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                  Will be assigned
+              {/* Will be assigned */}
+              <div className="px-5 py-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Will be assigned</span>
+                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    {updatablePlayers.length}
+                  </span>
                 </div>
                 {updatablePlayers.length === 0 ? (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/45">
-                    No registration ranks can be updated from parsed main-account ranks.
-                  </div>
+                  <p className="text-xs text-white/30">No ranks to update.</p>
                 ) : (
                   <div className="overflow-hidden rounded-xl border border-white/10">
-                    <div className="max-h-72 overflow-y-auto">
-                      {updatablePlayers.map((player) => (
-                        <div
-                          key={player.registration_id}
-                          className="grid gap-2 border-b border-white/10 p-3 last:border-b-0 md:grid-cols-[220px_minmax(0,1fr)]"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-white/90">
-                              {player.battle_tag ?? player.display_name ?? `Registration #${player.registration_id}`}
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-white/35">
-                              <span>#{player.registration_id}</span>
-                              {player.will_add_to_balancer ? (
-                                <span className="rounded border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-100">
-                                  To balancer
-                                </span>
-                              ) : null}
-                            </div>
+                    {updatablePlayers.map((player) => (
+                      <div
+                        key={player.registration_id}
+                        className="flex min-w-0 items-center gap-3 border-b border-white/[0.06] px-3 py-2 last:border-b-0"
+                      >
+                        <div className="min-w-0 w-48 shrink-0">
+                          <div className="truncate text-sm font-medium text-white/85">
+                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
                           </div>
-                          <div className="flex min-w-0 flex-wrap gap-1.5">
-                            {player.roles
-                              .filter((role) => role.action === "set" || role.action === "overwrite")
-                              .map((role) => (
-                                <RankAutofillRolePill key={role.role} role={role} />
-                              ))}
+                          <div className="flex items-center gap-1.5 text-[11px] text-white/30">
+                            <span>#{player.registration_id}</span>
+                            {player.will_add_to_balancer && (
+                              <span className="rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
+                                → Balancer
+                              </span>
+                            )}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex min-w-0 flex-wrap gap-1.5">
+                          {player.roles
+                            .filter((r) => r.action === "set" || r.action === "overwrite")
+                            .map((role) => (
+                              <RankAutofillRolePill key={role.role} role={role} />
+                            ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                    Skipped
+              {/* Skipped + Already set — side by side */}
+              <div className="grid gap-px lg:grid-cols-2">
+                {/* Skipped */}
+                <div className="px-5 py-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Skipped</span>
+                    {skippedPlayers.length > 0 && (
+                      <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
+                        {skippedPlayers.length}
+                      </span>
+                    )}
                   </div>
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-white/10">
-                    {skippedPlayers.length === 0 ? (
-                      <div className="p-3 text-sm text-white/40">No skipped registrations.</div>
-                    ) : (
-                      skippedPlayers.map((player) => (
-                        <div key={player.registration_id} className="border-b border-white/10 p-3 last:border-b-0">
-                          <div className="truncate text-sm font-medium text-white/80">
-                            {player.battle_tag ?? player.display_name ?? `Registration #${player.registration_id}`}
+                  {skippedPlayers.length === 0 ? (
+                    <p className="text-xs text-white/30">None skipped.</p>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
+                      {skippedPlayers.map((player) => (
+                        <div key={player.registration_id} className="border-b border-white/[0.06] px-3 py-2 last:border-b-0">
+                          <div className="truncate text-xs font-medium text-white/75">
+                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
                           </div>
-                          <div className="mt-1 text-xs leading-5 text-orange-200/80">
+                          <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
                             {player.reason ?? "Skipped"}
                           </div>
                           {player.will_add_to_balancer ? (
-                            <div className="mt-1 text-xs leading-5 text-cyan-100/80">
-                              Will be moved to balancer.
-                            </div>
+                            <div className="mt-0.5 text-[11px] text-cyan-200/70">Will be moved to balancer.</div>
                           ) : player.balancer_reason ? (
-                            <div className="mt-1 text-xs leading-5 text-white/35">{player.balancer_reason}</div>
+                            <div className="mt-0.5 text-[11px] text-white/30">{player.balancer_reason}</div>
                           ) : null}
-                          <div className="mt-2 flex flex-wrap gap-1.5">
+                          <div className="mt-1.5 flex flex-wrap gap-1">
                             {player.roles.map((role) => (
                               <RankAutofillRolePill key={role.role} role={role} />
                             ))}
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                    Already set
+                {/* Already set */}
+                <div className="px-5 py-3 lg:border-l lg:border-white/[0.06]">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Already set</span>
+                    {unchangedPlayers.length > 0 && (
+                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
+                        {unchangedPlayers.length}
+                      </span>
+                    )}
                   </div>
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-white/10">
-                    {unchangedPlayers.length === 0 ? (
-                      <div className="p-3 text-sm text-white/40">No unchanged registrations.</div>
-                    ) : (
-                      unchangedPlayers.map((player) => (
-                        <div key={player.registration_id} className="border-b border-white/10 p-3 last:border-b-0">
-                          <div className="truncate text-sm font-medium text-white/80">
-                            {player.battle_tag ?? player.display_name ?? `Registration #${player.registration_id}`}
+                  {unchangedPlayers.length === 0 ? (
+                    <p className="text-xs text-white/30">No unchanged registrations.</p>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
+                      {unchangedPlayers.map((player) => (
+                        <div key={player.registration_id} className="border-b border-white/[0.06] px-3 py-2 last:border-b-0">
+                          <div className="truncate text-xs font-medium text-white/75">
+                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
                           </div>
-                          <div className="mt-1 text-xs leading-5 text-white/40">
+                          <div className="mt-0.5 text-[11px] leading-4 text-white/35">
                             {player.reason ?? "No rank changes needed."}
                           </div>
                           {player.will_add_to_balancer ? (
-                            <div className="mt-1 text-xs leading-5 text-cyan-100/80">
-                              Will be moved to balancer.
-                            </div>
+                            <div className="mt-0.5 text-[11px] text-cyan-200/70">Will be moved to balancer.</div>
                           ) : player.balancer_reason ? (
-                            <div className="mt-1 text-xs leading-5 text-white/35">{player.balancer_reason}</div>
+                            <div className="mt-0.5 text-[11px] text-white/30">{player.balancer_reason}</div>
                           ) : null}
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            </>
-          ) : (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/45">
-              Preview is not loaded.
+
             </div>
-          )}
+          ) : null}
         </div>
 
-        <DialogFooter className="flex-col gap-3 border-t border-white/10 px-4 py-3 sm:flex-col sm:px-5">
-          <label className="flex w-full items-start gap-3 rounded-xl border border-emerald-400/15 bg-emerald-500/5 p-3 text-left">
-            <Checkbox
-              checked={assignmentConfirmed}
-              onCheckedChange={(checked) => onAssignmentConfirmedChange(checked === true)}
-              disabled={
-                !preview ||
-                (preview.role_updates === 0 && preview.balancer_additions === 0) ||
-                loadingPreview ||
-                applying
-              }
-              aria-label="Confirm rank assignment"
-            />
-            <span className="space-y-1">
-              <span className="block text-sm font-medium text-white/85">
+        {/* ── Footer ── */}
+        <div className="shrink-0 border-t border-white/10 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <label className="flex flex-1 cursor-pointer items-center gap-2.5">
+              <Checkbox
+                checked={assignmentConfirmed}
+                onCheckedChange={(checked) => onAssignmentConfirmedChange(checked === true)}
+                disabled={
+                  !preview ||
+                  (preview.role_updates === 0 && preview.balancer_additions === 0) ||
+                  loadingPreview ||
+                  applying
+                }
+                aria-label="Confirm rank assignment"
+              />
+              <span className="text-xs text-white/60 select-none">
                 Confirm assigning ranks to listed players
               </span>
-              <span className="block text-xs leading-5 text-white/45">
-                Required even when there are no skipped registrations. Listed rank changes and eligible balancer moves
-                will be applied.
-              </span>
-            </span>
-          </label>
-          <div className="flex w-full justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
+            </label>
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={applying}>
               Cancel
             </Button>
-            <Button
-              onClick={onApply}
-              disabled={
-                !preview ||
-                (preview.role_updates === 0 && preview.balancer_additions === 0) ||
-                !assignmentConfirmed ||
-                loadingPreview ||
-                applying
-              }
-            >
-              {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+            <Button size="sm" onClick={onApply} disabled={isApplyDisabled}>
+              {applying ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
               Apply ranks
             </Button>
           </div>
-        </DialogFooter>
+        </div>
+
       </DialogContent>
     </Dialog>
   );
