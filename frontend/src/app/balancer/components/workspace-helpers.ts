@@ -435,7 +435,7 @@ export function createSyntheticPlayerFromRegistration(
       division_number: resolveDivisionFromRankHelper(role.rank_value, grid),
       rank_value: role.rank_value,
       is_active: role.is_active,
-      ow_rank_value: null
+      ow_rank_value: role.ow_rank_value ?? null
     })),
     is_flex: isFlex,
     is_in_pool: isRegistrationIncludedInBalancer(registration),

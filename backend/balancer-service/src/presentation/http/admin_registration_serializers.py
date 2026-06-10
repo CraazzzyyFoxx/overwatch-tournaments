@@ -19,6 +19,7 @@ def _role_top_heroes(role: models.BalancerRegistrationRole) -> list[str]:
 
 def serialize_registration_role(
     role: models.BalancerRegistrationRole,
+    ow_rank_value: int | None = None,
 ) -> admin_schemas.BalancerRegistrationRoleRead:
     return admin_schemas.BalancerRegistrationRoleRead(
         role=role.role,
@@ -28,6 +29,7 @@ def serialize_registration_role(
         rank_value=role.rank_value,
         is_active=role.is_active,
         top_heroes=_role_top_heroes(role),
+        ow_rank_value=ow_rank_value,
     )
 
 
@@ -36,6 +38,7 @@ def serialize_registration(
     *,
     status_meta_map: dict[str, dict[str, StatusMeta]] | None = None,
     profiles_open: bool | None = None,
+    ow_ranks_for_user: dict[str, int] | None = None,
 ) -> admin_schemas.BalancerRegistrationRead:
     binding = loaded_relationship_or_none(registration, "google_sheet_binding")
     roles = loaded_relationship_or_none(registration, "roles") or []
@@ -88,5 +91,8 @@ def serialize_registration(
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
         profiles_open=profiles_open,
-        roles=[serialize_registration_role(role) for role in sorted_roles],
+        roles=[
+            serialize_registration_role(role, (ow_ranks_for_user or {}).get(role.role))
+            for role in sorted_roles
+        ],
     )

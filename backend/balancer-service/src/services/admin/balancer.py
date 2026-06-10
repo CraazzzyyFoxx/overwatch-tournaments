@@ -1094,14 +1094,19 @@ async def create_players_from_applications(
     return list(result.scalars().all())
 
 
+# UserRankSnapshot.role uses RankRole ("tank"/"damage"/"support"); the balancer uses
+# "tank"/"dps"/"support". Translate so per-role lookups in the serializer match.
+_SNAPSHOT_ROLE_TO_BALANCER = {"tank": "tank", "damage": "dps", "support": "support"}
+
+
 async def fetch_latest_ow_ranks_by_user_ids(
     session: AsyncSession,
     user_ids: list[int],
 ) -> dict[int, dict[str, int]]:
-    """Return the latest mapped rank_value per (user_id, role).
+    """Return the latest mapped rank_value per (user_id, balancer_role_code).
 
-    Result shape: {user_id: {role_code: rank_value}}.
-    Only entries where rank_value IS NOT NULL are included.
+    Result shape: {user_id: {role_code: rank_value}} keyed by balancer role codes
+    ("tank"/"dps"/"support"). Only entries where rank_value IS NOT NULL are included.
     """
     if not user_ids:
         return {}
@@ -1129,7 +1134,8 @@ async def fetch_latest_ow_ranks_by_user_ids(
 
     out: dict[int, dict[str, int]] = {}
     for uid, role, rank_value in result:
-        out.setdefault(uid, {})[role] = rank_value
+        balancer_role = _SNAPSHOT_ROLE_TO_BALANCER.get(role, role)
+        out.setdefault(uid, {})[balancer_role] = rank_value
     return out
 
 

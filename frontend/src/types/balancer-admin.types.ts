@@ -377,6 +377,8 @@ export interface AdminRegistrationRole {
   rank_value: number | null;
   is_active: boolean;
   top_heroes?: string[] | null;
+  /** Latest OW2 rank for this role, normalised to the workspace grid (from the backend). */
+  ow_rank_value?: number | null;
 }
 
 export type BalancerStatus = string;

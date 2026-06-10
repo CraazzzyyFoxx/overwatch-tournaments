@@ -23,6 +23,11 @@ from src.schemas.admin.registration_form import (
     RegistrationFormRead,
     RegistrationFormUpsert,
 )
+from src.services.admin.balancer import (
+    fetch_latest_ow_ranks_by_user_ids,
+    normalize_ow_ranks_to_grid,
+)
+from src.services.admin.balancer_registration import get_tournament_grid
 
 router = APIRouter(
     prefix="/balancer",
@@ -105,11 +110,19 @@ async def list_registrations(
         if form is not None and form.require_open_profile
         else {}
     )
+    user_ids = [r.user_id for r in registrations if r.user_id is not None]
+    grid = await get_tournament_grid(session, tournament_id)
+    ow_ranks = normalize_ow_ranks_to_grid(
+        await fetch_latest_ow_ranks_by_user_ids(session, user_ids), grid
+    )
     return [
         _serialize_registration(
             registration,
             status_meta_map=status_meta_map,
             profiles_open=profiles_open_map.get(registration.id),
+            ow_ranks_for_user=(
+                ow_ranks.get(registration.user_id) if registration.user_id is not None else None
+            ),
         )
         for registration in registrations
     ]

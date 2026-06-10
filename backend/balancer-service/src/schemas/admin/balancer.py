@@ -264,6 +264,9 @@ class BalancerRegistrationRoleRead(BaseModel):
     rank_value: int | None = None
     is_active: bool = True
     top_heroes: list[str] = Field(default_factory=list)  # ordered hero slugs (read-only display)
+    # Latest OW2 rank for this role, normalised to the workspace grid. Injected from
+    # UserRankSnapshot at list time; None when no snapshot maps to a grid tier.
+    ow_rank_value: int | None = None
 
 
 class BalancerRegistrationRoleInput(BaseModel):
