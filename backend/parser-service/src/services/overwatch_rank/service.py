@@ -5,6 +5,7 @@ Transaction-neutral — functions mutate/flush the session; the caller commits.
 
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -34,6 +35,29 @@ INACTIVE_TOURNAMENT_STATUSES = (
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _jittered_interval(base_seconds: float, jitter_fraction: float) -> float:
+    """Spread a reschedule delay over ``[base, base*(1+fraction)]``.
+
+    Keeps tags that were processed in the same tick from recurring at the same
+    instant (standing waves). ``jitter_fraction <= 0`` returns ``base`` unchanged.
+    """
+    if jitter_fraction <= 0:
+        return float(base_seconds)
+    return base_seconds + random.random() * base_seconds * jitter_fraction
+
+
+def _seed_next_eligible(interval_seconds: int) -> sa.ColumnElement[datetime]:
+    """SQL expression spreading a fresh seed across ``[now, now+interval]``.
+
+    Seeding with ``next_eligible_at = NULL`` makes the whole population due at
+    once (thundering herd on first enable); a per-row random offset distributes
+    the initial cycle evenly instead.
+    """
+    return sa.func.now() + sa.func.make_interval(
+        0, 0, 0, 0, 0, 0, sa.func.random() * interval_seconds
+    )
 
 
 async def log_fetch(
@@ -152,21 +176,27 @@ async def resolve_registration_targets(
     )
 
 
-async def seed_states_for_all_battle_tags(session: AsyncSession) -> int:
-    """Insert a (tier 0) state row for every battle tag that lacks one."""
+async def seed_states_for_all_battle_tags(
+    session: AsyncSession, *, interval_seconds: int
+) -> int:
+    """Insert a (tier 0) state row for every battle tag that lacks one.
+
+    New rows are seeded with a jittered ``next_eligible_at`` spread across
+    ``[now, now+interval_seconds]`` so the first collection cycle is even rather
+    than a thundering herd.
+    """
     bt = models.UserBattleTag
     state = models.BattleTagRankState
-    missing = (
-        sa.select(
-            bt.id.label("battle_tag_id"),
-            bt.battle_tag.label("battle_tag"),
-            sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
-        )
-        .where(~sa.exists().where(state.battle_tag_id == bt.id))
-    )
+    missing = sa.select(
+        bt.id.label("battle_tag_id"),
+        bt.battle_tag.label("battle_tag"),
+        sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
+        _seed_next_eligible(interval_seconds).label("next_eligible_at"),
+    ).where(~sa.exists().where(state.battle_tag_id == bt.id))
     result = await session.execute(
         sa.insert(state).from_select(
-            ["battle_tag_id", "battle_tag", "player_id_slug"], missing
+            ["battle_tag_id", "battle_tag", "player_id_slug", "next_eligible_at"],
+            missing,
         )
     )
     return result.rowcount or 0
@@ -240,7 +270,7 @@ async def _registration_collection_targets(
 
 
 async def seed_states_from_registrations(
-    session: AsyncSession, *, extra_accounts: int = 0
+    session: AsyncSession, *, interval_seconds: int, extra_accounts: int = 0
 ) -> int:
     """Sync tier-1 state to the registration collection pool (registrations_only).
 
@@ -276,22 +306,46 @@ async def seed_states_from_registrations(
         .values(priority_tier=1)
     )
 
-    # Insert tier-1 rows for pool tags that have no state row yet.
+    # Insert tier-1 rows for pool tags that have no state row yet, spread across
+    # the interval (see ``seed_states_for_all_battle_tags``).
     missing = sa.select(
         bt.id.label("battle_tag_id"),
         bt.battle_tag.label("battle_tag"),
         sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
         sa.literal(1).label("priority_tier"),
+        _seed_next_eligible(interval_seconds).label("next_eligible_at"),
     ).where(
         bt.id.in_(target_ids),
         ~sa.exists().where(state.battle_tag_id == bt.id),
     )
     result = await session.execute(
         sa.insert(state).from_select(
-            ["battle_tag_id", "battle_tag", "player_id_slug", "priority_tier"], missing
+            [
+                "battle_tag_id",
+                "battle_tag",
+                "player_id_slug",
+                "priority_tier",
+                "next_eligible_at",
+            ],
+            missing,
         )
     )
     return result.rowcount or 0
+
+
+async def count_in_scope(session: AsyncSession, *, scope: str) -> int:
+    """Count non-disabled tags eligible for collection under ``scope``.
+
+    Sizes the self-pacing batch off the *whole* in-scope population (not the
+    currently-due subset, which would self-amplify into bursts during a backlog).
+    """
+    state = models.BattleTagRankState
+    query = sa.select(sa.func.count()).select_from(state).where(
+        state.status != enums.RankCollectionStatus.disabled.value
+    )
+    if scope == "registrations_only":
+        query = query.where(state.priority_tier > 0)
+    return int(await session.scalar(query) or 0)
 
 
 async def select_and_claim_due(
@@ -300,13 +354,17 @@ async def select_and_claim_due(
     limit: int,
     scope: str,
     interval_seconds: int,
+    jitter_fraction: float = 0.0,
     now: datetime | None = None,
 ) -> Sequence[models.BattleTagRankState]:
     """Pick the most-due tags, claim them (push out ``next_eligible_at``), return them.
 
     Ordering: highest ``priority_tier`` first, then least-recently-checked. The
     claim prevents the next scheduler tick from re-selecting a tag before its
-    fetch has been processed (Redis dedup is the second line of defense).
+    fetch has been processed (Redis dedup is the second line of defense). The
+    claim is the reschedule path for events a worker never processes (lost
+    message / worker down), so it is jittered too — otherwise that recovery path
+    would re-cluster the batch.
     """
     now = now or _now()
     state = models.BattleTagRankState
@@ -322,12 +380,9 @@ async def select_and_claim_due(
     ).limit(limit)
 
     rows = (await session.scalars(query)).all()
-    if rows:
-        claim_until = now + timedelta(seconds=interval_seconds)
-        await session.execute(
-            sa.update(state)
-            .where(state.id.in_([r.id for r in rows]))
-            .values(next_eligible_at=claim_until)
+    for row in rows:
+        row.next_eligible_at = now + timedelta(
+            seconds=_jittered_interval(interval_seconds, jitter_fraction)
         )
     return rows
 
@@ -395,18 +450,26 @@ async def record_result(
         state.consecutive_failures = 0
         if last_snapshot is not None:
             state.last_snapshot_id = last_snapshot.id
-        state.next_eligible_at = now + timedelta(seconds=config.interval_seconds)
+        state.next_eligible_at = now + timedelta(
+            seconds=_jittered_interval(config.interval_seconds, config.jitter_fraction)
+        )
     elif status == enums.RankCollectionStatus.private:
         state.status = enums.RankCollectionStatus.private.value
         state.consecutive_failures = 0
         state.next_eligible_at = now + timedelta(
-            seconds=config.interval_seconds * PRIVATE_INTERVAL_FACTOR
+            seconds=_jittered_interval(
+                config.interval_seconds * PRIVATE_INTERVAL_FACTOR,
+                config.jitter_fraction,
+            )
         )
     elif status == enums.RankCollectionStatus.not_found:
         state.status = enums.RankCollectionStatus.not_found.value
         state.consecutive_failures = 0
         state.next_eligible_at = now + timedelta(
-            seconds=config.interval_seconds * NOT_FOUND_INTERVAL_FACTOR
+            seconds=_jittered_interval(
+                config.interval_seconds * NOT_FOUND_INTERVAL_FACTOR,
+                config.jitter_fraction,
+            )
         )
     else:  # error
         return await record_failure(

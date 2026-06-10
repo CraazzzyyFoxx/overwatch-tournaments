@@ -42,6 +42,16 @@ class RankCollectionConfig(BaseModel):
     batch_size: int = Field(default=50, ge=1, le=1000)
     rate_limit_per_minute: int = Field(default=30, ge=1, le=6000)
     scope: RankCollectionScope = "registrations_only"
+    # Self-pace each scheduler tick to cover the in-scope population once per
+    # ``interval_seconds`` instead of claiming a fixed ``batch_size`` per tick.
+    # ``False`` restores the legacy fixed-batch behaviour (rollback switch).
+    auto_pace: bool = True
+    # Fraction of the interval used as a random spread when (re)scheduling a tag,
+    # so tags processed together don't recur together. 0 = exact recurrence.
+    jitter_fraction: float = Field(default=0.15, ge=0.0, le=1.0)
+    # Optional hard ceiling on per-tick claims under ``auto_pace``. ``None`` =
+    # derive the ceiling from ``rate_limit_per_minute`` (and ``batch_size``) only.
+    max_per_tick: int | None = Field(default=None, ge=1, le=10_000)
     # Under ``registrations_only``: besides the tags entered in a registration
     # (main + smurfs), also collect up to this many of the registrant's *other*
     # battle.net accounts. 0 = only the registered pool.
