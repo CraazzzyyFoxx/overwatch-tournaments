@@ -289,8 +289,6 @@ async def update_version(
     data: schemas.DivisionGridVersionUpdate,
 ) -> models.DivisionGridVersion:
     version = await get_version(session, version_id)
-    if version.status != "draft":
-        raise HTTPException(status_code=400, detail="Only draft versions can be updated in-place")
     if data.label is not None:
         version.label = data.label
     if data.tiers is not None:

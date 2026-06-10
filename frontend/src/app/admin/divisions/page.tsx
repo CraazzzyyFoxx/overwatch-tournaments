@@ -19,6 +19,16 @@ import {
 import Image from "next/image";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,10 +110,17 @@ function emptyTier(number: number, index: number): DivisionTier {
   };
 }
 
-function buildEditorState(
-  selectedVersion: DivisionGridVersion | null,
-  isDraftMode: boolean
-): {
+function hasCriticalChanges(original: DivisionTier[], current: DivisionTier[]): boolean {
+  if (original.length !== current.length) return true;
+  const origSorted = [...original].sort((a, b) => a.number - b.number);
+  const currSorted = [...current].sort((a, b) => a.number - b.number);
+  return origSorted.some((orig, i) => {
+    const curr = currSorted[i];
+    return orig.rank_min !== curr.rank_min || orig.rank_max !== curr.rank_max;
+  });
+}
+
+function buildEditorState(selectedVersion: DivisionGridVersion | null): {
   label: string;
   tiers: DivisionTier[];
 } {
@@ -115,7 +132,7 @@ function buildEditorState(
   }
 
   return {
-    label: isDraftMode ? selectedVersion.label : `${selectedVersion.label} Copy`,
+    label: selectedVersion.label,
     tiers: [...selectedVersion.tiers]
       .sort((a, b) => a.number - b.number)
       .map((tier, index) => ({ ...tier, sort_order: tier.sort_order ?? index }))
@@ -332,10 +349,9 @@ function DivisionGridEditorCard({
   onSaved
 }: DivisionGridEditorCardProps) {
   const { toast } = useToast();
-  const isDraftMode = selectedVersion?.status === "draft";
   const initialState = useMemo(
-    () => buildEditorState(selectedVersion, !!isDraftMode),
-    [selectedVersion, isDraftMode]
+    () => buildEditorState(selectedVersion),
+    [selectedVersion]
   );
   const [label, setLabel] = useState(initialState.label);
   const [tiers, setTiers] = useState<DivisionTier[]>(initialState.tiers);
@@ -344,6 +360,7 @@ function DivisionGridEditorCard({
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeStep, setRangeStep] = useState(DEFAULT_RANK_STEP);
   const [tiersToAdd, setTiersToAdd] = useState(1);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   // Keyboard navigation refs: key = `${row}-${col}`
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -404,8 +421,8 @@ function DivisionGridEditorCard({
   );
 
   const saveVersionMutation = useMutation({
-    mutationFn: async () => {
-      if (isDraftMode && selectedVersion) {
+    mutationFn: async (mode: "edit" | "new") => {
+      if (mode === "edit" && selectedVersion) {
         return workspaceService.updateDivisionGridVersion(selectedVersion.id, {
           label,
           tiers: tiersPayload
@@ -416,13 +433,25 @@ function DivisionGridEditorCard({
         tiers: tiersPayload
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_, mode) => {
       await onSaved();
-      toast({ title: isDraftMode ? "Draft saved" : "Draft version created" });
+      toast({ title: mode === "edit" ? "Version saved" : "New draft created" });
     },
     onError: (error: Error) =>
       toast({ title: "Error", description: error.message, variant: "destructive" })
   });
+
+  const handleSave = useCallback(() => {
+    if (!selectedVersion) {
+      saveVersionMutation.mutate("new");
+      return;
+    }
+    if (hasCriticalChanges(selectedVersion.tiers, tiers)) {
+      setShowSaveDialog(true);
+    } else {
+      saveVersionMutation.mutate("edit");
+    }
+  }, [selectedVersion, tiers, saveVersionMutation]);
 
   const updateTier = useCallback(
     (index: number, field: keyof DivisionTier, value: string | number | null) => {
@@ -555,11 +584,11 @@ function DivisionGridEditorCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isDraftMode ? "Edit Draft" : "Draft Editor"}</CardTitle>
+        <CardTitle>Version Editor</CardTitle>
         <CardDescription>
-          {isDraftMode
-            ? "Edit the current draft version. Changes are saved in-place."
-            : "Create a new draft version from the selected tiers."}
+          Minor changes (name, icon, OW ranks) save in-place. Adding or removing tiers, or changing
+          rank ranges, will prompt you to choose between editing the current version or creating a
+          new draft.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -723,14 +752,45 @@ function DivisionGridEditorCard({
 
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={() => saveVersionMutation.mutate()}
+            onClick={handleSave}
             disabled={!canEdit || saveVersionMutation.isPending}
           >
             <Save className="mr-2 h-4 w-4" />
-            {isDraftMode ? "Save Draft" : "Create New Draft"}
+            Save
           </Button>
         </div>
       </CardContent>
+
+      <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Critical changes detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              You changed the number of tiers or their rank ranges. Would you like to edit the
+              current version in-place, or save these changes as a new draft version?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowSaveDialog(false);
+                saveVersionMutation.mutate("new");
+              }}
+            >
+              Create new version
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                setShowSaveDialog(false);
+                saveVersionMutation.mutate("edit");
+              }}
+            >
+              Edit current version
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
