@@ -280,10 +280,11 @@ export function BalancerMainPageClient() {
         issues: getPlayerValidationIssues(
           state.player,
           applicationsById.get(state.player.application_id) ?? null,
-          workspaceBalancerConfig
+          workspaceBalancerConfig,
+          divisionGrid
         )
       })),
-    [allPlayerValidationStates, applicationsById, workspaceBalancerConfig]
+    [allPlayerValidationStates, applicationsById, workspaceBalancerConfig, divisionGrid]
   );
 
   const activeVariant = useMemo(

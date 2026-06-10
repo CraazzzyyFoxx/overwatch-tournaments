@@ -11,7 +11,7 @@ import {
 import { BalanceResponse, BalancerConfig } from "@/types/balancer.types";
 import { UserRoleType } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
-import { DEFAULT_DIVISION_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
+import { DEFAULT_DIVISION_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import userService from "@/services/user.service";
 import { DivisionGridNormalizer } from "@/lib/division-grid-normalizer";
 
@@ -46,6 +46,13 @@ export type PlayerValidationIssue =
   | {
       code: "rank_delta_warning";
       message: string;
+      role: BalancerRoleCode;
+      /** Balancer rank for the role, as a division label (e.g. "Gold 3"). */
+      currentRankLabel: string;
+      /** OW2 rank converted into the workspace grid, as a division label. */
+      owRankLabel: string;
+      /** Absolute rank-point delta between the two. */
+      delta: number;
     };
 
 export type PlayerRankHistoryPreviewEntry = {
@@ -246,6 +253,10 @@ function roleSequencesMatch(
 export interface RoleRankDelta {
   role: BalancerRoleCode;
   delta: number;
+  /** Balancer rank for the role (workspace-grid points). */
+  currentRank: number;
+  /** OW2 rank converted into the workspace grid (points). */
+  owRank: number;
 }
 
 /**
@@ -258,14 +269,17 @@ export function computeRankDeltasByRole(player: BalancerPlayerRecord): RoleRankD
     .filter((entry) => entry.rank_value !== null && entry.ow_rank_value !== null)
     .map((entry) => ({
       role: entry.role,
-      delta: Math.abs((entry.rank_value as number) - (entry.ow_rank_value as number))
+      delta: Math.abs((entry.rank_value as number) - (entry.ow_rank_value as number)),
+      currentRank: entry.rank_value as number,
+      owRank: entry.ow_rank_value as number
     }));
 }
 
 export function getPlayerValidationIssues(
   player: BalancerPlayerRecord,
   application: BalancerApplication | null | undefined,
-  workspaceConfig?: { rank_delta_threshold: number | null } | null
+  workspaceConfig?: { rank_delta_threshold: number | null } | null,
+  grid: DivisionGrid = DEFAULT_DIVISION_GRID
 ): PlayerValidationIssue[] {
   const issues: PlayerValidationIssue[] = [];
 
@@ -297,9 +311,18 @@ export function getPlayerValidationIssues(
       .sort((a, b) => b.delta - a.delta);
     if (violating.length > 0) {
       const worst = violating[0];
+      const currentRankLabel =
+        getDivisionLabel(grid, resolveDivisionFromRank(grid, worst.currentRank)) ??
+        String(worst.currentRank);
+      const owRankLabel =
+        getDivisionLabel(grid, resolveDivisionFromRank(grid, worst.owRank)) ?? String(worst.owRank);
       issues.push({
         code: "rank_delta_warning",
-        message: `Rank delta ${ROLE_LABELS[worst.role]} ${worst.delta} exceeds threshold ${threshold}`
+        role: worst.role,
+        currentRankLabel,
+        owRankLabel,
+        delta: worst.delta,
+        message: `${ROLE_LABELS[worst.role]}: ${currentRankLabel} → ${owRankLabel} (Δ${worst.delta} pts)`
       });
     }
   }

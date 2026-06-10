@@ -106,8 +106,7 @@ function getIssueChipLabel(issue: PlayerValidationIssue): string {
   }
 
   if (issue.code === "rank_delta_warning") {
-    const match = issue.message.match(/Rank delta (\S+) (\d+)/);
-    return match ? `Δ ${match[1]} ${match[2]}` : "Rank Δ";
+    return issue.message;
   }
 
   return "Role mismatch";
