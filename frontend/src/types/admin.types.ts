@@ -26,6 +26,12 @@ export interface RankCollectionConfig {
   extra_accounts_per_registration: number;
   max_consecutive_failures: number;
   backoff_base_seconds: number;
+  /** Self-pace each tick to cover the in-scope population once per interval. */
+  auto_pace: boolean;
+  /** Random spread on (re)schedule, fraction of the interval. 0 = exact. */
+  jitter_fraction: number;
+  /** Hard ceiling on per-tick claims under auto_pace. null = derive from rate budget. */
+  max_per_tick: number | null;
 }
 
 export interface RankMappingEntry {

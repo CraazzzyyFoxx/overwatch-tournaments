@@ -52,7 +52,10 @@ const DEFAULT_COLLECTION: RankCollectionConfig = {
   scope: "registrations_only",
   extra_accounts_per_registration: 0,
   max_consecutive_failures: 5,
-  backoff_base_seconds: 60
+  backoff_base_seconds: 60,
+  auto_pace: true,
+  jitter_fraction: 0.15,
+  max_per_tick: null
 };
 
 
@@ -160,6 +163,17 @@ function RankCollectionSection({
           </Label>
         </div>
 
+        <div className="flex items-center gap-2">
+          <Switch
+            id="rank-collection-auto-pace"
+            checked={form.auto_pace}
+            onCheckedChange={(checked) => setForm({ ...form, auto_pace: checked })}
+          />
+          <Label htmlFor="rank-collection-auto-pace" className="cursor-pointer">
+            Auto-pace (spread the population evenly across the interval)
+          </Label>
+        </div>
+
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Interval (seconds)</Label>
@@ -225,6 +239,32 @@ function RankCollectionSection({
               min={1}
               value={form.backoff_base_seconds}
               onChange={num("backoff_base_seconds")}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Jitter fraction (0–1)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={form.jitter_fraction}
+              onChange={num("jitter_fraction")}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Max per tick (blank = auto)</Label>
+            <Input
+              type="number"
+              min={1}
+              placeholder="auto"
+              value={form.max_per_tick ?? ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  max_per_tick: e.target.value === "" ? null : Number(e.target.value)
+                })
+              }
             />
           </div>
         </div>
