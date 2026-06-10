@@ -48,6 +48,7 @@ import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTo
 import BalancerRegistrationsColumnPicker from "@/app/balancer/registrations/_components/BalancerRegistrationsColumnPicker";
 import RegistrationRowActions from "@/app/balancer/registrations/_components/RegistrationRowActions";
 import BattleTagRankHistory from "@/components/BattleTagRankHistory";
+import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import {
   type BalancerRegistrationColumnDefinition,
@@ -91,8 +92,10 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useToast } from "@/hooks/use-toast";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
 import registrationService from "@/services/registration.service";
@@ -252,18 +255,25 @@ function formatRankSource(role: RegistrationRankAutofillRole): string {
 }
 
 function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
+  const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(role);
   const isUpdate = role.action === "set" || role.action === "overwrite";
   const isBlocked = role.action === "blocked" || role.action === "missing_rank";
-  const rankText =
-    role.action === "missing_rank"
-      ? "missing"
-      : role.parsed_rank_value != null && isUpdate
-        ? role.current_rank_value != null
-          ? `${role.current_rank_value} -> ${role.parsed_rank_value}`
-          : String(role.parsed_rank_value)
-        : String(role.current_rank_value ?? role.parsed_rank_value ?? "-");
+  const isMissing = role.action === "missing_rank";
+
+  const parsedDivision = role.parsed_rank_value != null
+    ? resolveDivisionFromRank(grid, role.parsed_rank_value)
+    : null;
+  const currentDivision = role.current_rank_value != null
+    ? resolveDivisionFromRank(grid, role.current_rank_value)
+    : null;
+
+  // Which rank value to show as the primary label
+  const primaryRank = isUpdate
+    ? role.parsed_rank_value
+    : (role.current_rank_value ?? role.parsed_rank_value);
+  const primaryDivision = isUpdate ? parsedDivision : (currentDivision ?? parsedDivision);
 
   return (
     <div
@@ -281,9 +291,29 @@ function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) 
         <PlayerRoleIcon role={getRoleIconName(role.role)} size={14} color="currentColor" />
       </span>
       <span className="sr-only">{roleLabel}</span>
-      <span className="tabular-nums">
-        {rankText}
-      </span>
+
+      {isMissing ? (
+        <span className="opacity-60">missing</span>
+      ) : (
+        <>
+          {/* When overwriting: show current → new */}
+          {isUpdate && role.current_rank_value != null && (
+            <>
+              {currentDivision != null && (
+                <PlayerDivisionIcon division={currentDivision} width={13} height={13} />
+              )}
+              <span className="tabular-nums opacity-50">{role.current_rank_value}</span>
+              <span className="opacity-40">→</span>
+            </>
+          )}
+          {primaryDivision != null && (
+            <PlayerDivisionIcon division={primaryDivision} width={13} height={13} />
+          )}
+          <span className="tabular-nums">
+            {primaryRank ?? "-"}
+          </span>
+        </>
+      )}
     </div>
   );
 }
