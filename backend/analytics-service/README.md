@@ -1,12 +1,15 @@
-# analytics-service
+# Analytics Service
 
-Analytics microservice for anak-tournaments.
+Analytics microservice for anak-tournaments. It owns all post-tournament analytics computation.
 
-Owns all post-tournament analytics computation:
+- **Port:** 8006
+- **Entry points:** `main.py` (FastAPI HTTP server), `serve.py` (FastStream RabbitMQ worker)
 
-- v1 (current): OpenSkill/Plackett-Luce shifts, linear/points algorithms, predicted standings.
+## Scope
+
+- **v1 (current):** OpenSkill / Plackett-Luce shifts, linear/points algorithms, and predicted standings.
   Moved from `parser-service/src/services/analytics/` in Phase 0.
-- v2 (planned): classical-ML pipeline (gradient boosting + Bayesian online + Monte Carlo) for
+- **v2 (planned):** a classical-ML pipeline (gradient boosting + Bayesian online + Monte Carlo) for
   player performance, shifts, predicted standings, match quality, and anomaly detection.
 
 ## Entry points
@@ -22,6 +25,6 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8006
 uv run faststream run serve:app
 ```
 
-## Environment
+## Configuration & environment
 
-See `backend/env/analytics.env`. Inherits `backend/env/common.env`.
+See `backend/env/analytics.env`, which inherits `backend/env/common.env`.

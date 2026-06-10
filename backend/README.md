@@ -1,40 +1,58 @@
-# FastAPI Project - Backend
+# Backend
+
+The OWT backend is a Python microservices monorepo. Each service is an independent FastAPI
+application with its own `pyproject.toml`, while all services share one ORM/schema layer through
+[`shared/`](./shared/README.md). Dependencies are managed as a single [uv](https://docs.astral.sh/uv/)
+workspace rooted at this directory.
+
+## Services
+
+| Service | Port | Purpose |
+| --- | --- | --- |
+| [`app-service`](./app-service/README.md) | 8000 | Core public REST API + Redis caching |
+| [`auth-service`](./auth-service/README.md) | 8001 | Authentication, JWT, Discord OAuth, player linking |
+| [`parser-service`](./parser-service/README.md) | 8002 | Match-log parsing & scheduled processing |
+| [`balancer-service`](./balancer-service/README.md) | 8003 | Genetic-algorithm team balancing |
+| [`tournament-service`](./tournament-service/README.md) | 8004 | Tournament domain API + workers |
+| [`realtime-service`](./realtime-service/README.md) | 8005 | WebSocket gateway with Redis pub/sub |
+| [`analytics-service`](./analytics-service/README.md) | 8006 | OpenSkill / ML analytics |
+| [`discord-service`](./discord-service/README.md) | — | Discord bot integration |
+| [`twitch-service`](./twitch-service/README.md) | — | Twitch integration (inactive) |
+| [`shared`](./shared/README.md) | — | Shared ORM models, schemas, clients, utilities |
 
 ## Requirements
 
-* [Docker](https://www.docker.com/).
-* [uv](https://docs.astral.sh/uv/) for Python package and environment management.
+* [Docker](https://www.docker.com/) and Docker Compose.
+* [uv](https://docs.astral.sh/uv/) for Python package and environment management (Python 3.13+).
 
-## General Workflow
+## General workflow
 
-By default, the dependencies are managed with [uv](https://docs.astral.sh/uv/), go there and install it.
-
-From `./backend/` you can install all the dependencies with:
+Dependencies are managed as a uv workspace. From `./backend/` install everything with:
 
 ```console
 $ uv sync
 ```
 
-Then you can activate the virtual environment with:
+Then activate the virtual environment:
 
 ```console
-$ source .venv/bin/activate
+$ source .venv/bin/activate        # Linux/macOS
+$ .venv\Scripts\activate           # Windows
 ```
 
-Make sure your editor is using the correct Python virtual environment, with the interpreter at `backend/.venv/bin/python`.
+Make sure your editor uses the workspace interpreter at `backend/.venv/bin/python`.
 
-Modify or add SqlAlchemy models for data and SQL tables in `./backend/app/src/models.py`, API endpoints in `./backend/app/src/services/*/views.py`.
-
+Shared SQLAlchemy models live in [`shared/models/`](./shared/README.md) (the single source of truth).
+Service-specific API endpoints and business logic live under each service's `src/`.
 
 ## Docker Compose (dev profiles)
 
-`docker-compose.override.yml` is no longer used.
-
-Development behavior now lives directly in `docker-compose.yml`:
+`docker-compose.override.yml` is no longer used. Development behavior lives directly in the
+repository-root `docker-compose.yml`:
 
 - source folders are bind-mounted for live reload,
 - backend services run with `uvicorn --reload`,
-- local PostgreSQL is included by default,
+- local PostgreSQL, Redis, and RabbitMQ are included by default,
 - optional components use Compose profiles.
 
 ### Start core dev stack
@@ -49,55 +67,51 @@ $ docker compose up -d --wait
 $ docker compose --profile gateway --profile workers up -d --wait
 ```
 
-### Enter a running backend container
+(Equivalent `make dev-up` / `make dev-up-full` targets are available.)
+
+### Enter a running service container
 
 ```console
-$ docker compose exec backend bash
+$ docker compose exec <service> bash
 ```
 
-### Restart one backend service after env/dependency changes
+### Environment files
 
-```console
-$ docker compose up -d --build backend
-```
+Each service loads `backend/env/common.env` plus its own `backend/env/<service>.env`. Copy the
+`*.env.example` templates to matching `.env` files before first start.
 
-## Backend tests
+## Tests
 
-To test the backend run:
+Run the backend test suite:
 
 ```console
 $ bash ./scripts/test.sh
 ```
 
-The tests run with Pytest, modify and add tests to `./backend/app/tests/`.
-
-### Test Coverage
-
-When the tests are run, a file `htmlcov/index.html` is generated, you can open it in your browser to see the coverage of the tests.
+Tests run with Pytest. When the tests run, an `htmlcov/index.html` coverage report is generated.
 
 ## Migrations
 
-As during local development your app directory is mounted as a volume inside the container, you can also run the migrations with `alembic` commands inside the container and the migration code will be in your app directory (instead of being only inside the container). So you can add it to your git repository.
+Database schema is managed with [Alembic](https://alembic.sqlalchemy.org/); migration scripts live in
+[`backend/migrations/`](./migrations) and target the shared models in [`shared/models/`](./shared/README.md).
+Because the source directory is mounted into the container during local development, you can run Alembic
+inside the container and the generated files appear in your working tree.
 
-Make sure you create a "revision" of your models and that you "upgrade" your database with that revision every time you change them. As this is what will update the tables in your database. Otherwise, your application will have errors.
-
-* Start an interactive session in the backend container:
+* Start an interactive session in a backend container:
 
 ```console
 $ docker compose exec backend bash
 ```
 
-* Alembic is already configured to import your SQLModel models from `./backend/app/models.py`.
-
-* After changing a model (for example, adding a column), inside the container, create a revision, e.g.:
+* After changing a model (for example, adding a column), create a revision:
 
 ```console
 $ alembic revision --autogenerate -m "Add column last_name to User model"
 ```
 
-* Commit to the git repository the files generated in the alembic directory.
+* Commit the generated files in the `migrations/` directory.
 
-* After creating the revision, run the migration in the database (this is what will actually change the database):
+* Apply the migration to the database:
 
 ```console
 $ alembic upgrade head

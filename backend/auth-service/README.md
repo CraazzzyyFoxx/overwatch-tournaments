@@ -1,139 +1,141 @@
 # Authentication Service
 
-Микросервис для аутентификации и авторизации пользователей.
+Microservice for user authentication and authorization.
 
-## Функциональность
+## Features
 
-- 🔐 Регистрация пользователей с валидацией
-- 🔑 Аутентификация по email и паролю
-- 🎫 JWT токены (access + refresh)
-- 🔄 Обновление токенов (refresh)
-- 👤 Получение и обновление профиля пользователя
-- 🚪 Выход (logout) из одной или всех сессий
-- ✅ Валидация токенов для других микросервисов
-- 🎮 **Discord OAuth** - вход через Discord
-- 🔗 **Связывание Discord** - привязка Discord к существующему аккаунту
-- 👥 **Связывание игроков** - привязка игровых профилей к auth пользователю
+- 🔐 User registration with validation
+- 🔑 Authentication by email and password
+- 🎫 JWT tokens (access + refresh)
+- 🔄 Token refresh
+- 👤 Read and update the user profile
+- 🚪 Logout from one or all sessions
+- ✅ Token validation for other microservices
+- 🎮 **Discord OAuth** — sign in via Discord
+- 🔗 **Discord linking** — attach a Discord account to an existing user
+- 👥 **Player linking** — attach in-game player profiles to an auth user
 
-## Технологии
+## Technologies
 
-- **FastAPI** - веб-фреймворк
-- **SQLAlchemy 2.0+** - ORM с async поддержкой
-- **PostgreSQL** - база данных (общая с основным приложением)
-- **JWT** (python-jose) - токены аутентификации
-- **Bcrypt** (passlib) - хеширование паролей
-- **Pydantic** - валидация данных
-- **Loguru** - логирование
-- **HTTPX** - HTTP клиент для Discord API
+- **FastAPI** — web framework
+- **SQLAlchemy 2.0+** — ORM with async support
+- **PostgreSQL** — database (shared with the main application)
+- **JWT** (python-jose) — authentication tokens
+- **Bcrypt** (passlib) — password hashing
+- **Pydantic** — data validation
+- **Loguru** — logging
+- **HTTPX** — HTTP client for the Discord API
 
-## Структура проекта
+## Project structure
 
 ```
 auth-service/
-├── main.py              # Точка входа
-├── pyproject.toml       # Зависимости
-├── Dockerfile           # Docker образ
-├── docker-compose.yml   # Docker композиция
-├── .env.example         # Пример переменных окружения
+├── main.py              # Entry point
+├── pyproject.toml       # Dependencies
+├── Dockerfile           # Docker image
+├── docker-compose.yml   # Docker composition
+├── .env.example         # Example environment variables
 └── src/
-    ├── core/            # Основная конфигурация
-    │   ├── config.py    # Настройки приложения
-    │   ├── db.py        # База данных
-    │   └── logging.py   # Логирование
-    ├── models.py        # Импорт моделей из shared
-    ├── schemas/         # Pydantic схемы
+    ├── core/            # Core configuration
+    │   ├── config.py    # Application settings
+    │   ├── db.py        # Database
+    │   └── logging.py   # Logging
+    ├── models.py        # Re-exports models from shared
+    ├── schemas/         # Pydantic schemas
     │   └── auth.py
-    ├── services/        # Бизнес-логика
+    ├── services/        # Business logic
     │   └── auth_service.py
     └── routes/          # API endpoints
-        ├── auth.py      # Аутентификация
+        ├── auth.py      # Authentication
         └── health.py    # Health checks
 ```
 
-## Установка и запуск
+## Setup and run
 
-### Локальный запуск
+### Local run
 
-1. Создайте виртуальное окружение:
+1. Sync dependencies from the backend workspace and activate the virtualenv:
+
 ```bash
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
+cd backend
+uv sync
+source .venv/bin/activate   # Linux/macOS
+.venv\Scripts\activate      # Windows
 ```
 
-2. Установите зависимости:
-```bash
-pip install -e .
-```
+2. Copy `.env.example` to `.env` and configure the variables:
 
-3. Скопируйте `.env.example` в `.env` и настройте переменные:
 ```bash
 cp .env.example .env
 ```
 
-4. Запустите сервис:
+3. Run the service:
+
 ```bash
 python main.py
 ```
 
-Сервис будет доступен на `http://localhost:8001`
+The service will be available at `http://localhost:8001`.
 
-### Docker запуск
+### Docker run
 
-1. Создайте `.env` файл с необходимыми переменными
+1. Create an `.env` file with the required variables.
 
-2. Запустите через docker-compose:
+2. Start the service (typically as part of the root `docker compose` stack):
+
 ```bash
-docker-compose up -d
+docker compose up -d auth-service
 ```
 
-3. Проверьте health check:
+3. Check the health endpoint:
+
 ```bash
 curl http://localhost:8001/health
 ```
 
-## API Endpoints
+## API endpoints
 
-### Основные endpoints
+### Core endpoints
 
-- `GET /` - Информация о сервисе
-- `GET /health` - Health check
-- `GET /docs` - Swagger документация
-- `GET /redoc` - ReDoc документация
+- `GET /` — service info
+- `GET /health` — health check
+- `GET /docs` — Swagger documentation
+- `GET /redoc` — ReDoc documentation
 
-### Аутентификация
+### Authentication
 
-- `POST /register` - Регистрация нового пользователя
-- `POST /login` - Вход (получение токенов)
-- `POST /refresh` - Обновление access токена
-- `POST /logout` - Выход (отзыв токена)
-- `POST /logout-all` - Выход со всех устройств
-- `POST /set-password` 🔒 - Установить/сменить пароль
-- `GET /me` - Получить текущего пользователя
-- `PATCH /me` - Обновить профиль
-- `POST /validate` - Валидировать токен (для других сервисов)
+- `POST /register` — register a new user
+- `POST /login` — log in (obtain tokens)
+- `POST /refresh` — refresh the access token
+- `POST /logout` — log out (revoke the token)
+- `POST /logout-all` — log out from all devices
+- `POST /set-password` 🔒 — set/change password
+- `GET /me` — get the current user
+- `PATCH /me` — update the profile
+- `POST /validate` — validate a token (for other services)
 
 ### OAuth (Discord)
 
-- `GET /oauth/discord/url` - Получить URL для авторизации Discord
-- `GET /oauth/discord/callback` - Обработка callback от Discord (GET версия)
-- `POST /oauth/discord/callback` - Обработка callback от Discord (POST версия)
-- `POST /oauth/discord/link` 🔒 - Привязать Discord к аккаунту
-- `DELETE /oauth/discord/unlink` 🔒 - Отвязать Discord
-- `GET /oauth/connections` 🔒 - Все OAuth-связки аккаунта
+- `GET /oauth/discord/url` — get the Discord authorization URL
+- `GET /oauth/discord/callback` — handle the Discord callback (GET version)
+- `POST /oauth/discord/callback` — handle the Discord callback (POST version)
+- `POST /oauth/discord/link` 🔒 — link Discord to the account
+- `DELETE /oauth/discord/unlink` 🔒 — unlink Discord
+- `GET /oauth/connections` 🔒 — all OAuth connections for the account
 
-### Связывание игроков
+### Player linking
 
-- `POST /player/link` 🔒 - Привязать игрового персонажа
-- `DELETE /player/unlink/{player_id}` 🔒 - Отвязать игрока
-- `GET /player/linked` 🔒 - Список привязанных игроков
-- `PATCH /player/linked/{player_id}/primary` 🔒 - Установить основного игрока
+- `POST /player/link` 🔒 — link an in-game player
+- `DELETE /player/unlink/{player_id}` 🔒 — unlink a player
+- `GET /player/linked` 🔒 — list linked players
+- `PATCH /player/linked/{player_id}/primary` 🔒 — set the primary player
 
-🔒 - требуется авторизация
+🔒 — requires authorization.
 
-## Примеры использования
+## Usage examples
 
-### Регистрация
+### Register
+
 ```bash
 curl -X POST "http://localhost:8001/register" \
   -H "Content-Type: application/json" \
@@ -146,7 +148,8 @@ curl -X POST "http://localhost:8001/register" \
   }'
 ```
 
-### Вход
+### Log in
+
 ```bash
 curl -X POST "http://localhost:8001/login" \
   -H "Content-Type: application/json" \
@@ -156,7 +159,8 @@ curl -X POST "http://localhost:8001/login" \
   }'
 ```
 
-Ответ:
+Response:
+
 ```json
 {
   "access_token": "eyJ...",
@@ -165,13 +169,15 @@ curl -X POST "http://localhost:8001/login" \
 }
 ```
 
-### Использование токена
+### Use a token
+
 ```bash
 curl -X GET "http://localhost:8001/me" \
   -H "Authorization: Bearer eyJ..."
 ```
 
-### Обновление токена
+### Refresh a token
+
 ```bash
 curl -X POST "http://localhost:8001/refresh" \
   -H "Content-Type: application/json" \
@@ -180,9 +186,9 @@ curl -X POST "http://localhost:8001/refresh" \
   }'
 ```
 
-## Интеграция с другими сервисами
+## Integration with other services
 
-Другие микросервисы могут валидировать токены через endpoint `/validate`:
+Other microservices can validate tokens through the `/validate` endpoint:
 
 ```python
 import httpx
@@ -198,9 +204,9 @@ async def validate_token(token: str):
         return None
 ```
 
-## Конфигурация
+## Configuration
 
-Основные переменные окружения (см. `.env.example`):
+Key environment variables (see `.env.example`):
 
 ```bash
 # Application
@@ -209,7 +215,7 @@ DEBUG=True
 HOST=0.0.0.0
 PORT=8001
 
-# Database (shared with main app)
+# Database (shared with the main app)
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
@@ -226,57 +232,61 @@ REFRESH_TOKEN_EXPIRE_DAYS=30
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
 ```
 
-## База данных
+## Database
 
-Сервис использует **общую базу данных** с основным приложением:
-- Таблицы создаются через Alembic миграции в главном приложении
-- Auth-service подключается к существующим таблицам `auth_users` и `refresh_tokens`
-- Не требуется отдельных миграций для auth-service
+The service uses the **shared database** together with the main application:
 
-## Разработка
+- Tables are created via Alembic migrations in the main application.
+- The auth service connects to the existing `auth_users` and `refresh_tokens` tables.
+- No separate migrations are required for the auth service.
 
-### Логирование
+## Development
 
-Логи выводятся через Loguru с цветным форматированием:
+### Logging
+
+Logs are emitted through Loguru with colored formatting:
+
 ```
 2024-01-15 12:00:00.000 | INFO     | Starting Authentication Service...
 2024-01-15 12:00:01.000 | SUCCESS  | Database connection established
 2024-01-15 12:00:02.000 | INFO     | Registering new user: user@example.com
 ```
 
-### Безопасность
+### Security
 
-- ✅ Пароли хешируются с помощью bcrypt
-- ✅ JWT токены подписываются секретным ключом
-- ✅ Refresh токены хранятся в базе данных
-- ✅ Поддержка отзыва токенов
-- ✅ Валидация сложности паролей
-- ✅ CORS middleware для защиты от XSS
+- ✅ Passwords are hashed with bcrypt
+- ✅ JWT tokens are signed with a secret key
+- ✅ Refresh tokens are stored in the database
+- ✅ Token revocation is supported
+- ✅ Password-strength validation
+- ✅ CORS middleware
 
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Client    │────▶│ Auth Service │────▶│  PostgreSQL  │
-│ (Frontend)  │     │   (Port 8001)│     │  (Shared DB) │
+│ (Frontend)  │     │  (Port 8001) │     │  (Shared DB) │
 └─────────────┘     └──────────────┘     └──────────────┘
                             │                     ▲
                             │                     │
                             ▼                     │
-                    ┌──────────────┐             │
-                    │  Main App    │─────────────┘
+                    ┌──────────────┐              │
+                    │  Main App    │──────────────┘
                     │ (Port 8000)  │
                     └──────────────┘
 ```
 
-## Мониторинг
+## Monitoring
 
-Health check endpoint доступен для мониторинга:
+A health-check endpoint is available for monitoring:
+
 ```bash
 curl http://localhost:8001/health
 ```
 
-Ответ:
+Response:
+
 ```json
 {
   "status": "healthy",
@@ -284,6 +294,7 @@ curl http://localhost:8001/health
 }
 ```
 
-## Лицензия
+## License
 
-MIT
+This service is part of the OWT project, licensed under the GNU AGPL v3.0 with additional attribution
+terms. See the repository-root [LICENSE](../../LICENSE).

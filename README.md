@@ -2,38 +2,41 @@
 
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/CraazzzyyFoxx/1362ebafcd51d3f65dae7935b1d322eb/raw/pytest.json)
 [![Issues](https://img.shields.io/github/issues/CraazzzyyFoxx/anak-tournaments)](https://github.com/CraazzzyyFoxx/anak-tournaments)
-[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://aqt.craazzzyyfoxx.me/api/redoc)
-[![License: MIT](https://img.shields.io/github/license/CraazzzyyFoxx/anak-tournaments)](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE)
+[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://anakq.xyz/api/redoc)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE)
 
-> AQT provides comprehensive statistics about Anakq's sub-tournaments.
-> This includes the history of past tournaments, player statistics such as tournaments participated in, divisions, teams, heroes, and performance metrics.
-> Built with FastAPI, Next.js, and using Traefik as a reverse proxy and Redis for caching and queuing.
-> The project is optimized for fast and accurate data delivery, minimizing server load.
+> **OWT** provides comprehensive statistics about Anakq's sub-tournaments —
+> the history of past tournaments and player statistics such as tournaments participated in, divisions, teams,
+> heroes, and performance metrics.
+> The backend is a Python microservices platform (FastAPI, SQLAlchemy, PostgreSQL, Redis, RabbitMQ) and the
+> frontend is a Next.js application. The project is optimized for fast and accurate data delivery while
+> minimizing server load.
 
 ## Table of contents
 
 * [✨ Live instance](#-live-instance)
+* [🏛️ Architecture](#-architecture)
 * [🐋 Docker development](#docker-development-breaking-change)
 * [📈 Monitoring](#-monitoring)
 * [👨‍💻 Technical details](#-technical-details)
 * [🙏 Credits](#-credits)
 * [📝 License](#-license)
 
-## ✨ [Live instance](https://aqt.craazzzyyfoxx.me/)
+## ✨ [Live instance](https://anakq.xyz/)
 
 **Backend**
 > The backend is built with FastAPI and provides the core API functionality, including data retrieval, caching, and processing.
 > You can explore the backend API documentation using the following links:
 >
->Redoc Documentation: https://aqt.craazzzyyfoxx.me/api/v1/redoc
->Swagger UI: https://aqt.craazzzyyfoxx.me/api/v1/docs
+> Redoc Documentation: https://anakq.xyz/api/v1/redoc
+> Swagger UI: https://anakq.xyz/api/v1/docs
 
 **Frontend**
-> The frontend is built with Next.js and provides a user-friendly interface for interacting with the AQT API.
+> The frontend is built with Next.js and provides a user-friendly interface for interacting with the OWT API.
 > It displays tournament history, player statistics, and other relevant data in an intuitive and visually appealing way.
->You can access the live frontend instance here:
+> You can access the live frontend instance here:
 >
-> Frontend Live Instance: https://aqt.craazzzyyfoxx.me
+> Frontend Live Instance: https://anakq.xyz
 
 ### Pre-commit
 
@@ -44,19 +47,47 @@ The configuration can be found in the `.pre-commit-config.yaml` file. It consist
 - `ruff` for linting and code formatting (with `ruff format`)
 - `sourcery` for more code quality checks and a lot of simplifications
 
+## 🏛️ Architecture
+
+OWT is a microservices monorepo: a set of independent Python services under `backend/` (sharing one ORM layer
+via `backend/shared/`) plus a Next.js frontend. In production the services sit behind a Kong API gateway and
+communicate over PostgreSQL, Redis, and RabbitMQ.
+
+### Backend services (`backend/`)
+
+| Service | Port | Purpose | Docs |
+| --- | --- | --- | --- |
+| `app-service` | 8000 | Core public REST API — data retrieval, Redis caching, statistics endpoints | [README](./backend/app-service/README.md) |
+| `auth-service` | 8001 | Authentication & authorization — JWT, Discord OAuth, player linking | [README](./backend/auth-service/README.md) |
+| `parser-service` | 8002 | Match-log parsing & scheduled processing (OR-Tools, APScheduler, FastStream) | [README](./backend/parser-service/README.md) |
+| `balancer-service` | 8003 | Genetic-algorithm team balancing (async jobs + SSE) | [README](./backend/balancer-service/README.md) |
+| `tournament-service` | 8004 | Tournament domain — CRUD, registration, Challonge/Sheets sync, map veto, realtime | [README](./backend/tournament-service/README.md) |
+| `realtime-service` | 8005 | Unified WebSocket gateway with Redis pub/sub fan-out | [README](./backend/realtime-service/README.md) |
+| `analytics-service` | 8006 | Post-tournament analytics — OpenSkill (v1), ML pipeline (v2) | [README](./backend/analytics-service/README.md) |
+| `discord-service` | — | Discord bot integration and notifications | [README](./backend/discord-service/README.md) |
+| `twitch-service` | — | Twitch integration (inactive placeholder) | [README](./backend/twitch-service/README.md) |
+| `shared` | — | Shared ORM models, schemas, clients, and utilities used by every service | [README](./backend/shared/README.md) |
+
+### Frontend (`frontend/`)
+
+Next.js 16 + React 19 + TypeScript, styled with Tailwind CSS 4 and Shadcn/UI. See [frontend/README.md](./frontend/README.md).
+
 ## 👨‍💻 Technical details
 
 ### Technology Stack and Features
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
+- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend services.
     - 🧰 [SqlAlchemy](https://www.sqlalchemy.org/) for the Python SQL database interactions (ORM).
     - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
     - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
+    - 🐇 [RabbitMQ](https://www.rabbitmq.com/) with [FastStream](https://faststream.airt.ai/) for inter-service messaging and workers.
+    - 🧊 [Redis](https://redis.io/) for caching and realtime pub/sub.
 - 🚀 [**Next.js**](https://nextjs.org/) for the frontend.
     - 💃 Using TypeScript, hooks, and other parts of a modern frontend stack.
     - 🎨 [Shadcn/UI](https://ui.shadcn.com/) for the frontend components.
     - 🧪 [Playwright](https://playwright.dev) for End-to-End testing.
 - 🐋 [Docker Compose](https://www.docker.com) for development and production.
+- 🔭 OpenTelemetry, Prometheus, Loki, Tempo, and Grafana for observability.
 - ✅ Tests with [Pytest](https://pytest.org).
 - 🏭 CI/CD based on GitHub Actions.
 
@@ -69,7 +100,7 @@ In statistics, various conversions are applied for ease of use:
 
 ### Redis caching
 
-AQT API integrates a Redis-based cache system, divided into three main components:
+OWT API integrates a Redis-based cache system, divided into two main components:
 
 API Cache: This high-level cache associates URIs (cache keys) with Pickle data.
 
@@ -114,13 +145,11 @@ docker compose --profile gateway --profile workers up -d --wait
 
 You can also use `make dev-up` and `make dev-up-full`.
 
-Quick migration commands are in `DOCKER_DEV_MIGRATION.md`.
-
 ## 📈 Monitoring
 
-Monitoring deployment and operations are documented in `monitoring/README.md`.
+Monitoring deployment and operations are documented in [monitoring/README.md](./monitoring/README.md).
 
-The monitoring stack includes Prometheus, Alertmanager, Grafana, Loki, Promtail, Redis Exporter, and RabbitMQ Exporter.
+The monitoring stack runs as its own Compose project and includes Prometheus, Alertmanager, Grafana, Loki, Promtail, Tempo, the OpenTelemetry Collector, and Redis/RabbitMQ exporters.
 
 ## Backend Development
 
@@ -142,4 +171,10 @@ All data provided by the API is owned by Anakq and their community.
 
 Copyright © 2024-2025 [CraazzzyyFoxx](https://github.com/CraazzzyyFoxx).
 
-This project is [MIT](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE) licensed.
+This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE) with additional attribution terms (AGPL §7). In short:
+
+- **Self-hosting the unmodified project is allowed** — run it as-is for any purpose, including over a network.
+- **Self-hosting a modified version is allowed**, but the running site must display a visible link back to this original project and its author.
+- **Derivative works must stay open source** under this same license, with source code available to network users.
+
+See the [LICENSE](./LICENSE) file for the full text and the binding Additional Terms.

@@ -1,33 +1,38 @@
 # Balancer Service
 
-Team balancing service using genetic algorithm for optimal team distribution.
+Team balancing service that uses a genetic algorithm to produce optimal, fair team distributions for
+tournaments. Balancing runs as an asynchronous job and exposes live progress over Server-Sent Events.
+
+- **Port:** 8003
+- **Entry points:** `main.py` (FastAPI HTTP server), `serve.py` (FastStream worker for async jobs)
 
 ## Features
 
-- **Genetic Algorithm**: Uses evolutionary optimization to balance teams
-- **Multi-criteria Optimization**: Balances MMR, role preferences, and team variance
-- **Captain Assignment**: Optional captain selection based on highest ratings
-- **Flexible Configuration**: Customizable weights and algorithm parameters
-
-## API Endpoints
+- **Genetic Algorithm**: evolutionary optimization to balance teams
+- **Multi-criteria optimization**: balances MMR, role preferences, and team variance
+- **Captain assignment**: optional captain selection based on highest ratings
+- **Flexible configuration**: customizable weights and algorithm parameters
 
 ## Authorization
 
-All balancer endpoints (except `/health`) require an access token and are restricted to users with one of these roles:
+All balancer endpoints (except `/health`) require an access token and are restricted to users with one
+of these roles:
 
 - `admin`
 - `tournament_organizer`
 
+## API Endpoints
+
 ### POST `/api/balancer/jobs`
 
-Create async balancing job and return `job_id` immediately.
+Create an async balancing job and return a `job_id` immediately.
 
 **Request (multipart/form-data):**
 - `file` (required): JSON file with player data
 - `config` (optional): JSON string with balancing overrides
 
 ```bash
-curl -X POST "http://localhost:8005/api/balancer/jobs" \
+curl -X POST "http://localhost:8003/api/balancer/jobs" \
   -H "Authorization: Bearer <access_token>" \
   -F "file=@players.json" \
   -F 'config={"MASK":{"Tank":1,"Damage":2,"Support":2},"POPULATION_SIZE":200,"GENERATIONS":750,"USE_CAPTAINS":true}'
@@ -35,15 +40,15 @@ curl -X POST "http://localhost:8005/api/balancer/jobs" \
 
 ### POST `/api/balancer/balance`
 
-Backward-compatible alias for `POST /api/balancer/jobs`. Returns async `job_id`.
+Backward-compatible alias for `POST /api/balancer/jobs`. Returns an async `job_id`.
 
 ### GET `/api/balancer/jobs/{job_id}`
 
-Get job status (`queued`, `running`, `succeeded`, `failed`) with current stage and progress.
+Get job status (`queued`, `running`, `succeeded`, `failed`) with the current stage and progress.
 
 ### GET `/api/balancer/jobs/{job_id}/result`
 
-Get final balancing result when job is complete.
+Get the final balancing result when the job is complete.
 
 ### GET `/api/balancer/jobs/{job_id}/stream`
 
@@ -55,18 +60,20 @@ Returns runtime defaults, allowed limits, and available presets for frontend for
 
 ## Configuration
 
-All balancing parameters can be customized by passing a `config` object in your API request. The service supports:
+All balancing parameters can be customized by passing a `config` object in your API request. The service
+supports:
 
-- **Role Configuration**: Custom role masks and mappings
-- **Genetic Algorithm**: Population size, generations, elitism, mutation parameters
-- **Cost Weights**: MMR difference, discomfort, variance, and max discomfort weights
-- **Strategy**: Captain assignment and display settings
+- **Role configuration**: custom role masks and mappings
+- **Genetic algorithm**: population size, generations, elitism, mutation parameters
+- **Cost weights**: MMR difference, discomfort, variance, and max-discomfort weights
+- **Strategy**: captain assignment and display settings
 
-**For a complete guide to all configuration parameters**, see [CONFIG_GUIDE.md](CONFIG_GUIDE.md).
+The authoritative list of runtime defaults, allowed limits, and presets is returned by the
+`GET /api/balancer/config` endpoint, which the frontend uses to build its forms.
 
-### Quick Configuration Examples
+### Quick configuration examples
 
-**Default Configuration:**
+**Default configuration:**
 ```json
 {
   "MASK": {"Tank": 1, "Damage": 2, "Support": 2},
@@ -83,7 +90,7 @@ All balancing parameters can be customized by passing a `config` object in your 
 }
 ```
 
-**Competitive Tournament (prioritize fair matches):**
+**Competitive tournament (prioritize fair matches):**
 ```json
 {
   "POPULATION_SIZE": 300,
@@ -93,7 +100,7 @@ All balancing parameters can be customized by passing a `config` object in your 
 }
 ```
 
-**Quick Balancing (faster, lower quality):**
+**Quick balancing (faster, lower quality):**
 ```json
 {
   "POPULATION_SIZE": 50,
@@ -105,16 +112,20 @@ All balancing parameters can be customized by passing a `config` object in your 
 ## Running
 
 ```bash
-# Development
-uvicorn main:app --reload --port 8005
+# Development (HTTP server)
+uvicorn main:app --reload --port 8003
 
 # Worker (async jobs)
 faststream run serve:app
 
 # Production
-uvicorn main:app --host 0.0.0.0 --port 8005
+uvicorn main:app --host 0.0.0.0 --port 8003
 ```
 
 ## Health Check
 
-GET `/health` - Returns service health status
+`GET /health` — returns the service health status.
+
+## Configuration & environment
+
+See `backend/env/balancer.env`, which inherits `backend/env/common.env`.
