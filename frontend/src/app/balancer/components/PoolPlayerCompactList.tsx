@@ -266,7 +266,7 @@ export function PoolPlayerCompactList({
                     onSelectPlayer?.(player.id);
                   }}
                   className={cn(
-                    "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-all sm:grid-cols-[24px_minmax(0,1fr)_auto]",
+                    "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-all",
                     "border-white/6 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.04]",
                     isSelected && "border-primary/45 bg-primary/[0.08]",
                     isBulkSelected && !isSelected && "border-cyan-400/35 bg-cyan-500/[0.06]",
@@ -289,15 +289,62 @@ export function PoolPlayerCompactList({
                   </button>
 
                   <div className="min-w-0" title="Double-click to edit player">
-                    <div className="w-full min-w-0 text-left">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
                         <RoleIconStrip roleCodes={rankedRoleCodes} />
                         <span className="truncate text-[13px] font-medium text-white/88">{name}</span>
                         {suffix ? <span className="shrink-0 text-[12px] text-white/28">{suffix}</span> : null}
                       </div>
+
+                      <div className="flex shrink-0 items-center gap-1" data-card-action>
+                        <div className="flex items-center gap-2 pr-1">
+                          {divisionNumber != null ? (
+                            <span className="shrink-0" title={`Division ${divisionNumber}`}>
+                              <PlayerDivisionIcon division={divisionNumber} width={20} height={20} />
+                            </span>
+                          ) : null}
+                          {primaryEntry?.rank_value != null ? (
+                            <span
+                              className={cn(
+                                "min-w-10 text-right text-[13px] font-semibold tabular-nums text-cyan-300",
+                                primaryRole && ROLE_TEXT_ACCENTS[primaryRole],
+                              )}
+                            >
+                              {primaryEntry.rank_value}
+                            </span>
+                          ) : (
+                            <span className="text-[12px] text-white/24">-</span>
+                          )}
+                        </div>
+
+                        <StatusMenu
+                          value={registration?.balancer_status}
+                          statusOptions={statusOptions}
+                          disabled={actionsDisabled}
+                          onChange={registration ? (status) => onSetBalancerStatus?.(player.id, status) : undefined}
+                        />
+
+                        <BattleTagCopyButton battleTag={primaryBattleTag} />
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={actionsDisabled || !onSetPoolMembership}
+                          className={cn(
+                            "h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-white",
+                            !player.is_in_pool && "text-emerald-200/70",
+                          )}
+                          title={player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
+                          onClick={() => onSetPoolMembership?.(player.id, !player.is_in_pool)}
+                        >
+                          {player.is_in_pool ? <ShieldX className="h-3.5 w-3.5" /> : <PlusCircle className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
                     </div>
+
                     {player.is_flex || isReady || issues.length > 0 || smurfTags.length > 0 ? (
-                      <div className="mt-1 flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
                         {player.is_flex ? (
                           <span className="shrink-0 rounded-full border border-violet-300/20 bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-200">
                             Flex
@@ -314,52 +361,6 @@ export function PoolPlayerCompactList({
                         <SmurfTagStrip smurfTags={smurfTags} />
                       </div>
                     ) : null}
-                  </div>
-
-                  <div className="col-span-2 flex min-w-0 items-center justify-end gap-1 pt-1 sm:col-span-1 sm:pt-0" data-card-action>
-                    <div className="mr-auto flex items-center gap-2 sm:mr-1">
-                      {divisionNumber != null ? (
-                        <span className="shrink-0" title={`Division ${divisionNumber}`}>
-                          <PlayerDivisionIcon division={divisionNumber} width={20} height={20} />
-                        </span>
-                      ) : null}
-                      {primaryEntry?.rank_value != null ? (
-                        <span
-                          className={cn(
-                            "min-w-10 text-right text-[13px] font-semibold tabular-nums text-cyan-300",
-                            primaryRole && ROLE_TEXT_ACCENTS[primaryRole],
-                          )}
-                        >
-                          {primaryEntry.rank_value}
-                        </span>
-                      ) : (
-                        <span className="text-[12px] text-white/24">-</span>
-                      )}
-                    </div>
-
-                    <StatusMenu
-                      value={registration?.balancer_status}
-                      statusOptions={statusOptions}
-                      disabled={actionsDisabled}
-                      onChange={registration ? (status) => onSetBalancerStatus?.(player.id, status) : undefined}
-                    />
-
-                    <BattleTagCopyButton battleTag={primaryBattleTag} />
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={actionsDisabled || !onSetPoolMembership}
-                      className={cn(
-                        "h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-white",
-                        !player.is_in_pool && "text-emerald-200/70",
-                      )}
-                      title={player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
-                      onClick={() => onSetPoolMembership?.(player.id, !player.is_in_pool)}
-                    >
-                      {player.is_in_pool ? <ShieldX className="h-3.5 w-3.5" /> : <PlusCircle className="h-3.5 w-3.5" />}
-                    </Button>
                   </div>
                 </div>
               </ContextMenuTrigger>
