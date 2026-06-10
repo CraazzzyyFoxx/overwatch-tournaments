@@ -1167,7 +1167,7 @@ async def upsert_workspace_balancer_config(
     else:
         config.config_json = payload
         config.updated_by = updated_by
-    await session.flush()
+    await session.commit()
     await session.refresh(config)
     return config
 
