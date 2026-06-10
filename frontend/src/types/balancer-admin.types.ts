@@ -3,8 +3,6 @@ import type { Statistics as BalancerStatistics } from "@/types/balancer.types";
 export type BalancerRoleCode = "tank" | "dps" | "support";
 export type BalancerRosterKey = "Tank" | "Damage" | "Support";
 export type BalancerRoleSubtype = string;
-export type DuplicateResolution = "replace" | "skip";
-export type DuplicateStrategy = "manual" | "replace_all" | "skip_all";
 
 export interface BalancerTournamentSheet {
   id: number;
@@ -33,10 +31,6 @@ export interface BalancerPlayerRecord {
   is_flex: boolean;
   is_in_pool: boolean;
   admin_notes: string | null;
-}
-
-export interface BalancerPlayerHistoryRecord extends BalancerPlayerRecord {
-  tournament_number: number | null;
 }
 
 export interface BalancerPlayerRoleEntry {
@@ -158,63 +152,9 @@ export interface TournamentSheetUpsertInput {
   role_mapping_json?: Record<string, BalancerRoleCode | null> | null;
 }
 
-export interface BalancerPlayerCreateInput {
-  application_ids: number[];
-}
-
-export interface BalancerPlayerImportDuplicate {
-  battle_tag: string;
-  battle_tag_normalized: string;
-  application_id: number;
-  existing_player_id: number;
-  imported_role_entries_json: BalancerPlayerRoleEntry[];
-  existing_role_entries_json: BalancerPlayerRoleEntry[];
-  imported_is_in_pool: boolean;
-  existing_is_in_pool: boolean;
-  imported_admin_notes: string | null;
-  existing_admin_notes: string | null;
-}
-
-export interface BalancerPlayerImportSkipped {
-  battle_tag: string;
-  battle_tag_normalized: string;
-  reason: "missing_active_application" | "duplicate_in_file" | "no_ranked_roles";
-}
-
-export interface BalancerPlayerImportPreviewResponse {
-  total_players: number;
-  creatable_players: number;
-  duplicate_players: number;
-  skipped_players: number;
-  duplicates: BalancerPlayerImportDuplicate[];
-  skipped: BalancerPlayerImportSkipped[];
-}
-
-export interface BalancerPlayerImportResult {
-  success: boolean;
-  created: number;
-  replaced: number;
-  skipped_duplicates: number;
-  skipped_missing_application: number;
-  skipped_duplicate_in_file: number;
-  skipped_no_ranked_roles: number;
-  total_players: number;
-}
-
 export interface BalancerPlayerExportResponse {
   format: string;
   players: Record<string, unknown>;
-}
-
-export interface BalancerPlayerRoleSyncResponse {
-  updated: number;
-  skipped: number;
-}
-
-export interface ApplicationUserExportResponse {
-  processed: number;
-  skipped: number;
-  total: number;
 }
 
 export interface RegistrationUserExportResponse {

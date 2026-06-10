@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from shared.core import db
 
 if TYPE_CHECKING:
-    from shared.models.balancer import BalancerBalance, BalancerPlayer
+    from shared.models.balancer import BalancerBalance
     from shared.models.tournament import Tournament
     from shared.models.user import User
     from shared.models.workspace import Workspace
@@ -144,9 +144,6 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     is_flex: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     division_number: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    source_balancer_player_id: Mapped[int | None] = mapped_column(
-        ForeignKey("balancer.player.id", ondelete="SET NULL"), nullable=True, index=True
-    )
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="available", default="available")
     is_captain: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     drafted_by_team_id: Mapped[int | None] = mapped_column(
@@ -157,7 +154,6 @@ class DraftPlayer(db.TimeStampIntegerMixin):
 
     session: Mapped["DraftSession"] = relationship(back_populates="players")
     user: Mapped["User | None"] = relationship()
-    source_player: Mapped["BalancerPlayer | None"] = relationship()
     drafted_by_team: Mapped["DraftTeam | None"] = relationship(foreign_keys=[drafted_by_team_id], overlaps="roster")
 
 

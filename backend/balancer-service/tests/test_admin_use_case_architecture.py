@@ -71,7 +71,6 @@ class RegistrationAdminUseCaseTests(IsolatedAsyncioTestCase):
                 stream_pov=False,
                 notes=None,
                 admin_notes=None,
-                is_flex=False,
                 roles=[],
             ),
         )
@@ -102,7 +101,6 @@ class RegistrationAdminUseCaseTests(IsolatedAsyncioTestCase):
                 stream_pov=True,
                 notes="notes",
                 admin_notes="admin",
-                is_flex=True,
                 status="approved",
                 balancer_status="ready",
                 roles=[SimpleNamespace(model_dump=lambda: {"role": "tank"})],

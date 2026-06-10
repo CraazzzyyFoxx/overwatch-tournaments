@@ -198,20 +198,6 @@ async def _get_registration_workspace_id(session: AsyncSession, registration_id:
     return int(workspace_id)
 
 
-async def _get_player_workspace_id(session: AsyncSession, player_id: int) -> int:
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id)
-        .join(models.BalancerPlayer, models.BalancerPlayer.tournament_id == models.Tournament.id)
-        .where(models.BalancerPlayer.id == player_id)
-    )
-    if workspace_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Player not found",
-        )
-    return int(workspace_id)
-
-
 async def _get_balance_workspace_id(session: AsyncSession, balance_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(sa.func.coalesce(models.BalancerBalance.workspace_id, models.Tournament.workspace_id))
@@ -265,23 +251,6 @@ def require_registration_permission(resource: str, action: str):
         current_user: Annotated[AuthUser, Depends(get_current_active_user)],
     ) -> AuthUser:
         workspace_id = await _get_registration_workspace_id(session, registration_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_player_permission(resource: str, action: str):
-    async def permission_checker(
-        player_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_player_workspace_id(session, player_id)
         return await _require_workspace_permission(
             current_user,
             workspace_id=workspace_id,

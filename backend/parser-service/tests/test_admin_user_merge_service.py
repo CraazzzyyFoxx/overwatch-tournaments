@@ -83,7 +83,6 @@ class AdminUserMergeServiceTests(IsolatedAsyncioTestCase):
                 "achievements.override.user_id",
                 "achievements.user.user_id",
                 "balancer.registration.user_id",
-                "balancer.player.user_id",
                 "analytics.balance_player_snapshot.user_id",
                 "log_processing.record.uploader_id",
                 "auth.user_player.player_id",

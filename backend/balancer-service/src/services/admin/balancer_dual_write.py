@@ -38,7 +38,7 @@ async def sync_balance_variants_and_slots(
 ) -> None:
     """Create balance_variant and team_slot rows from the saved balance result.
 
-    Called after materialize_balance_teams() populates BalancerTeam rows.
+    Called after the BalancerTeam rows for the balance have been persisted.
     """
     # Delete old variants (cascades to team_slots through variant→team FK)
     await session.execute(
@@ -63,17 +63,6 @@ async def sync_balance_variants_and_slots(
     # Update balance metadata
     balance.algorithm = algorithm
 
-    # Build player lookup: battle_tag_normalized → BalancerPlayer
-    result = await session.execute(
-        sa.select(models.BalancerPlayer).where(
-            models.BalancerPlayer.tournament_id == balance.tournament_id,
-            models.BalancerPlayer.is_in_pool.is_(True),
-        )
-    )
-    player_lookup: dict[str, models.BalancerPlayer] = {}
-    for bp in result.scalars().all():
-        player_lookup[bp.battle_tag_normalized] = bp
-
     # Link teams to variant and create team_slots
     teams_result = await session.execute(
         sa.select(models.BalancerTeam).where(
@@ -94,12 +83,11 @@ async def sync_balance_variants_and_slots(
             role_code = ROLE_NAME_TO_CODE.get(role_name, role_name.lower())
             for player_data in players:
                 name_normalized = player_data.name.replace(" ", "").strip().lower()
-                bp = player_lookup.get(name_normalized)
 
                 session.add(
                     models.BalancerTeamSlot(
                         team_id=balancer_team.id,
-                        player_id=bp.id if bp else None,
+                        battle_tag_normalized=name_normalized,
                         role=role_code,
                         assigned_rank=player_data.rating,
                         discomfort=player_data.discomfort or 0,

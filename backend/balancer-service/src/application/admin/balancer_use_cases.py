@@ -1,18 +1,6 @@
 from __future__ import annotations
 
 
-class ListApplications:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int, include_inactive: bool = False):
-        return await self._balancer_service.list_applications(
-            session,
-            tournament_id,
-            include_inactive=include_inactive,
-        )
-
-
 class GetTournamentSheet:
     def __init__(self, *, registration_service) -> None:
         self._registration_service = registration_service
@@ -72,97 +60,12 @@ class PreviewTournamentSheetMapping:
         )
 
 
-class CreatePlayersFromApplications:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int, payload):
-        return await self._balancer_service.create_players_from_applications(session, tournament_id, payload)
-
-
-class ListPlayers:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int, in_pool_only: bool = False):
-        return await self._balancer_service.list_players(session, tournament_id, in_pool_only=in_pool_only)
-
-
-class UpdatePlayer:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, player_id: int, payload):
-        return await self._balancer_service.update_player(session, player_id, payload)
-
-
-class DeletePlayer:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, player_id: int) -> None:
-        await self._balancer_service.delete_player(session, player_id)
-
-
-class PreviewPlayerImport:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int, payload: dict, match_application_roles: bool):
-        return await self._balancer_service.preview_player_import(
-            session,
-            tournament_id,
-            payload,
-            match_application_roles=match_application_roles,
-        )
-
-
-class ImportPlayers:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(
-        self,
-        *,
-        session,
-        tournament_id: int,
-        payload: dict,
-        duplicate_strategy,
-        resolutions,
-        match_application_roles: bool,
-    ):
-        return await self._balancer_service.import_players(
-            session,
-            tournament_id,
-            payload,
-            duplicate_strategy=duplicate_strategy,
-            resolutions=resolutions,
-            match_application_roles=match_application_roles,
-        )
-
-
 class ExportPlayers:
     def __init__(self, *, registration_service) -> None:
         self._registration_service = registration_service
 
     async def execute(self, *, session, tournament_id: int):
         return await self._registration_service.export_active_registrations(session, tournament_id)
-
-
-class SyncPlayerRolesFromApplications:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int):
-        return await self._balancer_service.sync_player_roles_from_applications(session, tournament_id)
-
-
-class ExportApplicationsToUsers:
-    def __init__(self, *, balancer_service) -> None:
-        self._balancer_service = balancer_service
-
-    async def execute(self, *, session, tournament_id: int):
-        return await self._balancer_service.export_applications_to_users(session, tournament_id)
 
 
 class GetTournamentConfig:

@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.domain.balancer.role_entries import resolve_division_from_rank
 from src.schemas.team import InternalBalancerTeamsPayload
 
 
@@ -114,19 +115,25 @@ async def create_balance_snapshot(
     session.add(snapshot)
     await session.flush()
 
-    # Build player lookup (with role_entries eagerly loaded)
+    # Build registration lookup (battle_tag_normalized -> registration, roles eagerly
+    # loaded). Registrations are the source of truth for user_id and per-role rank.
     from sqlalchemy.orm import selectinload
 
-    bp_result = await session.execute(
-        sa.select(models.BalancerPlayer)
+    from src.services.admin.balancer_registration import get_tournament_grid
+
+    grid = await get_tournament_grid(session, balance.tournament_id)
+    reg_result = await session.execute(
+        sa.select(models.BalancerRegistration)
         .where(
-            models.BalancerPlayer.tournament_id == balance.tournament_id,
+            models.BalancerRegistration.tournament_id == balance.tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
         )
-        .options(selectinload(models.BalancerPlayer.role_entries))
+        .options(selectinload(models.BalancerRegistration.roles))
     )
-    bp_lookup: dict[str, models.BalancerPlayer] = {}
-    for bp in bp_result.scalars().all():
-        bp_lookup[bp.battle_tag_normalized] = bp
+    reg_lookup: dict[str, models.BalancerRegistration] = {}
+    for reg in reg_result.scalars().all():
+        if reg.battle_tag_normalized:
+            reg_lookup[reg.battle_tag_normalized] = reg
 
     for team_data in payload.teams:
         tournament_team = exported_teams.get(team_data.name)
@@ -137,8 +144,8 @@ async def create_balance_snapshot(
 
             for player in players:
                 name_normalized = player.name.replace(" ", "").strip().lower()
-                bp = bp_lookup.get(name_normalized)
-                user_id = bp.user_id if bp else None
+                registration = reg_lookup.get(name_normalized)
+                user_id = registration.user_id if registration else None
 
                 preferred_role: str | None = None
                 was_off_role = False
@@ -147,15 +154,18 @@ async def create_balance_snapshot(
                     preferred_role = ROLE_NAME_TO_CODE.get(pref_display, pref_display.lower())
                     was_off_role = preferred_role != role_code
 
-                # Look up division_number from the role_entry matching assigned_role
+                # Derive division_number from the registration role matching the assigned
+                # role (registrations store rank, not division — resolve via the grid).
                 division_number: int | None = None
-                if bp is not None:
-                    matching_entry = next(
-                        (e for e in bp.role_entries if e.role == role_code),
+                if registration is not None:
+                    matching_role = next(
+                        (r for r in registration.roles if r.role == role_code),
                         None,
                     )
-                    if matching_entry is not None:
-                        division_number = matching_entry.division_number
+                    if matching_role is not None:
+                        division_number = resolve_division_from_rank(
+                            matching_role.rank_value, grid
+                        )
 
                 session.add(
                     models.AnalyticsBalancePlayerSnapshot(

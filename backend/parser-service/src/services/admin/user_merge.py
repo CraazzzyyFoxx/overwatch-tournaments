@@ -32,7 +32,6 @@ REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("achievements.override.user_id", models.AchievementOverride, "user_id"),
     ("achievements.user.user_id", models.AchievementUser, "user_id"),
     ("balancer.registration.user_id", models.BalancerRegistration, "user_id"),
-    ("balancer.player.user_id", models.BalancerPlayer, "user_id"),
     ("analytics.balance_player_snapshot.user_id", models.AnalyticsBalancePlayerSnapshot, "user_id"),
     ("log_processing.record.uploader_id", models.LogProcessingRecord, "uploader_id"),
 )

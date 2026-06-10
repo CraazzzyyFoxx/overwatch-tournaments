@@ -326,7 +326,7 @@ def _map_registration(reg: BalancerRegistration) -> dict:
         "sub_role": sub_role,
         "rank_value": rank_value,
         "division_number": None,
-        "is_flex": bool(reg.is_flex),
+        "is_flex": bool(reg.is_flex_computed),
         "anomaly_flags": {
             "roles_ranks": roles_ranks,
             "notes": reg.notes,

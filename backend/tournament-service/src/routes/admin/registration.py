@@ -127,7 +127,6 @@ async def create_manual_registration(
         stream_pov=data.stream_pov,
         notes=data.notes,
         admin_notes=data.admin_notes,
-        is_flex=data.is_flex,
         roles=[role.model_dump() for role in data.roles],
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
@@ -152,7 +151,6 @@ async def update_registration(
         stream_pov=data.stream_pov,
         notes=data.notes,
         admin_notes=data.admin_notes,
-        is_flex=data.is_flex,
         status_value=data.status,
         balancer_status_value=data.balancer_status,
         roles=[role.model_dump() for role in data.roles] if data.roles is not None else None,

@@ -106,7 +106,6 @@ class CreateRegistration:
             stream_pov=payload.stream_pov,
             notes=payload.notes,
             admin_notes=payload.admin_notes,
-            is_flex=payload.is_flex,
             roles=[role.model_dump() for role in payload.roles],
         )
 
@@ -127,7 +126,6 @@ class UpdateRegistration:
             stream_pov=payload.stream_pov,
             notes=payload.notes,
             admin_notes=payload.admin_notes,
-            is_flex=payload.is_flex,
             status_value=payload.status,
             balancer_status_value=payload.balancer_status,
             roles=[role.model_dump() for role in payload.roles] if payload.roles is not None else None,

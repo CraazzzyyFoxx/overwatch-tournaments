@@ -6,7 +6,6 @@ from sqlalchemy.orm.attributes import NO_VALUE
 from src import models
 from src.domain.balancer.config_provider import serialize_saved_config_payload
 from src.domain.balancer.public_contract import normalize_balance_response_payload
-from src.domain.balancer.role_entries import normalize_role_entries
 from src.schemas.admin import balancer as admin_schemas
 
 
@@ -15,78 +14,6 @@ def loaded_relationship_or_none(instance: object, attribute: str):
     if loaded_value is NO_VALUE:
         return None
     return loaded_value
-
-
-def serialize_role_entries(
-    player: models.BalancerPlayer,
-    ow_ranks_for_player: dict[str, int] | None = None,
-) -> list[admin_schemas.BalancerPlayerRoleEntry]:
-    loaded_role_entries = loaded_relationship_or_none(player, "role_entries")
-    if loaded_role_entries is not None:
-        normalized_entries = [
-            {
-                "role": entry.role,
-                "subtype": entry.subtype,
-                "priority": entry.priority,
-                "division_number": entry.division_number,
-                "rank_value": entry.rank_value,
-                "is_active": entry.is_active,
-            }
-            for entry in sorted(loaded_role_entries, key=lambda entry: entry.priority)
-        ]
-    else:
-        normalized_entries = normalize_role_entries(player.role_entries_json)
-
-    result = []
-    ow_ranks = ow_ranks_for_player or {}
-    for entry in normalized_entries:
-        role_key = entry["role"] if isinstance(entry, dict) else entry.role
-        validated = admin_schemas.BalancerPlayerRoleEntry.model_validate(entry)
-        result.append(validated.model_copy(update={"ow_rank_value": ow_ranks.get(role_key)}))
-    return result
-
-
-def serialize_player(
-    player: models.BalancerPlayer,
-    ow_ranks_for_player: dict[str, int] | None = None,
-) -> admin_schemas.BalancerPlayerRead:
-    return admin_schemas.BalancerPlayerRead(
-        id=player.id,
-        tournament_id=player.tournament_id,
-        application_id=player.application_id,
-        battle_tag=player.battle_tag,
-        battle_tag_normalized=player.battle_tag_normalized,
-        user_id=player.user_id,
-        role_entries_json=serialize_role_entries(player, ow_ranks_for_player),
-        is_flex=player.is_flex,
-        is_in_pool=player.is_in_pool,
-        admin_notes=player.admin_notes,
-    )
-
-
-def serialize_application(
-    application: models.BalancerApplication,
-) -> admin_schemas.BalancerApplicationRead:
-    player = loaded_relationship_or_none(application, "player")
-    return admin_schemas.BalancerApplicationRead(
-        id=application.id,
-        tournament_id=application.tournament_id,
-        tournament_sheet_id=application.tournament_sheet_id,
-        battle_tag=application.battle_tag,
-        battle_tag_normalized=application.battle_tag_normalized,
-        smurf_tags_json=application.smurf_tags_json or [],
-        twitch_nick=application.twitch_nick,
-        discord_nick=application.discord_nick,
-        stream_pov=application.stream_pov,
-        last_tournament_text=application.last_tournament_text,
-        primary_role=application.primary_role,
-        additional_roles_json=application.additional_roles_json or [],
-        notes=application.notes,
-        submitted_at=application.submitted_at,
-        synced_at=application.synced_at,
-        is_active=application.is_active,
-        player=serialize_player(player) if player is not None else None,
-    )
 
 
 def serialize_feed(

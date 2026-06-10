@@ -180,9 +180,6 @@ export function useBalancerMutations({
         });
       }
 
-      if (payload.is_flex !== undefined) {
-        registrationPatch.is_flex = payload.is_flex;
-      }
       if (payload.admin_notes !== undefined) {
         registrationPatch.admin_notes = payload.admin_notes;
       }

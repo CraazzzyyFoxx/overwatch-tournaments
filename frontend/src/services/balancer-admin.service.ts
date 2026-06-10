@@ -21,25 +21,14 @@ import {
   AdminGoogleSheetMappingValidationError,
   MappingCatalog,
   MappingPreviewResponseV2,
-  ApplicationUserExportResponse,
   RegistrationUserExportResponse,
   BalanceExportResponse,
   BalanceSaveInput,
-  BalancerApplication,
-  BalancerPlayerCreateInput,
   BalancerPlayerExportResponse,
-  BalancerPlayerImportPreviewResponse,
-  BalancerPlayerImportResult,
-  BalancerPlayerHistoryRecord,
-  BalancerPlayerRecord,
-  BalancerPlayerRoleSyncResponse,
   BalancerTournamentConfig,
   BalancerTournamentConfigUpsertInput,
-  BalancerPlayerUpdateInput,
   RegistrationRankAutofillRequest,
   RegistrationRankAutofillResponse,
-  DuplicateResolution,
-  DuplicateStrategy,
   SavedBalance,
   StatusScope,
   WorkspaceBalancerConfig,
@@ -212,130 +201,10 @@ export default class balancerAdminService {
     return { ok: false, status: response.status, error };
   }
 
-  static async listApplications(
-    tournamentId: number,
-    includeInactive = false
-  ): Promise<BalancerApplication[]> {
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/applications`,
-      {
-        query: { include_inactive: includeInactive }
-      }
-    );
-    return response.json();
-  }
-
-  static async createPlayersFromApplications(
-    tournamentId: number,
-    data: BalancerPlayerCreateInput
-  ): Promise<BalancerPlayerRecord[]> {
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/players`,
-      {
-        method: "POST",
-        body: data
-      }
-    );
-    return response.json();
-  }
-
-  static async listPlayers(
-    tournamentId: number,
-    inPoolOnly = false
-  ): Promise<BalancerPlayerRecord[]> {
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/players`,
-      {
-        query: { in_pool_only: inPoolOnly }
-      }
-    );
-    return response.json();
-  }
-
-  static async updatePlayer(
-    playerId: number,
-    data: BalancerPlayerUpdateInput
-  ): Promise<BalancerPlayerRecord> {
-    const response = await apiFetch("balancer", `balancer/players/${playerId}`, {
-      method: "PATCH",
-      body: data
-    });
-    return response.json();
-  }
-
-  static async deletePlayer(playerId: number): Promise<void> {
-    await apiFetch("balancer", `balancer/players/${playerId}`, {
-      method: "DELETE"
-    });
-  }
-
-  static async previewPlayerImport(
-    tournamentId: number,
-    file: File,
-    matchApplicationRoles = false
-  ): Promise<BalancerPlayerImportPreviewResponse> {
-    const formData = new FormData();
-    formData.append("data", file);
-    formData.append("match_application_roles", String(matchApplicationRoles));
-
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/players/import/preview`,
-      {
-        method: "POST",
-        body: formData
-      }
-    );
-    return response.json();
-  }
-
-  static async importPlayers(
-    tournamentId: number,
-    file: File,
-    duplicateStrategy: DuplicateStrategy,
-    matchApplicationRoles = false,
-    resolutions?: Record<string, DuplicateResolution>
-  ): Promise<BalancerPlayerImportResult> {
-    const formData = new FormData();
-    formData.append("data", file);
-    formData.append("duplicate_strategy", duplicateStrategy);
-    formData.append("match_application_roles", String(matchApplicationRoles));
-    if (resolutions && Object.keys(resolutions).length > 0) {
-      formData.append("resolutions_json", JSON.stringify(resolutions));
-    }
-
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/players/import`,
-      {
-        method: "POST",
-        body: formData
-      }
-    );
-    return response.json();
-  }
-
   static async exportPlayers(tournamentId: number): Promise<BalancerPlayerExportResponse> {
     const response = await apiFetch(
       "tournament",
       `admin/balancer/tournaments/${tournamentId}/players/export`
-    );
-    return response.json();
-  }
-
-  static async syncPlayerRolesFromApplications(
-    tournamentId: number
-  ): Promise<BalancerPlayerRoleSyncResponse> {
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/players/application-roles`,
-      {
-        method: "POST",
-        body: {}
-      }
     );
     return response.json();
   }
@@ -411,20 +280,6 @@ export default class balancerAdminService {
       method: "POST",
       body: {}
     });
-    return response.json();
-  }
-
-  static async exportApplicationsToUsers(
-    tournamentId: number
-  ): Promise<ApplicationUserExportResponse> {
-    const response = await apiFetch(
-      "balancer",
-      `balancer/tournaments/${tournamentId}/applications/export-users`,
-      {
-        method: "POST",
-        body: {}
-      }
-    );
     return response.json();
   }
 
@@ -673,16 +528,6 @@ export default class balancerAdminService {
         body: data
       }
     );
-    return response.json();
-  }
-
-  static async getUserBalancerHistory(
-    userId: number,
-    workspaceId?: number | null
-  ): Promise<BalancerPlayerHistoryRecord[]> {
-    const query: Record<string, string | number> = {};
-    if (workspaceId != null) query.workspace_id = workspaceId;
-    const response = await apiFetch("balancer", `admin/balancer/users/${userId}/players`, { query });
     return response.json();
   }
 

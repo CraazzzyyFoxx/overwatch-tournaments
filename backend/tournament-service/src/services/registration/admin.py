@@ -1392,7 +1392,7 @@ async def _load_latest_ranks_from_balancer_history(
     current_tournament_id: int,
     workspace_id: int,
 ) -> dict[int, dict[str, int]]:
-    """Return dict[user_id][role_code] → rank_value from past BalancerPlayerRoleEntry records.
+    """Return dict[user_id][role_code] → rank_value from past registration records.
 
     Searches the workspace's previous tournaments (excluding the current one), ordered
     by tournament number descending so the most recent entry wins.
@@ -1403,30 +1403,31 @@ async def _load_latest_ranks_from_balancer_history(
     rows = (
         await session.execute(
             sa.select(
-                models.BalancerPlayer.user_id,
-                models.BalancerPlayerRoleEntry.role,
-                models.BalancerPlayerRoleEntry.rank_value,
+                models.BalancerRegistration.user_id,
+                models.BalancerRegistrationRole.role,
+                models.BalancerRegistrationRole.rank_value,
             )
             .join(
-                models.BalancerPlayerRoleEntry,
-                models.BalancerPlayerRoleEntry.player_id == models.BalancerPlayer.id,
+                models.BalancerRegistrationRole,
+                models.BalancerRegistrationRole.registration_id == models.BalancerRegistration.id,
             )
             .join(
                 models.Tournament,
-                models.Tournament.id == models.BalancerPlayer.tournament_id,
+                models.Tournament.id == models.BalancerRegistration.tournament_id,
             )
             .where(
-                models.BalancerPlayer.user_id.in_(user_ids),
+                models.BalancerRegistration.user_id.in_(user_ids),
                 models.Tournament.workspace_id == workspace_id,
-                models.BalancerPlayer.tournament_id != current_tournament_id,
-                models.BalancerPlayerRoleEntry.is_active.is_(True),
-                models.BalancerPlayerRoleEntry.rank_value.is_not(None),
+                models.BalancerRegistration.tournament_id != current_tournament_id,
+                models.BalancerRegistration.deleted_at.is_(None),
+                models.BalancerRegistrationRole.is_active.is_(True),
+                models.BalancerRegistrationRole.rank_value.is_not(None),
             )
             .order_by(
-                models.BalancerPlayer.user_id,
-                models.BalancerPlayerRoleEntry.role,
+                models.BalancerRegistration.user_id,
+                models.BalancerRegistrationRole.role,
                 models.Tournament.number.desc().nullslast(),
-                models.BalancerPlayer.tournament_id.desc(),
+                models.BalancerRegistration.tournament_id.desc(),
             )
         )
     ).all()
@@ -1766,7 +1767,6 @@ async def create_manual_registration(
     stream_pov: bool,
     notes: str | None,
     admin_notes: str | None,
-    is_flex: bool,
     roles: list[dict[str, Any]],
 ) -> models.BalancerRegistration:
     battle_tag = normalize_battle_tag(battle_tag)
@@ -1794,14 +1794,12 @@ async def create_manual_registration(
         stream_pov=stream_pov,
         notes=notes,
         admin_notes=admin_notes,
-        is_flex=is_flex,
         status="approved",
         exclude_from_balancer=False,
         submitted_at=datetime.now(UTC),
         balancer_profile_overridden_at=datetime.now(UTC),
     )
     replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
-    registration.is_flex = registration.is_flex_computed
     session.add(registration)
     await session.flush()
     await enqueue_registration_approved(session, registration)
@@ -1821,7 +1819,6 @@ async def update_registration_profile(
     stream_pov: bool | None,
     notes: str | None,
     admin_notes: str | None,
-    is_flex: bool | None,
     status_value: str | None,
     balancer_status_value: str | None,
     roles: list[dict[str, Any]] | None,
@@ -1875,9 +1872,6 @@ async def update_registration_profile(
     if admin_notes is not None:
         registration.admin_notes = admin_notes
         override_changed = True
-    if is_flex is not None:
-        registration.is_flex = is_flex
-        override_changed = True
     if roles is not None:
         for r_obj in registration.roles:
             r_obj.hero_entries.clear()
@@ -1894,7 +1888,6 @@ async def update_registration_profile(
             max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
 
         replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
-        registration.is_flex = registration.is_flex_computed
         sync_included_balancer_status(registration)
         override_changed = True
     if override_changed:
@@ -2157,7 +2150,6 @@ def apply_sheet_fields_to_registration(
     if allow_balancer_overwrite:
         registration.admin_notes = parsed_fields.get("admin_notes")
         replace_registration_roles(registration, build_registration_role_payloads(parsed_fields))
-        registration.is_flex = registration.is_flex_computed
         sync_included_balancer_status(registration)
 
 
@@ -2262,13 +2254,11 @@ async def sync_google_sheet_feed(
                     notes=parsed_fields.get("notes"),
                     admin_notes=parsed_fields.get("admin_notes"),
                     custom_fields_json=parsed_fields.get("custom_fields") or None,
-                    is_flex=bool(parsed_fields.get("is_flex", False)),
                     status="approved",
                     exclude_from_balancer=False,
                     submitted_at=parsed_fields.get("submitted_at") or now,
                 )
                 replace_registration_roles(registration, build_registration_role_payloads(parsed_fields))
-                registration.is_flex = registration.is_flex_computed
                 session.add(registration)
                 await session.flush()
                 created += 1

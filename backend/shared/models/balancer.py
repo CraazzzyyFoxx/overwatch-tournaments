@@ -16,11 +16,8 @@ if TYPE_CHECKING:
     from shared.models.workspace import Workspace
 
 __all__ = (
-    "BalancerApplication",
     "BalancerBalance",
     "BalancerBalanceVariant",
-    "BalancerPlayer",
-    "BalancerPlayerRoleEntry",
     "BalancerRegistration",
     "BalancerRegistrationForm",
     "BalancerRegistrationGoogleSheetBinding",
@@ -31,101 +28,8 @@ __all__ = (
     "BalancerTeam",
     "BalancerTeamSlot",
     "BalancerTournamentConfig",
-    "BalancerTournamentSheet",
     "WorkspaceBalancerConfig",
 )
-
-
-class BalancerTournamentSheet(db.TimeStampIntegerMixin):
-    __tablename__ = "tournament_sheet"
-    __table_args__ = (
-        UniqueConstraint("tournament_id", name="uq_balancer_tournament_sheet_tournament"),
-        {"schema": "balancer"},
-    )
-
-    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
-    source_url: Mapped[str] = mapped_column(Text())
-    sheet_id: Mapped[str] = mapped_column(String(255))
-    gid: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    header_row_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    column_mapping_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    role_mapping_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
-    last_synced_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_sync_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
-
-    tournament: Mapped["Tournament"] = relationship()
-    applications: Mapped[list["BalancerApplication"]] = relationship(back_populates="tournament_sheet")
-
-
-class BalancerApplication(db.TimeStampIntegerMixin):
-    __tablename__ = "application"
-    __table_args__ = (
-        UniqueConstraint("tournament_id", "battle_tag_normalized", name="uq_balancer_application_tournament_tag"),
-        {"schema": "balancer"},
-    )
-
-    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
-    tournament_sheet_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.tournament_sheet.id", ondelete="CASCADE"),
-        index=True,
-    )
-    registration_id: Mapped[int | None] = mapped_column(
-        ForeignKey("balancer.registration.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    battle_tag: Mapped[str] = mapped_column(String(255))
-    battle_tag_normalized: Mapped[str] = mapped_column(String(255), index=True)
-    smurf_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    twitch_nick: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    discord_nick: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    stream_pov: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    last_tournament_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    primary_role: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    additional_roles_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    raw_row_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    submitted_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    synced_at: Mapped[db.DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
-
-    tournament: Mapped["Tournament"] = relationship()
-    tournament_sheet: Mapped["BalancerTournamentSheet"] = relationship(back_populates="applications")
-    registration: Mapped["BalancerRegistration | None"] = relationship()
-    player: Mapped["BalancerPlayer | None"] = relationship(back_populates="application", uselist=False)
-
-
-class BalancerPlayer(db.TimeStampIntegerMixin):
-    __tablename__ = "player"
-    __table_args__ = (
-        UniqueConstraint("application_id", name="uq_balancer_player_application"),
-        {"schema": "balancer"},
-    )
-
-    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
-    application_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.application.id", ondelete="CASCADE"),
-        index=True,
-    )
-    battle_tag: Mapped[str] = mapped_column(String(255))
-    battle_tag_normalized: Mapped[str] = mapped_column(String(255), index=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True)
-    role_entries_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
-    is_flex: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    primary_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    secondary_roles_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    division_number: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    is_in_pool: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
-    admin_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
-
-    tournament: Mapped["Tournament"] = relationship()
-    application: Mapped["BalancerApplication"] = relationship(back_populates="player")
-    user: Mapped["User | None"] = relationship()
-    role_entries: Mapped[list["BalancerPlayerRoleEntry"]] = relationship(back_populates="player")
 
 
 class BalancerTournamentConfig(db.TimeStampIntegerMixin):
@@ -206,35 +110,11 @@ class BalancerTeam(db.TimeStampIntegerMixin):
     captain_battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avg_sr: Mapped[float] = mapped_column(Float())
     total_sr: Mapped[int] = mapped_column(Integer())
-    roster_json: Mapped[dict[str, Any]] = mapped_column(JSON)
     sort_order: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
 
     balance: Mapped["BalancerBalance"] = relationship(back_populates="teams")
     variant: Mapped["BalancerBalanceVariant | None"] = relationship()
     slots: Mapped[list["BalancerTeamSlot"]] = relationship(back_populates="team")
-
-
-class BalancerPlayerRoleEntry(db.TimeStampIntegerMixin):
-    """Normalized role entry for a balancer player (replaces role_entries_json)."""
-
-    __tablename__ = "player_role_entry"
-    __table_args__ = (
-        UniqueConstraint("player_id", "role", name="uq_balancer_player_role_entry"),
-        Index("ix_player_role_entry_role_active", "role", "is_active"),
-        {"schema": "balancer"},
-    )
-
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.player.id", ondelete="CASCADE"), index=True
-    )
-    role: Mapped[str] = mapped_column(String(16), nullable=False)
-    subtype: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    priority: Mapped[int] = mapped_column(Integer(), nullable=False)
-    rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    division_number: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
-
-    player: Mapped["BalancerPlayer"] = relationship(back_populates="role_entries")
 
 
 class BalancerBalanceVariant(db.TimeStampIntegerMixin):
@@ -266,17 +146,15 @@ class BalancerTeamSlot(db.TimeStampIntegerMixin):
     """One player's slot in a balanced team (replaces roster_json)."""
 
     __tablename__ = "team_slot"
-    __table_args__ = (
-        UniqueConstraint("team_id", "player_id", name="uq_balancer_team_slot"),
-        {"schema": "balancer"},
-    )
+    __table_args__ = ({"schema": "balancer"},)
 
     team_id: Mapped[int] = mapped_column(
         ForeignKey("balancer.team.id", ondelete="CASCADE"), index=True
     )
-    player_id: Mapped[int | None] = mapped_column(
-        ForeignKey("balancer.player.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    # Durable identity link to the balanced player. Registrations are mutable and
+    # tournament-scoped, so a saved historical balance keeps the normalized battle
+    # tag rather than a hard FK; resolve to a registration at query time if needed.
+    battle_tag_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     assigned_rank: Mapped[int] = mapped_column(Integer(), nullable=False)
     discomfort: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
@@ -284,7 +162,6 @@ class BalancerTeamSlot(db.TimeStampIntegerMixin):
     sort_order: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
     team: Mapped["BalancerTeam"] = relationship(back_populates="slots")
-    player: Mapped["BalancerPlayer | None"] = relationship()
 
 
 class BalancerRegistrationForm(db.TimeStampIntegerMixin):
@@ -421,7 +298,6 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     )
     exclude_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     admin_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    is_flex: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     custom_fields_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending", default="pending")
     balancer_status: Mapped[str] = mapped_column(
