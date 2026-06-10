@@ -1345,7 +1345,13 @@ async def _load_tournament_for_autofill(
     tournament_id: int,
 ) -> models.Tournament | None:
     result = await session.execute(
-        sa.select(models.Tournament).where(models.Tournament.id == tournament_id)
+        sa.select(models.Tournament)
+        .where(models.Tournament.id == tournament_id)
+        .options(
+            selectinload(models.Tournament.division_grid_version).selectinload(
+                models.DivisionGridVersion.tiers
+            )
+        )
     )
     return result.scalar_one_or_none()
 
