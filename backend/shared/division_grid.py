@@ -20,6 +20,8 @@ class DivisionTier:
     rank_min: int
     rank_max: int | None
     icon_url: str
+    ow_rank_min: int | None = None
+    ow_rank_max: int | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,19 @@ class DivisionGrid:
 
     def resolve_rank_from_division(self, division_number: int) -> int | None:
         return division_rank.resolve_rank_for_division(self, division_number)
+
+    def resolve_division_from_ow_rank(self, ow_rank: int) -> DivisionTier | None:
+        """Find the tier whose ow_rank_min/ow_rank_max range contains ow_rank.
+
+        Returns None when no tier has OW rank mapping configured or the rank
+        falls outside all configured ranges.
+        """
+        for tier in self.tiers:
+            if tier.ow_rank_min is None or tier.ow_rank_max is None:
+                continue
+            if tier.ow_rank_min <= ow_rank <= tier.ow_rank_max:
+                return tier
+        return None
 
     @property
     def max_division(self) -> int:
@@ -60,6 +75,8 @@ class DivisionGrid:
                     rank_min=int(t.rank_min),
                     rank_max=int(t.rank_max) if t.rank_max is not None else None,
                     icon_url=str(t.icon_url),
+                    ow_rank_min=int(t.ow_rank_min) if getattr(t, "ow_rank_min", None) is not None else None,
+                    ow_rank_max=int(t.ow_rank_max) if getattr(t, "ow_rank_max", None) is not None else None,
                 )
             )
 

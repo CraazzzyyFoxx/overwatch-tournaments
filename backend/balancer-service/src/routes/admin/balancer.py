@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from typing import Literal
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src import models
 from src.composition import build_admin_balancer_use_cases
@@ -172,6 +174,41 @@ async def list_players(
         in_pool_only=in_pool_only,
     )
     return [_serialize_player(player) for player in players]
+
+
+@router.get("/users/{user_id}/players", response_model=list[admin_schemas.BalancerPlayerHistoryRead])
+async def get_user_balancer_history(
+    user_id: int,
+    workspace_id: int | None = None,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    """Return all BalancerPlayer records for a user, optionally scoped to a workspace.
+
+    Results are sorted by tournament.number DESC (newest first) so the caller can
+    take the latest entry per role without additional sorting.
+    """
+    query = (
+        sa.select(models.BalancerPlayer, models.Tournament.number.label("tournament_number"))
+        .join(models.Tournament, models.Tournament.id == models.BalancerPlayer.tournament_id)
+        .where(models.BalancerPlayer.user_id == user_id)
+        .options(selectinload(models.BalancerPlayer.role_entries))
+        .order_by(models.Tournament.number.desc().nullslast(), models.BalancerPlayer.tournament_id.desc())
+    )
+    if workspace_id is not None:
+        query = query.where(models.Tournament.workspace_id == workspace_id)
+
+    rows = (await session.execute(query)).all()
+
+    history: list[admin_schemas.BalancerPlayerHistoryRead] = []
+    for player, tournament_number in rows:
+        base = _serialize_player(player)
+        history.append(
+            admin_schemas.BalancerPlayerHistoryRead(
+                **base.model_dump(),
+                tournament_number=tournament_number,
+            )
+        )
+    return history
 
 
 @router.patch("/players/{player_id}", response_model=admin_schemas.BalancerPlayerRead)

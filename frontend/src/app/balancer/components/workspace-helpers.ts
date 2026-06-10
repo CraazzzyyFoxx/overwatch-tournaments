@@ -2,12 +2,14 @@ import {
   AdminRegistration,
   BalancerApplication,
   BalancerPlayerExportResponse,
+  BalancerPlayerHistoryRecord,
   BalancerPlayerRecord,
   BalancerPlayerRoleEntry,
   BalancerRoleCode,
   InternalBalancePayload,
   SavedBalance
 } from "@/types/balancer-admin.types";
+import balancerAdminService from "@/services/balancer-admin.service";
 import { BalanceResponse, BalancerConfig } from "@/types/balancer.types";
 import { UserRoleType } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
@@ -51,11 +53,13 @@ export type PlayerRankHistoryPreviewEntry = {
   division_number: number | null;
   /** Division number in the source tournament's own grid — before normalisation. */
   original_division_number: number | null;
-  tournament_id: number;
-  tournament_name: string;
-  tournament_number: number;
-  source_role: UserRoleType;
+  tournament_id: number | null;
+  tournament_name: string | null;
+  tournament_number: number | null;
+  source_role: UserRoleType | null;
   tournament_grid_version: DivisionGridVersion | null;
+  /** Where this entry came from: balancer history or analytics (getUserTournaments). */
+  source: "balancer" | "analytics";
 };
 
 export type PlayerRankHistoryPreview = {
@@ -508,11 +512,12 @@ const USER_ROLE_TO_BALANCER: Record<UserRoleType, BalancerRoleCode> = {
 };
 
 /**
- * Looks up a player's rank history from past tournaments.
- * Returns a map of { balancer role code -> SR rank } using the latest tournament per role.
- * Division numbers are normalized to the target grid version when provided, so ranks
- * from older tournaments with different grid versions are remapped correctly.
- * Returns null if the user cannot be found.
+ * Looks up a player's rank history from past tournaments using a two-step search:
+ * 1. Balancer history (BalancerPlayerRoleEntry records from past assignments)
+ * 2. Analytics fallback (getUserTournaments) for roles not found in step 1
+ *
+ * Division numbers are normalized to the target grid version when provided.
+ * Returns null if the user cannot be found or has no history.
  */
 export async function fetchPlayerRankHistoryPreview(
   battleTag: string,
@@ -525,66 +530,90 @@ export async function fetchPlayerRankHistoryPreview(
     const user = await userService.getUserByName(lookupName);
     if (!user?.id) return null;
 
-    const tournaments = await userService.getUserTournaments(user.id, workspaceId);
-    if (!tournaments?.length) return null;
-
-    // Sort tournaments descending by number so we process newest first.
-    const sorted = [...tournaments].sort((a, b) => b.number - a.number);
-
-    // Collect all distinct grid versions referenced by this player's tournaments
-    // so the normalizer can fetch the mapping rules in one pass.
-    const sourceVersionsById = new Map<number, DivisionGridVersion>();
-    for (const tournament of sorted) {
-      const v = tournament.division_grid_version;
-      if (v) sourceVersionsById.set(v.id, v);
-    }
-
-    // Build normalizer when we have a target version to normalize towards.
-    let normalizer: DivisionGridNormalizer | null = null;
-    if (targetGridVersion) {
-      normalizer = await DivisionGridNormalizer.build(targetGridVersion, [
-        ...sourceVersionsById.values()
-      ]);
-    }
-
     const latestPerRole = new Map<BalancerRoleCode, PlayerRankHistoryPreviewEntry>();
 
-    for (const tournament of sorted) {
-      const roleName = tournament.role as UserRoleType;
-      const roleCode = USER_ROLE_TO_BALANCER[roleName];
-      if (!roleCode) continue;
-      // Already have a (newer) entry for this role
-      if (latestPerRole.has(roleCode)) continue;
-      // Find this user's own Player record in the roster
-      const playerRecord = tournament.players.find((p) => p.user_id === user.id);
-      const rankValue = playerRecord?.rank ?? null;
-      if (rankValue !== null && rankValue > 0) {
-        // Raw division in the source tournament's own grid.
-        const originalDivisionNumber = resolveDivisionFromRankHelper(
-          rankValue,
-          tournament.division_grid_version ?? grid
-        );
+    // Step 1: Balancer history — ranked role entries from past balancer assignments.
+    // Records are ordered by tournament number DESC from the API.
+    let balancerHistory: BalancerPlayerHistoryRecord[] = [];
+    try {
+      balancerHistory = await balancerAdminService.getUserBalancerHistory(user.id, workspaceId);
+    } catch {
+      // Non-fatal: fall through to analytics
+    }
 
-        // Normalised division in the target (workspace-default) grid.
-        let divisionNumber: number | null;
-        if (normalizer && tournament.division_grid_version) {
-          divisionNumber = normalizer.safeNormalize(tournament.division_grid_version.id, rankValue);
-        } else {
-          // No normalizer or no version — fall back to the raw value.
-          divisionNumber = originalDivisionNumber;
+    for (const player of balancerHistory) {
+      for (const entry of player.role_entries_json) {
+        if (!entry.is_active || entry.rank_value === null) continue;
+        if (latestPerRole.has(entry.role)) continue; // already have newer
+        latestPerRole.set(entry.role, {
+          role: entry.role,
+          rank_value: entry.rank_value,
+          division_number: entry.division_number ?? resolveDivisionFromRankHelper(entry.rank_value, grid),
+          original_division_number: entry.division_number ?? null,
+          tournament_id: player.tournament_id,
+          tournament_name: null,
+          tournament_number: player.tournament_number ?? null,
+          source_role: null,
+          tournament_grid_version: null,
+          source: "balancer"
+        });
+      }
+    }
+
+    // Step 2: Analytics fallback — only for roles not yet found in balancer history.
+    const missingRoles = ROLE_ORDER.filter((role) => !latestPerRole.has(role));
+    if (missingRoles.length > 0) {
+      const tournaments = await userService.getUserTournaments(user.id, workspaceId);
+      if (tournaments?.length) {
+        const sorted = [...tournaments].sort((a, b) => b.number - a.number);
+
+        const sourceVersionsById = new Map<number, DivisionGridVersion>();
+        for (const tournament of sorted) {
+          const v = tournament.division_grid_version;
+          if (v) sourceVersionsById.set(v.id, v);
         }
 
-        latestPerRole.set(roleCode, {
-          role: roleCode,
-          rank_value: rankValue,
-          division_number: divisionNumber,
-          original_division_number: originalDivisionNumber,
-          tournament_id: tournament.id,
-          tournament_name: tournament.name,
-          tournament_number: tournament.number,
-          source_role: roleName,
-          tournament_grid_version: tournament.division_grid_version ?? null
-        });
+        let normalizer: DivisionGridNormalizer | null = null;
+        if (targetGridVersion) {
+          normalizer = await DivisionGridNormalizer.build(targetGridVersion, [
+            ...sourceVersionsById.values()
+          ]);
+        }
+
+        for (const tournament of sorted) {
+          const roleName = tournament.role as UserRoleType;
+          const roleCode = USER_ROLE_TO_BALANCER[roleName];
+          if (!roleCode) continue;
+          if (latestPerRole.has(roleCode)) continue;
+          const playerRecord = tournament.players.find((p) => p.user_id === user.id);
+          const rankValue = playerRecord?.rank ?? null;
+          if (rankValue !== null && rankValue > 0) {
+            const originalDivisionNumber = resolveDivisionFromRankHelper(
+              rankValue,
+              tournament.division_grid_version ?? grid
+            );
+
+            let divisionNumber: number | null;
+            if (normalizer && tournament.division_grid_version) {
+              divisionNumber = normalizer.safeNormalize(tournament.division_grid_version.id, rankValue);
+            } else {
+              divisionNumber = originalDivisionNumber;
+            }
+
+            latestPerRole.set(roleCode, {
+              role: roleCode,
+              rank_value: rankValue,
+              division_number: divisionNumber,
+              original_division_number: originalDivisionNumber,
+              tournament_id: tournament.id,
+              tournament_name: tournament.name,
+              tournament_number: tournament.number,
+              source_role: roleName,
+              tournament_grid_version: tournament.division_grid_version ?? null,
+              source: "analytics"
+            });
+          }
+        }
       }
     }
 

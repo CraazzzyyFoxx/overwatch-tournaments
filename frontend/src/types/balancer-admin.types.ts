@@ -35,6 +35,10 @@ export interface BalancerPlayerRecord {
   admin_notes: string | null;
 }
 
+export interface BalancerPlayerHistoryRecord extends BalancerPlayerRecord {
+  tournament_number: number | null;
+}
+
 export interface BalancerPlayerRoleEntry {
   role: BalancerRoleCode;
   subtype: BalancerRoleSubtype | null;
@@ -231,10 +235,13 @@ export type RegistrationRankAutofillRoleAction =
   | "missing_rank"
   | "blocked";
 
+export type RegistrationRankAutofillMode = "ow2_ranks" | "division_history";
+
 export interface RegistrationRankAutofillRequest {
   registration_ids?: number[] | null;
   overwrite_existing?: boolean;
   add_to_balancer?: boolean;
+  mode?: RegistrationRankAutofillMode;
 }
 
 export interface RegistrationRankAutofillRole {
@@ -248,6 +255,7 @@ export interface RegistrationRankAutofillRole {
   tier: number | null;
   season: number | null;
   captured_at: string | null;
+  source: "analytics" | "balancer";
 }
 
 export interface RegistrationRankAutofillPlayer {

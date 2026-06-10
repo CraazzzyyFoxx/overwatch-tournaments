@@ -39,6 +39,7 @@ __all__ = (
     "BalancerPlayerImportPreviewResponse",
     "BalancerPlayerImportResult",
     "BalancerPlayerImportSkipped",
+    "BalancerPlayerHistoryRead",
     "BalancerPlayerRead",
     "BalancerPlayerRoleEntry",
     "BalancerPlayerRoleSyncResponse",
@@ -90,6 +91,10 @@ class BalancerPlayerRead(BaseRead):
     is_flex: bool
     is_in_pool: bool
     admin_notes: str | None
+
+
+class BalancerPlayerHistoryRead(BalancerPlayerRead):
+    tournament_number: int | None = None
 
 
 class BalancerApplicationRead(BaseRead):

@@ -68,6 +68,21 @@ logger = logging.getLogger(__name__)
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
+
+
+@dataclass
+class _RankData:
+    """Resolved rank value for autofill, abstracting over snapshot and balancer history."""
+
+    rank_value: int | None
+    platform: str | None = None
+    division: str | None = None
+    tier: int | None = None
+    season: int | None = None
+    captured_at: datetime | None = None
+    source: str = "analytics"
+
+
 RANK_ROLE_BY_REGISTRATION_ROLE = {
     "tank": enums.RankRole.tank.value,
     "dps": enums.RankRole.damage.value,
@@ -1177,7 +1192,7 @@ def sync_included_balancer_status(registration: models.BalancerRegistration | An
         registration.balancer_status = included_balancer_status(registration)
 
 
-def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | Any | None) -> dict[str, Any]:
+def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any | None) -> dict[str, Any]:
     if snapshot is None:
         return {
             "parsed_rank_value": None,
@@ -1186,6 +1201,7 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | Any | None) -> di
             "tier": None,
             "season": None,
             "captured_at": None,
+            "source": "analytics",
         }
     return {
         "parsed_rank_value": getattr(snapshot, "rank_value", None),
@@ -1194,6 +1210,7 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | Any | None) -> di
         "tier": getattr(snapshot, "tier", None),
         "season": getattr(snapshot, "season", None),
         "captured_at": getattr(snapshot, "captured_at", None),
+        "source": getattr(snapshot, "source", "analytics"),
     }
 
 
@@ -1323,6 +1340,88 @@ def _rank_autofill_balancer_addition(
     return True, None
 
 
+async def _load_tournament_for_autofill(
+    session: AsyncSession,
+    tournament_id: int,
+) -> models.Tournament | None:
+    result = await session.execute(
+        sa.select(models.Tournament).where(models.Tournament.id == tournament_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _build_ow2_rank_data(snapshot: models.UserRankSnapshot, grid: DivisionGrid) -> _RankData:
+    """Map a raw OW2 rank snapshot to a tournament division rank via ow_rank_min/ow_rank_max."""
+    ow_rank = getattr(snapshot, "rank_value", None)
+    if ow_rank is not None:
+        tier = grid.resolve_division_from_ow_rank(ow_rank)
+        rank_value = tier.rank_min if tier is not None else ow_rank
+    else:
+        rank_value = None
+    return _RankData(
+        rank_value=rank_value,
+        platform=getattr(snapshot, "platform", None),
+        division=getattr(snapshot, "division", None),
+        tier=getattr(snapshot, "tier", None),
+        season=getattr(snapshot, "season", None),
+        captured_at=getattr(snapshot, "captured_at", None),
+        source="analytics",
+    )
+
+
+async def _load_latest_ranks_from_balancer_history(
+    session: AsyncSession,
+    user_ids: list[int],
+    current_tournament_id: int,
+    workspace_id: int,
+) -> dict[int, dict[str, int]]:
+    """Return dict[user_id][role_code] → rank_value from past BalancerPlayerRoleEntry records.
+
+    Searches the workspace's previous tournaments (excluding the current one), ordered
+    by tournament number descending so the most recent entry wins.
+    """
+    if not user_ids:
+        return {}
+
+    rows = (
+        await session.execute(
+            sa.select(
+                models.BalancerPlayer.user_id,
+                models.BalancerPlayerRoleEntry.role,
+                models.BalancerPlayerRoleEntry.rank_value,
+            )
+            .join(
+                models.BalancerPlayerRoleEntry,
+                models.BalancerPlayerRoleEntry.player_id == models.BalancerPlayer.id,
+            )
+            .join(
+                models.Tournament,
+                models.Tournament.id == models.BalancerPlayer.tournament_id,
+            )
+            .where(
+                models.BalancerPlayer.user_id.in_(user_ids),
+                models.Tournament.workspace_id == workspace_id,
+                models.BalancerPlayer.tournament_id != current_tournament_id,
+                models.BalancerPlayerRoleEntry.is_active.is_(True),
+                models.BalancerPlayerRoleEntry.rank_value.is_not(None),
+            )
+            .order_by(
+                models.BalancerPlayer.user_id,
+                models.BalancerPlayerRoleEntry.role,
+                models.Tournament.number.desc().nullslast(),
+                models.BalancerPlayer.tournament_id.desc(),
+            )
+        )
+    ).all()
+
+    latest: dict[int, dict[str, int]] = {}
+    for row in rows:
+        user_map = latest.setdefault(row.user_id, {})
+        if row.role not in user_map:
+            user_map[row.role] = row.rank_value
+    return latest
+
+
 async def _load_rank_autofill_registrations(
     session: AsyncSession,
     tournament_id: int,
@@ -1396,10 +1495,14 @@ async def autofill_registration_ranks_from_parsed(
     registration_ids: list[int] | None = None,
     overwrite_existing: bool = False,
     add_to_balancer: bool = False,
+    mode: str = "ow2_ranks",
     apply: bool = False,
 ) -> dict[str, Any]:
     if registration_ids is not None:
         registration_ids = list(dict.fromkeys(int(registration_id) for registration_id in registration_ids))
+
+    tournament = await _load_tournament_for_autofill(session, tournament_id)
+    grid = DivisionGrid.from_version(tournament.division_grid_version if tournament else None)
 
     registrations = await _load_rank_autofill_registrations(session, tournament_id, registration_ids)
     battle_tags_by_key = await _load_main_battle_tags_by_key(session, registrations)
@@ -1407,6 +1510,21 @@ async def autofill_registration_ranks_from_parsed(
         session,
         [battle_tag.id for battle_tag in battle_tags_by_key.values()],
     )
+
+    # For division_history mode: load balancer history keyed by user_id
+    balancer_history_by_user_id: dict[int, dict[str, int]] = {}
+    if mode == "division_history" and tournament is not None:
+        user_ids = [
+            battle_tag.user_id
+            for battle_tag in battle_tags_by_key.values()
+            if battle_tag.user_id is not None
+        ]
+        balancer_history_by_user_id = await _load_latest_ranks_from_balancer_history(
+            session,
+            user_ids,
+            tournament_id,
+            tournament.workspace_id,
+        )
 
     players: list[dict[str, Any]] = []
     applied_registrations = 0
@@ -1417,10 +1535,37 @@ async def autofill_registration_ranks_from_parsed(
     for registration in registrations:
         tag_key = registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)
         main_battle_tag = battle_tags_by_key.get(tag_key or "")
-        rank_snapshots_by_role = snapshots_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
+        raw_snapshots = snapshots_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
+
+        rank_data_by_role: dict[str, _RankData | Any] = {}
+        if mode == "ow2_ranks":
+            for role, snapshot in raw_snapshots.items():
+                rank_data_by_role[role] = _build_ow2_rank_data(snapshot, grid)
+        elif mode == "division_history":
+            user_id = getattr(main_battle_tag, "user_id", None) if main_battle_tag else None
+            balancer_by_role = balancer_history_by_user_id.get(user_id or -1, {})
+            for role, snapshot in raw_snapshots.items():
+                if role in balancer_by_role:
+                    rank_data_by_role[role] = _RankData(
+                        rank_value=balancer_by_role[role],
+                        source="balancer",
+                    )
+                else:
+                    rank_data_by_role[role] = _RankData(
+                        rank_value=getattr(snapshot, "rank_value", None),
+                        platform=getattr(snapshot, "platform", None),
+                        division=getattr(snapshot, "division", None),
+                        tier=getattr(snapshot, "tier", None),
+                        season=getattr(snapshot, "season", None),
+                        captured_at=getattr(snapshot, "captured_at", None),
+                        source="analytics",
+                    )
+        else:
+            rank_data_by_role = dict(raw_snapshots)
+
         row, updates = build_registration_rank_autofill_plan(
             registration,
-            rank_snapshots_by_role,
+            rank_data_by_role,
             battle_tag_linked=main_battle_tag is not None,
             overwrite_existing=overwrite_existing,
             applied=apply,
@@ -1435,8 +1580,8 @@ async def autofill_registration_ranks_from_parsed(
 
         changed = False
         if apply and updates:
-            for role_entry, snapshot in updates:
-                role_entry.rank_value = snapshot.rank_value
+            for role_entry, rank_data in updates:
+                role_entry.rank_value = getattr(rank_data, "rank_value", None)
                 role_updates += 1
             registration.balancer_profile_overridden_at = now
             applied_registrations += 1

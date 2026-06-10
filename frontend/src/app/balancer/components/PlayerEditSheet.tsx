@@ -276,7 +276,9 @@ function getRankFillPercentFromDivisionIndex(
 }
 
 function formatTournamentSource(entry: PlayerRankHistoryPreviewEntry): string {
-  return `${entry.tournament_name}`;
+  if (entry.tournament_name) return entry.tournament_name;
+  if (entry.tournament_number != null) return `Tournament #${entry.tournament_number}`;
+  return entry.source === "balancer" ? "Balancer history" : "Analytics";
 }
 
 function buildHistoryChangeText(
@@ -633,8 +635,24 @@ function HistoryPreviewCard({
         <p className="text-xs leading-relaxed text-white/65">{changeText}</p>
       </div>
       <div className="space-y-1 text-xs text-white/55 sm:text-right">
-        <div className="font-medium text-white/80">{`${entry.tournament_name}`}</div>
-        <div>Source role: {entry.source_role}</div>
+        <div className="flex items-center justify-end gap-1.5">
+          <span
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              entry.source === "balancer"
+                ? "border-indigo-400/25 bg-indigo-500/10 text-indigo-200"
+                : "border-white/12 bg-white/5 text-white/50"
+            )}
+          >
+            {entry.source === "balancer" ? "Balancer" : "Analytics"}
+          </span>
+        </div>
+        {entry.tournament_name ? (
+          <div className="font-medium text-white/80">{entry.tournament_name}</div>
+        ) : entry.tournament_number != null ? (
+          <div className="font-medium text-white/80">Tournament #{entry.tournament_number}</div>
+        ) : null}
+        {entry.source_role ? <div>Source role: {entry.source_role}</div> : null}
       </div>
     </div>
   );

@@ -30,6 +30,7 @@ import {
   BalancerPlayerExportResponse,
   BalancerPlayerImportPreviewResponse,
   BalancerPlayerImportResult,
+  BalancerPlayerHistoryRecord,
   BalancerPlayerRecord,
   BalancerPlayerRoleSyncResponse,
   BalancerTournamentConfig,
@@ -647,6 +648,16 @@ export default class balancerAdminService {
         body: data
       }
     );
+    return response.json();
+  }
+
+  static async getUserBalancerHistory(
+    userId: number,
+    workspaceId?: number | null
+  ): Promise<BalancerPlayerHistoryRecord[]> {
+    const query: Record<string, string | number> = {};
+    if (workspaceId != null) query.workspace_id = workspaceId;
+    const response = await apiFetch("balancer", `admin/balancer/users/${userId}/players`, { query });
     return response.json();
   }
 

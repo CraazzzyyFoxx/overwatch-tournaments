@@ -101,6 +101,7 @@ import type {
   AdminRegistrationRole,
   BalancerRoleCode,
   BalancerRoleSubtype,
+  RegistrationRankAutofillMode,
   RegistrationRankAutofillResponse,
   RegistrationRankAutofillRole
 } from "@/types/balancer-admin.types";
@@ -114,6 +115,7 @@ type SourceFilter = "all" | "manual" | "google_sheets";
 type RankAutofillPreviewOptions = {
   overwriteExisting: boolean;
   addToBalancer: boolean;
+  mode: RegistrationRankAutofillMode;
 };
 
 const RESPONSIVE_CLASS: Record<
@@ -292,6 +294,8 @@ function RankAutofillDialog({
   preview,
   loadingPreview,
   applying,
+  mode,
+  onModeChange,
   overwriteExisting,
   onOverwriteChange,
   addToBalancer,
@@ -305,6 +309,8 @@ function RankAutofillDialog({
   preview: RegistrationRankAutofillResponse | undefined;
   loadingPreview: boolean;
   applying: boolean;
+  mode: RegistrationRankAutofillMode;
+  onModeChange: (mode: RegistrationRankAutofillMode) => void;
   overwriteExisting: boolean;
   onOverwriteChange: (checked: boolean) => void;
   addToBalancer: boolean;
@@ -331,6 +337,34 @@ function RankAutofillDialog({
         </DialogHeader>
 
         <div className="max-h-[calc(100vh-14rem)] space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">Rank source</div>
+            <div className="flex gap-2">
+              {(
+                [
+                  { value: "ow2_ranks", label: "OW2 Ranks", description: "Maps OW2 SR through division grid" },
+                  { value: "division_history", label: "Division History", description: "Balancer history → analytics fallback" }
+                ] as { value: RegistrationRankAutofillMode; label: string; description: string }[]
+              ).map(({ value, label, description }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onModeChange(value)}
+                  disabled={loadingPreview || applying}
+                  className={cn(
+                    "flex-1 rounded-xl border p-3 text-left transition-colors",
+                    mode === value
+                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                      : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/20 hover:text-white/80"
+                  )}
+                >
+                  <div className="text-sm font-medium">{label}</div>
+                  <div className="mt-0.5 text-xs text-white/40">{description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
             <Checkbox
               checked={overwriteExisting}
@@ -577,6 +611,7 @@ export default function BalancerRegistrationsPage() {
   const [editingRegistration, setEditingRegistration] = useState<AdminRegistration | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [rankAutofillOpen, setRankAutofillOpen] = useState(false);
+  const [autofillMode, setAutofillMode] = useState<RegistrationRankAutofillMode>("ow2_ranks");
   const [overwriteExistingRanks, setOverwriteExistingRanks] = useState(false);
   const [addAutofilledPlayersToBalancer, setAddAutofilledPlayersToBalancer] = useState(false);
   const [rankAutofillConfirmed, setRankAutofillConfirmed] = useState(false);
@@ -863,13 +898,14 @@ export default function BalancerRegistrationsPage() {
   });
 
   const rankAutofillPreviewMutation = useMutation({
-    mutationFn: ({ overwriteExisting, addToBalancer }: RankAutofillPreviewOptions) => {
+    mutationFn: ({ overwriteExisting, addToBalancer, mode }: RankAutofillPreviewOptions) => {
       if (!tournamentId) {
         throw new Error("Select a tournament first");
       }
       return balancerAdminService.previewRegistrationRankAutofill(tournamentId, {
         overwrite_existing: overwriteExisting,
-        add_to_balancer: addToBalancer
+        add_to_balancer: addToBalancer,
+        mode
       });
     },
     onSuccess: () => {
@@ -892,7 +928,8 @@ export default function BalancerRegistrationsPage() {
       }
       return balancerAdminService.applyRegistrationRankAutofill(tournamentId, {
         overwrite_existing: overwriteExistingRanks,
-        add_to_balancer: addAutofilledPlayersToBalancer
+        add_to_balancer: addAutofilledPlayersToBalancer,
+        mode: autofillMode
       });
     },
     onSuccess: async (result) => {
@@ -923,7 +960,7 @@ export default function BalancerRegistrationsPage() {
     setOverwriteExistingRanks(false);
     setAddAutofilledPlayersToBalancer(false);
     setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({ overwriteExisting: false, addToBalancer: false });
+    rankAutofillPreviewMutation.mutate({ overwriteExisting: false, addToBalancer: false, mode: autofillMode });
   };
 
   const handleRankOverwriteChange = (checked: boolean) => {
@@ -931,7 +968,8 @@ export default function BalancerRegistrationsPage() {
     setRankAutofillConfirmed(false);
     rankAutofillPreviewMutation.mutate({
       overwriteExisting: checked,
-      addToBalancer: addAutofilledPlayersToBalancer
+      addToBalancer: addAutofilledPlayersToBalancer,
+      mode: autofillMode
     });
   };
 
@@ -940,7 +978,18 @@ export default function BalancerRegistrationsPage() {
     setRankAutofillConfirmed(false);
     rankAutofillPreviewMutation.mutate({
       overwriteExisting: overwriteExistingRanks,
-      addToBalancer: checked
+      addToBalancer: checked,
+      mode: autofillMode
+    });
+  };
+
+  const handleAutofillModeChange = (newMode: RegistrationRankAutofillMode) => {
+    setAutofillMode(newMode);
+    setRankAutofillConfirmed(false);
+    rankAutofillPreviewMutation.mutate({
+      overwriteExisting: overwriteExistingRanks,
+      addToBalancer: addAutofilledPlayersToBalancer,
+      mode: newMode
     });
   };
 
@@ -1671,6 +1720,8 @@ export default function BalancerRegistrationsPage() {
         preview={rankAutofillPreviewMutation.data}
         loadingPreview={rankAutofillPreviewMutation.isPending}
         applying={rankAutofillApplyMutation.isPending}
+        mode={autofillMode}
+        onModeChange={handleAutofillModeChange}
         overwriteExisting={overwriteExistingRanks}
         onOverwriteChange={handleRankOverwriteChange}
         addToBalancer={addAutofilledPlayersToBalancer}
