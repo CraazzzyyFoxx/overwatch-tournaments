@@ -74,18 +74,23 @@ function rulesToRows(
 }
 
 function rowsToRules(rows: SourceRow[]) {
-  return rows.flatMap((row) =>
-    row.targets.map((t) => ({
+  return rows.flatMap((row) => {
+    // A single-target row has an implicit weight of 1 — the weight input is
+    // hidden in the UI, so normalize it here regardless of internal state.
+    const single = row.targets.length === 1;
+    return row.targets.map((t) => ({
       source_tier_id: row.source_tier_id,
       target_tier_id: t.target_tier_id,
-      weight: t.weight,
+      weight: single ? 1.0 : t.weight,
       is_primary: t.is_primary
-    }))
-  );
+    }));
+  });
 }
 
 function weightsOk(targets: TierTarget[]): boolean {
   if (targets.length === 0) return true;
+  // A single target carries an implicit weight of 1 (no weight input shown).
+  if (targets.length === 1) return true;
   const sum = targets.reduce((acc, t) => acc + t.weight, 0);
   return Math.abs(sum - 1.0) < 0.0001;
 }
