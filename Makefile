@@ -8,6 +8,7 @@
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
+MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 
 help:
 	@echo "Available commands:"
@@ -21,9 +22,14 @@ help:
 	@echo "  make dev-rebuild    - Rebuild and restart core dev stack"
 	@echo ""
 	@echo "  make prod-build     - Build production images"
-	@echo "  make prod-up        - Start production stack"
+	@echo "  make prod-up        - Start production stack (app only, no monitoring)"
 	@echo "  make prod-down      - Stop production stack"
 	@echo "  make prod-logs      - Follow production logs"
+	@echo ""
+	@echo "  make monitoring-up  - Start monitoring stack (requires prod-up first)"
+	@echo "  make monitoring-down- Stop monitoring stack"
+	@echo "  make monitoring-logs- Follow monitoring logs"
+	@echo "  make monitoring-ps  - Show monitoring services"
 	@echo ""
 	@echo "  make migrate        - Run backend migrations"
 	@echo "  make test           - Run backend tests"
@@ -136,18 +142,18 @@ frontend-rebuild:
 	$(COMPOSE) up -d --build --wait frontend
 
 # ==============================================================================
-# Monitoring services in unified production stack
+# Monitoring stack (separate Compose project: overwatch-monitoring)
+# Attaches to the production stack's network, so the prod stack must be up
+# first (`make prod-up`) — it creates the shared `overwatch-tournaments_app-network`.
 # ==============================================================================
-MONITORING_SERVICES = prometheus alertmanager grafana loki promtail redis-exporter rabbitmq-exporter
-
 monitoring-up:
-	$(PROD_COMPOSE) up -d $(MONITORING_SERVICES)
+	$(MONITORING_COMPOSE) up -d
 
 monitoring-down:
-	$(PROD_COMPOSE) stop $(MONITORING_SERVICES)
+	$(MONITORING_COMPOSE) down
 
 monitoring-logs:
-	$(PROD_COMPOSE) logs -f $(MONITORING_SERVICES)
+	$(MONITORING_COMPOSE) logs -f
 
 monitoring-ps:
-	$(PROD_COMPOSE) ps $(MONITORING_SERVICES)
+	$(MONITORING_COMPOSE) ps

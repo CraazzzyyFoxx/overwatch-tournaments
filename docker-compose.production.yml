@@ -3,6 +3,14 @@ name: overwatch-tournaments
 services:
   redis:
     image: 'redis/redis-stack:latest'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
     restart: unless-stopped
     volumes:
       - redis-data:/data
@@ -16,6 +24,14 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
@@ -30,133 +46,16 @@ services:
     networks:
       - app-network
 
-  # --------------------------------------------------------------------------
-  # Monitoring: Prometheus + Alertmanager + Loki + Promtail + Grafana
-  # --------------------------------------------------------------------------
-
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--web.enable-lifecycle"
-      - "--web.enable-admin-api"
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
-    networks:
-      - app-network
-    depends_on:
-      - redis-exporter
-      - rabbitmq-exporter
-
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    restart: unless-stopped
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-    volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./monitoring/secrets:/run/secrets:ro
-      - alertmanager_data:/alertmanager
-    networks:
-      - app-network
-
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.67.0
-    restart: unless-stopped
-    environment:
-      REDIS_ADDR: "redis:6379"
-    networks:
-      - app-network
-
-  rabbitmq-exporter:
-    image: kbudde/rabbitmq-exporter:1.0.0-RC19
-    restart: unless-stopped
-    environment:
-      RABBIT_URL: "http://rabbitmq:15672"
-      RABBIT_USER: "${RABBITMQ_USER:-guest}"
-      RABBIT_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
-      RABBIT_CAPABILITIES: "bert,no_sort"
-      PUBLISH_PORT: "9419"
-      OUTPUT_FORMAT: "TTY"
-      SKIP_QUEUES: "^$"
-      INCLUDE_QUEUES: ".*"
-    networks:
-      - app-network
-
-  loki:
-    image: grafana/loki:3.3.2
-    restart: unless-stopped
-    command: -config.file=/etc/loki/loki.yml
-    volumes:
-      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
-      - loki_data:/loki
-    networks:
-      - app-network
-
-  tempo:
-    image: grafana/tempo:2.7.0
-    restart: unless-stopped
-    command: ["-config.file=/etc/tempo.yml"]
-    volumes:
-      - ./monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
-      - tempo_data:/var/tempo
-    networks:
-      - app-network
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.111.0
-    restart: unless-stopped
-    command: ["--config=/etc/otel-collector/config.yml"]
-    volumes:
-      - ./monitoring/otel/otel-collector.yml:/etc/otel-collector/config.yml:ro
-    depends_on:
-      - tempo
-    networks:
-      - app-network
-
-  promtail:
-    image: grafana/promtail:3.3.2
-    restart: unless-stopped
-    command: -config.file=/etc/promtail/promtail.yml
-    volumes:
-      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
-      - ./logs:/var/log/app:ro
-    networks:
-      - app-network
-    depends_on:
-      - loki
-
-  grafana:
-    image: grafana/grafana:11.4.0
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-changeme}"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-http://localhost:3001}"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/logs.json"
-      TEMPO_URL: "${TEMPO_URL:-http://tempo:3200}"
-    volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    ports:
-      - "3001:3000"
-    networks:
-      - app-network
-    depends_on:
-      - prometheus
-      - loki
-      - tempo
-
   ss-local:
     image: teddysun/xray:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
     restart: unless-stopped
     command: ["xray", "run", "-c", "/etc/xray/config.json"]
     volumes:
@@ -171,6 +70,14 @@ services:
 
   kong:
     image: kong:3.7
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
     restart: always
     environment:
       - KONG_DATABASE=off
@@ -218,6 +125,14 @@ services:
 
   backend:
     image: "registry.craazzzyyfoxx.me/aqt-backend:latest"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -254,6 +169,14 @@ services:
 
   auth:
     image: registry.craazzzyyfoxx.me/aqt-auth:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     build:
       context: ./backend
       args:
@@ -290,6 +213,14 @@ services:
 
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 768M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -328,6 +259,14 @@ services:
 
   tournament:
     image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -366,6 +305,14 @@ services:
 
   realtime:
     image: registry.craazzzyyfoxx.me/aqt-realtime:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     build:
       context: ./backend
       args:
@@ -402,6 +349,14 @@ services:
 
   discord:
     image: registry.craazzzyyfoxx.me/aqt-discord:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
     build:
       context: ./backend
       args:
@@ -470,6 +425,14 @@ services:
 
   balancer:
     image: registry.craazzzyyfoxx.me/aqt-balancer:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     build:
       context: ./backend
       args:
@@ -508,6 +471,14 @@ services:
 
   analytics:
     image: registry.craazzzyyfoxx.me/aqt-analytics:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1536M
+        reservations:
+          cpus: '0.25'
+          memory: 384M
     build:
       context: ./backend
       args:
@@ -547,6 +518,14 @@ services:
 
   parser-worker:
     image: registry.craazzzyyfoxx.me/aqt-parser:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     build:
       context: ./backend
       args:
@@ -582,6 +561,14 @@ services:
 
   tournament-worker:
     image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
     build:
       context: ./backend
       args:
@@ -617,6 +604,14 @@ services:
 
   tournament-bracket-worker:
     image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -652,6 +647,14 @@ services:
 
   tournament-standings-worker:
     image: registry.craazzzyyfoxx.me/aqt-tournament:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -687,6 +690,14 @@ services:
 
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 768M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -724,6 +735,14 @@ services:
 
   analytics-worker:
     image: registry.craazzzyyfoxx.me/aqt-analytics:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '8.00'
+          memory: 4G
+        reservations:
+          cpus: '1.00'
+          memory: 1G
     build:
       context: ./backend
       args:
@@ -760,6 +779,14 @@ services:
 
   frontend:
     image: registry.craazzzyyfoxx.me/frontend:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.50'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     build:
       context: ./frontend
       dockerfile: prod.Dockerfile
@@ -823,11 +850,6 @@ services:
 volumes:
   redis-data:
   rabbitmq-data:
-  prometheus_data:
-  alertmanager_data:
-  loki_data:
-  grafana_data:
-  tempo_data:
 
 networks:
   app-network:
