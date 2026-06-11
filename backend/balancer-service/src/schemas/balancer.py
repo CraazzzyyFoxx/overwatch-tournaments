@@ -30,10 +30,8 @@ class ConfigOverrides(BaseModel):
         description="Penalty weight for the rating gap between strongest and weakest team",
     )
     role_discomfort_weight: float | None = Field(None, ge=0, description="Weight for player role discomfort")
-    intra_team_variance_weight: float | None = Field(None, ge=0, description="Weight for variance within teams")
     max_role_discomfort_weight: float | None = Field(None, ge=0, description="Weight for maximum discomfort penalty")
     role_line_balance_weight: float | None = Field(None, ge=0, description="Weight for balancing roles between teams")
-    role_spread_weight: float | None = Field(None, ge=0, description="Penalty weight for rating spread within roles in a team")
     intra_team_std_weight: float | None = Field(
         None,
         ge=0,
@@ -53,6 +51,13 @@ class ConfigOverrides(BaseModel):
         description=(
             "Penalty weight per pair of players in the same team sharing the same "
             "role subclass. Use 0 to disable."
+        ),
+    )
+    team_max_pain_weight: float | None = Field(
+        None,
+        ge=0,
+        description=(
+            "Weight for the per-team maximum role discomfort averaged over teams."
         ),
     )
     tank_impact_weight: float | None = Field(
@@ -140,6 +145,15 @@ class ConfigOverrides(BaseModel):
         ge=0.0,
         le=1.0,
         description="Probability of crossover when producing Rust MOO offspring.",
+    )
+    time_limit_ms: int | None = Field(
+        None,
+        ge=100,
+        le=600000,
+        description=(
+            "Hard wall-clock budget for the native optimizer in milliseconds; "
+            "the best result found so far is returned when exceeded."
+        ),
     )
     max_result_variants: int | None = Field(
         None,

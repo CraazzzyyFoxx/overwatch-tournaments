@@ -65,8 +65,13 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
     assert "stagnation_threshold" not in field_keys
     assert "algorithm" not in field_keys
     assert "algorithm" not in payload["defaults"]
-    assert payload["defaults"]["intra_team_std_weight"] == 0.7
-    assert payload["defaults"]["internal_role_spread_weight"] == 0.3
+    # Per-team normalized defaults (Rust divides extensive terms by team count;
+    # values pre-multiplied to keep legacy 4-team behaviour)
+    assert payload["defaults"]["intra_team_std_weight"] == 2.8
+    assert payload["defaults"]["internal_role_spread_weight"] == 1.2
+    assert payload["defaults"]["sub_role_collision_weight"] == 24.0
+    assert payload["defaults"]["team_max_pain_weight"] == 1.0
+    assert payload["defaults"]["tank_gap_weight"] == 1.0
     assert payload["defaults"]["tank_impact_weight"] == 1.4
     assert payload["defaults"]["mutation_rate_min"] == 0.15
     assert payload["defaults"]["crossover_rate"] == 0.85

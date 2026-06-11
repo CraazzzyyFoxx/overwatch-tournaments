@@ -54,10 +54,9 @@ def _serialize_native_request(
             "team_total_balance_weight": config.team_total_balance_weight,
             "max_team_gap_weight": config.max_team_gap_weight,
             "role_discomfort_weight": config.role_discomfort_weight,
-            "intra_team_variance_weight": config.intra_team_variance_weight,
             "max_role_discomfort_weight": config.max_role_discomfort_weight,
+            "team_max_pain_weight": config.team_max_pain_weight,
             "role_line_balance_weight": config.role_line_balance_weight,
-            "role_spread_weight": config.role_spread_weight,
             "intra_team_std_weight": config.intra_team_std_weight,
             "internal_role_spread_weight": config.internal_role_spread_weight,
             "sub_role_collision_weight": config.sub_role_collision_weight,
@@ -77,6 +76,7 @@ def _serialize_native_request(
             "greedy_seed_count": config.greedy_seed_count,
             "stagnation_kick_patience": config.stagnation_kick_patience,
             "crossover_rate": config.crossover_rate,
+            "time_limit_ms": config.time_limit_ms,
         },
     }
     return orjson.dumps(payload).decode("utf-8")

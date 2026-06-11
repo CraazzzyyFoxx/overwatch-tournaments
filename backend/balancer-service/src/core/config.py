@@ -33,18 +33,28 @@ class AlgorithmConfig(BaseSettings):
     team_total_balance_weight: float = Field(default=1.0, ge=0.0)
     max_team_gap_weight: float = Field(default=1.5, ge=0.0)
     role_discomfort_weight: float = Field(default=1.0, ge=0.0)
-    intra_team_variance_weight: float = Field(default=0.8, ge=0.0)
     max_role_discomfort_weight: float = Field(default=2.0, ge=0.0)
     role_line_balance_weight: float = Field(default=1.0, ge=0.0)
-    role_spread_weight: float = Field(default=1.0, ge=0.0)
-    intra_team_std_weight: float = Field(default=0.7, ge=0.0)
-    internal_role_spread_weight: float = Field(default=0.3, ge=0.0)
+    # Per-team normalized terms (Rust divides by team count): defaults are
+    # pre-multiplied so behaviour matches the legacy sums at 4 teams.
+    intra_team_std_weight: float = Field(default=2.8, ge=0.0)
+    internal_role_spread_weight: float = Field(default=1.2, ge=0.0)
     sub_role_collision_weight: float = Field(
-        default=1.5,
+        default=24.0,
         ge=0.0,
         description=(
-            "Penalty weight per subclass-collision pair in a team "
-            "(e.g., two players with the same subclass on the same role)."
+            "Penalty weight per subclass-collision pair in a team, normalized "
+            "per team count (e.g., two players with the same subclass on the "
+            "same role)."
+        ),
+    )
+    team_max_pain_weight: float = Field(
+        default=1.0,
+        ge=0.0,
+        description=(
+            "Weight for the per-team maximum role discomfort averaged over "
+            "teams. Makes 'one suffering player in every team' visible, "
+            "unlike the single global maximum."
         ),
     )
 
@@ -52,7 +62,9 @@ class AlgorithmConfig(BaseSettings):
     tank_impact_weight: float = Field(default=1.4, ge=0.0)
     dps_impact_weight: float = Field(default=1.0, ge=0.0)
     support_impact_weight: float = Field(default=1.1, ge=0.0)
-    tank_gap_weight: float = Field(default=2.0, ge=0.0)
+    # Penalizes the largest hole between adjacent (sorted) tank lines instead
+    # of the structurally irreducible max-min pool spread.
+    tank_gap_weight: float = Field(default=1.0, ge=0.0)
     tank_std_weight: float = Field(default=1.5, ge=0.0)
     effective_total_std_weight: float = Field(default=1.2, ge=0.0)
 
@@ -67,6 +79,17 @@ class AlgorithmConfig(BaseSettings):
     greedy_seed_count: int = Field(default=3, ge=0, le=1000)
     stagnation_kick_patience: int = Field(default=15, ge=0, le=5000)
     crossover_rate: float = Field(default=0.85, ge=0.0, le=1.0)
+    time_limit_ms: int | None = Field(
+        default=None,
+        ge=100,
+        le=600000,
+        description=(
+            "Hard wall-clock budget for the native optimizer in milliseconds. "
+            "When exceeded, evolution and polishing stop early and the best "
+            "archive found so far is returned. Trades reproducibility "
+            "(same seed may yield different results under load) for latency."
+        ),
+    )
 
     max_result_variants: int = Field(
         default=10,

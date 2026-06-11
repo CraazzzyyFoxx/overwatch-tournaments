@@ -18,13 +18,12 @@ PUBLIC_CONFIG_KEYS = {
     "team_total_balance_weight",
     "max_team_gap_weight",
     "role_discomfort_weight",
-    "intra_team_variance_weight",
     "max_role_discomfort_weight",
     "role_line_balance_weight",
-    "role_spread_weight",
     "intra_team_std_weight",
     "internal_role_spread_weight",
     "sub_role_collision_weight",
+    "team_max_pain_weight",
     "tank_impact_weight",
     "dps_impact_weight",
     "support_impact_weight",
@@ -41,6 +40,7 @@ PUBLIC_CONFIG_KEYS = {
     "greedy_seed_count",
     "stagnation_kick_patience",
     "crossover_rate",
+    "time_limit_ms",
     "max_result_variants",
 }
 
@@ -48,6 +48,11 @@ LEGACY_PUBLIC_CONFIG_KEYS = {
     "input_role_mapping",
     "elitism_rate",
     "stagnation_threshold",
+    # Никогда не читались вычислениями (живые веса — intra_team_std_weight и
+    # internal_role_spread_weight); выпилены из конфига, но могут встречаться
+    # в сохранённых турнирных конфигах — молча отбрасываем.
+    "intra_team_variance_weight",
+    "role_spread_weight",
 }
 
 
