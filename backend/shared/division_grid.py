@@ -41,13 +41,19 @@ class DivisionGrid:
     def resolve_division_from_ow_rank(self, ow_rank: int) -> DivisionTier | None:
         """Find the tier whose ow_rank_min/ow_rank_max range contains ow_rank.
 
-        Returns None when no tier has OW rank mapping configured or the rank
-        falls outside all configured ranges.
+        The pair is treated as an unordered interval: admins enter the top
+        divisions high→low (e.g. "Ultimate 1 → Ultimate 3"), which stores
+        ow_rank_min > ow_rank_max. Comparing against ``min``/``max`` of the pair
+        keeps those tiers matching instead of silently dropping the highest
+        ranks. Returns None when no tier has OW rank mapping configured or the
+        rank falls outside all configured ranges.
         """
         for tier in self.tiers:
             if tier.ow_rank_min is None or tier.ow_rank_max is None:
                 continue
-            if tier.ow_rank_min <= ow_rank <= tier.ow_rank_max:
+            low = min(tier.ow_rank_min, tier.ow_rank_max)
+            high = max(tier.ow_rank_min, tier.ow_rank_max)
+            if low <= ow_rank <= high:
                 return tier
         return None
 
@@ -112,10 +118,10 @@ def _build_default_grid() -> DivisionGrid:
         "grandmaster": 4000,
         "champion": 4500,
     }
-    
+
     tiers = []
     number = 1
-    
+
     for div in divisions:
         base = bases[div]
         for tier_num in range(1, 6):
@@ -123,14 +129,14 @@ def _build_default_grid() -> DivisionGrid:
             name = f"{div.capitalize()} {tier_num}"
             offset = (5 - tier_num) * 100
             rank_min = base + offset
-            
+
             if div == "champion" and tier_num == 1:
                 rank_max = None
             else:
                 rank_max = rank_min + 99
-                
+
             icon_url = f"https://minio.craazzzyyfoxx.me/aqt/assets/divisions/{slug}.png"
-            
+
             tiers.append(
                 DivisionTier(
                     id=None,
