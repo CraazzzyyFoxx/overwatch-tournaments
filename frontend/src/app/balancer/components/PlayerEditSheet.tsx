@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   X
 } from "lucide-react";
@@ -360,6 +361,13 @@ function SortableRoleEntry({
     divisionTiers.length
   );
 
+  // Live OW rank (already mapped to the workspace grid) as a one-click suggestion.
+  // Shown only when it would actually change the current rating.
+  const owRankValue = entry.ow_rank_value ?? null;
+  const owSuggestionDivision = owRankValue != null ? resolveDivision(owRankValue) : null;
+  const owSuggestionName = owSuggestionDivision != null ? getDivisionName(owSuggestionDivision) : null;
+  const showOwSuggestion = owRankValue != null && owRankValue !== entry.rank_value;
+
   return (
     <div
       ref={setNodeRef}
@@ -553,6 +561,39 @@ function SortableRoleEntry({
             </div>
           </div>
         </div>
+
+        {showOwSuggestion ? (
+          <button
+            type="button"
+            onClick={() =>
+              onUpdate(index, {
+                ...entry,
+                rank_value: owRankValue,
+                division_number: owSuggestionDivision
+              })
+            }
+            title={`Apply live OW rank${owSuggestionName ? `: ${owSuggestionName}` : ""} (${owRankValue})`}
+            className="flex w-full items-center gap-1.5 rounded-lg border border-white/10 bg-black/15 px-2 py-1.5 text-left transition hover:border-white/20 hover:bg-white/5"
+          >
+            <Sparkles className="h-3 w-3 shrink-0 text-amber-300/70" />
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-white/40">OW</span>
+            {owSuggestionDivision != null ? (
+              <PlayerDivisionIcon division={owSuggestionDivision} width={16} height={16} />
+            ) : null}
+            <span className="truncate text-[11px] font-medium text-white/75">
+              {owSuggestionName ?? `Division ${owSuggestionDivision}`}
+            </span>
+            <span className="text-[10px] tabular-nums text-white/40">({owRankValue})</span>
+            <span
+              className={cn(
+                "ml-auto shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold",
+                accent.chip
+              )}
+            >
+              {entry.rank_value == null ? "Use" : "Apply"}
+            </span>
+          </button>
+        ) : null}
       </div>
     </div>
   );
