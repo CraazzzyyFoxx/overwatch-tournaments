@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-from src.domain.balancer.role_entries import resolve_division_from_rank
+from src.services.balancer.algorithm.role_entries import resolve_division_from_rank
 from src.schemas.team import InternalBalancerTeamsPayload
 
 

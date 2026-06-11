@@ -32,9 +32,9 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 os.environ["DEBUG"] = "false"
 
 from src.core import auth as auth_dependencies  # noqa: E402
-from src.infrastructure.security.api_key_limiter import ApiKeyUsageLimiter  # noqa: E402
-from src.infrastructure.security.api_key_policy import validate_api_key_config_policy  # noqa: E402
-from src.infrastructure.security.workspace_access_policy import WorkspaceAccessPolicy  # noqa: E402
+from src.core.security.api_key_limiter import ApiKeyUsageLimiter  # noqa: E402
+from src.core.security.api_key_policy import validate_api_key_config_policy  # noqa: E402
+from src.core.security.workspace_access import WorkspaceAccessPolicy  # noqa: E402
 
 
 class FakeRedis:

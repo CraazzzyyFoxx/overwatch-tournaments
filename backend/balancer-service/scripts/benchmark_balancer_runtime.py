@@ -19,9 +19,9 @@ for candidate in (str(BACKEND_ROOT), str(SERVICE_ROOT)):
     if candidate not in sys.path:
         sys.path.insert(0, candidate)
 
-from src.application.balancer.result_serializer import _build_response_payload  # noqa: E402
-from src.application.balancer.runtime_service import _prepare_balance_context  # noqa: E402
-from src.domain.balancer.moo_backend import run_moo_optimizer  # noqa: E402
+from src.services.balancer.algorithm.result_serializer import _build_response_payload  # noqa: E402
+from src.services.balancer.algorithm.runtime import _prepare_balance_context  # noqa: E402
+from src.services.balancer.algorithm.moo_backend import run_moo_optimizer  # noqa: E402
 
 
 def _load_payload(path: Path) -> dict[str, Any]:

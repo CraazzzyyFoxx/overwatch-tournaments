@@ -1,1 +1,0 @@
-"""Security and authorization adapters."""

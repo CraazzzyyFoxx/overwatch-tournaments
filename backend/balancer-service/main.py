@@ -24,9 +24,9 @@ from shared.observability import (
 from shared.schemas import HealthCheckResponse
 from src.core.config import config
 from src.core.job_store import close_job_store
-from src.infrastructure.security.api_key_limiter import close_api_key_limiter
-from src.presentation.http.public_router import router, task_router
+from src.core.security.api_key_limiter import close_api_key_limiter
 from src.routes.admin import router as organizer_router
+from src.routes.balancer import router, task_router
 
 # Setup structured logging
 logger = setup_logging(
