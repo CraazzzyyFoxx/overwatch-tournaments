@@ -147,13 +147,13 @@ export function BalanceActionsBar({
         {activeVariantStats?.feasibility && activeVariantStats.feasibility.flex_player_count > 0 ? (
           <Badge
             title={`${activeVariantStats.feasibility.flex_player_count} flex players in the pool — they can fill any role they can play without counting as off-role.`}
-            className="rounded-full border-primary/20 bg-primary/10 text-primary-foreground/80 hover:bg-primary/10"
+            className="rounded-full border-primary/30 bg-primary/10 text-primary hover:bg-primary/10"
           >
             Flex {activeVariantStats.feasibility.flex_player_count}
           </Badge>
         ) : null}
         {activeVariantStats?.sub_role_collision_count != null ? (
-          <Badge className="rounded-full border-primary/20 bg-primary/10 text-primary-foreground/80 hover:bg-primary/10">
+          <Badge className="rounded-full border-primary/30 bg-primary/10 text-primary hover:bg-primary/10">
             <Shuffle className="mr-1.5 h-3.5 w-3.5" />
             Collisions {activeVariantStats.sub_role_collision_count}
           </Badge>
