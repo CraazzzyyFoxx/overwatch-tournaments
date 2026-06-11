@@ -95,6 +95,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN if [ "${APP_PATH}" = "balancer" ]; then \
         uvx --from maturin maturin develop \
             --release \
+            --features extension-module \
             --manifest-path /app/balancer-service/native/moo_core/Cargo.toml; \
     fi
 
