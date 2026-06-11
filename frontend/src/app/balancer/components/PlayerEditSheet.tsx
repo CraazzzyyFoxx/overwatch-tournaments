@@ -362,11 +362,12 @@ function SortableRoleEntry({
   );
 
   // Live OW rank (already mapped to the workspace grid) as a one-click suggestion.
-  // Shown only when it would actually change the current rating.
+  // Always shown for the role; actionable when an OW rank is available.
   const owRankValue = entry.ow_rank_value ?? null;
   const owSuggestionDivision = owRankValue != null ? resolveDivision(owRankValue) : null;
   const owSuggestionName = owSuggestionDivision != null ? getDivisionName(owSuggestionDivision) : null;
-  const showOwSuggestion = owRankValue != null && owRankValue !== entry.rank_value;
+  const owMatchesCurrent = owRankValue != null && owRankValue === entry.rank_value;
+  const owActionLabel = entry.rank_value == null ? "Use" : owMatchesCurrent ? "Matches" : "Apply";
 
   return (
     <div
@@ -562,7 +563,7 @@ function SortableRoleEntry({
           </div>
         </div>
 
-        {showOwSuggestion ? (
+        {owRankValue != null ? (
           <button
             type="button"
             onClick={() =>
@@ -590,10 +591,16 @@ function SortableRoleEntry({
                 accent.chip
               )}
             >
-              {entry.rank_value == null ? "Use" : "Apply"}
+              {owActionLabel}
             </span>
           </button>
-        ) : null}
+        ) : (
+          <div className="flex w-full items-center gap-1.5 rounded-lg border border-white/8 bg-black/10 px-2 py-1.5 text-left">
+            <Sparkles className="h-3 w-3 shrink-0 text-white/25" />
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-white/30">OW</span>
+            <span className="text-[11px] text-white/35">No live OW rank</span>
+          </div>
+        )}
       </div>
     </div>
   );
