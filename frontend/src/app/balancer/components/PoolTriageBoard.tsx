@@ -47,7 +47,7 @@ import {
 } from "./balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import { ROLE_LABELS, isRoleEntryActive } from "./workspace-helpers";
-import { IssueChip } from "./IssueChip";
+import { IssueChip, issueChipKey } from "./IssueChip";
 
 type StatusOptionGroups = {
   system: StatusMeta[];
@@ -299,7 +299,7 @@ function TriagePlayerCard({
                     </span>
                   ) : null}
                   {state.issues.map((issue) => (
-                    <IssueChip key={`${state.player.id}-${issue.code}`} issue={issue} />
+                    <IssueChip key={`${state.player.id}-${issueChipKey(issue)}`} issue={issue} />
                   ))}
                   <SmurfTagStrip smurfTags={smurfTags} compact />
                 </div>

@@ -17,6 +17,14 @@ function staticLabel(issue: PlayerValidationIssue): string {
 }
 
 /**
+ * Stable React key for an issue chip. Rank-delta warnings can occur once per role,
+ * so the role is folded in to keep keys unique within a player's chip list.
+ */
+export function issueChipKey(issue: PlayerValidationIssue): string {
+  return issue.code === "rank_delta_warning" ? `${issue.code}-${issue.role}` : issue.code;
+}
+
+/**
  * Amber validation chip. For rank-delta warnings it renders a compact icon form
  * (role · current-division-icon → ow-division-icon · Δpts); the full text is in the tooltip.
  */

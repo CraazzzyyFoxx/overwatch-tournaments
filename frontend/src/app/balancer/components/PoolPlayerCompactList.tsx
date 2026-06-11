@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord, BalancerRoleCode, StatusMeta } from "@/types/balancer-admin.types";
 import { getRegistrationBattleTags } from "./balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
-import { IssueChip } from "./IssueChip";
+import { IssueChip, issueChipKey } from "./IssueChip";
 import {
   ROLE_LABELS,
   isRoleEntryActive,
@@ -356,7 +356,7 @@ export function PoolPlayerCompactList({
                           </span>
                         ) : null}
                         {issues.map((issue) => (
-                          <IssueChip key={`${player.id}-${issue.code}`} issue={issue} />
+                          <IssueChip key={`${player.id}-${issueChipKey(issue)}`} issue={issue} />
                         ))}
                         <SmurfTagStrip smurfTags={smurfTags} />
                       </div>

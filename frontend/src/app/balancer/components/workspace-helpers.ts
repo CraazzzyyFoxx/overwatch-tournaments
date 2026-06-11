@@ -309,19 +309,19 @@ export function getPlayerValidationIssues(
     const violating = computeRankDeltasByRole(player)
       .filter((entry) => entry.delta > threshold)
       .sort((a, b) => b.delta - a.delta);
-    if (violating.length > 0) {
-      const worst = violating[0];
-      const currentDivision = resolveDivisionFromRank(grid, worst.currentRank);
-      const owDivision = resolveDivisionFromRank(grid, worst.owRank);
-      const currentLabel = getDivisionLabel(grid, currentDivision) ?? String(worst.currentRank);
-      const owLabel = getDivisionLabel(grid, owDivision) ?? String(worst.owRank);
+    // One chip per violating role, worst delta first.
+    for (const entry of violating) {
+      const currentDivision = resolveDivisionFromRank(grid, entry.currentRank);
+      const owDivision = resolveDivisionFromRank(grid, entry.owRank);
+      const currentLabel = getDivisionLabel(grid, currentDivision) ?? String(entry.currentRank);
+      const owLabel = getDivisionLabel(grid, owDivision) ?? String(entry.owRank);
       issues.push({
         code: "rank_delta_warning",
-        role: worst.role,
+        role: entry.role,
         currentDivision,
         owDivision,
-        delta: worst.delta,
-        message: `${ROLE_LABELS[worst.role]}: ${currentLabel} → ${owLabel} (Δ${worst.delta} pts)`
+        delta: entry.delta,
+        message: `${ROLE_LABELS[entry.role]}: ${currentLabel} → ${owLabel} (Δ${entry.delta} pts)`
       });
     }
   }

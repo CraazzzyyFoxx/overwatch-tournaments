@@ -12,6 +12,7 @@ import {
   createSyntheticPlayerFromRegistration,
   getPlayerValidationIssues,
   isRegistrationIncludedInBalancer,
+  type PlayerValidationIssue,
 } from "@/app/balancer/components/workspace-helpers";
 import type { AdminRegistration, BalancerApplication, BalancerPlayerRecord, StatusMeta, StatusScope } from "@/types/balancer-admin.types";
 
@@ -227,6 +228,25 @@ describe("getPlayerValidationIssues", () => {
     const issues = getPlayerValidationIssues(player, application);
 
     expect(issues.find((issue) => issue.code === "application_role_mismatch")).toBeUndefined();
+  });
+
+  it("emits a rank-delta warning for every role that exceeds the threshold", () => {
+    const player = createPlayer({
+      role_entries_json: [
+        { role: "support", subtype: null, priority: 0, division_number: null, rank_value: 900, is_active: true, ow_rank_value: 2000 },
+        { role: "dps", subtype: null, priority: 1, division_number: null, rank_value: 700, is_active: true, ow_rank_value: 1900 },
+      ],
+    });
+
+    const issues = getPlayerValidationIssues(player, null, { rank_delta_threshold: 100 });
+    const deltaIssues = issues.filter(
+      (issue): issue is Extract<PlayerValidationIssue, { code: "rank_delta_warning" }> =>
+        issue.code === "rank_delta_warning",
+    );
+
+    expect(deltaIssues.length).toBe(2);
+    // Worst delta first: dps (Δ1200) before support (Δ1100).
+    expect(deltaIssues.map((issue) => issue.role).join(",")).toBe("dps,support");
   });
 });
 
