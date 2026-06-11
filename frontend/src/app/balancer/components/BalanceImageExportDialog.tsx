@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
+import { formatSubRoleLabel } from "@/utils/player";
 import type { InternalBalancePayload, InternalBalanceTeam } from "@/types/balancer-admin.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import type { useToast } from "@/hooks/use-toast";
@@ -432,10 +433,17 @@ function BalanceExportTeamCard({
                   </div>
                 </td>
                 <td className="min-w-45 py-2.5 pr-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
-                      {player.name}
-                    </span>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
+                        {player.name}
+                      </span>
+                    </div>
+                    {formatSubRoleLabel(player.sub_role) ? (
+                      <span className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">
+                        {formatSubRoleLabel(player.sub_role)}
+                      </span>
+                    ) : null}
                   </div>
                 </td>
                 <td className="w-18 px-2 py-2.5">
