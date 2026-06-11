@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { PANEL_CLASS, TEAM_BADGE_ACCENTS } from "./balancer-page-helpers";
 import { calculateTeamAverageFromPayload } from "./balancer-page-helpers";
 import type { BalanceVariant } from "./workspace-helpers";
@@ -23,6 +25,11 @@ type DistributionBucket = {
 };
 
 export function TeamDistributionPanel({ variant, variantSelector }: TeamDistributionPanelProps) {
+  const [collapsed, setCollapsed] = useLocalStorageState<boolean>(
+    "balancer:distribution-collapsed",
+    true
+  );
+
   const teamAverages = useMemo(
     () => variant.payload.teams.map(calculateTeamAverageFromPayload),
     [variant.payload.teams]
@@ -71,44 +78,48 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
   }, [distributionPoints]);
 
   return (
-    <div className={cn(PANEL_CLASS, "px-3 py-2.5")}>
+    <div className={cn(PANEL_CLASS, "px-3 py-2")}>
       {variantSelector ? <div className="mb-2">{variantSelector}</div> : null}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/28">
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[11px] uppercase tracking-[0.16em] text-white/28">
             Team distribution
-          </div>
-          <div className="mt-1 flex items-baseline gap-3">
-            <span className="text-2xl font-semibold text-cyan-300">
-              {average ?? stats?.average_mmr ?? "-"}
+          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-white/55">
+            <span>
+              <span className="text-white/38">Avg</span>{" "}
+              <span className="font-semibold text-cyan-300">
+                {average ?? stats?.average_mmr ?? "-"}
+              </span>
             </span>
-            <span className="text-sm text-white/38">Average SR</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 text-right">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-white/24">Spread</div>
-            <div className="mt-0.5 text-base font-semibold text-amber-300">{spread ?? "-"}</div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-white/24">Range</div>
-            <div className="mt-0.5 text-sm text-white/74">
-              {min ?? "-"}
-              {min != null && max != null ? ` - ${max}` : ""}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-white/24">StdDev</div>
-            <div className="mt-0.5 text-sm text-white/74">
+            <span>
+              <span className="text-white/38">Spread</span>{" "}
+              <span className="font-semibold text-amber-300">{spread ?? "-"}</span>
+            </span>
+            <span>
+              <span className="text-white/38">Range</span> {min ?? "-"}
+              {min != null && max != null ? `–${max}` : ""}
+            </span>
+            <span>
+              <span className="text-white/38">σ</span>{" "}
               {stats?.mmr_std_dev != null ? stats.mmr_std_dev.toFixed(1) : "-"}
-            </div>
+            </span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand team distribution chart" : "Collapse team distribution chart"}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/40 transition hover:bg-white/5 hover:text-white/70"
+        >
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
       </div>
 
-      <div className="mt-2.5 rounded-xl border border-white/8 bg-black/15 px-3 py-3">
-        <div className="relative min-h-10">
+      {collapsed ? null : (
+      <div className="mt-2 rounded-xl border border-white/8 bg-black/15 px-3 py-2">
+        <div className="relative min-h-8">
           <div className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full bg-white/4" />
           {buckets.map((bucket) => {
             const clampedLeft = Math.max(4, Math.min(bucket.position, 96));
@@ -179,6 +190,7 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
           <span>{max ?? "-"}</span>
         </div>
       </div>
+      )}
     </div>
   );
 }

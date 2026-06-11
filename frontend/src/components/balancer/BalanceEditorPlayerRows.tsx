@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
+import { formatSubRoleLabel } from "@/utils/player";
 import type { DivisionGrid } from "@/types/workspace.types";
 import type {
   BalancerRosterKey,
@@ -110,6 +111,7 @@ function BalanceEditorPlayerTableRow({
   const preferredRole = preferredRoles[0];
   const assignedOffRole =
     !player.is_flex && preferredRole !== undefined && preferredRole !== roleKey;
+  const subRoleLabel = formatSubRoleLabel(player.sub_role);
 
   return (
     <TableRow
@@ -136,11 +138,21 @@ function BalanceEditorPlayerTableRow({
         </div>
       </TableCell>
       <TableCell className="min-w-45 py-2.5 pr-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {player.is_captain ? <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" /> : null}
-          <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
-            {player.name}
-          </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {player.is_captain ? <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" /> : null}
+            <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
+              {player.name}
+            </span>
+          </div>
+          {subRoleLabel ? (
+            <span
+              className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-white/40"
+              title={subRoleLabel}
+            >
+              {subRoleLabel}
+            </span>
+          ) : null}
         </div>
       </TableCell>
       <TableCell className="w-18 px-2 py-2.5">
