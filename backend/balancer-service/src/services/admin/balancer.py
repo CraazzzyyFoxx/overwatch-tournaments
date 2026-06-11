@@ -11,8 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from shared.models.balancer import WorkspaceBalancerConfig
 from src import models
-from src.domain.balancer.config_provider import normalize_tournament_config_payload, serialize_saved_config_payload
-from src.domain.balancer.public_contract import normalize_balance_response_payload
+from src.services.balancer.config.provider import normalize_tournament_config_payload, serialize_saved_config_payload
+from src.services.balancer.config.public_contract import normalize_balance_response_payload
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import InternalBalancerTeamsPayload
 from src.services import team as team_flows

@@ -1,5 +1,23 @@
-import { AlertCircle, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+  AlertCircle,
+  BarChart2,
+  CheckCircle2,
+  LayoutGrid,
+  Shuffle,
+  Sparkles,
+  Trash2,
+  UserX
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import type { BalanceVariant } from "./workspace-helpers";
 
 type VariantSelectorProps = {
@@ -9,100 +27,191 @@ type VariantSelectorProps = {
   onDeleteVariant?: (id: string) => void;
 };
 
+type VariantCardProps = {
+  variant: BalanceVariant;
+  isActive: boolean;
+  onSelect: () => void;
+  onDelete?: () => void;
+  className?: string;
+};
+
+function VariantCard({ variant, isActive, onSelect, onDelete, className }: VariantCardProps) {
+  const stats = variant.payload.statistics;
+  const offRoles = stats?.off_role_count ?? 0;
+  const offRoleAboveMin = stats?.off_role_above_minimum ?? null;
+  const offRoleOptimal = offRoles === 0 || offRoleAboveMin === 0;
+  const offRoleTooltip = (() => {
+    if (offRoles === 0) return "All players on first preference";
+    if (offRoleAboveMin === 0) return `Off-role ${offRoles} (structural minimum)`;
+    if (offRoleAboveMin != null) return `Off-role ${offRoles} (+${offRoleAboveMin} above min)`;
+    return `Off-role ${offRoles}`;
+  })();
+  const collisions = stats?.sub_role_collision_count ?? 0;
+  const benched = variant.payload.benched_players?.length ?? stats?.unbalanced_count ?? 0;
+  const stddev = stats?.mmr_std_dev;
+  const quality = stats?.composite_score;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "group rounded-xl border px-3 py-2 text-left transition",
+        isActive
+          ? "border-primary/35 bg-primary/[0.12] text-white"
+          : "border-white/8 bg-white/[0.02] text-white/55 hover:bg-white/[0.05] hover:text-white",
+        className
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">{variant.label}</span>
+        {onDelete ? (
+          <span
+            role="button"
+            tabIndex={0}
+            title="Delete variant"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete();
+              }
+            }}
+            className="ml-auto opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </div>
+      {stats != null ? (
+        <div className="mt-1.5 flex items-center gap-2.5">
+          <span
+            title={offRoleTooltip}
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
+              offRoles === 0
+                ? "text-white/30"
+                : offRoleOptimal
+                  ? "text-emerald-300/90"
+                  : "text-orange-300/90"
+            )}
+          >
+            {offRoleOptimal && offRoles > 0 ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : (
+              <AlertCircle className="h-3 w-3" />
+            )}
+            {offRoles}
+          </span>
+          <span
+            title="Sub-role collisions"
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
+              collisions > 0 ? "text-primary/90" : "text-white/30"
+            )}
+          >
+            <Shuffle className="h-3 w-3" />
+            {collisions}
+          </span>
+          <span
+            title="Benched"
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
+              benched > 0 ? "text-rose-300/90" : "text-white/30"
+            )}
+          >
+            <UserX className="h-3 w-3" />
+            {benched}
+          </span>
+          {stddev != null ? (
+            <span
+              title="StdDev"
+              className="flex items-center gap-1 text-[10px] font-semibold tabular-nums text-blue-300/70"
+            >
+              <BarChart2 className="h-3 w-3" />
+              {stddev.toFixed(1)}
+            </span>
+          ) : null}
+          {quality != null ? (
+            <span
+              title="Composite quality score (lower = better)"
+              className="flex items-center gap-1 text-[10px] font-semibold tabular-nums text-emerald-300/80"
+            >
+              <Sparkles className="h-3 w-3" />
+              {quality.toFixed(2)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
 export function VariantSelector({
   variants,
   activeVariantId,
   onSelectVariant,
   onDeleteVariant
 }: VariantSelectorProps) {
+  const [showAll, setShowAll] = useState(false);
+
   if (variants.length <= 1) return null;
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-      {variants.map((variant) => {
-        const isActive = variant.id === activeVariantId;
-        const stats = variant.payload.statistics;
-        const offRoles = stats?.off_role_count ?? 0;
-        const offRoleAboveMin = stats?.off_role_above_minimum ?? null;
-        const offRoleOptimal = offRoles === 0 || offRoleAboveMin === 0;
-        const collisions = stats?.sub_role_collision_count ?? 0;
-        const benched = variant.payload.benched_players?.length ?? stats?.unbalanced_count ?? 0;
-        const stddev = stats?.mmr_std_dev;
-        const quality = stats?.composite_score;
-        const isHealthy = offRoleOptimal && collisions === 0 && benched === 0;
-        const shortLabel = variant.label.match(/\d+/)?.[0] ?? variant.label;
+    <>
+      <div className="flex items-stretch gap-2">
+        <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-1">
+          {variants.map((variant) => (
+            <VariantCard
+              key={variant.id}
+              variant={variant}
+              isActive={variant.id === activeVariantId}
+              onSelect={() => onSelectVariant(variant.id)}
+              onDelete={onDeleteVariant ? () => onDeleteVariant(variant.id) : undefined}
+              className="shrink-0"
+            />
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAll(true)}
+          className="shrink-0 self-center border border-white/8 bg-white/[0.02] text-white/70 hover:bg-white/[0.05] hover:text-white"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Show all
+        </Button>
+      </div>
 
-        const tooltip = (() => {
-          if (stats == null) return variant.label;
-          const offRolePart =
-            offRoles === 0
-              ? "Off-role 0"
-              : offRoleAboveMin != null
-                ? `Off-role ${offRoles} (+${offRoleAboveMin} above min)`
-                : `Off-role ${offRoles}`;
-          return [
-            variant.label,
-            offRolePart,
-            `Collisions ${collisions}`,
-            `Benched ${benched}`,
-            stddev != null ? `StdDev ${stddev.toFixed(1)}` : null,
-            quality != null ? `Quality ${quality.toFixed(2)}` : null
-          ]
-            .filter(Boolean)
-            .join(" · ");
-        })();
-
-        return (
-          <button
-            key={variant.id}
-            type="button"
-            onClick={() => onSelectVariant(variant.id)}
-            title={tooltip}
-            className={cn(
-              "group flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition",
-              isActive
-                ? "border-primary/35 bg-primary/[0.12] text-white"
-                : "border-white/8 bg-white/[0.02] text-white/55 hover:bg-white/[0.05] hover:text-white"
-            )}
-          >
-            {stats != null ? (
-              isHealthy ? (
-                <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-300/90" />
-              ) : (
-                <AlertCircle className="h-3 w-3 shrink-0 text-orange-300/90" />
-              )
-            ) : null}
-            <span className="font-semibold tabular-nums">#{shortLabel}</span>
-            {quality != null ? (
-              <span className="flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-emerald-300/80">
-                <Sparkles className="h-2.5 w-2.5" />
-                {quality.toFixed(2)}
-              </span>
-            ) : null}
-            {onDeleteVariant ? (
-              <span
-                role="button"
-                tabIndex={0}
-                title="Delete variant"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteVariant(variant.id);
+      <Dialog open={showAll} onOpenChange={setShowAll}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>All balances</DialogTitle>
+            <DialogDescription>
+              Compare every generated variant and select one to load it into the editor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex max-h-[60vh] flex-wrap gap-2 overflow-y-auto pr-1">
+            {variants.map((variant) => (
+              <VariantCard
+                key={variant.id}
+                variant={variant}
+                isActive={variant.id === activeVariantId}
+                onSelect={() => {
+                  onSelectVariant(variant.id);
+                  setShowAll(false);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onDeleteVariant(variant.id);
-                  }
-                }}
-                className="opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-400"
-              >
-                <Trash2 className="h-3 w-3" />
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+                onDelete={onDeleteVariant ? () => onDeleteVariant(variant.id) : undefined}
+              />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -15,9 +15,9 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import BalancerJobEvent
-from src.composition import build_execute_balance_job_use_case
 from src.core import db
 from src.core.config import config
+from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_supervisor
 
 logger = setup_logging(
@@ -29,7 +29,6 @@ logger = setup_logging(
 
 broker = RabbitBroker(config.rabbitmq_url, logger=logger)
 app = FastStream(broker)
-execute_balance_job = build_execute_balance_job_use_case(broker=broker)
 
 
 def _decode_balancer_message(message: Any) -> Any:
@@ -75,7 +74,7 @@ async def process_balancer_job(data: dict, msg: RabbitMessage) -> None:
         return
 
     try:
-        await execute_balance_job.execute(event.job_id)
+        await execute_balance_job(event.job_id)
         logger.success(f"Balancer job completed: {event.job_id}")
     except Exception as exc:  # pragma: no cover - defensive worker guard
         logger.exception(f"Balancer job failed ({event.job_id}): {exc}")

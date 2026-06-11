@@ -27,8 +27,8 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-from src.domain.balancer.entities import Player, Team  # noqa: E402
-from src.domain.balancer.rating_normalizer import RatingNormalizer  # noqa: E402
+from src.services.balancer.algorithm.entities import Player, Team  # noqa: E402
+from src.services.balancer.algorithm.rating_normalizer import RatingNormalizer  # noqa: E402
 
 
 MASK = {"Tank": 1, "Damage": 2, "Support": 2}

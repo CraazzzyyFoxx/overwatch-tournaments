@@ -7,23 +7,21 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-from src.composition import build_admin_balancer_use_cases
 from src.core import auth, db
-from src.presentation.http.admin_balancer_serializers import (
-    serialize_balance as _serialize_balance,
-)
-from src.presentation.http.admin_balancer_serializers import (
-    serialize_tournament_config as _serialize_tournament_config,
-)
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
+from src.services import team as team_service
+from src.services.admin import balancer as admin_balancer
+from src.services.admin._mappers import (
+    serialize_balance as _serialize_balance,
+    serialize_tournament_config as _serialize_tournament_config,
+)
 
 router = APIRouter(
     prefix="/balancer",
     tags=["balancer"],
     dependencies=[Depends(auth.require_admin_panel_access())],
 )
-use_cases = build_admin_balancer_use_cases()
 
 
 @router.get(
@@ -35,10 +33,7 @@ async def get_tournament_config(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
 ):
-    tournament_config = await use_cases.get_tournament_config.execute(
-        session=session,
-        tournament_id=tournament_id,
-    )
+    tournament_config = await admin_balancer.get_tournament_config(session, tournament_id)
     if tournament_config is None:
         return None
     return _serialize_tournament_config(tournament_config)
@@ -54,11 +49,8 @@ async def upsert_tournament_config(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
 ):
-    tournament_config = await use_cases.upsert_tournament_config.execute(
-        session=session,
-        tournament_id=tournament_id,
-        payload=data,
-        user=user,
+    tournament_config = await admin_balancer.upsert_tournament_config(
+        session, tournament_id, data.config_json, user
     )
     return _serialize_tournament_config(tournament_config)
 
@@ -69,7 +61,7 @@ async def get_balance(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "read")),
 ):
-    balance = await use_cases.get_saved_balance.execute(session=session, tournament_id=tournament_id)
+    balance = await admin_balancer.get_balance(session, tournament_id)
     if balance is None:
         return None
     return _serialize_balance(balance)
@@ -82,12 +74,7 @@ async def save_balance(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
 ):
-    balance = await use_cases.save_balance.execute(
-        session=session,
-        tournament_id=tournament_id,
-        payload=data,
-        user=user,
-    )
+    balance = await admin_balancer.save_balance(session, tournament_id, data, user)
     return _serialize_balance(balance)
 
 
@@ -97,10 +84,7 @@ async def export_balance(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_balance_permission("team", "import")),
 ):
-    balance, removed_teams, imported_teams = await use_cases.export_balance.execute(
-        session=session,
-        balance_id=balance_id,
-    )
+    balance, removed_teams, imported_teams = await admin_balancer.export_balance(session, balance_id)
     return admin_schemas.BalanceExportResponse(
         success=True,
         removed_teams=removed_teams,
@@ -140,9 +124,7 @@ async def get_workspace_balancer_config(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_workspace_permission("workspace", "read")),
 ):
-    cfg = await use_cases.get_workspace_balancer_config.execute(
-        session=session, workspace_id=workspace_id
-    )
+    cfg = await admin_balancer.get_workspace_balancer_config(session, workspace_id)
     return _config_to_read(cfg, workspace_id)
 
 
@@ -156,10 +138,11 @@ async def upsert_workspace_balancer_config(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_workspace_permission("workspace", "admin")),
 ):
-    cfg = await use_cases.upsert_workspace_balancer_config.execute(
-        session=session,
+    cfg = await admin_balancer.upsert_workspace_balancer_config(
+        session,
         workspace_id=workspace_id,
-        payload=data,
+        rank_delta_threshold=data.rank_delta_threshold,
+        rank_delta_hide_from_pool=data.rank_delta_hide_from_pool,
         updated_by=user.id,
     )
     return _config_to_read(cfg, workspace_id)
@@ -188,9 +171,5 @@ async def import_teams_from_json(
         internal_payload = InternalBalancerTeamsPayload.model_validate(payload)
         teams = [team.to_balancer_team() for team in internal_payload.teams]
 
-    await use_cases.import_teams_from_json.execute(
-        session=session,
-        tournament_id=tournament_id,
-        teams=teams,
-    )
+    await team_service.bulk_create_from_balancer(session, tournament_id, teams)
     return {"imported_teams": len(teams)}

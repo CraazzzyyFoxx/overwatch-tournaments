@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
@@ -30,457 +30,17 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 os.environ["DEBUG"] = "false"
 
-from src.application.balancer.player_loader import load_players_from_dict  # noqa: E402
-from src.application.balancer.public_use_cases import (  # noqa: E402
-    CreateBalanceJob,
-    ExecuteBalanceJob,
-    GetBalancerConfig,
-)
-from src.application.balancer.runtime_service import balance_teams_moo  # noqa: E402
-from src.core.config import AlgorithmConfig  # noqa: E402
+from src.services.balancer.config.defaults import AlgorithmConfig  # noqa: E402
 from src.core.job_store import BalancerJobStore  # noqa: E402
-from src.domain.balancer.captain_assignment_service import CaptainAssignmentService  # noqa: E402
-from src.domain.balancer.config_provider import get_balancer_config_payload  # noqa: E402
-from src.domain.balancer.entities import Player  # noqa: E402
-from src.domain.balancer.moo_backend import _serialize_native_request, run_moo_optimizer  # noqa: E402
-from src.domain.balancer.role_assignment_service import RoleAssignmentService  # noqa: E402
-from src.infrastructure.parsers.balancer_request_parser import BalancerRequestParser  # noqa: E402
-from src.infrastructure.solvers.moo_balance_solver import MooBalanceSolver  # noqa: E402
+from src.services.balancer.algorithm.captain_assignment_service import CaptainAssignmentService  # noqa: E402
+from src.services.balancer.algorithm.entities import Player  # noqa: E402
+from src.services.balancer.algorithm.moo_backend import _serialize_native_request, run_moo_optimizer  # noqa: E402
+from src.services.balancer.algorithm.player_loader import load_players_from_dict  # noqa: E402
+from src.services.balancer.algorithm.role_assignment_service import RoleAssignmentService  # noqa: E402
+from src.services.balancer.algorithm.runtime import balance_teams_moo  # noqa: E402
+from src.services.balancer.config.provider import get_balancer_config_payload  # noqa: E402
+from src.services.balancer.request_parser import BalancerRequestParser  # noqa: E402
 
-
-class GetBalancerConfigTests(TestCase):
-    def test_returns_same_payload_as_runtime_config_function(self) -> None:
-        use_case = GetBalancerConfig(
-            config_provider=SimpleNamespace(get_payload=get_balancer_config_payload),
-        )
-
-        payload = use_case.execute()
-
-        self.assertEqual(payload, get_balancer_config_payload())
-
-
-class CreateBalanceJobTests(IsolatedAsyncioTestCase):
-    async def test_creates_job_and_publishes_queue_event(self) -> None:
-        created = {}
-
-        class FakeAccessPolicy:
-            def ensure_workspace_access(self, user, workspace_id: int) -> None:
-                created["user"] = user.id
-                created["workspace_id"] = workspace_id
-
-        class FakePayloadParser:
-            async def parse_player_data(self, uploaded_file) -> dict:
-                return {"players": {"1": {"name": "Player One"}}}
-
-            def parse_config_overrides(self, raw_config: str | None) -> dict | None:
-                self.last_raw = raw_config
-                return {"algorithm": "moo"}
-
-        class FakeJobRepository:
-            async def create_job(
-                self,
-                input_data,
-                config_overrides,
-                *,
-                workspace_id,
-                created_by,
-                job_id=None,
-                credential_type="access_token",
-                api_key_id=None,
-            ):
-                created["input_data"] = input_data
-                created["config_overrides"] = config_overrides
-                created["created_by"] = created_by
-                created["job_id"] = job_id
-                created["credential_type"] = credential_type
-                created["api_key_id"] = api_key_id
-                return "job-123"
-
-        class FakePublisher:
-            async def publish_job_requested(self, job_id: str) -> None:
-                created["published_job_id"] = job_id
-
-        use_case = CreateBalanceJob(
-            access_policy=FakeAccessPolicy(),
-            payload_parser=FakePayloadParser(),
-            job_repository=FakeJobRepository(),
-            publisher=FakePublisher(),
-        )
-
-        response = await use_case.execute(
-            uploaded_file=SimpleNamespace(filename="players.json"),
-            raw_config='{"algorithm": "moo"}',
-            workspace_id=77,
-            user=SimpleNamespace(id=9),
-        )
-
-        self.assertEqual(response.job_id, "job-123")
-        self.assertEqual(response.status, "queued")
-        self.assertEqual(created["workspace_id"], 77)
-        self.assertEqual(created["created_by"], 9)
-        self.assertEqual(created["published_job_id"], "job-123")
-        self.assertEqual(created["config_overrides"], {"algorithm": "moo"})
-        self.assertEqual(created["credential_type"], "access_token")
-        self.assertIsNone(created["api_key_id"])
-
-    async def test_api_key_create_job_reserves_limit_and_stores_key_metadata(self) -> None:
-        created = {}
-
-        class FakeAccessPolicy:
-            def ensure_workspace_access(self, user, workspace_id: int) -> None:
-                created["workspace_user"] = user.id
-                created["workspace_id"] = workspace_id
-
-        class FakePayloadParser:
-            async def parse_player_data(self, uploaded_file) -> dict:
-                return {"players": {"1": {"name": "Player One"}}}
-
-            def parse_config_overrides(self, raw_config: str | None) -> dict | None:
-                return {"population_size": 150}
-
-        class FakeJobRepository:
-            async def create_job(
-                self,
-                input_data,
-                config_overrides,
-                *,
-                job_id,
-                workspace_id,
-                created_by,
-                credential_type,
-                api_key_id,
-            ):
-                created["job_id"] = job_id
-                created["input_data"] = input_data
-                created["config_overrides"] = config_overrides
-                created["created_by"] = created_by
-                created["credential_type"] = credential_type
-                created["api_key_id"] = api_key_id
-                created["repository_workspace_id"] = workspace_id
-                return job_id
-
-        class FakePublisher:
-            async def publish_job_requested(self, job_id: str) -> None:
-                created["published_job_id"] = job_id
-
-        class FakeLimiter:
-            async def check_request(self, user) -> None:
-                created["checked_api_key_id"] = user._api_key_id
-
-            async def reserve_job(self, user, job_id: str) -> None:
-                created["reserved_api_key_id"] = user._api_key_id
-                created["reserved_job_id"] = job_id
-
-            async def release_job(self, api_key_id: int, job_id: str) -> None:
-                created["released"] = (api_key_id, job_id)
-
-        user = SimpleNamespace(
-            id=9,
-            _credential_type="api_key",
-            _api_key_id=42,
-            _api_key_limits={
-                "requests_per_minute": 60,
-                "jobs_per_day": 100,
-                "concurrent_jobs": 2,
-                "max_upload_bytes": 10 * 1024 * 1024,
-                "max_players": 500,
-            },
-            _api_key_config_policy={},
-        )
-
-        use_case = CreateBalanceJob(
-            access_policy=FakeAccessPolicy(),
-            payload_parser=FakePayloadParser(),
-            job_repository=FakeJobRepository(),
-            publisher=FakePublisher(),
-            api_key_limiter=FakeLimiter(),
-        )
-
-        response = await use_case.execute(
-            uploaded_file=SimpleNamespace(filename="players.json", size=1024),
-            raw_config='{"algorithm": "moo", "population_size": 150}',
-            workspace_id=77,
-            user=user,
-        )
-
-        self.assertEqual(response.job_id, created["job_id"])
-        self.assertEqual(created["reserved_job_id"], created["job_id"])
-        self.assertEqual(created["published_job_id"], created["job_id"])
-        self.assertEqual(created["checked_api_key_id"], 42)
-        self.assertEqual(created["reserved_api_key_id"], 42)
-        self.assertEqual(created["credential_type"], "api_key")
-        self.assertEqual(created["api_key_id"], 42)
-        self.assertEqual(created["repository_workspace_id"], 77)
-        self.assertNotIn("released", created)
-
-
-class ExecuteBalanceJobTests(IsolatedAsyncioTestCase):
-    async def test_executes_job_with_factory_selected_solver_and_marks_result(self) -> None:
-        events: list[tuple[str, str, str]] = []
-        marked: dict[str, object] = {}
-
-        class FakeJobRepository:
-            def __init__(self) -> None:
-                self.meta = {"status": "queued", "created_at": 0.0, "events_count": 0}
-
-            async def get_job_payload(self, job_id: str) -> dict:
-                return {"player_data": {"players": {}}, "config_overrides": {"algorithm": "moo"}}
-
-            async def get_job_meta(self, job_id: str) -> dict:
-                return self.meta
-
-            async def mark_running(self, job_id: str, meta: dict | None = None) -> dict:
-                marked["running"] = job_id
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "running"
-                self.meta["stage"] = "running"
-                self.meta["error"] = None
-                return self.meta
-
-            async def append_event(
-                self,
-                job_id: str,
-                *,
-                status: str,
-                stage: str,
-                message: str,
-                level: str = "info",
-                progress=None,
-                update_meta: bool = False,
-                meta: dict | None = None,
-            ) -> None:
-                events.append((status, stage, message))
-                if meta is not None:
-                    meta["events_count"] = int(meta.get("events_count", 0)) + 1
-                    if update_meta:
-                        meta["status"] = status
-                        meta["stage"] = stage
-                        if progress is not None:
-                            meta["progress"] = progress
-                    self.meta = meta
-
-            async def mark_succeeded(self, job_id: str, result: dict, meta: dict | None = None) -> dict:
-                marked["succeeded"] = (job_id, result)
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "succeeded"
-                return self.meta
-
-            async def mark_failed(self, job_id: str, error_message: str, meta: dict | None = None) -> dict:
-                marked["failed"] = (job_id, error_message)
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "failed"
-                return self.meta
-
-        class FakeSolver:
-            async def solve(self, input_data: dict, config_overrides: dict, progress_callback) -> dict:
-                progress_callback({"status": "running", "stage": "optimizing", "message": "Working"})
-                return {
-                    "variants": [
-                        {
-                            "teams": [],
-                            "statistics": {
-                                "average_mmr": 0,
-                                "mmr_std_dev": 0,
-                                "total_teams": 0,
-                                "players_per_team": 5,
-                            },
-                            "benched_players": [],
-                        }
-                    ]
-                }
-
-        use_case = ExecuteBalanceJob(
-            job_repository=FakeJobRepository(),
-            solver=FakeSolver(),
-        )
-
-        await use_case.execute("job-42")
-
-        self.assertEqual(marked["running"], "job-42")
-        self.assertEqual(marked["succeeded"][0], "job-42")
-        self.assertEqual(marked["succeeded"][1]["variants"][0]["teams"], [])
-        self.assertEqual(marked["succeeded"][1]["variants"][0]["benched_players"], [])
-        self.assertIn(("running", "optimizing", "Working"), events)
-        self.assertNotIn("failed", marked)
-
-    async def test_flushes_last_throttled_progress_update_before_completion(self) -> None:
-        messages: list[str] = []
-
-        class FakeJobRepository:
-            def __init__(self) -> None:
-                self.meta = {"status": "queued", "created_at": 0.0, "events_count": 0}
-
-            async def get_job_payload(self, job_id: str) -> dict:
-                return {"player_data": {"players": {}}, "config_overrides": {"algorithm": "moo"}}
-
-            async def get_job_meta(self, job_id: str) -> dict:
-                return self.meta
-
-            async def mark_running(self, job_id: str, meta: dict | None = None) -> dict:
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "running"
-                self.meta["stage"] = "running"
-                return self.meta
-
-            async def append_event(
-                self,
-                job_id: str,
-                *,
-                status: str,
-                stage: str,
-                message: str,
-                level: str = "info",
-                progress=None,
-                update_meta: bool = False,
-                meta: dict | None = None,
-            ) -> None:
-                if stage == "optimizing":
-                    messages.append(message)
-                if meta is not None:
-                    meta["events_count"] = int(meta.get("events_count", 0)) + 1
-                    if update_meta:
-                        meta["status"] = status
-                        meta["stage"] = stage
-                        if progress is not None:
-                            meta["progress"] = progress
-                    self.meta = meta
-
-            async def mark_succeeded(self, job_id: str, result: dict, meta: dict | None = None) -> dict:
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "succeeded"
-                return self.meta
-
-            async def mark_failed(self, job_id: str, error_message: str, meta: dict | None = None) -> dict:
-                raise AssertionError(error_message)
-
-        class FakeSolver:
-            async def solve(self, input_data: dict, config_overrides: dict, progress_callback) -> dict:
-                progress_callback(
-                    {
-                        "status": "running",
-                        "stage": "optimizing",
-                        "message": "Phase 1",
-                        "progress": {"percent": 0.0},
-                    }
-                )
-                progress_callback(
-                    {
-                        "status": "running",
-                        "stage": "optimizing",
-                        "message": "Phase 2",
-                        "progress": {"percent": 1.0},
-                    }
-                )
-                return {
-                    "variants": [
-                        {
-                            "teams": [],
-                            "statistics": {
-                                "average_mmr": 0,
-                                "mmr_std_dev": 0,
-                                "total_teams": 0,
-                                "players_per_team": 5,
-                            },
-                            "benched_players": [],
-                        }
-                    ]
-                }
-
-        clock_values = iter([1.0, 1.1, 1.2])
-        await ExecuteBalanceJob(
-            job_repository=FakeJobRepository(),
-            solver=FakeSolver(),
-            progress_clock=lambda: next(clock_values),
-        ).execute("job-throttle")
-
-        self.assertEqual(messages, ["Phase 1", "Phase 2"])
-
-    async def test_ignores_legacy_job_payload_config_key(self) -> None:
-        class FakeJobRepository:
-            def __init__(self) -> None:
-                self.meta = {"status": "queued", "created_at": 0.0, "events_count": 0}
-
-            async def get_job_payload(self, job_id: str) -> dict:
-                return {"player_data": {"players": {}}, "config": {"population_size": 50}}
-
-            async def get_job_meta(self, job_id: str) -> dict:
-                return self.meta
-
-            async def mark_running(self, job_id: str, meta: dict | None = None) -> dict:
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "running"
-                return self.meta
-
-            async def append_event(
-                self,
-                job_id: str,
-                *,
-                status: str,
-                stage: str,
-                message: str,
-                level: str = "info",
-                progress=None,
-                update_meta: bool = False,
-                meta: dict | None = None,
-            ) -> None:
-                if meta is not None:
-                    meta["events_count"] = int(meta.get("events_count", 0)) + 1
-                    self.meta = meta
-                return None
-
-            async def mark_succeeded(self, job_id: str, result: dict, meta: dict | None = None) -> dict:
-                self.meta = dict(meta or self.meta)
-                self.meta["status"] = "succeeded"
-                return self.meta
-
-            async def mark_failed(self, job_id: str, error_message: str, meta: dict | None = None) -> dict:
-                raise AssertionError(error_message)
-
-        class FakeSolver:
-            async def solve(self, input_data: dict, config_overrides: dict, progress_callback) -> dict:
-                self.last_config_overrides = config_overrides
-                return {
-                    "variants": [
-                        {
-                            "teams": [],
-                            "statistics": {
-                                "average_mmr": 0,
-                                "mmr_std_dev": 0,
-                                "total_teams": 0,
-                                "players_per_team": 5,
-                            },
-                            "benched_players": [],
-                        }
-                    ]
-                }
-
-        solver = FakeSolver()
-        use_case = ExecuteBalanceJob(
-            job_repository=FakeJobRepository(),
-            solver=solver,
-        )
-
-        await use_case.execute("job-legacy")
-
-        self.assertEqual(solver.last_config_overrides, {})
-
-
-class SolverAdapterTests(IsolatedAsyncioTestCase):
-    async def test_moo_solver_preserves_runtime_variants_shape(self) -> None:
-        solver = MooBalanceSolver()
-        variants = [
-            {"teams": [{"id": 1}], "statistics": {}, "benched_players": []},
-            {"teams": [{"id": 2}], "statistics": {}, "benched_players": []},
-        ]
-
-        with patch(
-            "src.infrastructure.solvers.moo_balance_solver.asyncio.to_thread",
-            AsyncMock(return_value=variants),
-        ) as to_thread:
-            result = await solver.solve({"players": {}}, {"algorithm": "moo"}, None)
-
-        self.assertEqual(result, {"variants": variants})
-        to_thread.assert_awaited_once()
 
 class MooBackendContractTests(TestCase):
     def test_serializes_current_rust_config_contract(self) -> None:
@@ -543,8 +103,8 @@ class MooBackendRuntimeTests(TestCase):
 
     def test_requires_native_module_even_when_legacy_python_backend_is_requested(self) -> None:
         with patch.dict(os.environ, {"BALANCER_MOO_BACKEND": "python"}, clear=False):
-            with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-                with patch("src.domain.balancer.moo_backend._load_native_module", return_value=None):
+            with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
+                with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=None):
                     with self.assertRaisesRegex(RuntimeError, "moo_core"):
                         run_moo_optimizer(
                             [self.player],
@@ -560,8 +120,8 @@ class MooBackendRuntimeTests(TestCase):
             run_moo_optimizer=lambda _: (_ for _ in ()).throw(ValueError("native exploded"))
         )
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=broken_native):
+        with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
+            with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=broken_native):
                 with self.assertRaisesRegex(ValueError, "native exploded"):
                     run_moo_optimizer(
                         [self.player],
@@ -608,8 +168,8 @@ class MooBackendRuntimeTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
+        with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
+            with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=native_module):
                 result = run_moo_optimizer(
                     [self.player],
                     1,
@@ -963,8 +523,8 @@ class MooDeterminismTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
+        with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
+            with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=native_module):
                 runs = [
                     balance_teams_moo(input_data, config_overrides)[0]["teams"]
                     for _ in range(3)
@@ -1025,8 +585,8 @@ class MooDeterminismTests(TestCase):
 
         native_module = SimpleNamespace(run_moo_optimizer=fake_run_moo_optimizer)
 
-        with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
-            with patch("src.domain.balancer.moo_backend._load_native_module", return_value=native_module):
+        with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
+            with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=native_module):
                 ordered_run = balance_teams_moo(make_input([1, 2, 3, 4, 5, 6]), config_overrides)[0]["teams"]
                 reversed_run = balance_teams_moo(make_input([6, 5, 4, 3, 2, 1]), config_overrides)[0]["teams"]
 
