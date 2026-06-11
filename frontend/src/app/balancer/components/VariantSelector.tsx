@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import type { BalanceVariant } from "./workspace-helpers";
 
+const INLINE_VARIANT_LIMIT = 8;
+
 type VariantSelectorProps = {
   variants: BalanceVariant[];
   activeVariantId: string | null;
@@ -164,8 +166,8 @@ export function VariantSelector({
   return (
     <>
       <div className="flex items-stretch gap-2">
-        <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-1">
-          {variants.map((variant) => (
+        <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
+          {variants.slice(0, INLINE_VARIANT_LIMIT).map((variant) => (
             <VariantCard
               key={variant.id}
               variant={variant}
@@ -196,7 +198,7 @@ export function VariantSelector({
               Compare every generated variant and select one to load it into the editor.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex max-h-[60vh] flex-wrap gap-2 overflow-y-auto pr-1">
+          <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
             {variants.map((variant) => (
               <VariantCard
                 key={variant.id}
@@ -207,6 +209,7 @@ export function VariantSelector({
                   setShowAll(false);
                 }}
                 onDelete={onDeleteVariant ? () => onDeleteVariant(variant.id) : undefined}
+                className="w-full"
               />
             ))}
           </div>
