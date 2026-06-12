@@ -1,14 +1,27 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
 from faststream.rabbit import RabbitBroker
+from faststream.rabbit.annotations import RabbitMessage
+from shared.messaging.config import (
+    TOURNAMENT_BRACKET_JOBS_DLQ,
+    TOURNAMENT_BRACKET_JOBS_QUEUE,
+    TOURNAMENT_COMPUTE_EXCHANGE,
+    TOURNAMENT_STANDINGS_JOBS_DLQ,
+    TOURNAMENT_STANDINGS_JOBS_QUEUE,
+)
 from shared.messaging.outbox import publish_pending_outbox_events
+from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
+    observe_message_processing,
     setup_logging,
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
+from src.services.computation.bracket_worker import process_bracket_job
+from src.services.computation.standings_worker import process_standings_job
 from src.services.registration import admin as registration_service
 
 logger = setup_logging(
@@ -37,7 +50,10 @@ async def sync_registration_google_sheet_feeds() -> None:
 
 
 @app.on_startup
-async def start_scheduler() -> None:
+async def start_worker() -> None:
+    await broker.connect()
+    await declare_dead_letter_queue(broker, TOURNAMENT_BRACKET_JOBS_DLQ)
+    await declare_dead_letter_queue(broker, TOURNAMENT_STANDINGS_JOBS_DLQ)
     setup_tracing(
         service_name="tournament-worker",
         otlp_endpoint=config.settings.otlp_endpoint,
@@ -60,3 +76,27 @@ async def start_scheduler() -> None:
 @app.on_shutdown
 async def stop_scheduler() -> None:
     scheduler.shutdown(wait=False)
+
+
+@broker.subscriber(TOURNAMENT_BRACKET_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE)
+async def consume_bracket_job(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=TOURNAMENT_BRACKET_JOBS_QUEUE,
+        handler="consume_bracket_job",
+        message=msg,
+        logger=logger,
+    ):
+        event = TournamentComputationJobEvent.model_validate(data)
+        await process_bracket_job(event.job_id)
+
+
+@broker.subscriber(TOURNAMENT_STANDINGS_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE)
+async def consume_standings_job(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=TOURNAMENT_STANDINGS_JOBS_QUEUE,
+        handler="consume_standings_job",
+        message=msg,
+        logger=logger,
+    ):
+        event = TournamentComputationJobEvent.model_validate(data)
+        await process_standings_job(event.job_id)

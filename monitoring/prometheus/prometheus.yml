@@ -105,22 +105,6 @@ scrape_configs:
         target_label: instance
         replacement: tournament-worker
 
-  - job_name: tournament-bracket-worker
-    static_configs:
-      - targets: ["tournament-bracket-worker:9103"]
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: tournament-bracket-worker
-
-  - job_name: tournament-standings-worker
-    static_configs:
-      - targets: ["tournament-standings-worker:9103"]
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: tournament-standings-worker
-
   - job_name: balancer-worker
     static_configs:
       - targets: ["balancer-worker:9100"]

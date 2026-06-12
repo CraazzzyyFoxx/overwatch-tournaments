@@ -68,10 +68,8 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
 
     async def test_worker_queue_handlers_are_registered(self) -> None:
         worker = importlib.import_module("serve")
-        bracket_worker = importlib.import_module("serve_bracket")
-        standings_worker = importlib.import_module("serve_standings")
 
         self.assertTrue(callable(worker.drain_outbox))
         self.assertTrue(callable(worker.sync_registration_google_sheet_feeds))
-        self.assertTrue(callable(bracket_worker.consume_bracket_job))
-        self.assertTrue(callable(standings_worker.consume_standings_job))
+        self.assertTrue(callable(worker.consume_bracket_job))
+        self.assertTrue(callable(worker.consume_standings_job))

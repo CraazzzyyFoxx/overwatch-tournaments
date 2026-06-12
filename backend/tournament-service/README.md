@@ -30,10 +30,12 @@ registration through bracket generation, results, and realtime updates.
 
 ## Background jobs
 
+All background processing runs in a single worker (`serve.py`, started with `faststream run serve:app`):
+
 - Durable computation jobs with a history/status API under `/admin/tournament-jobs`.
-- Bracket worker consuming `tournament_bracket_jobs`.
-- Standings worker consuming `tournament_standings_jobs`.
-- Worker scheduler for registration Google Sheets sync.
+- Bracket job consumer (`tournament_bracket_jobs`) and standings job consumer (`tournament_standings_jobs`) — both subscribed in the same process.
+- Outbox sweeper publishing pending domain events.
+- Scheduler for registration Google Sheets sync.
 
 ## Running
 
@@ -41,7 +43,7 @@ registration through bracket generation, results, and realtime updates.
 # Development (HTTP server)
 uvicorn main:app --reload --port 8004
 
-# Workers (outbox sweeper, bracket/standings consumers, scheduler)
+# Worker (outbox sweeper, bracket + standings consumers, scheduler)
 faststream run serve:app
 ```
 
