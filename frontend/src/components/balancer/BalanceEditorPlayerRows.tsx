@@ -57,6 +57,8 @@ type DroppableRoleSectionProps = {
   players: InternalBalancePlayer[];
   divisionGrid: DivisionGrid;
   selectedPlayerId?: number | null;
+  /** The active drag cannot legally drop into this role — block + dim it. */
+  dropDisabled?: boolean;
   onSelectPlayer?: (playerId: number | null) => void;
 };
 
@@ -201,10 +203,12 @@ function BalanceEditorInsertSlotRow({
   teamIndex,
   roleKey,
   insertIndex,
+  disabled = false,
 }: {
   teamIndex: number;
   roleKey: BalancerRosterKey;
   insertIndex: number;
+  disabled?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `player-slot:${teamIndex}:${roleKey}:${insertIndex}`,
@@ -214,6 +218,7 @@ function BalanceEditorInsertSlotRow({
       roleKey,
       insertIndex,
     },
+    disabled,
   });
 
   return (
@@ -239,6 +244,7 @@ function DraggableBalanceEditorPlayerTableRow(
     player: InternalBalancePlayer;
     teamIndex: number;
     playerIndex: number;
+    dropDisabled?: boolean;
   },
 ) {
   const { attributes, listeners, setNodeRef: setDraggableNodeRef, transform, isDragging } = useDraggable({
@@ -253,6 +259,7 @@ function DraggableBalanceEditorPlayerTableRow(
       playerIndex: props.playerIndex,
       playerId: props.player.uuid,
     },
+    disabled: props.dropDisabled,
   });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
   const setNodeRef = (node: HTMLTableRowElement | null) => {
@@ -279,6 +286,7 @@ export function DroppableRoleSection({
   players,
   divisionGrid,
   selectedPlayerId,
+  dropDisabled = false,
   onSelectPlayer,
 }: DroppableRoleSectionProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -288,10 +296,18 @@ export function DroppableRoleSection({
       teamIndex,
       roleKey,
     },
+    disabled: dropDisabled,
   });
 
   return (
-    <TableBody ref={setNodeRef} className={cn("transition-colors", isOver && "bg-white/3")}>
+    <TableBody
+      ref={setNodeRef}
+      className={cn(
+        "transition-colors",
+        isOver && "bg-white/3",
+        dropDisabled && "cursor-not-allowed opacity-35",
+      )}
+    >
       {players.map((player, playerIndex) => (
         <Fragment key={player.uuid}>
           <DraggableBalanceEditorPlayerTableRow
@@ -301,6 +317,7 @@ export function DroppableRoleSection({
             roleKey={roleKey}
             divisionGrid={divisionGrid}
             selectedPlayerId={selectedPlayerId}
+            dropDisabled={dropDisabled}
             onSelectPlayer={onSelectPlayer}
           />
           {playerIndex < players.length - 1 ? (
@@ -308,6 +325,7 @@ export function DroppableRoleSection({
               teamIndex={teamIndex}
               roleKey={roleKey}
               insertIndex={playerIndex + 1}
+              disabled={dropDisabled}
             />
           ) : null}
         </Fragment>

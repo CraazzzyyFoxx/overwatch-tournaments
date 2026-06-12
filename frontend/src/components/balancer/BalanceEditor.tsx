@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useCallback, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -8,24 +8,34 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
+import { useQuery } from "@tanstack/react-query";
 import { UserX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import type { DivisionGrid } from "@/types/workspace.types";
+import workspaceService from "@/services/workspace.service";
+import { memberDisplayName } from "@/lib/workspace-member";
+import type { DivisionGrid, WorkspaceMember } from "@/types/workspace.types";
 import type {
   BalancerRosterKey,
   InternalBalancePayload,
   InternalBalancePlayer,
 } from "@/types/balancer-admin.types";
 
+import { BALANCE_ROSTER_KEYS } from "@/app/balancer/components/balancer-page-helpers";
+
 import { BalanceEditorPlayerPreviewRow } from "./BalanceEditorPlayerRows";
 import { BalanceEditorTeamCard } from "./BalanceEditorTeamCard";
 import {
-  getDraggedBalancePlayer,
+  canPlayerPlayRole,
+  findBalancePlayerLocation,
   moveBalancePlayer,
   resolveBalanceDropTarget,
+  type BalanceActiveDrag,
 } from "./balance-editor-helpers";
+import { useBalancerDragGhosts } from "./useBalancerDragGhosts";
 
 type BalanceEditorProps = {
   value: InternalBalancePayload | null;
@@ -35,6 +45,12 @@ type BalanceEditorProps = {
   onSelectPlayer?: (playerId: number | null) => void;
   collapsedTeamIds?: number[];
   onToggleTeam?: (teamId: number) => void;
+  /** Realtime topic for broadcasting live-drag ghosts to other viewers. */
+  realtimeTopic?: string | null;
+  /** Current user's auth id — used to ignore our own broadcast echoes. */
+  currentUserId?: number | null;
+  /** Workspace whose members resolve ghost actor names. */
+  workspaceId?: number | null;
 };
 
 export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(function BalanceEditor(
@@ -46,6 +62,9 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     onSelectPlayer,
     collapsedTeamIds = [],
     onToggleTeam,
+    realtimeTopic = null,
+    currentUserId = null,
+    workspaceId = null,
   },
   ref,
 ) {
@@ -56,6 +75,41 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const teamCards = useMemo(() => value?.teams ?? [], [value]);
 
+  const { remoteDrags, broadcastDragStart, broadcastDragOver, broadcastDragEnd } =
+    useBalancerDragGhosts({ topic: realtimeTopic, currentUserId });
+
+  const membersQuery = useQuery({
+    queryKey: ["workspace", "members", workspaceId],
+    queryFn: () => workspaceService.getMembers(workspaceId as number),
+    enabled: workspaceId !== null,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const membersById = useMemo(
+    () =>
+      new Map<number, WorkspaceMember>(
+        (membersQuery.data ?? []).map((member) => [member.auth_user_id, member]),
+      ),
+    [membersQuery.data],
+  );
+
+  const resolveActorName = useCallback(
+    (userId: number) => memberDisplayName(membersById.get(userId), userId),
+    [membersById],
+  );
+
+  const activeDrag = useMemo<BalanceActiveDrag | null>(() => {
+    if (!activePlayer) {
+      return null;
+    }
+    return {
+      currentRole: activePlayer.roleKey,
+      playableRoles: BALANCE_ROSTER_KEYS.filter((role) =>
+        canPlayerPlayRole(activePlayer.player, role),
+      ),
+    };
+  }, [activePlayer]);
+
   if (!value || teamCards.length === 0) {
     return (
       <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-6 text-sm text-white/45">
@@ -64,12 +118,39 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     );
   }
 
-  const handleDragStart = (playerId: string) => {
-    setActivePlayer(getDraggedBalancePlayer(value, playerId));
+  const handleDragStart = (event: DragStartEvent) => {
+    const playerId = String(event.active.id);
+    const location = findBalancePlayerLocation(value, playerId);
+    if (!location) {
+      setActivePlayer(null);
+      return;
+    }
+
+    const player = value.teams[location.teamIndex].roster[location.roleKey][location.playerIndex];
+    setActivePlayer({ player, roleKey: location.roleKey });
+    broadcastDragStart({
+      playerId,
+      playerName: player.name,
+      fromTeamIndex: location.teamIndex,
+      fromRoleKey: location.roleKey,
+    });
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const target = resolveBalanceDropTarget(
+      event.over ? String(event.over.id) : null,
+      event.over?.data.current,
+    );
+    broadcastDragOver({
+      overTeamIndex: target?.teamIndex ?? null,
+      overRoleKey: target?.roleKey ?? null,
+      overInsertIndex: target?.kind === "insert-slot" ? target.insertIndex : null,
+    });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActivePlayer(null);
+    broadcastDragEnd();
     const nextPayload = moveBalancePlayer(
       value,
       String(event.active.id),
@@ -84,13 +165,20 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     }
   };
 
+  const handleDragCancel = () => {
+    setActivePlayer(null);
+    broadcastDragEnd();
+  };
+
   const benchedPlayers = value.benched_players ?? [];
 
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(event) => handleDragStart(String(event.active.id))}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <div ref={ref} className="space-y-4">
         {benchedPlayers.length > 0 ? (
@@ -119,6 +207,9 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
               divisionGrid={divisionGrid}
               selectedPlayerId={selectedPlayerId}
               collapsed={collapsedTeamIds.includes(team.id)}
+              activeDrag={activeDrag}
+              remoteDrags={remoteDrags.filter((drag) => drag.overTeamIndex === teamIndex)}
+              resolveActorName={resolveActorName}
               onSelectPlayer={onSelectPlayer}
               onToggleTeam={onToggleTeam}
             />

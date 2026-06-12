@@ -10,6 +10,7 @@ import workspaceService from "@/services/workspace.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { WorkspaceMember } from "@/types/workspace.types";
 import { cn } from "@/lib/utils";
+import { memberDisplayName } from "@/lib/workspace-member";
 
 /** Portal target rendered by {@link BalancerSidebar} in its footer. */
 const PRESENCE_SLOT_ID = "balancer-presence-slot";
@@ -21,14 +22,6 @@ type BalancerPresenceStackProps = {
   userIds: number[];
   workspaceId: number | null;
 };
-
-function memberDisplayName(member: WorkspaceMember | undefined, userId: number): string {
-  if (!member) {
-    return `User #${userId}`;
-  }
-  const fullName = [member.first_name, member.last_name].filter(Boolean).join(" ").trim();
-  return fullName || member.username || member.email || `User #${userId}`;
-}
 
 function initials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);

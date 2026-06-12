@@ -81,6 +81,8 @@ export interface InternalBalancePlayer {
   role_preferences: string[];
   sub_role?: BalancerRoleSubtype | null;
   all_ratings?: Record<string, number>;
+  /** Stable per-role discomfort snapshot from the solver (immune to UI reordering). */
+  all_discomforts?: Record<string, number>;
 }
 
 export interface InternalBalanceTeam {

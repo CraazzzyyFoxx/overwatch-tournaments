@@ -17,8 +17,12 @@ import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
-import { useBalancerRealtime } from "@/app/balancer/components/useBalancerRealtime";
+import {
+  balancerRealtimeTopic,
+  useBalancerRealtime,
+} from "@/app/balancer/components/useBalancerRealtime";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
@@ -115,6 +119,7 @@ export function BalancerMainPageClient() {
   const tournamentId = useBalancerTournamentId();
   const divisionGrid = useDivisionGrid();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
   const balanceEditorRef = useRef<HTMLDivElement | null>(null);
@@ -776,6 +781,9 @@ export function BalancerMainPageClient() {
               invalidPlayerCount={invalidPlayerStates.length}
               canRunBalance={canRunBalance}
               isRunPending={runBalanceMutation.isPending}
+              realtimeTopic={balancerRealtimeTopic(tournamentId)}
+              currentUserId={currentUserId}
+              workspaceId={workspaceId}
               onChangePayload={handleBalancePayloadChange}
               onSelectPlayer={handleOpenPlayerEditor}
               onToggleTeam={handleToggleTeam}

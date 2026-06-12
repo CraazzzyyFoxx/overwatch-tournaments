@@ -180,6 +180,10 @@ class PlayerData(BaseModel):
     is_captain: bool
     role_preferences: list[str]
     all_ratings: dict[str, int]
+    # Stable per-role discomfort snapshot (computed from original preferences),
+    # so the frontend can re-derive discomfort when a player is moved between
+    # roles without re-running the solver. Defaulted for legacy payloads.
+    all_discomforts: dict[str, int] = Field(default_factory=dict)
     is_flex: bool = False
     sub_role: str | None = None
 

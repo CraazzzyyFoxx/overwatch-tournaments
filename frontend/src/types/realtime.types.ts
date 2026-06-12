@@ -28,7 +28,15 @@ export type PingOp = {
   op: "ping";
 };
 
-export type ClientRealtimeFrame = SubscribeOp | UnsubscribeOp | PingOp;
+/** Client-originated ephemeral broadcast to a subscribed topic (e.g. live drag). */
+export type PublishOp = {
+  op: "publish";
+  topic: string;
+  event_type: string;
+  data: Record<string, unknown>;
+};
+
+export type ClientRealtimeFrame = SubscribeOp | UnsubscribeOp | PingOp | PublishOp;
 
 export type SubscribedFrame = {
   op: "subscribed";

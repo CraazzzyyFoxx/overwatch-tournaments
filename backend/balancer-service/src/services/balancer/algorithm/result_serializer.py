@@ -54,6 +54,7 @@ def teams_to_json(
                     "is_flex": player.is_flex,
                     "role_preferences": player.preferences,
                     "all_ratings": player.ratings,
+                    "all_discomforts": player.discomfort_map,
                     "sub_role": player.subclasses.get(role) or None,
                 }
                 for player in players
@@ -125,6 +126,7 @@ def teams_to_json(
                 "is_flex": player.is_flex,
                 "role_preferences": player.preferences,
                 "all_ratings": player.ratings,
+                "all_discomforts": player.discomfort_map,
             }
             for player in benched_players
         ]

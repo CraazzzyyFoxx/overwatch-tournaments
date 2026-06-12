@@ -20,6 +20,9 @@ type BalancerEditorPanelProps = {
   invalidPlayerCount: number;
   canRunBalance: boolean;
   isRunPending: boolean;
+  realtimeTopic?: string | null;
+  currentUserId?: number | null;
+  workspaceId?: number | null;
   onChangePayload: (payload: InternalBalancePayload) => void;
   onSelectPlayer: (playerId: number | null) => void;
   onToggleTeam: (teamId: number) => void;
@@ -38,6 +41,9 @@ export function BalancerEditorPanel({
   invalidPlayerCount,
   canRunBalance,
   isRunPending,
+  realtimeTopic = null,
+  currentUserId = null,
+  workspaceId = null,
   onChangePayload,
   onSelectPlayer,
   onToggleTeam,
@@ -58,6 +64,9 @@ export function BalancerEditorPanel({
             onSelectPlayer={onSelectPlayer}
             collapsedTeamIds={collapsedTeamIds}
             onToggleTeam={onToggleTeam}
+            realtimeTopic={realtimeTopic}
+            currentUserId={currentUserId}
+            workspaceId={workspaceId}
           />
         </div>
       ) : (

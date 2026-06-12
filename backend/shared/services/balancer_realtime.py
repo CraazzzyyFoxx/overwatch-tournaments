@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 __all__ = (
     "BALANCER_BALANCE_SAVED",
     "BALANCER_CONFIG_CHANGED",
+    "BALANCER_DRAG",
     "BALANCER_JOB_FAILED",
     "BALANCER_JOB_PROGRESS",
     "BALANCER_JOB_QUEUED",
@@ -56,6 +57,13 @@ BALANCER_JOB_FAILED = "balancer_job.failed"
 # Ephemeral presence (NOT published via publish_balancer_event; emitted by
 # realtime-service directly). Declared here so the literal has one home.
 BALANCER_PRESENCE = "balancer.presence"
+
+# Ephemeral live-drag overlay. Client-originated (published over the WebSocket
+# via the `publish` op) and fanned out to co-subscribers by realtime-service;
+# never persisted and never published through publish_balancer_event. This is
+# the single event type the realtime-service allows clients to publish on the
+# balancer topic — see the publish allowlist in realtime-service ws routes.
+BALANCER_DRAG = "balancer.drag"
 
 
 async def publish_balancer_event(

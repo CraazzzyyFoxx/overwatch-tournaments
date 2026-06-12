@@ -19,6 +19,9 @@ class ConnectionState:
     user: AuthUser | None
     topics: set[str] = field(default_factory=set)
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Sliding 1-second window for client-originated ephemeral publishes.
+    publish_window_start: float = 0.0
+    publish_window_count: int = 0
 
 
 class ConnectionManager:
@@ -50,8 +53,18 @@ class ConnectionManager:
             return False
         return True
 
-    async def route(self, topic: str, frame: dict[str, Any]) -> None:
-        states = [state for state in list(self._states) if topic in state.topics]
+    async def route(
+        self,
+        topic: str,
+        frame: dict[str, Any],
+        *,
+        exclude: ConnectionState | None = None,
+    ) -> None:
+        states = [
+            state
+            for state in list(self._states)
+            if topic in state.topics and state is not exclude
+        ]
         if not states:
             return
 
