@@ -150,6 +150,10 @@ async def create_balancer_job(
     player_data_file: UploadFile = File(..., description=PLAYER_DATA_FILE_DESCRIPTION),
     config_overrides: str | None = Form(None, description=CONFIG_OVERRIDES_DESCRIPTION),
     workspace_id: int = Query(..., description="Workspace context for authorization"),
+    tournament_id: int | None = Form(
+        None,
+        description="Tournament that owns this balance; enables realtime job-status fan-out",
+    ),
     user: models.AuthUser = Depends(get_current_active_user),
 ) -> CreateJobResponse:
     try:
@@ -159,6 +163,7 @@ async def create_balancer_job(
             workspace_id=workspace_id,
             user=user,
             broker=task_router.broker,
+            tournament_id=tournament_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

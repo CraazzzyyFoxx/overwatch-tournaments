@@ -10,6 +10,7 @@ from shared.services.rank_snapshots import (
     fetch_latest_ow_ranks_by_account,
     normalize_ow_ranks_to_grid,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -18,6 +19,7 @@ from src.schemas.admin import balancer as admin_schemas
 from src.schemas.registration import RegistrationFormRead, RegistrationFormUpsert
 from src.services.registration import admin as registration_service
 from src.services.registration.ow_rank_selection import select_main_account_ow_ranks
+from src.services.registration.realtime import emit_balancer_registrations_changed
 from src.services.registration.serializers import (
     serialize_registration,
     serialize_registration_form,
@@ -155,6 +157,11 @@ async def create_manual_registration(
         roles=[role.model_dump() for role in data.roles],
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -181,6 +188,11 @@ async def update_registration(
         roles=[role.model_dump() for role in data.roles] if data.roles is not None else None,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -196,6 +208,11 @@ async def approve_registration(
         reviewed_by=user.id,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -211,6 +228,11 @@ async def reject_registration(
         reviewed_by=user.id,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -228,6 +250,11 @@ async def set_registration_exclusion(
         exclude_reason=data.exclude_reason,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -239,6 +266,11 @@ async def withdraw_registration(
 ):
     registration = await registration_service.withdraw_registration(session, registration_id)
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -250,6 +282,11 @@ async def restore_registration(
 ):
     registration = await registration_service.restore_registration(session, registration_id)
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -259,11 +296,18 @@ async def delete_registration(
     session: AsyncSession = Depends(db.get_async_session),
     user: models.AuthUser = Depends(auth.require_registration_permission("team", "import")),
 ):
+    tournament_id = await session.scalar(
+        select(models.BalancerRegistration.tournament_id).where(
+            models.BalancerRegistration.id == registration_id
+        )
+    )
     await registration_service.soft_delete_registration(
         session,
         registration_id,
         deleted_by=user.id,
     )
+    if tournament_id is not None:
+        await emit_balancer_registrations_changed(int(tournament_id), actor_user_id=user.id)
 
 
 @router.post(
@@ -283,6 +327,8 @@ async def bulk_approve_registrations(
         registration_ids,
         reviewed_by=user.id,
     )
+    if approved:
+        await emit_balancer_registrations_changed(tournament_id, actor_user_id=user.id)
     return admin_schemas.BulkApproveResponse(approved=approved, skipped=skipped)
 
 
@@ -299,6 +345,11 @@ async def set_balancer_status(
         balancer_status=data.balancer_status,
     )
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)
 
 
@@ -320,6 +371,8 @@ async def bulk_add_to_balancer(
         registration_ids,
         balancer_status=balancer_status,
     )
+    if updated:
+        await emit_balancer_registrations_changed(tournament_id, actor_user_id=user.id)
     return admin_schemas.BulkBalancerStatusResponse(updated=updated, skipped=skipped)
 
 
@@ -368,6 +421,7 @@ async def apply_registration_rank_autofill(
         stages=data.stages,
         apply=True,
     )
+    await emit_balancer_registrations_changed(tournament_id, actor_user_id=user.id)
     return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
 
 
@@ -418,4 +472,9 @@ async def toggle_check_in(
     else:
         registration = await registration_service.uncheck_in_registration(session, registration_id)
     status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+    await emit_balancer_registrations_changed(
+        registration.tournament_id,
+        workspace_id=registration.workspace_id,
+        actor_user_id=user.id,
+    )
     return serialize_registration(registration, status_meta_map=status_meta_map)

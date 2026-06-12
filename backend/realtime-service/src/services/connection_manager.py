@@ -71,9 +71,29 @@ class ConnectionManager:
             fanout_ms=round((perf_counter() - started) * 1000, 2),
         )
 
+    def presence_user_ids(self, topic: str) -> list[int]:
+        """Distinct authenticated user ids currently subscribed to ``topic``.
+
+        Derived from live connections, so presence reflects who has the page
+        open right now. In-process only — with a single realtime-service
+        instance (current deployment) this is the full set; multi-instance
+        would need Redis-backed presence.
+        """
+        user_ids = {
+            state.user.id
+            for state in list(self._states)
+            if topic in state.topics and state.user is not None
+        }
+        return sorted(user_ids)
+
     def cleanup(self, state: ConnectionState) -> None:
         state.topics.clear()
         self._states.discard(state)
+
+
+def is_presence_topic(topic: str) -> bool:
+    """Topics that broadcast WebSocket-derived presence to their subscribers."""
+    return topic.endswith(":balancer")
 
 
 connection_manager = ConnectionManager()

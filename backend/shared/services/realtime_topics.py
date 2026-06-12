@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __all__ = (
     "analytics_jobs",
+    "balancer",
     "bracket",
     "draft",
     "realtime_channel",
@@ -17,6 +18,17 @@ def bracket(tournament_id: int) -> str:
 
 def draft(tournament_id: int) -> str:
     return f"tournament:{int(tournament_id)}:draft"
+
+
+def balancer(tournament_id: int) -> str:
+    """Topic for live balancer collaboration on a single tournament.
+
+    Carries data-edit signals (``balancer.*_changed``), job-status events
+    (``balancer_job.*``), and ephemeral presence (``balancer.presence``).
+    Unlike the public draft/bracket topics, access is gated by workspace
+    membership (see the realtime-service topic ACL).
+    """
+    return f"tournament:{int(tournament_id)}:balancer"
 
 
 def workspace_notifications(workspace_id: int) -> str:

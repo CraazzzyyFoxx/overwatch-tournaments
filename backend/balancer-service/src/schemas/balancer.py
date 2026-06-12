@@ -275,6 +275,7 @@ class JobStatusResponse(BaseModel):
     job_id: str
     status: Literal["queued", "running", "succeeded", "failed"]
     stage: str | None = None
+    tournament_id: int | None = None
     created_at: float
     started_at: float | None = None
     finished_at: float | None = None

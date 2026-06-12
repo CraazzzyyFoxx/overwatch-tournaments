@@ -17,6 +17,7 @@ import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
+import { useBalancerRealtime } from "@/app/balancer/components/useBalancerRealtime";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
 import { notify } from "@/lib/notify";
@@ -30,6 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { BalancerActionsPanel } from "./BalancerActionsPanel";
 import { BalancerEditorPanel } from "./BalancerEditorPanel";
+import { BalancerPresenceStack } from "./BalancerPresenceStack";
 import { BalanceImageExportDialog } from "./BalanceImageExportDialog";
 import {
   BalancerOperationDialog,
@@ -122,6 +124,7 @@ export function BalancerMainPageClient() {
   const [jobState, dispatchJob] = useBalancerJob();
   const [variants, setVariants] = useState<BalanceVariant[]>([]);
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
+  const [presenceUserIds, setPresenceUserIds] = useState<number[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
   const [editingPlayerId, setEditingPlayerId] = useState<number | null>(null);
   const [pendingRankHistory, setPendingRankHistory] = useState<Partial<
@@ -403,6 +406,14 @@ export function BalancerMainPageClient() {
     setSelectedPreset("DEFAULT");
   }, [balancerConfigQuery.data?.defaults]);
 
+  const { registerLocalJob } = useBalancerRealtime({
+    tournamentId,
+    dispatchJob,
+    setVariants,
+    setActiveVariantId,
+    setPresence: setPresenceUserIds
+  });
+
   const {
     addPlayerMutation,
     updatePlayerMutation,
@@ -434,7 +445,8 @@ export function BalancerMainPageClient() {
     draftConfig,
     isConfigDirty,
     onTournamentConfigSaved: handleConfigSavedFromRun,
-    activeVariant
+    activeVariant,
+    onJobCreated: registerLocalJob
   });
 
   const canRunBalance = useMemo(
@@ -687,6 +699,11 @@ export function BalancerMainPageClient() {
       />
 
       <div className="flex min-h-0 w-full flex-1 flex-col gap-3 pb-4">
+        {presenceUserIds.length > 0 ? (
+          <div className="flex items-center justify-end">
+            <BalancerPresenceStack userIds={presenceUserIds} workspaceId={workspaceId} />
+          </div>
+        ) : null}
         <div
           className={cn(
             "grid min-h-0 flex-1 gap-3",
