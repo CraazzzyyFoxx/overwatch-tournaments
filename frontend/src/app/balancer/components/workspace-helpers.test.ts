@@ -299,6 +299,34 @@ describe("pool lane helpers", () => {
 
     expect(derivePoolLane({ player, issues: getPlayerValidationIssues(player, null) })).toBe("ready");
   });
+
+  it("keeps a player whose only issue is a rank-delta warning in Ready", () => {
+    const player = createPlayer({
+      role_entries_json: [
+        { role: "support", subtype: null, priority: 1, division_number: 12, rank_value: 900, is_active: true, ow_rank_value: 2000 },
+      ],
+    });
+    const issues = getPlayerValidationIssues(player, null, { rank_delta_threshold: 100 });
+
+    // The advisory rank-delta chip is still emitted as informational context...
+    expect(issues.some((issue) => issue.code === "rank_delta_warning")).toBe(true);
+    // ...but a rank delta on its own must not push the player into Need Fix.
+    expect(derivePoolLane({ player, issues })).toBe("ready");
+  });
+
+  it("still routes a rank-delta player into Need Fix when a blocking issue is also present", () => {
+    const player = createPlayer({
+      role_entries_json: [
+        { role: "support", subtype: null, priority: 1, division_number: 12, rank_value: 900, is_active: true, ow_rank_value: 2000 },
+      ],
+    });
+    const application = createApplication({ primary_role: "tank", additional_roles_json: [] });
+    const issues = getPlayerValidationIssues(player, application, { rank_delta_threshold: 100 });
+
+    expect(issues.some((issue) => issue.code === "rank_delta_warning")).toBe(true);
+    expect(issues.some((issue) => issue.code === "application_role_mismatch")).toBe(true);
+    expect(derivePoolLane({ player, issues })).toBe("needs_fix");
+  });
 });
 
 describe("battle tag clipboard helpers", () => {

@@ -40,6 +40,7 @@ import {
   POOL_LANES,
   POOL_LANE_LABELS,
   derivePoolLane,
+  hasBlockingIssues,
   getPoolDropPatch,
   getRegistrationBattleTags,
   type PlayerValidationState,
@@ -239,7 +240,7 @@ function TriagePlayerCard({
   const battleTags = getRegistrationBattleTags(registration, state.player.battle_tag);
   const primaryBattleTag = battleTags[0] ?? state.player.battle_tag;
   const smurfTags = battleTags.slice(1);
-  const isReady = state.player.is_in_pool && state.issues.length === 0;
+  const isReady = state.player.is_in_pool && !hasBlockingIssues(state.issues);
 
   return (
     <ContextMenu>
