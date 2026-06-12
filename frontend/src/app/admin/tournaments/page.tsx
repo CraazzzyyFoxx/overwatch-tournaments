@@ -15,7 +15,7 @@ import {
   type TournamentFormFieldsValue
 } from "@/components/admin/tournaments/TournamentFormFields";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import tournamentService from "@/services/tournament.service";
 import adminService from "@/services/admin.service";
 import workspaceService from "@/services/workspace.service";
@@ -96,7 +96,6 @@ function getUpdatePayload(formData: TournamentFormData): TournamentUpdateInput {
 
 export default function TournamentsPage() {
   const router = useRouter();
-  const { toast } = useToast();
   const { canAccessPermission } = usePermissions();
   const queryClient = useQueryClient();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -137,10 +136,7 @@ export default function TournamentsPage() {
       queryClient.invalidateQueries({ queryKey: ["tournaments"] });
       setCreateDialogOpen(false);
       resetForm();
-      toast({ title: "Tournament created successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Tournament created successfully");
     }
   });
 
@@ -158,10 +154,7 @@ export default function TournamentsPage() {
       queryClient.invalidateQueries({ queryKey: ["tournaments"] });
       setCreateDialogOpen(false);
       resetForm();
-      toast({ title: "Tournament created with stages from Challonge" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Tournament created with stages from Challonge");
     }
   });
 
@@ -173,10 +166,7 @@ export default function TournamentsPage() {
       setEditDialogOpen(false);
       setSelectedTournament(null);
       resetForm();
-      toast({ title: "Tournament updated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Tournament updated successfully");
     }
   });
 
@@ -186,10 +176,7 @@ export default function TournamentsPage() {
       queryClient.invalidateQueries({ queryKey: ["tournaments"] });
       setDeleteDialogOpen(false);
       setSelectedTournament(null);
-      toast({ title: "Tournament deleted successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Tournament deleted successfully");
     }
   });
 

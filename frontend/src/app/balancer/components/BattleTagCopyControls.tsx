@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   ContextMenuItem,
   ContextMenuLabel,
-  ContextMenuSeparator,
+  ContextMenuSeparator
 } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
@@ -14,9 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { formatBattleTagsForClipboard, formatSmurfCount } from "./balancer-page-helpers";
 
@@ -37,14 +37,12 @@ type BattleTagMenuItemsProps = {
 };
 
 function useBattleTagClipboard() {
-  const { toast } = useToast();
-
   return async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      toast({ title: `${label} copied` });
+      notify.success(`${label} copied`);
     } catch {
-      toast({ title: "Clipboard unavailable", variant: "destructive" });
+      notify.error("Clipboard unavailable");
     }
   };
 }
@@ -52,7 +50,7 @@ function useBattleTagClipboard() {
 export function BattleTagCopyButton({
   battleTag,
   label = "BattleTag",
-  className,
+  className
 }: BattleTagCopyButtonProps) {
   const copyBattleTag = useBattleTagClipboard();
 
@@ -63,7 +61,7 @@ export function BattleTagCopyButton({
       size="icon"
       className={cn(
         "h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-cyan-100",
-        className,
+        className
       )}
       title={`Copy ${label}`}
       onClick={() => copyBattleTag(battleTag, label)}
@@ -82,14 +80,17 @@ export function SmurfTagStrip({ smurfTags, className, compact = false }: SmurfTa
   }
 
   return (
-    <div className={cn("flex shrink-0 items-center gap-1", className)} onDoubleClick={(event) => event.stopPropagation()}>
+    <div
+      className={cn("flex shrink-0 items-center gap-1", className)}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn(
               "inline-flex items-center gap-1 rounded-full border border-cyan-300/15 bg-cyan-500/8 font-semibold text-cyan-100/62 transition hover:border-cyan-300/30 hover:bg-cyan-500/14 hover:text-cyan-50",
-              compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+              compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]"
             )}
             title="Show smurf BattleTags"
           >
@@ -101,7 +102,9 @@ export function SmurfTagStrip({ smurfTags, className, compact = false }: SmurfTa
           {smurfTags.length > 1 ? (
             <>
               <DropdownMenuItem
-                onClick={() => copyBattleTag(formatBattleTagsForClipboard(smurfTags), "Smurf BattleTags")}
+                onClick={() =>
+                  copyBattleTag(formatBattleTagsForClipboard(smurfTags), "Smurf BattleTags")
+                }
               >
                 <Files className="h-4 w-4" />
                 Copy all smurfs
@@ -110,7 +113,10 @@ export function SmurfTagStrip({ smurfTags, className, compact = false }: SmurfTa
             </>
           ) : null}
           {smurfTags.map((smurfTag) => (
-            <DropdownMenuItem key={smurfTag} onClick={() => copyBattleTag(smurfTag, "Smurf BattleTag")}>
+            <DropdownMenuItem
+              key={smurfTag}
+              onClick={() => copyBattleTag(smurfTag, "Smurf BattleTag")}
+            >
               <Copy className="h-4 w-4" />
               <span className="truncate">{smurfTag}</span>
             </DropdownMenuItem>

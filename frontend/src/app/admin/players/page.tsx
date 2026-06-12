@@ -4,7 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeftRight, Check, ChevronsUpDown, Minus, Plus, Pencil, Sparkles, Trash2 } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Check,
+  ChevronsUpDown,
+  Minus,
+  Plus,
+  Pencil,
+  Sparkles,
+  Trash2
+} from "lucide-react";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
@@ -15,7 +24,7 @@ import { TournamentCombobox } from "@/components/admin/TournamentCombobox";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import adminService from "@/services/admin.service";
@@ -31,7 +40,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList,
+  CommandList
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -138,7 +147,7 @@ function SearchableSelect({
   placeholder,
   searchPlaceholder,
   emptyMessage,
-  disabled = false,
+  disabled = false
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
@@ -160,10 +169,7 @@ function SearchableSelect({
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-0"
-      >
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -180,9 +186,16 @@ function SearchableSelect({
                 >
                   <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
                     <span className="truncate">{option.label}</span>
-                    {option.meta ? <span className="shrink-0 text-xs text-muted-foreground">{option.meta}</span> : null}
+                    {option.meta ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">{option.meta}</span>
+                    ) : null}
                   </div>
-                  <Check className={cn("ml-2 h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
+                  <Check
+                    className={cn(
+                      "ml-2 h-4 w-4",
+                      value === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -292,7 +305,7 @@ const defaultFormData: PlayerFormData = {
   division: 0,
   is_newcomer: false,
   is_newcomer_role: false,
-  is_substitution: false,
+  is_substitution: false
 };
 
 function getCreatePlayerForm(tournamentId: number | null): PlayerFormData {
@@ -309,7 +322,7 @@ function getEditPlayerForm(player: Player): PlayerFormData {
     division: player.division,
     is_newcomer: player.is_newcomer,
     is_newcomer_role: player.is_newcomer_role,
-    is_substitution: player.is_substitution,
+    is_substitution: player.is_substitution
   };
 }
 
@@ -317,7 +330,7 @@ function buildPlayerRows(teams: Team[]): PlayerRow[] {
   return teams.flatMap((team) =>
     (team.players ?? []).map((player) => ({
       ...player,
-      team,
+      team
     }))
   );
 }
@@ -334,7 +347,7 @@ function buildPlayerCreateInput(formData: PlayerFormData): PlayerCreateInput {
     is_newcomer: formData.is_newcomer,
     is_newcomer_role: formData.is_newcomer_role,
     is_substitution: formData.is_substitution,
-    ...(formData.sub_role ? { sub_role: formData.sub_role } : {}),
+    ...(formData.sub_role ? { sub_role: formData.sub_role } : {})
   };
 }
 
@@ -347,7 +360,7 @@ function buildPlayerUpdateInput(formData: PlayerFormData): PlayerUpdateInput {
     is_newcomer: formData.is_newcomer,
     is_newcomer_role: formData.is_newcomer_role,
     is_substitution: formData.is_substitution,
-    ...(formData.sub_role ? { sub_role: formData.sub_role } : {}),
+    ...(formData.sub_role ? { sub_role: formData.sub_role } : {})
   };
 }
 
@@ -361,7 +374,6 @@ export default function PlayersPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
   const { canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const queryClient = useQueryClient();
@@ -373,9 +385,7 @@ export default function PlayersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const selectedTournamentId = parseTournamentQueryParam(
-    searchParams.get(TOURNAMENT_QUERY_PARAM)
-  );
+  const selectedTournamentId = parseTournamentQueryParam(searchParams.get(TOURNAMENT_QUERY_PARAM));
   const [selectedUserName, setSelectedUserName] = useState("");
 
   // Fetch tournaments and teams
@@ -386,15 +396,17 @@ export default function PlayersPage() {
 
   const { data: teamsData } = useQuery({
     queryKey: ["teams", selectedTournamentId],
-    queryFn: () => teamService.getAll(selectedTournamentId),
+    queryFn: () => teamService.getAll(selectedTournamentId)
   });
 
-  const selectedTournament = tournamentsData?.results.find((tournament) => tournament.id === selectedTournamentId);
+  const selectedTournament = tournamentsData?.results.find(
+    (tournament) => tournament.id === selectedTournamentId
+  );
   const selectedWorkspaceId = selectedTournament?.workspace_id;
   const { data: playerSubRoles } = useQuery({
     queryKey: ["player-sub-roles", selectedWorkspaceId],
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: selectedWorkspaceId! }),
-    enabled: Boolean(selectedWorkspaceId),
+    enabled: Boolean(selectedWorkspaceId)
   });
 
   // Form state
@@ -408,10 +420,7 @@ export default function PlayersPage() {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       setCreateDialogOpen(false);
       resetForm();
-      toast({ title: "Player created successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Player created successfully");
     }
   });
 
@@ -424,10 +433,7 @@ export default function PlayersPage() {
       setEditDialogOpen(false);
       setSelectedPlayer(null);
       resetForm();
-      toast({ title: "Player updated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Player updated successfully");
     }
   });
 
@@ -438,10 +444,7 @@ export default function PlayersPage() {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       setDeleteDialogOpen(false);
       setSelectedPlayer(null);
-      toast({ title: "Player deleted successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Player deleted successfully");
     }
   });
 
@@ -472,17 +475,19 @@ export default function PlayersPage() {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      toast({ title: "Missing player name", description: "Enter a player name before saving.", variant: "destructive" });
+      notify.error("Missing player name", { description: "Enter a player name before saving." });
       return;
     }
 
     if (formData.user_id <= 0) {
-      toast({ title: "Missing user", description: "Select a user from the search field before saving.", variant: "destructive" });
+      notify.error("Missing user", {
+        description: "Select a user from the search field before saving."
+      });
       return;
     }
 
     if (formData.team_id <= 0) {
-      toast({ title: "Missing team", description: "Select a team before saving.", variant: "destructive" });
+      notify.error("Missing team", { description: "Select a team before saving." });
       return;
     }
 
@@ -494,7 +499,7 @@ export default function PlayersPage() {
     if (selectedPlayer) {
       updateMutation.mutate({
         id: selectedPlayer.id,
-        data: buildPlayerUpdateInput(formData),
+        data: buildPlayerUpdateInput(formData)
       });
     }
   };
@@ -517,7 +522,7 @@ export default function PlayersPage() {
     setFormData((current) => ({
       ...current,
       tournament_id: nextTournamentId ?? 0,
-      team_id: 0,
+      team_id: 0
     }));
 
     const query = nextParams.toString();
@@ -530,13 +535,15 @@ export default function PlayersPage() {
   const isEditDirty = editDialogOpen && hasUnsavedChanges(formData, editFormInitial);
 
   const subRoleOptions = filterSubRoleOptions(playerSubRoles, formData.role);
-  const hasCurrentSubRoleOption = subRoleOptions.some((subRole) => subRole.slug === formData.sub_role);
+  const hasCurrentSubRoleOption = subRoleOptions.some(
+    (subRole) => subRole.slug === formData.sub_role
+  );
   const teamOptions = useMemo(
     () =>
       (teamsData?.results ?? []).map((team) => ({
         value: team.id.toString(),
         label: team.name,
-        meta: `${team.players?.length ?? 0} players`,
+        meta: `${team.players?.length ?? 0} players`
       })),
     [teamsData?.results]
   );
@@ -546,15 +553,15 @@ export default function PlayersPage() {
       ...subRoleOptions.map((subRole) => ({
         value: subRole.slug,
         label: subRole.label,
-        meta: subRole.slug,
-      })),
+        meta: subRole.slug
+      }))
     ];
 
     if (formData.sub_role && !hasCurrentSubRoleOption) {
       options.push({
         value: formData.sub_role,
         label: formatSubRoleLabel(formData.sub_role) ?? formData.sub_role,
-        meta: "current",
+        meta: "current"
       });
     }
 
@@ -571,7 +578,10 @@ export default function PlayersPage() {
       accessorKey: "role",
       header: "Role",
       cell: ({ row }) => (
-        <div className="flex items-center" title={normalizePlayerRole(row.getValue<string>("role"))}>
+        <div
+          className="flex items-center"
+          title={normalizePlayerRole(row.getValue<string>("role"))}
+        >
           <PlayerRoleIcon role={normalizePlayerRole(row.getValue<string>("role"))} size={18} />
         </div>
       )
@@ -584,7 +594,9 @@ export default function PlayersPage() {
     {
       accessorKey: "sub_role",
       header: "Sub-role",
-      cell: ({ row }) => <div>{formatSubRoleLabel(row.getValue<string | null>("sub_role")) ?? "-"}</div>
+      cell: ({ row }) => (
+        <div>{formatSubRoleLabel(row.getValue<string | null>("sub_role")) ?? "-"}</div>
+      )
     },
     {
       accessorKey: "division",
@@ -614,8 +626,12 @@ export default function PlayersPage() {
       header: "Flags",
       cell: ({ row }) => (
         <div className="flex gap-1">
-          {row.original.is_newcomer && <StatusIcon icon={Sparkles} label="Newcomer" variant="warning" />}
-          {row.original.is_substitution && <StatusIcon icon={ArrowLeftRight} label="Substitute" variant="info" />}
+          {row.original.is_newcomer && (
+            <StatusIcon icon={Sparkles} label="Newcomer" variant="warning" />
+          )}
+          {row.original.is_substitution && (
+            <StatusIcon icon={ArrowLeftRight} label="Substitute" variant="info" />
+          )}
         </div>
       )
     },
@@ -625,7 +641,12 @@ export default function PlayersPage() {
         canUpdate || canDelete ? (
           <div className="flex items-center gap-2">
             {canUpdate ? (
-              <Button aria-label={`Edit ${row.original.name}`} variant="ghost" size="icon" onClick={() => handleEdit(row.original)}>
+              <Button
+                aria-label={`Edit ${row.original.name}`}
+                variant="ghost"
+                size="icon"
+                onClick={() => handleEdit(row.original)}
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
             ) : null}
@@ -674,7 +695,15 @@ export default function PlayersPage() {
       </div>
 
       <AdminDataTable
-        queryKey={(page, search, pageSize, sortField, sortDir) => ["players", selectedTournamentId, page, search, pageSize, sortField, sortDir]}
+        queryKey={(page, search, pageSize, sortField, sortDir) => [
+          "players",
+          selectedTournamentId,
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
+        ]}
         queryFn={async (page, search, pageSize, sortField, sortDir) => {
           const data = await teamService.getAll(selectedTournamentId);
           const players = buildPlayerRows(data.results);
@@ -710,11 +739,15 @@ export default function PlayersPage() {
             <SearchableSelect
               value={formData.team_id ? formData.team_id.toString() : ""}
               options={teamOptions}
-              placeholder={selectedTournamentId ? "Search and select team" : "Select tournament first"}
+              placeholder={
+                selectedTournamentId ? "Search and select team" : "Select tournament first"
+              }
               searchPlaceholder="Search team..."
               emptyMessage="No teams found."
               disabled={!selectedTournamentId}
-              onChange={(value) => setFormData({ ...formData, team_id: Number.parseInt(value, 10) })}
+              onChange={(value) =>
+                setFormData({ ...formData, team_id: Number.parseInt(value, 10) })
+              }
             />
           </div>
 
@@ -740,7 +773,7 @@ export default function PlayersPage() {
                 setFormData((current) => ({
                   ...current,
                   user_id: user?.id ?? 0,
-                  name: current.name || user?.name || "",
+                  name: current.name || user?.name || ""
                 }));
               }}
             />
@@ -750,9 +783,7 @@ export default function PlayersPage() {
             <Label htmlFor="role">Role</Label>
             <Select
               value={normalizePlayerRole(formData.role)}
-              onValueChange={(value) =>
-                setFormData({ ...formData, role: value, sub_role: "" })
-              }
+              onValueChange={(value) => setFormData({ ...formData, role: value, sub_role: "" })}
             >
               <SelectTrigger>
                 <RoleOptionContent role={normalizePlayerRole(formData.role)} />
@@ -779,7 +810,7 @@ export default function PlayersPage() {
                 const subRole = value === "none" ? "" : value;
                 setFormData({
                   ...formData,
-                  sub_role: subRole,
+                  sub_role: subRole
                 });
               }}
             />
@@ -863,9 +894,7 @@ export default function PlayersPage() {
             <Label htmlFor="edit-role">Role</Label>
             <Select
               value={normalizePlayerRole(formData.role)}
-              onValueChange={(value) =>
-                setFormData({ ...formData, role: value, sub_role: "" })
-              }
+              onValueChange={(value) => setFormData({ ...formData, role: value, sub_role: "" })}
             >
               <SelectTrigger>
                 <RoleOptionContent role={normalizePlayerRole(formData.role)} />
@@ -892,7 +921,7 @@ export default function PlayersPage() {
                 const subRole = value === "none" ? "" : value;
                 setFormData({
                   ...formData,
-                  sub_role: subRole,
+                  sub_role: subRole
                 });
               }}
             />

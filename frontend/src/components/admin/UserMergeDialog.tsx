@@ -12,7 +12,7 @@ import type {
   UserMergeFieldPolicy,
   UserMergeIdentityOption,
   UserMergeIdentitySelection,
-  UserMergePreviewResponse,
+  UserMergePreviewResponse
 } from "@/types/admin.types";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -39,18 +39,20 @@ interface UserMergeDialogProps {
 type FieldKey = keyof UserMergeFieldPolicy;
 type IdentitySelectionKey = keyof UserMergeIdentitySelection;
 
-function buildDefaultIdentitySelection(preview: UserMergePreviewResponse): UserMergeIdentitySelection {
+function buildDefaultIdentitySelection(
+  preview: UserMergePreviewResponse
+): UserMergeIdentitySelection {
   return {
     discord_ids: preview.source.discord.map((item) => item.id),
     battle_tag_ids: preview.source.battle_tag.map((item) => item.id),
-    twitch_ids: preview.source.twitch.map((item) => item.id),
+    twitch_ids: preview.source.twitch.map((item) => item.id)
   };
 }
 
 function mergePreviewToFieldPolicy(preview: UserMergePreviewResponse): UserMergeFieldPolicy {
   return {
     name: "target",
-    avatar_url: "target",
+    avatar_url: "target"
   };
 }
 
@@ -59,7 +61,7 @@ function FieldChoiceButtons({
   fieldKey,
   preview,
   value,
-  onChange,
+  onChange
 }: {
   label: string;
   fieldKey: FieldKey;
@@ -105,7 +107,7 @@ function IdentitySelectionSection({
   label,
   items,
   selectedIds,
-  onToggle,
+  onToggle
 }: {
   label: string;
   items: UserMergeIdentityOption[];
@@ -161,18 +163,18 @@ export function UserMergeDialog({
   sourceUser,
   open,
   onOpenChange,
-  onMerged,
+  onMerged
 }: UserMergeDialogProps) {
   const queryClient = useQueryClient();
   const [targetUser, setTargetUser] = useState<MinimizedUser | undefined>();
   const [fieldPolicy, setFieldPolicy] = useState<UserMergeFieldPolicy>({
     name: "target",
-    avatar_url: "target",
+    avatar_url: "target"
   });
   const [identitySelection, setIdentitySelection] = useState<UserMergeIdentitySelection>({
     discord_ids: [],
     battle_tag_ids: [],
-    twitch_ids: [],
+    twitch_ids: []
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -180,14 +182,14 @@ export function UserMergeDialog({
     mutationFn: () =>
       adminService.previewUserMerge({
         source_user_id: sourceUser.id,
-        target_user_id: targetUser!.id,
+        target_user_id: targetUser!.id
       }),
     onSuccess: (preview) => {
       setFieldPolicy(mergePreviewToFieldPolicy(preview));
       setIdentitySelection(buildDefaultIdentitySelection(preview));
       setConfirmDelete(false);
       executeMutation.reset();
-    },
+    }
   });
 
   const executeMutation = useMutation({
@@ -196,7 +198,7 @@ export function UserMergeDialog({
       await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       onOpenChange(false);
       onMerged?.(result.surviving_target_user_id);
-    },
+    }
   });
 
   const preview = previewMutation.data;
@@ -205,7 +207,7 @@ export function UserMergeDialog({
       Object.entries(preview?.affected_counts ?? {})
         .filter(([, count]) => count > 0)
         .sort((a, b) => b[1] - a[1]),
-    [preview],
+    [preview]
   );
 
   const handleTargetSelect = (user: MinimizedUser | undefined) => {
@@ -220,7 +222,7 @@ export function UserMergeDialog({
   const handleIdentityToggle = (
     key: IdentitySelectionKey,
     identityId: number,
-    checked: boolean,
+    checked: boolean
   ) => {
     setIdentitySelection((prev) => {
       const nextValues = checked
@@ -237,7 +239,7 @@ export function UserMergeDialog({
       target_user_id: targetUser.id,
       preview_fingerprint: preview.preview_fingerprint,
       field_policy: fieldPolicy,
-      identity_selection: identitySelection,
+      identity_selection: identitySelection
     });
   };
 
@@ -252,7 +254,8 @@ export function UserMergeDialog({
             Merge Player Profiles
           </DialogTitle>
           <DialogDescription>
-            Merge source profile <strong>{sourceUser.name}</strong> into another existing player profile.
+            Merge source profile <strong>{sourceUser.name}</strong> into another existing player
+            profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -293,14 +296,6 @@ export function UserMergeDialog({
             </Button>
           </div>
 
-          {previewMutation.isError && previewMutation.error instanceof Error ? (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Preview failed</AlertTitle>
-              <AlertDescription>{previewMutation.error.message}</AlertDescription>
-            </Alert>
-          ) : null}
-
           {preview ? (
             <div className="space-y-5">
               {mergeBlocked ? (
@@ -337,7 +332,10 @@ export function UserMergeDialog({
                     {affectedEntries.length > 0 ? (
                       <div className="space-y-2">
                         {affectedEntries.map(([key, count]) => (
-                          <div key={key} className="flex items-center justify-between gap-3 text-sm">
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-3 text-sm"
+                          >
                             <span className="text-muted-foreground">{key}</span>
                             <Badge variant="secondary" className="tabular-nums">
                               {count}
@@ -359,19 +357,25 @@ export function UserMergeDialog({
                   label="Discord identities"
                   items={preview.source.discord}
                   selectedIds={identitySelection.discord_ids}
-                  onToggle={(identityId, checked) => handleIdentityToggle("discord_ids", identityId, checked)}
+                  onToggle={(identityId, checked) =>
+                    handleIdentityToggle("discord_ids", identityId, checked)
+                  }
                 />
                 <IdentitySelectionSection
                   label="BattleTag identities"
                   items={preview.source.battle_tag}
                   selectedIds={identitySelection.battle_tag_ids}
-                  onToggle={(identityId, checked) => handleIdentityToggle("battle_tag_ids", identityId, checked)}
+                  onToggle={(identityId, checked) =>
+                    handleIdentityToggle("battle_tag_ids", identityId, checked)
+                  }
                 />
                 <IdentitySelectionSection
                   label="Twitch identities"
                   items={preview.source.twitch}
                   selectedIds={identitySelection.twitch_ids}
-                  onToggle={(identityId, checked) => handleIdentityToggle("twitch_ids", identityId, checked)}
+                  onToggle={(identityId, checked) =>
+                    handleIdentityToggle("twitch_ids", identityId, checked)
+                  }
                 />
               </div>
 
@@ -393,14 +397,6 @@ export function UserMergeDialog({
                   </div>
                 </label>
               </div>
-
-              {executeMutation.isError && executeMutation.error instanceof Error ? (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Merge failed</AlertTitle>
-                  <AlertDescription>{executeMutation.error.message}</AlertDescription>
-                </Alert>
-              ) : null}
             </div>
           ) : null}
         </div>

@@ -32,12 +32,11 @@ import type {
   BalancerConfig,
   BalancerConfigResponse
 } from "@/types/balancer.types";
-import type { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 
 type UseBalancerMutationsOptions = {
   tournamentId: number | null;
   workspaceId: number | null;
-  toast: ReturnType<typeof useToast>["toast"];
   queryClient: QueryClient;
   dispatchJob: React.Dispatch<JobAction>;
   setSelectedPlayerId: (id: number | null) => void;
@@ -93,7 +92,6 @@ async function runReportedStage<T>(
 export function useBalancerMutations({
   tournamentId,
   workspaceId,
-  toast,
   queryClient,
   dispatchJob,
   setSelectedPlayerId,
@@ -125,7 +123,7 @@ export function useBalancerMutations({
       await queryClient.invalidateQueries({
         queryKey: ["balancer-admin", "registrations", tournamentId]
       });
-      toast({ title: "Registration included in balancer" });
+      notify.success("Registration included in balancer");
       // Autofill ranks for the just-included player using the balancer-first priority chain
       // (previous balances → analytics → OW), reusing the backend's autofill logic.
       if (tournamentId) {
@@ -141,13 +139,6 @@ export function useBalancerMutations({
       } else {
         setPendingRankHistory(null);
       }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to include registration",
-        description: error.message,
-        variant: "destructive"
-      });
     }
   });
 
@@ -216,14 +207,7 @@ export function useBalancerMutations({
     onSuccess: async () => {
       setEditingPlayerId(null);
       await invalidateRegistrations();
-      toast({ title: "Registration updated" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update registration",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Registration updated");
     }
   });
 
@@ -236,14 +220,7 @@ export function useBalancerMutations({
     onSuccess: async () => {
       await invalidateRegistrations();
       setEditingPlayerId(null);
-      toast({ title: "Registration excluded from balancer" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to exclude registration",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Registration excluded from balancer");
     }
   });
 
@@ -255,18 +232,11 @@ export function useBalancerMutations({
       }),
     onSuccess: async (_, variables) => {
       await invalidateRegistrations();
-      toast({
-        title: variables.isInPool
+      notify.success(
+        variables.isInPool
           ? "Registration included in balancer"
           : "Registration excluded from balancer"
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update pool membership",
-        description: error.message,
-        variant: "destructive"
-      });
+      );
     }
   });
 
@@ -275,14 +245,7 @@ export function useBalancerMutations({
       balancerAdminService.setBalancerStatus(playerId, balancerStatus),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Balancer status updated" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update balancer status",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Balancer status updated");
     }
   });
 
@@ -300,16 +263,9 @@ export function useBalancerMutations({
     },
     onSuccess: async (result) => {
       await invalidateRegistrations();
-      toast({
-        title: `${result.updated} registration${result.updated !== 1 ? "s" : ""} ${result.isInPool ? "included" : "excluded"}`
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Bulk pool update failed",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success(
+        `${result.updated} registration${result.updated !== 1 ? "s" : ""} ${result.isInPool ? "included" : "excluded"}`
+      );
     }
   });
 
@@ -330,16 +286,9 @@ export function useBalancerMutations({
     },
     onSuccess: async (result) => {
       await invalidateRegistrations();
-      toast({
-        title: `${result.updated} balancer status${result.updated !== 1 ? "es" : ""} updated`
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Bulk status update failed",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success(
+        `${result.updated} balancer status${result.updated !== 1 ? "es" : ""} updated`
+      );
     }
   });
 
@@ -490,28 +439,22 @@ export function useBalancerMutations({
               const bestId = newIds[0];
               if (bestId) setActiveVariantId(bestId);
               dispatchJob({ type: "clear" });
-              toast({ title: "Balance completed" });
+              notify.success("Balance completed");
             } catch (error) {
               const message =
                 error instanceof Error ? error.message : "Failed to fetch balance result";
               dispatchJob({ type: "update", status: "failed", message, progress: null });
-              toast({ title: "Balance failed", description: message, variant: "destructive" });
+              notify.error("Balance failed", { description: message });
             }
           }
           if (event.status === "failed") {
-            toast({ title: "Balance failed", description: event.message, variant: "destructive" });
+            notify.error("Balance failed", { description: event.message });
           }
         },
         onError: (message) => {
           dispatchJob({ type: "update", status: "failed", message, progress: null });
+          notify.error("Balance job failed", { description: message });
         }
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to run balancer",
-        description: error.message,
-        variant: "destructive"
       });
     }
   });
@@ -525,14 +468,7 @@ export function useBalancerMutations({
         queryKey: ["balancer-public", "balance", tournamentId]
       });
       applySavedBalanceVariant(savedBalance);
-      toast({ title: "Final balance saved" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to save balance",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Final balance saved");
     }
   });
 
@@ -555,16 +491,8 @@ export function useBalancerMutations({
     },
     onSuccess: ({ savedBalance, exportResult }) => {
       applySavedBalanceVariant(savedBalance);
-      toast({
-        title: "Teams exported to tournament",
+      notify.success("Teams exported to tournament", {
         description: `${exportResult.imported_teams} teams created.`
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to export to tournament",
-        description: error.message,
-        variant: "destructive"
       });
     }
   });
@@ -586,14 +514,7 @@ export function useBalancerMutations({
       return result;
     },
     onSuccess: (result) => {
-      toast({ title: "Teams imported", description: `${result.imported_teams} teams created.` });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to import teams",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Teams imported", { description: `${result.imported_teams} teams created.` });
     }
   });
 

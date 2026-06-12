@@ -6,21 +6,21 @@ import React from "react";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-  display: "swap",
+  display: "swap"
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-jetbrains-mono",
-  display: "swap",
+  display: "swap"
 });
 
 const barlowCondensed = Barlow_Condensed({
   subsets: ["latin"],
   weight: ["600", "700", "800"],
   variable: "--font-barlow-condensed",
-  display: "swap",
+  display: "swap"
 });
 import { Providers } from "@/app/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
@@ -29,9 +29,8 @@ import { cn } from "@/lib/utils";
 import AuthModal from "@/components/AuthModal";
 import AccountSettingsModal from "@/components/AccountSettingsModal";
 import LoginModalTrigger from "@/components/LoginModalTrigger";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
-
 
 export const metadata: Metadata = {
   title: SITE_NAME,

@@ -17,22 +17,25 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { OAuthConnectionAdmin, OAuthProvider } from "@/types/rbac.types";
 
 const PAGE_SIZE = 20;
 
-const PROVIDER_META: Record<OAuthProvider, { label: string; icon: string | null; iconClass?: string }> = {
+const PROVIDER_META: Record<
+  OAuthProvider,
+  { label: string; icon: string | null; iconClass?: string }
+> = {
   discord: { label: "Discord", icon: "/discord.png" },
   twitch: { label: "Twitch", icon: "/twitch.png" },
   battlenet: { label: "Battle.net", icon: "/battlenet.svg", iconClass: "invert grayscale" },
   google: { label: "Google", icon: null },
-  github: { label: "GitHub", icon: null },
+  github: { label: "GitHub", icon: null }
 };
 
 const PROVIDER_COLORS: Record<OAuthProvider, string> = {
@@ -40,7 +43,7 @@ const PROVIDER_COLORS: Record<OAuthProvider, string> = {
   twitch: "bg-[#9146FF]/15 text-[#b380ff] border-[#9146FF]/30",
   battlenet: "bg-[#148EFF]/15 text-[#60b0ff] border-[#148EFF]/30",
   google: "bg-red-500/15 text-red-400 border-red-500/30",
-  github: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+  github: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30"
 };
 
 function ProviderBadge({ provider }: { provider: OAuthProvider }) {
@@ -67,7 +70,7 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
-    day: "numeric",
+    day: "numeric"
   });
 }
 
@@ -76,13 +79,8 @@ function isTokenExpired(expiresAt: string | null | undefined): boolean {
   return new Date(expiresAt) < new Date();
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong";
-}
-
 export default function OAuthConnectionsAdminPage() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const canDeleteConnections = hasPermission("auth_user.update");
   const [providerFilter, setProviderFilter] = useState<string>("all");
@@ -93,18 +91,15 @@ export default function OAuthConnectionsAdminPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["access-admin", "oauth-connections"] });
       setDeletingConnection(null);
-      toast({ title: "OAuth connection removed" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("OAuth connection removed");
+    }
   });
 
   const columns: ColumnDef<OAuthConnectionAdmin>[] = [
     {
       accessorKey: "provider",
       header: "Provider",
-      cell: ({ row }) => <ProviderBadge provider={row.original.provider} />,
+      cell: ({ row }) => <ProviderBadge provider={row.original.provider} />
     },
     {
       id: "provider_user",
@@ -120,9 +115,7 @@ export default function OAuthConnectionsAdminPage() {
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
-                {conn.display_name ?? conn.username}
-              </p>
+              <p className="truncate text-sm font-medium">{conn.display_name ?? conn.username}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {conn.username}
                 {conn.email ? ` \u00B7 ${conn.email}` : ""}
@@ -130,14 +123,14 @@ export default function OAuthConnectionsAdminPage() {
             </div>
           </div>
         );
-      },
+      }
     },
     {
       accessorKey: "provider_user_id",
       header: "Provider ID",
       cell: ({ row }) => (
         <code className="text-xs text-muted-foreground">{row.original.provider_user_id}</code>
-      ),
+      )
     },
     {
       id: "auth_user",
@@ -158,7 +151,7 @@ export default function OAuthConnectionsAdminPage() {
             <p className="truncate text-xs text-muted-foreground">{conn.auth_user_email}</p>
           </div>
         );
-      },
+      }
     },
     {
       id: "token_status",
@@ -170,20 +163,23 @@ export default function OAuthConnectionsAdminPage() {
         }
         const expired = isTokenExpired(expiresAt);
         return (
-          <Badge variant="outline" className={expired ? "border-red-500/30 text-red-400" : "border-green-500/30 text-green-400"}>
+          <Badge
+            variant="outline"
+            className={
+              expired ? "border-red-500/30 text-red-400" : "border-green-500/30 text-green-400"
+            }
+          >
             {expired ? "Expired" : "Active"}
           </Badge>
         );
-      },
+      }
     },
     {
       accessorKey: "created_at",
       header: "Connected",
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {formatDate(row.original.created_at)}
-        </span>
-      ),
+        <span className="text-sm text-muted-foreground">{formatDate(row.original.created_at)}</span>
+      )
     },
     ...(canDeleteConnections
       ? ([
@@ -199,10 +195,10 @@ export default function OAuthConnectionsAdminPage() {
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-            ),
-          },
+            )
+          }
         ] satisfies ColumnDef<OAuthConnectionAdmin>[])
-      : []),
+      : [])
   ];
 
   return (
@@ -221,20 +217,29 @@ export default function OAuthConnectionsAdminPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Providers</SelectItem>
-              {(Object.entries(PROVIDER_META) as [OAuthProvider, typeof PROVIDER_META[OAuthProvider]][]).map(
-                ([key, meta]) => (
-                  <SelectItem key={key} value={key}>
-                    <span className="flex items-center gap-2">
-                      {meta.icon ? (
-                        <Image src={meta.icon} alt={meta.label} width={14} height={14} className={meta.iconClass ?? ""} />
-                      ) : (
-                        <Globe className="h-3.5 w-3.5" />
-                      )}
-                      {meta.label}
-                    </span>
-                  </SelectItem>
-                ),
-              )}
+              {(
+                Object.entries(PROVIDER_META) as [
+                  OAuthProvider,
+                  (typeof PROVIDER_META)[OAuthProvider]
+                ][]
+              ).map(([key, meta]) => (
+                <SelectItem key={key} value={key}>
+                  <span className="flex items-center gap-2">
+                    {meta.icon ? (
+                      <Image
+                        src={meta.icon}
+                        alt={meta.label}
+                        width={14}
+                        height={14}
+                        className={meta.iconClass ?? ""}
+                      />
+                    ) : (
+                      <Globe className="h-3.5 w-3.5" />
+                    )}
+                    {meta.label}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -250,12 +255,12 @@ export default function OAuthConnectionsAdminPage() {
             pageSize,
             sortField,
             sortDir,
-            providerFilter,
+            providerFilter
           ]}
           queryFn={async (page, search, pageSize, sortField, sortDir) => {
             const connections = await rbacService.listOAuthConnections({
               search: search || undefined,
-              provider: providerFilter !== "all" ? providerFilter : undefined,
+              provider: providerFilter !== "all" ? providerFilter : undefined
             });
             return paginateResults(sortArray(connections, sortField, sortDir), page, pageSize);
           }}

@@ -28,7 +28,7 @@ import {
   User,
   UserPlus,
   Users,
-  X,
+  X
 } from "lucide-react";
 
 import { AchievementCombobox } from "@/components/admin/achievements/AchievementCombobox";
@@ -47,7 +47,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,7 +57,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -67,12 +67,12 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import tournamentService from "@/services/tournament.service";
 import type {
@@ -80,11 +80,18 @@ import type {
   AchievementGrain,
   AchievementRule,
   AchievementRuleUpdateInput,
-  AchievementScope,
+  AchievementScope
 } from "@/types/admin.types";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
-const CATEGORIES: AchievementCategory[] = ["overall", "hero", "division", "team", "standing", "match"];
+const CATEGORIES: AchievementCategory[] = [
+  "overall",
+  "hero",
+  "division",
+  "team",
+  "standing",
+  "match"
+];
 const SCOPES: AchievementScope[] = ["global", "tournament", "match"];
 const GRAINS: AchievementGrain[] = ["user", "user_tournament", "user_match"];
 
@@ -94,19 +101,19 @@ const CATEGORY_ICONS: Record<string, typeof Globe> = {
   division: Layers,
   team: Users,
   standing: Trophy,
-  match: Swords,
+  match: Swords
 };
 
 const SCOPE_ICONS: Record<string, typeof Globe> = {
   global: Globe,
   tournament: Trophy,
-  match: Map,
+  match: Map
 };
 
 const GRAIN_ICONS: Record<string, typeof Globe> = {
   user: User,
   user_tournament: Target,
-  user_match: Crosshair,
+  user_match: Crosshair
 };
 
 function CategoryIcon({ category }: { category: string }) {
@@ -129,7 +136,7 @@ function SortableHead({
   label,
   currentSort,
   currentOrder,
-  onSort,
+  onSort
 }: {
   field: string;
   label: string;
@@ -174,7 +181,6 @@ export default function AchievementDetailPage() {
   // --- State ---
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deletingRule, setDeletingRule] = useState(false);
-  const { toast } = useToast();
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [overrideUserId, setOverrideUserId] = useState<number | undefined>(undefined);
   const [overrideUserName, setOverrideUserName] = useState("");
@@ -191,7 +197,9 @@ export default function AchievementDetailPage() {
   const [treeData, setTreeData] = useState<Record<string, unknown>>({});
 
   // Users table state
-  const [usersFilterTournamentId, setUsersFilterTournamentId] = useState<number | undefined>(undefined);
+  const [usersFilterTournamentId, setUsersFilterTournamentId] = useState<number | undefined>(
+    undefined
+  );
   const [usersSort, setUsersSort] = useState<string>("count");
   const [usersSortOrder, setUsersSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -199,39 +207,47 @@ export default function AchievementDetailPage() {
   const { data: rule, isLoading } = useQuery({
     queryKey: ["admin", "achievement-rule", workspaceId, ruleId],
     queryFn: () => adminService.getAchievementRule(workspaceId!, ruleId),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId
   });
 
   const { data: tournaments } = useQuery({
     queryKey: ["tournaments"],
-    queryFn: () => tournamentService.getAll(null),
+    queryFn: () => tournamentService.getAll(null)
   });
 
   const { data: allRules } = useQuery({
     queryKey: ["admin", "achievements", workspaceId],
     queryFn: () => adminService.getAchievementRules(workspaceId!),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId
   });
 
   const {
     data: usersData,
     fetchNextPage,
     hasNextPage,
-    isFetchingNextPage,
+    isFetchingNextPage
   } = useInfiniteQuery({
-    queryKey: ["admin", "achievement-rule-users", workspaceId, ruleId, usersFilterTournamentId, usersSort, usersSortOrder],
+    queryKey: [
+      "admin",
+      "achievement-rule-users",
+      workspaceId,
+      ruleId,
+      usersFilterTournamentId,
+      usersSort,
+      usersSortOrder
+    ],
     queryFn: ({ pageParam = 1 }) =>
       adminService.getAchievementRuleUsers(workspaceId!, ruleId, {
         page: pageParam,
         per_page: 30,
         tournament_id: usersFilterTournamentId,
         sort: usersSort,
-        order: usersSortOrder,
+        order: usersSortOrder
       }),
     getNextPageParam: (lastPage) =>
       lastPage.total / lastPage.per_page > lastPage.page ? lastPage.page + 1 : undefined,
     enabled: !!workspaceId,
-    initialPageParam: 1,
+    initialPageParam: 1
   });
 
   const { data: overrides, refetch: refetchOverrides } = useQuery({
@@ -240,7 +256,7 @@ export default function AchievementDetailPage() {
       const all = await adminService.getAchievementOverrides(workspaceId!);
       return all.filter((o) => o.achievement_rule_id === ruleId);
     },
-    enabled: !!workspaceId,
+    enabled: !!workspaceId
   });
 
   // --- Mutations ---
@@ -249,83 +265,79 @@ export default function AchievementDetailPage() {
       const updated = await adminService.updateAchievementRule(workspaceId!, ruleId, data);
       // Upload image if selected
       if (imageFile && updated.slug) {
-        const uploadResult = await adminService.uploadAchievementImage(updated.slug, imageFile, workspaceId!);
+        const uploadResult = await adminService.uploadAchievementImage(
+          updated.slug,
+          imageFile,
+          workspaceId!
+        );
         // Update the rule with the new image URL
         await adminService.updateAchievementRule(workspaceId!, ruleId, {
-          image_url: uploadResult.public_url,
+          image_url: uploadResult.public_url
         });
       }
       return updated;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievement-rule", workspaceId, ruleId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+      });
       queryClient.invalidateQueries({ queryKey: ["admin", "achievements", workspaceId] });
       setEditDialogOpen(false);
       setImageFile(null);
       setImagePreview(null);
-    },
+    }
   });
 
   const saveTreeMutation = useMutation({
     mutationFn: (conditionTree: Record<string, unknown>) =>
       adminService.updateAchievementRule(workspaceId!, ruleId, { condition_tree: conditionTree }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievement-rule", workspaceId, ruleId] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+      });
       queryClient.invalidateQueries({ queryKey: ["admin", "achievements", workspaceId] });
       setEditingTree(false);
-    },
+    }
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => adminService.deleteAchievementRule(workspaceId!, ruleId),
-    onSuccess: () => router.push("/admin/achievements"),
+    onSuccess: () => router.push("/admin/achievements")
   });
 
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
       adminService.updateAchievementRule(workspaceId!, ruleId, { enabled }),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievement-rule", workspaceId, ruleId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+      })
   });
 
   const evaluateMutation = useMutation({
     mutationFn: (tournamentId?: number) =>
       adminService.evaluateAchievements(workspaceId!, {
         tournament_id: tournamentId,
-        rule_ids: [ruleId],
+        rule_ids: [ruleId]
       }),
     onSuccess: (data) => {
-      toast({
-        title: `Evaluate: ${data.status}`,
-        description: `+${data.results_created} / -${data.results_removed}`,
+      notify.success(`Evaluate: ${data.status}`, {
+        description: `+${data.results_created} / -${data.results_removed}`
       });
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievement-rule-users", workspaceId, ruleId] });
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: "Evaluation failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "achievement-rule-users", workspaceId, ruleId]
       });
-    },
+    }
   });
 
   const testMutation = useMutation({
     mutationFn: (tournamentId?: number) =>
       adminService.testAchievementRule(workspaceId!, ruleId, tournamentId),
     onSuccess: (data) => {
-      toast({
-        title: "Dry-run complete",
-        description: `${data.qualifying_count} users qualify`,
+      notify.success("Dry-run complete", {
+        description: `${data.qualifying_count} users qualify`
       });
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: "Test failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
-    },
+    }
   });
 
   const overrideMutation = useMutation({
@@ -335,7 +347,7 @@ export default function AchievementDetailPage() {
         user_id: overrideUserId!,
         tournament_id: overrideTournamentId ?? null,
         action: overrideAction,
-        reason: overrideReason,
+        reason: overrideReason
       }),
     onSuccess: () => {
       refetchOverrides();
@@ -343,12 +355,12 @@ export default function AchievementDetailPage() {
       setOverrideUserId(undefined);
       setOverrideUserName("");
       setOverrideReason("");
-    },
+    }
   });
 
   const deleteOverrideMutation = useMutation({
     mutationFn: (id: number) => adminService.deleteAchievementOverride(workspaceId!, id),
-    onSuccess: () => refetchOverrides(),
+    onSuccess: () => refetchOverrides()
   });
 
   // --- Helpers ---
@@ -366,7 +378,7 @@ export default function AchievementDetailPage() {
       condition_tree: rule.condition_tree,
       depends_on: rule.depends_on,
       enabled: rule.enabled,
-      min_tournament_id: rule.min_tournament_id,
+      min_tournament_id: rule.min_tournament_id
     });
     updateMutation.reset();
     setEditDialogOpen(true);
@@ -374,10 +386,18 @@ export default function AchievementDetailPage() {
 
   const formInitial = rule
     ? {
-        name: rule.name, description_ru: rule.description_ru, description_en: rule.description_en,
-        image_url: rule.image_url, hero_id: rule.hero_id, category: rule.category,
-        scope: rule.scope, grain: rule.grain, condition_tree: rule.condition_tree,
-        depends_on: rule.depends_on, enabled: rule.enabled, min_tournament_id: rule.min_tournament_id,
+        name: rule.name,
+        description_ru: rule.description_ru,
+        description_en: rule.description_en,
+        image_url: rule.image_url,
+        hero_id: rule.hero_id,
+        category: rule.category,
+        scope: rule.scope,
+        grain: rule.grain,
+        condition_tree: rule.condition_tree,
+        depends_on: rule.depends_on,
+        enabled: rule.enabled,
+        min_tournament_id: rule.min_tournament_id
       }
     : {};
   const isFormDirty = editDialogOpen && hasUnsavedChanges(formData, formInitial);
@@ -416,10 +436,16 @@ export default function AchievementDetailPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/admin/achievements"><ArrowLeft className="h-4 w-4" /></Link>
+            <Link href="/admin/achievements">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
           </Button>
           {rule.image_url && (
-            <img src={rule.image_url} alt={rule.name} className="h-12 w-12 rounded-lg object-cover border" />
+            <img
+              src={rule.image_url}
+              alt={rule.name}
+              className="h-12 w-12 rounded-lg object-cover border"
+            />
           )}
           <div>
             <div className="flex items-center gap-2">
@@ -446,7 +472,11 @@ export default function AchievementDetailPage() {
               size="sm"
               onClick={() => toggleMutation.mutate(!rule.enabled)}
             >
-              {rule.enabled ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+              {rule.enabled ? (
+                <EyeOff className="mr-2 h-4 w-4" />
+              ) : (
+                <Eye className="mr-2 h-4 w-4" />
+              )}
               {rule.enabled ? "Disable" : "Enable"}
             </Button>
           )}
@@ -531,7 +561,6 @@ export default function AchievementDetailPage() {
             </div>
           </CardContent>
         </Card>
-
       </div>
 
       {/* Condition tree — full width, inline editable */}
@@ -540,7 +569,9 @@ export default function AchievementDetailPage() {
           <div>
             <CardTitle>Condition Tree</CardTitle>
             <CardDescription>
-              {editingTree ? "Edit the evaluation logic" : "Visual representation of the evaluation logic"}
+              {editingTree
+                ? "Edit the evaluation logic"
+                : "Visual representation of the evaluation logic"}
             </CardDescription>
           </div>
           {canUpdate && !editingTree && (
@@ -560,13 +591,12 @@ export default function AchievementDetailPage() {
         <CardContent>
           {editingTree ? (
             <div className="space-y-4">
-              <ConditionFlowEditor
-                value={treeData}
-                onChange={setTreeData}
-              />
+              <ConditionFlowEditor value={treeData} onChange={setTreeData} />
               <div className="flex items-center justify-end gap-2 pt-2 border-t">
                 {saveTreeMutation.error instanceof Error && (
-                  <p className="text-sm text-destructive mr-auto">{saveTreeMutation.error.message}</p>
+                  <p className="text-sm text-destructive mr-auto">
+                    {saveTreeMutation.error.message}
+                  </p>
                 )}
                 <Button
                   variant="outline"
@@ -622,10 +652,34 @@ export default function AchievementDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead field="user_name" label="User" currentSort={usersSort} currentOrder={usersSortOrder} onSort={handleUsersSort} />
-                <SortableHead field="count" label="Count" currentSort={usersSort} currentOrder={usersSortOrder} onSort={handleUsersSort} />
-                <SortableHead field="last_tournament_id" label="Last Tournament" currentSort={usersSort} currentOrder={usersSortOrder} onSort={handleUsersSort} />
-                <SortableHead field="first_qualified" label="First Earned" currentSort={usersSort} currentOrder={usersSortOrder} onSort={handleUsersSort} />
+                <SortableHead
+                  field="user_name"
+                  label="User"
+                  currentSort={usersSort}
+                  currentOrder={usersSortOrder}
+                  onSort={handleUsersSort}
+                />
+                <SortableHead
+                  field="count"
+                  label="Count"
+                  currentSort={usersSort}
+                  currentOrder={usersSortOrder}
+                  onSort={handleUsersSort}
+                />
+                <SortableHead
+                  field="last_tournament_id"
+                  label="Last Tournament"
+                  currentSort={usersSort}
+                  currentOrder={usersSortOrder}
+                  onSort={handleUsersSort}
+                />
+                <SortableHead
+                  field="first_qualified"
+                  label="First Earned"
+                  currentSort={usersSort}
+                  currentOrder={usersSortOrder}
+                  onSort={handleUsersSort}
+                />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -640,16 +694,23 @@ export default function AchievementDetailPage() {
                     <TableCell>{row.count}</TableCell>
                     <TableCell>
                       {row.last_tournament_id ? (
-                        <Link href={`/tournaments/${row.last_tournament_id}`} className="text-primary hover:underline">
+                        <Link
+                          href={`/tournaments/${row.last_tournament_id}`}
+                          className="text-primary hover:underline"
+                        >
                           #{row.last_tournament_id}
                         </Link>
-                      ) : "-"}
+                      ) : (
+                        "-"
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {row.first_qualified ? new Date(row.first_qualified).toLocaleDateString() : "-"}
+                      {row.first_qualified
+                        ? new Date(row.first_qualified).toLocaleDateString()
+                        : "-"}
                     </TableCell>
                   </TableRow>
-                )),
+                ))
               )}
               {totalUsers === 0 && (
                 <TableRow>
@@ -662,7 +723,11 @@ export default function AchievementDetailPage() {
           </Table>
           {hasNextPage && (
             <div className="flex justify-center mt-4">
-              <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
                 {isFetchingNextPage ? "Loading..." : "Load More"}
               </Button>
             </div>
@@ -743,8 +808,13 @@ export default function AchievementDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Action</Label>
-                <Select value={overrideAction} onValueChange={(v) => setOverrideAction(v as "grant" | "revoke")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={overrideAction}
+                  onValueChange={(v) => setOverrideAction(v as "grant" | "revoke")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="grant">Grant</SelectItem>
                     <SelectItem value="revoke">Revoke</SelectItem>
@@ -775,12 +845,18 @@ export default function AchievementDetailPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOverrideDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setOverrideDialogOpen(false)}>
+              Cancel
+            </Button>
             <Button
               onClick={() => overrideMutation.mutate()}
               disabled={!overrideUserId || !overrideReason || overrideMutation.isPending}
             >
-              {overrideMutation.isPending ? "Saving..." : overrideAction === "grant" ? "Grant" : "Revoke"}
+              {overrideMutation.isPending
+                ? "Saving..."
+                : overrideAction === "grant"
+                  ? "Grant"
+                  : "Revoke"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -789,20 +865,31 @@ export default function AchievementDetailPage() {
       {/* ─── Edit Dialog ─────────────────────────────────────────────── */}
       <EntityFormDialog
         open={editDialogOpen}
-        onOpenChange={(open) => { if (!open) setEditDialogOpen(false); }}
+        onOpenChange={(open) => {
+          if (!open) setEditDialogOpen(false);
+        }}
         title={`Edit: ${rule.slug}`}
         description="Update achievement metadata"
-        onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(formData); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          updateMutation.mutate(formData);
+        }}
         isSubmitting={updateMutation.isPending}
         submittingLabel="Updating..."
-        errorMessage={updateMutation.error instanceof Error ? updateMutation.error.message : undefined}
+        errorMessage={
+          updateMutation.error instanceof Error ? updateMutation.error.message : undefined
+        }
         isDirty={isFormDirty}
       >
         <ScrollArea className="max-h-[60vh]">
           <div className="space-y-4 pr-4">
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input value={formData.name ?? ""} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+              <Input
+                value={formData.name ?? ""}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
             </div>
 
             {/* Image upload */}
@@ -863,33 +950,76 @@ export default function AchievementDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Description (RU)</Label>
-                <Textarea value={formData.description_ru ?? ""} onChange={(e) => setFormData({ ...formData, description_ru: e.target.value })} required />
+                <Textarea
+                  value={formData.description_ru ?? ""}
+                  onChange={(e) => setFormData({ ...formData, description_ru: e.target.value })}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Description (EN)</Label>
-                <Textarea value={formData.description_en ?? ""} onChange={(e) => setFormData({ ...formData, description_en: e.target.value })} required />
+                <Textarea
+                  value={formData.description_en ?? ""}
+                  onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
+                  required
+                />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={formData.category ?? "overall"} onValueChange={(v) => setFormData({ ...formData, category: v as AchievementCategory })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                <Select
+                  value={formData.category ?? "overall"}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, category: v as AchievementCategory })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Scope</Label>
-                <Select value={formData.scope ?? "global"} onValueChange={(v) => setFormData({ ...formData, scope: v as AchievementScope })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{SCOPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                <Select
+                  value={formData.scope ?? "global"}
+                  onValueChange={(v) => setFormData({ ...formData, scope: v as AchievementScope })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SCOPES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Grain</Label>
-                <Select value={formData.grain ?? "user"} onValueChange={(v) => setFormData({ ...formData, grain: v as AchievementGrain })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{GRAINS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                <Select
+                  value={formData.grain ?? "user"}
+                  onValueChange={(v) => setFormData({ ...formData, grain: v as AchievementGrain })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GRAINS.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>

@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import userService from "@/services/user.service";
 import type { MinimizedUser } from "@/types/user.types";
@@ -217,7 +217,6 @@ function PlayerSearchSection({ onSelect }: { onSelect: (user: MinimizedUser) => 
 }
 
 function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => void }) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
 
@@ -231,16 +230,10 @@ function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => v
     mutationFn: (battleTagIds: number[] | null) =>
       adminService.triggerRankCollection({ user_id: user.id, battle_tag_ids: battleTagIds }),
     onSuccess: (result) => {
-      toast({ title: `Queued ${result.enqueued} rank fetch(es)` });
+      notify.success(`Queued ${result.enqueued} rank fetch(es)`);
       setSelectedTagIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["admin", "rank", "collection", user.id] });
-    },
-    onError: (error: Error) =>
-      toast({
-        title: "Failed to trigger collection",
-        description: error.message,
-        variant: "destructive"
-      })
+    }
   });
 
   const toggleTag = (id: number) =>
@@ -367,9 +360,7 @@ export default function RankCollectionAdminPage() {
       <FetchLogSection />
       <PlayerSearchSection onSelect={setSelectedUser} />
 
-      {selectedUser && (
-        <PlayerDialog user={selectedUser} onClose={() => setSelectedUser(null)} />
-      )}
+      {selectedUser && <PlayerDialog user={selectedUser} onClose={() => setSelectedUser(null)} />}
     </div>
   );
 }

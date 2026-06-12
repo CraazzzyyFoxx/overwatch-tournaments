@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -23,7 +23,7 @@ import type {
   AnalyticsJob,
   AnalyticsJobKind,
   AnalyticsJobProgressStage,
-  AnalyticsJobRealtimePayload,
+  AnalyticsJobRealtimePayload
 } from "@/types/analytics.types";
 
 interface MLAdminToolbarProps {
@@ -87,26 +87,22 @@ function trainScopeDescription(scope: TrainScope, selectedCount: number): string
   return `${selectedCount} selected workspace${selectedCount === 1 ? "" : "s"}.`;
 }
 
-export default function MLAdminToolbar({
-  tournamentId,
-  workspaceId,
-}: MLAdminToolbarProps) {
+export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToolbarProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { isSuperuser } = usePermissions();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const [liveJob, setLiveJob] = React.useState<AnalyticsJob | null>(null);
   const [isTrainDialogOpen, setIsTrainDialogOpen] = React.useState(false);
   const [trainScope, setTrainScope] = React.useState<TrainScope>("all");
-  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = React.useState<number[]>(
-    () => (workspaceId != null ? [workspaceId] : [])
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = React.useState<number[]>(() =>
+    workspaceId != null ? [workspaceId] : []
   );
   const isLiveJobActive = liveJob != null && !TERMINAL_STATUSES.has(liveJob.status);
 
   const { data: initialActiveJob } = useQuery({
     queryKey: ["analytics-active-job", workspaceId ?? "global"],
     queryFn: () => analyticsService.getActiveJob(workspaceId),
-    refetchInterval: isLiveJobActive ? false : 30_000,
+    refetchInterval: isLiveJobActive ? false : 30_000
   });
 
   React.useEffect(() => {
@@ -119,7 +115,7 @@ export default function MLAdminToolbar({
     queryKey: ["analytics-job", liveJob?.id],
     queryFn: () => analyticsService.getJob(liveJob!.id),
     enabled: isLiveJobActive,
-    refetchInterval: isLiveJobActive ? 1_500 : false,
+    refetchInterval: isLiveJobActive ? 1_500 : false
   });
 
   React.useEffect(() => {
@@ -153,7 +149,7 @@ export default function MLAdminToolbar({
           ? new Date().toISOString()
           : (prev?.finished_at ?? null),
         created_at: prev?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }));
 
       if (TERMINAL_STATUSES.has(payload.status)) {
@@ -190,9 +186,7 @@ export default function MLAdminToolbar({
         {
           tournament_id: tournamentId,
           kind,
-          ...(kind === "train_ml"
-            ? { training_workspace_ids: trainingWorkspaceIds ?? null }
-            : {}),
+          ...(kind === "train_ml" ? { training_workspace_ids: trainingWorkspaceIds ?? null } : {})
         },
         workspaceId
       ),
@@ -201,18 +195,10 @@ export default function MLAdminToolbar({
       if (job.kind === "train_ml") {
         setIsTrainDialogOpen(false);
       }
-      toast({
-        title: job.kind === "train_ml" ? "Training dispatched" : "Recalculation dispatched",
-        description: `Job #${job.id} - listening for live updates.`,
+      notify.success(job.kind === "train_ml" ? "Training dispatched" : "Recalculation dispatched", {
+        description: `Job #${job.id} - listening for live updates.`
       });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Cannot start job",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    }
   });
 
   return (
@@ -254,8 +240,8 @@ export default function MLAdminToolbar({
             <DialogHeader>
               <DialogTitle>Train ML models</DialogTitle>
               <DialogDescription>
-                Choose which workspaces should be included in the training sample.
-                Inference will still run for the selected tournament separately.
+                Choose which workspaces should be included in the training sample. Inference will
+                still run for the selected tournament separately.
               </DialogDescription>
             </DialogHeader>
 
@@ -347,11 +333,7 @@ export default function MLAdminToolbar({
             </div>
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsTrainDialogOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setIsTrainDialogOpen(false)}>
                 Cancel
               </Button>
               <Button
@@ -359,7 +341,7 @@ export default function MLAdminToolbar({
                 onClick={() =>
                   createJobMutation.mutate({
                     kind: "train_ml",
-                    trainingWorkspaceIds,
+                    trainingWorkspaceIds
                   })
                 }
                 disabled={isActive || createJobMutation.isPending || !isTrainScopeValid}
@@ -392,7 +374,8 @@ export default function MLAdminToolbar({
               ) : (
                 <AlertCircle className="h-3.5 w-3.5" />
               )}
-              Job #{liveJob.id} / {liveJob.kind === "train_ml" ? "Train ML" : "Compute"} / {liveJob.status}
+              Job #{liveJob.id} / {liveJob.kind === "train_ml" ? "Train ML" : "Compute"} /{" "}
+              {liveJob.status}
             </span>
             <span className="text-muted-foreground">
               {liveJob.finished_at

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Encounter } from "@/types/encounter.types";
 
@@ -57,7 +57,6 @@ export function TournamentLogUploadDialog({
   initialEncounterId = null,
   onUploaded
 }: TournamentLogUploadDialogProps) {
-  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedEncounterId, setSelectedEncounterId] = useState<string>(
@@ -70,24 +69,22 @@ export function TournamentLogUploadDialog({
       adminService.uploadMatchLogs({
         tournamentId,
         files,
-        encounterId:
-          selectedEncounterId === NO_ENCOUNTER_VALUE ? null : Number(selectedEncounterId)
+        encounterId: selectedEncounterId === NO_ENCOUNTER_VALUE ? null : Number(selectedEncounterId)
       }),
     onSuccess: (result) => {
       onUploaded?.();
       setOpen(false);
       const uploadedCount = result.uploaded.length;
       const errorCount = result.errors.length;
-      toast({
-        title: errorCount ? "Logs uploaded with errors" : "Logs queued",
-        description: errorCount
-          ? `${uploadedCount} queued, ${errorCount} failed`
-          : `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} queued for processing`,
-        variant: errorCount ? "destructive" : "default"
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      if (errorCount) {
+        notify.error("Logs uploaded with errors", {
+          description: `${uploadedCount} queued, ${errorCount} failed`
+        });
+      } else {
+        notify.success("Logs queued", {
+          description: `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} queued for processing`
+        });
+      }
     }
   });
 

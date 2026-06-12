@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 
 import { EncounterScoreControls } from "@/components/admin/EncounterScoreControls";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +52,6 @@ export function MatchReportDialog({ open, onOpenChange, encounter }: MatchReport
 
 function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDialogProps, "open">) {
   const qc = useQueryClient();
-  const { toast } = useToast();
   const { t } = useTranslation();
   const homeTeamLabel = encounter.home_team?.name?.trim() || "Home team";
   const awayTeamLabel = encounter.away_team?.name?.trim() || "Away team";
@@ -88,13 +87,9 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
         closeness
       }),
     onSuccess: async () => {
-      toast({ title: t("matchReport.submittedForConfirmation") });
+      notify.success(t("matchReport.submittedForConfirmation"));
       await refreshEncounterViews();
       onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : t("matchReport.submitErrorMessage");
-      toast({ title: t("matchEdit.saveError"), description: message, variant: "destructive" });
     }
   });
 
@@ -159,7 +154,9 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
                   <Star
                     className={cn(
                       "h-4.5 w-4.5 transition-colors duration-150",
-                      isSelected ? "fill-yellow-400 text-yellow-400" : "text-zinc-600 hover:text-zinc-500"
+                      isSelected
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-zinc-600 hover:text-zinc-500"
                     )}
                   />
                   <span className="text-[10.5px] font-bold font-mono">{val}/10</span>

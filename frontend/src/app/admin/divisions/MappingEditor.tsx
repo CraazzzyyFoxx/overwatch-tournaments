@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { ApiError } from "@/lib/api-error";
 import workspaceService from "@/services/workspace.service";
 import type { DivisionGridVersion, DivisionTier } from "@/types/workspace.types";
@@ -103,7 +103,6 @@ type Props = {
 };
 
 export function DivisionGridMappingEditor({ versions, canEdit }: Props) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [sourceVersionId, setSourceVersionId] = useState<number | null>(null);
@@ -159,10 +158,8 @@ export function DivisionGridMappingEditor({ versions, canEdit }: Props) {
       await queryClient.invalidateQueries({
         queryKey: ["division-grid-mapping", sourceVersionId, targetVersionId]
       });
-      toast({ title: "Mapping saved" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success("Mapping saved");
+    }
   });
 
   // ─── Row update helpers ───────────────────────────────────────────────────

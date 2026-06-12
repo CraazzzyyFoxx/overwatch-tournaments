@@ -17,9 +17,9 @@ import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
-import { useToast } from "@/hooks/use-toast";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -114,7 +114,6 @@ export function BalancerMainPageClient() {
   const divisionGrid = useDivisionGrid();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
   const balanceEditorRef = useRef<HTMLDivElement | null>(null);
   const variantsRef = useRef<BalanceVariant[]>([]);
@@ -340,14 +339,7 @@ export function BalancerMainPageClient() {
       await queryClient.invalidateQueries({
         queryKey: ["balancer-admin", "tournament-config", tournamentId]
       });
-      toast({ title: "Balancer settings saved" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to save balancer settings",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Balancer settings saved");
     }
   });
 
@@ -361,16 +353,8 @@ export function BalancerMainPageClient() {
     onSuccess: ({ payload, tournamentId: exportedTournamentId }) => {
       const playerCount = Object.keys(payload.players).length;
       downloadPlayersExport(payload, exportedTournamentId);
-      toast({
-        title: "Players exported",
+      notify.success("Players exported", {
         description: `${playerCount} player${playerCount === 1 ? "" : "s"} downloaded.`
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to export players",
-        description: error.message,
-        variant: "destructive"
       });
     }
   });
@@ -434,7 +418,6 @@ export function BalancerMainPageClient() {
   } = useBalancerMutations({
     tournamentId,
     workspaceId,
-    toast,
     queryClient,
     dispatchJob,
     setSelectedPlayerId,
@@ -532,11 +515,11 @@ export function BalancerMainPageClient() {
   const handleCopyNames = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(buildTeamNamesText(activeVariant?.payload ?? null));
-      toast({ title: "Team names copied" });
+      notify.success("Team names copied");
     } catch {
-      toast({ title: "Clipboard unavailable", variant: "destructive" });
+      notify.error("Clipboard unavailable");
     }
-  }, [activeVariant, toast]);
+  }, [activeVariant]);
 
   const handleTournamentExportStageChange = useCallback(
     (stepId: string, status: BalancerOperationStepStatus) => {
@@ -675,7 +658,6 @@ export function BalancerMainPageClient() {
         payload={activeVariant?.payload ?? null}
         divisionGrid={divisionGrid}
         tournamentId={tournamentId}
-        toast={toast}
       />
 
       <BalancerOperationDialog

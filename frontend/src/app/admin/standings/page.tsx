@@ -11,7 +11,7 @@ import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
 import tournamentService from "@/services/tournament.service";
 import adminService from "@/services/admin.service";
@@ -91,7 +91,6 @@ export default function StandingsPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
   const { canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const queryClient = useQueryClient();
@@ -167,16 +166,14 @@ export default function StandingsPage() {
 
   // Mutations
   const updateMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: ({ id, data }: { id: number; data: StandingUpdateInput }) =>
       adminService.updateStanding(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["standings"] });
       setEditDialogOpen(false);
       setSelectedStanding(null);
-      toast({ title: "Standing updated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standing updated successfully");
     }
   });
 
@@ -186,10 +183,7 @@ export default function StandingsPage() {
       queryClient.invalidateQueries({ queryKey: ["standings"] });
       setDeleteDialogOpen(false);
       setSelectedStanding(null);
-      toast({ title: "Standing deleted successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standing deleted successfully");
     }
   });
 
@@ -198,10 +192,7 @@ export default function StandingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["standings"] });
       setRecalculateDialogOpen(false);
-      toast({ title: "Standings recalculated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standings recalculated successfully");
     }
   });
 

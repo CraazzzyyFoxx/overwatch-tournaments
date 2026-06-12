@@ -1,11 +1,20 @@
 "use client";
 
-import { AlertCircle, Clock3, LaptopMinimal, MapPin, RefreshCw, Shield, ShieldOff } from "lucide-react";
+import {
+  AlertCircle,
+  Clock3,
+  LaptopMinimal,
+  MapPin,
+  RefreshCw,
+  Shield,
+  ShieldOff
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/use-account-sessions";
-import { useToast } from "@/hooks/use-toast";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { notify } from "@/lib/notify";
 import type { AccountSession, AccountSessionStatus } from "@/types/auth.types";
 
 const STATUS_META: Record<
@@ -19,18 +28,18 @@ const STATUS_META: Record<
   active: {
     dotClassName: "bg-emerald-400",
     label: "Active",
-    textClassName: "text-emerald-200",
+    textClassName: "text-emerald-200"
   },
   revoked: {
     dotClassName: "bg-amber-300",
     label: "Revoked",
-    textClassName: "text-amber-100",
+    textClassName: "text-amber-100"
   },
   expired: {
     dotClassName: "bg-slate-400",
     label: "Expired",
-    textClassName: "text-slate-300",
-  },
+    textClassName: "text-slate-300"
+  }
 };
 
 function formatTimestamp(value: string | null | undefined): string {
@@ -38,7 +47,7 @@ function formatTimestamp(value: string | null | undefined): string {
 
   return new Date(value).toLocaleString("en-US", {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeStyle: "short"
   });
 }
 
@@ -73,10 +82,6 @@ function formatDeviceLabel(userAgent: string | null | undefined): string {
   return userAgent.length > 72 ? `${userAgent.slice(0, 72)}...` : userAgent;
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Failed to load sessions";
-}
-
 function StatusText({ status }: { status: AccountSessionStatus }) {
   const meta = STATUS_META[status];
 
@@ -109,7 +114,7 @@ function SummaryCell({ label, value }: { label: string; value: number }) {
 function SessionRow({
   session,
   isRevoking,
-  onRevoke,
+  onRevoke
 }: {
   session: AccountSession;
   isRevoking: boolean;
@@ -126,7 +131,9 @@ function SessionRow({
               <LaptopMinimal className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{formatDeviceLabel(session.user_agent)}</p>
+              <p className="truncate text-sm font-semibold text-white">
+                {formatDeviceLabel(session.user_agent)}
+              </p>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusText status={session.status} />
                 {session.is_current ? (
@@ -146,7 +153,12 @@ function SessionRow({
           </div>
 
           {canRevoke ? (
-            <Button variant="outline" size="sm" disabled={isRevoking} onClick={() => onRevoke(session.session_id)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRevoking}
+              onClick={() => onRevoke(session.session_id)}
+            >
               <ShieldOff className="size-4" />
               Revoke
             </Button>
@@ -159,7 +171,11 @@ function SessionRow({
           <DetailCell label="Expires" value={formatTimestamp(session.expires_at)} />
           <DetailCell
             label={session.status === "revoked" ? "Revoked" : "Session"}
-            value={session.status === "revoked" ? formatTimestamp(session.revoked_at) : session.session_id}
+            value={
+              session.status === "revoked"
+                ? formatTimestamp(session.revoked_at)
+                : session.session_id
+            }
           />
         </div>
 
@@ -175,30 +191,25 @@ function SessionRow({
 }
 
 export default function AccountSessionsSection() {
-  const { toast } = useToast();
   const { data, isLoading, isError, error, refetch } = useAccountSessions();
   const revokeSessionMutation = useRevokeAccountSession();
 
   const sessions = data ?? [];
   const currentSession = sessions.find((session) => session.is_current) ?? null;
-  const otherActiveSessions = sessions.filter((session) => !session.is_current && session.status === "active");
-  const sessionHistory = sessions.filter((session) => !session.is_current && session.status !== "active");
+  const otherActiveSessions = sessions.filter(
+    (session) => !session.is_current && session.status === "active"
+  );
+  const sessionHistory = sessions.filter(
+    (session) => !session.is_current && session.status !== "active"
+  );
 
   const handleRevoke = (sessionId: string) => {
     revokeSessionMutation.mutate(sessionId, {
       onSuccess: () => {
-        toast({
-          title: "Session revoked",
-          description: "The selected session was signed out.",
+        notify.success("Session revoked", {
+          description: "The selected session was signed out."
         });
-      },
-      onError: (mutationError) => {
-        toast({
-          title: "Failed to revoke session",
-          description: getErrorMessage(mutationError),
-          variant: "destructive",
-        });
-      },
+      }
     });
   };
 
@@ -217,7 +228,7 @@ export default function AccountSessionsSection() {
       <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
         <p className="flex items-center gap-2">
           <AlertCircle className="size-4" />
-          {getErrorMessage(error)}
+          {getApiErrorMessage(error, "Failed to load sessions")}
         </p>
         <Button
           variant="outline"
@@ -244,7 +255,9 @@ export default function AccountSessionsSection() {
 
       {currentSession ? (
         <section className="flex flex-col gap-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Session</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Current Session
+          </h4>
           <ul className="flex flex-col gap-2">
             <SessionRow session={currentSession} isRevoking={false} onRevoke={handleRevoke} />
           </ul>
@@ -252,14 +265,19 @@ export default function AccountSessionsSection() {
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Other Active Sessions</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Other Active Sessions
+        </h4>
         {otherActiveSessions.length > 0 ? (
           <ul className="flex flex-col gap-2">
             {otherActiveSessions.map((session) => (
               <SessionRow
                 key={session.session_id}
                 session={session}
-                isRevoking={revokeSessionMutation.isPending && revokeSessionMutation.variables === session.session_id}
+                isRevoking={
+                  revokeSessionMutation.isPending &&
+                  revokeSessionMutation.variables === session.session_id
+                }
                 onRevoke={handleRevoke}
               />
             ))}
@@ -272,11 +290,18 @@ export default function AccountSessionsSection() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Session History</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Session History
+        </h4>
         {sessionHistory.length > 0 ? (
           <ul className="flex flex-col gap-2">
             {sessionHistory.map((session) => (
-              <SessionRow key={session.session_id} session={session} isRevoking={false} onRevoke={handleRevoke} />
+              <SessionRow
+                key={session.session_id}
+                session={session}
+                isRevoking={false}
+                onRevoke={handleRevoke}
+              />
             ))}
           </ul>
         ) : (

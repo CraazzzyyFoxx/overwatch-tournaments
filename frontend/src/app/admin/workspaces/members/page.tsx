@@ -7,7 +7,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
@@ -22,14 +22,14 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList,
+  CommandList
 } from "@/components/ui/command";
 
 function RoleMultiSelect({
   roles,
   value,
   onChange,
-  disabled,
+  disabled
 }: {
   roles: RbacRole[];
   value: number[];
@@ -46,7 +46,12 @@ function RoleMultiSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="w-full justify-between" disabled={disabled}>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="w-full justify-between"
+          disabled={disabled}
+        >
           <span className="truncate">
             {selected.length > 0 ? selected.map((role) => role.name).join(", ") : "Select roles..."}
           </span>
@@ -82,7 +87,6 @@ function RoleMultiSelect({
 }
 
 export default function WorkspaceMembersPage() {
-  const { toast } = useToast();
   const { isSuperuser, canAccessAnyPermission } = usePermissions();
   const queryClient = useQueryClient();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -97,59 +101,70 @@ export default function WorkspaceMembersPage() {
   const [userComboOpen, setUserComboOpen] = useState(false);
 
   const canCreateMembers =
-    isSuperuser || (currentWorkspaceId !== null && canAccessAnyPermission(["workspace_member.create"], currentWorkspaceId));
+    isSuperuser ||
+    (currentWorkspaceId !== null &&
+      canAccessAnyPermission(["workspace_member.create"], currentWorkspaceId));
   const canUpdateMembers =
-    isSuperuser || (currentWorkspaceId !== null && canAccessAnyPermission(["workspace_member.update"], currentWorkspaceId));
+    isSuperuser ||
+    (currentWorkspaceId !== null &&
+      canAccessAnyPermission(["workspace_member.update"], currentWorkspaceId));
   const canDeleteMembers =
-    isSuperuser || (currentWorkspaceId !== null && canAccessAnyPermission(["workspace_member.delete"], currentWorkspaceId));
+    isSuperuser ||
+    (currentWorkspaceId !== null &&
+      canAccessAnyPermission(["workspace_member.delete"], currentWorkspaceId));
 
   const { data: members, refetch: refetchMembers } = useQuery({
     queryKey: ["workspace-members", currentWorkspaceId],
-    queryFn: () => (currentWorkspaceId ? workspaceService.getMembers(currentWorkspaceId) : Promise.resolve([])),
-    enabled: !!currentWorkspaceId,
+    queryFn: () =>
+      currentWorkspaceId ? workspaceService.getMembers(currentWorkspaceId) : Promise.resolve([]),
+    enabled: !!currentWorkspaceId
   });
 
   const { data: allUsers } = useQuery({
     queryKey: ["rbac-users", currentWorkspaceId],
     queryFn: () => rbacService.listUsers({ workspace_id: currentWorkspaceId ?? undefined }),
-    enabled: canCreateMembers,
+    enabled: canCreateMembers
   });
 
   const { data: scopedRoles } = useQuery({
     queryKey: ["workspace-rbac-roles", currentWorkspaceId],
-    queryFn: () => (currentWorkspaceId ? rbacService.listRoles({ workspace_id: currentWorkspaceId }) : Promise.resolve([])),
-    enabled: !!currentWorkspaceId && (canCreateMembers || canUpdateMembers),
+    queryFn: () =>
+      currentWorkspaceId
+        ? rbacService.listRoles({ workspace_id: currentWorkspaceId })
+        : Promise.resolve([]),
+    enabled: !!currentWorkspaceId && (canCreateMembers || canUpdateMembers)
   });
 
   const memberRoleId = scopedRoles?.find((role) => role.name === "member")?.id;
-  const addMemberUserId = addMemberDraft.workspaceId === currentWorkspaceId ? addMemberDraft.userId : "";
+  const addMemberUserId =
+    addMemberDraft.workspaceId === currentWorkspaceId ? addMemberDraft.userId : "";
   const selectedAddRoleIds =
     addMemberDraft.workspaceId === currentWorkspaceId ? addMemberDraft.roleIds : [];
   const addMemberRoleIds =
     selectedAddRoleIds.length > 0 ? selectedAddRoleIds : memberRoleId ? [memberRoleId] : [];
 
   const addMemberMutation = useMutation({
-    mutationFn: () => workspaceService.addMember(currentWorkspaceId!, Number(addMemberUserId), addMemberRoleIds),
+    mutationFn: () =>
+      workspaceService.addMember(currentWorkspaceId!, Number(addMemberUserId), addMemberRoleIds),
     onSuccess: () => {
       refetchMembers();
       queryClient.invalidateQueries({ queryKey: ["rbac-users", currentWorkspaceId] });
       setAddMemberDraft({
         workspaceId: currentWorkspaceId,
         userId: "",
-        roleIds: memberRoleId ? [memberRoleId] : [],
+        roleIds: memberRoleId ? [memberRoleId] : []
       });
-      toast({ title: "Member added" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Member added");
+    }
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: (authUserId: number) => workspaceService.removeMember(currentWorkspaceId!, authUserId),
+    mutationFn: (authUserId: number) =>
+      workspaceService.removeMember(currentWorkspaceId!, authUserId),
     onSuccess: () => {
       refetchMembers();
-      toast({ title: "Member removed" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Member removed");
+    }
   });
 
   const updateRolesMutation = useMutation({
@@ -157,15 +172,17 @@ export default function WorkspaceMembersPage() {
       workspaceService.updateMemberRole(currentWorkspaceId!, authUserId, roleIds),
     onSuccess: () => {
       refetchMembers();
-      toast({ title: "Roles updated" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Roles updated");
+    }
   });
 
   if (!currentWorkspaceId) {
     return (
       <div className="flex flex-col gap-6">
-        <AdminPageHeader title="Workspace Members" description="Select a workspace to manage members." />
+        <AdminPageHeader
+          title="Workspace Members"
+          description="Select a workspace to manage members."
+        />
       </div>
     );
   }
@@ -203,7 +220,9 @@ export default function WorkspaceMembersPage() {
                       <CommandEmpty>No users found.</CommandEmpty>
                       <CommandGroup>
                         {(allUsers ?? [])
-                          .filter((u) => !members?.some((m: WorkspaceMember) => m.auth_user_id === u.id))
+                          .filter(
+                            (u) => !members?.some((m: WorkspaceMember) => m.auth_user_id === u.id)
+                          )
                           .map((u) => (
                             <CommandItem
                               key={u.id}
@@ -213,7 +232,9 @@ export default function WorkspaceMembersPage() {
                                   workspaceId: currentWorkspaceId,
                                   userId: String(u.id),
                                   roleIds:
-                                    current.workspaceId === currentWorkspaceId ? current.roleIds : addMemberRoleIds,
+                                    current.workspaceId === currentWorkspaceId
+                                      ? current.roleIds
+                                      : addMemberRoleIds
                                 }));
                                 setUserComboOpen(false);
                               }}
@@ -221,7 +242,7 @@ export default function WorkspaceMembersPage() {
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  addMemberUserId === String(u.id) ? "opacity-100" : "opacity-0",
+                                  addMemberUserId === String(u.id) ? "opacity-100" : "opacity-0"
                                 )}
                               />
                               {u.username}
@@ -239,13 +260,15 @@ export default function WorkspaceMembersPage() {
                   setAddMemberDraft((current) => ({
                     workspaceId: currentWorkspaceId,
                     userId: current.workspaceId === currentWorkspaceId ? current.userId : "",
-                    roleIds,
+                    roleIds
                   }))
                 }
               />
               <Button
                 onClick={() => addMemberMutation.mutate()}
-                disabled={!addMemberUserId || addMemberRoleIds.length === 0 || addMemberMutation.isPending}
+                disabled={
+                  !addMemberUserId || addMemberRoleIds.length === 0 || addMemberMutation.isPending
+                }
               >
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add
@@ -280,15 +303,21 @@ export default function WorkspaceMembersPage() {
                 className="grid grid-cols-[1fr_minmax(220px,360px)_40px] gap-2 items-center px-4 py-2 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{m.username ?? `User #${m.auth_user_id}`}</p>
-                  {m.email ? <p className="truncate text-xs text-muted-foreground">{m.email}</p> : null}
+                  <p className="truncate text-sm font-medium">
+                    {m.username ?? `User #${m.auth_user_id}`}
+                  </p>
+                  {m.email ? (
+                    <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                  ) : null}
                 </div>
 
                 {canUpdateMembers ? (
                   <RoleMultiSelect
                     roles={scopedRoles ?? []}
                     value={(m.rbac_roles ?? []).map((role) => role.id)}
-                    onChange={(roleIds) => updateRolesMutation.mutate({ authUserId: m.auth_user_id, roleIds })}
+                    onChange={(roleIds) =>
+                      updateRolesMutation.mutate({ authUserId: m.auth_user_id, roleIds })
+                    }
                     disabled={updateRolesMutation.isPending}
                   />
                 ) : (

@@ -9,7 +9,7 @@ import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
@@ -39,7 +39,7 @@ function GroupStagePanel({
   onReport,
   canEdit,
   canReport,
-  bracketTabs,
+  bracketTabs
 }: {
   stage: Stage;
   stageItem?: StageItem;
@@ -89,16 +89,12 @@ function GroupStagePanel({
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-              {subtitle}
-            </p>
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">{subtitle}</p>
           </div>
         ) : (
           <div className="min-w-0">
             <h3 className="truncate text-lg font-semibold text-white">{title}</h3>
-            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-              {subtitle}
-            </p>
+            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">{subtitle}</p>
           </div>
         )}
 
@@ -142,25 +138,17 @@ function GroupStagePanel({
   );
 }
 
-
 function getGroupScopeCount(stages: Stage[]) {
-  return stages.reduce(
-    (count, stage) => count + Math.max(stage.items.length, 1),
-    0
-  );
+  return stages.reduce((count, stage) => count + Math.max(stage.items.length, 1), 0);
 }
 
-export default function TournamentBracketPage({
-  tournament,
-  stages,
-}: TournamentBracketPageProps) {
+export default function TournamentBracketPage({ tournament, stages }: TournamentBracketPageProps) {
   const searchParams = useSearchParams();
   const selectedStageParam = searchParams.get("stage");
   const viewParam = searchParams.get("view");
 
   const { isSuperuser, isWorkspaceAdmin } = usePermissions();
   const { status: authStatus, user: authUser } = useAuthProfile();
-  const { toast } = useToast();
   const isAuthenticated = authStatus === "authenticated";
   const isAdmin =
     isAuthenticated &&
@@ -173,34 +161,32 @@ export default function TournamentBracketPage({
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
 
   const canEdit = isAdmin ? () => true : undefined;
-  const canReport = isAuthenticated && !isAdmin
-    ? (enc: Encounter) => enc.result_status !== "confirmed"
-    : undefined;
+  const canReport =
+    isAuthenticated && !isAdmin ? (enc: Encounter) => enc.result_status !== "confirmed" : undefined;
   const handleEdit = isAdmin ? (enc: Encounter) => setEditEncounter(enc) : undefined;
-  const handleReport = isAuthenticated && !isAdmin
-    ? async (enc: Encounter) => {
-        try {
-          const { side } = await captainService.getMyRole(enc.id);
-          if (side === null) {
-            toast({ title: t("common.noAccess"), description: t("common.notCaptain"), variant: "destructive" });
-            return;
+  const handleReport =
+    isAuthenticated && !isAdmin
+      ? async (enc: Encounter) => {
+          try {
+            const { side } = await captainService.getMyRole(enc.id);
+            if (side === null) {
+              notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
+              return;
+            }
+            setReportEncounter(enc);
+          } catch {
+            notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
           }
-          setReportEncounter(enc);
-        } catch {
-          toast({ title: t("common.error"), description: t("common.roleVerificationFailed"), variant: "destructive" });
         }
-      }
-    : undefined;
+      : undefined;
 
   const groupStages = stages.filter(
-    (stage) =>
-      stage.stage_type === "round_robin" || stage.stage_type === "swiss"
+    (stage) => stage.stage_type === "round_robin" || stage.stage_type === "swiss"
   );
 
   const eliminationStages = stages.filter(
     (stage) =>
-      stage.stage_type === "single_elimination" ||
-      stage.stage_type === "double_elimination"
+      stage.stage_type === "single_elimination" || stage.stage_type === "double_elimination"
   );
 
   const activeStage = stages.find((stage) => stage.is_active);
@@ -251,7 +237,7 @@ export default function TournamentBracketPage({
             ? `/tournaments/${tournament.id}/bracket?stage=${groupStages[0].id}`
             : `/tournaments/${tournament.id}/bracket?view=groups`,
         label: t("common.groupStage"),
-        isActive: isGroupViewActive,
+        isActive: isGroupViewActive
       });
     } else if (groupStages.length === 1) {
       const stage = groupStages[0];
@@ -259,7 +245,7 @@ export default function TournamentBracketPage({
         key: `stage-${stage.id}`,
         href: `/tournaments/${tournament.id}/bracket?stage=${stage.id}`,
         label: stage.name,
-        isActive: !viewParam && stage.id === activeStageId,
+        isActive: !viewParam && stage.id === activeStageId
       });
     }
 
@@ -271,12 +257,20 @@ export default function TournamentBracketPage({
           eliminationStages.length === 1 && groupStages.length > 0
             ? t("common.playoff")
             : stage.name,
-        isActive: !viewParam && stage.id === activeStageId,
+        isActive: !viewParam && stage.id === activeStageId
       });
     });
 
     return tabs;
-  }, [groupStages, eliminationStages, fallbackStage?.id, selectedStageParam, viewParam, tournament.id, t]);
+  }, [
+    groupStages,
+    eliminationStages,
+    fallbackStage?.id,
+    selectedStageParam,
+    viewParam,
+    tournament.id,
+    t
+  ]);
 
   const { data: allEncounters } = useQuery({
     queryKey: ["encounters", "tournament", tournament.id, tournament.workspace_id],
@@ -291,15 +285,14 @@ export default function TournamentBracketPage({
         tournament.workspace_id
       ),
     refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: true
   });
 
   const { data: allStandings = [] } = useQuery({
     queryKey: ["standings", tournament.id, tournament.workspace_id],
-    queryFn: () =>
-      tournamentService.getStandings(tournament.id, tournament.workspace_id),
+    queryFn: () => tournamentService.getStandings(tournament.id, tournament.workspace_id),
     refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: true
   });
 
   const groupStagePanels = useMemo(() => {
@@ -313,10 +306,8 @@ export default function TournamentBracketPage({
             stage,
             stageItem: undefined as StageItem | undefined,
             encounters: encounters.filter((encounter) => encounter.stage_id === stage.id),
-            standings: allStandings.filter(
-              (standing) => standing.stage_id === stage.id
-            ),
-          },
+            standings: allStandings.filter((standing) => standing.stage_id === stage.id)
+          }
         ];
       }
 
@@ -325,15 +316,11 @@ export default function TournamentBracketPage({
         stage,
         stageItem,
         encounters: encounters.filter(
-          (encounter) =>
-            encounter.stage_id === stage.id &&
-            encounter.stage_item_id === stageItem.id
+          (encounter) => encounter.stage_id === stage.id && encounter.stage_item_id === stageItem.id
         ),
         standings: allStandings.filter(
-          (standing) =>
-            standing.stage_id === stage.id &&
-            standing.stage_item_id === stageItem.id
-        ),
+          (standing) => standing.stage_id === stage.id && standing.stage_item_id === stageItem.id
+        )
       }));
     });
   }, [activeGroupStages, allEncounters?.results, allStandings]);
@@ -344,9 +331,7 @@ export default function TournamentBracketPage({
     for (const stage of activeStages) {
       map.set(
         stage.id,
-        (allEncounters?.results ?? []).filter(
-          (encounter) => encounter.stage_id === stage.id
-        )
+        (allEncounters?.results ?? []).filter((encounter) => encounter.stage_id === stage.id)
       );
     }
 
@@ -356,9 +341,7 @@ export default function TournamentBracketPage({
   const playoffStandings = useMemo(
     () =>
       allStandings.filter((standing) =>
-        ["single_elimination", "double_elimination"].includes(
-          standing.stage?.stage_type ?? ""
-        )
+        ["single_elimination", "double_elimination"].includes(standing.stage?.stage_type ?? "")
       ),
     [allStandings]
   );
@@ -383,107 +366,110 @@ export default function TournamentBracketPage({
                 />
               ))
             : activeStages.map((stage) => {
-            const encounters = encountersByStage.get(stage.id) ?? [];
-            if (encounters.length === 0 && bracketTabs.length <= 1) {
-              return (
-                <div
-                  key={stage.id}
-                  className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground"
-                >
-                  {t("common.noMatches", { stage: stage.name })}
-                </div>
-              );
-            }
-
-            const stagePlayoffStandings = playoffStandings.filter(
-              (standing) => standing.stage_id === stage.id
-            );
-            const hasPlayoffStandings = stagePlayoffStandings.length > 0;
-
-            return (
-              <Tabs
-                key={stage.id}
-                defaultValue="bracket"
-                className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
-              >
-                <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  {bracketTabs.length > 1 ? (
-                    <div className="min-w-0">
-                      <div className="stage-tabs">
-                        {bracketTabs.map((tab) => (
-                          <Link
-                            key={tab.key}
-                            href={tab.href}
-                            className={cn("stage-tab", tab.isActive && "active")}
-                          >
-                            {tab.label}
-                          </Link>
-                        ))}
-                      </div>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-                        {stage.stage_type.replace(/_/g, " ")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="min-w-0">
-                      <h3 className="truncate text-lg font-semibold text-white">{stage.name}</h3>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
-                        {stage.stage_type.replace(/_/g, " ")}
-                      </p>
-                    </div>
-                  )}
-
-                  <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
-                    {hasPlayoffStandings && (
-                      <TabsTrigger
-                        value="standings"
-                        className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
-                      >
-                        {t("common.standings")}
-                      </TabsTrigger>
-                    )}
-                    <TabsTrigger
-                      value="bracket"
-                      className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                const encounters = encountersByStage.get(stage.id) ?? [];
+                if (encounters.length === 0 && bracketTabs.length <= 1) {
+                  return (
+                    <div
+                      key={stage.id}
+                      className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground"
                     >
-                      {t("common.bracket")}
-                    </TabsTrigger>
-                  </TabsList>
-                </div>
-
-                {hasPlayoffStandings && (
-                  <TabsContent value="standings" className="mt-0">
-                    <div className="overflow-x-auto">
-                      <StandingsTable standings={[...stagePlayoffStandings]} is_groups={false} />
-                    </div>
-                  </TabsContent>
-                )}
-
-                <TabsContent value="bracket" className="mt-0 p-4">
-                  {encounters.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground">
                       {t("common.noMatches", { stage: stage.name })}
                     </div>
-                  ) : (
-                    <BracketView
-                      encounters={encounters}
-                      type={stage.stage_type}
-                      onEdit={handleEdit}
-                      onReport={handleReport}
-                      canEdit={canEdit}
-                      canReport={canReport}
-                    />
-                  )}
-                </TabsContent>
-              </Tabs>
-            );
-          })}
+                  );
+                }
+
+                const stagePlayoffStandings = playoffStandings.filter(
+                  (standing) => standing.stage_id === stage.id
+                );
+                const hasPlayoffStandings = stagePlayoffStandings.length > 0;
+
+                return (
+                  <Tabs
+                    key={stage.id}
+                    defaultValue="bracket"
+                    className="overflow-hidden rounded-2xl border border-[var(--aqt-border)] bg-[var(--aqt-card)]"
+                  >
+                    <div className="flex flex-col gap-3 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      {bracketTabs.length > 1 ? (
+                        <div className="min-w-0">
+                          <div className="stage-tabs">
+                            {bracketTabs.map((tab) => (
+                              <Link
+                                key={tab.key}
+                                href={tab.href}
+                                className={cn("stage-tab", tab.isActive && "active")}
+                              >
+                                {tab.label}
+                              </Link>
+                            ))}
+                          </div>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                            {stage.stage_type.replace(/_/g, " ")}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="min-w-0">
+                          <h3 className="truncate text-lg font-semibold text-white">
+                            {stage.name}
+                          </h3>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                            {stage.stage_type.replace(/_/g, " ")}
+                          </p>
+                        </div>
+                      )}
+
+                      <TabsList className="h-auto justify-start rounded-xl border border-[var(--aqt-border)] bg-[hsl(0_0%_0%/0.25)] p-1 text-[var(--aqt-fg-muted)]">
+                        {hasPlayoffStandings && (
+                          <TabsTrigger
+                            value="standings"
+                            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                          >
+                            {t("common.standings")}
+                          </TabsTrigger>
+                        )}
+                        <TabsTrigger
+                          value="bracket"
+                          className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                        >
+                          {t("common.bracket")}
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+
+                    {hasPlayoffStandings && (
+                      <TabsContent value="standings" className="mt-0">
+                        <div className="overflow-x-auto">
+                          <StandingsTable
+                            standings={[...stagePlayoffStandings]}
+                            is_groups={false}
+                          />
+                        </div>
+                      </TabsContent>
+                    )}
+
+                    <TabsContent value="bracket" className="mt-0 p-4">
+                      {encounters.length === 0 ? (
+                        <div className="py-8 text-center text-muted-foreground">
+                          {t("common.noMatches", { stage: stage.name })}
+                        </div>
+                      ) : (
+                        <BracketView
+                          encounters={encounters}
+                          type={stage.stage_type}
+                          onEdit={handleEdit}
+                          onReport={handleReport}
+                          canEdit={canEdit}
+                          canReport={canReport}
+                        />
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                );
+              })}
         </div>
       ) : (
         <div className="py-12 text-center text-muted-foreground">
-          {stages.length === 0
-            ? t("common.noStages")
-            : t("common.noBracketMatches")}
+          {stages.length === 0 ? t("common.noStages") : t("common.noBracketMatches")}
         </div>
       )}
 
@@ -509,4 +495,3 @@ export default function TournamentBracketPage({
     </div>
   );
 }
-

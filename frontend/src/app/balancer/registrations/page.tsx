@@ -93,8 +93,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { useToast } from "@/hooks/use-toast";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { notify } from "@/lib/notify";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
@@ -177,8 +177,6 @@ function formatSubmittedAt(value: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
-
-
 function RolesCell({
   roles,
   catalog
@@ -197,12 +195,18 @@ function RolesCell({
         .sort((left, right) => left.priority - right.priority)
         .map((role) => {
           const roleLabel = ROLE_LABELS[role.role] ?? role.role;
-          const subroleLabel = role.subrole ? getSubroleLabel(catalog, role.role, role.subrole) : null;
+          const subroleLabel = role.subrole
+            ? getSubroleLabel(catalog, role.role, role.subrole)
+            : null;
           return (
             <div
               key={`${role.role}-${role.priority}`}
               className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
-              title={[roleLabel, subroleLabel, role.rank_value != null ? `${role.rank_value}` : null]
+              title={[
+                roleLabel,
+                subroleLabel,
+                role.rank_value != null ? `${role.rank_value}` : null
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             >
@@ -283,12 +287,10 @@ function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) 
   const isBlocked = role.action === "blocked" || role.action === "missing_rank";
   const isMissing = role.action === "missing_rank";
 
-  const parsedDivision = role.parsed_rank_value != null
-    ? resolveDivisionFromRank(grid, role.parsed_rank_value)
-    : null;
-  const currentDivision = role.current_rank_value != null
-    ? resolveDivisionFromRank(grid, role.current_rank_value)
-    : null;
+  const parsedDivision =
+    role.parsed_rank_value != null ? resolveDivisionFromRank(grid, role.parsed_rank_value) : null;
+  const currentDivision =
+    role.current_rank_value != null ? resolveDivisionFromRank(grid, role.current_rank_value) : null;
 
   // Which rank value to show as the primary label
   const primaryRank = isUpdate
@@ -306,10 +308,9 @@ function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) 
             ? "border-orange-400/25 bg-orange-500/10 text-orange-100"
             : "border-white/10 bg-white/5 text-white/60"
       )}
-      title={[
-        [role.reason, source].filter(Boolean).join(" / "),
-        ...breakdown
-      ].filter(Boolean).join("\n")}
+      title={[[role.reason, source].filter(Boolean).join(" / "), ...breakdown]
+        .filter(Boolean)
+        .join("\n")}
     >
       <span className="shrink-0" aria-hidden="true">
         <PlayerRoleIcon role={getRoleIconName(role.role)} size={14} color="currentColor" />
@@ -333,9 +334,7 @@ function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) 
           {primaryDivision != null && (
             <PlayerDivisionIcon division={primaryDivision} width={16} height={16} />
           )}
-          <span className="tabular-nums">
-            {primaryRank ?? "-"}
-          </span>
+          <span className="tabular-nums">{primaryRank ?? "-"}</span>
         </>
       )}
     </div>
@@ -374,7 +373,9 @@ function RankAutofillDialog({
   onApply: () => void;
 }) {
   const updatablePlayers =
-    preview?.players.filter((player) => player.status === "will_update" || player.status === "applied") ?? [];
+    preview?.players.filter(
+      (player) => player.status === "will_update" || player.status === "applied"
+    ) ?? [];
   const skippedPlayers = preview?.players.filter((player) => player.status === "skipped") ?? [];
   const unchangedPlayers = preview?.players.filter((player) => player.status === "unchanged") ?? [];
 
@@ -388,7 +389,6 @@ function RankAutofillDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
-
         {/* ── Header ── */}
         <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-3.5 text-left">
           <div className="flex items-center justify-between gap-4">
@@ -405,14 +405,35 @@ function RankAutofillDialog({
               <div className="flex shrink-0 items-center divide-x divide-white/10 rounded-lg border border-white/10 bg-white/[0.03]">
                 {[
                   { label: "Players", value: preview.total_registrations, color: "" },
-                  { label: "Update", value: preview.updatable_registrations, color: "text-emerald-300" },
+                  {
+                    label: "Update",
+                    value: preview.updatable_registrations,
+                    color: "text-emerald-300"
+                  },
                   { label: "Ranks", value: preview.role_updates, color: "text-emerald-300" },
-                  { label: "→ Balancer", value: preview.balancer_additions, color: "text-cyan-300" },
-                  { label: "Skipped", value: preview.skipped_registrations, color: preview.skipped_registrations > 0 ? "text-orange-300" : "" },
+                  {
+                    label: "→ Balancer",
+                    value: preview.balancer_additions,
+                    color: "text-cyan-300"
+                  },
+                  {
+                    label: "Skipped",
+                    value: preview.skipped_registrations,
+                    color: preview.skipped_registrations > 0 ? "text-orange-300" : ""
+                  }
                 ].map(({ label, value, color }) => (
                   <div key={label} className="px-3 py-2 text-center">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-white/35">{label}</div>
-                    <div className={cn("text-base font-semibold tabular-nums", color || "text-white/80")}>{value}</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                      {label}
+                    </div>
+                    <div
+                      className={cn(
+                        "text-base font-semibold tabular-nums",
+                        color || "text-white/80"
+                      )}
+                    >
+                      {value}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -489,11 +510,12 @@ function RankAutofillDialog({
             </div>
           ) : preview ? (
             <div className="divide-y divide-white/[0.06]">
-
               {/* Will be assigned */}
               <div className="px-5 py-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Will be assigned</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                    Will be assigned
+                  </span>
                   <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
                     {updatablePlayers.length}
                   </span>
@@ -509,7 +531,9 @@ function RankAutofillDialog({
                       >
                         <div className="min-w-0 w-48 shrink-0">
                           <div className="truncate text-sm font-medium text-white/85">
-                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
+                            {player.battle_tag ??
+                              player.display_name ??
+                              `#${player.registration_id}`}
                           </div>
                           <div className="flex items-center gap-1.5 text-[11px] text-white/30">
                             <span>#{player.registration_id}</span>
@@ -538,7 +562,9 @@ function RankAutofillDialog({
                 {/* Skipped */}
                 <div className="px-5 py-3">
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Skipped</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                      Skipped
+                    </span>
                     {skippedPlayers.length > 0 && (
                       <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
                         {skippedPlayers.length}
@@ -550,17 +576,26 @@ function RankAutofillDialog({
                   ) : (
                     <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
                       {skippedPlayers.map((player) => (
-                        <div key={player.registration_id} className="border-b border-white/[0.06] px-3 py-2 last:border-b-0">
+                        <div
+                          key={player.registration_id}
+                          className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
+                        >
                           <div className="truncate text-xs font-medium text-white/75">
-                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
+                            {player.battle_tag ??
+                              player.display_name ??
+                              `#${player.registration_id}`}
                           </div>
                           <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
                             {player.reason ?? "Skipped"}
                           </div>
                           {player.will_add_to_balancer ? (
-                            <div className="mt-0.5 text-[11px] text-cyan-200/70">Will be moved to balancer.</div>
+                            <div className="mt-0.5 text-[11px] text-cyan-200/70">
+                              Will be moved to balancer.
+                            </div>
                           ) : player.balancer_reason ? (
-                            <div className="mt-0.5 text-[11px] text-white/30">{player.balancer_reason}</div>
+                            <div className="mt-0.5 text-[11px] text-white/30">
+                              {player.balancer_reason}
+                            </div>
                           ) : null}
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {player.roles.map((role) => (
@@ -576,7 +611,9 @@ function RankAutofillDialog({
                 {/* Already set */}
                 <div className="px-5 py-3 lg:border-l lg:border-white/[0.06]">
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Already set</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                      Already set
+                    </span>
                     {unchangedPlayers.length > 0 && (
                       <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
                         {unchangedPlayers.length}
@@ -588,17 +625,26 @@ function RankAutofillDialog({
                   ) : (
                     <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
                       {unchangedPlayers.map((player) => (
-                        <div key={player.registration_id} className="border-b border-white/[0.06] px-3 py-2 last:border-b-0">
+                        <div
+                          key={player.registration_id}
+                          className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
+                        >
                           <div className="truncate text-xs font-medium text-white/75">
-                            {player.battle_tag ?? player.display_name ?? `#${player.registration_id}`}
+                            {player.battle_tag ??
+                              player.display_name ??
+                              `#${player.registration_id}`}
                           </div>
                           <div className="mt-0.5 text-[11px] leading-4 text-white/35">
                             {player.reason ?? "No rank changes needed."}
                           </div>
                           {player.will_add_to_balancer ? (
-                            <div className="mt-0.5 text-[11px] text-cyan-200/70">Will be moved to balancer.</div>
+                            <div className="mt-0.5 text-[11px] text-cyan-200/70">
+                              Will be moved to balancer.
+                            </div>
                           ) : player.balancer_reason ? (
-                            <div className="mt-0.5 text-[11px] text-white/30">{player.balancer_reason}</div>
+                            <div className="mt-0.5 text-[11px] text-white/30">
+                              {player.balancer_reason}
+                            </div>
                           ) : null}
                         </div>
                       ))}
@@ -606,7 +652,6 @@ function RankAutofillDialog({
                   )}
                 </div>
               </div>
-
             </div>
           ) : null}
         </div>
@@ -630,29 +675,32 @@ function RankAutofillDialog({
                 Confirm assigning ranks to listed players
               </span>
             </label>
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={applying}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={applying}
+            >
               Cancel
             </Button>
             <Button size="sm" onClick={onApply} disabled={isApplyDisabled}>
-              {applying ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+              {applying ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+              )}
               Apply ranks
             </Button>
           </div>
         </div>
-
       </DialogContent>
     </Dialog>
   );
 }
 
-
-
-
-
 export default function BalancerRegistrationsPage() {
   const tournamentId = useBalancerTournamentId();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const searchParams = useSearchParams();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
@@ -719,8 +767,6 @@ export default function BalancerRegistrationsPage() {
     enabled: tournamentId !== null
   });
 
-
-
   const formQuery = useQuery({
     queryKey: ["balancer-admin", "registration-form", tournamentId],
     queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
@@ -781,14 +827,7 @@ export default function BalancerRegistrationsPage() {
     onSuccess: async () => {
       await invalidateRegistrations();
       setCreateOpen(false);
-      toast({ title: "Manual registration created" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to create registration",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Manual registration created");
     }
   });
 
@@ -802,14 +841,7 @@ export default function BalancerRegistrationsPage() {
     onSuccess: async () => {
       await invalidateRegistrations();
       setEditingRegistration(null);
-      toast({ title: "Registration updated" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update registration",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Registration updated");
     }
   });
 
@@ -818,10 +850,7 @@ export default function BalancerRegistrationsPage() {
       balancerAdminService.approveRegistration(registrationId),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Registration approved" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to approve", description: error.message, variant: "destructive" });
+      notify.success("Registration approved");
     }
   });
 
@@ -829,10 +858,7 @@ export default function BalancerRegistrationsPage() {
     mutationFn: (registrationId: number) => balancerAdminService.rejectRegistration(registrationId),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Registration rejected" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to reject", description: error.message, variant: "destructive" });
+      notify.success("Registration rejected");
     }
   });
 
@@ -841,10 +867,7 @@ export default function BalancerRegistrationsPage() {
       balancerAdminService.withdrawRegistration(registrationId),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Registration withdrawn" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to withdraw", description: error.message, variant: "destructive" });
+      notify.success("Registration withdrawn");
     }
   });
 
@@ -853,10 +876,7 @@ export default function BalancerRegistrationsPage() {
       balancerAdminService.restoreRegistration(registrationId),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Registration restored" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to restore", description: error.message, variant: "destructive" });
+      notify.success("Registration restored");
     }
   });
 
@@ -864,10 +884,7 @@ export default function BalancerRegistrationsPage() {
     mutationFn: (registrationId: number) => balancerAdminService.deleteRegistration(registrationId),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Registration deleted" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to delete", description: error.message, variant: "destructive" });
+      notify.success("Registration deleted");
     }
   });
 
@@ -880,10 +897,7 @@ export default function BalancerRegistrationsPage() {
     onSuccess: async (result) => {
       await invalidateRegistrations();
       setSelectedIds(new Set());
-      toast({ title: `${result.approved} approved, ${result.skipped} skipped` });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Bulk approve failed", description: error.message, variant: "destructive" });
+      notify.success(`${result.approved} approved, ${result.skipped} skipped`);
     }
   });
 
@@ -897,14 +911,7 @@ export default function BalancerRegistrationsPage() {
     }) => balancerAdminService.setBalancerStatus(registrationId, balancerStatus),
     onSuccess: async () => {
       await invalidateRegistrations();
-      toast({ title: "Balancer status updated" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update balancer status",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Balancer status updated");
     }
   });
 
@@ -913,14 +920,7 @@ export default function BalancerRegistrationsPage() {
       balancerAdminService.checkInRegistration(registrationId, checkedIn),
     onSuccess: async (_, variables) => {
       await invalidateRegistrations();
-      toast({ title: variables.checkedIn ? "Checked in" : "Check-in removed" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to update check-in",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success(variables.checkedIn ? "Checked in" : "Check-in removed");
     }
   });
 
@@ -930,30 +930,15 @@ export default function BalancerRegistrationsPage() {
     onSuccess: async (result) => {
       await invalidateRegistrations();
       setSelectedIds(new Set());
-      toast({ title: `${result.updated} added to balancer, ${result.skipped} skipped` });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Bulk add to balancer failed",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success(`${result.updated} added to balancer, ${result.skipped} skipped`);
     }
   });
 
   const exportToUsersMutation = useMutation({
     mutationFn: () => balancerAdminService.exportRegistrationsToUsers(tournamentId as number),
     onSuccess: (result) => {
-      toast({
-        title: "Export complete",
+      notify.success("Export complete", {
         description: `${result.processed} processed, ${result.skipped} skipped (${result.total} total)`
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Export to analytics failed",
-        description: error.message,
-        variant: "destructive"
       });
     }
   });
@@ -972,13 +957,6 @@ export default function BalancerRegistrationsPage() {
     onSuccess: () => {
       setRankAutofillConfirmed(false);
       setRankAutofillOpen(true);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to preview parsed ranks",
-        description: error.message,
-        variant: "destructive"
-      });
     }
   });
 
@@ -996,23 +974,14 @@ export default function BalancerRegistrationsPage() {
     onSuccess: async (result) => {
       await invalidateRegistrations();
       setRankAutofillOpen(false);
-      toast({
-        title: "Ranks autofilled",
-        description: `${result.applied_registrations} player${
-          result.applied_registrations === 1 ? "" : "s"
-        }, ${result.role_updates} role rank${
-          result.role_updates === 1 ? "" : "s"
-        } updated. ${result.skipped_registrations} skipped.`
-          + (result.balancer_additions > 0
-            ? ` ${result.balancer_additions} moved to balancer.`
-            : "")
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to apply parsed ranks",
-        description: error.message,
-        variant: "destructive"
+      notify.success("Ranks autofilled", {
+        description:
+          `${result.applied_registrations} player${
+            result.applied_registrations === 1 ? "" : "s"
+          }, ${result.role_updates} role rank${
+            result.role_updates === 1 ? "" : "s"
+          } updated. ${result.skipped_registrations} skipped.` +
+          (result.balancer_additions > 0 ? ` ${result.balancer_additions} moved to balancer.` : "")
       });
     }
   });
@@ -1118,9 +1087,7 @@ export default function BalancerRegistrationsPage() {
           const getAdmissionScore = (reg: AdminRegistration) => {
             const isProfileClosed = requireOpenProfile && reg.profiles_open === false;
             const isApprovedAndReady =
-              reg.status === "approved" &&
-              reg.balancer_status === "ready" &&
-              !isProfileClosed;
+              reg.status === "approved" && reg.balancer_status === "ready" && !isProfileClosed;
             if (!isApprovedAndReady) return 0;
             return reg.checked_in ? 2 : 1;
           };
@@ -1218,7 +1185,9 @@ export default function BalancerRegistrationsPage() {
               <Button
                 variant="outline"
                 onClick={openRankAutofillPreview}
-                disabled={rankAutofillPreviewMutation.isPending || rankAutofillApplyMutation.isPending}
+                disabled={
+                  rankAutofillPreviewMutation.isPending || rankAutofillApplyMutation.isPending
+                }
               >
                 {rankAutofillPreviewMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1465,308 +1434,318 @@ export default function BalancerRegistrationsPage() {
                         const isExpanded = expandedIds.has(registration.id);
                         return (
                           <Fragment key={registration.id}>
-                          <tr
-                            className="border-b border-white/4 transition-colors hover:bg-white/[0.02]"
-                          >
-                            <td className="px-3 py-2.5 align-top">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpanded(registration.id)}
-                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/40 hover:bg-white/5 hover:text-white"
-                                  aria-label={isExpanded ? "Collapse details" : "Expand details"}
-                                  aria-expanded={isExpanded}
-                                >
-                                  {isExpanded ? (
-                                    <ChevronDown className="h-4 w-4" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4" />
-                                  )}
-                                </button>
-                                {selectable ? (
-                                  <Checkbox
-                                    checked={selectedIds.has(registration.id)}
-                                    onCheckedChange={(checked) =>
-                                      setSelectedIds((current) => {
-                                        const next = new Set(current);
-                                        if (checked) {
-                                          next.add(registration.id);
-                                        } else {
-                                          next.delete(registration.id);
-                                        }
-                                        return next;
-                                      })
-                                    }
-                                    aria-label={`Select registration ${registration.id}`}
-                                  />
-                                ) : null}
-                              </div>
-                            </td>
-                            {visibleColumns.map((column) => (
-                              <td
-                                key={column.id}
-                                className={cn(
-                                  "px-3 py-2.5 align-top",
-                                  RESPONSIVE_CLASS[column.responsive ?? "always"],
-                                  ALIGN_CLASS[column.align ?? "left"],
-                                  column.widthClass
-                                )}
-                              >
-                                {column.render(registration, index)}
-                              </td>
-                            ))}
-                            <td className="px-3 py-2.5 align-top">
-                              <RegistrationRowActions
-                                registration={registration}
-                                onEdit={(selectedRegistration) => {
-                                  setEditingRegistration(selectedRegistration);
-                                }}
-                                onApprove={(registrationId) =>
-                                  approveMutation.mutate(registrationId)
-                                }
-                                onReject={(registrationId) => rejectMutation.mutate(registrationId)}
-                                onToggleBalancer={(selectedRegistration) =>
-                                  balancerStatusMutation.mutate({
-                                    registrationId: selectedRegistration.id,
-                                    balancerStatus:
-                                      selectedRegistration.balancer_status === "ready"
-                                        ? "not_in_balancer"
-                                        : "ready"
-                                  })
-                                }
-                                onToggleCheckIn={(selectedRegistration) =>
-                                  checkInMutation.mutate({
-                                    registrationId: selectedRegistration.id,
-                                    checkedIn: !selectedRegistration.checked_in
-                                  })
-                                }
-                                onWithdraw={(registrationId) =>
-                                  withdrawMutation.mutate(registrationId)
-                                }
-                                onRestore={(registrationId) =>
-                                  restoreMutation.mutate(registrationId)
-                                }
-                                onDelete={(registrationId) => deleteMutation.mutate(registrationId)}
-                              />
-                            </td>
-                            {false && (
-                              <>
-                                <TableCell>
-                                  <div className="space-y-1">
-                                    <div className="font-medium">
-                                      {registration.battle_tag ??
-                                        registration.display_name ??
-                                        `Registration #${registration.id}`}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {[registration.discord_nick, registration.twitch_nick]
-                                        .filter(Boolean)
-                                        .join(" · ") ||
-                                        registration.source_record_key ||
-                                        "-"}
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <SourceBadge source={registration.source} />
-                                </TableCell>
-                                <TableCell>
-                                  <RolesCell roles={registration.roles} catalog={subroleCatalog} />
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className={statusConfig.className}>
-                                    <StatusIcon className="mr-1 h-3.5 w-3.5" />
-                                    {statusConfig.label}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <BalancerBadge registration={registration} />
-                                </TableCell>
-                                <TableCell>
-                                  <CheckInBadge registration={registration} />
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {formatSubmittedAt(registration.submitted_at)}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-2">
-                                    {registration.status === "pending" ? (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => approveMutation.mutate(registration.id)}
-                                        >
-                                          <Check className="mr-1.5 h-3.5 w-3.5" />
-                                          Approve
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => rejectMutation.mutate(registration.id)}
-                                        >
-                                          <X className="mr-1.5 h-3.5 w-3.5" />
-                                          Reject
-                                        </Button>
-                                      </>
-                                    ) : null}
-                                    {registration.status !== "withdrawn" ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setEditingRegistration(registration);
-                                        }}
-                                      >
-                                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                        Edit
-                                      </Button>
-                                    ) : null}
-                                    {registration.status === "approved" ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          balancerStatusMutation.mutate({
-                                            registrationId: registration.id,
-                                            balancerStatus: inBalancer ? "not_in_balancer" : "ready"
-                                          })
-                                        }
-                                      >
-                                        {inBalancer ? (
-                                          <ShieldX className="mr-1.5 h-3.5 w-3.5" />
-                                        ) : (
-                                          <Check className="mr-1.5 h-3.5 w-3.5" />
-                                        )}
-                                        {inBalancer ? "Remove from Balancer" : "Add to Balancer"}
-                                      </Button>
-                                    ) : null}
-                                    {registration.status === "approved" ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          checkInMutation.mutate({
-                                            registrationId: registration.id,
-                                            checkedIn: !registration.checked_in
-                                          })
-                                        }
-                                      >
-                                        <Check className="mr-1.5 h-3.5 w-3.5" />
-                                        {registration.checked_in ? "Uncheck-in" : "Check-in"}
-                                      </Button>
-                                    ) : null}
-                                    {registration.status === "withdrawn" ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => restoreMutation.mutate(registration.id)}
-                                      >
-                                        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                                        Restore
-                                      </Button>
+                            <tr className="border-b border-white/4 transition-colors hover:bg-white/[0.02]">
+                              <td className="px-3 py-2.5 align-top">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpanded(registration.id)}
+                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/40 hover:bg-white/5 hover:text-white"
+                                    aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                                    aria-expanded={isExpanded}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-4 w-4" />
                                     ) : (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => withdrawMutation.mutate(registration.id)}
-                                      >
-                                        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                                        Withdraw
-                                      </Button>
+                                      <ChevronRight className="h-4 w-4" />
                                     )}
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => deleteMutation.mutate(registration.id)}
-                                    >
-                                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                      Delete
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </>
-                            )}
-                          </tr>
-                          {isExpanded ? (
-                            <tr className="border-b border-white/[0.06] bg-white/[0.015]">
-                              <td colSpan={visibleColumns.length + 2} className="px-4 py-4">
-                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-                                  <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                                      Rank history
-                                    </div>
-                                    <BattleTagRankHistory
-                                      userId={registration.user_id}
-                                      battleTag={registration.battle_tag}
+                                  </button>
+                                  {selectable ? (
+                                    <Checkbox
+                                      checked={selectedIds.has(registration.id)}
+                                      onCheckedChange={(checked) =>
+                                        setSelectedIds((current) => {
+                                          const next = new Set(current);
+                                          if (checked) {
+                                            next.add(registration.id);
+                                          } else {
+                                            next.delete(registration.id);
+                                          }
+                                          return next;
+                                        })
+                                      }
+                                      aria-label={`Select registration ${registration.id}`}
                                     />
-                                  </div>
-                                  <dl className="space-y-2 text-xs text-white/70">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                                      Details
-                                    </div>
-                                    <div>
-                                      <dt className="mb-1 text-white/40">Declared roles</dt>
-                                      <dd>
-                                        <RolesCell roles={registration.roles} catalog={subroleCatalog} />
-                                      </dd>
-                                    </div>
-                                    {registration.smurf_tags_json.length > 0 ? (
-                                      <div className="flex justify-between gap-3">
-                                        <dt className="text-white/40">Smurfs</dt>
-                                        <dd className="text-right">
-                                          {registration.smurf_tags_json.join(", ")}
-                                        </dd>
-                                      </div>
-                                    ) : null}
-                                    {registration.discord_nick || registration.twitch_nick ? (
-                                      <div className="flex justify-between gap-3">
-                                        <dt className="text-white/40">Contact</dt>
-                                        <dd className="text-right">
-                                          {[registration.discord_nick, registration.twitch_nick]
-                                            .filter(Boolean)
-                                            .join(" · ")}
-                                        </dd>
-                                      </div>
-                                    ) : null}
-                                    <div className="flex justify-between gap-3">
-                                      <dt className="text-white/40">Source</dt>
-                                      <dd className="text-right">{registration.source}</dd>
-                                    </div>
-                                    <div className="flex justify-between gap-3">
-                                      <dt className="text-white/40">Submitted</dt>
-                                      <dd className="text-right">
-                                        {formatSubmittedAt(registration.submitted_at)}
-                                      </dd>
-                                    </div>
-                                    {registration.reviewed_at ? (
-                                      <div className="flex justify-between gap-3">
-                                        <dt className="text-white/40">Reviewed</dt>
-                                        <dd className="text-right">
-                                          {formatSubmittedAt(registration.reviewed_at)}
-                                          {registration.reviewed_by_username
-                                            ? ` · ${registration.reviewed_by_username}`
-                                            : ""}
-                                        </dd>
-                                      </div>
-                                    ) : null}
-                                    {registration.notes ? (
-                                      <div>
-                                        <dt className="text-white/40">Notes</dt>
-                                        <dd className="mt-0.5">{registration.notes}</dd>
-                                      </div>
-                                    ) : null}
-                                    {registration.admin_notes ? (
-                                      <div>
-                                        <dt className="text-white/40">Admin notes</dt>
-                                        <dd className="mt-0.5">{registration.admin_notes}</dd>
-                                      </div>
-                                    ) : null}
-                                  </dl>
+                                  ) : null}
                                 </div>
                               </td>
+                              {visibleColumns.map((column) => (
+                                <td
+                                  key={column.id}
+                                  className={cn(
+                                    "px-3 py-2.5 align-top",
+                                    RESPONSIVE_CLASS[column.responsive ?? "always"],
+                                    ALIGN_CLASS[column.align ?? "left"],
+                                    column.widthClass
+                                  )}
+                                >
+                                  {column.render(registration, index)}
+                                </td>
+                              ))}
+                              <td className="px-3 py-2.5 align-top">
+                                <RegistrationRowActions
+                                  registration={registration}
+                                  onEdit={(selectedRegistration) => {
+                                    setEditingRegistration(selectedRegistration);
+                                  }}
+                                  onApprove={(registrationId) =>
+                                    approveMutation.mutate(registrationId)
+                                  }
+                                  onReject={(registrationId) =>
+                                    rejectMutation.mutate(registrationId)
+                                  }
+                                  onToggleBalancer={(selectedRegistration) =>
+                                    balancerStatusMutation.mutate({
+                                      registrationId: selectedRegistration.id,
+                                      balancerStatus:
+                                        selectedRegistration.balancer_status === "ready"
+                                          ? "not_in_balancer"
+                                          : "ready"
+                                    })
+                                  }
+                                  onToggleCheckIn={(selectedRegistration) =>
+                                    checkInMutation.mutate({
+                                      registrationId: selectedRegistration.id,
+                                      checkedIn: !selectedRegistration.checked_in
+                                    })
+                                  }
+                                  onWithdraw={(registrationId) =>
+                                    withdrawMutation.mutate(registrationId)
+                                  }
+                                  onRestore={(registrationId) =>
+                                    restoreMutation.mutate(registrationId)
+                                  }
+                                  onDelete={(registrationId) =>
+                                    deleteMutation.mutate(registrationId)
+                                  }
+                                />
+                              </td>
+                              {false && (
+                                <>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      <div className="font-medium">
+                                        {registration.battle_tag ??
+                                          registration.display_name ??
+                                          `Registration #${registration.id}`}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {[registration.discord_nick, registration.twitch_nick]
+                                          .filter(Boolean)
+                                          .join(" · ") ||
+                                          registration.source_record_key ||
+                                          "-"}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <SourceBadge source={registration.source} />
+                                  </TableCell>
+                                  <TableCell>
+                                    <RolesCell
+                                      roles={registration.roles}
+                                      catalog={subroleCatalog}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className={statusConfig.className}>
+                                      <StatusIcon className="mr-1 h-3.5 w-3.5" />
+                                      {statusConfig.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <BalancerBadge registration={registration} />
+                                  </TableCell>
+                                  <TableCell>
+                                    <CheckInBadge registration={registration} />
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {formatSubmittedAt(registration.submitted_at)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-2">
+                                      {registration.status === "pending" ? (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => approveMutation.mutate(registration.id)}
+                                          >
+                                            <Check className="mr-1.5 h-3.5 w-3.5" />
+                                            Approve
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => rejectMutation.mutate(registration.id)}
+                                          >
+                                            <X className="mr-1.5 h-3.5 w-3.5" />
+                                            Reject
+                                          </Button>
+                                        </>
+                                      ) : null}
+                                      {registration.status !== "withdrawn" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setEditingRegistration(registration);
+                                          }}
+                                        >
+                                          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                          Edit
+                                        </Button>
+                                      ) : null}
+                                      {registration.status === "approved" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            balancerStatusMutation.mutate({
+                                              registrationId: registration.id,
+                                              balancerStatus: inBalancer
+                                                ? "not_in_balancer"
+                                                : "ready"
+                                            })
+                                          }
+                                        >
+                                          {inBalancer ? (
+                                            <ShieldX className="mr-1.5 h-3.5 w-3.5" />
+                                          ) : (
+                                            <Check className="mr-1.5 h-3.5 w-3.5" />
+                                          )}
+                                          {inBalancer ? "Remove from Balancer" : "Add to Balancer"}
+                                        </Button>
+                                      ) : null}
+                                      {registration.status === "approved" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            checkInMutation.mutate({
+                                              registrationId: registration.id,
+                                              checkedIn: !registration.checked_in
+                                            })
+                                          }
+                                        >
+                                          <Check className="mr-1.5 h-3.5 w-3.5" />
+                                          {registration.checked_in ? "Uncheck-in" : "Check-in"}
+                                        </Button>
+                                      ) : null}
+                                      {registration.status === "withdrawn" ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => restoreMutation.mutate(registration.id)}
+                                        >
+                                          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                                          Restore
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => withdrawMutation.mutate(registration.id)}
+                                        >
+                                          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                                          Withdraw
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => deleteMutation.mutate(registration.id)}
+                                      >
+                                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </>
+                              )}
                             </tr>
-                          ) : null}
+                            {isExpanded ? (
+                              <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                                <td colSpan={visibleColumns.length + 2} className="px-4 py-4">
+                                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                                    <div className="space-y-2">
+                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                        Rank history
+                                      </div>
+                                      <BattleTagRankHistory
+                                        userId={registration.user_id}
+                                        battleTag={registration.battle_tag}
+                                      />
+                                    </div>
+                                    <dl className="space-y-2 text-xs text-white/70">
+                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                        Details
+                                      </div>
+                                      <div>
+                                        <dt className="mb-1 text-white/40">Declared roles</dt>
+                                        <dd>
+                                          <RolesCell
+                                            roles={registration.roles}
+                                            catalog={subroleCatalog}
+                                          />
+                                        </dd>
+                                      </div>
+                                      {registration.smurf_tags_json.length > 0 ? (
+                                        <div className="flex justify-between gap-3">
+                                          <dt className="text-white/40">Smurfs</dt>
+                                          <dd className="text-right">
+                                            {registration.smurf_tags_json.join(", ")}
+                                          </dd>
+                                        </div>
+                                      ) : null}
+                                      {registration.discord_nick || registration.twitch_nick ? (
+                                        <div className="flex justify-between gap-3">
+                                          <dt className="text-white/40">Contact</dt>
+                                          <dd className="text-right">
+                                            {[registration.discord_nick, registration.twitch_nick]
+                                              .filter(Boolean)
+                                              .join(" · ")}
+                                          </dd>
+                                        </div>
+                                      ) : null}
+                                      <div className="flex justify-between gap-3">
+                                        <dt className="text-white/40">Source</dt>
+                                        <dd className="text-right">{registration.source}</dd>
+                                      </div>
+                                      <div className="flex justify-between gap-3">
+                                        <dt className="text-white/40">Submitted</dt>
+                                        <dd className="text-right">
+                                          {formatSubmittedAt(registration.submitted_at)}
+                                        </dd>
+                                      </div>
+                                      {registration.reviewed_at ? (
+                                        <div className="flex justify-between gap-3">
+                                          <dt className="text-white/40">Reviewed</dt>
+                                          <dd className="text-right">
+                                            {formatSubmittedAt(registration.reviewed_at)}
+                                            {registration.reviewed_by_username
+                                              ? ` · ${registration.reviewed_by_username}`
+                                              : ""}
+                                          </dd>
+                                        </div>
+                                      ) : null}
+                                      {registration.notes ? (
+                                        <div>
+                                          <dt className="text-white/40">Notes</dt>
+                                          <dd className="mt-0.5">{registration.notes}</dd>
+                                        </div>
+                                      ) : null}
+                                      {registration.admin_notes ? (
+                                        <div>
+                                          <dt className="text-white/40">Admin notes</dt>
+                                          <dd className="mt-0.5">{registration.admin_notes}</dd>
+                                        </div>
+                                      ) : null}
+                                    </dl>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
                           </Fragment>
                         );
                       })}

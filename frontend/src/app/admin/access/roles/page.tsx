@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   Trash2,
   Wrench,
-  XSquare,
+  XSquare
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,15 +40,27 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type { RbacPermission, RbacRole, RbacRoleDetail, UpsertRolePayload } from "@/types/rbac.types";
+import type {
+  RbacPermission,
+  RbacRole,
+  RbacRoleDetail,
+  UpsertRolePayload
+} from "@/types/rbac.types";
 
 const PAGE_SIZE = 15;
 const ACTION_ORDER = [
@@ -71,15 +83,11 @@ const ACTION_ORDER = [
   "upload",
   "stream",
   "reprocess",
-  "revoke",
+  "revoke"
 ];
 
 /** "global" = global roles (workspace_id IS NULL), number = workspace-scoped */
 type RoleScope = "global" | number;
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong";
-}
 
 function formatPermissionLabel(value: string): string {
   if (value === "*") {
@@ -92,7 +100,10 @@ function sortActions(left: string, right: string): number {
   const leftIndex = ACTION_ORDER.indexOf(left);
   const rightIndex = ACTION_ORDER.indexOf(right);
   if (leftIndex !== -1 || rightIndex !== -1) {
-    return (leftIndex === -1 ? ACTION_ORDER.length : leftIndex) - (rightIndex === -1 ? ACTION_ORDER.length : rightIndex);
+    return (
+      (leftIndex === -1 ? ACTION_ORDER.length : leftIndex) -
+      (rightIndex === -1 ? ACTION_ORDER.length : rightIndex)
+    );
   }
   return left.localeCompare(right);
 }
@@ -116,14 +127,14 @@ function hasRoleFormChanges(current: UpsertRolePayload, initial: UpsertRolePaylo
 const emptyRoleForm: UpsertRolePayload = {
   name: "",
   description: "",
-  permission_ids: [],
+  permission_ids: []
 };
 
 function roleToForm(role: RbacRoleDetail): UpsertRolePayload {
   return {
     name: role.name,
     description: role.description || "",
-    permission_ids: role.permissions.map((permission) => permission.id),
+    permission_ids: role.permissions.map((permission) => permission.id)
   };
 }
 
@@ -143,7 +154,7 @@ function MatrixCheckbox({
   checked,
   disabled,
   label,
-  onChange,
+  onChange
 }: {
   checked: boolean;
   disabled?: boolean;
@@ -164,14 +175,17 @@ function MatrixCheckbox({
 
 export default function AccessAdminRolesPage() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const { hasPermission, isSuperuser, canAccessPermission, canAccessAnyPermission } = usePermissions();
+  const { hasPermission, isSuperuser, canAccessPermission, canAccessAnyPermission } =
+    usePermissions();
 
   const { workspaces } = useWorkspaceStore();
   const adminWorkspaces = workspaces.filter(
     (ws) =>
       isSuperuser ||
-      canAccessAnyPermission(["role.read", "role.create", "role.update", "role.delete", "role.assign"], ws.id),
+      canAccessAnyPermission(
+        ["role.read", "role.create", "role.update", "role.delete", "role.assign"],
+        ws.id
+      )
   );
 
   // Scope selector: "global" or a workspace id
@@ -187,7 +201,8 @@ export default function AccessAdminRolesPage() {
   const canReadPermissions =
     effectiveScope === "global"
       ? hasPermission("permission.read")
-      : typeof effectiveScope === "number" && canAccessPermission("permission.read", effectiveScope);
+      : typeof effectiveScope === "number" &&
+        canAccessPermission("permission.read", effectiveScope);
   const canManageInScope =
     effectiveScope === "global"
       ? hasPermission("role.create") && canReadPermissions
@@ -196,7 +211,9 @@ export default function AccessAdminRolesPage() {
   const canUpdateRole =
     effectiveScope === "global"
       ? hasPermission("role.update") && canReadPermissions
-      : typeof effectiveScope === "number" && canAccessPermission("role.update", effectiveScope) && canReadPermissions;
+      : typeof effectiveScope === "number" &&
+        canAccessPermission("role.update", effectiveScope) &&
+        canReadPermissions;
   const canDeleteRole =
     effectiveScope === "global"
       ? hasPermission("role.delete")
@@ -212,48 +229,44 @@ export default function AccessAdminRolesPage() {
     queryKey: ["access-admin", "permissions", effectiveScope],
     queryFn: () =>
       rbacService.listPermissions(
-        effectiveScope === "global" ? undefined : { workspace_id: effectiveScope },
+        effectiveScope === "global" ? undefined : { workspace_id: effectiveScope }
       ),
-    enabled: canReadPermissions && (createDialogOpen || editingRoleId !== null),
+    enabled: canReadPermissions && (createDialogOpen || editingRoleId !== null)
   });
 
   const roleDetailQuery = useQuery({
     queryKey: ["access-admin", "roles", editingRoleId],
     queryFn: () => rbacService.getRole(editingRoleId as number),
-    enabled: editingRoleId !== null,
+    enabled: editingRoleId !== null
   });
 
   const createRoleMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: (payload: UpsertRolePayload) => rbacService.createRole(payload),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "permissions"] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "permissions"] })
       ]);
       setCreateDialogOpen(false);
       setFormOverride(emptyRoleForm);
-      toast({ title: "Role created" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Role created");
+    }
   });
 
   const updateRoleMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: ({ id, payload }: { id: number; payload: Partial<UpsertRolePayload> }) =>
       rbacService.updateRole(id, payload),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] })
       ]);
       setEditingRoleId(null);
       setFormOverride(emptyRoleForm);
-      toast({ title: "Role updated" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Role updated");
+    }
   });
 
   const deleteRoleMutation = useMutation({
@@ -261,25 +274,23 @@ export default function AccessAdminRolesPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] })
       ]);
       setDeletingRole(null);
-      toast({ title: "Role deleted" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Role deleted");
+    }
   });
 
   const columns: ColumnDef<RbacRole>[] = [
     {
       accessorKey: "name",
-      header: "Role",
+      header: "Role"
     },
     {
       accessorKey: "description",
       header: "Description",
-      cell: ({ row }) => row.original.description || <span className="text-muted-foreground">No description</span>,
+      cell: ({ row }) =>
+        row.original.description || <span className="text-muted-foreground">No description</span>
     },
     {
       id: "scope",
@@ -301,7 +312,7 @@ export default function AccessAdminRolesPage() {
             <span className="text-sm">Global</span>
           </div>
         );
-      },
+      }
     },
     {
       id: "system",
@@ -311,7 +322,7 @@ export default function AccessAdminRolesPage() {
           <StatusIcon icon={Lock} label="System" variant="muted" />
         ) : (
           <StatusIcon icon={Wrench} label="Custom" variant="info" />
-        ),
+        )
     },
     {
       id: "actions",
@@ -372,8 +383,8 @@ export default function AccessAdminRolesPage() {
             </DropdownMenuContent>
           </DropdownMenu>
         );
-      },
-    },
+      }
+    }
   ];
 
   const permissionMatrix = useMemo(() => {
@@ -389,12 +400,14 @@ export default function AccessAdminRolesPage() {
 
     const rows: PermissionMatrixRow[] = Array.from(groups.entries())
       .map(([resource, permissions]) => {
-        const sortedPermissions = [...permissions].sort((left, right) => sortActions(left.action, right.action));
+        const sortedPermissions = [...permissions].sort((left, right) =>
+          sortActions(left.action, right.action)
+        );
         return {
           resource,
           permissions: sortedPermissions,
           permissionIds: sortedPermissions.map((permission) => permission.id),
-          byAction: new Map(sortedPermissions.map((permission) => [permission.action, permission])),
+          byAction: new Map(sortedPermissions.map((permission) => [permission.action, permission]))
         };
       })
       .sort((left, right) => left.resource.localeCompare(right.resource));
@@ -404,13 +417,13 @@ export default function AccessAdminRolesPage() {
       action,
       permissionIds: rows
         .map((row) => row.byAction.get(action)?.id)
-        .filter((permissionId): permissionId is number => permissionId !== undefined),
+        .filter((permissionId): permissionId is number => permissionId !== undefined)
     }));
 
     return {
       columns,
       rows,
-      allPermissionIds: rows.flatMap((row) => row.permissionIds),
+      allPermissionIds: rows.flatMap((row) => row.permissionIds)
     };
   }, [permissionsQuery.data]);
 
@@ -419,10 +432,13 @@ export default function AccessAdminRolesPage() {
   const roleDetail = roleDetailQuery.data?.id === editingRoleId ? roleDetailQuery.data : undefined;
   const currentBaseline = useMemo(
     () => (isEditing && roleDetail ? roleToForm(roleDetail) : emptyRoleForm),
-    [isEditing, roleDetail],
+    [isEditing, roleDetail]
   );
   const formData = formOverride ?? currentBaseline;
-  const selectedPermissionIds = useMemo(() => new Set(formData.permission_ids), [formData.permission_ids]);
+  const selectedPermissionIds = useMemo(
+    () => new Set(formData.permission_ids),
+    [formData.permission_ids]
+  );
   const permissionSelectionStats = useMemo(() => {
     const selectedIds = selectedPermissionIds;
     const rowSelectedCounts = new Map<string, number>();
@@ -430,27 +446,36 @@ export default function AccessAdminRolesPage() {
     const columnChecked = new Map<string, boolean>();
 
     for (const row of permissionMatrix.rows) {
-      const selectedCount = row.permissionIds.filter((permissionId) => selectedIds.has(permissionId)).length;
+      const selectedCount = row.permissionIds.filter((permissionId) =>
+        selectedIds.has(permissionId)
+      ).length;
       rowSelectedCounts.set(row.resource, selectedCount);
-      rowChecked.set(row.resource, row.permissionIds.length > 0 && selectedCount === row.permissionIds.length);
+      rowChecked.set(
+        row.resource,
+        row.permissionIds.length > 0 && selectedCount === row.permissionIds.length
+      );
     }
 
     for (const column of permissionMatrix.columns) {
       columnChecked.set(
         column.action,
-        column.permissionIds.length > 0 && column.permissionIds.every((permissionId) => selectedIds.has(permissionId)),
+        column.permissionIds.length > 0 &&
+          column.permissionIds.every((permissionId) => selectedIds.has(permissionId))
       );
     }
 
     return { columnChecked, rowChecked, rowSelectedCounts };
   }, [permissionMatrix.columns, permissionMatrix.rows, selectedPermissionIds]);
   const isFormDirty = useMemo(
-    () => !isReadOnly && (createDialogOpen || isEditing) && hasRoleFormChanges(formData, currentBaseline),
-    [isReadOnly, createDialogOpen, currentBaseline, formData, isEditing],
+    () =>
+      !isReadOnly &&
+      (createDialogOpen || isEditing) &&
+      hasRoleFormChanges(formData, currentBaseline),
+    [isReadOnly, createDialogOpen, currentBaseline, formData, isEditing]
   );
 
   const updateFormData = (
-    updater: UpsertRolePayload | ((current: UpsertRolePayload) => UpsertRolePayload),
+    updater: UpsertRolePayload | ((current: UpsertRolePayload) => UpsertRolePayload)
   ) => {
     setFormOverride((current) => {
       const value = current ?? currentBaseline;
@@ -463,14 +488,14 @@ export default function AccessAdminRolesPage() {
       ...current,
       permission_ids: checked
         ? [...current.permission_ids, permissionId]
-        : current.permission_ids.filter((id) => id !== permissionId),
+        : current.permission_ids.filter((id) => id !== permissionId)
     }));
   };
 
   const setPermissions = (permissionIds: number[]) => {
     updateFormData((current) => ({
       ...current,
-      permission_ids: Array.from(new Set(permissionIds)),
+      permission_ids: Array.from(new Set(permissionIds))
     }));
   };
 
@@ -486,7 +511,7 @@ export default function AccessAdminRolesPage() {
       }
       return {
         ...current,
-        permission_ids: Array.from(next),
+        permission_ids: Array.from(next)
       };
     });
   };
@@ -500,7 +525,7 @@ export default function AccessAdminRolesPage() {
     // Include workspace_id when creating in workspace scope
     const payload: UpsertRolePayload = {
       ...formData,
-      workspace_id: effectiveScope === "global" ? null : effectiveScope,
+      workspace_id: effectiveScope === "global" ? null : effectiveScope
     };
     createRoleMutation.mutate(payload);
   };
@@ -508,7 +533,7 @@ export default function AccessAdminRolesPage() {
   const scopeLabel =
     effectiveScope === "global"
       ? "Global"
-      : workspaces.find((w) => w.id === effectiveScope)?.name ?? "Workspace";
+      : (workspaces.find((w) => w.id === effectiveScope)?.name ?? "Workspace");
 
   return (
     <div className="space-y-6">
@@ -539,9 +564,7 @@ export default function AccessAdminRolesPage() {
         <Label className="text-sm text-muted-foreground">Scope:</Label>
         <Select
           value={String(effectiveScope)}
-          onValueChange={(value) =>
-            setSelectedScope(value === "global" ? "global" : Number(value))
-          }
+          onValueChange={(value) => setSelectedScope(value === "global" ? "global" : Number(value))}
         >
           <SelectTrigger className="w-[220px]">
             <SelectValue placeholder="Select scope" />
@@ -571,12 +594,19 @@ export default function AccessAdminRolesPage() {
         initialPageSize={PAGE_SIZE}
         pageSizeOptions={[10, 20, 50, 100]}
         queryKey={(page, search, pageSize, sortField, sortDir) => [
-          "access-admin", "roles", effectiveScope, page, search, pageSize, sortField, sortDir,
+          "access-admin",
+          "roles",
+          effectiveScope,
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
         ]}
         queryFn={async (page, search, pageSize, sortField, sortDir) => {
           const workspaceId = effectiveScope === "global" ? undefined : effectiveScope;
           const roles = await rbacService.listRoles(
-            workspaceId !== undefined ? { workspace_id: workspaceId } : undefined,
+            workspaceId !== undefined ? { workspace_id: workspaceId } : undefined
           );
           const filteredRoles = search
             ? roles.filter((role) => {
@@ -611,15 +641,15 @@ export default function AccessAdminRolesPage() {
           isReadOnly
             ? `View Role: ${roleDetail?.name ?? ""}`
             : isEditing
-            ? "Edit Role"
-            : `Create Role (${scopeLabel})`
+              ? "Edit Role"
+              : `Create Role (${scopeLabel})`
         }
         description={
           isReadOnly
             ? "Inspect role metadata and its permission matrix."
             : isEditing
-            ? "Update role metadata and its permission bundle."
-            : `Create a new custom role in the ${scopeLabel} scope and attach explicit permissions.`
+              ? "Update role metadata and its permission bundle."
+              : `Create a new custom role in the ${scopeLabel} scope and attach explicit permissions.`
         }
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
@@ -650,7 +680,9 @@ export default function AccessAdminRolesPage() {
             <Input
               id="role-name"
               value={formData.name}
-              onChange={(event) => updateFormData((current) => ({ ...current, name: event.target.value }))}
+              onChange={(event) =>
+                updateFormData((current) => ({ ...current, name: event.target.value }))
+              }
               placeholder="support_admin"
               required
               disabled={isReadOnly}
@@ -662,7 +694,9 @@ export default function AccessAdminRolesPage() {
             <Input
               id="role-description"
               value={formData.description || ""}
-              onChange={(event) => updateFormData((current) => ({ ...current, description: event.target.value }))}
+              onChange={(event) =>
+                updateFormData((current) => ({ ...current, description: event.target.value }))
+              }
               placeholder="Describe what this role is allowed to do"
               disabled={isReadOnly}
             />
@@ -673,7 +707,8 @@ export default function AccessAdminRolesPage() {
               <div className="flex items-center gap-2">
                 <Label>Permission Matrix</Label>
                 <Badge variant="outline">
-                  {formData.permission_ids.length}/{permissionMatrix.allPermissionIds.length} selected
+                  {formData.permission_ids.length}/{permissionMatrix.allPermissionIds.length}{" "}
+                  selected
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -704,18 +739,29 @@ export default function AccessAdminRolesPage() {
               <Table wrapperClassName="min-w-[900px] overflow-visible">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="sticky left-0 z-20 w-[240px] bg-background">Resource</TableHead>
+                    <TableHead className="sticky left-0 z-20 w-[240px] bg-background">
+                      Resource
+                    </TableHead>
                     {permissionMatrix.columns.map((column) => {
                       return (
-                        <TableHead key={column.action} className="min-w-[96px] bg-background text-center">
+                        <TableHead
+                          key={column.action}
+                          className="min-w-[96px] bg-background text-center"
+                        >
                           <div className="flex flex-col items-center gap-1.5">
                             <MatrixCheckbox
-                              checked={permissionSelectionStats.columnChecked.get(column.action) ?? false}
+                              checked={
+                                permissionSelectionStats.columnChecked.get(column.action) ?? false
+                              }
                               label={`Toggle all ${column.action} permissions`}
                               disabled={isReadOnly || column.permissionIds.length === 0}
-                              onChange={(checked) => togglePermissionGroup(column.permissionIds, checked)}
+                              onChange={(checked) =>
+                                togglePermissionGroup(column.permissionIds, checked)
+                              }
                             />
-                            <span className="text-xs capitalize">{formatPermissionLabel(column.action)}</span>
+                            <span className="text-xs capitalize">
+                              {formatPermissionLabel(column.action)}
+                            </span>
                           </div>
                         </TableHead>
                       );
@@ -724,8 +770,10 @@ export default function AccessAdminRolesPage() {
                 </TableHeader>
                 <TableBody>
                   {permissionMatrix.rows.map((row) => {
-                    const rowChecked = permissionSelectionStats.rowChecked.get(row.resource) ?? false;
-                    const rowSelectedCount = permissionSelectionStats.rowSelectedCounts.get(row.resource) ?? 0;
+                    const rowChecked =
+                      permissionSelectionStats.rowChecked.get(row.resource) ?? false;
+                    const rowSelectedCount =
+                      permissionSelectionStats.rowSelectedCounts.get(row.resource) ?? 0;
 
                     return (
                       <TableRow key={row.resource}>
@@ -735,7 +783,9 @@ export default function AccessAdminRolesPage() {
                               checked={rowChecked}
                               label={`Toggle all ${row.resource} permissions`}
                               disabled={isReadOnly}
-                              onChange={(checked) => togglePermissionGroup(row.permissionIds, checked)}
+                              onChange={(checked) =>
+                                togglePermissionGroup(row.permissionIds, checked)
+                              }
                             />
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium">
@@ -751,7 +801,10 @@ export default function AccessAdminRolesPage() {
                           const permission = row.byAction.get(column.action);
                           if (!permission) {
                             return (
-                              <TableCell key={column.action} className="text-center text-muted-foreground/40">
+                              <TableCell
+                                key={column.action}
+                                className="text-center text-muted-foreground/40"
+                              >
                                 -
                               </TableCell>
                             );

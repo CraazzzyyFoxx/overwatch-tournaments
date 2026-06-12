@@ -25,13 +25,13 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { normalizeChallongeSlug } from "@/lib/challonge";
 import { hasUnsavedChanges } from "@/lib/form-change";
@@ -59,11 +59,8 @@ export function TournamentSettingsTab({
 }: TournamentSettingsTabProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  const [formData, setFormData] = useState<TournamentFormState>(
-    getTournamentForm(tournament)
-  );
+  const [formData, setFormData] = useState<TournamentFormState>(getTournamentForm(tournament));
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const initialFormData = getTournamentForm(tournament);
@@ -78,10 +75,7 @@ export function TournamentSettingsTab({
     mutationFn: (data: TournamentUpdateInput) => adminService.updateTournament(tournamentId, data),
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Tournament settings updated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to save settings", description: error.message, variant: "destructive" });
+      notify.success("Tournament settings updated successfully");
     }
   });
 
@@ -89,17 +83,14 @@ export function TournamentSettingsTab({
     mutationFn: () => adminService.deleteTournament(tournamentId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["tournaments"] });
-      toast({ title: "Tournament deleted successfully" });
+      notify.success("Tournament deleted successfully");
       router.push("/admin/tournaments");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to delete tournament", description: error.message, variant: "destructive" });
     }
   });
 
   const handleReset = () => {
     setFormData(initialFormData);
-    toast({ title: "Changes discarded", description: "Form reset to current tournament settings." });
+    notify.info("Changes discarded", { description: "Form reset to current tournament settings." });
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -151,12 +142,7 @@ export function TournamentSettingsTab({
               <RotateCcw className="mr-1.5 size-3.5" />
               Discard
             </Button>
-            <Button
-              type="submit"
-              size="sm"
-              className="h-8"
-              disabled={updateMutation.isPending}
-            >
+            <Button type="submit" size="sm" className="h-8" disabled={updateMutation.isPending}>
               <Save className="mr-1.5 size-3.5" />
               {updateMutation.isPending ? "Saving..." : "Save changes"}
             </Button>
@@ -180,7 +166,9 @@ export function TournamentSettingsTab({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-[3fr_1fr] gap-4">
                 <div>
-                  <Label htmlFor="settings-name" className="text-xs">Tournament Name</Label>
+                  <Label htmlFor="settings-name" className="text-xs">
+                    Tournament Name
+                  </Label>
                   <Input
                     id="settings-name"
                     value={formData.name}
@@ -190,7 +178,9 @@ export function TournamentSettingsTab({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="settings-number" className="text-xs">Number</Label>
+                  <Label htmlFor="settings-number" className="text-xs">
+                    Number
+                  </Label>
                   <Input
                     id="settings-number"
                     type="number"
@@ -198,7 +188,7 @@ export function TournamentSettingsTab({
                     onChange={(event) =>
                       setFormData({
                         ...formData,
-                        number: event.target.value ? Number(event.target.value) : null,
+                        number: event.target.value ? Number(event.target.value) : null
                       })
                     }
                     className="mt-1.5 bg-background/50"
@@ -206,11 +196,15 @@ export function TournamentSettingsTab({
                 </div>
               </div>
               <div>
-                <Label htmlFor="settings-description" className="text-xs">Description</Label>
+                <Label htmlFor="settings-description" className="text-xs">
+                  Description
+                </Label>
                 <Textarea
                   id="settings-description"
                   value={formData.description}
-                  onChange={(event) => setFormData({ ...formData, description: event.target.value })}
+                  onChange={(event) =>
+                    setFormData({ ...formData, description: event.target.value })
+                  }
                   className="mt-1.5 bg-background/50 min-h-[90px]"
                   placeholder="Optional tournament description..."
                 />
@@ -232,7 +226,10 @@ export function TournamentSettingsTab({
             <CardContent className="space-y-5">
               <div>
                 <Field>
-                  <FieldLabel htmlFor="settings-date-range" className="text-xs font-normal text-foreground">
+                  <FieldLabel
+                    htmlFor="settings-date-range"
+                    className="text-xs font-normal text-foreground"
+                  >
                     Tournament Duration Range
                   </FieldLabel>
                   <div className="mt-1.5">
@@ -240,7 +237,9 @@ export function TournamentSettingsTab({
                       id="settings-date-range"
                       startDate={formData.start_date}
                       endDate={formData.end_date}
-                      onChange={(start, end) => setFormData({ ...formData, start_date: start, end_date: end })}
+                      onChange={(start, end) =>
+                        setFormData({ ...formData, start_date: start, end_date: end })
+                      }
                     />
                   </div>
                 </Field>
@@ -248,7 +247,9 @@ export function TournamentSettingsTab({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border/30 pt-4">
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Registration Period</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Registration Period
+                  </p>
                   <div className="grid gap-3">
                     <DateTimePicker
                       id="settings-registration-opens"
@@ -256,7 +257,9 @@ export function TournamentSettingsTab({
                       dateLabel="Opens at"
                       timeLabel="Time"
                       value={formData.registration_opens_at}
-                      onChange={(nextValue) => setFormData({ ...formData, registration_opens_at: nextValue })}
+                      onChange={(nextValue) =>
+                        setFormData({ ...formData, registration_opens_at: nextValue })
+                      }
                     />
                     <DateTimePicker
                       id="settings-registration-closes"
@@ -264,13 +267,17 @@ export function TournamentSettingsTab({
                       dateLabel="Closes at"
                       timeLabel="Time"
                       value={formData.registration_closes_at}
-                      onChange={(nextValue) => setFormData({ ...formData, registration_closes_at: nextValue })}
+                      onChange={(nextValue) =>
+                        setFormData({ ...formData, registration_closes_at: nextValue })
+                      }
                     />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Check-in Period</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Check-in Period
+                  </p>
                   <div className="grid gap-3">
                     <DateTimePicker
                       id="settings-check-in-opens"
@@ -278,7 +285,9 @@ export function TournamentSettingsTab({
                       dateLabel="Opens at"
                       timeLabel="Time"
                       value={formData.check_in_opens_at}
-                      onChange={(nextValue) => setFormData({ ...formData, check_in_opens_at: nextValue })}
+                      onChange={(nextValue) =>
+                        setFormData({ ...formData, check_in_opens_at: nextValue })
+                      }
                     />
                     <DateTimePicker
                       id="settings-check-in-closes"
@@ -286,7 +295,9 @@ export function TournamentSettingsTab({
                       dateLabel="Closes at"
                       timeLabel="Time"
                       value={formData.check_in_closes_at}
-                      onChange={(nextValue) => setFormData({ ...formData, check_in_closes_at: nextValue })}
+                      onChange={(nextValue) =>
+                        setFormData({ ...formData, check_in_closes_at: nextValue })
+                      }
                     />
                   </div>
                 </div>
@@ -310,10 +321,14 @@ export function TournamentSettingsTab({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="settings-team-formation" className="text-xs">Team formation</Label>
+                  <Label htmlFor="settings-team-formation" className="text-xs">
+                    Team formation
+                  </Label>
                   <Select
                     value={formData.team_formation}
-                    onValueChange={(nextValue) => setFormData({ ...formData, team_formation: nextValue })}
+                    onValueChange={(nextValue) =>
+                      setFormData({ ...formData, team_formation: nextValue })
+                    }
                   >
                     <SelectTrigger id="settings-team-formation" className="mt-1.5 bg-background/50">
                       <SelectValue placeholder="Select method" />
@@ -326,19 +341,26 @@ export function TournamentSettingsTab({
                 </div>
 
                 <div>
-                  <Label htmlFor="settings-division-grid-version" className="text-xs">Division Grid Version</Label>
+                  <Label htmlFor="settings-division-grid-version" className="text-xs">
+                    Division Grid Version
+                  </Label>
                   <Select
                     value={formData.division_grid_version_id?.toString() ?? "none"}
                     onValueChange={(nextValue) =>
                       setFormData({
                         ...formData,
-                        division_grid_version_id: nextValue === "none" ? null : Number(nextValue),
+                        division_grid_version_id: nextValue === "none" ? null : Number(nextValue)
                       })
                     }
                   >
-                    <SelectTrigger id="settings-division-grid-version" className="mt-1.5 bg-background/50">
+                    <SelectTrigger
+                      id="settings-division-grid-version"
+                      className="mt-1.5 bg-background/50"
+                    >
                       <SelectValue
-                        placeholder={divisionGridLoading ? "Loading division grids..." : "Select version"}
+                        placeholder={
+                          divisionGridLoading ? "Loading division grids..." : "Select version"
+                        }
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -359,9 +381,14 @@ export function TournamentSettingsTab({
                   <Checkbox
                     id="settings-is-league"
                     checked={formData.is_league}
-                    onCheckedChange={(checked) => setFormData({ ...formData, is_league: checked === true })}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, is_league: checked === true })
+                    }
                   />
-                  <Label htmlFor="settings-is-league" className="cursor-pointer text-sm font-medium">
+                  <Label
+                    htmlFor="settings-is-league"
+                    className="cursor-pointer text-sm font-medium"
+                  >
                     Treat as league season
                   </Label>
                 </div>
@@ -370,9 +397,14 @@ export function TournamentSettingsTab({
                   <Checkbox
                     id="settings-is-finished"
                     checked={formData.is_finished}
-                    onCheckedChange={(checked) => setFormData({ ...formData, is_finished: checked === true })}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, is_finished: checked === true })
+                    }
                   />
-                  <Label htmlFor="settings-is-finished" className="cursor-pointer text-sm font-medium">
+                  <Label
+                    htmlFor="settings-is-finished"
+                    className="cursor-pointer text-sm font-medium"
+                  >
                     Mark tournament as finished
                   </Label>
                 </div>
@@ -396,7 +428,9 @@ export function TournamentSettingsTab({
               <CardContent>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label htmlFor="settings-win-points" className="text-xs">Win</Label>
+                    <Label htmlFor="settings-win-points" className="text-xs">
+                      Win
+                    </Label>
                     <Input
                       id="settings-win-points"
                       type="number"
@@ -409,7 +443,9 @@ export function TournamentSettingsTab({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="settings-draw-points" className="text-xs">Draw</Label>
+                    <Label htmlFor="settings-draw-points" className="text-xs">
+                      Draw
+                    </Label>
                     <Input
                       id="settings-draw-points"
                       type="number"
@@ -422,7 +458,9 @@ export function TournamentSettingsTab({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="settings-loss-points" className="text-xs">Loss</Label>
+                    <Label htmlFor="settings-loss-points" className="text-xs">
+                      Loss
+                    </Label>
                     <Input
                       id="settings-loss-points"
                       type="number"
@@ -451,12 +489,16 @@ export function TournamentSettingsTab({
               </CardHeader>
               <CardContent>
                 <div>
-                  <Label htmlFor="settings-challonge" className="text-xs">Challonge URL or Slug</Label>
+                  <Label htmlFor="settings-challonge" className="text-xs">
+                    Challonge URL or Slug
+                  </Label>
                   <Input
                     id="settings-challonge"
                     placeholder="e.g. my-tournament or https://challonge.com/my-tournament"
                     value={formData.challonge_slug}
-                    onChange={(event) => setFormData({ ...formData, challonge_slug: event.target.value })}
+                    onChange={(event) =>
+                      setFormData({ ...formData, challonge_slug: event.target.value })
+                    }
                     className="mt-1.5 bg-background/50"
                   />
                 </div>
@@ -470,10 +512,13 @@ export function TournamentSettingsTab({
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="size-4 text-destructive" />
-                  <CardTitle className="text-sm font-semibold text-destructive">Danger Zone</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-destructive">
+                    Danger Zone
+                  </CardTitle>
                 </div>
                 <CardDescription className="text-xs text-destructive/70">
-                  Irreversible actions. Deleting a tournament will remove all historical logs and participant rosters.
+                  Irreversible actions. Deleting a tournament will remove all historical logs and
+                  participant rosters.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -496,11 +541,7 @@ export function TournamentSettingsTab({
       {/* Non-sticky Save/Discard actions at bottom of screen if no changes, or regular placement */}
       {!isDirty && (
         <div className="flex items-center justify-end gap-3 border-t border-border/40 pt-4 mt-6">
-          <Button
-            type="submit"
-            disabled={true}
-            className="opacity-50 cursor-not-allowed"
-          >
+          <Button type="submit" disabled={true} className="opacity-50 cursor-not-allowed">
             <Save className="mr-1.5 size-3.5" />
             Save changes
           </Button>

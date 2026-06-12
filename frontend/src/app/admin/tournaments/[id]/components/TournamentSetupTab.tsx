@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { DiscordChannelInput, DiscordChannelRead } from "@/types/admin.types";
 import type { Stage, Tournament } from "@/types/tournament.types";
@@ -79,15 +79,7 @@ function SetupStatusTile({ title, value, detail, tone, icon: Icon }: SetupStatus
   );
 }
 
-function HealthRow({
-  label,
-  value,
-  tone
-}: {
-  label: string;
-  value: string;
-  tone: StatusTone;
-}) {
+function HealthRow({ label, value, tone }: { label: string; value: string; tone: StatusTone }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -108,7 +100,6 @@ export function TournamentSetupTab({
   discordChannelLoading
 }: TournamentSetupTabProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const queryKeys = getTournamentWorkspaceQueryKeys(tournamentId);
 
   const [discordChannelDialogOpen, setDiscordChannelDialogOpen] = useState(false);
@@ -125,10 +116,7 @@ export function TournamentSetupTab({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.discordChannel });
       setDiscordChannelDialogOpen(false);
-      toast({ title: "Discord channel configured" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Discord channel configured");
     }
   });
 
@@ -137,10 +125,7 @@ export function TournamentSetupTab({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.discordChannel });
       setDiscordChannelDeleteOpen(false);
-      toast({ title: "Discord channel removed" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Discord channel removed");
     }
   });
 
@@ -163,7 +148,9 @@ export function TournamentSetupTab({
     stages.length === 0 ? "No stages configured" : null,
     hasChallongeSource ? null : "No Challonge link",
     discordChannel ? null : "No Discord channel",
-    stages.length > 0 && structuredStagesCount < stages.length ? "Some stages have no structure" : null
+    stages.length > 0 && structuredStagesCount < stages.length
+      ? "Some stages have no structure"
+      : null
   ].filter((warning): warning is string => Boolean(warning));
 
   return (
@@ -243,7 +230,11 @@ export function TournamentSetupTab({
                         : "border-border/70 text-muted-foreground"
                     )}
                   >
-                    {discordChannel?.is_active ? "Active" : discordChannel ? "Inactive" : "Not configured"}
+                    {discordChannel?.is_active
+                      ? "Active"
+                      : discordChannel
+                        ? "Inactive"
+                        : "Not configured"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -256,7 +247,9 @@ export function TournamentSetupTab({
                       <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                         Guild
                       </p>
-                      <p className="mt-1 truncate font-mono text-[12px]">{discordChannel.guild_id}</p>
+                      <p className="mt-1 truncate font-mono text-[12px]">
+                        {discordChannel.guild_id}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -337,7 +330,11 @@ export function TournamentSetupTab({
                         ? "No stages"
                         : `${structuredStagesCount}/${stages.length} ready`
                     }
-                    tone={structuredStagesCount === stages.length && stages.length > 0 ? "ready" : "warning"}
+                    tone={
+                      structuredStagesCount === stages.length && stages.length > 0
+                        ? "ready"
+                        : "warning"
+                    }
                   />
                   <HealthRow
                     label="Challonge source"
@@ -346,8 +343,12 @@ export function TournamentSetupTab({
                   />
                   <HealthRow
                     label="Discord logs"
-                    value={discordChannel?.is_active ? "Monitoring" : discordChannel ? "Paused" : "Off"}
-                    tone={discordChannel?.is_active ? "ready" : discordChannel ? "muted" : "warning"}
+                    value={
+                      discordChannel?.is_active ? "Monitoring" : discordChannel ? "Paused" : "Off"
+                    }
+                    tone={
+                      discordChannel?.is_active ? "ready" : discordChannel ? "muted" : "warning"
+                    }
                   />
                 </div>
 

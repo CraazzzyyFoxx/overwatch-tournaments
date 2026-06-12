@@ -41,7 +41,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { OW2_RANK_OPTIONS } from "@/lib/ow-rank-mapping";
 import workspaceService from "@/services/workspace.service";
@@ -53,7 +53,16 @@ import type {
 } from "@/types/workspace.types";
 
 function buildDefaultTiers(): DivisionTier[] {
-  const divisions = ["champion", "grandmaster", "master", "diamond", "platinum", "gold", "silver", "bronze"];
+  const divisions = [
+    "champion",
+    "grandmaster",
+    "master",
+    "diamond",
+    "platinum",
+    "gold",
+    "silver",
+    "bronze"
+  ];
   const bases: Record<string, number> = {
     bronze: 1000,
     silver: 1500,
@@ -62,13 +71,13 @@ function buildDefaultTiers(): DivisionTier[] {
     diamond: 3000,
     master: 3500,
     grandmaster: 4000,
-    champion: 4500,
+    champion: 4500
   };
-  
+
   const tiers: DivisionTier[] = [];
   let sort_order = 0;
   let number = 1;
-  
+
   for (const div of divisions) {
     const base = bases[div];
     for (let tier_num = 1; tier_num <= 5; tier_num++) {
@@ -76,9 +85,9 @@ function buildDefaultTiers(): DivisionTier[] {
       const name = `${div.charAt(0).toUpperCase() + div.slice(1)} ${tier_num}`;
       const offset = (5 - tier_num) * 100;
       const rank_min = base + offset;
-      const rank_max = (div === "champion" && tier_num === 1) ? null : rank_min + 99;
+      const rank_max = div === "champion" && tier_num === 1 ? null : rank_min + 99;
       const icon_url = `https://minio.craazzzyyfoxx.me/aqt/assets/divisions/${slug}.png`;
-      
+
       tiers.push({
         slug,
         number,
@@ -86,13 +95,13 @@ function buildDefaultTiers(): DivisionTier[] {
         sort_order,
         rank_min,
         rank_max,
-        icon_url,
+        icon_url
       });
       sort_order++;
       number++;
     }
   }
-  
+
   return tiers.sort((a, b) => a.number - b.number);
 }
 
@@ -277,7 +286,9 @@ const TierEditorRow = memo(function TierEditorRow({
       <div className="flex items-center gap-1.5">
         <Select
           value={tier.ow_rank_min?.toString() ?? "__none__"}
-          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_min", v === "__none__" ? null : Number(v))}
+          onValueChange={(v) =>
+            onUpdate(rowIndex, "ow_rank_min", v === "__none__" ? null : Number(v))
+          }
           disabled={!canEdit}
         >
           <SelectTrigger className="h-8 flex-1 min-w-0">
@@ -295,7 +306,9 @@ const TierEditorRow = memo(function TierEditorRow({
         <span className="shrink-0 text-xs text-muted-foreground">–</span>
         <Select
           value={tier.ow_rank_max?.toString() ?? "__none__"}
-          onValueChange={(v) => onUpdate(rowIndex, "ow_rank_max", v === "__none__" ? null : Number(v))}
+          onValueChange={(v) =>
+            onUpdate(rowIndex, "ow_rank_max", v === "__none__" ? null : Number(v))
+          }
           disabled={!canEdit}
         >
           <SelectTrigger className="h-8 flex-1 min-w-0">
@@ -348,11 +361,7 @@ function DivisionGridEditorCard({
   selectedVersion,
   onSaved
 }: DivisionGridEditorCardProps) {
-  const { toast } = useToast();
-  const initialState = useMemo(
-    () => buildEditorState(selectedVersion),
-    [selectedVersion]
-  );
+  const initialState = useMemo(() => buildEditorState(selectedVersion), [selectedVersion]);
   const [label, setLabel] = useState(initialState.label);
   const [tiers, setTiers] = useState<DivisionTier[]>(initialState.tiers);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(() => new Set());
@@ -364,14 +373,11 @@ function DivisionGridEditorCard({
 
   // Keyboard navigation refs: key = `${row}-${col}`
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-  const setInputRef = useCallback(
-    (row: number, col: number, el: HTMLInputElement | null) => {
-      const key = `${row}-${col}`;
-      if (el) inputRefs.current.set(key, el);
-      else inputRefs.current.delete(key);
-    },
-    []
-  );
+  const setInputRef = useCallback((row: number, col: number, el: HTMLInputElement | null) => {
+    const key = `${row}-${col}`;
+    if (el) inputRefs.current.set(key, el);
+    else inputRefs.current.delete(key);
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) => {
@@ -435,10 +441,8 @@ function DivisionGridEditorCard({
     },
     onSuccess: async (_, mode) => {
       await onSaved();
-      toast({ title: mode === "edit" ? "Version saved" : "New draft created" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success(mode === "edit" ? "Version saved" : "New draft created");
+    }
   });
 
   const handleSave = useCallback(() => {
@@ -569,17 +573,20 @@ function DivisionGridEditorCard({
     setSelectedRows(new Set());
   }, [selectedRows]);
 
-  const uploadIcon = useCallback(async (index: number, tier: DivisionTier, file: File) => {
-    const slugBase = tier.slug || `division-${tier.number}`;
-    const randomHash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-    const upload = await workspaceService.uploadDivisionIcon(
-      `${slugBase}-${randomHash}`,
-      file,
-      workspaceId
-    );
-    updateTier(index, "icon_url", upload.public_url);
-    toast({ title: "Icon uploaded" });
-  }, [toast, updateTier, workspaceId]);
+  const uploadIcon = useCallback(
+    async (index: number, tier: DivisionTier, file: File) => {
+      const slugBase = tier.slug || `division-${tier.number}`;
+      const randomHash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+      const upload = await workspaceService.uploadDivisionIcon(
+        `${slugBase}-${randomHash}`,
+        file,
+        workspaceId
+      );
+      updateTier(index, "icon_url", upload.public_url);
+      notify.success("Icon uploaded");
+    },
+    [updateTier, workspaceId]
+  );
 
   return (
     <Card>
@@ -751,10 +758,7 @@ function DivisionGridEditorCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={handleSave}
-            disabled={!canEdit || saveVersionMutation.isPending}
-          >
+          <Button onClick={handleSave} disabled={!canEdit || saveVersionMutation.isPending}>
             <Save className="mr-2 h-4 w-4" />
             Save
           </Button>
@@ -796,7 +800,6 @@ function DivisionGridEditorCard({
 }
 
 export default function DivisionsAdminPage() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isSuperuser, canAccessAnyPermission } = usePermissions();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -808,8 +811,13 @@ export default function DivisionsAdminPage() {
     isSuperuser ||
     (currentWorkspaceId !== null &&
       canAccessAnyPermission(
-        ["division_grid.create", "division_grid.update", "division_grid.delete", "division_grid.import"],
-        currentWorkspaceId,
+        [
+          "division_grid.create",
+          "division_grid.update",
+          "division_grid.delete",
+          "division_grid.import"
+        ],
+        currentWorkspaceId
       ));
 
   const gridsQuery = useQuery({
@@ -843,18 +851,25 @@ export default function DivisionsAdminPage() {
   const versions = activeGrid?.versions ?? [];
   const effectiveMarketplaceSourceWorkspaceId =
     marketplaceSourceWorkspaceId !== null &&
-    marketplaceWorkspaces.some((sourceWorkspace) => sourceWorkspace.id === marketplaceSourceWorkspaceId)
+    marketplaceWorkspaces.some(
+      (sourceWorkspace) => sourceWorkspace.id === marketplaceSourceWorkspaceId
+    )
       ? marketplaceSourceWorkspaceId
       : null;
 
   const marketplaceGridsQuery = useQuery({
-    queryKey: ["division-grid-marketplace", currentWorkspaceId, effectiveMarketplaceSourceWorkspaceId],
+    queryKey: [
+      "division-grid-marketplace",
+      currentWorkspaceId,
+      effectiveMarketplaceSourceWorkspaceId
+    ],
     queryFn: () =>
       workspaceService.getDivisionGridMarketplace(
         currentWorkspaceId!,
         effectiveMarketplaceSourceWorkspaceId!
       ),
-    enabled: currentWorkspaceId !== null && canEdit && effectiveMarketplaceSourceWorkspaceId !== null
+    enabled:
+      currentWorkspaceId !== null && canEdit && effectiveMarketplaceSourceWorkspaceId !== null
   });
 
   const marketplaceGrids = marketplaceGridsQuery.data ?? [];
@@ -894,10 +909,8 @@ export default function DivisionsAdminPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["division-grids", currentWorkspaceId] });
-      toast({ title: "Division grid created" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success("Division grid created");
+    }
   });
 
   const cloneMutation = useMutation({
@@ -907,10 +920,8 @@ export default function DivisionsAdminPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["division-grids", currentWorkspaceId] });
-      toast({ title: "Version cloned" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success("Version cloned");
+    }
   });
 
   const publishMutation = useMutation({
@@ -920,10 +931,8 @@ export default function DivisionsAdminPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["division-grids", currentWorkspaceId] });
-      toast({ title: "Version published" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success("Version published");
+    }
   });
 
   const deleteVersionMutation = useMutation({
@@ -931,10 +940,8 @@ export default function DivisionsAdminPage() {
     onSuccess: async (_, versionId) => {
       if (selectedVersionId === versionId) setSelectedVersionId(null);
       await queryClient.invalidateQueries({ queryKey: ["division-grids", currentWorkspaceId] });
-      toast({ title: "Version deleted" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Cannot delete", description: error.message, variant: "destructive" })
+      notify.success("Version deleted");
+    }
   });
 
   const setDefaultMutation = useMutation({
@@ -946,10 +953,8 @@ export default function DivisionsAdminPage() {
     },
     onSuccess: async () => {
       await fetchWorkspaces();
-      toast({ title: "Workspace default updated" });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      notify.success("Workspace default updated");
+    }
   });
 
   const importMarketplaceMutation = useMutation({
@@ -973,13 +978,10 @@ export default function DivisionsAdminPage() {
       if (makeImportedDefault) {
         await fetchWorkspaces();
       }
-      toast({
-        title: "Division grid imported",
+      notify.success("Division grid imported", {
         description: `${result.created_grids} grid(s), ${result.created_versions} version(s), ${result.copied_images} image(s)`
       });
-    },
-    onError: (error: Error) =>
-      toast({ title: "Import failed", description: error.message, variant: "destructive" })
+    }
   });
 
   if (!currentWorkspaceId) {
@@ -1016,7 +1018,9 @@ export default function DivisionsAdminPage() {
                     disabled={cloneMutation.isPending}
                   >
                     <CopyPlus className="mr-2 h-4 w-4" />
-                    {selectedVersion?.status === "published" ? "Fork to New Draft" : "Clone Version"}
+                    {selectedVersion?.status === "published"
+                      ? "Fork to New Draft"
+                      : "Clone Version"}
                   </Button>
                   <Button
                     variant="outline"
@@ -1177,7 +1181,9 @@ export default function DivisionsAdminPage() {
                         >
                           <Checkbox
                             checked={checked}
-                            onCheckedChange={(value) => toggleMarketplaceGrid(grid.id, value === true)}
+                            onCheckedChange={(value) =>
+                              toggleMarketplaceGrid(grid.id, value === true)
+                            }
                             aria-label={`Select ${grid.name}`}
                           />
                           <div className="min-w-0 flex-1">

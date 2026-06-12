@@ -1,12 +1,19 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  XCircle
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { ChallongeSyncLogEntry } from "@/types/admin.types";
 import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
@@ -33,7 +40,6 @@ function getLogTone(status: ChallongeSyncLogEntry["status"]) {
 
 export function ChallongeSyncPanel({ tournamentId, hasChallongeSource }: ChallongeSyncPanelProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ["admin", "challonge-sync-log", tournamentId],
@@ -55,10 +61,7 @@ export function ChallongeSyncPanel({ tournamentId, hasChallongeSource }: Challon
         queryKey: ["admin", "tournament", tournamentId]
       });
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Challonge import started", description: "Sync log will update shortly." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Challonge import failed", description: error.message, variant: "destructive" });
+      notify.success("Challonge import started", { description: "Sync log will update shortly." });
     }
   });
 
@@ -66,10 +69,7 @@ export function ChallongeSyncPanel({ tournamentId, hasChallongeSource }: Challon
     mutationFn: () => adminService.challongeExport(tournamentId),
     onSuccess: () => {
       invalidateSyncLog();
-      toast({ title: "Challonge export started", description: "Sync log will update shortly." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Challonge export failed", description: error.message, variant: "destructive" });
+      notify.success("Challonge export started", { description: "Sync log will update shortly." });
     }
   });
 
@@ -161,7 +161,9 @@ export function ChallongeSyncPanel({ tournamentId, hasChallongeSource }: Challon
                   <Badge variant="outline" className={cn("mb-1", getLogTone(lastLog.status))}>
                     {lastLog.status}
                   </Badge>
-                  <p className="text-xs text-muted-foreground">{formatSyncTime(lastLog.created_at)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatSyncTime(lastLog.created_at)}
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -199,10 +201,7 @@ export function ChallongeSyncPanel({ tournamentId, hasChallongeSource }: Challon
                     key={log.id}
                     className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-xs last:border-b-0"
                   >
-                    <Badge
-                      variant="outline"
-                      className="w-14 justify-center text-[10px] capitalize"
-                    >
+                    <Badge variant="outline" className="w-14 justify-center text-[10px] capitalize">
                       {log.direction}
                     </Badge>
                     <Badge

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { useTranslation } from "@/i18n/LanguageContext";
 import adminService from "@/services/admin.service";
 import type { EncounterUpdateInput } from "@/types/admin.types";
@@ -66,7 +66,6 @@ function EncounterEditDialogBody({
   onOpenChange
 }: Omit<EncounterEditDialogProps, "open">) {
   const qc = useQueryClient();
-  const { toast } = useToast();
   const { t } = useTranslation();
   const homeTeamLabel = encounter.home_team?.name?.trim() || "Home team";
   const awayTeamLabel = encounter.away_team?.name?.trim() || "Away team";
@@ -104,26 +103,18 @@ function EncounterEditDialogBody({
       await adminService.updateEncounter(encounter.id, encounterPayload);
     },
     onSuccess: async () => {
-      toast({ title: t("matchEdit.matchUpdated") });
+      notify.success(t("matchEdit.matchUpdated"));
       await refreshEncounterViews();
       onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : t("matchEdit.saveErrorMessage");
-      toast({ title: t("matchEdit.saveError"), description: message, variant: "destructive" });
     }
   });
 
   const confirmMutation = useMutation({
     mutationFn: () => adminService.confirmEncounterResult(encounter.id),
     onSuccess: async () => {
-      toast({ title: t("matchEdit.resultConfirmed") });
+      notify.success(t("matchEdit.resultConfirmed"));
       await refreshEncounterViews();
       onOpenChange(false);
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : t("matchEdit.confirmErrorMessage");
-      toast({ title: t("matchEdit.saveError"), description: message, variant: "destructive" });
     }
   });
 
@@ -133,7 +124,9 @@ function EncounterEditDialogBody({
         <DialogTitle className="flex items-center gap-2 text-white text-lg font-bold tracking-tight">
           {t("matchEdit.title")}
           {encounter.result_status === "pending_confirmation" && (
-            <Badge className="bg-amber-500/80 text-white border-0">{t("matchEdit.pendingConfirmation")}</Badge>
+            <Badge className="bg-amber-500/80 text-white border-0">
+              {t("matchEdit.pendingConfirmation")}
+            </Badge>
           )}
           {encounter.result_status === "disputed" && (
             <Badge className="bg-red-500/80 text-white border-0">{t("matchEdit.disputed")}</Badge>
@@ -170,7 +163,11 @@ function EncounterEditDialogBody({
             </SelectTrigger>
             <SelectContent className="bg-[#0c0d0f] border-zinc-800 text-white">
               {ENCOUNTER_STATUSES.map((item) => (
-                <SelectItem key={item} value={item} className="focus:bg-zinc-800 focus:text-white hover:bg-zinc-800 text-zinc-200 cursor-pointer">
+                <SelectItem
+                  key={item}
+                  value={item}
+                  className="focus:bg-zinc-800 focus:text-white hover:bg-zinc-800 text-zinc-200 cursor-pointer"
+                >
                   {item}
                 </SelectItem>
               ))}
@@ -179,7 +176,9 @@ function EncounterEditDialogBody({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-[13px] font-bold text-zinc-300">{t("matchEdit.matchCloseness")}</Label>
+          <Label className="text-[13px] font-bold text-zinc-300">
+            {t("matchEdit.matchCloseness")}
+          </Label>
           <div className="flex items-center gap-1.5">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <button
@@ -192,7 +191,9 @@ function EncounterEditDialogBody({
                 <Star
                   className={cn(
                     "h-5 w-5 transition-colors duration-150",
-                    n <= stars ? "fill-yellow-400 text-yellow-400" : "text-zinc-700 hover:text-zinc-600"
+                    n <= stars
+                      ? "fill-yellow-400 text-yellow-400"
+                      : "text-zinc-700 hover:text-zinc-600"
                   )}
                 />
               </button>
@@ -238,4 +239,3 @@ function EncounterEditDialogBody({
     </DialogContent>
   );
 }
-

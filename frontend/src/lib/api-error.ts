@@ -16,13 +16,66 @@ export class ApiError extends Error {
   }
 }
 
+// ─── Parsing ──────────────────────────────────────────────────────────────────
+
+const PYDANTIC_LOC_PREFIXES = ["body", "query", "path", "header", "cookie"];
+
+/** Render a pydantic `loc` tuple into a readable field path (dropping the source prefix). */
+function formatPydanticLoc(loc: unknown): string {
+  if (!Array.isArray(loc)) return "";
+  return loc
+    .map((part) => String(part))
+    .filter((part, index) => !(index === 0 && PYDANTIC_LOC_PREFIXES.includes(part)))
+    .join(".");
+}
+
+/**
+ * Normalize a single `detail` entry into one or more {msg, code}.
+ *
+ * Handles the backend shapes:
+ *   - string                                   (wrapped HTTPException)
+ *   - { msg: string, code }                    (business error)
+ *   - { msg: [pydantic errors], code }         (422 validation – msg is an array)
+ */
+function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
+  if (typeof item === "string") {
+    return [{ msg: item, code: "error" }];
+  }
+
+  if (item && typeof item === "object") {
+    const obj = item as { msg?: unknown; message?: unknown; code?: string };
+    const code = obj.code ?? "unknown";
+    const rawMsg = obj.msg ?? obj.message;
+
+    // 422: msg is the raw pydantic error array → expand into readable lines.
+    if (Array.isArray(rawMsg)) {
+      const lines = rawMsg.map((entry) => {
+        const pe = (entry ?? {}) as { loc?: unknown; msg?: unknown };
+        const loc = formatPydanticLoc(pe.loc);
+        const peMsg = typeof pe.msg === "string" ? pe.msg : "Invalid value";
+        return { msg: loc ? `${loc}: ${peMsg}` : peMsg, code };
+      });
+      return lines.length > 0 ? lines : [{ msg: "Invalid input", code }];
+    }
+
+    if (typeof rawMsg === "string") {
+      return [{ msg: rawMsg, code }];
+    }
+
+    return [{ msg: "Unknown error", code }];
+  }
+
+  return [{ msg: "Unknown error", code: "unknown" }];
+}
+
 /**
  * Parse a non-ok Response into an ApiError.
  *
- * Expected backend shapes:
- *   { "detail": [{ "msg": "…", "code": "…" }] }   – array form
- *   { "detail": "some string" }                     – string form
- *   { "message": "some string" }                    – fallback
+ * Expected backend shapes (see backend/shared/core/errors.py & middleware.py):
+ *   { "detail": [{ "msg": "…", "code": "…" }] }            – business error
+ *   { "detail": [{ "msg": [pydantic…], "code": "…" }] }    – 422 validation
+ *   { "detail": ["some string"] } / { "detail": "string" } – wrapped HTTPException
+ *   { "message": "some string" }                            – fallback
  */
 export async function parseApiError(response: Response): Promise<ApiError> {
   let details: ApiErrorDetail[];
@@ -32,10 +85,10 @@ export async function parseApiError(response: Response): Promise<ApiError> {
     const raw = body?.detail ?? body?.message;
 
     if (Array.isArray(raw)) {
-      details = raw.map((item: { msg?: string; message?: string; code?: string }) => ({
-        msg: item.msg ?? item.message ?? "Unknown error",
-        code: item.code ?? "unknown",
-      }));
+      details = raw.flatMap(normalizeDetailItem);
+      if (details.length === 0) {
+        details = [{ msg: "An error occurred", code: "unknown" }];
+      }
     } else if (typeof raw === "string") {
       details = [{ msg: raw, code: "error" }];
     } else {
@@ -46,4 +99,79 @@ export async function parseApiError(response: Response): Promise<ApiError> {
   }
 
   return new ApiError(response.status, details);
+}
+
+// ─── Presentation helpers ──────────────────────────────────────────────────────
+
+/** Fallback friendly messages keyed by machine error code. Server `msg` is preferred. */
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  Unknown: "Something went wrong. Please try again.",
+  unknown: "Something went wrong. Please try again.",
+  request_too_large: "The request is too large.",
+  unprocessable_entity: "Some of the submitted values are invalid."
+};
+
+function friendlyMessage(detail: ApiErrorDetail): string {
+  if (detail.msg && detail.msg !== detail.code) return detail.msg;
+  return ERROR_CODE_MESSAGES[detail.code] ?? detail.msg ?? detail.code;
+}
+
+function defaultTitleForStatus(status: number): string {
+  if (status === 401) return "Unauthorized";
+  if (status === 403) return "Access denied";
+  if (status === 404) return "Not found";
+  if (status === 429) return "Too many requests";
+  if (status >= 500) return "Server error";
+  return "Request failed";
+}
+
+/**
+ * Extract a single human-readable string from any thrown value.
+ * Use for inline error states; `describeApiError` is preferred for toasts.
+ */
+export function getApiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (error instanceof ApiError) {
+    const msg = error.details.map(friendlyMessage).filter(Boolean).join("\n").trim();
+    return msg || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  if (typeof error === "string") {
+    return error || fallback;
+  }
+  return fallback;
+}
+
+/**
+ * Split any thrown value into a toast-friendly { title, description }.
+ * Validation (422) errors are grouped under a single title with field lines as the description.
+ */
+export function describeApiError(error: unknown): { title: string; description?: string } {
+  if (error instanceof ApiError) {
+    const lines = error.details.map(friendlyMessage).filter(Boolean);
+
+    if (error.status === 422 || error.details.some((d) => d.code === "unprocessable_entity")) {
+      return {
+        title: "Validation error",
+        description: lines.join("\n") || undefined
+      };
+    }
+
+    if (lines.length === 0) {
+      return { title: defaultTitleForStatus(error.status) };
+    }
+    if (lines.length === 1) {
+      return { title: lines[0] };
+    }
+    return { title: defaultTitleForStatus(error.status), description: lines.join("\n") };
+  }
+
+  if (error instanceof Error) {
+    return { title: error.message || "Error" };
+  }
+  if (typeof error === "string") {
+    return { title: error || "Error" };
+  }
+  return { title: "Something went wrong" };
 }

@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -489,8 +489,7 @@ function TeamNumberInput({
         disabled={disabled || (typeof min === "number" && value <= min)}
         aria-label={`Decrease ${id}`}
       >
-        <span className="sr-only">Decrease</span>
-        -
+        <span className="sr-only">Decrease</span>-
       </Button>
       <div className="flex min-w-0 flex-1 items-center">
         <Input
@@ -523,8 +522,7 @@ function TeamNumberInput({
         disabled={disabled || (typeof max === "number" && value >= max)}
         aria-label={`Increase ${id}`}
       >
-        <span className="sr-only">Increase</span>
-        +
+        <span className="sr-only">Increase</span>+
       </Button>
     </div>
   );
@@ -609,7 +607,11 @@ function filterSubRoleOptions(subRoles: PlayerSubRole[] | undefined, role: Playe
   return (subRoles ?? []).filter((subRole) => subRole.role === catalogRole);
 }
 
-function invalidateTeamQueries(queryClient: ReturnType<typeof useQueryClient>, tournamentId: number, teamId?: number) {
+function invalidateTeamQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  tournamentId: number,
+  teamId?: number
+) {
   void Promise.all([
     queryClient.invalidateQueries({ queryKey: ["teams"] }),
     queryClient.invalidateQueries({ queryKey: ["tournaments"] }),
@@ -636,7 +638,6 @@ export function TeamRosterEditorDialog({
   onSaved
 }: TeamRosterEditorDialogProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const draftCounterRef = useRef(0);
   const isEditing = mode === "edit";
   const canManageRoster = canCreatePlayer || canUpdatePlayer || canDeletePlayer;
@@ -742,6 +743,7 @@ export function TeamRosterEditorDialog({
   };
 
   const saveTeamMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: async (variables: {
       teamData: TeamFormState;
       roster: TeamRosterDraftPlayer[];
@@ -877,9 +879,7 @@ export function TeamRosterEditorDialog({
       invalidateTeamQueries(queryClient, tournamentId, savedTeam.id);
       onSaved?.(savedTeam);
       onOpenChange(false);
-      toast({
-        title: isEditing ? "Team roster updated" : "Team and roster created"
-      });
+      notify.success(isEditing ? "Team roster updated" : "Team and roster created");
     },
     onError: (error: Error) => {
       setTeamFormError(error.message);
@@ -1037,7 +1037,9 @@ export function TeamRosterEditorDialog({
                   {draft.state === "new" ? <Badge variant="outline">New</Badge> : null}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {draft.user_id > 0 ? `${draft.user_name} · Rank ${draft.rank}` : "User not selected yet"}
+                  {draft.user_id > 0
+                    ? `${draft.user_name} · Rank ${draft.rank}`
+                    : "User not selected yet"}
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span>{formatSubRoleLabel(draft.sub_role) ?? "No sub-role"}</span>

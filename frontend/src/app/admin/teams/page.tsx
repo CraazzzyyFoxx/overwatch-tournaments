@@ -20,7 +20,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { paginateResults, sortArray } from "@/lib/paginate-results";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
@@ -40,7 +40,6 @@ export default function TeamsPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
   const { canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const queryClient = useQueryClient();
@@ -57,9 +56,7 @@ export default function TeamsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
-  const selectedTournamentId = parseTournamentQueryParam(
-    searchParams.get(TOURNAMENT_QUERY_PARAM)
-  );
+  const selectedTournamentId = parseTournamentQueryParam(searchParams.get(TOURNAMENT_QUERY_PARAM));
 
   const { data: tournamentsData } = useQuery({
     queryKey: ["tournaments"],
@@ -83,10 +80,7 @@ export default function TeamsPage() {
       ]);
       setDeleteDialogOpen(false);
       setSelectedTeam(null);
-      toast({ title: "Team deleted successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Team deleted successfully");
     }
   });
 
@@ -114,8 +108,7 @@ export default function TeamsPage() {
   };
 
   const canOpenCreateDialog = canCreateTeam && canCreatePlayer && selectedTournamentId != null;
-  const canOpenEditDialog =
-    canUpdateTeam || canCreatePlayer || canUpdatePlayer || canDeletePlayer;
+  const canOpenEditDialog = canUpdateTeam || canCreatePlayer || canUpdatePlayer || canDeletePlayer;
 
   const columns: ColumnDef<Team>[] = [
     {

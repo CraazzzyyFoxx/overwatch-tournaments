@@ -25,7 +25,7 @@ import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { buildEncounterName } from "@/components/admin/encounter-name";
 import { isGroupStageScoreContext } from "@/components/admin/encounter-score";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
 import teamService from "@/services/team.service";
@@ -139,7 +139,6 @@ export default function EncountersPage() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
   const { canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const queryClient = useQueryClient();
@@ -151,9 +150,7 @@ export default function EncountersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedEncounter, setSelectedEncounter] = useState<Encounter | null>(null);
-  const selectedTournamentId = parseTournamentQueryParam(
-    searchParams.get(TOURNAMENT_QUERY_PARAM)
-  );
+  const selectedTournamentId = parseTournamentQueryParam(searchParams.get(TOURNAMENT_QUERY_PARAM));
   const formTournamentId =
     editDialogOpen && selectedEncounter ? selectedEncounter.tournament_id : selectedTournamentId;
 
@@ -192,19 +189,18 @@ export default function EncountersPage() {
 
   // Mutations
   const createMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: (data: EncounterCreateInput) => adminService.createEncounter(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["encounters"] });
       setCreateDialogOpen(false);
       resetForm();
-      toast({ title: "Encounter created successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Encounter created successfully");
     }
   });
 
   const updateMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: ({ id, data }: { id: number; data: EncounterUpdateInput }) =>
       adminService.updateEncounter(id, data),
     onSuccess: () => {
@@ -212,10 +208,7 @@ export default function EncountersPage() {
       setEditDialogOpen(false);
       setSelectedEncounter(null);
       resetForm();
-      toast({ title: "Encounter updated successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Encounter updated successfully");
     }
   });
 
@@ -225,10 +218,7 @@ export default function EncountersPage() {
       queryClient.invalidateQueries({ queryKey: ["encounters"] });
       setDeleteDialogOpen(false);
       setSelectedEncounter(null);
-      toast({ title: "Encounter deleted successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Encounter deleted successfully");
     }
   });
 
@@ -258,7 +248,7 @@ export default function EncountersPage() {
     e.preventDefault();
     const teamsError = getEncounterTeamsError(formData as EncounterCreateInput);
     if (teamsError) {
-      toast({ title: "Error", description: teamsError, variant: "destructive" });
+      notify.error("Error", { description: teamsError });
       return;
     }
     createMutation.mutate(formData as EncounterCreateInput);
@@ -272,7 +262,7 @@ export default function EncountersPage() {
         away_team_id: (formData as EncounterUpdateInput).away_team_id ?? null
       });
       if (teamsError) {
-        toast({ title: "Error", description: teamsError, variant: "destructive" });
+        notify.error("Error", { description: teamsError });
         return;
       }
       updateMutation.mutate({

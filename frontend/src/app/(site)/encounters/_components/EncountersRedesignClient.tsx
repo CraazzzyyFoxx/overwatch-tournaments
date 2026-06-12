@@ -3,17 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Bookmark,
-  FileText,
-  Loader2,
-  Pin,
-  Play,
-  Save,
-  Search,
-  Trash2,
-  Tv,
-} from "lucide-react";
+import { Bookmark, FileText, Loader2, Pin, Play, Save, Search, Trash2, Tv } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import type { PaginatedResponse } from "@/types/pagination.types";
@@ -22,7 +12,7 @@ import type {
   EncounterOverview,
   EncounterSavedView,
   EncounterScoreHeatmapCell,
-  EncounterStageSplit,
+  EncounterStageSplit
 } from "@/types/encounter.types";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
@@ -31,11 +21,11 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
@@ -62,7 +52,7 @@ import {
   getTeamInitials,
   getWinnerSide,
   type MediaSlotKey,
-  type TeamColor,
+  type TeamColor
 } from "./encounters-redesign.helpers";
 import styles from "./EncountersRedesign.module.css";
 
@@ -79,13 +69,13 @@ const TEAM_COLOR_CLASS: Record<TeamColor, string> = {
   amber: styles.tgAmber,
   rose: styles.tgRose,
   violet: styles.tgViolet,
-  blue: styles.tgBlue,
+  blue: styles.tgBlue
 };
 
 const STAGE_PILL_CLASS: Record<string, string> = {
   playoffs: styles.stagePillPlayoffs,
   group: styles.stagePillGroup,
-  finals: styles.stagePillFinals,
+  finals: styles.stagePillFinals
 };
 
 const VIEW_SWATCH_HSL: Record<TeamColor, string> = {
@@ -93,7 +83,7 @@ const VIEW_SWATCH_HSL: Record<TeamColor, string> = {
   amber: "hsl(38 95% 55%)",
   rose: "hsl(340 75% 58%)",
   violet: "hsl(270 70% 62%)",
-  blue: "hsl(210 80% 60%)",
+  blue: "hsl(210 80% 60%)"
 };
 
 const STAGE_DONUT_COLORS = [
@@ -101,7 +91,7 @@ const STAGE_DONUT_COLORS = [
   "hsl(38 95% 55%)",
   "hsl(340 75% 58%)",
   "hsl(174 72% 46%)",
-  "hsl(270 70% 62%)",
+  "hsl(270 70% 62%)"
 ];
 
 function countLabel(value?: number): string {
@@ -137,7 +127,7 @@ function toSavedFilterState(view: EncounterSavedView): EncounterFilterState {
       view.filters.sort === "closeness" || view.filters.sort === "upcoming"
         ? view.filters.sort
         : DEFAULT_FILTERS.sort,
-    scope: view.filters.scope === "my_team" ? "my_team" : "all",
+    scope: view.filters.scope === "my_team" ? "my_team" : "all"
   };
 }
 
@@ -168,7 +158,7 @@ function donutSegments(stages: EncounterStageSplit[]) {
       pct: stage.pct,
       color: STAGE_DONUT_COLORS[index % STAGE_DONUT_COLORS.length],
       dashArray: `${length.toFixed(2)} ${circumference.toFixed(2)}`,
-      dashOffset: -offset,
+      dashOffset: -offset
     };
     offset += length;
     return segment;
@@ -181,11 +171,10 @@ export default function EncountersRedesignClient({
   initialOverview,
   initialFilters,
   initialPage,
-  initialError,
+  initialError
 }: EncountersRedesignClientProps) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { user } = useAuthProfile();
   const userKey = user?.username;
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -197,7 +186,7 @@ export default function EncountersRedesignClient({
   const previousUrlRef = useRef({ page: initialPage, filters: initialFilters });
   const effectiveFilters = useMemo(
     () => ({ ...filters, query: debouncedSearch }),
-    [debouncedSearch, filters],
+    [debouncedSearch, filters]
   );
 
   useEffect(() => {
@@ -236,15 +225,15 @@ export default function EncountersRedesignClient({
             "home_team",
             "away_team",
             "matches",
-            "matches.map",
-          ],
-        },
+            "matches.map"
+          ]
+        }
       ),
     initialData:
       page === initialPage && JSON.stringify(effectiveFilters) === JSON.stringify(initialFilters)
         ? initialData
         : undefined,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous) => previous
   });
 
   const overviewQuery = useQuery({
@@ -256,7 +245,7 @@ export default function EncountersRedesignClient({
         ? initialOverview
         : undefined,
     placeholderData: (previous) => previous,
-    retry: 1,
+    retry: 1
   });
 
   const savedViewsQuery = useQuery({
@@ -265,14 +254,14 @@ export default function EncountersRedesignClient({
     enabled: Boolean(user && currentWorkspaceId != null),
     placeholderData: (previous) => previous,
     retry: false,
-    staleTime: 60_000,
+    staleTime: 60_000
   });
 
   const tournamentsLookupQuery = useQuery({
     queryKey: ["encounters-tournaments-lookup", currentWorkspaceId],
     queryFn: () => tournamentService.lookup(currentWorkspaceId),
     staleTime: 5 * 60_000,
-    retry: 1,
+    retry: 1
   });
 
   const saveViewMutation = useMutation({
@@ -280,21 +269,20 @@ export default function EncountersRedesignClient({
       encounterService.saveView(name, effectiveFilters, currentWorkspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey],
+        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
       });
-      toast({ title: "View saved" });
-    },
+      notify.success("View saved");
+    }
   });
 
   const deleteViewMutation = useMutation({
-    mutationFn: ({ id }: { id: number }) =>
-      encounterService.deleteView(id, currentWorkspaceId),
+    mutationFn: ({ id }: { id: number }) => encounterService.deleteView(id, currentWorkspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey],
+        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
       });
-      toast({ title: "View deleted" });
-    },
+      notify.success("View deleted");
+    }
   });
 
   const overview = overviewQuery.data ?? initialOverview;
@@ -303,7 +291,10 @@ export default function EncountersRedesignClient({
   const totalPages = Math.max(1, Math.ceil((encounters.total ?? 0) / ENCOUNTERS_PAGE_SIZE));
   const activeView = selectedViewId(effectiveFilters);
   const maxHistogram = Math.max(1, ...overview.closeness_histogram.map((bucket) => bucket.count));
-  const heatmap = useMemo(() => buildHeatmapMatrix(overview.score_heatmap), [overview.score_heatmap]);
+  const heatmap = useMemo(
+    () => buildHeatmapMatrix(overview.score_heatmap),
+    [overview.score_heatmap]
+  );
   const stageDonut = useMemo(() => donutSegments(overview.stage_split), [overview.stage_split]);
   const maxMapCount = Math.max(1, ...overview.hot_maps.map((map) => map.count));
   const liveOrUpcoming = overview.featured.live.length
@@ -336,7 +327,13 @@ export default function EncountersRedesignClient({
   const showingStart = rows.length ? (page - 1) * ENCOUNTERS_PAGE_SIZE + 1 : 0;
   const showingEnd = Math.min(page * ENCOUNTERS_PAGE_SIZE, encounters.total);
 
-  const quickFilters: Array<{ id: string; label: string; count: number; active: boolean; onClick: () => void }> = [
+  const quickFilters: Array<{
+    id: string;
+    label: string;
+    count: number;
+    active: boolean;
+    onClick: () => void;
+  }> = [
     {
       id: "all",
       label: "All",
@@ -350,9 +347,9 @@ export default function EncountersRedesignClient({
         setFilterPatch({
           status: null,
           has_logs: null,
-          scope: "all",
+          scope: "all"
         });
-      },
+      }
     },
     {
       id: "live",
@@ -361,8 +358,8 @@ export default function EncountersRedesignClient({
       active: effectiveFilters.status === "live",
       onClick: () =>
         setFilterPatch({
-          status: effectiveFilters.status === "live" ? null : "live",
-        }),
+          status: effectiveFilters.status === "live" ? null : "live"
+        })
     },
     {
       id: "upcoming",
@@ -371,17 +368,16 @@ export default function EncountersRedesignClient({
       active: effectiveFilters.status === "pending",
       onClick: () =>
         setFilterPatch({
-          status: effectiveFilters.status === "pending" ? null : "pending",
-        }),
+          status: effectiveFilters.status === "pending" ? null : "pending"
+        })
     },
     {
       id: "with_logs",
       label: "With logs",
       count: overview.kpis.with_logs_count,
       active: effectiveFilters.has_logs === true,
-      onClick: () =>
-        setFilterPatch({ has_logs: effectiveFilters.has_logs === true ? null : true }),
-    },
+      onClick: () => setFilterPatch({ has_logs: effectiveFilters.has_logs === true ? null : true })
+    }
   ];
 
   return (
@@ -417,7 +413,9 @@ export default function EncountersRedesignClient({
                   />
                 ) : null}
                 <span>{view.label}</span>
-                <span className={styles.viewCount}>{countLabel(overview.preset_counts[view.id])}</span>
+                <span className={styles.viewCount}>
+                  {countLabel(overview.preset_counts[view.id])}
+                </span>
               </button>
             ))}
             {savedViewsQuery.data?.map((view) => (
@@ -489,8 +487,8 @@ export default function EncountersRedesignClient({
               items={[
                 ["all", "Tournament: Any"] as [string, string],
                 ...(tournamentsLookupQuery.data ?? []).map(
-                  (item) => [String(item.id), `Tournament: ${item.name}`] as [string, string],
-                ),
+                  (item) => [String(item.id), `Tournament: ${item.name}`] as [string, string]
+                )
               ]}
             />
             <FilterSelect
@@ -503,7 +501,7 @@ export default function EncountersRedesignClient({
                 ["all", "Best-of: Any"],
                 ["3", "Best-of: 3"],
                 ["5", "Best-of: 5"],
-                ["7", "Best-of: 7"],
+                ["7", "Best-of: 7"]
               ]}
             />
             <FilterSelect
@@ -516,7 +514,7 @@ export default function EncountersRedesignClient({
                 ["all", "Closeness: Any"],
                 ["0.4", "Closeness ≥ 40%"],
                 ["0.6", "Closeness ≥ 60%"],
-                ["0.8", "Closeness ≥ 80%"],
+                ["0.8", "Closeness ≥ 80%"]
               ]}
             />
             <FilterSelect
@@ -527,7 +525,7 @@ export default function EncountersRedesignClient({
                 ["all", "Status: All"],
                 ["open", "Status: Open"],
                 ["pending", "Status: Pending"],
-                ["completed", "Status: Final"],
+                ["completed", "Status: Final"]
               ]}
             />
             <div className={styles.filterSearch}>
@@ -550,7 +548,7 @@ export default function EncountersRedesignClient({
               items={[
                 ["date", `Sort: Date`],
                 ["closeness", `Sort: Closeness`],
-                ["upcoming", `Sort: Upcoming`],
+                ["upcoming", `Sort: Upcoming`]
               ]}
               triggerLabel={`Sort: ${sortLabel}`}
               className={styles.filterSelectSort}
@@ -611,7 +609,9 @@ export default function EncountersRedesignClient({
                 </div>
                 <span className={styles.pill}>
                   Max{" "}
-                  <span className={cn(styles.mono, styles.pillAccent)}>{countLabel(heatmap.max)}</span>
+                  <span className={cn(styles.mono, styles.pillAccent)}>
+                    {countLabel(heatmap.max)}
+                  </span>
                 </span>
               </div>
               <div className={styles.cardBody}>
@@ -796,16 +796,13 @@ export default function EncountersRedesignClient({
                       <button
                         key={entry}
                         type="button"
-                        className={cn(
-                          styles.pageBtn,
-                          entry === page && styles.pageBtnActive,
-                        )}
+                        className={cn(styles.pageBtn, entry === page && styles.pageBtnActive)}
                         disabled={entry === page}
                         onClick={() => setPage(entry)}
                       >
                         {entry}
                       </button>
-                    ),
+                    )
                   )}
                   <button
                     className={styles.pageBtn}
@@ -981,7 +978,7 @@ function Hero({ overview }: { overview: EncounterOverview }) {
 function HeroStat({
   label,
   value,
-  foot,
+  foot
 }: {
   label: string;
   value: React.ReactNode;
@@ -1002,7 +999,7 @@ function FilterSelect({
   onValueChange,
   items,
   triggerLabel,
-  className,
+  className
 }: {
   label: string;
   value: string;
@@ -1031,7 +1028,7 @@ function RowCells({
   row,
   cols,
   matrix,
-  max,
+  max
 }: {
   row: number;
   cols: number[];
@@ -1062,7 +1059,7 @@ function FeaturedPanel({
   title,
   subtitle,
   encounters,
-  variant,
+  variant
 }: {
   title: string;
   subtitle: string;
@@ -1087,7 +1084,8 @@ function FeaturedPanel({
             const state = getEncounterStateLabel(encounter);
             const isLive = variant === "live" && state === "Live";
             const isUpcoming = variant === "live" && state === "Upcoming";
-            const closenessPct = encounter.closeness != null ? Math.round(encounter.closeness * 100) : null;
+            const closenessPct =
+              encounter.closeness != null ? Math.round(encounter.closeness * 100) : null;
             return (
               <div
                 key={encounter.id}
@@ -1097,7 +1095,9 @@ function FeaturedPanel({
               >
                 <div>
                   <div className={styles.matchup}>
-                    {isLive ? <span className={cn(styles.statusDot, styles.statusLive)}>Live</span> : null}
+                    {isLive ? (
+                      <span className={cn(styles.statusDot, styles.statusLive)}>Live</span>
+                    ) : null}
                     {isUpcoming ? (
                       <span className={cn(styles.statusDot, styles.statusUpcoming)}>
                         {state === "Upcoming" ? "Soon" : state}
@@ -1113,7 +1113,7 @@ function FeaturedPanel({
                       stageLabel(encounter),
                       `Round ${encounter.round}`,
                       `${encounter.matches?.length ?? 0} maps`,
-                      formatDuration(getSeriesDuration(encounter)),
+                      formatDuration(getSeriesDuration(encounter))
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -1126,11 +1126,19 @@ function FeaturedPanel({
                     </span>
                   ) : (
                     <span className={styles.featScore}>
-                      <span className={winner === "home" ? styles.featScoreWinner : styles.featScoreLoser}>
+                      <span
+                        className={
+                          winner === "home" ? styles.featScoreWinner : styles.featScoreLoser
+                        }
+                      >
                         {encounter.score.home}
                       </span>
                       <span className={styles.scoreSep}>–</span>
-                      <span className={winner === "away" ? styles.featScoreWinner : styles.featScoreLoser}>
+                      <span
+                        className={
+                          winner === "away" ? styles.featScoreWinner : styles.featScoreLoser
+                        }
+                      >
                         {encounter.score.away}
                       </span>
                     </span>
@@ -1220,11 +1228,21 @@ function EncounterRow({ encounter }: { encounter: Encounter }) {
       </td>
       <td className={cn(styles.dim, styles.mono)}>R{encounter.round}</td>
       <td className={cn(styles.mono, styles.scoreAlign)}>
-        <span className={cn(styles.scoreCell, winner === "home" ? styles.scoreCellWinner : styles.scoreCellLoser)}>
+        <span
+          className={cn(
+            styles.scoreCell,
+            winner === "home" ? styles.scoreCellWinner : styles.scoreCellLoser
+          )}
+        >
           {encounter.score.home}
         </span>
         <span className={styles.scoreSep}>–</span>
-        <span className={cn(styles.scoreCell, winner === "away" ? styles.scoreCellWinner : styles.scoreCellLoser)}>
+        <span
+          className={cn(
+            styles.scoreCell,
+            winner === "away" ? styles.scoreCellWinner : styles.scoreCellLoser
+          )}
+        >
           {encounter.score.away}
         </span>
       </td>
@@ -1248,10 +1266,7 @@ function EncounterRow({ encounter }: { encounter: Encounter }) {
       <td>
         <div className={styles.closeness}>
           <div className={styles.closenessTrack}>
-            <div
-              className={styles.closenessFill}
-              style={{ width: `${closenessPct ?? 0}%` }}
-            />
+            <div className={styles.closenessFill} style={{ width: `${closenessPct ?? 0}%` }} />
           </div>
           <span className={cn(styles.closenessNum)}>
             {closenessPct == null ? "—" : `${closenessPct}%`}
@@ -1274,7 +1289,7 @@ function EncounterRow({ encounter }: { encounter: Encounter }) {
 const MEDIA_ICON_VARIANT: Record<MediaSlotKey, string> = {
   logs: styles.mediaIconLogs,
   vod: styles.mediaIconVod,
-  cast: styles.mediaIconCast,
+  cast: styles.mediaIconCast
 };
 
 function MediaIcons({ hasLogs }: { hasLogs: boolean }) {
@@ -1289,7 +1304,7 @@ function MediaIcons({ hasLogs }: { hasLogs: boolean }) {
                 className={cn(
                   styles.mediaIcon,
                   enabledVariant,
-                  !slot.enabled && styles.mediaIconDisabled,
+                  !slot.enabled && styles.mediaIconDisabled
                 )}
               >
                 {slot.key === "logs" ? (
@@ -1314,7 +1329,7 @@ function Insight({
   label,
   value,
   meta,
-  valueClassName,
+  valueClassName
 }: {
   label: string;
   value: string;

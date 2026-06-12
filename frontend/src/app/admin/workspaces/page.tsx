@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import workspaceService from "@/services/workspace.service";
@@ -35,14 +35,13 @@ interface WorkspaceUpdateFormData {
 const emptyForm: WorkspaceFormData = {
   slug: "",
   name: "",
-  description: "",
+  description: ""
 };
 
 const ACCEPTED_IMAGE_TYPES = "image/webp,image/png,image/jpeg,image/gif";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
 export default function WorkspacesPage() {
-  const { toast } = useToast();
   const { isSuperuser, isWorkspaceAdmin } = usePermissions();
   const queryClient = useQueryClient();
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
@@ -51,7 +50,9 @@ export default function WorkspacesPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Workspace | null>(null);
-  const [formData, setFormData] = useState<WorkspaceFormData | WorkspaceUpdateFormData>({ ...emptyForm });
+  const [formData, setFormData] = useState<WorkspaceFormData | WorkspaceUpdateFormData>({
+    ...emptyForm
+  });
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,7 +67,7 @@ export default function WorkspacesPage() {
       const ws = await workspaceService.create({
         slug: data.slug,
         name: data.name,
-        description: data.description || undefined,
+        description: data.description || undefined
       });
       if (iconFile) {
         await workspaceService.uploadIcon(ws.id, iconFile);
@@ -79,9 +80,8 @@ export default function WorkspacesPage() {
       setFormData({ ...emptyForm });
       setIconFile(null);
       setIconPreview(null);
-      toast({ title: "Workspace created" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Workspace created");
+    }
   });
 
   const updateMutation = useMutation({
@@ -96,9 +96,8 @@ export default function WorkspacesPage() {
       setEditOpen(false);
       setIconFile(null);
       setIconPreview(null);
-      toast({ title: "Workspace updated" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Workspace updated");
+    }
   });
 
   const deleteMutation = useMutation({
@@ -109,19 +108,16 @@ export default function WorkspacesPage() {
     onSuccess: () => {
       invalidate();
       setDeleteOpen(false);
-      toast({ title: "Workspace deleted" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Workspace deleted");
+    }
   });
 
   const uploadIconMutation = useMutation({
-    mutationFn: ({ id, file }: { id: number; file: File }) =>
-      workspaceService.uploadIcon(id, file),
+    mutationFn: ({ id, file }: { id: number; file: File }) => workspaceService.uploadIcon(id, file),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Icon uploaded" });
-    },
-    onError: (e: Error) => toast({ title: "Upload failed", description: e.message, variant: "destructive" }),
+      notify.success("Icon uploaded");
+    }
   });
 
   const deleteIconMutation = useMutation({
@@ -129,9 +125,8 @@ export default function WorkspacesPage() {
     onSuccess: () => {
       invalidate();
       setIconPreview(null);
-      toast({ title: "Icon removed" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      notify.success("Icon removed");
+    }
   });
 
   const handleCreate = () => {
@@ -153,7 +148,7 @@ export default function WorkspacesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_FILE_SIZE) {
-      toast({ title: "File too large", description: "Maximum size is 2 MB", variant: "destructive" });
+      notify.error("File too large", { description: "Maximum size is 2 MB" });
       return;
     }
     setIconFile(file);
@@ -171,7 +166,7 @@ export default function WorkspacesPage() {
     {
       accessorKey: "id",
       header: "ID",
-      cell: ({ row }) => <div className="font-mono text-xs">{row.getValue("id")}</div>,
+      cell: ({ row }) => <div className="font-mono text-xs">{row.getValue("id")}</div>
     },
     {
       id: "icon",
@@ -179,27 +174,23 @@ export default function WorkspacesPage() {
       cell: ({ row }) => {
         const ws = row.original;
         return ws.icon_url ? (
-          <img
-            src={ws.icon_url}
-            alt={ws.name}
-            className="h-8 w-8 rounded-md border object-cover"
-          />
+          <img src={ws.icon_url} alt={ws.name} className="h-8 w-8 rounded-md border object-cover" />
         ) : (
           <div className="h-8 w-8 rounded-md border bg-muted flex items-center justify-center text-muted-foreground text-xs font-medium">
             {ws.name.charAt(0).toUpperCase()}
           </div>
         );
-      },
+      }
     },
     {
       accessorKey: "slug",
       header: "Slug",
-      cell: ({ row }) => <code className="text-xs">{row.getValue("slug")}</code>,
+      cell: ({ row }) => <code className="text-xs">{row.getValue("slug")}</code>
     },
     {
       accessorKey: "name",
       header: "Name",
-      cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+      cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>
     },
     {
       accessorKey: "is_active",
@@ -209,7 +200,7 @@ export default function WorkspacesPage() {
           <StatusIcon icon={CheckCircle} label="Active" variant="success" />
         ) : (
           <StatusIcon icon={XCircle} label="Inactive" variant="muted" />
-        ),
+        )
     },
     {
       id: "actions",
@@ -236,8 +227,8 @@ export default function WorkspacesPage() {
             ) : null}
           </div>
         );
-      },
-    },
+      }
+    }
   ];
 
   return (
@@ -257,19 +248,23 @@ export default function WorkspacesPage() {
 
       <AdminDataTable
         queryKey={(page, search, pageSize, sortField, sortDir) => [
-          "admin-workspaces", isSuperuser, page, search, pageSize, sortField, sortDir,
+          "admin-workspaces",
+          isSuperuser,
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
         ]}
         queryFn={async () => {
           const all = await workspaceService.getAll();
           // Non-superusers only see workspaces they admin
-          const visible = isSuperuser
-            ? all
-            : all.filter((ws) => isWorkspaceAdmin(ws.id));
+          const visible = isSuperuser ? all : all.filter((ws) => isWorkspaceAdmin(ws.id));
           return {
             results: visible,
             total: visible.length,
             page: 1,
-            per_page: visible.length,
+            per_page: visible.length
           };
         }}
         columns={columns}
@@ -299,12 +294,17 @@ export default function WorkspacesPage() {
               id="slug"
               value={(formData as WorkspaceFormData).slug ?? ""}
               onChange={(e) =>
-                setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })
+                setFormData({
+                  ...formData,
+                  slug: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "")
+                })
               }
               placeholder="my-workspace"
               required
             />
-            <p className="text-xs text-muted-foreground mt-1">URL-safe identifier (a-z, 0-9, -, _)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              URL-safe identifier (a-z, 0-9, -, _)
+            </p>
           </div>
           <div>
             <Label htmlFor="name">Name *</Label>
@@ -338,7 +338,10 @@ export default function WorkspacesPage() {
                   <button
                     type="button"
                     className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5 hover:bg-accent"
-                    onClick={() => { setIconFile(null); setIconPreview(null); }}
+                    onClick={() => {
+                      setIconFile(null);
+                      setIconPreview(null);
+                    }}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -457,11 +460,10 @@ export default function WorkspacesPage() {
         cascadeInfo={[
           "All tournaments in this workspace",
           "All teams, players, matches, and statistics",
-          "All workspace members",
+          "All workspace members"
         ]}
         isDeleting={deleteMutation.isPending}
       />
-
     </div>
   );
 }

@@ -15,10 +15,10 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getTierForRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENTS } from "@/lib/roles";
@@ -40,12 +40,8 @@ const STATUS_LABEL: Record<string, string> = {
   live: "Live",
   paused: "Paused",
   completed: "Completed",
-  cancelled: "Cancelled",
+  cancelled: "Cancelled"
 };
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected error";
-}
 
 /** A registration is in the balancer pool (mirrors isRegistrationIncludedInBalancer). */
 function isInBalancerPool(r: AdminRegistration): boolean {
@@ -64,7 +60,7 @@ function registrationSummary(r: AdminRegistration): { role: string; rank: number
   const ranks = active.map((e) => e.rank_value).filter((v): v is number => v != null);
   return {
     role: primary?.role ?? "dps",
-    rank: primary?.rank_value ?? (ranks.length ? Math.max(...ranks) : null),
+    rank: primary?.rank_value ?? (ranks.length ? Math.max(...ranks) : null)
   };
 }
 
@@ -73,19 +69,16 @@ function registrationLabel(r: AdminRegistration): string {
 }
 
 export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionDashboardProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const boardKey = tournamentQueryKeys.draftBoard(tournamentId);
 
   const boardQuery = useQuery({
     queryKey: boardKey,
     queryFn: () => draftService.getTournamentBoard(tournamentId),
-    enabled: Number.isFinite(tournamentId) && tournamentId > 0,
+    enabled: Number.isFinite(tournamentId) && tournamentId > 0
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: boardKey });
-  const onError = (error: unknown) =>
-    toast({ title: "Draft error", description: errorMessage(error), variant: "destructive" });
 
   // --- create session config ---
   const [rounds, setRounds] = useState(4);
@@ -104,13 +97,12 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
         pick_time_seconds: pickTime,
         team_size: teamSize,
         autopick_strategy: autopick,
-        settings: draftFormat === "custom" ? { round_rules: roundRules } : {},
+        settings: draftFormat === "custom" ? { round_rules: roundRules } : {}
       }),
     onSuccess: () => {
-      toast({ title: "Draft session created" });
+      notify.success("Draft session created");
       invalidate();
-    },
-    onError,
+    }
   });
 
   // --- seed from the existing balancer pool ---
@@ -124,14 +116,13 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
         captain_order: captainOrder,
         pool_captains: captainIds.map((id) => ({
           registration_id: id,
-          name: teamNames[id]?.trim() || null,
-        })),
+          name: teamNames[id]?.trim() || null
+        }))
       }),
     onSuccess: () => {
-      toast({ title: "Draft seeded from balancer pool" });
+      notify.success("Draft seeded from balancer pool");
       invalidate();
-    },
-    onError,
+    }
   });
 
   const lifecycleMutation = useMutation({
@@ -140,10 +131,9 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
       action: "start" | "pause" | "resume" | "cancel" | "export";
     }) => draftService.lifecycle(tournamentId, vars.sessionId, vars.action),
     onSuccess: (_data, vars) => {
-      toast({ title: `Draft ${vars.action}` });
+      notify.success(`Draft ${vars.action}`);
       invalidate();
-    },
-    onError,
+    }
   });
 
   const board = boardQuery.data ?? null;
@@ -233,120 +223,124 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <Label htmlFor="draft-rounds">Rounds</Label>
-              <Input
-                id="draft-rounds"
-                type="number"
-                value={rounds}
-                onChange={(e) => {
-                  const val = Number(e.target.value) || 1;
-                  setRounds(val);
-                  setRoundRules((prev) => {
-                    const next = [...prev];
-                    if (next.length < val) {
-                      while (next.length < val) next.push("linear");
-                    } else if (next.length > val) {
-                      next.splice(val);
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div>
+                <Label htmlFor="draft-rounds">Rounds</Label>
+                <Input
+                  id="draft-rounds"
+                  type="number"
+                  value={rounds}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 1;
+                    setRounds(val);
+                    setRoundRules((prev) => {
+                      const next = [...prev];
+                      if (next.length < val) {
+                        while (next.length < val) next.push("linear");
+                      } else if (next.length > val) {
+                        next.splice(val);
+                      }
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="draft-format">Format</Label>
+                <Select
+                  value={draftFormat}
+                  onValueChange={(v) => {
+                    const fmt = v as DraftFormat;
+                    setDraftFormat(fmt);
+                    if (fmt === "custom" && roundRules.length !== rounds) {
+                      setRoundRules(Array.from({ length: rounds }, () => "linear"));
                     }
-                    return next;
-                  });
-                }}
-              />
-            </div>
-            <div>
-              <Label htmlFor="draft-format">Format</Label>
-              <Select
-                value={draftFormat}
-                onValueChange={(v) => {
-                  const fmt = v as DraftFormat;
-                  setDraftFormat(fmt);
-                  if (fmt === "custom" && roundRules.length !== rounds) {
-                    setRoundRules(Array.from({ length: rounds }, () => "linear"));
-                  }
-                }}
-              >
-                <SelectTrigger id="draft-format">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="snake">Snake</SelectItem>
-                  <SelectItem value="linear">Linear</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="draft-pick-time">Pick time (s)</Label>
-              <Input
-                id="draft-pick-time"
-                type="number"
-                value={pickTime}
-                onChange={(e) => setPickTime(Number(e.target.value) || 45)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="draft-team-size">Team size</Label>
-              <Input
-                id="draft-team-size"
-                type="number"
-                value={teamSize}
-                onChange={(e) => setTeamSize(Number(e.target.value) || 5)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="draft-autopick">Autopick</Label>
-              <Select
-                value={autopick}
-                onValueChange={(v) => setAutopick(v as DraftAutopickStrategy)}
-              >
-                <SelectTrigger id="draft-autopick">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="best_fit">Best fit</SelectItem>
-                  <SelectItem value="role_need">Role need</SelectItem>
-                  <SelectItem value="best_available">Best available</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {draftFormat === "custom" && (
-            <div className="border border-border/40 p-4 rounded-md space-y-3 bg-muted/20">
-              <h4 className="text-sm font-semibold">Configure Round Rules</h4>
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                {Array.from({ length: rounds }).map((_, index) => (
-                  <div key={index} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Round {index + 1}</Label>
-                    <Select
-                      value={roundRules[index] || "linear"}
-                      onValueChange={(v) => {
-                        setRoundRules((prev) => {
-                          const updated = [...prev];
-                          updated[index] = v;
-                          return updated;
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="linear">Linear (1 ➔ N)</SelectItem>
-                        <SelectItem value="reverse">Reverse Linear (N ➔ 1)</SelectItem>
-                        <SelectItem value="weakest_first">Weakest Captain First</SelectItem>
-                        <SelectItem value="strongest_first">Strongest Captain First</SelectItem>
-                        <SelectItem value="team_avg_asc">Lowest Team Avg First (Dynamic)</SelectItem>
-                        <SelectItem value="team_avg_desc">Highest Team Avg First (Dynamic)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                  }}
+                >
+                  <SelectTrigger id="draft-format">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="snake">Snake</SelectItem>
+                    <SelectItem value="linear">Linear</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="draft-pick-time">Pick time (s)</Label>
+                <Input
+                  id="draft-pick-time"
+                  type="number"
+                  value={pickTime}
+                  onChange={(e) => setPickTime(Number(e.target.value) || 45)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="draft-team-size">Team size</Label>
+                <Input
+                  id="draft-team-size"
+                  type="number"
+                  value={teamSize}
+                  onChange={(e) => setTeamSize(Number(e.target.value) || 5)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="draft-autopick">Autopick</Label>
+                <Select
+                  value={autopick}
+                  onValueChange={(v) => setAutopick(v as DraftAutopickStrategy)}
+                >
+                  <SelectTrigger id="draft-autopick">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="best_fit">Best fit</SelectItem>
+                    <SelectItem value="role_need">Role need</SelectItem>
+                    <SelectItem value="best_available">Best available</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
+
+            {draftFormat === "custom" && (
+              <div className="border border-border/40 p-4 rounded-md space-y-3 bg-muted/20">
+                <h4 className="text-sm font-semibold">Configure Round Rules</h4>
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  {Array.from({ length: rounds }).map((_, index) => (
+                    <div key={index} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Round {index + 1}</Label>
+                      <Select
+                        value={roundRules[index] || "linear"}
+                        onValueChange={(v) => {
+                          setRoundRules((prev) => {
+                            const updated = [...prev];
+                            updated[index] = v;
+                            return updated;
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="linear">Linear (1 ➔ N)</SelectItem>
+                          <SelectItem value="reverse">Reverse Linear (N ➔ 1)</SelectItem>
+                          <SelectItem value="weakest_first">Weakest Captain First</SelectItem>
+                          <SelectItem value="strongest_first">Strongest Captain First</SelectItem>
+                          <SelectItem value="team_avg_asc">
+                            Lowest Team Avg First (Dynamic)
+                          </SelectItem>
+                          <SelectItem value="team_avg_desc">
+                            Highest Team Avg First (Dynamic)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
               Create session
             </Button>
@@ -482,13 +476,14 @@ function PoolSeedForm({
   onCaptainOrder,
   pending,
   alreadySeeded,
-  onSeed,
+  onSeed
 }: PoolSeedFormProps) {
   const divisionGrid = useDivisionGrid();
 
   const poolQuery = useQuery({
     queryKey: ["balancer", "draft-pool", tournamentId],
-    queryFn: () => balancerAdminService.listRegistrations(tournamentId, { status_filter: "approved" }),
+    queryFn: () =>
+      balancerAdminService.listRegistrations(tournamentId, { status_filter: "approved" })
   });
 
   const pool = useMemo(() => {
@@ -537,7 +532,10 @@ function PoolSeedForm({
                 <Label htmlFor="captain-order" className="text-xs text-muted-foreground">
                   Draft order
                 </Label>
-                <Select value={captainOrder} onValueChange={(v) => onCaptainOrder(v as DraftCaptainOrder)}>
+                <Select
+                  value={captainOrder}
+                  onValueChange={(v) => onCaptainOrder(v as DraftCaptainOrder)}
+                >
                   <SelectTrigger id="captain-order" className="h-8 w-44">
                     <SelectValue />
                   </SelectTrigger>

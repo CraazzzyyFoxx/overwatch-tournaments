@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
 
@@ -31,7 +31,6 @@ export function WorkspaceBalancerConfigDialog({
   open,
   onOpenChange
 }: WorkspaceBalancerConfigDialogProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [threshold, setThreshold] = useState<string>("");
@@ -52,11 +51,8 @@ export function WorkspaceBalancerConfigDialog({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
-      toast({ description: "Pool settings saved." });
+      notify.success("Pool settings saved.");
       onOpenChange(false);
-    },
-    onError: () => {
-      toast({ variant: "destructive", description: "Failed to save settings." });
     }
   });
 

@@ -2,7 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { BadgeCheck, CheckCircle, Link2, Shield, ShieldAlert, Trash2, UserCog, XCircle } from "lucide-react";
+import {
+  BadgeCheck,
+  CheckCircle,
+  Link2,
+  Shield,
+  ShieldAlert,
+  Trash2,
+  UserCog,
+  XCircle
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
@@ -18,18 +27,18 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { AuthAdminUser } from "@/types/rbac.types";
@@ -37,13 +46,8 @@ import type { MinimizedUser } from "@/types/user.types";
 
 const PAGE_SIZE = 15;
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong";
-}
-
 export default function AccessAdminUsersPage() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const canAssignRoles = hasPermission("role.assign") && hasPermission("role.read");
   const canManageLinkedPlayers = hasPermission("auth_user.update");
@@ -57,13 +61,13 @@ export default function AccessAdminUsersPage() {
   const rolesQuery = useQuery({
     queryKey: ["access-admin", "roles", "all"],
     queryFn: () => rbacService.listRoles(),
-    enabled: canAssignRoles,
+    enabled: canAssignRoles
   });
 
   const userDetailQuery = useQuery({
     queryKey: ["access-admin", "users", managingUserId],
     queryFn: () => rbacService.getUser(managingUserId as number),
-    enabled: managingUserId !== null,
+    enabled: managingUserId !== null
   });
 
   const assignRoleMutation = useMutation({
@@ -72,14 +76,11 @@ export default function AccessAdminUsersPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
         queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       setSelectedRoleId("");
-      toast({ title: "Role assigned" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Role assigned");
+    }
   });
 
   const removeRoleMutation = useMutation({
@@ -88,34 +89,28 @@ export default function AccessAdminUsersPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
         queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
-      toast({ title: "Role removed" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Role removed");
+    }
   });
 
   const assignLinkedPlayerMutation = useMutation({
     mutationFn: (payload: { userId: number; player_id: number; is_primary: boolean }) =>
       rbacService.assignLinkedPlayer(payload.userId, {
         player_id: payload.player_id,
-        is_primary: payload.is_primary,
+        is_primary: payload.is_primary
       }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       setSelectedAnalyticsUserId(null);
       setSelectedAnalyticsUserName("");
       setAssignAsPrimary(true);
-      toast({ title: "Linked analytics account assigned" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Linked analytics account assigned");
+    }
   });
 
   const removeLinkedPlayerMutation = useMutation({
@@ -124,23 +119,20 @@ export default function AccessAdminUsersPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] }),
+        queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
-      toast({ title: "Linked analytics account removed" });
-    },
-    onError: (error) => {
-      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
-    },
+      notify.success("Linked analytics account removed");
+    }
   });
 
   const columns: ColumnDef<AuthAdminUser>[] = [
     {
       accessorKey: "email",
-      header: "Email",
+      header: "Email"
     },
     {
       accessorKey: "username",
-      header: "Username",
+      header: "Username"
     },
     {
       id: "linkedPlayers",
@@ -161,7 +153,7 @@ export default function AccessAdminUsersPage() {
             ))}
           </div>
         );
-      },
+      }
     },
     {
       id: "status",
@@ -175,11 +167,15 @@ export default function AccessAdminUsersPage() {
             ) : (
               <StatusIcon icon={XCircle} label="Inactive" variant="muted" />
             )}
-            {user.is_verified ? <StatusIcon icon={BadgeCheck} label="Verified" variant="info" /> : null}
-            {user.is_superuser ? <StatusIcon icon={ShieldAlert} label="Superuser" variant="destructive" /> : null}
+            {user.is_verified ? (
+              <StatusIcon icon={BadgeCheck} label="Verified" variant="info" />
+            ) : null}
+            {user.is_superuser ? (
+              <StatusIcon icon={ShieldAlert} label="Superuser" variant="destructive" />
+            ) : null}
           </div>
         );
-      },
+      }
     },
     {
       id: "roles",
@@ -199,20 +195,20 @@ export default function AccessAdminUsersPage() {
             ))}
           </div>
         );
-      },
+      }
     },
     {
       id: "actions",
       header: "",
       cell: ({ row }) => (
         <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={() => setManagingUserId(row.original.id)}>
-              <UserCog className="mr-2 h-4 w-4" />
-              {canAssignRoles ? "Manage" : "Inspect"}
-            </Button>
-          </div>
-        ),
-    },
+          <Button variant="outline" size="sm" onClick={() => setManagingUserId(row.original.id)}>
+            <UserCog className="mr-2 h-4 w-4" />
+            {canAssignRoles ? "Manage" : "Inspect"}
+          </Button>
+        </div>
+      )
+    }
   ];
 
   const assignableRoles = useMemo(() => {
@@ -231,7 +227,15 @@ export default function AccessAdminUsersPage() {
       <AdminDataTable
         initialPageSize={PAGE_SIZE}
         pageSizeOptions={[10, 20, 50, 100]}
-        queryKey={(page, search, pageSize, sortField, sortDir) => ["access-admin", "users", page, search, pageSize, sortField, sortDir]}
+        queryKey={(page, search, pageSize, sortField, sortDir) => [
+          "access-admin",
+          "users",
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
+        ]}
         queryFn={async (page, search, pageSize, sortField, sortDir) => {
           const users = await rbacService.listUsers({ search: search || undefined });
           return paginateResults(sortArray(users, sortField, sortDir), page, pageSize);
@@ -255,14 +259,14 @@ export default function AccessAdminUsersPage() {
         }}
       >
         <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Manage Access</DialogTitle>
-              <DialogDescription>
-                {canAssignRoles
-                  ? "Assign roles, manage linked analytics accounts, and review effective permissions for this auth account."
-                  : "Review linked analytics accounts, assigned roles, and effective permissions for this auth account."}
-              </DialogDescription>
-            </DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Manage Access</DialogTitle>
+            <DialogDescription>
+              {canAssignRoles
+                ? "Assign roles, manage linked analytics accounts, and review effective permissions for this auth account."
+                : "Review linked analytics accounts, assigned roles, and effective permissions for this auth account."}
+            </DialogDescription>
+          </DialogHeader>
 
           {userDetailQuery.isLoading ? (
             <div className="py-8 text-sm text-muted-foreground">Loading auth user...</div>
@@ -272,16 +276,22 @@ export default function AccessAdminUsersPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-lg font-semibold">{userDetailQuery.data.email}</p>
-                    <p className="text-sm text-muted-foreground">@{userDetailQuery.data.username}</p>
+                    <p className="text-sm text-muted-foreground">
+                      @{userDetailQuery.data.username}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {userDetailQuery.data.is_superuser ? <StatusIcon icon={ShieldAlert} label="Superuser" variant="destructive" /> : null}
+                    {userDetailQuery.data.is_superuser ? (
+                      <StatusIcon icon={ShieldAlert} label="Superuser" variant="destructive" />
+                    ) : null}
                     {userDetailQuery.data.is_active ? (
                       <StatusIcon icon={CheckCircle} label="Active" variant="success" />
                     ) : (
                       <StatusIcon icon={XCircle} label="Inactive" variant="muted" />
                     )}
-                    {userDetailQuery.data.is_verified ? <StatusIcon icon={BadgeCheck} label="Verified" variant="info" /> : null}
+                    {userDetailQuery.data.is_verified ? (
+                      <StatusIcon icon={BadgeCheck} label="Verified" variant="info" />
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -314,7 +324,7 @@ export default function AccessAdminUsersPage() {
                             onClick={() =>
                               removeRoleMutation.mutate({
                                 user_id: userDetailQuery.data!.id,
-                                role_id: role.id,
+                                role_id: role.id
                               })
                             }
                           >
@@ -348,7 +358,7 @@ export default function AccessAdminUsersPage() {
                           onClick={() =>
                             assignRoleMutation.mutate({
                               user_id: userDetailQuery.data!.id,
-                              role_id: Number(selectedRoleId),
+                              role_id: Number(selectedRoleId)
                             })
                           }
                         >
@@ -367,13 +377,14 @@ export default function AccessAdminUsersPage() {
                         Linked Player Accounts
                       </h3>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Links from this auth account to `players.user` records through `AuthUserPlayer`.
+                        Links from this auth account to `players.user` records through
+                        `AuthUserPlayer`.
                       </p>
                     </div>
 
                     <div className="space-y-3">
                       {(userDetailQuery.data.linked_players ?? []).length > 0 ? (
-                      (userDetailQuery.data.linked_players ?? []).map((player) => (
+                        (userDetailQuery.data.linked_players ?? []).map((player) => (
                           <div
                             key={player.player_id}
                             className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
@@ -385,7 +396,9 @@ export default function AccessAdminUsersPage() {
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {player.is_primary ? <Badge variant="secondary">Primary</Badge> : null}
+                              {player.is_primary ? (
+                                <Badge variant="secondary">Primary</Badge>
+                              ) : null}
                               {canManageLinkedPlayers ? (
                                 <Button
                                   variant="outline"
@@ -394,7 +407,7 @@ export default function AccessAdminUsersPage() {
                                   onClick={() =>
                                     removeLinkedPlayerMutation.mutate({
                                       userId: userDetailQuery.data!.id,
-                                      playerId: player.player_id,
+                                      playerId: player.player_id
                                     })
                                   }
                                 >
@@ -430,18 +443,24 @@ export default function AccessAdminUsersPage() {
                               checked={assignAsPrimary}
                               onCheckedChange={(checked) => setAssignAsPrimary(Boolean(checked))}
                             />
-                            <Label htmlFor="assign-linked-player-primary" className="cursor-pointer">
+                            <Label
+                              htmlFor="assign-linked-player-primary"
+                              className="cursor-pointer"
+                            >
                               Mark as primary
                             </Label>
                           </div>
                           <Button
-                            disabled={selectedAnalyticsUserId == null || assignLinkedPlayerMutation.isPending}
+                            disabled={
+                              selectedAnalyticsUserId == null ||
+                              assignLinkedPlayerMutation.isPending
+                            }
                             onClick={() => {
                               if (selectedAnalyticsUserId == null) return;
                               assignLinkedPlayerMutation.mutate({
                                 userId: userDetailQuery.data!.id,
                                 player_id: selectedAnalyticsUserId,
-                                is_primary: assignAsPrimary,
+                                is_primary: assignAsPrimary
                               });
                             }}
                           >
@@ -478,7 +497,9 @@ export default function AccessAdminUsersPage() {
               </div>
             </div>
           ) : (
-            <div className="py-8 text-sm text-muted-foreground">Unable to load auth user details.</div>
+            <div className="py-8 text-sm text-muted-foreground">
+              Unable to load auth user details.
+            </div>
           )}
 
           <DialogFooter>

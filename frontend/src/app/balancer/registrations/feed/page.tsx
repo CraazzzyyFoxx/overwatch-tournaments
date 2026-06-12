@@ -10,12 +10,12 @@ import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTo
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   AdminGoogleSheetFeedSyncResponse,
   AdminGoogleSheetFeedUpsertInput,
-  MappingPreviewResponseV2,
+  MappingPreviewResponseV2
 } from "@/types/balancer-admin.types";
 
 import { ColumnMappingTab } from "./_components/ColumnMappingTab";
@@ -28,7 +28,7 @@ import {
   dedupeHeaders,
   formatParsedValue,
   parsedTargetValue,
-  toFieldErrors,
+  toFieldErrors
 } from "./_components/mappingConfig";
 import { useMappingState } from "./_components/useMappingState";
 
@@ -38,7 +38,6 @@ export default function BalancerRegistrationsFeedPage() {
   const tournamentId = useBalancerTournamentId();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [sourceUrl, setSourceUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -62,14 +61,15 @@ export default function BalancerRegistrationsFeedPage() {
     queryKey: ["balancer-admin", "sheet", tournamentId],
     queryFn: () => balancerAdminService.getTournamentSheet(tournamentId as number),
     enabled: tournamentId !== null,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: false
   });
 
   const catalogQuery = useQuery({
     queryKey: ["balancer-admin", "sheet-catalog", tournamentId],
-    queryFn: () => balancerAdminService.getTournamentSheetMappingCatalog(tournamentId as number, true),
+    queryFn: () =>
+      balancerAdminService.getTournamentSheetMappingCatalog(tournamentId as number, true),
     enabled: tournamentId !== null,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: false
   });
 
   // Hydrate once per feed id (the hook guards against clobbering unsaved edits).
@@ -128,7 +128,7 @@ export default function BalancerRegistrationsFeedPage() {
     auto_sync_enabled: autoSyncEnabled,
     auto_sync_interval_seconds: Number(autoSyncIntervalSeconds) || 300,
     mapping_config_json: buildMappingConfigJson(mapping.mappingState),
-    value_mapping_json: buildValueMappingJson(mapping.valueState),
+    value_mapping_json: buildValueMappingJson(mapping.valueState)
   });
 
   const invalidateFeed = () =>
@@ -138,7 +138,11 @@ export default function BalancerRegistrationsFeedPage() {
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      balancerAdminService.upsertTournamentSheetWithValidation(tournamentId as number, buildUpsertPayload()),
+      balancerAdminService.upsertTournamentSheetWithValidation(
+        tournamentId as number,
+        buildUpsertPayload()
+      ),
+    meta: { suppressErrorToast: true },
     onSuccess: async (result) => {
       if (result.ok) {
         setFieldErrors({});
@@ -146,17 +150,16 @@ export default function BalancerRegistrationsFeedPage() {
         mapping.resetChanges();
         setSourceHasChanges(false);
         await invalidateFeed();
-        toast({ title: "Google Sheets feed saved" });
+        notify.success("Google Sheets feed saved");
         return;
       }
       setFieldErrors(toFieldErrors(result.error.errors));
       setFormError(result.error.message);
-      toast({ title: "Mapping is invalid", description: result.error.message, variant: "destructive" });
+      notify.error("Mapping is invalid", { description: result.error.message });
     },
     onError: (error: Error) => {
       setFormError(error.message);
-      toast({ title: "Failed to save feed", description: error.message, variant: "destructive" });
-    },
+    }
   });
 
   const syncMutation = useMutation({
@@ -164,20 +167,16 @@ export default function BalancerRegistrationsFeedPage() {
     onSuccess: async (result) => {
       setSyncResult(result);
       await Promise.all([invalidateFeed(), invalidateRegistrations()]);
-      toast({
-        title: "Google Sheets sync complete",
-        description: `${result.created} created, ${result.updated} updated, ${result.withdrawn} withdrawn, ${result.skipped} skipped`,
+      notify.success("Google Sheets sync complete", {
+        description: `${result.created} created, ${result.updated} updated, ${result.withdrawn} withdrawn, ${result.skipped} skipped`
       });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Sync failed", description: error.message, variant: "destructive" });
-    },
+    }
   });
 
   const suggestMutation = useMutation({
     mutationFn: () =>
       balancerAdminService.suggestTournamentSheetMapping(tournamentId as number, {
-        source_url: sourceUrl || undefined,
+        source_url: sourceUrl || undefined
       }),
     onSuccess: (result) => {
       // Suggest returns the live headers + a starting mapping; it does NOT persist.
@@ -185,11 +184,10 @@ export default function BalancerRegistrationsFeedPage() {
       // (without clobbering columns the admin already chose).
       setDetectedHeaderKeys(dedupeHeaders(result.headers));
       mapping.applySuggestedMapping(result.mapping_config_json);
-      toast({ title: "Auto-suggest applied", description: "Headers detected and a starting mapping was suggested." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Auto-suggest failed", description: error.message, variant: "destructive" });
-    },
+      notify.success("Auto-suggest applied", {
+        description: "Headers detected and a starting mapping was suggested."
+      });
+    }
   });
 
   const previewMutation = useMutation({
@@ -198,7 +196,7 @@ export default function BalancerRegistrationsFeedPage() {
         source_url: sourceUrl || undefined,
         mapping_config_json: buildMappingConfigJson(mapping.mappingState),
         value_mapping_json: buildValueMappingJson(mapping.valueState),
-        sample_rows: PREVIEW_SAMPLE_ROWS,
+        sample_rows: PREVIEW_SAMPLE_ROWS
       }),
     onSuccess: (result) => {
       setPreview(result);
@@ -206,10 +204,7 @@ export default function BalancerRegistrationsFeedPage() {
       if (result.header_keys.length > 0) {
         setDetectedHeaderKeys(result.header_keys);
       }
-    },
-    onError: (error: Error) => {
-      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
-    },
+    }
   });
 
   if (!tournamentId) {
@@ -225,7 +220,9 @@ export default function BalancerRegistrationsFeedPage() {
 
   if (feedQuery.isError || catalogQuery.isError) {
     const message =
-      (feedQuery.error as Error)?.message ?? (catalogQuery.error as Error)?.message ?? "Reload and try again.";
+      (feedQuery.error as Error)?.message ??
+      (catalogQuery.error as Error)?.message ??
+      "Reload and try again.";
     return (
       <Alert variant="destructive">
         <AlertTitle>Failed to load the Google Sheets feed</AlertTitle>
@@ -366,9 +363,7 @@ export default function BalancerRegistrationsFeedPage() {
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        {hasChanges ? (
-          <span className="text-xs text-muted-foreground">Unsaved changes</span>
-        ) : null}
+        {hasChanges ? <span className="text-xs text-muted-foreground">Unsaved changes</span> : null}
         <Button
           size="lg"
           onClick={() => saveMutation.mutate()}

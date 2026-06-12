@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { LogProcessingRecord, LogProcessingStatus } from "@/types/admin.types";
@@ -207,7 +207,6 @@ export function TournamentLogsTab({
   canUploadLogs,
   enabled
 }: TournamentLogsTabProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const tableStyles = getAdminDetailTableStyles("compact");
   const queryKeys = getTournamentWorkspaceQueryKeys(tournamentId);
@@ -228,11 +227,8 @@ export function TournamentLogsTab({
   const retryLogMutation = useMutation({
     mutationFn: (recordId: number) => adminService.retryLogRecord(recordId),
     onSuccess: () => {
-      toast({ title: "Log retry queued" });
+      notify.success("Log retry queued");
       logHistoryQuery.refetch();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Retry failed", description: error.message, variant: "destructive" });
     }
   });
 
@@ -240,25 +236,18 @@ export function TournamentLogsTab({
     mutationFn: (recordIds: number[]) =>
       Promise.all(recordIds.map((recordId) => adminService.retryLogRecord(recordId))),
     onSuccess: (_records, recordIds) => {
-      toast({
-        title: "Failed logs queued",
+      notify.success("Failed logs queued", {
         description: `${recordIds.length} visible failed log${recordIds.length === 1 ? "" : "s"} sent for retry.`
       });
       logHistoryQuery.refetch();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Retry failed", description: error.message, variant: "destructive" });
     }
   });
 
   const processAllLogsMutation = useMutation({
     mutationFn: () => adminService.processAllTournamentLogs(tournamentId),
     onSuccess: () => {
-      toast({ title: "Processing queued for all S3 logs" });
+      notify.success("Processing queued for all S3 logs");
       logHistoryQuery.refetch();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 

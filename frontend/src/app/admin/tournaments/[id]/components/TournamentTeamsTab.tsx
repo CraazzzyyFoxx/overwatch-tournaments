@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/table";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
@@ -480,7 +480,6 @@ export function TournamentTeamsTab({
   canDeletePlayer
 }: TournamentTeamsTabProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const tableStyles = getAdminDetailTableStyles("compact");
   const importTeamsFileRef = useRef<HTMLInputElement>(null);
   const draftCounterRef = useRef(0);
@@ -609,6 +608,7 @@ export function TournamentTeamsTab({
   };
 
   const saveTeamMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: async (variables: {
       mode: "create" | "update";
       teamId?: number;
@@ -745,9 +745,9 @@ export function TournamentTeamsTab({
     onSuccess: async (_data, variables) => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       resetTeamDialog();
-      toast({
-        title: variables.mode === "create" ? "Team and roster created" : "Team roster updated"
-      });
+      notify.success(
+        variables.mode === "create" ? "Team and roster created" : "Team roster updated"
+      );
     },
     onError: (error: Error) => {
       setTeamFormError(error.message);
@@ -759,10 +759,7 @@ export function TournamentTeamsTab({
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       setTeamPendingDelete(null);
-      toast({ title: "Team deleted" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Team deleted");
     }
   });
 
@@ -772,13 +769,9 @@ export function TournamentTeamsTab({
     onSuccess: (result) => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       setChallongeSyncDialogOpen(false);
-      toast({
-        title: "Teams synced from Challonge",
+      notify.success("Teams synced from Challonge", {
         description: summarizeChallongeSyncResult(result)
       });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
@@ -786,14 +779,7 @@ export function TournamentTeamsTab({
     mutationFn: (file: File) => balancerAdminService.importTeamsFromJson(tournamentId, file),
     onSuccess: async (result) => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Teams imported", description: `${result.imported_teams} teams created.` });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to import teams",
-        description: error.message,
-        variant: "destructive"
-      });
+      notify.success("Teams imported", { description: `${result.imported_teams} teams created.` });
     }
   });
 
@@ -948,8 +934,7 @@ export function TournamentTeamsTab({
     (participant.mapped_team_id != null ? String(participant.mapped_team_id) : UNMAPPED_TEAM_VALUE);
   const activeUnmappedParticipants = challongeParticipants.filter(
     (participant) =>
-      participant.active &&
-      getChallongeMappingValue(participant) === UNMAPPED_TEAM_VALUE
+      participant.active && getChallongeMappingValue(participant) === UNMAPPED_TEAM_VALUE
   );
   const selectedChallongeMappings = challongeParticipants.flatMap((participant) => {
     const value = getChallongeMappingValue(participant);
@@ -1007,10 +992,8 @@ export function TournamentTeamsTab({
     event.preventDefault();
 
     if (!canSubmitChallongeMappings) {
-      toast({
-        title: "Mappings incomplete",
-        description: `${activeUnmappedParticipants.length} active Challonge participants are unmapped.`,
-        variant: "destructive"
+      notify.error("Mappings incomplete", {
+        description: `${activeUnmappedParticipants.length} active Challonge participants are unmapped.`
       });
       return;
     }
@@ -1243,7 +1226,12 @@ export function TournamentTeamsTab({
                       <TableCell className={tableStyles.cell}>{team.players.length}</TableCell>
                       <TableCell className={tableStyles.cell}>
                         <div className="flex items-center justify-end gap-2">
-                          <Button asChild variant="ghost" size="sm" aria-label={`Open ${team.name}`}>
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Open ${team.name}`}
+                          >
                             <Link href={`/admin/teams/${team.id}`}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Open
@@ -1336,7 +1324,9 @@ export function TournamentTeamsTab({
                 onClick={applyChallongeSuggestions}
                 disabled={
                   isChallongePreviewLoading ||
-                  !challongeParticipants.some((participant) => participant.suggested_team_id != null)
+                  !challongeParticipants.some(
+                    (participant) => participant.suggested_team_id != null
+                  )
                 }
               >
                 <Sparkles className="mr-2 h-4 w-4" />
@@ -1385,7 +1375,8 @@ export function TournamentTeamsTab({
                                 {participant.name}
                               </div>
                               <div className="mt-0.5 text-xs text-muted-foreground">
-                                #{participant.participant_id} / Challonge #{participant.challonge_id}
+                                #{participant.participant_id} / Challonge #
+                                {participant.challonge_id}
                               </div>
                             </div>
                           </TableCell>

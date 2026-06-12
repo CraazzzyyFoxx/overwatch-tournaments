@@ -10,7 +10,7 @@ import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTo
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import { ROLES, canonicalToRegistrationRole } from "@/lib/roles";
 import adminService from "@/services/admin.service";
 import balancerAdminService from "@/services/balancer-admin.service";
@@ -18,7 +18,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type {
   AdminCustomFieldDef,
   AdminRegistrationFormUpsert,
-  BuiltInFieldConfig,
+  BuiltInFieldConfig
 } from "@/types/balancer-admin.types";
 
 import { BuiltInFieldsCard } from "./_components/BuiltInFieldsCard";
@@ -32,13 +32,12 @@ import {
   hydrateCustomField,
   makeUniqueCustomFieldKey,
   normalizeValidation,
-  supportsCustomFieldValidation,
+  supportsCustomFieldValidation
 } from "./_components/formConfig";
 
 export default function RegistrationFormConfigPage() {
   const tournamentId = useBalancerTournamentId();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const searchParams = useSearchParams();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
@@ -48,7 +47,7 @@ export default function RegistrationFormConfigPage() {
   const [openProfileScope, setOpenProfileScope] = useState<"main" | "all">("main");
   const [showRanks, setShowRanks] = useState(false);
   const [builtInFields, setBuiltInFields] = useState<Record<string, BuiltInFieldConfig>>(() =>
-    getBuiltInConfig({}),
+    getBuiltInConfig({})
   );
   const [customFields, setCustomFields] = useState<AdminCustomFieldDef[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -59,7 +58,7 @@ export default function RegistrationFormConfigPage() {
     enabled: tournamentId !== null,
     // This page is a long-lived editor; a background refetch must not clobber
     // the admin's unsaved edits.
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: false
   });
 
   const loadedFormKeyRef = useRef<string | null>(null);
@@ -96,12 +95,12 @@ export default function RegistrationFormConfigPage() {
   const catalogQuery = useQuery({
     queryKey: ["admin", "player-sub-roles", workspaceId],
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId as number }),
-    enabled: workspaceId !== null,
+    enabled: workspaceId !== null
   });
 
   const subroleCatalog = useMemo<Record<string, CatalogEntry[]>>(() => {
     const grouped: Record<string, CatalogEntry[]> = Object.fromEntries(
-      ROLES.map((role) => [role.code, [] as CatalogEntry[]]),
+      ROLES.map((role) => [role.code, [] as CatalogEntry[]])
     );
     for (const row of catalogQuery.data ?? []) {
       const code = canonicalToRegistrationRole(row.role);
@@ -127,22 +126,16 @@ export default function RegistrationFormConfigPage() {
     },
     onSuccess: async () => {
       await invalidateCatalog();
-      toast({ title: "Sub-role added" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to add sub-role", description: error.message, variant: "destructive" });
-    },
+      notify.success("Sub-role added");
+    }
   });
 
   const deleteSubroleMutation = useMutation({
     mutationFn: (id: number) => adminService.deletePlayerSubRole(id),
     onSuccess: async () => {
       await invalidateCatalog();
-      toast({ title: "Sub-role removed" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to remove sub-role", description: error.message, variant: "destructive" });
-    },
+      notify.success("Sub-role removed");
+    }
   });
 
   const saveMutation = useMutation({
@@ -157,26 +150,23 @@ export default function RegistrationFormConfigPage() {
         built_in_fields: Object.fromEntries(
           Object.entries(builtInFields).map(([key, value]) => [
             key,
-            { ...value, validation: normalizeValidation(value.validation) },
-          ]),
+            { ...value, validation: normalizeValidation(value.validation) }
+          ])
         ),
         custom_fields: customFields.map((field) => ({
           ...field,
-          validation: normalizeValidation(field.validation),
-        })),
+          validation: normalizeValidation(field.validation)
+        }))
       };
       return balancerAdminService.upsertRegistrationForm(tournamentId, payload);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registration-form", tournamentId],
+        queryKey: ["balancer-admin", "registration-form", tournamentId]
       });
       setHasChanges(false);
-      toast({ title: "Registration form saved" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
-    },
+      notify.success("Registration form saved");
+    }
   });
 
   const updateBuiltIn = (key: string, updates: Partial<BuiltInFieldConfig>) => {
@@ -187,8 +177,8 @@ export default function RegistrationFormConfigPage() {
         ...updates,
         ...(Object.prototype.hasOwnProperty.call(updates, "validation")
           ? { validation: normalizeValidation(updates.validation) }
-          : {}),
-      },
+          : {})
+      }
     }));
     setHasChanges(true);
   };
@@ -204,7 +194,7 @@ export default function RegistrationFormConfigPage() {
         const cfg = prev[fieldKey] ?? { enabled: true, required: false };
         next[fieldKey] = {
           ...cfg,
-          subroles: { ...(cfg.subroles ?? {}), [role]: nextSlugs },
+          subroles: { ...(cfg.subroles ?? {}), [role]: nextSlugs }
         };
       }
       return next;
@@ -222,8 +212,8 @@ export default function RegistrationFormConfigPage() {
         required: false,
         placeholder: null,
         options: null,
-        validation: getCustomFieldDefaultValidation("text"),
-      },
+        validation: getCustomFieldDefaultValidation("text")
+      }
     ]);
     setHasChanges(true);
   };
@@ -237,7 +227,9 @@ export default function RegistrationFormConfigPage() {
         if ("type" in updates && updates.type && !supportsCustomFieldValidation(updates.type)) {
           updated.validation = null;
         } else if ("type" in updates && updates.type) {
-          updated.validation = normalizeValidation(updated.validation) ?? getCustomFieldDefaultValidation(updates.type);
+          updated.validation =
+            normalizeValidation(updated.validation) ??
+            getCustomFieldDefaultValidation(updates.type);
         }
 
         // Assign a stable, unique key once when the field is first named; never
@@ -251,7 +243,7 @@ export default function RegistrationFormConfigPage() {
           updated.validation = normalizeValidation(updates.validation);
         }
         return updated;
-      }),
+      })
     );
     setHasChanges(true);
   };
@@ -368,8 +360,8 @@ export default function RegistrationFormConfigPage() {
                 </select>
               </div>
               <p className="text-xs text-muted-foreground">
-                When enabled, players whose Overwatch profile is private are not admitted (blocked at
-                check-in). Unranked players are already excluded separately.
+                When enabled, players whose Overwatch profile is private are not admitted (blocked
+                at check-in). Unranked players are already excluded separately.
               </p>
             </div>
 
@@ -387,7 +379,8 @@ export default function RegistrationFormConfigPage() {
                 Show player ranks on participants page
               </label>
               <p className="text-xs text-muted-foreground">
-                When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads.
+                When enabled, player rank values will be displayed on the public participants page.
+                When disabled, rank values are completely hidden and omitted from backend payloads.
               </p>
             </div>
           </div>

@@ -11,7 +11,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  X,
+  X
 } from "lucide-react";
 
 import {
@@ -22,7 +22,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,22 +31,36 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   useAccountApiKeys,
   useCreateAccountApiKey,
   useRenameAccountApiKey,
-  useRevokeAccountApiKey,
+  useRevokeAccountApiKey
 } from "@/hooks/use-account-api-keys";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useToast } from "@/hooks/use-toast";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AccountApiKey, ApiKeyConfigPolicy, ApiKeyLimits } from "@/types/auth.types";
@@ -56,48 +70,53 @@ const DEFAULT_LIMITS: ApiKeyLimits = {
   jobs_per_day: 100,
   concurrent_jobs: 2,
   max_upload_bytes: 10 * 1024 * 1024,
-  max_players: 500,
+  max_players: 500
 };
 
 const DEFAULT_POLICY: ApiKeyConfigPolicy = {
-  allowed_keys: ["role_mask", "population_size", "generation_count", "use_captains", "max_result_variants"],
+  allowed_keys: [
+    "role_mask",
+    "population_size",
+    "generation_count",
+    "use_captains",
+    "max_result_variants"
+  ],
   max_values: {
     population_size: 150,
     generation_count: 500,
-    max_result_variants: 10,
-  },
+    max_result_variants: 10
+  }
 };
 
 type ApiKeyStatus = "active" | "expired" | "revoked";
 
-const STATUS_META: Record<ApiKeyStatus, { label: string; dotClassName: string; textClassName: string }> = {
+const STATUS_META: Record<
+  ApiKeyStatus,
+  { label: string; dotClassName: string; textClassName: string }
+> = {
   active: {
     label: "Active",
     dotClassName: "bg-emerald-500",
-    textClassName: "text-emerald-500",
+    textClassName: "text-emerald-500"
   },
   expired: {
     label: "Expired",
     dotClassName: "bg-slate-500",
-    textClassName: "text-slate-500",
+    textClassName: "text-slate-500"
   },
   revoked: {
     label: "Revoked",
     dotClassName: "bg-amber-500",
-    textClassName: "text-amber-500",
-  },
+    textClassName: "text-amber-500"
+  }
 };
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
 
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "Never";
 
   return new Date(value).toLocaleString("en-US", {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeStyle: "short"
   });
 }
 
@@ -132,7 +151,7 @@ function mergeLimits(limits: Partial<ApiKeyLimits> | undefined): ApiKeyLimits {
 function mergePolicy(policy: Partial<ApiKeyConfigPolicy> | undefined): ApiKeyConfigPolicy {
   return {
     allowed_keys: policy?.allowed_keys ?? DEFAULT_POLICY.allowed_keys,
-    max_values: policy?.max_values ?? DEFAULT_POLICY.max_values,
+    max_values: policy?.max_values ?? DEFAULT_POLICY.max_values
   };
 }
 
@@ -140,7 +159,9 @@ function StatusCell({ status }: { status: ApiKeyStatus }) {
   const meta = STATUS_META[status];
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.textClassName)}>
+    <span
+      className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.textClassName)}
+    >
       <span className={cn("size-1.5 rounded-full", meta.dotClassName)} />
       {meta.label}
     </span>
@@ -150,7 +171,9 @@ function StatusCell({ status }: { status: ApiKeyStatus }) {
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">{label}</p>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+        {label}
+      </p>
       <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
@@ -161,8 +184,8 @@ function LimitsText({ limits }: { limits: Partial<ApiKeyLimits> | undefined }) {
 
   return (
     <span className="text-xs text-muted-foreground">
-      {merged.requests_per_minute}/min | {merged.jobs_per_day}/day | {merged.concurrent_jobs} concurrent |{" "}
-      {formatBytes(merged.max_upload_bytes)}
+      {merged.requests_per_minute}/min | {merged.jobs_per_day}/day | {merged.concurrent_jobs}{" "}
+      concurrent | {formatBytes(merged.max_upload_bytes)}
     </span>
   );
 }
@@ -170,7 +193,8 @@ function LimitsText({ limits }: { limits: Partial<ApiKeyLimits> | undefined }) {
 function PolicyText({ policy }: { policy: Partial<ApiKeyConfigPolicy> | undefined }) {
   const merged = mergePolicy(policy);
   const caps = Object.entries(merged.max_values ?? {});
-  const capSummary = caps.length > 0 ? caps.map(([field, cap]) => `${field} <= ${cap}`).join(", ") : "No caps";
+  const capSummary =
+    caps.length > 0 ? caps.map(([field, cap]) => `${field} <= ${cap}`).join(", ") : "No caps";
 
   return (
     <div className="max-w-[280px] text-xs text-muted-foreground">
@@ -199,7 +223,6 @@ function DefaultPolicyPreview() {
 }
 
 export default function AccessAdminApiKeysPage() {
-  const { toast } = useToast();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
@@ -224,24 +247,31 @@ export default function AccessAdminApiKeysPage() {
     (workspace) =>
       isSuperuser ||
       isWorkspaceAdmin(workspace.id) ||
-      hasWorkspacePermission(workspace.id, "team.import"),
+      hasWorkspacePermission(workspace.id, "team.import")
   );
   const selectedWorkspaceIsManageable =
-    selectedWorkspaceId !== null && manageableWorkspaces.some((workspace) => workspace.id === selectedWorkspaceId);
+    selectedWorkspaceId !== null &&
+    manageableWorkspaces.some((workspace) => workspace.id === selectedWorkspaceId);
   const currentWorkspaceIsManageable =
-    currentWorkspaceId !== null && manageableWorkspaces.some((workspace) => workspace.id === currentWorkspaceId);
+    currentWorkspaceId !== null &&
+    manageableWorkspaces.some((workspace) => workspace.id === currentWorkspaceId);
   const createWorkspaceIsManageable =
-    createWorkspaceId !== null && manageableWorkspaces.some((workspace) => workspace.id === createWorkspaceId);
+    createWorkspaceId !== null &&
+    manageableWorkspaces.some((workspace) => workspace.id === createWorkspaceId);
   const effectiveSelectedWorkspaceId = selectedWorkspaceIsManageable
     ? selectedWorkspaceId
     : currentWorkspaceIsManageable
       ? currentWorkspaceId
       : (manageableWorkspaces[0]?.id ?? null);
-  const effectiveCreateWorkspaceId = createWorkspaceIsManageable ? createWorkspaceId : effectiveSelectedWorkspaceId;
+  const effectiveCreateWorkspaceId = createWorkspaceIsManageable
+    ? createWorkspaceId
+    : effectiveSelectedWorkspaceId;
   const selectedWorkspace =
     manageableWorkspaces.find((workspace) => workspace.id === effectiveSelectedWorkspaceId) ?? null;
 
-  const { data, isLoading, isError, error, refetch } = useAccountApiKeys(effectiveSelectedWorkspaceId);
+  const { data, isLoading, isError, error, refetch } = useAccountApiKeys(
+    effectiveSelectedWorkspaceId
+  );
   const createMutation = useCreateAccountApiKey();
   const renameMutation = useRenameAccountApiKey(effectiveSelectedWorkspaceId);
   const revokeMutation = useRevokeAccountApiKey(effectiveSelectedWorkspaceId);
@@ -251,9 +281,11 @@ export default function AccessAdminApiKeysPage() {
       [...(data ?? [])].sort((left, right) => {
         const leftTime = new Date(left.created_at).getTime();
         const rightTime = new Date(right.created_at).getTime();
-        return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+        return (
+          (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
+        );
       }),
-    [data],
+    [data]
   );
   const activeCount = apiKeys.filter((apiKey) => getApiKeyStatus(apiKey) === "active").length;
   const revokedCount = apiKeys.filter((apiKey) => getApiKeyStatus(apiKey) === "revoked").length;
@@ -271,7 +303,7 @@ export default function AccessAdminApiKeysPage() {
       {
         workspace_id: effectiveCreateWorkspaceId,
         expires_at: toIsoTimestamp(createExpiresAt),
-        name: createName.trim(),
+        name: createName.trim()
       },
       {
         onSuccess: (result) => {
@@ -281,19 +313,11 @@ export default function AccessAdminApiKeysPage() {
           setCreateExpiresAt("");
           setCreateName("Balancer API");
           setIsCreateOpen(false);
-          toast({
-            title: "API key created",
-            description: "Copy the secret now. It will not be shown again.",
+          notify.success("API key created", {
+            description: "Copy the secret now. It will not be shown again."
           });
-        },
-        onError: (mutationError) => {
-          toast({
-            title: "Failed to create API key",
-            description: getErrorMessage(mutationError, "Unable to create API key"),
-            variant: "destructive",
-          });
-        },
-      },
+        }
+      }
     );
   };
 
@@ -306,16 +330,9 @@ export default function AccessAdminApiKeysPage() {
         onSuccess: () => {
           setRenameTarget(null);
           setRenameName("");
-          toast({ title: "API key renamed" });
-        },
-        onError: (mutationError) => {
-          toast({
-            title: "Failed to rename API key",
-            description: getErrorMessage(mutationError, "Unable to rename API key"),
-            variant: "destructive",
-          });
-        },
-      },
+          notify.success("API key renamed");
+        }
+      }
     );
   };
 
@@ -325,28 +342,24 @@ export default function AccessAdminApiKeysPage() {
     revokeMutation.mutate(revokeTarget.id, {
       onSuccess: () => {
         setRevokeTarget(null);
-        toast({ title: "API key revoked" });
-      },
-      onError: (mutationError) => {
-        toast({
-          title: "Failed to revoke API key",
-          description: getErrorMessage(mutationError, "Unable to revoke API key"),
-          variant: "destructive",
-        });
-      },
+        notify.success("API key revoked");
+      }
     });
   };
 
   const copyOneTimeKey = async () => {
     if (!oneTimeKey) return;
     await navigator.clipboard.writeText(oneTimeKey);
-    toast({ title: "API key copied" });
+    notify.success("API key copied");
   };
 
   if (manageableWorkspaces.length === 0) {
     return (
       <div className="space-y-4">
-        <AdminPageHeader title="API Keys" description="Manage workspace-scoped credentials for the balancer public API." />
+        <AdminPageHeader
+          title="API Keys"
+          description="Manage workspace-scoped credentials for the balancer public API."
+        />
         <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
           No workspaces are available for API keys.
         </div>
@@ -370,9 +383,15 @@ export default function AccessAdminApiKeysPage() {
       <div className="rounded-xl border border-border/50 bg-card/50">
         <div className="flex flex-col gap-3 border-b border-border/40 p-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="w-full space-y-1.5 lg:max-w-xs">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">Workspace</label>
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              Workspace
+            </label>
             <Select
-              value={effectiveSelectedWorkspaceId !== null ? String(effectiveSelectedWorkspaceId) : undefined}
+              value={
+                effectiveSelectedWorkspaceId !== null
+                  ? String(effectiveSelectedWorkspaceId)
+                  : undefined
+              }
               onValueChange={(value) => {
                 const nextWorkspaceId = Number(value);
                 setSelectedWorkspaceId(nextWorkspaceId);
@@ -405,17 +424,29 @@ export default function AccessAdminApiKeysPage() {
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">One-time secret</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">This full API key is visible only once.</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  This full API key is visible only once.
+                </p>
                 <code className="mt-2 block overflow-x-auto rounded-md border border-emerald-500/20 bg-background/80 p-2 text-xs text-emerald-700 dark:text-emerald-300">
                   {oneTimeKey}
                 </code>
               </div>
               <div className="flex shrink-0 gap-1">
-                <Button variant="outline" size="sm" className="h-8 rounded-md" onClick={() => void copyOneTimeKey()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-md"
+                  onClick={() => void copyOneTimeKey()}
+                >
                   <Clipboard className="size-4" />
                   Copy
                 </Button>
-                <Button variant="ghost" size="icon" className="size-8 rounded-md" onClick={() => setOneTimeKey(null)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 rounded-md"
+                  onClick={() => setOneTimeKey(null)}
+                >
                   <X className="size-4" />
                   <span className="sr-only">Dismiss secret</span>
                 </Button>
@@ -429,7 +460,7 @@ export default function AccessAdminApiKeysPage() {
             <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
               <p className="flex items-center gap-2">
                 <AlertCircle className="size-4" />
-                {getErrorMessage(error, "Failed to load API keys")}
+                {getApiErrorMessage(error, "Failed to load API keys")}
               </p>
               <Button
                 variant="outline"
@@ -448,14 +479,18 @@ export default function AccessAdminApiKeysPage() {
           <Table wrapperClassName="overflow-x-auto">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9 min-w-[220px] bg-muted/20 pl-4 text-[11px]">Name</TableHead>
+                <TableHead className="h-9 min-w-[220px] bg-muted/20 pl-4 text-[11px]">
+                  Name
+                </TableHead>
                 <TableHead className="h-9 bg-muted/20 text-[11px]">Status</TableHead>
                 <TableHead className="h-9 bg-muted/20 text-[11px]">Created</TableHead>
                 <TableHead className="h-9 bg-muted/20 text-[11px]">Last Used</TableHead>
                 <TableHead className="h-9 bg-muted/20 text-[11px]">Expires</TableHead>
                 <TableHead className="h-9 min-w-[260px] bg-muted/20 text-[11px]">Limits</TableHead>
                 <TableHead className="h-9 min-w-[260px] bg-muted/20 text-[11px]">Policy</TableHead>
-                <TableHead className="h-9 bg-muted/20 pr-4 text-right text-[11px]">Actions</TableHead>
+                <TableHead className="h-9 bg-muted/20 pr-4 text-right text-[11px]">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -486,17 +521,27 @@ export default function AccessAdminApiKeysPage() {
                             <KeyRound className="size-4 text-muted-foreground" />
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">{apiKey.name}</p>
-                            <p className="truncate font-mono text-xs text-muted-foreground">aqt_sk_{apiKey.public_id}_...</p>
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {apiKey.name}
+                            </p>
+                            <p className="truncate font-mono text-xs text-muted-foreground">
+                              aqt_sk_{apiKey.public_id}_...
+                            </p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <StatusCell status={status} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatTimestamp(apiKey.created_at)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatTimestamp(apiKey.last_used_at)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatTimestamp(apiKey.expires_at)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatTimestamp(apiKey.created_at)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatTimestamp(apiKey.last_used_at)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatTimestamp(apiKey.expires_at)}
+                      </TableCell>
                       <TableCell>
                         <LimitsText limits={apiKey.limits} />
                       </TableCell>
@@ -544,17 +589,31 @@ export default function AccessAdminApiKeysPage() {
         <DialogContent className="max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
-            <DialogDescription>The key is scoped to one workspace and can use the balancer public API.</DialogDescription>
+            <DialogDescription>
+              The key is scoped to one workspace and can use the balancer public API.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">Name</label>
-              <Input value={createName} onChange={(event) => setCreateName(event.target.value)} maxLength={100} />
+              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                Name
+              </label>
+              <Input
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                maxLength={100}
+              />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">Workspace</label>
+              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                Workspace
+              </label>
               <Select
-                value={effectiveCreateWorkspaceId !== null ? String(effectiveCreateWorkspaceId) : undefined}
+                value={
+                  effectiveCreateWorkspaceId !== null
+                    ? String(effectiveCreateWorkspaceId)
+                    : undefined
+                }
                 onValueChange={(value) => setCreateWorkspaceId(Number(value))}
               >
                 <SelectTrigger>
@@ -584,14 +643,26 @@ export default function AccessAdminApiKeysPage() {
             <DefaultPolicyPreview />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={createMutation.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateOpen(false)}
+              disabled={createMutation.isPending}
+            >
               Cancel
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={createMutation.isPending || effectiveCreateWorkspaceId === null || createName.trim().length === 0}
+              disabled={
+                createMutation.isPending ||
+                effectiveCreateWorkspaceId === null ||
+                createName.trim().length === 0
+              }
             >
-              {createMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {createMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
               Create
             </Button>
           </DialogFooter>
@@ -613,8 +684,14 @@ export default function AccessAdminApiKeysPage() {
             <DialogDescription>Update the display name used in this admin list.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">Name</label>
-            <Input value={renameName} onChange={(event) => setRenameName(event.target.value)} maxLength={100} />
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              Name
+            </label>
+            <Input
+              value={renameName}
+              onChange={(event) => setRenameName(event.target.value)}
+              maxLength={100}
+            />
           </div>
           <DialogFooter>
             <Button
@@ -627,15 +704,25 @@ export default function AccessAdminApiKeysPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleRename} disabled={renameMutation.isPending || renameName.trim().length === 0}>
-              {renameMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            <Button
+              onClick={handleRename}
+              disabled={renameMutation.isPending || renameName.trim().length === 0}
+            >
+              {renameMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
               Save
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={revokeTarget !== null} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+      <AlertDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => !open && setRevokeTarget(null)}
+      >
         <AlertDialogContent className="rounded-xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
@@ -650,7 +737,11 @@ export default function AccessAdminApiKeysPage() {
               disabled={revokeMutation.isPending}
               onClick={handleRevoke}
             >
-              {revokeMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {revokeMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
               Revoke
             </AlertDialogAction>
           </AlertDialogFooter>

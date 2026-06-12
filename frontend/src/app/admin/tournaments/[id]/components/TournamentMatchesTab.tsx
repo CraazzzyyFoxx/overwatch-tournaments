@@ -53,7 +53,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { hasUnsavedChanges } from "@/lib/form-change";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type {
   EncounterCreateInput,
@@ -139,7 +139,6 @@ export function TournamentMatchesTab({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const tableStyles = getAdminDetailTableStyles("compact");
 
   const defaultStage = stages[0] ?? null;
@@ -202,6 +201,7 @@ export function TournamentMatchesTab({
   };
 
   const saveEncounterMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: async ({
       mode,
       encounterId,
@@ -220,9 +220,7 @@ export function TournamentMatchesTab({
     onSuccess: (_data, variables) => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       resetEncounterDialog();
-      toast({
-        title: variables.mode === "create" ? "Encounter created" : "Encounter updated"
-      });
+      notify.success(variables.mode === "create" ? "Encounter created" : "Encounter updated");
     },
     onError: (error: Error) => {
       setEncounterFormError(error.message);
@@ -234,10 +232,7 @@ export function TournamentMatchesTab({
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       setEncounterPendingDelete(null);
-      toast({ title: "Encounter deleted" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Encounter deleted");
     }
   });
 
@@ -245,23 +240,18 @@ export function TournamentMatchesTab({
     mutationFn: () => adminService.syncEncountersFromChallonge(tournamentId),
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Encounters synced from Challonge" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Encounters synced from Challonge");
     }
   });
 
   const updateStandingMutation = useMutation({
+    meta: { suppressErrorToast: true },
     mutationFn: ({ standingId, data }: { standingId: number; data: StandingUpdateInput }) =>
       adminService.updateStanding(standingId, data),
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       resetStandingDialog();
-      toast({ title: "Standing updated" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standing updated");
     }
   });
 
@@ -270,10 +260,7 @@ export function TournamentMatchesTab({
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       setStandingPendingDelete(null);
-      toast({ title: "Standing deleted" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standing deleted");
     }
   });
 
@@ -281,10 +268,7 @@ export function TournamentMatchesTab({
     mutationFn: () => adminService.calculateStandings(tournamentId),
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Standings calculated" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standings calculated");
     }
   });
 
@@ -295,10 +279,7 @@ export function TournamentMatchesTab({
     },
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Standings recalculated" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Standings recalculated");
     }
   });
 

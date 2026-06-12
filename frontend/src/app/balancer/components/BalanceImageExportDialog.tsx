@@ -12,27 +12,25 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/division-grid";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { formatSubRoleLabel } from "@/utils/player";
 import type { InternalBalancePayload, InternalBalanceTeam } from "@/types/balancer-admin.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import type { useToast } from "@/hooks/use-toast";
 
 import {
   BALANCE_ROSTER_KEYS,
   TEAM_BADGE_ACCENTS,
   calculateTeamAverageFromPayload,
-  calculateTeamTotalFromPayload,
+  calculateTeamTotalFromPayload
 } from "./balancer-page-helpers";
 
 const TEAMS_PER_IMAGE = 10;
 const EXPORT_WIDTH = 1920;
 const EXPORT_BACKGROUND = "#090a10";
-
-type ToastFn = ReturnType<typeof useToast>["toast"];
 
 type BalanceImageExportDialogProps = {
   open: boolean;
@@ -40,7 +38,6 @@ type BalanceImageExportDialogProps = {
   payload: InternalBalancePayload | null;
   divisionGrid: DivisionGrid;
   tournamentId: number | null;
-  toast: ToastFn;
 };
 
 type TeamChunk = {
@@ -68,8 +65,8 @@ export function chunkBalanceTeams(teams: InternalBalanceTeam[]): TeamChunk[] {
       id: `part-${chunks.length + 1}`,
       entries: teams.slice(index, index + TEAMS_PER_IMAGE).map((team, offset) => ({
         team,
-        teamIndex: index + offset,
-      })),
+        teamIndex: index + offset
+      }))
     });
   }
 
@@ -81,8 +78,7 @@ export function BalanceImageExportDialog({
   onOpenChange,
   payload,
   divisionGrid,
-  tournamentId,
-  toast,
+  tournamentId
 }: BalanceImageExportDialogProps) {
   const chunkRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const fullImageRef = useRef<HTMLDivElement | null>(null);
@@ -144,7 +140,7 @@ export function BalanceImageExportDialog({
             id: chunk.id,
             label: `Image ${index + 1}`,
             blob,
-            url,
+            url
           });
         }
 
@@ -167,7 +163,7 @@ export function BalanceImageExportDialog({
 
         if (!cancelled) {
           setError("Could not generate balance images.");
-          toast({ title: "Image export failed", variant: "destructive" });
+          notify.error("Image export failed");
         }
       } finally {
         if (!cancelled) {
@@ -181,19 +177,16 @@ export function BalanceImageExportDialog({
     return () => {
       cancelled = true;
     };
-  }, [chunks, clearGeneratedImages, open, payload, toast]);
+  }, [chunks, clearGeneratedImages, open, payload]);
 
-  const handleCopyImage = useCallback(
-    async (blob: Blob, title: string) => {
-      try {
-        await copyImageBlob(blob);
-        toast({ title });
-      } catch {
-        toast({ title: "Clipboard image copy unavailable", variant: "destructive" });
-      }
-    },
-    [toast],
-  );
+  const handleCopyImage = useCallback(async (blob: Blob, title: string) => {
+    try {
+      await copyImageBlob(blob);
+      notify.success(title);
+    } catch {
+      notify.error("Clipboard image copy unavailable");
+    }
+  }, []);
 
   const handleDownloadAll = useCallback(() => {
     images.forEach((image, index) => {
@@ -282,7 +275,9 @@ export function BalanceImageExportDialog({
                         variant="outline"
                         size="sm"
                         className="rounded-xl border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white"
-                        onClick={() => void handleCopyImage(image.blob, `Image ${index + 1} copied`)}
+                        onClick={() =>
+                          void handleCopyImage(image.blob, `Image ${index + 1} copied`)
+                        }
                       >
                         <Copy className="h-4 w-4" />
                         Copy
@@ -338,7 +333,7 @@ export function BalanceImageExportDialog({
 function BalanceImageCaptureFrame({
   refCallback,
   entries,
-  divisionGrid,
+  divisionGrid
 }: {
   refCallback: (node: HTMLDivElement | null) => void;
   entries: TeamExportEntry[];
@@ -367,7 +362,7 @@ function BalanceImageCaptureFrame({
 function BalanceExportTeamCard({
   team,
   teamIndex,
-  divisionGrid,
+  divisionGrid
 }: {
   team: InternalBalanceTeam;
   teamIndex: number;
@@ -384,7 +379,7 @@ function BalanceExportTeamCard({
           <div
             className={cn(
               "rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
-              teamAccent,
+              teamAccent
             )}
           >
             #{team.id}
@@ -435,7 +430,10 @@ function BalanceExportTeamCard({
                 <td className="min-w-45 py-2.5 pr-2">
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
+                      <span
+                        className="truncate text-sm font-semibold text-white/88"
+                        title={player.name}
+                      >
                         {player.name}
                       </span>
                     </div>
@@ -447,10 +445,7 @@ function BalanceExportTeamCard({
                   </div>
                 </td>
                 <td className="w-18 px-2 py-2.5">
-                  <ExportDivisionIcon
-                    divisionGrid={divisionGrid}
-                    rank={player.assigned_rating}
-                  />
+                  <ExportDivisionIcon divisionGrid={divisionGrid} rank={player.assigned_rating} />
                 </td>
                 <td className="w-22 px-3 py-2.5">
                   <div className="flex items-center justify-center gap-1">
@@ -473,7 +468,10 @@ function BalanceExportTeamCard({
 
             {team.roster[roleKey].length === 0 ? (
               <tr className="border-b border-white/5">
-                <td colSpan={4} className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/24">
+                <td
+                  colSpan={4}
+                  className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/24"
+                >
                   Empty {roleKey.toLowerCase()}
                 </td>
               </tr>
@@ -485,13 +483,7 @@ function BalanceExportTeamCard({
   );
 }
 
-function ExportDivisionIcon({
-  divisionGrid,
-  rank,
-}: {
-  divisionGrid: DivisionGrid;
-  rank: number;
-}) {
+function ExportDivisionIcon({ divisionGrid, rank }: { divisionGrid: DivisionGrid; rank: number }) {
   const division = resolveDivisionFromRank(divisionGrid, rank);
   const src = getDivisionIconSrc(divisionGrid, division);
   const label = getDivisionLabel(divisionGrid, division);
@@ -518,7 +510,7 @@ async function capturePngBlob(node: HTMLDivElement): Promise<Blob> {
   const blob = await toBlob(node, {
     cacheBust: true,
     backgroundColor: EXPORT_BACKGROUND,
-    pixelRatio: 2,
+    pixelRatio: 2
   });
 
   if (!blob) {
@@ -539,8 +531,8 @@ async function copyImageBlob(blob: Blob): Promise<void> {
 
   await navigator.clipboard.write([
     new ClipboardItem({
-      "image/png": blob,
-    }),
+      "image/png": blob
+    })
   ]);
 }
 
@@ -563,7 +555,7 @@ async function waitForImages(node: HTMLElement): Promise<void> {
 
           image.addEventListener("load", () => resolve(), { once: true });
           image.addEventListener("error", () => resolve(), { once: true });
-        }),
-    ),
+        })
+    )
   );
 }

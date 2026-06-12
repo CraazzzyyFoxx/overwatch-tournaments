@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { normalizeChallongeSlug } from "@/lib/challonge";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -85,19 +85,14 @@ export function TournamentWorkspaceHeader({
 }: TournamentWorkspaceHeaderProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const toggleFinishedMutation = useMutation({
     mutationFn: () => adminService.toggleTournamentFinished(tournamentId),
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
-      toast({ title: "Tournament status updated" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.success("Tournament status updated");
     }
   });
-
 
   return (
     <>
