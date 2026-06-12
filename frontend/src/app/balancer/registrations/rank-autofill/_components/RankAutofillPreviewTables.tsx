@@ -181,35 +181,36 @@ export function RankAutofillPreviewTables({
         {updatablePlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-white/10">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
-                className="flex min-w-0 cursor-pointer items-center gap-3 border-b border-white/[0.06] px-3 py-2 last:border-b-0 hover:bg-white/[0.02]"
+                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] p-2.5 hover:bg-white/[0.04]"
               >
-                <Checkbox
-                  checked={selectedIds.has(player.registration_id)}
-                  onCheckedChange={(checked) => onToggle(player.registration_id, checked === true)}
-                  disabled={loading}
-                  aria-label={t("rankAutofill.selectAria", { name: playerLabel(player) })}
-                />
-                <div className="min-w-0 w-48 shrink-0">
-                  <div className="truncate text-sm font-medium text-white/85">{playerLabel(player)}</div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-white/30">
-                    <span>#{player.registration_id}</span>
-                    {player.partial && (
-                      <span className="rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                        {t("rankAutofill.badgePartial")}
-                      </span>
-                    )}
-                    {player.will_add_to_balancer && (
-                      <span className="rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
-                        → Balancer
-                      </span>
-                    )}
-                  </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <Checkbox
+                    className="shrink-0"
+                    checked={selectedIds.has(player.registration_id)}
+                    onCheckedChange={(checked) => onToggle(player.registration_id, checked === true)}
+                    disabled={loading}
+                    aria-label={t("rankAutofill.selectAria", { name: playerLabel(player) })}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
+                    {playerLabel(player)}
+                  </span>
+                  {player.partial && (
+                    <span className="shrink-0 rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
+                      {t("rankAutofill.badgePartial")}
+                    </span>
+                  )}
+                  {player.will_add_to_balancer && (
+                    <span className="shrink-0 rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
+                      → Balancer
+                    </span>
+                  )}
                 </div>
-                <div className="flex min-w-0 flex-wrap gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-6">
+                  <span className="text-[11px] text-white/30">#{player.registration_id}</span>
                   {player.roles
                     .filter((role) => role.action === "set" || role.action === "overwrite")
                     .map((role) => (

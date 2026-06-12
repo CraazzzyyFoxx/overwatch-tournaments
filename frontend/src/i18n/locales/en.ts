@@ -364,6 +364,7 @@ export const en = {
     chainTitle: "Source chain",
     chainDescription:
       "Drag to set priority order, disable sources you don't need, and optionally limit recency (tournaments for history/analytics, days for OW).",
+    toggleChainAria: "Toggle source chain",
     overwrite: "Overwrite existing",
     overwriteAria: "Overwrite existing ranks",
     addToBalancer: "Move eligible to balancer",

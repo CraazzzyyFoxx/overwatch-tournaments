@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 import {
   defaultRankAutofillStages,
@@ -49,6 +49,7 @@ export default function RankAutofillPage() {
   const [addToBalancer, setAddToBalancer] = useState(false);
   const [allowPartial, setAllowPartial] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [chainOpen, setChainOpen] = useState(true);
 
   const previewRequest = useMemo<RegistrationRankAutofillRequest>(
     () => ({
@@ -202,54 +203,75 @@ export default function RankAutofillPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("rankAutofill.chainTitle")}</CardTitle>
-          <CardDescription>{t("rankAutofill.chainDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <RankAutofillStageList
-            stages={stages}
-            disabled={applyMutation.isPending}
-            onReorder={handleReorderStage}
-            onToggle={handleToggleStage}
-            onLookbackChange={handleLookbackChange}
-          />
-
-          <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-3">
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={overwriteExisting}
-                onCheckedChange={(checked) => setOverwriteExisting(checked === true)}
-                disabled={applyMutation.isPending}
-                aria-label={t("rankAutofill.overwriteAria")}
-              />
-              <span className="text-xs text-white/65 select-none">{t("rankAutofill.overwrite")}</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={addToBalancer}
-                onCheckedChange={(checked) => setAddToBalancer(checked === true)}
-                disabled={applyMutation.isPending}
-                aria-label={t("rankAutofill.addToBalancerAria")}
-              />
-              <span className="text-xs text-white/65 select-none">{t("rankAutofill.addToBalancer")}</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={allowPartial}
-                onCheckedChange={(checked) => setAllowPartial(checked === true)}
-                disabled={applyMutation.isPending}
-                aria-label={t("rankAutofill.allowPartialAria")}
-              />
-              <span className="text-xs text-white/65 select-none">{t("rankAutofill.allowPartial")}</span>
-            </label>
-            {previewQuery.isFetching && (
-              <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                {t("rankAutofill.previewUpdating")}
-              </div>
-            )}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">{t("rankAutofill.chainTitle")}</CardTitle>
+              <CardDescription>{t("rankAutofill.chainDescription")}</CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={() => setChainOpen((open) => !open)}
+              aria-label={t("rankAutofill.toggleChainAria")}
+              aria-expanded={chainOpen}
+            >
+              {chainOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
           </div>
-        </CardContent>
+        </CardHeader>
+        {chainOpen && (
+          <CardContent className="flex flex-col gap-4">
+            <RankAutofillStageList
+              stages={stages}
+              disabled={applyMutation.isPending}
+              onReorder={handleReorderStage}
+              onToggle={handleToggleStage}
+              onLookbackChange={handleLookbackChange}
+            />
+
+            <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-3">
+              <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={overwriteExisting}
+                  onCheckedChange={(checked) => setOverwriteExisting(checked === true)}
+                  disabled={applyMutation.isPending}
+                  aria-label={t("rankAutofill.overwriteAria")}
+                />
+                <span className="text-xs text-white/65 select-none">{t("rankAutofill.overwrite")}</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={addToBalancer}
+                  onCheckedChange={(checked) => setAddToBalancer(checked === true)}
+                  disabled={applyMutation.isPending}
+                  aria-label={t("rankAutofill.addToBalancerAria")}
+                />
+                <span className="text-xs text-white/65 select-none">
+                  {t("rankAutofill.addToBalancer")}
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <Checkbox
+                  checked={allowPartial}
+                  onCheckedChange={(checked) => setAllowPartial(checked === true)}
+                  disabled={applyMutation.isPending}
+                  aria-label={t("rankAutofill.allowPartialAria")}
+                />
+                <span className="text-xs text-white/65 select-none">
+                  {t("rankAutofill.allowPartial")}
+                </span>
+              </label>
+              {previewQuery.isFetching && (
+                <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {t("rankAutofill.previewUpdating")}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Card className="flex min-h-0 flex-1 flex-col">
