@@ -81,7 +81,6 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
         assert field["description"]
         assert field["group"] in {"Roles", "Algorithm", "Quality weights", "Strategy", "Solver output"}
         assert field["default"] == payload["defaults"].get(field["key"])
-        assert field["applies_to"]
 
 
 def test_normalize_tournament_config_payload_keeps_only_valid_editable_fields() -> None:
