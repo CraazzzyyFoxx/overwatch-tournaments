@@ -88,19 +88,24 @@ class _RankData:
     captured_at: datetime | None = None
     source: str = "analytics"
     division_history_rank_value: int | None = None
-    ow_peak_rank_value: int | None = None
+    ow_rank_value: int | None = None
     ow_current_rank_value: int | None = None
-    ow_peak_season: int | None = None
+    analytics_rank_value: int | None = None
     used_source: str | None = None
 
 
 @dataclass
 class _OwRankSignals:
-    """OW rank-history signals for a single (battle_tag, role): current + current-season peak."""
+    """Weekly OW rank signal for a single (battle_tag, role).
 
-    current_snapshot: models.UserRankSnapshot | Any | None = None
-    peak_snapshot: models.UserRankSnapshot | Any | None = None
-    current_season: int | None = None
+    ``composite_rank_value`` is ``round((max + mean) / 2)`` over the chosen weekly window of
+    mapped OW ``rank_value`` snapshots (see ``_compute_ow_week_rank_value``). ``latest_snapshot``
+    is the most recent snapshot, kept for display metadata (platform/division/season/captured_at)
+    and for the contextual "OW current" value.
+    """
+
+    composite_rank_value: int | None = None
+    latest_snapshot: models.UserRankSnapshot | Any | None = None
 
 
 # Registration role code -> canonical RankRole value (e.g. dps -> damage). Single source of
@@ -111,6 +116,15 @@ REGISTRATION_ROLE_LABELS = {
     "dps": "Damage",
     "support": "Support",
 }
+# tournament.player.role is a HeroClass (Tank/Damage/Support); bridge it to the registration
+# role codes (tank/dps/support) used to key balancer history and the per-role rank data.
+HERO_CLASS_TO_REGISTRATION_ROLE = {
+    enums.HeroClass.tank: "tank",
+    enums.HeroClass.damage: "dps",
+    enums.HeroClass.support: "support",
+}
+# Window for the OW rank source: aggregate snapshots captured within one week.
+OW_RANK_WEEK_WINDOW = timedelta(days=7)
 
 
 def _register_registration_changed(
@@ -1221,9 +1235,9 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
             "captured_at": None,
             "source": "analytics",
             "division_history_rank_value": None,
-            "ow_peak_rank_value": None,
+            "ow_rank_value": None,
             "ow_current_rank_value": None,
-            "ow_peak_season": None,
+            "analytics_rank_value": None,
             "used_source": None,
         }
     return {
@@ -1235,9 +1249,9 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
         "captured_at": getattr(snapshot, "captured_at", None),
         "source": getattr(snapshot, "source", "analytics"),
         "division_history_rank_value": getattr(snapshot, "division_history_rank_value", None),
-        "ow_peak_rank_value": getattr(snapshot, "ow_peak_rank_value", None),
+        "ow_rank_value": getattr(snapshot, "ow_rank_value", None),
         "ow_current_rank_value": getattr(snapshot, "ow_current_rank_value", None),
-        "ow_peak_season": getattr(snapshot, "ow_peak_season", None),
+        "analytics_rank_value": getattr(snapshot, "analytics_rank_value", None),
         "used_source": getattr(snapshot, "used_source", None),
     }
 
@@ -1438,6 +1452,61 @@ async def _load_latest_ranks_from_balancer_history(
     return latest
 
 
+async def _load_latest_ranks_from_tournament_history(
+    session: AsyncSession,
+    user_ids: list[int],
+    current_tournament_id: int,
+    workspace_id: int,
+) -> dict[int, dict[str, int]]:
+    """Return dict[user_id][registration_role_code] → rank from past tournament participation.
+
+    This is the "analytics" source: actual ranks played in the workspace's previous tournaments
+    (``tournament.player``), distinct from the balancer-registration history. Excludes the current
+    tournament and substitution rows; the most recent tournament wins per role. ``Player.role`` is
+    a HeroClass and is bridged to the registration role code (Damage → dps) to match keying.
+    """
+    if not user_ids:
+        return {}
+
+    rows = (
+        await session.execute(
+            sa.select(
+                models.Player.user_id,
+                models.Player.role,
+                models.Player.rank,
+            )
+            .join(
+                models.Tournament,
+                models.Tournament.id == models.Player.tournament_id,
+            )
+            .where(
+                models.Player.user_id.in_(user_ids),
+                models.Tournament.workspace_id == workspace_id,
+                models.Player.tournament_id != current_tournament_id,
+                models.Player.role.is_not(None),
+                models.Player.is_substitution.is_(False),
+                models.Player.rank > 0,
+            )
+            .order_by(
+                models.Player.user_id,
+                models.Player.role,
+                models.Tournament.number.desc().nullslast(),
+                models.Player.tournament_id.desc(),
+            )
+        )
+    ).all()
+
+    latest: dict[int, dict[str, int]] = {}
+    for row in rows:
+        role_code = HERO_CLASS_TO_REGISTRATION_ROLE.get(row.role)
+        if role_code is None:
+            continue
+        user_map = latest.setdefault(row.user_id, {})
+        if role_code not in user_map:
+            user_map[role_code] = row.rank
+    return latest
+
+
 async def _load_rank_autofill_registrations(
     session: AsyncSession,
     tournament_id: int,
@@ -1484,13 +1553,9 @@ async def _load_main_battle_tags_by_key(
 async def _load_ow_rank_signals_by_battle_tag_id(
     session: AsyncSession,
     battle_tag_ids: list[int],
+    now: datetime,
 ) -> dict[int, dict[str, _OwRankSignals]]:
-    """Return per (battle_tag_id, rank_role) OW signals: latest snapshot + current-season peak.
-
-    Current season is the most recent ``season`` observed for that (tag, role); the peak is the
-    highest-SR snapshot within that season. When ``season`` is null on the snapshots, the peak
-    degrades to the all-time maximum for that role.
-    """
+    """Return per (battle_tag_id, rank_role) the weekly OW rank composite + latest snapshot."""
     if not battle_tag_ids:
         return {}
     result = await session.execute(
@@ -1503,102 +1568,126 @@ async def _load_ow_rank_signals_by_battle_tag_id(
         )
         .order_by(models.UserRankSnapshot.captured_at.desc(), models.UserRankSnapshot.id.desc())
     )
-    return _group_ow_rank_signals(result.scalars().all())
+    return _group_ow_rank_signals(result.scalars().all(), now)
 
 
 def _group_ow_rank_signals(
     snapshots_newest_first: Iterable[models.UserRankSnapshot | Any],
+    now: datetime,
 ) -> dict[int, dict[str, _OwRankSignals]]:
-    """Group newest-first snapshots into per (battle_tag_id, role) current + current-season peak.
+    """Group newest-first snapshots into per (battle_tag_id, role) weekly OW signals.
 
-    Pure (no DB) so the season/peak logic can be unit-tested. The first snapshot seen for a
-    (tag, role) is the current one and pins the current season; the peak is the highest-SR
-    snapshot within that season (null season => all-time peak).
+    Pure (no DB) so the windowing logic can be unit-tested. For each (tag, role) the composite
+    rank is ``round((max + mean) / 2)`` over the weekly window (see ``_compute_ow_week_rank_value``);
+    the first snapshot seen (newest) is kept as the latest for display metadata.
     """
-    signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
+    grouped: dict[int, dict[str, list[Any]]] = {}
     for snapshot in snapshots_newest_first:
-        role_map = signals_by_tag_id.setdefault(snapshot.battle_tag_id, {})
-        signals = role_map.get(snapshot.role)
-        if signals is None:
-            signals = _OwRankSignals(
-                current_snapshot=snapshot,
-                peak_snapshot=snapshot,
-                current_season=getattr(snapshot, "season", None),
-            )
-            role_map[snapshot.role] = signals
-            continue
+        grouped.setdefault(snapshot.battle_tag_id, {}).setdefault(snapshot.role, []).append(snapshot)
 
-        in_current_season = (
-            signals.current_season is None
-            or getattr(snapshot, "season", None) == signals.current_season
-        )
-        if in_current_season:
-            peak_value = getattr(signals.peak_snapshot, "rank_value", None) or 0
-            if (getattr(snapshot, "rank_value", None) or 0) > peak_value:
-                signals.peak_snapshot = snapshot
+    signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
+    for tag_id, role_map in grouped.items():
+        out = signals_by_tag_id.setdefault(tag_id, {})
+        for role, snaps in role_map.items():
+            out[role] = _OwRankSignals(
+                composite_rank_value=_compute_ow_week_rank_value(snaps, now),
+                latest_snapshot=snaps[0] if snaps else None,
+            )
     return signals_by_tag_id
 
 
-def _build_blended_rank_data(
-    signals: _OwRankSignals | None,
-    division_history_rank: int | None,
-    grid: DivisionGrid,
-) -> _RankData | None:
-    """Blend division history + OW peak (current season) + OW current into one suggestion.
+def _compute_ow_week_rank_value(
+    snapshots: Iterable[models.UserRankSnapshot | Any],
+    now: datetime,
+) -> int | None:
+    """Composite OW rank over a weekly window: ``round((max + mean) / 2)`` of mapped rank_value.
 
-    Chosen value = max(division_history, ow_peak). OW current is contextual only. Returns None
-    when no signal yields a usable tournament rank (the role is then treated as missing).
+    Window selection (per role):
+      1. snapshots captured within the last 7 days from ``now``;
+      2. if none, snapshots within 7 days of the player's most recent snapshot;
+      3. if still none (no usable timestamps), the single most-recent snapshot.
+    Returns ``None`` only when there are no snapshots carrying a ``rank_value``.
     """
-    current_snapshot = signals.current_snapshot if signals else None
-    peak_snapshot = signals.peak_snapshot if signals else None
-
-    ow_peak_rank = _map_ow_snapshot_rank(peak_snapshot, grid)
-    ow_current_rank = _map_ow_snapshot_rank(current_snapshot, grid)
-
-    candidates: dict[str, int] = {}
-    if division_history_rank is not None:
-        candidates["division_history"] = division_history_rank
-    if ow_peak_rank is not None:
-        candidates["ow_peak"] = ow_peak_rank
-
-    if not candidates:
+    snaps = [s for s in snapshots if getattr(s, "rank_value", None) is not None]
+    if not snaps:
         return None
 
-    # Tie → prefer division_history (the platform's own prior assignment).
-    used_source = max(
-        candidates,
-        key=lambda source: (candidates[source], 1 if source == "division_history" else 0),
+    dated = [s for s in snaps if getattr(s, "captured_at", None) is not None]
+    window = [s for s in dated if s.captured_at >= now - OW_RANK_WEEK_WINDOW]
+    if not window and dated:
+        latest_at = max(s.captured_at for s in dated)
+        window = [s for s in dated if s.captured_at >= latest_at - OW_RANK_WEEK_WINDOW]
+    if not window:
+        window = [snaps[0]]
+
+    values = [s.rank_value for s in window]
+    return round((max(values) + sum(values) / len(values)) / 2)
+
+
+def _build_priority_rank_data(
+    mode: str,
+    signals: _OwRankSignals | None,
+    division_history_rank: int | None,
+    analytics_rank: int | None,
+    grid: DivisionGrid,
+) -> _RankData | None:
+    """Pick a rank by strict priority fallback over OW / balancer / analytics for the given mode.
+
+    ``ow_first``       -> [OW (weekly composite), balancer (division history), analytics]
+    ``balancer_first`` -> [balancer, analytics, OW]
+    The first source carrying a value wins (no max blending). Returns ``None`` when every source
+    is empty (the role is then treated as missing).
+    """
+    latest_snapshot = signals.latest_snapshot if signals else None
+    ow_rank = _map_ow_rank_value(signals.composite_rank_value, grid) if signals else None
+    ow_current_rank = _map_ow_snapshot_rank(latest_snapshot, grid)
+
+    candidates: dict[str, int | None] = {
+        "ow": ow_rank,
+        "division_history": division_history_rank,
+        "analytics": analytics_rank,
+    }
+    order = (
+        ("division_history", "analytics", "ow")
+        if mode == "balancer_first"
+        else ("ow", "division_history", "analytics")
     )
+
+    used_source = next((source for source in order if candidates[source] is not None), None)
+    if used_source is None:
+        return None
     chosen = candidates[used_source]
 
-    # Primary display reflects the OW snapshot we leaned on (peak if available, else current).
-    display_snapshot = peak_snapshot or current_snapshot
     source = "balancer" if used_source == "division_history" else "analytics"
     return _RankData(
         rank_value=chosen,
-        platform=getattr(display_snapshot, "platform", None),
-        division=getattr(display_snapshot, "division", None),
-        tier=getattr(display_snapshot, "tier", None),
-        season=getattr(display_snapshot, "season", None),
-        captured_at=getattr(display_snapshot, "captured_at", None),
+        platform=getattr(latest_snapshot, "platform", None),
+        division=getattr(latest_snapshot, "division", None),
+        tier=getattr(latest_snapshot, "tier", None),
+        season=getattr(latest_snapshot, "season", None),
+        captured_at=getattr(latest_snapshot, "captured_at", None),
         source=source,
         division_history_rank_value=division_history_rank,
-        ow_peak_rank_value=ow_peak_rank,
+        ow_rank_value=ow_rank,
         ow_current_rank_value=ow_current_rank,
-        ow_peak_season=getattr(peak_snapshot, "season", None),
+        analytics_rank_value=analytics_rank,
         used_source=used_source,
     )
 
 
+def _map_ow_rank_value(ow_rank_value: int | None, grid: DivisionGrid) -> int | None:
+    """Map an OW ``rank_value`` to a tournament division rank via the grid, or None if unmapped."""
+    if ow_rank_value is None:
+        return None
+    tier = grid.resolve_division_from_ow_rank(ow_rank_value)
+    return tier.rank_min if tier is not None else None
+
+
 def _map_ow_snapshot_rank(snapshot: models.UserRankSnapshot | Any | None, grid: DivisionGrid) -> int | None:
-    """Map a raw OW2 SR snapshot to a tournament division rank via the grid, or None if unmapped."""
+    """Map a single OW snapshot to a tournament division rank via the grid, or None if unmapped."""
     if snapshot is None:
         return None
-    ow_rank = getattr(snapshot, "rank_value", None)
-    if ow_rank is None:
-        return None
-    tier = grid.resolve_division_from_ow_rank(ow_rank)
-    return tier.rank_min if tier is not None else None
+    return _map_ow_rank_value(getattr(snapshot, "rank_value", None), grid)
 
 
 async def autofill_registration_ranks_from_parsed(
@@ -1608,11 +1697,13 @@ async def autofill_registration_ranks_from_parsed(
     registration_ids: list[int] | None = None,
     overwrite_existing: bool = False,
     add_to_balancer: bool = False,
+    mode: str = "ow_first",
     apply: bool = False,
 ) -> dict[str, Any]:
     if registration_ids is not None:
         registration_ids = list(dict.fromkeys(int(registration_id) for registration_id in registration_ids))
 
+    now = datetime.now(UTC)
     tournament = await _load_tournament_for_autofill(session, tournament_id)
     grid = DivisionGrid.from_version(tournament.division_grid_version if tournament else None)
 
@@ -1621,10 +1712,13 @@ async def autofill_registration_ranks_from_parsed(
     ow_signals_by_tag_id = await _load_ow_rank_signals_by_battle_tag_id(
         session,
         [battle_tag.id for battle_tag in battle_tags_by_key.values()],
+        now,
     )
 
-    # Division history is always part of the blend, keyed by user_id then registration role.
+    # Balancer history (division_history) and tournament-participation history (analytics) are
+    # both candidates in the priority chain, keyed by user_id then registration role code.
     balancer_history_by_user_id: dict[int, dict[str, int]] = {}
+    analytics_history_by_user_id: dict[int, dict[str, int]] = {}
     if tournament is not None:
         user_ids = [
             battle_tag.user_id
@@ -1637,12 +1731,17 @@ async def autofill_registration_ranks_from_parsed(
             tournament_id,
             tournament.workspace_id,
         )
+        analytics_history_by_user_id = await _load_latest_ranks_from_tournament_history(
+            session,
+            user_ids,
+            tournament_id,
+            tournament.workspace_id,
+        )
 
     players: list[dict[str, Any]] = []
     applied_registrations = 0
     role_updates = 0
     balancer_additions = 0
-    now = datetime.now(UTC)
 
     for registration in registrations:
         tag_key = registration.battle_tag_normalized or normalize_battle_tag_key(registration.battle_tag)
@@ -1650,19 +1749,23 @@ async def autofill_registration_ranks_from_parsed(
         ow_signals_by_role = ow_signals_by_tag_id.get(main_battle_tag.id, {}) if main_battle_tag else {}
         user_id = getattr(main_battle_tag, "user_id", None) if main_battle_tag else None
         balancer_by_role = balancer_history_by_user_id.get(user_id or -1, {})
+        analytics_by_role = analytics_history_by_user_id.get(user_id or -1, {})
 
-        # Build one blended suggestion per rank-role, keyed the way the plan builder expects.
-        # Division history is stored under registration-role codes (tank/dps/support); OW
-        # snapshots use rank-role codes (tank/damage/support) — bridge via the mapping.
+        # Build one suggestion per rank-role via the selected priority chain, keyed the way the
+        # plan builder expects. Balancer/analytics history are stored under registration-role codes
+        # (tank/dps/support); OW snapshots use rank-role codes (tank/damage/support) — bridge via
+        # the mapping.
         rank_data_by_role: dict[str, _RankData | Any] = {}
         for registration_role, rank_role in RANK_ROLE_BY_REGISTRATION_ROLE.items():
-            blended = _build_blended_rank_data(
+            resolved = _build_priority_rank_data(
+                mode,
                 ow_signals_by_role.get(rank_role),
                 balancer_by_role.get(registration_role),
+                analytics_by_role.get(registration_role),
                 grid,
             )
-            if blended is not None:
-                rank_data_by_role[rank_role] = blended
+            if resolved is not None:
+                rank_data_by_role[rank_role] = resolved
 
         row, updates = build_registration_rank_autofill_plan(
             registration,

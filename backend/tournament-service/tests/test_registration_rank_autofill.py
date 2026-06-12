@@ -192,11 +192,11 @@ def test_autofill_does_not_add_unapproved_player_to_balancer() -> None:
     assert reason == "Registration must be approved before it can be added to balancer."
 
 
-# ── Blended suggestion (division history + OW peak/current) ──────────────────────────────────
+# ── Priority-chain suggestion (OW weekly composite / balancer / analytics) ───────────────────
 
 
 class _FakeGrid:
-    """Identity grid for SR in [1000, 4900]; everything else is unmapped (None)."""
+    """Identity grid for ranks in [1000, 4900]; everything else is unmapped (None)."""
 
     def resolve_division_from_ow_rank(self, ow_rank: int | None):
         if ow_rank is None or ow_rank < 1000 or ow_rank > 4900:
@@ -204,130 +204,158 @@ class _FakeGrid:
         return SimpleNamespace(rank_min=ow_rank)
 
 
-def _signals(*, peak: int | None, current: int | None, season: int | None = 15) -> SimpleNamespace:
-    peak_snapshot = _snapshot(peak) if peak is not None else None
-    current_snapshot = _snapshot(current) if current is not None else None
-    if peak_snapshot is not None:
-        peak_snapshot.season = season
-    if current_snapshot is not None:
-        current_snapshot.season = season
-    return reg_admin._OwRankSignals(
-        current_snapshot=current_snapshot,
-        peak_snapshot=peak_snapshot,
-        current_season=season,
-    )
+def _ow_signals(composite: int | None, *, latest_rank: int | None = None) -> SimpleNamespace:
+    """OW signal whose weekly composite is already resolved to ``composite`` (pre-grid rank_value)."""
+    latest_value = latest_rank if latest_rank is not None else composite
+    latest = _snapshot(latest_value) if latest_value is not None else None
+    return reg_admin._OwRankSignals(composite_rank_value=composite, latest_snapshot=latest)
 
 
-def test_blend_division_history_only() -> None:
-    data = reg_admin._build_blended_rank_data(None, 3400, _FakeGrid())
+def test_priority_ow_first_prefers_ow() -> None:
+    # User-confirmed example: OW=3000, balancer=3200, analytics=2800 -> ow_first picks OW.
+    data = reg_admin._build_priority_rank_data("ow_first", _ow_signals(3000), 3200, 2800, _FakeGrid())
 
     assert data is not None
-    assert data.rank_value == 3400
+    assert data.rank_value == 3000
+    assert data.used_source == "ow"
+    assert data.source == "analytics"
+    assert data.ow_rank_value == 3000
+    assert data.division_history_rank_value == 3200
+    assert data.analytics_rank_value == 2800
+
+
+def test_priority_balancer_first_prefers_balancer() -> None:
+    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), 3200, 2800, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 3200
     assert data.used_source == "division_history"
     assert data.source == "balancer"
-    assert data.division_history_rank_value == 3400
-    assert data.ow_peak_rank_value is None
-    assert data.ow_current_rank_value is None
 
 
-def test_blend_ow_only_uses_peak() -> None:
-    data = reg_admin._build_blended_rank_data(
-        _signals(peak=3450, current=3200), None, _FakeGrid()
-    )
+def test_priority_ow_first_falls_back_to_balancer() -> None:
+    data = reg_admin._build_priority_rank_data("ow_first", None, 3200, 2800, _FakeGrid())
 
     assert data is not None
-    assert data.rank_value == 3450
-    assert data.used_source == "ow_peak"
-    assert data.source == "analytics"
-    assert data.ow_peak_rank_value == 3450
-    assert data.ow_current_rank_value == 3200  # reported but not chosen
-
-
-def test_blend_peak_beats_lower_division_history() -> None:
-    data = reg_admin._build_blended_rank_data(
-        _signals(peak=3450, current=3200), 3400, _FakeGrid()
-    )
-
-    assert data is not None
-    assert data.rank_value == 3450
-    assert data.used_source == "ow_peak"
-
-
-def test_blend_division_history_beats_lower_peak() -> None:
-    data = reg_admin._build_blended_rank_data(
-        _signals(peak=3450, current=3200), 3500, _FakeGrid()
-    )
-
-    assert data is not None
-    assert data.rank_value == 3500
+    assert data.rank_value == 3200
     assert data.used_source == "division_history"
 
 
-def test_blend_tie_prefers_division_history() -> None:
-    data = reg_admin._build_blended_rank_data(
-        _signals(peak=3400, current=3400), 3400, _FakeGrid()
-    )
+def test_priority_ow_first_falls_back_to_analytics() -> None:
+    data = reg_admin._build_priority_rank_data("ow_first", None, None, 2800, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 2800
+    assert data.used_source == "analytics"
+
+
+def test_priority_balancer_first_prefers_analytics_over_ow() -> None:
+    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), None, 2800, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 2800
+    assert data.used_source == "analytics"
+
+
+def test_priority_balancer_first_falls_back_to_ow_last() -> None:
+    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), None, None, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 3000
+    assert data.used_source == "ow"
+
+
+def test_priority_unmapped_ow_is_skipped() -> None:
+    data = reg_admin._build_priority_rank_data("ow_first", _ow_signals(5000), 3400, None, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3400
     assert data.used_source == "division_history"
+    assert data.ow_rank_value is None
 
 
-def test_blend_unmapped_ow_falls_back_to_division_history() -> None:
-    data = reg_admin._build_blended_rank_data(
-        _signals(peak=5000, current=5000), 3400, _FakeGrid()
-    )
-
-    assert data is not None
-    assert data.rank_value == 3400
-    assert data.used_source == "division_history"
-    assert data.ow_peak_rank_value is None
-
-
-def test_blend_returns_none_when_no_signal() -> None:
-    assert reg_admin._build_blended_rank_data(None, None, _FakeGrid()) is None
-    # OW present but unmapped, no division history → still nothing usable.
+def test_priority_returns_none_when_all_sources_empty() -> None:
+    assert reg_admin._build_priority_rank_data("ow_first", None, None, None, _FakeGrid()) is None
+    # OW present but unmapped, no balancer/analytics → still nothing usable.
     assert (
-        reg_admin._build_blended_rank_data(_signals(peak=5000, current=5000), None, _FakeGrid())
+        reg_admin._build_priority_rank_data("balancer_first", _ow_signals(5000), None, None, _FakeGrid())
         is None
     )
 
 
-# ── OW signal grouping (current + current-season peak) ───────────────────────────────────────
+# ── OW weekly composite: round((max + mean) / 2) over a 7-day window ─────────────────────────
+
+_NOW = datetime(2026, 6, 12, tzinfo=UTC)
 
 
-def _tagged(rank_value: int, *, season: int, role: str = "damage", tag_id: int = 7) -> SimpleNamespace:
-    snapshot = _snapshot(rank_value, role=role)
-    snapshot.season = season
-    snapshot.battle_tag_id = tag_id
-    return snapshot
+def _snap(
+    rank_value: int | None,
+    captured_at: datetime,
+    *,
+    role: str = "damage",
+    tag_id: int = 7,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        rank_value=rank_value,
+        role=role,
+        battle_tag_id=tag_id,
+        platform="pc",
+        division="master",
+        tier=3,
+        season=15,
+        captured_at=captured_at,
+    )
 
 
-def test_group_peak_is_current_season_only() -> None:
-    # Newest-first: current is season 15 @ 3200; a higher 3900 sits in the older season 14.
-    snapshots = [
-        _tagged(3200, season=15),
-        _tagged(3100, season=15),
-        _tagged(3900, season=14),  # higher, but old season → ignored for peak
+def test_week_composite_is_max_plus_mean_over_two() -> None:
+    snaps = [
+        _snap(3400, datetime(2026, 6, 11, tzinfo=UTC)),
+        _snap(3200, datetime(2026, 6, 9, tzinfo=UTC)),
+        _snap(3000, datetime(2026, 6, 7, tzinfo=UTC)),
     ]
+    # max=3400, mean=3200 -> (3400 + 3200) / 2 = 3300
+    assert reg_admin._compute_ow_week_rank_value(snaps, _NOW) == 3300
 
-    grouped = reg_admin._group_ow_rank_signals(snapshots)
+
+def test_week_recent_window_takes_precedence_over_old_peak() -> None:
+    snaps = [
+        _snap(3000, datetime(2026, 6, 10, tzinfo=UTC)),
+        _snap(3400, datetime(2026, 6, 8, tzinfo=UTC)),
+        _snap(4000, datetime(2026, 5, 1, tzinfo=UTC)),  # older than a week -> ignored
+    ]
+    # window [now-7d]: [3000, 3400] -> max 3400, mean 3200 -> 3300
+    assert reg_admin._compute_ow_week_rank_value(snaps, _NOW) == 3300
+
+
+def test_week_falls_back_to_window_around_latest_when_recent_empty() -> None:
+    snaps = [
+        _snap(3000, datetime(2026, 6, 1, tzinfo=UTC)),  # latest, but >7d before now
+        _snap(3200, datetime(2026, 5, 30, tzinfo=UTC)),
+        _snap(3100, datetime(2026, 5, 28, tzinfo=UTC)),
+    ]
+    # No snapshot within 7d of now -> window of 7d around the latest (2026-06-01): all three.
+    # max=3200, mean=3100 -> (3200 + 3100) / 2 = 3150
+    assert reg_admin._compute_ow_week_rank_value(snaps, _NOW) == 3150
+
+
+def test_week_single_snapshot_returns_its_value() -> None:
+    snaps = [_snap(3333, datetime(2026, 1, 1, tzinfo=UTC))]
+    assert reg_admin._compute_ow_week_rank_value(snaps, _NOW) == 3333
+
+
+def test_week_no_snapshots_returns_none() -> None:
+    assert reg_admin._compute_ow_week_rank_value([], _NOW) is None
+    assert reg_admin._compute_ow_week_rank_value([_snap(None, _NOW)], _NOW) is None
+
+
+def test_group_ow_signals_computes_composite_and_latest() -> None:
+    snaps = [
+        _snap(3400, datetime(2026, 6, 11, tzinfo=UTC)),
+        _snap(3200, datetime(2026, 6, 9, tzinfo=UTC)),
+    ]
+    grouped = reg_admin._group_ow_rank_signals(snaps, _NOW)
     signals = grouped[7]["damage"]
 
-    assert signals.current_season == 15
-    assert signals.current_snapshot.rank_value == 3200
-    assert signals.peak_snapshot.rank_value == 3200  # 3100 lower, 3900 wrong season
-
-
-def test_group_peak_picks_highest_within_current_season() -> None:
-    snapshots = [
-        _tagged(3200, season=15),
-        _tagged(3600, season=15),  # in-season peak
-        _tagged(3400, season=15),
-    ]
-
-    grouped = reg_admin._group_ow_rank_signals(snapshots)
-    signals = grouped[7]["damage"]
-
-    assert signals.current_snapshot.rank_value == 3200
-    assert signals.peak_snapshot.rank_value == 3600
+    # max=3400, mean=3300 -> (3400 + 3300) / 2 = 3350
+    assert signals.composite_rank_value == 3350
+    assert signals.latest_snapshot.rank_value == 3400

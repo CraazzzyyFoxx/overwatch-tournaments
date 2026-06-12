@@ -339,6 +339,7 @@ async def preview_registration_rank_autofill(
         registration_ids=data.registration_ids,
         overwrite_existing=data.overwrite_existing,
         add_to_balancer=data.add_to_balancer,
+        mode=data.mode,
         apply=False,
     )
     return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
@@ -360,6 +361,7 @@ async def apply_registration_rank_autofill(
         registration_ids=data.registration_ids,
         overwrite_existing=data.overwrite_existing,
         add_to_balancer=data.add_to_balancer,
+        mode=data.mode,
         apply=True,
     )
     return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)

@@ -7,9 +7,9 @@ import type { JobAction } from "./useBalancerJob";
 import { sanitizeBalancerConfig } from "./balancer-config-helpers";
 import {
   buildBalancerInput,
+  buildRankHistoryFromAutofillPreview,
   buildVariantFromSavedBalance,
   convertBalanceResponseToInternalPayload,
-  fetchPlayerRankHistory,
   type BalanceVariant
 } from "./workspace-helpers";
 import { createVariantLabel } from "./balancer-page-helpers";
@@ -120,15 +120,27 @@ export function useBalancerMutations({
         exclude_reason: null
       });
     },
-    onSuccess: async (registration, application) => {
+    onSuccess: async (registration) => {
       setSelectedPlayerId(registration.id);
       await queryClient.invalidateQueries({
         queryKey: ["balancer-admin", "registrations", tournamentId]
       });
       toast({ title: "Registration included in balancer" });
-      fetchPlayerRankHistory(application.battle_tag)
-        .then((history) => setPendingRankHistory(history))
-        .catch(() => setPendingRankHistory(null));
+      // Autofill ranks for the just-included player using the balancer-first priority chain
+      // (previous balances → analytics → OW), reusing the backend's autofill logic.
+      if (tournamentId) {
+        balancerAdminService
+          .previewRegistrationRankAutofill(tournamentId, {
+            registration_ids: [registration.id],
+            mode: "balancer_first"
+          })
+          .then((preview) =>
+            setPendingRankHistory(buildRankHistoryFromAutofillPreview(preview, registration.id))
+          )
+          .catch(() => setPendingRankHistory(null));
+      } else {
+        setPendingRankHistory(null);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -472,8 +484,11 @@ export function useBalancerMutations({
                 });
                 return next;
               });
-              const latestId = newIds[newIds.length - 1];
-              if (latestId) setActiveVariantId(latestId);
+              // The solver returns variants best-first (lowest composite_score),
+              // so auto-select the first one — the highest-quality balance — rather
+              // than the last (worst) variant of the batch.
+              const bestId = newIds[0];
+              if (bestId) setActiveVariantId(bestId);
               dispatchJob({ type: "clear" });
               toast({ title: "Balance completed" });
             } catch (error) {

@@ -104,6 +104,7 @@ import type {
   AdminRegistrationRole,
   BalancerRoleCode,
   BalancerRoleSubtype,
+  RegistrationRankAutofillMode,
   RegistrationRankAutofillResponse,
   RegistrationRankAutofillRole
 } from "@/types/balancer-admin.types";
@@ -117,6 +118,7 @@ type SourceFilter = "all" | "manual" | "google_sheets";
 type RankAutofillPreviewOptions = {
   overwriteExisting: boolean;
   addToBalancer: boolean;
+  mode: RegistrationRankAutofillMode;
 };
 
 const RESPONSIVE_CLASS: Record<
@@ -260,15 +262,14 @@ function formatBlendBreakdown(role: RegistrationRankAutofillRole): string[] {
   const mark = (source: RegistrationRankAutofillRole["used_source"]) =>
     role.used_source === source ? " ← used" : "";
   const lines: string[] = [];
+  if (role.ow_rank_value != null) {
+    lines.push(`OW (week) ${role.ow_rank_value}${mark("ow")}`);
+  }
   if (role.division_history_rank_value != null) {
-    lines.push(`div-history ${role.division_history_rank_value}${mark("division_history")}`);
+    lines.push(`balancer ${role.division_history_rank_value}${mark("division_history")}`);
   }
-  if (role.ow_peak_rank_value != null) {
-    const season = role.ow_peak_season != null ? ` (S${role.ow_peak_season})` : "";
-    lines.push(`OW peak ${role.ow_peak_rank_value}${season}${mark("ow_peak")}`);
-  }
-  if (role.ow_current_rank_value != null) {
-    lines.push(`OW current ${role.ow_current_rank_value}${mark("ow_current")}`);
+  if (role.analytics_rank_value != null) {
+    lines.push(`analytics ${role.analytics_rank_value}${mark("analytics")}`);
   }
   return lines;
 }
@@ -347,6 +348,8 @@ function RankAutofillDialog({
   preview,
   loadingPreview,
   applying,
+  mode,
+  onModeChange,
   overwriteExisting,
   onOverwriteChange,
   addToBalancer,
@@ -360,6 +363,8 @@ function RankAutofillDialog({
   preview: RegistrationRankAutofillResponse | undefined;
   loadingPreview: boolean;
   applying: boolean;
+  mode: RegistrationRankAutofillMode;
+  onModeChange: (mode: RegistrationRankAutofillMode) => void;
   overwriteExisting: boolean;
   onOverwriteChange: (checked: boolean) => void;
   addToBalancer: boolean;
@@ -392,7 +397,7 @@ function RankAutofillDialog({
                 Autofill parsed ranks
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs text-white/40">
-                Blended: division history + OW peak/current (this season). Main BattleTag only.
+                Priority fallback per role. Main BattleTag only.
               </DialogDescription>
             </div>
             {/* Stats strip — visible once preview loads */}
@@ -418,6 +423,33 @@ function RankAutofillDialog({
         {/* ── Settings strip ── */}
         <div className="shrink-0 border-b border-white/10 bg-white/[0.02] px-5 py-2.5">
           <div className="flex flex-wrap items-center gap-3">
+            {/* Source priority mode */}
+            <div className="flex rounded-lg border border-white/10 p-0.5">
+              {(
+                [
+                  { value: "ow_first", label: "OW → balancer → analytics" },
+                  { value: "balancer_first", label: "Balancer → analytics → OW" }
+                ] as { value: RegistrationRankAutofillMode; label: string }[]
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onModeChange(value)}
+                  disabled={loadingPreview || applying}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
+                    mode === value
+                      ? "bg-indigo-500/20 text-indigo-200"
+                      : "text-white/50 hover:text-white/80"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-5 w-px bg-white/10" aria-hidden="true" />
+
             {/* Overwrite checkbox */}
             <label className="flex cursor-pointer items-center gap-2">
               <Checkbox
@@ -640,6 +672,7 @@ export default function BalancerRegistrationsPage() {
   const [editingRegistration, setEditingRegistration] = useState<AdminRegistration | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [rankAutofillOpen, setRankAutofillOpen] = useState(false);
+  const [autofillMode, setAutofillMode] = useState<RegistrationRankAutofillMode>("ow_first");
   const [overwriteExistingRanks, setOverwriteExistingRanks] = useState(false);
   const [addAutofilledPlayersToBalancer, setAddAutofilledPlayersToBalancer] = useState(false);
   const [rankAutofillConfirmed, setRankAutofillConfirmed] = useState(false);
@@ -926,13 +959,14 @@ export default function BalancerRegistrationsPage() {
   });
 
   const rankAutofillPreviewMutation = useMutation({
-    mutationFn: ({ overwriteExisting, addToBalancer }: RankAutofillPreviewOptions) => {
+    mutationFn: ({ overwriteExisting, addToBalancer, mode }: RankAutofillPreviewOptions) => {
       if (!tournamentId) {
         throw new Error("Select a tournament first");
       }
       return balancerAdminService.previewRegistrationRankAutofill(tournamentId, {
         overwrite_existing: overwriteExisting,
-        add_to_balancer: addToBalancer
+        add_to_balancer: addToBalancer,
+        mode
       });
     },
     onSuccess: () => {
@@ -955,7 +989,8 @@ export default function BalancerRegistrationsPage() {
       }
       return balancerAdminService.applyRegistrationRankAutofill(tournamentId, {
         overwrite_existing: overwriteExistingRanks,
-        add_to_balancer: addAutofilledPlayersToBalancer
+        add_to_balancer: addAutofilledPlayersToBalancer,
+        mode: autofillMode
       });
     },
     onSuccess: async (result) => {
@@ -986,7 +1021,21 @@ export default function BalancerRegistrationsPage() {
     setOverwriteExistingRanks(false);
     setAddAutofilledPlayersToBalancer(false);
     setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({ overwriteExisting: false, addToBalancer: false });
+    rankAutofillPreviewMutation.mutate({
+      overwriteExisting: false,
+      addToBalancer: false,
+      mode: autofillMode
+    });
+  };
+
+  const handleAutofillModeChange = (mode: RegistrationRankAutofillMode) => {
+    setAutofillMode(mode);
+    setRankAutofillConfirmed(false);
+    rankAutofillPreviewMutation.mutate({
+      overwriteExisting: overwriteExistingRanks,
+      addToBalancer: addAutofilledPlayersToBalancer,
+      mode
+    });
   };
 
   const handleRankOverwriteChange = (checked: boolean) => {
@@ -994,7 +1043,8 @@ export default function BalancerRegistrationsPage() {
     setRankAutofillConfirmed(false);
     rankAutofillPreviewMutation.mutate({
       overwriteExisting: checked,
-      addToBalancer: addAutofilledPlayersToBalancer
+      addToBalancer: addAutofilledPlayersToBalancer,
+      mode: autofillMode
     });
   };
 
@@ -1003,7 +1053,8 @@ export default function BalancerRegistrationsPage() {
     setRankAutofillConfirmed(false);
     rankAutofillPreviewMutation.mutate({
       overwriteExisting: overwriteExistingRanks,
-      addToBalancer: checked
+      addToBalancer: checked,
+      mode: autofillMode
     });
   };
 
@@ -1734,6 +1785,8 @@ export default function BalancerRegistrationsPage() {
         preview={rankAutofillPreviewMutation.data}
         loadingPreview={rankAutofillPreviewMutation.isPending}
         applying={rankAutofillApplyMutation.isPending}
+        mode={autofillMode}
+        onModeChange={handleAutofillModeChange}
         overwriteExisting={overwriteExistingRanks}
         onOverwriteChange={handleRankOverwriteChange}
         addToBalancer={addAutofilledPlayersToBalancer}

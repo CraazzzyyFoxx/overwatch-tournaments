@@ -178,13 +178,21 @@ export type RegistrationRankAutofillRoleAction =
 
 export type RegistrationRankAutofillUsedSource =
   | "division_history"
-  | "ow_peak"
-  | "ow_current";
+  | "ow"
+  | "analytics";
+
+/**
+ * Priority chains for rank autofill:
+ *  - ow_first: OW (weekly composite) -> balancer (division history) -> analytics (past tournaments)
+ *  - balancer_first: balancer -> analytics -> OW
+ */
+export type RegistrationRankAutofillMode = "ow_first" | "balancer_first";
 
 export interface RegistrationRankAutofillRequest {
   registration_ids?: number[] | null;
   overwrite_existing?: boolean;
   add_to_balancer?: boolean;
+  mode?: RegistrationRankAutofillMode;
 }
 
 export interface RegistrationRankAutofillRole {
@@ -200,9 +208,9 @@ export interface RegistrationRankAutofillRole {
   captured_at: string | null;
   source: "analytics" | "balancer";
   division_history_rank_value: number | null;
-  ow_peak_rank_value: number | null;
+  ow_rank_value: number | null;
   ow_current_rank_value: number | null;
-  ow_peak_season: number | null;
+  analytics_rank_value: number | null;
   used_source: RegistrationRankAutofillUsedSource | null;
 }
 

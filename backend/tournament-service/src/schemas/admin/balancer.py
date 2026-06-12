@@ -23,7 +23,11 @@ RankAutofillRoleAction = Literal[
     "blocked",
 ]
 RankAutofillSource = Literal["analytics", "balancer"]
-RankAutofillUsedSource = Literal["division_history", "ow_peak", "ow_current"]
+RankAutofillUsedSource = Literal["division_history", "ow", "analytics"]
+# Priority chains for rank autofill:
+#   ow_first       -> OW (week composite) -> balancer (division history) -> analytics (past tournaments)
+#   balancer_first -> balancer -> analytics -> OW
+RankAutofillMode = Literal["ow_first", "balancer_first"]
 
 __all__ = (
     "RegistrationUserExportResponse",
@@ -218,6 +222,7 @@ class BalancerRegistrationRankAutofillRequest(BaseModel):
     registration_ids: list[int] | None = None
     overwrite_existing: bool = False
     add_to_balancer: bool = False
+    mode: RankAutofillMode = "ow_first"
 
 
 class BalancerRegistrationRankAutofillRole(BaseModel):
@@ -233,9 +238,9 @@ class BalancerRegistrationRankAutofillRole(BaseModel):
     captured_at: datetime | None = None
     source: RankAutofillSource = "analytics"
     division_history_rank_value: int | None = None
-    ow_peak_rank_value: int | None = None
+    ow_rank_value: int | None = None
     ow_current_rank_value: int | None = None
-    ow_peak_season: int | None = None
+    analytics_rank_value: int | None = None
     used_source: RankAutofillUsedSource | None = None
 
 
