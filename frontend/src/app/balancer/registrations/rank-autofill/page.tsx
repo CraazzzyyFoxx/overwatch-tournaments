@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
 
 import {
   defaultRankAutofillStages,
@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ export default function RankAutofillPage() {
   const [allowPartial, setAllowPartial] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [chainOpen, setChainOpen] = useState(true);
+  const [search, setSearch] = useState("");
+  const [mismatchOnly, setMismatchOnly] = useState(false);
 
   const previewRequest = useMemo<RegistrationRankAutofillRequest>(
     () => ({
@@ -136,12 +139,20 @@ export default function RankAutofillPage() {
       return next;
     });
 
-  const handleToggleAll = (checked: boolean) => {
-    const updatable = (previewQuery.data?.players ?? [])
-      .filter((player) => player.status === "will_update" || player.status === "applied")
-      .map((player) => player.registration_id);
-    setSelectedIds(checked ? new Set(updatable) : new Set());
-  };
+  // Toggle the currently-visible (filtered) actionable players, preserving any selection outside
+  // the current filter.
+  const handleToggleAll = (checked: boolean, ids: number[]) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
 
   if (!tournamentId) {
     return (
@@ -295,25 +306,48 @@ export default function RankAutofillPage() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-y-auto">
-          {previewQuery.isError ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t("rankAutofill.previewErrorTitle")}</AlertTitle>
-              <AlertDescription>
-                {previewQuery.error instanceof Error
-                  ? previewQuery.error.message
-                  : t("rankAutofill.previewErrorGeneric")}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <RankAutofillPreviewTables
-              preview={previewQuery.data}
-              loading={previewQuery.isFetching}
-              selectedIds={selectedIds}
-              onToggle={handleTogglePlayer}
-              onToggleAll={handleToggleAll}
-            />
-          )}
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t("rankAutofill.searchPlaceholder")}
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <Checkbox
+                checked={mismatchOnly}
+                onCheckedChange={(checked) => setMismatchOnly(checked === true)}
+                aria-label={t("rankAutofill.mismatchOnlyAria")}
+              />
+              <span className="text-xs text-white/65 select-none">{t("rankAutofill.mismatchOnly")}</span>
+            </label>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {previewQuery.isError ? (
+              <Alert variant="destructive">
+                <AlertTitle>{t("rankAutofill.previewErrorTitle")}</AlertTitle>
+                <AlertDescription>
+                  {previewQuery.error instanceof Error
+                    ? previewQuery.error.message
+                    : t("rankAutofill.previewErrorGeneric")}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <RankAutofillPreviewTables
+                preview={previewQuery.data}
+                loading={previewQuery.isFetching}
+                search={search}
+                mismatchOnly={mismatchOnly}
+                selectedIds={selectedIds}
+                onToggle={handleTogglePlayer}
+                onToggleAll={handleToggleAll}
+              />
+            )}
+          </div>
         </CardContent>
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-6 py-3">
           <span className="text-xs text-white/45">
