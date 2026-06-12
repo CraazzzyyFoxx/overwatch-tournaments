@@ -20,6 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import type { BalancerConfig, BalancerConfigField } from "@/types/balancer.types";
 
@@ -270,6 +271,29 @@ function ConfigFieldControl({
     );
   }
 
+  if (field.type === "slider") {
+    const numeric =
+      typeof value === "number" ? value : Number(value ?? field.default ?? 0);
+    const min = field.limits?.min ?? 0;
+    const max = field.limits?.max ?? 1;
+    return (
+      <div className="flex flex-col gap-2">
+        <Slider
+          min={min}
+          max={max}
+          step={0.05}
+          value={[numeric]}
+          onValueChange={(next) => onChange(next[0])}
+        />
+        <div className="flex justify-between text-[11px] text-white/45">
+          <span>balance</span>
+          <span className="tabular-nums text-white/70">{numeric.toFixed(2)}</span>
+          <span>comfort</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <NumericConfigInput field={field} value={value} onChange={onChange} />
   );
@@ -332,7 +356,6 @@ export function BalancerConfigDrawer({
                                   Limit: {field.limits.min} - {field.limits.max}
                                 </span>
                               ) : null}
-                              <span>Applies: {field.applies_to.join(", ")}</span>
                             </div>
                           </div>
                           <div>

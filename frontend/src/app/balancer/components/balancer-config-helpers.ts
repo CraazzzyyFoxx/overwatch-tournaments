@@ -41,6 +41,7 @@ const NUMERIC_CONFIG_KEYS = new Set<string>([
   "stagnation_kick_patience",
   "crossover_rate",
   "max_result_variants",
+  "rank_comfort_tilt",
 ]);
 
 const SUPPORTED_CONFIG_KEY_SET = new Set<string>(SUPPORTED_BALANCER_CONFIG_KEYS);

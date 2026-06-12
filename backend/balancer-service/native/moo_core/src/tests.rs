@@ -44,6 +44,7 @@ fn regression_config() -> ConfigSpec {
         crossover_rate: 0.85,
         team_crossover_share: 0.5,
         time_limit_ms: None,
+        rank_comfort_tilt: 0.5,
     }
 }
 
@@ -617,6 +618,46 @@ fn per_team_terms_are_clone_equivariant() {
     ));
 }
 
+#[test]
+fn knee_scores_weights_shift_priority() {
+    // Невырожденный фронт: A — лучший баланс/худший комфорт, C — наоборот, B — колено.
+    let objectives = vec![
+        Objectives {
+            balance: 0.0,
+            comfort: 10.0,
+        },
+        Objectives {
+            balance: 5.0,
+            comfort: 5.0,
+        },
+        Objectives {
+            balance: 10.0,
+            comfort: 0.0,
+        },
+    ];
+
+    // Чистый вес баланса → лучший баланс (idx 0) ранжируется первым.
+    let balance_tilt = knee_scores(&objectives, 1.0, 0.0);
+    assert!(
+        balance_tilt[0] < balance_tilt[1] && balance_tilt[1] < balance_tilt[2],
+        "balance-weighted scores must rank best-balance first"
+    );
+
+    // Чистый вес комфорта → лучший комфорт (idx 2) первым.
+    let comfort_tilt = knee_scores(&objectives, 0.0, 1.0);
+    assert!(
+        comfort_tilt[2] < comfort_tilt[1] && comfort_tilt[1] < comfort_tilt[0],
+        "comfort-weighted scores must rank best-comfort first"
+    );
+
+    // Нейтральные веса (1,1) = прежняя формула sqrt(b²+c²) → колено (idx 1) первым.
+    let neutral = knee_scores(&objectives, 1.0, 1.0);
+    assert!(
+        neutral[1] < neutral[0] && neutral[1] < neutral[2],
+        "neutral weights keep the knee point first (legacy behaviour)"
+    );
+}
+
 /// Knee-ранжирование: на содержательном фронте порядок — по расстоянию
 /// до идеала; на вырожденном (две точки) — лексикографический фолбэк.
 #[test]
@@ -632,7 +673,7 @@ fn knee_order_ranks_by_distance_with_degenerate_fallback() {
         obj(0.6, 0.1),
     ];
     let signatures: Vec<u64> = (0..objectives.len() as u64).collect();
-    let scores = knee_scores(&objectives);
+    let scores = knee_scores(&objectives, 1.0, 1.0);
     let order = knee_order(&objectives, &signatures, &scores);
     assert_eq!(order[0], 1, "knee point must rank first");
 
@@ -640,7 +681,7 @@ fn knee_order_ranks_by_distance_with_degenerate_fallback() {
     // точек равна 1.0 — порядок должен решаться лексикографически.
     let two = vec![obj(10.0, 500.0), obj(20.0, 100.0)];
     let sigs = vec![7u64, 3u64];
-    let two_scores = knee_scores(&two);
+    let two_scores = knee_scores(&two, 1.0, 1.0);
     let two_order = knee_order(&two, &sigs, &two_scores);
     assert_eq!(
         two_order,

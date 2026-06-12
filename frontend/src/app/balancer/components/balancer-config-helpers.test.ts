@@ -86,4 +86,9 @@ describe("balancer config helpers", () => {
       mutation_rate_min: 0.25,
     });
   });
+
+  it("keeps rank_comfort_tilt in sanitized config", () => {
+    const result = sanitizeBalancerConfig({ rank_comfort_tilt: 0.8 } as unknown as Parameters<typeof sanitizeBalancerConfig>[0]);
+    expect(result.rank_comfort_tilt).toBe(0.8);
+  });
 });

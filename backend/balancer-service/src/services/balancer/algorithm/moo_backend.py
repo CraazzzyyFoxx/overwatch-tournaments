@@ -77,6 +77,7 @@ def _serialize_native_request(
             "stagnation_kick_patience": config.stagnation_kick_patience,
             "crossover_rate": config.crossover_rate,
             "time_limit_ms": config.time_limit_ms,
+            "rank_comfort_tilt": config.rank_comfort_tilt,
         },
     }
     return orjson.dumps(payload).decode("utf-8")

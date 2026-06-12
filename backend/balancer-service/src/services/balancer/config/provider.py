@@ -45,6 +45,7 @@ CONFIG_LIMITS: dict[str, dict[str, int | float]] = {
     "crossover_rate": {"min": 0.0, "max": 1.0},
     "time_limit_ms": {"min": 100, "max": 600000},
     "max_result_variants": {"min": 1, "max": 200},
+    "rank_comfort_tilt": {"min": 0.0, "max": 1.0},
 }
 
 EDITABLE_CONFIG_FIELD_KEYS = {
@@ -81,6 +82,7 @@ EDITABLE_CONFIG_FIELD_KEYS = {
     "crossover_rate",
     "time_limit_ms",
     "max_result_variants",
+    "rank_comfort_tilt",
 }
 
 SYSTEM_CONFIG_FIELD_KEYS = {
@@ -97,7 +99,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Required player count per team role. Default Overwatch format is 1 Tank, 2 Damage, 2 Support.",
         "type": "role_mask",
         "group": "Roles",
-        "applies_to": ["moo"],
     },
     {
         "key": "population_size",
@@ -105,7 +106,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Number of candidate balances kept per generation. Higher values improve search coverage and cost more time.",
         "type": "integer",
         "group": "Algorithm",
-        "applies_to": ["moo"],
     },
     {
         "key": "generation_count",
@@ -113,7 +113,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Maximum optimization iterations. Higher values can improve quality and increase runtime.",
         "type": "integer",
         "group": "Algorithm",
-        "applies_to": ["moo"],
     },
     {
         "key": "mutation_rate",
@@ -121,7 +120,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Probability that a solution is changed while producing the next generation.",
         "type": "float",
         "group": "Algorithm",
-        "applies_to": ["moo"],
     },
     {
         "key": "mutation_strength",
@@ -129,7 +127,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Number of swap/change operations attempted during a mutation.",
         "type": "integer",
         "group": "Algorithm",
-        "applies_to": ["moo"],
     },
     {
         "key": "average_mmr_balance_weight",
@@ -137,7 +134,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for differences between team average MMR values.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "team_total_balance_weight",
@@ -145,7 +141,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for standard deviation of total team rating sums.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "max_team_gap_weight",
@@ -153,7 +148,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for the rating gap between the strongest and weakest teams.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "role_discomfort_weight",
@@ -161,7 +155,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for assigning players away from their preferred roles.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "max_role_discomfort_weight",
@@ -169,7 +162,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for the single worst role discomfort assignment in a solution.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "role_line_balance_weight",
@@ -177,7 +169,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for uneven rating strength between the same role across teams.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "sub_role_collision_weight",
@@ -185,7 +176,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight per pair of players in the same team sharing the same role subclass.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "team_max_pain_weight",
@@ -193,7 +183,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for the per-team maximum role discomfort averaged over all teams.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "tank_impact_weight",
@@ -201,7 +190,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Importance multiplier for Tank role contribution when comparing effective team totals.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "dps_impact_weight",
@@ -209,7 +197,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Importance multiplier for Damage role contribution when comparing effective team totals.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "support_impact_weight",
@@ -217,7 +204,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Importance multiplier for Support role contribution when comparing effective team totals.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "tank_gap_weight",
@@ -225,7 +211,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "tank_std_weight",
@@ -233,7 +218,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty multiplier for Tank-line standard deviation across teams.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "effective_total_std_weight",
@@ -241,7 +225,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty multiplier for weighted effective team-total standard deviation.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "intra_team_std_weight",
@@ -249,7 +232,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Weight for rating spread inside each team.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "internal_role_spread_weight",
@@ -257,7 +239,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Penalty weight for uneven average strength between roles inside the same team.",
         "type": "float",
         "group": "Quality weights",
-        "applies_to": ["moo"],
     },
     {
         "key": "use_captains",
@@ -265,7 +246,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Marks top-rated players as captains and uses them as team anchors when supported by the solver.",
         "type": "boolean",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "convergence_patience",
@@ -273,7 +253,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Generations without meaningful Pareto improvement before early stopping can trigger.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "convergence_epsilon",
@@ -281,7 +260,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Minimum relative improvement required to continue once convergence patience is reached.",
         "type": "float",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "mutation_rate_min",
@@ -289,7 +267,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Lower bound for the adaptive mutation rate during Rust MOO search.",
         "type": "float",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "mutation_rate_max",
@@ -297,7 +274,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Upper bound for the adaptive mutation rate during Rust MOO search.",
         "type": "float",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "island_count",
@@ -305,7 +281,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Number of independent Rust MOO islands explored in parallel before merging the archive.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "polish_max_passes",
@@ -313,7 +288,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Maximum local-improvement passes applied to each archive solution after the main search.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "greedy_seed_count",
@@ -321,7 +295,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "How many initial individuals are built with greedy seeding before random fill.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "stagnation_kick_patience",
@@ -329,7 +302,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Generations without archive improvement before stronger mutation and crossover are applied.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "crossover_rate",
@@ -337,7 +309,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Probability of crossover when producing offspring in the Rust MOO search.",
         "type": "float",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "time_limit_ms",
@@ -345,7 +316,6 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Hard wall-clock budget for the optimizer. When exceeded, the best result found so far is returned. Trades same-seed reproducibility for latency.",
         "type": "integer",
         "group": "Strategy",
-        "applies_to": ["moo"],
     },
     {
         "key": "max_result_variants",
@@ -353,7 +323,18 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Maximum number of solution variants returned by the selected solver.",
         "type": "integer",
         "group": "Solver output",
-        "applies_to": ["moo"],
+    },
+    {
+        "key": "rank_comfort_tilt",
+        "label": "Rank tilt (balance ↔ comfort)",
+        "description": (
+            "Shifts how result variants are ranked: 0.5 weighs team balance "
+            "(StdDev) and comfort (off-role) equally; toward 1 prioritises "
+            "comfort/off-role, toward 0 prioritises balance. Ordering only — "
+            "does not change the optimizer search."
+        ),
+        "type": "slider",
+        "group": "Quality weights",
     },
 ]
 

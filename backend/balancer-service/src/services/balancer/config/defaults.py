@@ -60,6 +60,17 @@ class AlgorithmConfig(BaseSettings):
             "unlike the single global maximum."
         ),
     )
+    rank_comfort_tilt: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Ranking tilt between balance and comfort when ordering result "
+            "variants. 0.5 = balanced (legacy); toward 1 favours comfort/off-role, "
+            "toward 0 favours team balance (StdDev). Affects only variant ordering "
+            "and primary selection, not the optimizer search."
+        ),
+    )
 
     # Rust MOO advanced objective shaping
     tank_impact_weight: float = Field(default=1.4, ge=0.0)

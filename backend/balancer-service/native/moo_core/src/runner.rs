@@ -277,7 +277,8 @@ pub(crate) fn run_optimizer(
     let objs: Vec<Objectives> = final_archive.iter().map(|entry| entry.obj).collect();
     let normed = normalize_objectives(&objs);
     let signatures: Vec<u64> = final_archive.iter().map(|entry| entry.sig).collect();
-    let scores = knee_scores(&objs);
+    let tilt = ctx.config.rank_comfort_tilt;
+    let scores = knee_scores(&objs, 1.0 - tilt, tilt);
     let score_order = knee_order(&objs, &signatures, &scores);
     // rank_pos[i] = позиция i в knee-порядке; используется для сортировки хвоста
     let mut rank_pos = vec![0usize; score_order.len()];

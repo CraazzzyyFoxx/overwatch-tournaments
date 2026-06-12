@@ -40,6 +40,9 @@ fn default_internal_role_spread_weight() -> f64 {
 fn default_team_max_pain_weight() -> f64 {
     1.0
 }
+fn default_rank_comfort_tilt() -> f64 {
+    0.5
+}
 fn default_convergence_patience() -> usize {
     0
 }
@@ -140,6 +143,11 @@ struct ConfigSpec {
     /// (same seed может дать другой результат при другой нагрузке CPU).
     #[serde(default)]
     time_limit_ms: Option<u64>,
+    /// Сдвиг ранга баланс↔комфорт при упорядочивании вариантов (0.5 = текущее
+    /// 50/50). Влияет ТОЛЬКО на финальный ранг/primary/отображаемый score, не на
+    /// objective-поиск. Старые сохранённые конфиги без поля → 0.5.
+    #[serde(default = "default_rank_comfort_tilt")]
+    rank_comfort_tilt: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

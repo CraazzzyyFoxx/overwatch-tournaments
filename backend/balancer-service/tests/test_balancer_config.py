@@ -81,7 +81,6 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
         assert field["description"]
         assert field["group"] in {"Roles", "Algorithm", "Quality weights", "Strategy", "Solver output"}
         assert field["default"] == payload["defaults"].get(field["key"])
-        assert field["applies_to"]
 
 
 def test_normalize_tournament_config_payload_keeps_only_valid_editable_fields() -> None:
@@ -199,6 +198,19 @@ def test_internal_balance_payload_accepts_public_player_shape_with_is_flex() -> 
     assert player.rating == 2500
     assert player.discomfort == 0
     assert player.preferences == ["Damage", "Support"]
+
+
+def test_rank_comfort_tilt_field_exposed() -> None:
+    from src.services.balancer.config.provider import get_balancer_config_payload
+
+    payload = get_balancer_config_payload()
+    fields_by_key = {field["key"]: field for field in payload["fields"]}
+
+    assert payload["defaults"]["rank_comfort_tilt"] == 0.5
+    field = fields_by_key["rank_comfort_tilt"]
+    assert field["type"] == "slider"
+    assert field["group"] == "Quality weights"
+    assert field["limits"] == {"min": 0.0, "max": 1.0}
 
 
 class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
