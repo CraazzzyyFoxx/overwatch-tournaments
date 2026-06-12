@@ -20,6 +20,8 @@ import type {
 import type { DivisionGrid } from "@/types/workspace.types";
 
 import { DroppableRoleSection } from "./BalanceEditorPlayerRows";
+import { isRoleDropAllowed, type BalanceActiveDrag } from "./balance-editor-helpers";
+import type { RemoteDrag } from "./useBalancerDragGhosts";
 
 type BalanceEditorTeamCardProps = {
   team: InternalBalancePayload["teams"][number];
@@ -27,6 +29,10 @@ type BalanceEditorTeamCardProps = {
   divisionGrid: DivisionGrid;
   selectedPlayerId?: number | null;
   collapsed: boolean;
+  activeDrag?: BalanceActiveDrag | null;
+  /** Other users' in-progress drags currently targeting this team. */
+  remoteDrags?: RemoteDrag[];
+  resolveActorName?: (userId: number) => string;
   onSelectPlayer?: (playerId: number | null) => void;
   onToggleTeam?: (teamId: number) => void;
 };
@@ -36,6 +42,9 @@ export function BalanceEditorTeamCard({
   teamIndex,
   divisionGrid,
   selectedPlayerId,
+  activeDrag = null,
+  remoteDrags = [],
+  resolveActorName,
   onSelectPlayer,
 }: BalanceEditorTeamCardProps) {
   const total = Math.round(calculateTeamTotalFromPayload(team));
@@ -74,6 +83,31 @@ export function BalanceEditorTeamCard({
           
         </div>
       </div>
+      {remoteDrags.length > 0 ? (
+        <div className="flex flex-col gap-1 border-b border-cyan-300/15 bg-cyan-500/5 px-4 py-2">
+          {remoteDrags.map((drag) => (
+            <div
+              key={drag.userId}
+              className="flex items-center gap-1.5 text-[11px] text-cyan-100/80"
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400/70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-300" />
+              </span>
+              <span className="font-medium text-cyan-50/90">
+                {resolveActorName?.(drag.userId) ?? `User #${drag.userId}`}
+              </span>
+              <span className="text-cyan-100/55">moving</span>
+              <span className="truncate font-medium text-cyan-50/90" title={drag.playerName}>
+                {drag.playerName || "player"}
+              </span>
+              {drag.overRoleKey ? (
+                <span className="text-cyan-100/55">&rarr; {drag.overRoleKey}</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <Table wrapperClassName="overflow-x-auto overflow-y-visible" className="min-w-90">
         <TableHeader>
           <TableRow className="border-white/6 hover:bg-transparent">
@@ -100,6 +134,7 @@ export function BalanceEditorTeamCard({
             players={team.roster[roleKey]}
             divisionGrid={divisionGrid}
             selectedPlayerId={selectedPlayerId}
+            dropDisabled={activeDrag != null && !isRoleDropAllowed(activeDrag, roleKey)}
             onSelectPlayer={onSelectPlayer}
           />
         ))}

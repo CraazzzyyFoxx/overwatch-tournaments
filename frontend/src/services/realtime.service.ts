@@ -97,6 +97,19 @@ class RealtimeClient {
     this.sendSubscribe(topic);
   }
 
+  /**
+   * Publish an ephemeral frame to a topic (e.g. a live-drag overlay). Fire and
+   * forget: silently dropped when the socket is not open, since these frames are
+   * transient and losing one is harmless. The server stamps the actor, enforces
+   * the topic ACL, and restricts which event types clients may publish.
+   */
+  publish(topic: string, eventType: string, data: Record<string, unknown>): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    this.send({ op: "publish", topic, event_type: eventType, data });
+  }
+
   private ensureSocket(): void {
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       return;

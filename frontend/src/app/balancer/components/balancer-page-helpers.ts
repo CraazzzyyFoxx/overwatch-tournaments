@@ -234,3 +234,76 @@ export function calculateOffRoleCountFromPayload(
     0
   );
 }
+
+/**
+ * Sample standard deviation. Mirrors the backend `_sample_stdev_from_sums`
+ * (Bessel-corrected, like Python's `statistics.stdev`); returns 0 for < 2 values.
+ */
+export function sampleStdDev(values: number[]): number {
+  const n = values.length;
+  if (n < 2) {
+    return 0;
+  }
+  const sum = values.reduce((acc, value) => acc + value, 0);
+  const sumOfSquares = values.reduce((acc, value) => acc + value * value, 0);
+  const variance = (sumOfSquares - (sum * sum) / n) / (n - 1);
+  return variance > 0 ? Math.sqrt(variance) : 0;
+}
+
+/** All per-player assigned ratings of a team, flattened across role buckets. */
+export function collectTeamRatings(team: InternalBalancePayload["teams"][number]): number[] {
+  return BALANCE_ROSTER_KEYS.flatMap((roleKey) =>
+    team.roster[roleKey].map((player) => player.assigned_rating)
+  );
+}
+
+/** Intra-team rating spread (mirrors backend `Team.intra_std`). */
+export function calculateTeamVarianceFromPayload(
+  team: InternalBalancePayload["teams"][number]
+): number {
+  return sampleStdDev(collectTeamRatings(team));
+}
+
+/** Total and max role-discomfort across a team (mirrors `Team.discomfort` / `max_pain`). */
+export function calculateTeamDiscomfortFromPayload(
+  team: InternalBalancePayload["teams"][number]
+): { total: number; max: number } {
+  let total = 0;
+  let max = 0;
+  for (const roleKey of BALANCE_ROSTER_KEYS) {
+    for (const player of team.roster[roleKey]) {
+      const discomfort = player.role_discomfort ?? 0;
+      total += discomfort;
+      if (discomfort > max) {
+        max = discomfort;
+      }
+    }
+  }
+  return { total, max };
+}
+
+/**
+ * Sub-role collisions within a team: for each (role, sub_role) pair occurring
+ * more than once, add C(n, 2). Mirrors `result_serializer.teams_to_json`.
+ */
+export function calculateSubRoleCollisionsFromPayload(
+  team: InternalBalancePayload["teams"][number]
+): number {
+  let collisions = 0;
+  for (const roleKey of BALANCE_ROSTER_KEYS) {
+    const counts = new Map<string, number>();
+    for (const player of team.roster[roleKey]) {
+      const subRole = player.sub_role;
+      if (!subRole) {
+        continue;
+      }
+      counts.set(subRole, (counts.get(subRole) ?? 0) + 1);
+    }
+    for (const occurrences of counts.values()) {
+      if (occurrences > 1) {
+        collisions += (occurrences * (occurrences - 1)) / 2;
+      }
+    }
+  }
+  return collisions;
+}

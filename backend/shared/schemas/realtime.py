@@ -10,6 +10,7 @@ __all__ = (
     "EventFrame",
     "PingOp",
     "PongFrame",
+    "PublishOp",
     "SubscribeOp",
     "SubscribedFrame",
     "TopicPattern",
@@ -68,7 +69,26 @@ class PingOp(BaseModel):
     op: Literal["ping"]
 
 
-ClientOp = Annotated[SubscribeOp | UnsubscribeOp | PingOp, Field(discriminator="op")]
+class PublishOp(BaseModel):
+    """Client-originated ephemeral broadcast to a subscribed topic.
+
+    Used for transient collaboration cues (e.g. live drag overlays) that are
+    fanned out to co-subscribers without being persisted. The realtime-service
+    enforces auth, topic subscription, an event-type allowlist, and server-side
+    stamping of the actor — clients cannot persist events or spoof identity.
+    """
+
+    op: Literal["publish"]
+    topic: str = Field(min_length=1, max_length=255)
+    event_type: str = Field(min_length=1, max_length=64)
+    # Bounded key count: legitimate ephemeral payloads (drag overlays) carry a
+    # handful of scalar fields. Caps fan-out amplification from a single client.
+    data: dict[str, Any] = Field(default_factory=dict, max_length=32)
+
+
+ClientOp = Annotated[
+    SubscribeOp | UnsubscribeOp | PingOp | PublishOp, Field(discriminator="op")
+]
 
 
 class SubscribedFrame(BaseModel):
