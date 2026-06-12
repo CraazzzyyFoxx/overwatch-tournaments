@@ -3,6 +3,7 @@
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
@@ -47,7 +48,29 @@ function formatBlendBreakdown(role: RegistrationRankAutofillRole): string[] {
   return lines;
 }
 
+/** A role whose current registration rank disagrees with the suggested rank (both present). */
+function roleHasMismatch(role: RegistrationRankAutofillRole): boolean {
+  return (
+    role.current_rank_value != null &&
+    role.parsed_rank_value != null &&
+    role.current_rank_value !== role.parsed_rank_value
+  );
+}
+
+function playerHasMismatch(player: RegistrationRankAutofillPlayer): boolean {
+  return player.roles.some(roleHasMismatch);
+}
+
+function hasUnverifiedRole(player: RegistrationRankAutofillPlayer): boolean {
+  return player.roles.some((role) => role.action === "unverified");
+}
+
+function playerLabel(player: RegistrationRankAutofillPlayer): string {
+  return player.battle_tag ?? player.display_name ?? `#${player.registration_id}`;
+}
+
 export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
+  const { t } = useTranslation();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(role);
@@ -56,16 +79,18 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
   const isUnverified = role.action === "unverified";
   const isBlocked = role.action === "blocked" || role.action === "missing_rank";
   const isMissing = role.action === "missing_rank";
+  // A kept rank that disagrees with the suggestion (overwrite off) — surfaced, not applied.
+  const isMismatch = !isUpdate && roleHasMismatch(role);
 
   const parsedDivision =
     role.parsed_rank_value != null ? resolveDivisionFromRank(grid, role.parsed_rank_value) : null;
   const currentDivision =
     role.current_rank_value != null ? resolveDivisionFromRank(grid, role.current_rank_value) : null;
 
-  const primaryRank = isUpdate
-    ? role.parsed_rank_value
-    : (role.current_rank_value ?? role.parsed_rank_value);
-  const primaryDivision = isUpdate ? parsedDivision : (currentDivision ?? parsedDivision);
+  const showsTransition = (isUpdate || isMismatch) && role.current_rank_value != null;
+  const primaryRank =
+    isUpdate || isMismatch ? role.parsed_rank_value : (role.current_rank_value ?? role.parsed_rank_value);
+  const primaryDivision = isUpdate || isMismatch ? parsedDivision : (currentDivision ?? parsedDivision);
 
   return (
     <div
@@ -73,11 +98,13 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
         "inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]",
         isUpdate
           ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-          : isUnverified
-            ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
-            : isBlocked
-              ? "border-orange-400/25 bg-orange-500/10 text-orange-100"
-              : "border-white/10 bg-white/5 text-white/60"
+          : isMismatch
+            ? "border-rose-400/25 bg-rose-500/10 text-rose-100"
+            : isUnverified
+              ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
+              : isBlocked
+                ? "border-orange-400/25 bg-orange-500/10 text-orange-100"
+                : "border-white/10 bg-white/5 text-white/60"
       )}
       title={[[role.reason, source].filter(Boolean).join(" / "), ...breakdown]
         .filter(Boolean)
@@ -89,10 +116,10 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
       <span className="sr-only">{roleLabel}</span>
 
       {isMissing ? (
-        <span className="opacity-60">missing</span>
+        <span className="opacity-60">{t("rankAutofill.pillMissing")}</span>
       ) : (
         <>
-          {isUpdate && role.current_rank_value != null && (
+          {showsTransition && (
             <>
               {currentDivision != null && (
                 <PlayerDivisionIcon division={currentDivision} width={16} height={16} />
@@ -105,40 +132,38 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
             <PlayerDivisionIcon division={primaryDivision} width={16} height={16} />
           )}
           <span className="tabular-nums">{primaryRank ?? "-"}</span>
-          {isUnverified && <span className="opacity-60">не подтверждён</span>}
+          {isUnverified && <span className="opacity-60">{t("rankAutofill.pillUnverified")}</span>}
         </>
       )}
     </div>
   );
 }
 
-function PlayerLabel({ player }: { player: RegistrationRankAutofillPlayer }) {
-  return player.battle_tag ?? player.display_name ?? `#${player.registration_id}`;
-}
-
-function hasUnverifiedRole(player: RegistrationRankAutofillPlayer): boolean {
-  return player.roles.some((role) => role.action === "unverified");
-}
-
 interface RankAutofillPreviewTablesProps {
   preview: RegistrationRankAutofillResponse | undefined;
   loading: boolean;
+  search: string;
+  mismatchOnly: boolean;
   selectedIds: Set<number>;
   onToggle: (registrationId: number, checked: boolean) => void;
-  onToggleAll: (checked: boolean) => void;
+  onToggleAll: (checked: boolean, ids: number[]) => void;
 }
 
 export function RankAutofillPreviewTables({
   preview,
   loading,
+  search,
+  mismatchOnly,
   selectedIds,
   onToggle,
   onToggleAll
 }: RankAutofillPreviewTablesProps) {
+  const { t } = useTranslation();
+
   if (!preview && !loading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-white/30">
-        Превью не загружено.
+        {t("rankAutofill.previewNotLoaded")}
       </div>
     );
   }
@@ -146,68 +171,85 @@ export function RankAutofillPreviewTables({
     return null;
   }
 
-  const updatablePlayers = preview.players.filter(
+  const query = search.trim().toLowerCase();
+  const matchesSearch = (player: RegistrationRankAutofillPlayer) =>
+    query === "" ||
+    (player.battle_tag ?? "").toLowerCase().includes(query) ||
+    (player.display_name ?? "").toLowerCase().includes(query) ||
+    String(player.registration_id).includes(query);
+
+  const visiblePlayers = preview.players.filter(
+    (player) => matchesSearch(player) && (!mismatchOnly || playerHasMismatch(player))
+  );
+
+  if (visiblePlayers.length === 0) {
+    return (
+      <div className="flex h-32 items-center justify-center text-sm text-white/30">
+        {t("rankAutofill.noMatches")}
+      </div>
+    );
+  }
+
+  const updatablePlayers = visiblePlayers.filter(
     (player) => player.status === "will_update" || player.status === "applied"
   );
-  const skippedPlayers = preview.players.filter((player) => player.status === "skipped");
-  const unchangedPlayers = preview.players.filter((player) => player.status === "unchanged");
+  const skippedPlayers = visiblePlayers.filter((player) => player.status === "skipped");
+  const unchangedPlayers = visiblePlayers.filter((player) => player.status === "unchanged");
 
   const selectableIds = updatablePlayers.map((player) => player.registration_id);
-  const allChecked =
-    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const allChecked = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 
   return (
     <div className="divide-y divide-white/[0.06]">
-      {/* Will be assigned — with per-player selection */}
+      {/* To assign — with per-player selection, 3-column grid on wide screens */}
       <div className="px-1 py-3">
         <div className="mb-2 flex items-center gap-2">
           <Checkbox
             checked={allChecked}
-            onCheckedChange={(checked) => onToggleAll(checked === true)}
+            onCheckedChange={(checked) => onToggleAll(checked === true, selectableIds)}
             disabled={selectableIds.length === 0 || loading}
-            aria-label="Выбрать всех"
+            aria-label={t("rankAutofill.selectAllAria")}
           />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-            К назначению
+            {t("rankAutofill.sections.assign")}
           </span>
           <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
             {selectedIds.size}/{updatablePlayers.length}
           </span>
         </div>
         {updatablePlayers.length === 0 ? (
-          <p className="text-xs text-white/30">Нет рангов к обновлению.</p>
+          <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-white/10">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
-                className="flex min-w-0 cursor-pointer items-center gap-3 border-b border-white/[0.06] px-3 py-2 last:border-b-0 hover:bg-white/[0.02]"
+                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] p-2.5 hover:bg-white/[0.04]"
               >
-                <Checkbox
-                  checked={selectedIds.has(player.registration_id)}
-                  onCheckedChange={(checked) => onToggle(player.registration_id, checked === true)}
-                  disabled={loading}
-                  aria-label={`Выбрать ${PlayerLabel({ player })}`}
-                />
-                <div className="min-w-0 w-48 shrink-0">
-                  <div className="truncate text-sm font-medium text-white/85">
-                    <PlayerLabel player={player} />
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-white/30">
-                    <span>#{player.registration_id}</span>
-                    {player.partial && (
-                      <span className="rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                        частично
-                      </span>
-                    )}
-                    {player.will_add_to_balancer && (
-                      <span className="rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
-                        → Balancer
-                      </span>
-                    )}
-                  </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <Checkbox
+                    className="shrink-0"
+                    checked={selectedIds.has(player.registration_id)}
+                    onCheckedChange={(checked) => onToggle(player.registration_id, checked === true)}
+                    disabled={loading}
+                    aria-label={t("rankAutofill.selectAria", { name: playerLabel(player) })}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
+                    {playerLabel(player)}
+                  </span>
+                  {player.partial && (
+                    <span className="shrink-0 rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
+                      {t("rankAutofill.badgePartial")}
+                    </span>
+                  )}
+                  {player.will_add_to_balancer && (
+                    <span className="shrink-0 rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
+                      → Balancer
+                    </span>
+                  )}
                 </div>
-                <div className="flex min-w-0 flex-wrap gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-6">
+                  <span className="text-[11px] text-white/30">#{player.registration_id}</span>
                   {player.roles
                     .filter((role) => role.action === "set" || role.action === "overwrite")
                     .map((role) => (
@@ -225,7 +267,7 @@ export function RankAutofillPreviewTables({
         <div className="px-1 py-3 lg:pr-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              Пропущены
+              {t("rankAutofill.sections.skipped")}
             </span>
             {skippedPlayers.length > 0 && (
               <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
@@ -234,7 +276,7 @@ export function RankAutofillPreviewTables({
             )}
           </div>
           {skippedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">Никто не пропущен.</p>
+            <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
           ) : (
             <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
               {skippedPlayers.map((player) => (
@@ -242,11 +284,9 @@ export function RankAutofillPreviewTables({
                   key={player.registration_id}
                   className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
                 >
-                  <div className="truncate text-xs font-medium text-white/75">
-                    <PlayerLabel player={player} />
-                  </div>
+                  <div className="truncate text-xs font-medium text-white/75">{playerLabel(player)}</div>
                   <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
-                    {player.reason ?? "Пропущен"}
+                    {player.reason ?? t("rankAutofill.skippedFallback")}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {player.roles.map((role) => (
@@ -262,7 +302,7 @@ export function RankAutofillPreviewTables({
         <div className="px-1 py-3 lg:border-l lg:border-white/[0.06] lg:pl-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              Уже заданы
+              {t("rankAutofill.sections.alreadySet")}
             </span>
             {unchangedPlayers.length > 0 && (
               <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
@@ -271,38 +311,46 @@ export function RankAutofillPreviewTables({
             )}
           </div>
           {unchangedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">Нет неизменённых регистраций.</p>
+            <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
           ) : (
             <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
-              {unchangedPlayers.map((player) => (
-                <div
-                  key={player.registration_id}
-                  className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-xs font-medium text-white/75">
-                      <PlayerLabel player={player} />
-                    </span>
-                    {hasUnverifiedRole(player) && (
-                      <span className="rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                        не подтверждён
+              {unchangedPlayers.map((player) => {
+                const auditRoles = player.roles.filter(
+                  (role) => role.action === "unverified" || roleHasMismatch(role)
+                );
+                return (
+                  <div
+                    key={player.registration_id}
+                    className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-xs font-medium text-white/75">
+                        {playerLabel(player)}
                       </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-[11px] leading-4 text-white/35">
-                    {player.reason ?? "Изменения не нужны."}
-                  </div>
-                  {hasUnverifiedRole(player) && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {player.roles
-                        .filter((role) => role.action === "unverified")
-                        .map((role) => (
+                      {hasUnverifiedRole(player) && (
+                        <span className="shrink-0 rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
+                          {t("rankAutofill.badgeUnverified")}
+                        </span>
+                      )}
+                      {playerHasMismatch(player) && (
+                        <span className="shrink-0 rounded border border-rose-400/20 bg-rose-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-rose-200">
+                          {t("rankAutofill.badgeMismatch")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-[11px] leading-4 text-white/35">
+                      {player.reason ?? t("rankAutofill.unchangedFallback")}
+                    </div>
+                    {auditRoles.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {auditRoles.map((role) => (
                           <RankAutofillRolePill key={role.role} role={role} />
                         ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

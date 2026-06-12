@@ -356,5 +356,86 @@ export const en = {
       oneSided: "1 - one-sided match",
       toTheEnd: "10 - to the end"
     }
+  },
+  rankAutofill: {
+    title: "Rank autofill",
+    subtitle: "Configure the source chain and pick exactly which players to update.",
+    backToRegistrations: "Back to registrations",
+    chainTitle: "Source chain",
+    chainDescription:
+      "Drag to set priority order, disable sources you don't need, and optionally limit recency (tournaments for history/analytics, days for OW).",
+    toggleChainAria: "Toggle source chain",
+    overwrite: "Overwrite existing",
+    overwriteAria: "Overwrite existing ranks",
+    addToBalancer: "Move eligible to balancer",
+    addToBalancerAria: "Move eligible players to balancer",
+    allowPartial: "Partial (fill found roles even if some are missing)",
+    allowPartialAria: "Apply partially",
+    previewUpdating: "Updating preview…",
+    previewTitle: "Preview",
+    previewDescription: "Priority fallback per role. Main BattleTag only.",
+    searchPlaceholder: "Search players…",
+    mismatchOnly: "Mismatches only",
+    mismatchOnlyAria: "Show only players whose current rank differs from the suggestion",
+    badgeMismatch: "mismatch",
+    noMatches: "No players match the filters.",
+    previewNotLoaded: "Preview not loaded.",
+    previewErrorTitle: "Failed to load preview",
+    previewErrorGeneric: "Request error",
+    selectedCount: "Selected players: {count}",
+    apply: "Apply to {count}",
+    noTournamentTitle: "Select a tournament",
+    noTournamentDescription: "Choose a tournament in the sidebar before configuring rank autofill.",
+    successTitle: "Ranks autofilled",
+    successDescription: "{applied} player(s), {roles} rank(s) updated. Skipped: {skipped}.",
+    successBalancerSuffix: " {count} → balancer.",
+    errorTitle: "Failed to autofill ranks",
+    stats: {
+      players: "Players",
+      update: "Update",
+      ranks: "Ranks",
+      toBalancer: "→ Balancer",
+      unverified: "Unverified",
+      skipped: "Skipped"
+    },
+    sections: {
+      assign: "To assign",
+      skipped: "Skipped",
+      alreadySet: "Already set"
+    },
+    selectAllAria: "Select all",
+    selectAria: "Select {name}",
+    dragAria: "Drag stage",
+    enableAria: "Enable {label}",
+    windowAria: "Window for {label}",
+    noRanksToUpdate: "No ranks to update.",
+    noneSkipped: "None skipped.",
+    noUnchanged: "No unchanged registrations.",
+    skippedFallback: "Skipped",
+    unchangedFallback: "No changes needed.",
+    badgePartial: "partial",
+    badgeUnverified: "unverified",
+    pillUnverified: "unverified",
+    pillMissing: "missing",
+    source: {
+      ow: {
+        label: "Overwatch rank",
+        description: "Weekly composite of OW snapshots for the main BattleTag."
+      },
+      division_history: {
+        label: "Balancer history",
+        description: "Latest rank from past balancer registrations."
+      },
+      analytics: {
+        label: "Analytics",
+        description: "Latest rank from participation in past tournaments."
+      }
+    },
+    window: {
+      daysSuffix: "days",
+      tournamentsSuffix: "tnmts",
+      daysPlaceholder: "7",
+      tournamentsPlaceholder: "all"
+    }
   }
 };

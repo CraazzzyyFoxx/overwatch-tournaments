@@ -6,42 +6,15 @@ import type {
 /** Lookback window unit for a stage: tournament-based sources vs the time-based OW source. */
 export type StageWindowKind = "tournaments" | "days";
 
-export interface RankAutofillStageMeta {
-  source: RankAutofillSourceKey;
-  label: string;
-  description: string;
-  windowKind: StageWindowKind;
-  /** Short unit suffix shown next to the window input. */
-  windowSuffix: string;
-  /** Placeholder shown when no window is set. */
-  windowPlaceholder: string;
-}
-
-export const STAGE_META: Record<RankAutofillSourceKey, RankAutofillStageMeta> = {
-  ow: {
-    source: "ow",
-    label: "Overwatch rank",
-    description: "Недельный композит снапшотов OW по главному BattleTag.",
-    windowKind: "days",
-    windowSuffix: "дн.",
-    windowPlaceholder: "7"
-  },
-  division_history: {
-    source: "division_history",
-    label: "История balancer",
-    description: "Последний ранг из прошлых balancer-регистраций.",
-    windowKind: "tournaments",
-    windowSuffix: "турн.",
-    windowPlaceholder: "все"
-  },
-  analytics: {
-    source: "analytics",
-    label: "Аналитика",
-    description: "Последний ранг из участия в прошлых турнирах.",
-    windowKind: "tournaments",
-    windowSuffix: "турн.",
-    windowPlaceholder: "все"
-  }
+/**
+ * Window unit per source (structural). Human-readable text — labels, descriptions, unit suffixes
+ * and placeholders — lives in i18n (`rankAutofill.source.*`, `rankAutofill.window.*`), looked up
+ * by the components, so this module stays presentation-free and unit-testable.
+ */
+export const STAGE_WINDOW_KIND: Record<RankAutofillSourceKey, StageWindowKind> = {
+  ow: "days",
+  division_history: "tournaments",
+  analytics: "tournaments"
 };
 
 /** Default chain: OW → история balancer → аналитика, все включены, без окон. */
@@ -101,7 +74,7 @@ export function setStageLookback(
     if (stage.source !== source) {
       return stage;
     }
-    return STAGE_META[source].windowKind === "days"
+    return STAGE_WINDOW_KIND[source] === "days"
       ? { ...stage, lookback_days: value }
       : { ...stage, lookback_tournaments: value };
   });
@@ -110,7 +83,7 @@ export function setStageLookback(
 /** Current lookback value for a stage, regardless of which field backs it. */
 export function stageWindowValue(stage: RegistrationRankAutofillStage): number | null {
   const value =
-    STAGE_META[stage.source].windowKind === "days" ? stage.lookback_days : stage.lookback_tournaments;
+    STAGE_WINDOW_KIND[stage.source] === "days" ? stage.lookback_days : stage.lookback_tournaments;
   return value ?? null;
 }
 
