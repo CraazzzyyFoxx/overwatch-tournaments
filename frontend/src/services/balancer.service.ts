@@ -24,9 +24,8 @@ const SUPPORTED_CONFIG_FIELD_TYPES = new Set([
   "select"
 ]);
 
-type RawBalancerConfigField = Omit<BalancerConfigField, "key" | "applies_to"> & {
+type RawBalancerConfigField = Omit<BalancerConfigField, "key"> & {
   key: string;
-  applies_to: string[];
 };
 
 type RawBalancerConfigResponse = Omit<BalancerConfigResponse, "defaults" | "presets" | "fields"> & {
@@ -84,14 +83,6 @@ function normalizeConfigField(
     return null;
   }
 
-  const appliesTo = field.applies_to.filter((algorithm) =>
-    SUPPORTED_BALANCER_ALGORITHM_SET.has(algorithm)
-  ) as BalancerConfigField["applies_to"];
-
-  if (appliesTo.length === 0) {
-    return null;
-  }
-
   const options =
     field.key === "algorithm"
       ? (field.options ?? []).filter((option) => SUPPORTED_BALANCER_ALGORITHM_SET.has(option))
@@ -100,7 +91,6 @@ function normalizeConfigField(
   return {
     ...field,
     key: field.key as BalancerConfigField["key"],
-    applies_to: appliesTo,
     options,
     default: defaults[field.key as keyof BalancerConfig] ?? field.default
   };

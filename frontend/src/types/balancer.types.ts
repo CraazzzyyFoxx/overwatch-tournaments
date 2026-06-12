@@ -153,7 +153,6 @@ export interface BalancerConfigField {
   default: unknown;
   limits?: { min: number; max: number } | null;
   options?: string[];
-  applies_to: BalancerAlgorithm[];
 }
 
 export interface BalanceJobResult {

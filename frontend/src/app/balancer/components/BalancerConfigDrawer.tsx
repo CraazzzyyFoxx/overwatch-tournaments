@@ -332,7 +332,6 @@ export function BalancerConfigDrawer({
                                   Limit: {field.limits.min} - {field.limits.max}
                                 </span>
                               ) : null}
-                              <span>Applies: {field.applies_to.join(", ")}</span>
                             </div>
                           </div>
                           <div>
