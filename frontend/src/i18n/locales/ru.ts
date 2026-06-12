@@ -358,5 +358,80 @@ export const ru = {
       oneSided: "1 - односторонний матч",
       toTheEnd: "10 - до последнего"
     }
+  },
+  rankAutofill: {
+    title: "Autofill рангов",
+    subtitle: "Настройте цепочку источников и точечно выберите игроков для обновления.",
+    backToRegistrations: "К регистрациям",
+    chainTitle: "Цепочка источников",
+    chainDescription:
+      "Перетащите для порядка приоритета, отключите ненужные источники и при необходимости ограничьте давность (турниры для истории/аналитики, дни для OW).",
+    overwrite: "Перезаписывать существующие",
+    overwriteAria: "Перезаписывать существующие ранги",
+    addToBalancer: "Перемещать в balancer",
+    addToBalancerAria: "Перемещать подходящих в balancer",
+    allowPartial: "Частично (заполнять найденные роли, даже если не все найдены)",
+    allowPartialAria: "Частичное применение",
+    previewUpdating: "Обновление превью…",
+    previewTitle: "Превью",
+    previewDescription: "Приоритетный fallback по ролям. Только главный BattleTag.",
+    previewNotLoaded: "Превью не загружено.",
+    previewErrorTitle: "Не удалось загрузить превью",
+    previewErrorGeneric: "Ошибка запроса",
+    selectedCount: "Выбрано игроков: {count}",
+    apply: "Применить к {count}",
+    noTournamentTitle: "Выберите турнир",
+    noTournamentDescription: "Выберите турнир в сайдбаре, прежде чем настраивать autofill рангов.",
+    successTitle: "Ранги проставлены",
+    successDescription: "{applied} игрок(ов), {roles} ранг(ов) обновлено. Пропущено: {skipped}.",
+    successBalancerSuffix: " {count} → balancer.",
+    errorTitle: "Не удалось проставить ранги",
+    stats: {
+      players: "Игроки",
+      update: "Обновить",
+      ranks: "Ранги",
+      toBalancer: "→ Balancer",
+      unverified: "Не подтв.",
+      skipped: "Пропуск"
+    },
+    sections: {
+      assign: "К назначению",
+      skipped: "Пропущены",
+      alreadySet: "Уже заданы"
+    },
+    selectAllAria: "Выбрать всех",
+    selectAria: "Выбрать {name}",
+    dragAria: "Перетащить этап",
+    enableAria: "Включить {label}",
+    windowAria: "Окно для {label}",
+    noRanksToUpdate: "Нет рангов к обновлению.",
+    noneSkipped: "Никто не пропущен.",
+    noUnchanged: "Нет неизменённых регистраций.",
+    skippedFallback: "Пропущен",
+    unchangedFallback: "Изменения не нужны.",
+    badgePartial: "частично",
+    badgeUnverified: "не подтверждён",
+    pillUnverified: "не подтверждён",
+    pillMissing: "нет",
+    source: {
+      ow: {
+        label: "Overwatch rank",
+        description: "Недельный композит снапшотов OW по главному BattleTag."
+      },
+      division_history: {
+        label: "История balancer",
+        description: "Последний ранг из прошлых balancer-регистраций."
+      },
+      analytics: {
+        label: "Аналитика",
+        description: "Последний ранг из участия в прошлых турнирах."
+      }
+    },
+    window: {
+      daysSuffix: "дн.",
+      tournamentsSuffix: "турн.",
+      daysPlaceholder: "7",
+      tournamentsPlaceholder: "все"
+    }
   }
 };

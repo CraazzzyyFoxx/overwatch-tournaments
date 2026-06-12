@@ -3,6 +3,7 @@
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
@@ -48,6 +49,7 @@ function formatBlendBreakdown(role: RegistrationRankAutofillRole): string[] {
 }
 
 export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
+  const { t } = useTranslation();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(role);
@@ -89,7 +91,7 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
       <span className="sr-only">{roleLabel}</span>
 
       {isMissing ? (
-        <span className="opacity-60">missing</span>
+        <span className="opacity-60">{t("rankAutofill.pillMissing")}</span>
       ) : (
         <>
           {isUpdate && role.current_rank_value != null && (
@@ -105,14 +107,14 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
             <PlayerDivisionIcon division={primaryDivision} width={16} height={16} />
           )}
           <span className="tabular-nums">{primaryRank ?? "-"}</span>
-          {isUnverified && <span className="opacity-60">не подтверждён</span>}
+          {isUnverified && <span className="opacity-60">{t("rankAutofill.pillUnverified")}</span>}
         </>
       )}
     </div>
   );
 }
 
-function PlayerLabel({ player }: { player: RegistrationRankAutofillPlayer }) {
+function playerLabel(player: RegistrationRankAutofillPlayer): string {
   return player.battle_tag ?? player.display_name ?? `#${player.registration_id}`;
 }
 
@@ -135,10 +137,12 @@ export function RankAutofillPreviewTables({
   onToggle,
   onToggleAll
 }: RankAutofillPreviewTablesProps) {
+  const { t } = useTranslation();
+
   if (!preview && !loading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-white/30">
-        Превью не загружено.
+        {t("rankAutofill.previewNotLoaded")}
       </div>
     );
   }
@@ -158,24 +162,24 @@ export function RankAutofillPreviewTables({
 
   return (
     <div className="divide-y divide-white/[0.06]">
-      {/* Will be assigned — with per-player selection */}
+      {/* To assign — with per-player selection */}
       <div className="px-1 py-3">
         <div className="mb-2 flex items-center gap-2">
           <Checkbox
             checked={allChecked}
             onCheckedChange={(checked) => onToggleAll(checked === true)}
             disabled={selectableIds.length === 0 || loading}
-            aria-label="Выбрать всех"
+            aria-label={t("rankAutofill.selectAllAria")}
           />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-            К назначению
+            {t("rankAutofill.sections.assign")}
           </span>
           <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
             {selectedIds.size}/{updatablePlayers.length}
           </span>
         </div>
         {updatablePlayers.length === 0 ? (
-          <p className="text-xs text-white/30">Нет рангов к обновлению.</p>
+          <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-white/10">
             {updatablePlayers.map((player) => (
@@ -187,17 +191,15 @@ export function RankAutofillPreviewTables({
                   checked={selectedIds.has(player.registration_id)}
                   onCheckedChange={(checked) => onToggle(player.registration_id, checked === true)}
                   disabled={loading}
-                  aria-label={`Выбрать ${PlayerLabel({ player })}`}
+                  aria-label={t("rankAutofill.selectAria", { name: playerLabel(player) })}
                 />
                 <div className="min-w-0 w-48 shrink-0">
-                  <div className="truncate text-sm font-medium text-white/85">
-                    <PlayerLabel player={player} />
-                  </div>
+                  <div className="truncate text-sm font-medium text-white/85">{playerLabel(player)}</div>
                   <div className="flex items-center gap-1.5 text-[11px] text-white/30">
                     <span>#{player.registration_id}</span>
                     {player.partial && (
                       <span className="rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                        частично
+                        {t("rankAutofill.badgePartial")}
                       </span>
                     )}
                     {player.will_add_to_balancer && (
@@ -225,7 +227,7 @@ export function RankAutofillPreviewTables({
         <div className="px-1 py-3 lg:pr-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              Пропущены
+              {t("rankAutofill.sections.skipped")}
             </span>
             {skippedPlayers.length > 0 && (
               <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
@@ -234,7 +236,7 @@ export function RankAutofillPreviewTables({
             )}
           </div>
           {skippedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">Никто не пропущен.</p>
+            <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
           ) : (
             <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
               {skippedPlayers.map((player) => (
@@ -242,11 +244,9 @@ export function RankAutofillPreviewTables({
                   key={player.registration_id}
                   className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
                 >
-                  <div className="truncate text-xs font-medium text-white/75">
-                    <PlayerLabel player={player} />
-                  </div>
+                  <div className="truncate text-xs font-medium text-white/75">{playerLabel(player)}</div>
                   <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
-                    {player.reason ?? "Пропущен"}
+                    {player.reason ?? t("rankAutofill.skippedFallback")}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {player.roles.map((role) => (
@@ -262,7 +262,7 @@ export function RankAutofillPreviewTables({
         <div className="px-1 py-3 lg:border-l lg:border-white/[0.06] lg:pl-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              Уже заданы
+              {t("rankAutofill.sections.alreadySet")}
             </span>
             {unchangedPlayers.length > 0 && (
               <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
@@ -271,7 +271,7 @@ export function RankAutofillPreviewTables({
             )}
           </div>
           {unchangedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">Нет неизменённых регистраций.</p>
+            <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
           ) : (
             <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
               {unchangedPlayers.map((player) => (
@@ -281,16 +281,16 @@ export function RankAutofillPreviewTables({
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-xs font-medium text-white/75">
-                      <PlayerLabel player={player} />
+                      {playerLabel(player)}
                     </span>
                     {hasUnverifiedRole(player) && (
                       <span className="rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                        не подтверждён
+                        {t("rankAutofill.badgeUnverified")}
                       </span>
                     )}
                   </div>
                   <div className="mt-0.5 text-[11px] leading-4 text-white/35">
-                    {player.reason ?? "Изменения не нужны."}
+                    {player.reason ?? t("rankAutofill.unchangedFallback")}
                   </div>
                   {hasUnverifiedRole(player) && (
                     <div className="mt-1.5 flex flex-wrap gap-1">

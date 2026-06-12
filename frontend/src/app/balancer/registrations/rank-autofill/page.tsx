@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import balancerAdminService from "@/services/balancer-admin.service";
@@ -38,6 +39,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 }
 
 export default function RankAutofillPage() {
+  const { t } = useTranslation();
   const tournamentId = useBalancerTournamentId();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -86,7 +88,7 @@ export default function RankAutofillPage() {
   const applyMutation = useMutation({
     mutationFn: () => {
       if (!tournamentId) {
-        throw new Error("Сначала выберите турнир");
+        throw new Error(t("rankAutofill.noTournamentTitle"));
       }
       return balancerAdminService.applyRegistrationRankAutofill(tournamentId, {
         ...previewRequest,
@@ -98,14 +100,19 @@ export default function RankAutofillPage() {
         queryKey: ["balancer-admin", "registrations", tournamentId]
       });
       await previewQuery.refetch();
-      notify.success("Ранги проставлены", {
+      notify.success(t("rankAutofill.successTitle"), {
         description:
-          `${result.applied_registrations} игрок(ов), ${result.role_updates} ранг(ов) обновлено. ` +
-          `Пропущено: ${result.skipped_registrations}.` +
-          (result.balancer_additions > 0 ? ` ${result.balancer_additions} → balancer.` : "")
+          t("rankAutofill.successDescription", {
+            applied: result.applied_registrations,
+            roles: result.role_updates,
+            skipped: result.skipped_registrations
+          }) +
+          (result.balancer_additions > 0
+            ? t("rankAutofill.successBalancerSuffix", { count: result.balancer_additions })
+            : "")
       });
     },
-    onError: (error: unknown) => notify.apiError(error, { title: "Не удалось проставить ранги" })
+    onError: (error: unknown) => notify.apiError(error, { title: t("rankAutofill.errorTitle") })
   });
 
   const handleToggleStage = (source: Parameters<typeof setStageEnabled>[1], enabled: boolean) =>
@@ -138,10 +145,8 @@ export default function RankAutofillPage() {
   if (!tournamentId) {
     return (
       <Alert>
-        <AlertTitle>Выберите турнир</AlertTitle>
-        <AlertDescription>
-          Выберите турнир в сайдбаре, прежде чем настраивать autofill рангов.
-        </AlertDescription>
+        <AlertTitle>{t("rankAutofill.noTournamentTitle")}</AlertTitle>
+        <AlertDescription>{t("rankAutofill.noTournamentDescription")}</AlertDescription>
       </Alert>
     );
   }
@@ -153,17 +158,25 @@ export default function RankAutofillPage() {
   const preview = previewQuery.data;
   const stats = preview
     ? [
-        { label: "Игроки", value: preview.total_registrations, color: "" },
-        { label: "Обновить", value: preview.updatable_registrations, color: "text-emerald-300" },
-        { label: "Ранги", value: preview.role_updates, color: "text-emerald-300" },
-        { label: "→ Balancer", value: preview.balancer_additions, color: "text-cyan-300" },
+        { label: t("rankAutofill.stats.players"), value: preview.total_registrations, color: "" },
         {
-          label: "Не подтв.",
+          label: t("rankAutofill.stats.update"),
+          value: preview.updatable_registrations,
+          color: "text-emerald-300"
+        },
+        { label: t("rankAutofill.stats.ranks"), value: preview.role_updates, color: "text-emerald-300" },
+        {
+          label: t("rankAutofill.stats.toBalancer"),
+          value: preview.balancer_additions,
+          color: "text-cyan-300"
+        },
+        {
+          label: t("rankAutofill.stats.unverified"),
           value: preview.unverified_registrations,
           color: preview.unverified_registrations > 0 ? "text-amber-300" : ""
         },
         {
-          label: "Пропуск",
+          label: t("rankAutofill.stats.skipped"),
           value: preview.skipped_registrations,
           color: preview.skipped_registrations > 0 ? "text-orange-300" : ""
         }
@@ -176,26 +189,21 @@ export default function RankAutofillPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Autofill рангов</h1>
-          <p className="text-sm text-muted-foreground">
-            Настройте цепочку источников и точечно выберите игроков для обновления.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("rankAutofill.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("rankAutofill.subtitle")}</p>
         </div>
         <Button variant="outline" asChild>
           <Link href={registrationsHref}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            К регистрациям
+            {t("rankAutofill.backToRegistrations")}
           </Link>
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Цепочка источников</CardTitle>
-          <CardDescription>
-            Перетащите для порядка приоритета, отключите ненужные источники и при необходимости
-            ограничьте давность (турниры для истории/аналитики, дни для OW).
-          </CardDescription>
+          <CardTitle className="text-base">{t("rankAutofill.chainTitle")}</CardTitle>
+          <CardDescription>{t("rankAutofill.chainDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <RankAutofillStageList
@@ -212,34 +220,32 @@ export default function RankAutofillPage() {
                 checked={overwriteExisting}
                 onCheckedChange={(checked) => setOverwriteExisting(checked === true)}
                 disabled={applyMutation.isPending}
-                aria-label="Перезаписывать существующие ранги"
+                aria-label={t("rankAutofill.overwriteAria")}
               />
-              <span className="text-xs text-white/65 select-none">Перезаписывать существующие</span>
+              <span className="text-xs text-white/65 select-none">{t("rankAutofill.overwrite")}</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
               <Checkbox
                 checked={addToBalancer}
                 onCheckedChange={(checked) => setAddToBalancer(checked === true)}
                 disabled={applyMutation.isPending}
-                aria-label="Перемещать подходящих в balancer"
+                aria-label={t("rankAutofill.addToBalancerAria")}
               />
-              <span className="text-xs text-white/65 select-none">Перемещать в balancer</span>
+              <span className="text-xs text-white/65 select-none">{t("rankAutofill.addToBalancer")}</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
               <Checkbox
                 checked={allowPartial}
                 onCheckedChange={(checked) => setAllowPartial(checked === true)}
                 disabled={applyMutation.isPending}
-                aria-label="Частичное применение"
+                aria-label={t("rankAutofill.allowPartialAria")}
               />
-              <span className="text-xs text-white/65 select-none">
-                Частично (заполнять найденные роли, даже если не все найдены)
-              </span>
+              <span className="text-xs text-white/65 select-none">{t("rankAutofill.allowPartial")}</span>
             </label>
             {previewQuery.isFetching && (
               <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Обновление превью…
+                {t("rankAutofill.previewUpdating")}
               </div>
             )}
           </div>
@@ -249,8 +255,8 @@ export default function RankAutofillPage() {
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Превью</CardTitle>
-            <CardDescription>Приоритетный fallback по ролям. Только главный BattleTag.</CardDescription>
+            <CardTitle className="text-base">{t("rankAutofill.previewTitle")}</CardTitle>
+            <CardDescription>{t("rankAutofill.previewDescription")}</CardDescription>
           </div>
           {preview && (
             <div className="flex shrink-0 items-center divide-x divide-white/10 rounded-lg border border-white/10 bg-white/[0.03]">
@@ -270,9 +276,11 @@ export default function RankAutofillPage() {
         <CardContent className="min-h-0 flex-1 overflow-y-auto">
           {previewQuery.isError ? (
             <Alert variant="destructive">
-              <AlertTitle>Не удалось загрузить превью</AlertTitle>
+              <AlertTitle>{t("rankAutofill.previewErrorTitle")}</AlertTitle>
               <AlertDescription>
-                {previewQuery.error instanceof Error ? previewQuery.error.message : "Ошибка запроса"}
+                {previewQuery.error instanceof Error
+                  ? previewQuery.error.message
+                  : t("rankAutofill.previewErrorGeneric")}
               </AlertDescription>
             </Alert>
           ) : (
@@ -286,14 +294,16 @@ export default function RankAutofillPage() {
           )}
         </CardContent>
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-6 py-3">
-          <span className="text-xs text-white/45">Выбрано игроков: {selectedIds.size}</span>
+          <span className="text-xs text-white/45">
+            {t("rankAutofill.selectedCount", { count: selectedIds.size })}
+          </span>
           <Button onClick={() => applyMutation.mutate()} disabled={applyDisabled}>
             {applyMutation.isPending ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             ) : (
               <Check className="mr-1.5 h-4 w-4" />
             )}
-            Применить к {selectedIds.size}
+            {t("rankAutofill.apply", { count: selectedIds.size })}
           </Button>
         </div>
       </Card>
