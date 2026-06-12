@@ -14,6 +14,7 @@ import { UserRoleType } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 import { DEFAULT_DIVISION_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import userService from "@/services/user.service";
+import balancerAdminService from "@/services/balancer-admin.service";
 import { DivisionGridNormalizer } from "@/lib/division-grid-normalizer";
 
 const ROLE_ORDER: BalancerRoleCode[] = ["tank", "dps", "support"];
@@ -573,15 +574,21 @@ const USER_ROLE_TO_BALANCER: Record<UserRoleType, BalancerRoleCode> = {
 };
 
 /**
- * Looks up a player's rank history from past tournaments via analytics
- * (getUserTournaments). Division numbers are normalized to the target grid
- * version when provided. Returns null if the user cannot be found or has no history.
+ * Looks up a player's rank history using a two-step search:
+ * 1. Balancer history — ranks from past balancer registrations (source "balancer"),
+ *    scoped to `workspaceId` when numeric, otherwise `currentWorkspaceId`.
+ * 2. Analytics fallback — past tournament ranks via getUserTournaments (source "analytics")
+ *    for roles not found in step 1.
+ *
+ * Division numbers are normalized to the target grid version when provided. Returns null if
+ * the user cannot be found or has no history.
  */
 export async function fetchPlayerRankHistoryPreview(
   battleTag: string,
   targetGridVersion: DivisionGridVersion | null = null,
   grid: DivisionGrid = DEFAULT_DIVISION_GRID,
-  workspaceId?: number | null
+  workspaceId?: number | null,
+  currentWorkspaceId?: number | null
 ): Promise<PlayerRankHistoryPreview | null> {
   try {
     const lookupName = battleTag.replace("#", "-");
@@ -590,7 +597,38 @@ export async function fetchPlayerRankHistoryPreview(
 
     const latestPerRole = new Map<BalancerRoleCode, PlayerRankHistoryPreviewEntry>();
 
-    // Analytics: rank history from past tournaments, ordered by tournament number DESC.
+    // Step 1: Balancer history — ranks from past balancer registrations (newest first).
+    // Scoped to a concrete workspace (the chosen one, else the current workspace).
+    const balancerWorkspaceId =
+      typeof workspaceId === "number" ? workspaceId : currentWorkspaceId ?? null;
+    if (balancerWorkspaceId != null) {
+      try {
+        const balancerHistory = await balancerAdminService.getUserBalancerRankHistory(
+          user.id,
+          balancerWorkspaceId
+        );
+        for (const entry of balancerHistory) {
+          if (latestPerRole.has(entry.role)) continue; // newest already kept
+          latestPerRole.set(entry.role, {
+            role: entry.role,
+            rank_value: entry.rank_value,
+            division_number: resolveDivisionFromRankHelper(entry.rank_value, grid),
+            original_division_number: null,
+            tournament_id: entry.tournament_id,
+            tournament_name: entry.tournament_name,
+            tournament_number: entry.tournament_number,
+            source_role: null,
+            tournament_grid_version: null,
+            source: "balancer"
+          });
+        }
+      } catch {
+        // Non-fatal: fall through to the analytics step.
+      }
+    }
+
+    // Step 2: Analytics fallback — past tournament ranks for roles not found in step 1,
+    // ordered by tournament number DESC.
     const missingRoles = ROLE_ORDER.filter((role) => !latestPerRole.has(role));
     if (missingRoles.length > 0) {
       const tournaments = await userService.getUserTournaments(user.id, workspaceId);

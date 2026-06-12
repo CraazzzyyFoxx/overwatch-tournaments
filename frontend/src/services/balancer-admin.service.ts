@@ -25,6 +25,7 @@ import {
   BalanceExportResponse,
   BalanceSaveInput,
   BalancerPlayerExportResponse,
+  BalancerRegistrationRankHistoryEntry,
   BalancerTournamentConfig,
   BalancerTournamentConfigUpsertInput,
   RegistrationRankAutofillRequest,
@@ -529,6 +530,21 @@ export default class balancerAdminService {
       }
     );
     return response.json();
+  }
+
+  static async getUserBalancerRankHistory(
+    userId: number,
+    workspaceId: number
+  ): Promise<BalancerRegistrationRankHistoryEntry[]> {
+    const response = await apiFetch(
+      "tournament",
+      `admin/balancer/users/${userId}/registration-rank-history`,
+      {
+        query: { workspace_id: workspaceId }
+      }
+    );
+    const data = await response.json();
+    return data.entries ?? [];
   }
 
   // -- Check-in management -------------------------------------------------

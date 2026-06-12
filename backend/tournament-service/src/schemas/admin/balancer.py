@@ -58,6 +58,8 @@ __all__ = (
     "BalancerRegistrationRankAutofillResponse",
     "BalancerRegistrationRankAutofillPlayer",
     "BalancerRegistrationRankAutofillRole",
+    "BalancerRegistrationRankHistoryEntry",
+    "BalancerRegistrationRankHistoryResponse",
     "BalancerRegistrationRoleInput",
     "BalancerRegistrationRoleRead",
     "BalancerRegistrationStatusCreate",
@@ -266,6 +268,18 @@ class BalancerRegistrationRankAutofillResponse(BaseModel):
     add_to_balancer: bool
     balancer_additions: int
     players: list[BalancerRegistrationRankAutofillPlayer] = Field(default_factory=list)
+
+
+class BalancerRegistrationRankHistoryEntry(BaseModel):
+    tournament_id: int
+    tournament_number: int | None = None
+    tournament_name: str | None = None
+    role: BalancerRole
+    rank_value: int
+
+
+class BalancerRegistrationRankHistoryResponse(BaseModel):
+    entries: list[BalancerRegistrationRankHistoryEntry] = Field(default_factory=list)
 
 
 class StatusMetaRead(BaseModel):

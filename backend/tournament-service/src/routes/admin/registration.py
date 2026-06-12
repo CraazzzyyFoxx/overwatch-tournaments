@@ -367,6 +367,24 @@ async def apply_registration_rank_autofill(
     return admin_schemas.BalancerRegistrationRankAutofillResponse(**result)
 
 
+@router.get(
+    "/users/{user_id}/registration-rank-history",
+    response_model=admin_schemas.BalancerRegistrationRankHistoryResponse,
+)
+async def get_user_registration_rank_history(
+    user_id: int,
+    workspace_id: int,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser = Depends(auth.require_workspace_permission("team", "read")),
+):
+    entries = await registration_service.load_user_balancer_rank_history(
+        session,
+        user_id=user_id,
+        workspace_id=workspace_id,
+    )
+    return admin_schemas.BalancerRegistrationRankHistoryResponse(entries=entries)
+
+
 @router.post(
     "/tournaments/{tournament_id}/registrations/export-users",
     response_model=admin_schemas.RegistrationUserExportResponse,

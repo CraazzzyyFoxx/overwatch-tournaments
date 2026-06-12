@@ -15,6 +15,11 @@ from fastapi import HTTPException, status
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.services.division_grid_normalization import (
+    DivisionGridNormalizationError,
+    DivisionGridNormalizer,
+    build_division_grid_normalizer,
+)
 from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, normalize_sub_role
 from shared.hero_catalog import HeroCatalog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -1398,16 +1403,67 @@ async def _load_tournament_for_autofill(
     return result.scalar_one_or_none()
 
 
+def _normalize_history_rank(
+    normalizer: DivisionGridNormalizer | None,
+    source_version_id: int | None,
+    rank: int | None,
+    target_grid: DivisionGrid,
+) -> int | None:
+    """Map a historical rank from its source tournament's grid version into the target grid.
+
+    Returns the target tier's ``rank_min``. When no normalizer/source version is available the
+    rank is returned unchanged; when a primary mapping is missing it falls back to matching the
+    division *number* (stable across grids), mirroring the frontend ``safeNormalize``.
+    """
+    if rank is None:
+        return None
+    if normalizer is None or source_version_id is None:
+        return rank
+    try:
+        return normalizer.normalize_division(source_version_id, rank).rank_min
+    except DivisionGridNormalizationError:
+        source_grid = normalizer.source_grids_by_version_id.get(source_version_id, target_grid)
+        number = source_grid.resolve_division_number(rank)
+        mapped = target_grid.resolve_rank_from_division(number)
+        return mapped if mapped is not None else rank
+
+
+async def _build_autofill_rank_normalizer(
+    session: AsyncSession,
+    tournament: models.Tournament | Any,
+) -> DivisionGridNormalizer | None:
+    """Build a normalizer targeting the tournament's grid version, or None if unavailable.
+
+    ``require_complete=False`` so a workspace with partially-mapped grids still builds; per-rank
+    misses are handled by ``_normalize_history_rank``'s division-number fallback.
+    """
+    target_version_id = getattr(tournament, "division_grid_version_id", None)
+    if target_version_id is None:
+        return None
+    try:
+        return await build_division_grid_normalizer(
+            session,
+            tournament.workspace_id,
+            target_version_id=target_version_id,
+            require_complete=False,
+        )
+    except DivisionGridNormalizationError:
+        return None
+
+
 async def _load_latest_ranks_from_balancer_history(
     session: AsyncSession,
     user_ids: list[int],
     current_tournament_id: int,
     workspace_id: int,
+    normalizer: DivisionGridNormalizer | None,
+    target_grid: DivisionGrid,
 ) -> dict[int, dict[str, int]]:
     """Return dict[user_id][role_code] → rank_value from past registration records.
 
     Searches the workspace's previous tournaments (excluding the current one), ordered
-    by tournament number descending so the most recent entry wins.
+    by tournament number descending so the most recent entry wins. Ranks are normalized from
+    each source tournament's grid version into the target grid.
     """
     if not user_ids:
         return {}
@@ -1418,6 +1474,7 @@ async def _load_latest_ranks_from_balancer_history(
                 models.BalancerRegistration.user_id,
                 models.BalancerRegistrationRole.role,
                 models.BalancerRegistrationRole.rank_value,
+                models.Tournament.division_grid_version_id,
             )
             .join(
                 models.BalancerRegistrationRole,
@@ -1448,7 +1505,11 @@ async def _load_latest_ranks_from_balancer_history(
     for row in rows:
         user_map = latest.setdefault(row.user_id, {})
         if row.role not in user_map:
-            user_map[row.role] = row.rank_value
+            normalized = _normalize_history_rank(
+                normalizer, row.division_grid_version_id, row.rank_value, target_grid
+            )
+            if normalized is not None:
+                user_map[row.role] = normalized
     return latest
 
 
@@ -1457,13 +1518,16 @@ async def _load_latest_ranks_from_tournament_history(
     user_ids: list[int],
     current_tournament_id: int,
     workspace_id: int,
+    normalizer: DivisionGridNormalizer | None,
+    target_grid: DivisionGrid,
 ) -> dict[int, dict[str, int]]:
     """Return dict[user_id][registration_role_code] → rank from past tournament participation.
 
     This is the "analytics" source: actual ranks played in the workspace's previous tournaments
     (``tournament.player``), distinct from the balancer-registration history. Excludes the current
     tournament and substitution rows; the most recent tournament wins per role. ``Player.role`` is
-    a HeroClass and is bridged to the registration role code (Damage → dps) to match keying.
+    a HeroClass and is bridged to the registration role code (Damage → dps) to match keying. Ranks
+    are normalized from each source tournament's grid version into the target grid.
     """
     if not user_ids:
         return {}
@@ -1474,6 +1538,7 @@ async def _load_latest_ranks_from_tournament_history(
                 models.Player.user_id,
                 models.Player.role,
                 models.Player.rank,
+                models.Tournament.division_grid_version_id,
             )
             .join(
                 models.Tournament,
@@ -1503,8 +1568,66 @@ async def _load_latest_ranks_from_tournament_history(
             continue
         user_map = latest.setdefault(row.user_id, {})
         if role_code not in user_map:
-            user_map[role_code] = row.rank
+            normalized = _normalize_history_rank(
+                normalizer, row.division_grid_version_id, row.rank, target_grid
+            )
+            if normalized is not None:
+                user_map[role_code] = normalized
     return latest
+
+
+async def load_user_balancer_rank_history(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    workspace_id: int,
+) -> list[dict[str, Any]]:
+    """Per (tournament, role) ranks from a user's past balancer registrations in a workspace.
+
+    Newest tournament first; only active, ranked roles. Powers the balancer step of the
+    PlayerEditSheet "Load from history" preview (source = "balancer").
+    """
+    rows = (
+        await session.execute(
+            sa.select(
+                models.Tournament.id.label("tournament_id"),
+                models.Tournament.number.label("tournament_number"),
+                models.Tournament.name.label("tournament_name"),
+                models.BalancerRegistrationRole.role,
+                models.BalancerRegistrationRole.rank_value,
+            )
+            .join(
+                models.BalancerRegistration,
+                models.BalancerRegistration.id == models.BalancerRegistrationRole.registration_id,
+            )
+            .join(
+                models.Tournament,
+                models.Tournament.id == models.BalancerRegistration.tournament_id,
+            )
+            .where(
+                models.BalancerRegistration.user_id == user_id,
+                models.Tournament.workspace_id == workspace_id,
+                models.BalancerRegistration.deleted_at.is_(None),
+                models.BalancerRegistrationRole.is_active.is_(True),
+                models.BalancerRegistrationRole.rank_value.is_not(None),
+            )
+            .order_by(
+                models.Tournament.number.desc().nullslast(),
+                models.BalancerRegistration.tournament_id.desc(),
+            )
+        )
+    ).all()
+
+    return [
+        {
+            "tournament_id": row.tournament_id,
+            "tournament_number": row.tournament_number,
+            "tournament_name": row.tournament_name,
+            "role": row.role,
+            "rank_value": row.rank_value,
+        }
+        for row in rows
+    ]
 
 
 async def _load_rank_autofill_registrations(
@@ -1725,17 +1848,25 @@ async def autofill_registration_ranks_from_parsed(
             for battle_tag in battle_tags_by_key.values()
             if battle_tag.user_id is not None
         ]
+        # Normalize historical ranks from each source tournament's grid version into this
+        # tournament's grid. Best-effort: skip when the target version is unknown or the
+        # normalizer cannot be built (loaders then fall back to raw ranks).
+        normalizer = await _build_autofill_rank_normalizer(session, tournament)
         balancer_history_by_user_id = await _load_latest_ranks_from_balancer_history(
             session,
             user_ids,
             tournament_id,
             tournament.workspace_id,
+            normalizer,
+            grid,
         )
         analytics_history_by_user_id = await _load_latest_ranks_from_tournament_history(
             session,
             user_ids,
             tournament_id,
             tournament.workspace_id,
+            normalizer,
+            grid,
         )
 
     players: list[dict[str, Any]] = []

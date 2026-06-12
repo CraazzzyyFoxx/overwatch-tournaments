@@ -25,6 +25,9 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 
 reg_admin = importlib.import_module("src.services.registration.admin")
 
+from shared.division_grid import DivisionGrid, DivisionTier  # noqa: E402
+from shared.services.division_grid_normalization import DivisionGridNormalizer  # noqa: E402
+
 
 def test_rank_snapshot_model_is_available_from_service_models() -> None:
     assert hasattr(reg_admin.models, "UserRankSnapshot")
@@ -359,3 +362,57 @@ def test_group_ow_signals_computes_composite_and_latest() -> None:
     # max=3400, mean=3300 -> (3400 + 3300) / 2 = 3350
     assert signals.composite_rank_value == 3350
     assert signals.latest_snapshot.rank_value == 3400
+
+
+# ── Cross-grid rank normalization for history sources ────────────────────────────────────────
+
+
+def _tier(tier_id: int, number: int, rank_min: int, rank_max: int | None) -> DivisionTier:
+    return DivisionTier(
+        id=tier_id,
+        slug=None,
+        number=number,
+        name=str(number),
+        rank_min=rank_min,
+        rank_max=rank_max,
+        icon_url="",
+    )
+
+
+def _make_normalizer() -> tuple[DivisionGridNormalizer, DivisionGrid]:
+    target_t1 = _tier(10, 1, 1000, 1999)
+    target_t2 = _tier(11, 2, 2000, None)
+    target_grid = DivisionGrid(version_id=1, tiers=(target_t2, target_t1))
+    source_t1 = _tier(20, 1, 100, 199)
+    source_t2 = _tier(21, 2, 200, None)
+    source_grid = DivisionGrid(version_id=2, tiers=(source_t2, source_t1))
+    normalizer = DivisionGridNormalizer(
+        target_version_id=1,
+        target_grid=target_grid,
+        source_grids_by_version_id={2: source_grid},
+        primary_target_by_source_tier_id={20: target_t1, 21: target_t2},
+        weighted_targets_by_source_tier_id={},
+    )
+    return normalizer, target_grid
+
+
+def test_normalize_history_rank_passthrough_without_mapping_inputs() -> None:
+    normalizer, target_grid = _make_normalizer()
+    # No normalizer / no source version → rank is returned unchanged; None stays None.
+    assert reg_admin._normalize_history_rank(None, 2, 150, target_grid) == 150
+    assert reg_admin._normalize_history_rank(normalizer, None, 150, target_grid) == 150
+    assert reg_admin._normalize_history_rank(normalizer, 2, None, target_grid) is None
+
+
+def test_normalize_history_rank_maps_via_primary_mapping() -> None:
+    normalizer, target_grid = _make_normalizer()
+    # source v2 rank 150 → source tier 20 → target tier 10 (rank_min 1000).
+    assert reg_admin._normalize_history_rank(normalizer, 2, 150, target_grid) == 1000
+
+
+def test_normalize_history_rank_falls_back_to_division_number() -> None:
+    normalizer, target_grid = _make_normalizer()
+    # Drop the primary mapping for source tier 21 → normalize raises → fallback by division
+    # number: source tier number 2 → target rank for division 2 = 2000 (open tier rank_min).
+    normalizer.primary_target_by_source_tier_id.pop(21)
+    assert reg_admin._normalize_history_rank(normalizer, 2, 250, target_grid) == 2000

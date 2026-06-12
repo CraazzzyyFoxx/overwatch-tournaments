@@ -182,29 +182,22 @@ function applyHistoryPreviewToRoleEntries(
 
   const byRole = new Map(entries.map((entry) => [entry.role, entry]));
   for (const historyEntry of preview.entries) {
+    const existingEntry = byRole.get(historyEntry.role);
+    // Only fill ranks for roles the player already has in the balancer; never add
+    // new roles from history — applying history must not change the player's roles.
+    if (!existingEntry) {
+      continue;
+    }
+
     // Use the normalised division to derive a rank_value in the target grid,
     // so that the form's rank/division fields stay consistent.
     const normalizedRank =
       resolveRankFromDivision(historyEntry.division_number) ?? historyEntry.rank_value;
-    const existingEntry = byRole.get(historyEntry.role);
-    if (existingEntry) {
-      byRole.set(historyEntry.role, {
-        ...existingEntry,
-        rank_value: normalizedRank,
-        division_number: historyEntry.division_number,
-        is_active: true
-      });
-      continue;
-    }
-
     byRole.set(historyEntry.role, {
-      role: historyEntry.role,
-      subtype: null,
-      priority: entries.length + byRole.size,
-      division_number: historyEntry.division_number,
+      ...existingEntry,
       rank_value: normalizedRank,
-      is_active: true,
-      ow_rank_value: null
+      division_number: historyEntry.division_number,
+      is_active: true
     });
   }
 
@@ -905,7 +898,8 @@ export function PlayerEditModal({
         player.battle_tag,
         divisionGridVersion,
         divisionGrid,
-        getHistoryWorkspaceIdParam(historyWorkspaceValue)
+        getHistoryWorkspaceIdParam(historyWorkspaceValue),
+        workspaceId
       );
       setHistoryPreview(preview);
     } catch (error) {
@@ -930,7 +924,8 @@ export function PlayerEditModal({
           player.battle_tag,
           divisionGridVersion,
           divisionGrid,
-          getHistoryWorkspaceIdParam(value)
+          getHistoryWorkspaceIdParam(value),
+          workspaceId
         );
         setHistoryPreview(preview);
       } catch (error) {

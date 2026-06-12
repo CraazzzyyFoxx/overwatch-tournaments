@@ -238,6 +238,14 @@ export interface RegistrationRankAutofillResponse {
   players: RegistrationRankAutofillPlayer[];
 }
 
+export interface BalancerRegistrationRankHistoryEntry {
+  tournament_id: number;
+  tournament_number: number | null;
+  tournament_name: string | null;
+  role: BalancerRoleCode;
+  rank_value: number;
+}
+
 export interface BalancerPlayerUpdateInput {
   role_entries_json?: BalancerPlayerRoleEntry[] | null;
   is_in_pool?: boolean | null;
