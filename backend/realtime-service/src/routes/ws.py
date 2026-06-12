@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, cast
 
@@ -8,7 +9,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 from shared.models.auth_user import AuthUser
 from shared.models.realtime import WorkspaceEvent
-from shared.schemas.realtime import SubscribeOp
+from shared.schemas.realtime import SubscribeOp, WorkspaceEventEnvelope
+from shared.services.balancer_realtime import BALANCER_PRESENCE
 from shared.services.realtime_publisher import event_to_envelope
 
 from src.core import config, db
@@ -21,11 +23,33 @@ from src.protocol import (
     pong_frame,
     subscribed_frame,
 )
-from src.services.connection_manager import ConnectionState, connection_manager
+from src.services.connection_manager import (
+    ConnectionState,
+    connection_manager,
+    is_presence_topic,
+)
 from src.services.event_replay import ReplayGapTooLarge, event_replay_service
 from src.services.topic_acl import topic_acl_registry
 
 router = APIRouter()
+
+
+async def _broadcast_presence(topic: str) -> None:
+    """Fan an ephemeral presence frame to everyone subscribed to ``topic``.
+
+    Not persisted (``event_id=0``) so it never advances the replay cursor.
+    The payload carries the current connected user ids; the frontend resolves
+    them to avatars from the workspace member list.
+    """
+    envelope = WorkspaceEventEnvelope(
+        event_id=0,
+        event_type=BALANCER_PRESENCE,
+        schema_version=1,
+        occurred_at=datetime.now(UTC),
+        actor_user_id=None,
+        data={"user_ids": connection_manager.presence_user_ids(topic)},
+    )
+    await connection_manager.route(topic, event_frame(topic, envelope))
 
 
 @router.websocket("/ws")
@@ -55,13 +79,20 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
             if op.op == "unsubscribe":
                 connection_manager.unsubscribe(state, op.topic)
+                if is_presence_topic(op.topic):
+                    await _broadcast_presence(op.topic)
                 continue
 
             await _handle_subscribe(state, cast(SubscribeOp, op), user)
     except WebSocketDisconnect:
         return
     finally:
+        # Recompute presence for any presence topic this connection was on,
+        # after removing it so the leaving user is no longer counted.
+        presence_topics = [topic for topic in state.topics if is_presence_topic(topic)]
         connection_manager.cleanup(state)
+        for topic in presence_topics:
+            await _broadcast_presence(topic)
 
 
 async def _resolve_websocket_user(websocket: WebSocket) -> AuthUser | None:
@@ -115,3 +146,5 @@ async def _handle_subscribe(state: ConnectionState, op: SubscribeOp, user: AuthU
         replay_count=len(events),
         duration_ms=round((perf_counter() - started) * 1000, 2),
     )
+    if is_presence_topic(op.topic):
+        await _broadcast_presence(op.topic)

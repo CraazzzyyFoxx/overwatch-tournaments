@@ -134,12 +134,22 @@ export default class balancerService {
     }
   }
 
-  static async createBalanceJob(file: File, config?: BalancerConfig): Promise<BalanceJobCreateResponse> {
+  static async createBalanceJob(
+    file: File,
+    config?: BalancerConfig,
+    tournamentId?: number | null
+  ): Promise<BalanceJobCreateResponse> {
     const formData = new FormData();
     formData.append("player_data_file", file);
 
     if (config && Object.keys(config).length > 0) {
       formData.append("config_overrides", JSON.stringify(config));
+    }
+
+    // Enables realtime job-status fan-out to everyone with this tournament's
+    // balancer page open (the topic is tournament-scoped).
+    if (tournamentId != null) {
+      formData.append("tournament_id", String(tournamentId));
     }
 
     try {

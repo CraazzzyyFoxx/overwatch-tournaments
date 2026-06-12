@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 TERMINAL_STATUSES = {"succeeded", "failed"}
@@ -36,11 +37,13 @@ class ProgressEventThrottler:
         job_id: str,
         meta: dict[str, Any],
         clock=None,
+        on_emit: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:
         self._job_store = job_store
         self._job_id = job_id
         self._meta = meta
         self._clock = clock or time.monotonic
+        self._on_emit = on_emit
         self._last_emitted_stage: str | None = None
         self._last_emitted_percent: float | None = None
         self._last_emitted_at: float | None = None
@@ -101,3 +104,12 @@ class ProgressEventThrottler:
         self._last_emitted_at = now
         self._last_emitted_stage = stage_value
         self._last_emitted_percent = extract_progress_percent(progress)
+
+        if self._on_emit is not None:
+            await self._on_emit(
+                {
+                    "status": status_name,
+                    "stage": stage_value,
+                    "progress": progress if isinstance(progress, dict) else None,
+                }
+            )

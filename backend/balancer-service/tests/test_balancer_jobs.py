@@ -55,12 +55,13 @@ class CreateJobTests(IsolatedAsyncioTestCase):
 
         class FakeStore:
             async def create_job(self, input_data, config_overrides, *, job_id, workspace_id,
-                                 created_by, credential_type, api_key_id):
+                                 created_by, credential_type, api_key_id, tournament_id=None):
                 created.update(
                     input_data=input_data,
                     config_overrides=config_overrides,
                     job_id=job_id,
                     workspace_id=workspace_id,
+                    tournament_id=tournament_id,
                     created_by=created_by,
                     credential_type=credential_type,
                     api_key_id=api_key_id,
@@ -111,12 +112,64 @@ class CreateJobTests(IsolatedAsyncioTestCase):
         self.assertEqual(created["credential_type"], "access_token")
         self.assertIsNone(created["api_key_id"])
 
+    async def test_publishes_realtime_queued_event_when_tournament_scoped(self) -> None:
+        class FakeStore:
+            async def create_job(self, *a, **k):
+                return "job-xyz"
+
+            async def mark_failed(self, *a, **k):  # pragma: no cover - not expected here
+                raise AssertionError("mark_failed should not be called")
+
+        class FakeParser:
+            async def parse_player_data(self, uploaded_file) -> dict:
+                return {"players": {"1": {"name": "Player One"}}}
+
+            def parse_config_overrides(self, raw_config):
+                return {}
+
+        class FakePublisher:
+            def __init__(self, broker, logger):
+                pass
+
+            async def publish_job_requested(self, job_id: str) -> None:
+                pass
+
+        access_policy = SimpleNamespace(ensure_workspace_access=lambda *a, **k: None)
+        emit = AsyncMock()
+
+        with (
+            patch(f"{JOBS}.get_job_store", return_value=FakeStore()),
+            patch(f"{JOBS}.get_api_key_limiter", return_value=_noop_limiter()),
+            patch(f"{JOBS}._access_policy", access_policy),
+            patch(f"{JOBS}._payload_parser", FakeParser()),
+            patch(f"{JOBS}.is_api_key_principal", return_value=False),
+            patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
+            patch(f"{JOBS}.emit_balancer_job_event", emit),
+        ):
+            await jobs.create_job(
+                uploaded_file=SimpleNamespace(filename="players.json"),
+                raw_config=None,
+                workspace_id=77,
+                user=SimpleNamespace(id=9),
+                broker=SimpleNamespace(),
+                tournament_id=42,
+            )
+
+        emit.assert_awaited_once()
+        args, kwargs = emit.await_args
+        self.assertEqual(args[0], 42)
+        self.assertEqual(args[1], "balancer_job.queued")
+        self.assertEqual(kwargs["job_id"], "job-xyz")
+        self.assertEqual(kwargs["status"], "queued")
+        self.assertEqual(kwargs["workspace_id"], 77)
+        self.assertEqual(kwargs["actor_user_id"], 9)
+
     async def test_api_key_create_job_reserves_limit_and_stores_metadata(self) -> None:
         created: dict = {}
 
         class FakeStore:
             async def create_job(self, input_data, config_overrides, *, job_id, workspace_id,
-                                 created_by, credential_type, api_key_id):
+                                 created_by, credential_type, api_key_id, tournament_id=None):
                 created.update(job_id=job_id, credential_type=credential_type, api_key_id=api_key_id)
                 return job_id
 

@@ -9,10 +9,8 @@ import {
   buildBalancerInput,
   buildRankHistoryFromAutofillPreview,
   buildVariantFromSavedBalance,
-  convertBalanceResponseToInternalPayload,
   type BalanceVariant
 } from "./workspace-helpers";
-import { createVariantLabel } from "./balancer-page-helpers";
 import type { PlayerValidationState } from "./balancer-page-helpers";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
@@ -27,11 +25,7 @@ import type {
   BalanceSaveInput,
   SavedBalance
 } from "@/types/balancer-admin.types";
-import type {
-  BalanceJobResult,
-  BalancerConfig,
-  BalancerConfigResponse
-} from "@/types/balancer.types";
+import type { BalancerConfig, BalancerConfigResponse } from "@/types/balancer.types";
 import { notify } from "@/lib/notify";
 
 type UseBalancerMutationsOptions = {
@@ -54,6 +48,16 @@ type UseBalancerMutationsOptions = {
   isConfigDirty: boolean;
   onTournamentConfigSaved: (config: BalancerConfig) => void;
   activeVariant: BalanceVariant | null;
+  /**
+   * Called once a balance job is created so the realtime layer can attach the
+   * run-local context (skipped count, config) to the eventual `succeeded`
+   * event. The variants themselves are applied by the realtime handler so the
+   * initiator and every other viewer share one code path.
+   */
+  onJobCreated: (
+    jobId: string,
+    context: { skipped: number; config: BalancerConfig | undefined }
+  ) => void;
 };
 
 type FlowStepStatus = "pending" | "running" | "succeeded" | "failed";
@@ -108,7 +112,8 @@ export function useBalancerMutations({
   draftConfig,
   isConfigDirty,
   onTournamentConfigSaved,
-  activeVariant
+  activeVariant,
+  onJobCreated
 }: UseBalancerMutationsOptions) {
   const addPlayerMutation = useMutation({
     mutationFn: async (application: BalancerApplication) => {
@@ -387,75 +392,27 @@ export function useBalancerMutations({
       }
       const skipped = excludeInvalidPlayers ? invalidPlayerStates.length : 0;
       return {
-        job: await balancerService.createBalanceJob(file, config as BalancerConfig | undefined),
+        job: await balancerService.createBalanceJob(
+          file,
+          config as BalancerConfig | undefined,
+          tournamentId
+        ),
         skipped,
         config: config as BalancerConfig | undefined
       };
     },
     onSuccess: ({ job, skipped, config }) => {
+      // Immediate optimistic feedback; subsequent status (running/progress/
+      // succeeded/failed) and the resulting variants arrive via the realtime
+      // balancer topic, so the initiator and every other viewer stay in sync
+      // through a single handler (see useBalancerRealtime).
       dispatchJob({
         type: "update",
         status: job.status,
         message: "Balance job created",
         progress: 0
       });
-      void balancerService.streamBalanceJob(job.job_id, {
-        onEvent: async (event) => {
-          dispatchJob({
-            type: "update",
-            status: event.status,
-            message: event.message,
-            progress: typeof event.progress?.percent === "number" ? event.progress.percent : null
-          });
-          if (event.status === "succeeded") {
-            try {
-              const result = (await balancerService.getBalanceJobResult(
-                job.job_id
-              )) as BalanceJobResult;
-              // Pre-generate stable IDs outside the updater so that setActiveVariantId
-              // and setVariants always agree on the same ID regardless of how many times
-              // React invokes the updater (concurrent mode may call it multiple times).
-              const timestamp = Date.now();
-              const newIds = result.variants.map((_, i) => `generated-${timestamp}-${i}`);
-              setVariants((current) => {
-                const next = [...current];
-                const generatedCount = next.filter((v) => v.source === "generated").length;
-                result.variants.forEach((variant, batchIndex) => {
-                  const payload = convertBalanceResponseToInternalPayload(variant);
-                  next.push({
-                    id: newIds[batchIndex],
-                    label: createVariantLabel(generatedCount + batchIndex + 1),
-                    payload,
-                    source: "generated",
-                    config: config ?? null,
-                    skippedCount: batchIndex === 0 && skipped > 0 ? skipped : undefined
-                  });
-                });
-                return next;
-              });
-              // The solver returns variants best-first (lowest composite_score),
-              // so auto-select the first one — the highest-quality balance — rather
-              // than the last (worst) variant of the batch.
-              const bestId = newIds[0];
-              if (bestId) setActiveVariantId(bestId);
-              dispatchJob({ type: "clear" });
-              notify.success("Balance completed");
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : "Failed to fetch balance result";
-              dispatchJob({ type: "update", status: "failed", message, progress: null });
-              notify.error("Balance failed", { description: message });
-            }
-          }
-          if (event.status === "failed") {
-            notify.error("Balance failed", { description: event.message });
-          }
-        },
-        onError: (message) => {
-          dispatchJob({ type: "update", status: "failed", message, progress: null });
-          notify.error("Balance job failed", { description: message });
-        }
-      });
+      onJobCreated(job.job_id, { skipped, config });
     }
   });
 

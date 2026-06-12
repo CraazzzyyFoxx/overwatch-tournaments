@@ -27,11 +27,22 @@ from src.core.security.workspace_access import WorkspaceAccessPolicy
 from src.schemas.balancer import BalanceJobResult, CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
 from src.services.balancer.config.public_contract import normalize_balance_job_result_payload
+from shared.services.balancer_realtime import (
+    BALANCER_JOB_FAILED,
+    BALANCER_JOB_QUEUED,
+    BALANCER_JOB_RUNNING,
+    BALANCER_JOB_SUCCEEDED,
+)
+
 from src.services.balancer.progress import (
     TERMINAL_STATUSES,
     ProgressEventThrottler,
 )
 from src.services.balancer.publisher import BalancerJobPublisher
+from src.services.balancer.realtime import (
+    emit_balancer_job_event,
+    emit_balancer_job_progress,
+)
 from src.services.balancer.request_parser import BalancerRequestParser
 from src.services.balancer.solver import run_balance
 
@@ -114,6 +125,7 @@ async def create_job(
     workspace_id: int,
     user,
     broker,
+    tournament_id: int | None = None,
 ) -> CreateJobResponse:
     job_store = get_job_store()
     api_key_limiter = get_api_key_limiter()
@@ -137,6 +149,7 @@ async def create_job(
             config_overrides,
             job_id=job_id,
             workspace_id=workspace_id,
+            tournament_id=tournament_id,
             created_by=user.id,
             credential_type=getattr(user, "_credential_type", "access_token"),
             api_key_id=api_key_id,
@@ -154,6 +167,18 @@ async def create_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to enqueue balancer job",
         ) from exc
+
+    # Broadcast to everyone with the tournament's balancer page open. Admin jobs
+    # carry a tournament_id; API-key/public jobs without one are not fanned out.
+    if tournament_id is not None:
+        await emit_balancer_job_event(
+            tournament_id,
+            BALANCER_JOB_QUEUED,
+            job_id=job_id,
+            status="queued",
+            workspace_id=workspace_id,
+            actor_user_id=user.id,
+        )
 
     return CreateJobResponse(job_id=job_id, status="queued", **_build_job_urls(job_id))
 
@@ -269,6 +294,43 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
     if current_meta and current_meta.get("status") in TERMINAL_STATUSES:
         return
 
+    # Realtime fan-out context is fixed at creation time; capture it before
+    # mark_* reassigns `current_meta`. Admin jobs carry a tournament_id; jobs
+    # without one (API-key/public) skip realtime broadcasting entirely.
+    rt_tournament_id = current_meta.get("tournament_id") if isinstance(current_meta, dict) else None
+    rt_workspace_id = current_meta.get("workspace_id") if isinstance(current_meta, dict) else None
+    rt_actor_id = current_meta.get("created_by") if isinstance(current_meta, dict) else None
+
+    async def publish_job_progress(update: dict[str, Any]) -> None:
+        if rt_tournament_id is None:
+            return
+        await emit_balancer_job_progress(
+            int(rt_tournament_id),
+            job_id=job_id,
+            status=str(update.get("status", "running")),
+            progress=update.get("progress"),
+        )
+
+    async def publish_job_lifecycle(
+        event_type: str,
+        status_value: str,
+        *,
+        progress: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        if rt_tournament_id is None:
+            return
+        await emit_balancer_job_event(
+            int(rt_tournament_id),
+            event_type,
+            job_id=job_id,
+            status=status_value,
+            progress=progress,
+            error=error,
+            workspace_id=int(rt_workspace_id) if rt_workspace_id is not None else None,
+            actor_user_id=int(rt_actor_id) if rt_actor_id is not None else None,
+        )
+
     event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
     progress_callback = _build_progress_callback(event_queue, loop)
@@ -310,11 +372,13 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
             player_count = len(players_payload)
 
         current_meta = await job_store.mark_running(job_id, meta=current_meta)
+        await publish_job_lifecycle(BALANCER_JOB_RUNNING, "running")
         progress_throttler = ProgressEventThrottler(
             job_store=job_store,
             job_id=job_id,
             meta=current_meta,
             clock=progress_clock,
+            on_emit=publish_job_progress,
         )
 
         async def consume_progress_events() -> None:
@@ -362,6 +426,11 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
                 player_count = resolved_player_count
 
         current_meta = await job_store.mark_succeeded(job_id, result, meta=current_meta)
+        await publish_job_lifecycle(
+            BALANCER_JOB_SUCCEEDED,
+            "succeeded",
+            progress={"percent": 100.0},
+        )
         total_seconds = time.perf_counter() - total_started_at
         BALANCER_JOB_TOTAL_SECONDS.labels(algorithm=algorithm, status="succeeded").observe(total_seconds)
         logger.bind(
@@ -385,6 +454,11 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
             job_id,
             f"Balancer job failed: {exc}",
             meta=current_meta,
+        )
+        await publish_job_lifecycle(
+            BALANCER_JOB_FAILED,
+            "failed",
+            error=f"Balancer job failed: {exc}",
         )
         total_seconds = time.perf_counter() - total_started_at
         BALANCER_JOB_TOTAL_SECONDS.labels(algorithm=algorithm, status="failed").observe(total_seconds)

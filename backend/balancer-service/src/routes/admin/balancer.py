@@ -6,6 +6,12 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.services.balancer_realtime import (
+    BALANCER_BALANCE_SAVED,
+    BALANCER_CONFIG_CHANGED,
+    BALANCER_TEAMS_CHANGED,
+)
+
 from src import models
 from src.core import auth, db
 from src.schemas.admin import balancer as admin_schemas
@@ -16,6 +22,7 @@ from src.services.admin._mappers import (
     serialize_balance as _serialize_balance,
     serialize_tournament_config as _serialize_tournament_config,
 )
+from src.services.balancer.realtime import emit_balancer_data_event
 
 router = APIRouter(
     prefix="/balancer",
@@ -52,6 +59,12 @@ async def upsert_tournament_config(
     tournament_config = await admin_balancer.upsert_tournament_config(
         session, tournament_id, data.config_json, user
     )
+    await emit_balancer_data_event(
+        tournament_id,
+        BALANCER_CONFIG_CHANGED,
+        workspace_id=tournament_config.workspace_id,
+        actor_user_id=user.id,
+    )
     return _serialize_tournament_config(tournament_config)
 
 
@@ -75,6 +88,11 @@ async def save_balance(
     user: models.AuthUser = Depends(auth.require_tournament_permission("team", "import")),
 ):
     balance = await admin_balancer.save_balance(session, tournament_id, data, user)
+    await emit_balancer_data_event(
+        tournament_id,
+        BALANCER_BALANCE_SAVED,
+        actor_user_id=user.id,
+    )
     return _serialize_balance(balance)
 
 
@@ -85,6 +103,11 @@ async def export_balance(
     user: models.AuthUser = Depends(auth.require_balance_permission("team", "import")),
 ):
     balance, removed_teams, imported_teams = await admin_balancer.export_balance(session, balance_id)
+    await emit_balancer_data_event(
+        balance.tournament_id,
+        BALANCER_TEAMS_CHANGED,
+        actor_user_id=user.id,
+    )
     return admin_schemas.BalanceExportResponse(
         success=True,
         removed_teams=removed_teams,
@@ -172,4 +195,9 @@ async def import_teams_from_json(
         teams = [team.to_balancer_team() for team in internal_payload.teams]
 
     await team_service.bulk_create_from_balancer(session, tournament_id, teams)
+    await emit_balancer_data_event(
+        tournament_id,
+        BALANCER_TEAMS_CHANGED,
+        actor_user_id=user.id,
+    )
     return {"imported_teams": len(teams)}
