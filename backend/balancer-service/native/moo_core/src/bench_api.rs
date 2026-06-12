@@ -39,6 +39,7 @@ fn bench_config() -> ConfigSpec {
         crossover_rate: 0.85,
         team_crossover_share: 0.5,
         time_limit_ms: None,
+        rank_comfort_tilt: 0.5,
     }
 }
 
