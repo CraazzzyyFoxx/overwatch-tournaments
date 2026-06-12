@@ -200,10 +200,10 @@ export function RankAutofillPreviewTables({
   const allChecked = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 md:h-full md:min-h-0 md:grid-cols-3 md:grid-rows-1">
       {/* Column 1 — To assign (with per-player selection) */}
-      <section className="flex min-w-0 flex-col">
-        <div className="mb-2 flex items-center gap-2">
+      <section className="flex min-w-0 flex-col md:min-h-0">
+        <div className="mb-2 flex shrink-0 items-center gap-2">
           <Checkbox
             checked={allChecked}
             onCheckedChange={(checked) => onToggleAll(checked === true, selectableIds)}
@@ -220,7 +220,7 @@ export function RankAutofillPreviewTables({
         {updatablePlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
@@ -263,8 +263,8 @@ export function RankAutofillPreviewTables({
       </section>
 
       {/* Column 2 — Skipped */}
-      <section className="flex min-w-0 flex-col">
-        <div className="mb-2 flex items-center gap-2">
+      <section className="flex min-w-0 flex-col md:min-h-0">
+        <div className="mb-2 flex shrink-0 items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
             {t("rankAutofill.sections.skipped")}
           </span>
@@ -277,7 +277,7 @@ export function RankAutofillPreviewTables({
         {skippedPlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {skippedPlayers.map((player) => (
               <div
                 key={player.registration_id}
@@ -299,8 +299,8 @@ export function RankAutofillPreviewTables({
       </section>
 
       {/* Column 3 — Already set */}
-      <section className="flex min-w-0 flex-col">
-        <div className="mb-2 flex items-center gap-2">
+      <section className="flex min-w-0 flex-col md:min-h-0">
+        <div className="mb-2 flex shrink-0 items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
             {t("rankAutofill.sections.alreadySet")}
           </span>
@@ -313,7 +313,7 @@ export function RankAutofillPreviewTables({
         {unchangedPlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {unchangedPlayers.map((player) => {
               const auditRoles = player.roles.filter(
                 (role) => role.action === "unverified" || roleHasMismatch(role)
