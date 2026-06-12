@@ -200,9 +200,9 @@ export function RankAutofillPreviewTables({
   const allChecked = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 
   return (
-    <div className="divide-y divide-white/[0.06]">
-      {/* To assign — with per-player selection, 3-column grid on wide screens */}
-      <div className="px-1 py-3">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* Column 1 — To assign (with per-player selection) */}
+      <section className="flex min-w-0 flex-col">
         <div className="mb-2 flex items-center gap-2">
           <Checkbox
             checked={allChecked}
@@ -220,7 +220,7 @@ export function RankAutofillPreviewTables({
         {updatablePlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="flex flex-col gap-2">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
@@ -260,101 +260,100 @@ export function RankAutofillPreviewTables({
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Skipped + Already set */}
-      <div className="grid gap-px lg:grid-cols-2">
-        <div className="px-1 py-3 lg:pr-4">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              {t("rankAutofill.sections.skipped")}
+      {/* Column 2 — Skipped */}
+      <section className="flex min-w-0 flex-col">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            {t("rankAutofill.sections.skipped")}
+          </span>
+          {skippedPlayers.length > 0 && (
+            <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
+              {skippedPlayers.length}
             </span>
-            {skippedPlayers.length > 0 && (
-              <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
-                {skippedPlayers.length}
-              </span>
-            )}
+          )}
+        </div>
+        {skippedPlayers.length === 0 ? (
+          <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {skippedPlayers.map((player) => (
+              <div
+                key={player.registration_id}
+                className="min-w-0 rounded-lg border border-white/10 bg-white/[0.02] p-2.5"
+              >
+                <div className="truncate text-xs font-medium text-white/75">{playerLabel(player)}</div>
+                <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
+                  {player.reason ?? t("rankAutofill.skippedFallback")}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {player.roles.map((role) => (
+                    <RankAutofillRolePill key={role.role} role={role} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-          {skippedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
-          ) : (
-            <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
-              {skippedPlayers.map((player) => (
+        )}
+      </section>
+
+      {/* Column 3 — Already set */}
+      <section className="flex min-w-0 flex-col">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            {t("rankAutofill.sections.alreadySet")}
+          </span>
+          {unchangedPlayers.length > 0 && (
+            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
+              {unchangedPlayers.length}
+            </span>
+          )}
+        </div>
+        {unchangedPlayers.length === 0 ? (
+          <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {unchangedPlayers.map((player) => {
+              const auditRoles = player.roles.filter(
+                (role) => role.action === "unverified" || roleHasMismatch(role)
+              );
+              return (
                 <div
                   key={player.registration_id}
-                  className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
+                  className="min-w-0 rounded-lg border border-white/10 bg-white/[0.02] p-2.5"
                 >
-                  <div className="truncate text-xs font-medium text-white/75">{playerLabel(player)}</div>
-                  <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
-                    {player.reason ?? t("rankAutofill.skippedFallback")}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {player.roles.map((role) => (
-                      <RankAutofillRolePill key={role.role} role={role} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="px-1 py-3 lg:border-l lg:border-white/[0.06] lg:pl-4">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-              {t("rankAutofill.sections.alreadySet")}
-            </span>
-            {unchangedPlayers.length > 0 && (
-              <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
-                {unchangedPlayers.length}
-              </span>
-            )}
-          </div>
-          {unchangedPlayers.length === 0 ? (
-            <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
-          ) : (
-            <div className="max-h-72 overflow-y-auto rounded-xl border border-white/10">
-              {unchangedPlayers.map((player) => {
-                const auditRoles = player.roles.filter(
-                  (role) => role.action === "unverified" || roleHasMismatch(role)
-                );
-                return (
-                  <div
-                    key={player.registration_id}
-                    className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-medium text-white/75">
-                        {playerLabel(player)}
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/75">
+                      {playerLabel(player)}
+                    </span>
+                    {hasUnverifiedRole(player) && (
+                      <span className="shrink-0 rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
+                        {t("rankAutofill.badgeUnverified")}
                       </span>
-                      {hasUnverifiedRole(player) && (
-                        <span className="shrink-0 rounded border border-amber-400/20 bg-amber-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-                          {t("rankAutofill.badgeUnverified")}
-                        </span>
-                      )}
-                      {playerHasMismatch(player) && (
-                        <span className="shrink-0 rounded border border-rose-400/20 bg-rose-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-rose-200">
-                          {t("rankAutofill.badgeMismatch")}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-[11px] leading-4 text-white/35">
-                      {player.reason ?? t("rankAutofill.unchangedFallback")}
-                    </div>
-                    {auditRoles.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {auditRoles.map((role) => (
-                          <RankAutofillRolePill key={role.role} role={role} />
-                        ))}
-                      </div>
+                    )}
+                    {playerHasMismatch(player) && (
+                      <span className="shrink-0 rounded border border-rose-400/20 bg-rose-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-rose-200">
+                        {t("rankAutofill.badgeMismatch")}
+                      </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                  <div className="mt-0.5 text-[11px] leading-4 text-white/35">
+                    {player.reason ?? t("rankAutofill.unchangedFallback")}
+                  </div>
+                  {auditRoles.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {auditRoles.map((role) => (
+                        <RankAutofillRolePill key={role.role} role={role} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
