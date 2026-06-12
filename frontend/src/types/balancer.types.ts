@@ -36,7 +36,8 @@ export const SUPPORTED_BALANCER_CONFIG_KEYS = [
   "greedy_seed_count",
   "stagnation_kick_patience",
   "crossover_rate",
-  "max_result_variants"
+  "max_result_variants",
+  "rank_comfort_tilt"
 ] as const;
 
 export type BalancerConfigKey = (typeof SUPPORTED_BALANCER_CONFIG_KEYS)[number];
@@ -140,9 +141,16 @@ export interface BalancerConfig {
   stagnation_kick_patience?: number;
   crossover_rate?: number;
   max_result_variants?: number;
+  rank_comfort_tilt?: number;
 }
 
-export type BalancerConfigFieldType = "boolean" | "float" | "integer" | "role_mask" | "select";
+export type BalancerConfigFieldType =
+  | "boolean"
+  | "float"
+  | "integer"
+  | "role_mask"
+  | "select"
+  | "slider";
 
 export interface BalancerConfigField {
   key: BalancerConfigKey;

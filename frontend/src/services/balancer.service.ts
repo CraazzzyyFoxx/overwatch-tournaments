@@ -16,12 +16,13 @@ const BALANCER_STREAM_PREFIX = (
   process.env.NEXT_PUBLIC_BALANCER_API_URL || "http://localhost/api/balancer"
 ).replace(/\/$/, "");
 
-const SUPPORTED_CONFIG_FIELD_TYPES = new Set([
+const SUPPORTED_CONFIG_FIELD_TYPES = new Set<string>([
   "boolean",
   "float",
   "integer",
   "role_mask",
-  "select"
+  "select",
+  "slider"
 ]);
 
 type RawBalancerConfigField = Omit<BalancerConfigField, "key"> & {
