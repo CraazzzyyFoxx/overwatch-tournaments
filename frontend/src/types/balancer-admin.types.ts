@@ -173,6 +173,7 @@ export type RegistrationRankAutofillRoleAction =
   | "set"
   | "overwrite"
   | "keep_existing"
+  | "unverified"
   | "missing_rank"
   | "blocked";
 
@@ -181,18 +182,37 @@ export type RegistrationRankAutofillUsedSource =
   | "ow"
   | "analytics";
 
+/** Individual source of a rank-autofill stage chain. */
+export type RankAutofillSourceKey = "ow" | "division_history" | "analytics";
+
 /**
  * Priority chains for rank autofill:
  *  - ow_first: OW (weekly composite) -> balancer (division history) -> analytics (past tournaments)
  *  - balancer_first: balancer -> analytics -> OW
+ * Legacy presets; superseded by an explicit `stages` chain when one is supplied.
  */
 export type RegistrationRankAutofillMode = "ow_first" | "balancer_first";
+
+/** One source in the autofill priority chain (order = list position). */
+export interface RegistrationRankAutofillStage {
+  source: RankAutofillSourceKey;
+  enabled: boolean;
+  /** Recency window for division_history / analytics, in tournaments (null = no limit). */
+  lookback_tournaments?: number | null;
+  /** Recency window for the OW source, in days (null = default 7-day window). */
+  lookback_days?: number | null;
+}
 
 export interface RegistrationRankAutofillRequest {
   registration_ids?: number[] | null;
   overwrite_existing?: boolean;
   add_to_balancer?: boolean;
+  /** Apply found role ranks even when other active roles have no parsed rank. */
+  allow_partial?: boolean;
+  /** Legacy preset; only used when `stages` is not supplied. */
   mode?: RegistrationRankAutofillMode;
+  /** Explicit ordered priority chain; supersedes `mode` when non-empty. */
+  stages?: RegistrationRankAutofillStage[];
 }
 
 export interface RegistrationRankAutofillRole {
@@ -222,6 +242,8 @@ export interface RegistrationRankAutofillPlayer {
   reason: string | null;
   will_add_to_balancer: boolean;
   balancer_reason: string | null;
+  /** Some active roles were filled but others had no parsed rank (allow_partial). */
+  partial?: boolean;
   roles: RegistrationRankAutofillRole[];
 }
 
@@ -231,6 +253,8 @@ export interface RegistrationRankAutofillResponse {
   applied_registrations: number;
   skipped_registrations: number;
   unchanged_registrations: number;
+  /** Registrations with >=1 active role whose current rank no enabled source could corroborate. */
+  unverified_registrations: number;
   role_updates: number;
   overwrite_existing: boolean;
   add_to_balancer: boolean;

@@ -214,9 +214,14 @@ def _ow_signals(composite: int | None, *, latest_rank: int | None = None) -> Sim
     return reg_admin._OwRankSignals(composite_rank_value=composite, latest_snapshot=latest)
 
 
+# Ordered source chains (what ``resolve_autofill_stages`` produces for the legacy presets).
+_OW_FIRST = ("ow", "division_history", "analytics")
+_BALANCER_FIRST = ("division_history", "analytics", "ow")
+
+
 def test_priority_ow_first_prefers_ow() -> None:
     # User-confirmed example: OW=3000, balancer=3200, analytics=2800 -> ow_first picks OW.
-    data = reg_admin._build_priority_rank_data("ow_first", _ow_signals(3000), 3200, 2800, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_OW_FIRST, _ow_signals(3000), 3200, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3000
@@ -228,7 +233,7 @@ def test_priority_ow_first_prefers_ow() -> None:
 
 
 def test_priority_balancer_first_prefers_balancer() -> None:
-    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), 3200, 2800, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(3000), 3200, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3200
@@ -237,7 +242,7 @@ def test_priority_balancer_first_prefers_balancer() -> None:
 
 
 def test_priority_ow_first_falls_back_to_balancer() -> None:
-    data = reg_admin._build_priority_rank_data("ow_first", None, 3200, 2800, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_OW_FIRST, None, 3200, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3200
@@ -245,7 +250,7 @@ def test_priority_ow_first_falls_back_to_balancer() -> None:
 
 
 def test_priority_ow_first_falls_back_to_analytics() -> None:
-    data = reg_admin._build_priority_rank_data("ow_first", None, None, 2800, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_OW_FIRST, None, None, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 2800
@@ -253,7 +258,7 @@ def test_priority_ow_first_falls_back_to_analytics() -> None:
 
 
 def test_priority_balancer_first_prefers_analytics_over_ow() -> None:
-    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), None, 2800, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(3000), None, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 2800
@@ -261,7 +266,7 @@ def test_priority_balancer_first_prefers_analytics_over_ow() -> None:
 
 
 def test_priority_balancer_first_falls_back_to_ow_last() -> None:
-    data = reg_admin._build_priority_rank_data("balancer_first", _ow_signals(3000), None, None, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(3000), None, None, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3000
@@ -269,7 +274,7 @@ def test_priority_balancer_first_falls_back_to_ow_last() -> None:
 
 
 def test_priority_unmapped_ow_is_skipped() -> None:
-    data = reg_admin._build_priority_rank_data("ow_first", _ow_signals(5000), 3400, None, _FakeGrid())
+    data = reg_admin._build_priority_rank_data(_OW_FIRST, _ow_signals(5000), 3400, None, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 3400
@@ -278,12 +283,176 @@ def test_priority_unmapped_ow_is_skipped() -> None:
 
 
 def test_priority_returns_none_when_all_sources_empty() -> None:
-    assert reg_admin._build_priority_rank_data("ow_first", None, None, None, _FakeGrid()) is None
+    assert reg_admin._build_priority_rank_data(_OW_FIRST, None, None, None, _FakeGrid()) is None
     # OW present but unmapped, no balancer/analytics → still nothing usable.
     assert (
-        reg_admin._build_priority_rank_data("balancer_first", _ow_signals(5000), None, None, _FakeGrid())
+        reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(5000), None, None, _FakeGrid())
         is None
     )
+
+
+def test_priority_custom_order_analytics_only_ignores_disabled_sources() -> None:
+    # Only analytics in the chain: OW and balancer candidates are present but never considered.
+    data = reg_admin._build_priority_rank_data(("analytics",), _ow_signals(3000), 3200, 2800, _FakeGrid())
+
+    assert data is not None
+    assert data.rank_value == 2800
+    assert data.used_source == "analytics"
+
+
+def test_priority_custom_order_reordered_prefers_first_in_order() -> None:
+    # analytics before division_history → analytics wins even though balancer has a value.
+    data = reg_admin._build_priority_rank_data(
+        ("analytics", "division_history"), None, 3200, 2800, _FakeGrid()
+    )
+
+    assert data is not None
+    assert data.rank_value == 2800
+    assert data.used_source == "analytics"
+
+
+def test_priority_empty_order_returns_none() -> None:
+    assert reg_admin._build_priority_rank_data((), _ow_signals(3000), 3200, 2800, _FakeGrid()) is None
+
+
+# ── resolve_autofill_stages: legacy mode presets vs explicit stage chain ─────────────────────
+
+
+def _stage(source: str, *, enabled: bool = True, lookback_tournaments=None, lookback_days=None):
+    return SimpleNamespace(
+        source=source,
+        enabled=enabled,
+        lookback_tournaments=lookback_tournaments,
+        lookback_days=lookback_days,
+    )
+
+
+def test_resolve_stages_uses_mode_order_when_no_stages() -> None:
+    assert [s.source for s in reg_admin.resolve_autofill_stages("ow_first", None)] == list(_OW_FIRST)
+    assert [s.source for s in reg_admin.resolve_autofill_stages("balancer_first", None)] == list(_BALANCER_FIRST)
+    # Unknown / None mode → ow_first default.
+    assert [s.source for s in reg_admin.resolve_autofill_stages(None, None)] == list(_OW_FIRST)
+
+
+def test_resolve_stages_explicit_chain_overrides_mode_and_preserves_order() -> None:
+    stages = [_stage("analytics", lookback_tournaments=5), _stage("ow", lookback_days=14)]
+    resolved = reg_admin.resolve_autofill_stages("ow_first", stages)
+
+    assert [s.source for s in resolved] == ["analytics", "ow"]
+    assert resolved[0].lookback_tournaments == 5
+    assert resolved[1].lookback_days == 14
+
+
+def test_resolve_stages_drops_disabled_and_dedupes() -> None:
+    stages = [
+        _stage("ow"),
+        _stage("division_history", enabled=False),
+        _stage("ow"),  # duplicate, dropped
+        _stage("analytics"),
+    ]
+    resolved = reg_admin.resolve_autofill_stages("ow_first", stages)
+
+    assert [s.source for s in resolved] == ["ow", "analytics"]
+
+
+def test_resolve_stages_all_disabled_is_empty() -> None:
+    stages = [_stage("ow", enabled=False), _stage("analytics", enabled=False)]
+    assert reg_admin.resolve_autofill_stages("ow_first", stages) == []
+
+
+def test_lookback_cutoff() -> None:
+    assert reg_admin._autofill_lookback_cutoff(42, 5) == 37
+    assert reg_admin._autofill_lookback_cutoff(None, 5) is None
+    assert reg_admin._autofill_lookback_cutoff(42, None) is None
+
+
+# ── allow_partial + unverified action in the plan builder ────────────────────────────────────
+
+
+def test_partial_applies_found_role_and_leaves_unparsed_role_untouched() -> None:
+    tank = _role("tank", priority=0)  # no current rank, no parsed rank → would otherwise block
+    dps = _role("dps", priority=1)  # parsed rank found
+
+    row, updates = reg_admin.build_registration_rank_autofill_plan(
+        _registration(tank, dps),
+        {"damage": _snapshot(3300)},
+        battle_tag_linked=True,
+        overwrite_existing=False,
+        allow_partial=True,
+    )
+
+    assert row["status"] == "will_update"
+    assert row["partial"] is True
+    assert len(updates) == 1
+    assert updates[0][0] is dps
+    assert tank.rank_value is None  # unfilled role left untouched
+    actions = {role_row["role"]: role_row["action"] for role_row in row["roles"]}
+    assert actions == {"tank": "missing_rank", "dps": "set"}
+
+
+def test_partial_preserves_existing_rank_on_unparsed_role() -> None:
+    # Unfound role already has a rank → reported as unverified (kept), never cleared.
+    tank = _role("tank", rank_value=3100, priority=0)
+    dps = _role("dps", priority=1)  # parsed rank found
+
+    row, updates = reg_admin.build_registration_rank_autofill_plan(
+        _registration(tank, dps),
+        {"damage": _snapshot(3300)},
+        battle_tag_linked=True,
+        overwrite_existing=False,
+        allow_partial=True,
+    )
+
+    assert row["status"] == "will_update"
+    assert len(updates) == 1
+    assert updates[0][0] is dps
+    assert tank.rank_value == 3100  # existing rank untouched, never cleared
+    actions = {role_row["role"]: role_row["action"] for role_row in row["roles"]}
+    assert actions["tank"] == "unverified"
+
+
+def test_partial_disabled_skips_whole_registration() -> None:
+    tank = _role("tank", priority=0)  # no current rank, no parsed rank
+    dps = _role("dps", priority=1)
+
+    row, updates = reg_admin.build_registration_rank_autofill_plan(
+        _registration(tank, dps),
+        {"damage": _snapshot(3300)},
+        battle_tag_linked=True,
+        overwrite_existing=False,
+        allow_partial=False,
+    )
+
+    assert updates == []
+    assert row["status"] == "skipped"
+    assert row["partial"] is False
+    assert [role_row["action"] for role_row in row["roles"]] == ["missing_rank", "blocked"]
+
+
+def test_unverified_action_when_existing_rank_has_no_source_value() -> None:
+    # Current rank set, overwrite off, and no source produced a value for the role → unverified.
+    row, updates = reg_admin.build_registration_rank_autofill_plan(
+        _registration(_role("support", rank_value=2100)),
+        {},
+        battle_tag_linked=True,
+        overwrite_existing=False,
+    )
+
+    assert updates == []
+    assert row["status"] == "unchanged"
+    assert row["roles"][0]["action"] == "unverified"
+
+
+def test_keep_existing_action_when_source_value_present() -> None:
+    # Same setup but a source value exists → kept (not unverified) because overwrite is off.
+    row, _updates = reg_admin.build_registration_rank_autofill_plan(
+        _registration(_role("support", rank_value=2100)),
+        {"support": _snapshot(2500, role="support")},
+        battle_tag_linked=True,
+        overwrite_existing=False,
+    )
+
+    assert row["roles"][0]["action"] == "keep_existing"
 
 
 # ── OW weekly composite: round((max + mean) / 2) over a 7-day window ─────────────────────────
