@@ -220,7 +220,7 @@ export function RankAutofillPreviewTables({
         {updatablePlayers.length === 0 ? (
           <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
