@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSidebar } from "@/components/ui/sidebar";
 import workspaceService from "@/services/workspace.service";
+import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { WorkspaceMember } from "@/types/workspace.types";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,10 @@ export function BalancerPresenceStack({ userIds, workspaceId }: BalancerPresence
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
+  // The presence frame is broadcast to every viewer and includes ourselves;
+  // hide the current user so the stack only shows *other* people viewing.
+  const currentUserId = useAuthProfileStore((store) => store.user?.id ?? null);
+
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   /* eslint-disable react-hooks/set-state-in-effect -- The portal target lives in the sidebar, outside this component, and is only available after hydration. */
   useEffect(() => {
@@ -73,7 +78,13 @@ export function BalancerPresenceStack({ userIds, workspaceId }: BalancerPresence
     return map;
   }, [membersQuery.data]);
 
-  const uniqueUserIds = useMemo(() => Array.from(new Set(userIds)).sort((a, b) => a - b), [userIds]);
+  const uniqueUserIds = useMemo(
+    () =>
+      Array.from(new Set(userIds))
+        .filter((id) => id !== currentUserId)
+        .sort((a, b) => a - b),
+    [userIds, currentUserId]
+  );
 
   if (!slot || uniqueUserIds.length === 0) {
     return null;
