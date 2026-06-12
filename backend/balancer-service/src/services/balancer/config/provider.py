@@ -45,6 +45,7 @@ CONFIG_LIMITS: dict[str, dict[str, int | float]] = {
     "crossover_rate": {"min": 0.0, "max": 1.0},
     "time_limit_ms": {"min": 100, "max": 600000},
     "max_result_variants": {"min": 1, "max": 200},
+    "rank_comfort_tilt": {"min": 0.0, "max": 1.0},
 }
 
 EDITABLE_CONFIG_FIELD_KEYS = {
@@ -81,6 +82,7 @@ EDITABLE_CONFIG_FIELD_KEYS = {
     "crossover_rate",
     "time_limit_ms",
     "max_result_variants",
+    "rank_comfort_tilt",
 }
 
 SYSTEM_CONFIG_FIELD_KEYS = {
@@ -321,6 +323,18 @@ CONFIG_FIELD_DEFINITIONS: list[dict[str, typing.Any]] = [
         "description": "Maximum number of solution variants returned by the selected solver.",
         "type": "integer",
         "group": "Solver output",
+    },
+    {
+        "key": "rank_comfort_tilt",
+        "label": "Rank tilt (balance ↔ comfort)",
+        "description": (
+            "Shifts how result variants are ranked: 0.5 weighs team balance "
+            "(StdDev) and comfort (off-role) equally; toward 1 prioritises "
+            "comfort/off-role, toward 0 prioritises balance. Ordering only — "
+            "does not change the optimizer search."
+        ),
+        "type": "slider",
+        "group": "Quality weights",
     },
 ]
 

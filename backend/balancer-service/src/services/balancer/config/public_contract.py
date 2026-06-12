@@ -42,6 +42,7 @@ PUBLIC_CONFIG_KEYS = {
     "crossover_rate",
     "time_limit_ms",
     "max_result_variants",
+    "rank_comfort_tilt",
 }
 
 LEGACY_PUBLIC_CONFIG_KEYS = {

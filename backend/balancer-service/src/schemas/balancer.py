@@ -60,6 +60,9 @@ class ConfigOverrides(BaseModel):
             "Weight for the per-team maximum role discomfort averaged over teams."
         ),
     )
+    rank_comfort_tilt: float | None = Field(
+        None, ge=0, le=1, description="Ranking tilt between balance and comfort (0.5 = balanced)"
+    )
     tank_impact_weight: float | None = Field(
         None,
         ge=0,

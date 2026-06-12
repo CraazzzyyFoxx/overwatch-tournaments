@@ -200,6 +200,19 @@ def test_internal_balance_payload_accepts_public_player_shape_with_is_flex() -> 
     assert player.preferences == ["Damage", "Support"]
 
 
+def test_rank_comfort_tilt_field_exposed() -> None:
+    from src.services.balancer.config.provider import get_balancer_config_payload
+
+    payload = get_balancer_config_payload()
+    fields_by_key = {field["key"]: field for field in payload["fields"]}
+
+    assert payload["defaults"]["rank_comfort_tilt"] == 0.5
+    field = fields_by_key["rank_comfort_tilt"]
+    assert field["type"] == "slider"
+    assert field["group"] == "Quality weights"
+    assert field["limits"] == {"min": 0.0, "max": 1.0}
+
+
 class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
     async def test_upsert_tournament_config_creates_normalized_row(self) -> None:
         session = AsyncMock()
