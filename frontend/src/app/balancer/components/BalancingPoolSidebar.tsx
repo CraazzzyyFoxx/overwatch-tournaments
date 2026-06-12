@@ -28,7 +28,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AdminRegistration, BalancerApplication, StatusMeta, WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
 import type { PlayerValidationState, PoolView, PoolSortValue } from "./balancer-page-helpers";
-import { PANEL_CLASS, sortPlayerStates } from "./balancer-page-helpers";
+import { PANEL_CLASS, hasBlockingIssues, sortPlayerStates } from "./balancer-page-helpers";
 import { buildPlayerSearchIndex } from "./workspace-helpers";
 import { PoolSearchCombobox } from "./PoolSearchCombobox";
 import { PoolPlayerCompactList } from "./PoolPlayerCompactList";
@@ -174,11 +174,11 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       [allPlayerValidationStates],
     );
     const readyPlayers = useMemo(
-      () => poolPlayers.filter((s) => s.issues.length === 0),
+      () => poolPlayers.filter((s) => !hasBlockingIssues(s.issues)),
       [poolPlayers],
     );
     const invalidPlayers = useMemo(
-      () => poolPlayers.filter((s) => s.issues.length > 0),
+      () => poolPlayers.filter((s) => hasBlockingIssues(s.issues)),
       [poolPlayers],
     );
     const rankDeltaPlayers = useMemo(
@@ -203,8 +203,8 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
           if (!state.player.is_in_pool) return false;
           if (hideFromPool && state.issues.some((i) => i.code === "rank_delta_warning")) return false;
         }
-        if (poolView === "ready" && state.issues.length > 0) return false;
-        if (poolView === "needs_fix" && state.issues.length === 0) return false;
+        if (poolView === "ready" && hasBlockingIssues(state.issues)) return false;
+        if (poolView === "needs_fix" && !hasBlockingIssues(state.issues)) return false;
         if (!normalizedSearchQuery) return true;
         return buildPlayerSearchIndex(
           state.player,

@@ -33,12 +33,31 @@ export const POOL_LANE_LABELS: Record<PoolLane, string> = {
   ready: "Ready"
 };
 
+/**
+ * Issue codes that are purely informational — extra balancing context, not a blocking rule.
+ * They still surface as chips and in the Rank Δ view, but must NOT push a player into the
+ * Need Fix lane. The rank-delta warning is advisory: a large gap between the balancer rank and
+ * the OW rank is something to be aware of when balancing, not a problem that has to be fixed.
+ */
+const NON_BLOCKING_ISSUE_CODES: ReadonlySet<PlayerValidationIssue["code"]> = new Set([
+  "rank_delta_warning"
+]);
+
+export function isBlockingIssue(issue: PlayerValidationIssue): boolean {
+  return !NON_BLOCKING_ISSUE_CODES.has(issue.code);
+}
+
+/** Whether a player has any issue that should move them into the Need Fix lane. */
+export function hasBlockingIssues(issues: PlayerValidationIssue[]): boolean {
+  return issues.some(isBlockingIssue);
+}
+
 export function derivePoolLane(state: PlayerValidationState): PoolLane {
   if (!state.player.is_in_pool) {
     return "excluded";
   }
 
-  return state.issues.length > 0 ? "needs_fix" : "ready";
+  return hasBlockingIssues(state.issues) ? "needs_fix" : "ready";
 }
 
 export function getPoolDropPatch(targetLane: PoolLane): PoolDropPatch {
