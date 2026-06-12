@@ -17,11 +17,11 @@ pub(crate) fn archive_capacity_limit(ctx: &Context) -> usize {
 /// на двухточечном фронте: сумма там тождественно равна 1.0 и порядок решали
 /// тай-брейки (в продакшене это проявлялось как composite_score=1.0 у
 /// показанного варианта).
-pub(crate) fn knee_scores(objectives: &[Objectives]) -> Vec<f64> {
+pub(crate) fn knee_scores(objectives: &[Objectives], w_balance: f64, w_comfort: f64) -> Vec<f64> {
     let normed = normalize_objectives(objectives);
     normed
         .iter()
-        .map(|o| (o.balance * o.balance + o.comfort * o.comfort).sqrt())
+        .map(|o| (w_balance * o.balance * o.balance + w_comfort * o.comfort * o.comfort).sqrt())
         .collect()
 }
 
@@ -124,7 +124,7 @@ pub(crate) fn archive_selection_order(archive: &[ArchiveEntry]) -> Vec<usize> {
     let front: Vec<usize> = (0..archive.len()).collect();
     let crowding = crowding_distance(&front, &objectives);
     let signatures: Vec<u64> = archive.iter().map(|entry| entry.sig).collect();
-    let scores = knee_scores(&objectives);
+    let scores = knee_scores(&objectives, 1.0, 1.0);
     let score_ranked = knee_order(&objectives, &signatures, &scores);
 
     let best_balance_idx = best_balance_index(&objectives, &signatures);
@@ -194,7 +194,7 @@ pub(crate) fn archive_select_elites(archive: &[ArchiveEntry], count: usize) -> V
 
     let objectives: Vec<Objectives> = archive.iter().map(|entry| entry.obj).collect();
     let signatures: Vec<u64> = archive.iter().map(|entry| entry.sig).collect();
-    let scores = knee_scores(&objectives);
+    let scores = knee_scores(&objectives, 1.0, 1.0);
     let ranked = knee_order(&objectives, &signatures, &scores);
     let anchors = [
         ranked[0],
