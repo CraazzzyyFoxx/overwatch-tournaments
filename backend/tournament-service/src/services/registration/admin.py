@@ -15,13 +15,13 @@ from fastapi import HTTPException, status
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, normalize_sub_role
+from shared.hero_catalog import HeroCatalog
 from shared.services.division_grid_normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
     build_division_grid_normalizer,
 )
-from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, normalize_sub_role
-from shared.hero_catalog import HeroCatalog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -38,9 +38,9 @@ from src.services.registration.mapping_catalog import (
     target_spec_map,
     validate_mapping_config,
 )
+from src.services.registration.service import ensure_player_identity
 from src.services.registration.utils import (
     DEFAULT_BOOLEAN_TRUE_VALUES,
-    RoleSubroleEntry,
     DEFAULT_SORT_PRIORITY_SENTINEL,
     DEFAULT_SYNC_INTERVAL_SECONDS,
     GOOGLE_SHEET_FETCH_TIMEOUT,
@@ -48,6 +48,7 @@ from src.services.registration.utils import (
     ROLE_ORDER,
     UNKNOWN_PRIORITY_SENTINEL,
     VALID_ROLES,
+    RoleSubroleEntry,
     build_csv_export_url,
     build_header_keys,
     extract_sheet_source,
@@ -2504,6 +2505,13 @@ async def sync_google_sheet_feed(
                 if registration.status == "withdrawn":
                     registration.status = "approved"
                 updated += 1
+
+            # Resolve/provision the domain player so sheet-imported registrations
+            # carry user_id (mirrors create_registration). Without this, OW-rank
+            # lookup — which joins by user_id — finds nothing and the balancer
+            # rank-delta UI stays empty. Idempotent: respects an already-linked
+            # user_id, so re-syncs and already-linked rows are untouched.
+            await ensure_player_identity(session, registration)
 
             if binding is None:
                 binding = models.BalancerRegistrationGoogleSheetBinding(
