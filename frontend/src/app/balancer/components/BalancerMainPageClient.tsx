@@ -698,12 +698,10 @@ export function BalancerMainPageClient() {
         onRetry={lastJsonImportFile ? () => startJsonImport(lastJsonImportFile) : undefined}
       />
 
+      {/* Renders into the sidebar footer via a portal; returns null when nobody is viewing. */}
+      <BalancerPresenceStack userIds={presenceUserIds} workspaceId={workspaceId} />
+
       <div className="flex min-h-0 w-full flex-1 flex-col gap-3 pb-4">
-        {presenceUserIds.length > 0 ? (
-          <div className="flex items-center justify-end">
-            <BalancerPresenceStack userIds={presenceUserIds} workspaceId={workspaceId} />
-          </div>
-        ) : null}
         <div
           className={cn(
             "grid min-h-0 flex-1 gap-3",

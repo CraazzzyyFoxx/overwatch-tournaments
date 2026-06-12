@@ -211,6 +211,8 @@ export function BalancerSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-2 pt-0 group-data-[collapsible=icon]:px-1">
+        {/* Portal target for the live "viewing now" presence stack (filled by BalancerPresenceStack on the main page). */}
+        <div id="balancer-presence-slot" className="px-1 pb-1 empty:hidden" />
         <div className="mx-2 mb-1.5 h-px bg-sidebar-border/40" />
         <SidebarBackToSite />
         <SidebarUserDropdown />
