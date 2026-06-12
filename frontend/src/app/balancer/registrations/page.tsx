@@ -48,8 +48,6 @@ import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTo
 import BalancerRegistrationsColumnPicker from "@/app/balancer/registrations/_components/BalancerRegistrationsColumnPicker";
 import RegistrationRowActions from "@/app/balancer/registrations/_components/RegistrationRowActions";
 import BattleTagRankHistory from "@/components/BattleTagRankHistory";
-import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import {
   type BalancerRegistrationColumnDefinition,
   buildBalancerRegistrationColumns
@@ -92,21 +90,16 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { mergeStatusOptions } from "@/lib/balancer-statuses";
 import { notify } from "@/lib/notify";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
+import { ROLE_LABELS, getSubroleLabel } from "@/lib/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
 import registrationService from "@/services/registration.service";
 import type {
   AdminRegistration,
   AdminRegistrationRole,
   BalancerRoleCode,
-  BalancerRoleSubtype,
-  RegistrationRankAutofillMode,
-  RegistrationRankAutofillResponse,
-  RegistrationRankAutofillRole
+  BalancerRoleSubtype
 } from "@/types/balancer-admin.types";
 import type { RegistrationForm, SubroleCatalog } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
@@ -115,11 +108,6 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 type RegistrationStatusFilter = string;
 type InclusionFilter = "all" | "included" | "excluded";
 type SourceFilter = "all" | "manual" | "google_sheets";
-type RankAutofillPreviewOptions = {
-  overwriteExisting: boolean;
-  addToBalancer: boolean;
-  mode: RegistrationRankAutofillMode;
-};
 
 const RESPONSIVE_CLASS: Record<
   NonNullable<BalancerRegistrationColumnDefinition["responsive"]>,
@@ -250,454 +238,6 @@ function CheckInBadge({ registration }: { registration: AdminRegistration }) {
   );
 }
 
-function formatRankSource(role: RegistrationRankAutofillRole): string {
-  const nativeRank = role.division
-    ? `${role.division}${role.tier != null ? ` ${role.tier}` : ""}`
-    : null;
-  const capturedAt = role.captured_at ? formatSubmittedAt(role.captured_at) : null;
-  return [role.platform?.toUpperCase(), nativeRank, capturedAt].filter(Boolean).join(" / ");
-}
-
-/**
- * Per-role breakdown of the blended suggestion: division history + OW peak (current season) +
- * OW current, with the chosen signal marked. Lines with no value are omitted.
- */
-function formatBlendBreakdown(role: RegistrationRankAutofillRole): string[] {
-  const mark = (source: RegistrationRankAutofillRole["used_source"]) =>
-    role.used_source === source ? " ← used" : "";
-  const lines: string[] = [];
-  if (role.ow_rank_value != null) {
-    lines.push(`OW (week) ${role.ow_rank_value}${mark("ow")}`);
-  }
-  if (role.division_history_rank_value != null) {
-    lines.push(`balancer ${role.division_history_rank_value}${mark("division_history")}`);
-  }
-  if (role.analytics_rank_value != null) {
-    lines.push(`analytics ${role.analytics_rank_value}${mark("analytics")}`);
-  }
-  return lines;
-}
-
-function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
-  const grid = useDivisionGrid();
-  const roleLabel = ROLE_LABELS[role.role] ?? role.role;
-  const source = formatRankSource(role);
-  const breakdown = formatBlendBreakdown(role);
-  const isUpdate = role.action === "set" || role.action === "overwrite";
-  const isBlocked = role.action === "blocked" || role.action === "missing_rank";
-  const isMissing = role.action === "missing_rank";
-
-  const parsedDivision =
-    role.parsed_rank_value != null ? resolveDivisionFromRank(grid, role.parsed_rank_value) : null;
-  const currentDivision =
-    role.current_rank_value != null ? resolveDivisionFromRank(grid, role.current_rank_value) : null;
-
-  // Which rank value to show as the primary label
-  const primaryRank = isUpdate
-    ? role.parsed_rank_value
-    : (role.current_rank_value ?? role.parsed_rank_value);
-  const primaryDivision = isUpdate ? parsedDivision : (currentDivision ?? parsedDivision);
-
-  return (
-    <div
-      className={cn(
-        "inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]",
-        isUpdate
-          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-          : isBlocked
-            ? "border-orange-400/25 bg-orange-500/10 text-orange-100"
-            : "border-white/10 bg-white/5 text-white/60"
-      )}
-      title={[[role.reason, source].filter(Boolean).join(" / "), ...breakdown]
-        .filter(Boolean)
-        .join("\n")}
-    >
-      <span className="shrink-0" aria-hidden="true">
-        <PlayerRoleIcon role={getRoleIconName(role.role)} size={14} color="currentColor" />
-      </span>
-      <span className="sr-only">{roleLabel}</span>
-
-      {isMissing ? (
-        <span className="opacity-60">missing</span>
-      ) : (
-        <>
-          {/* When overwriting: show current → new */}
-          {isUpdate && role.current_rank_value != null && (
-            <>
-              {currentDivision != null && (
-                <PlayerDivisionIcon division={currentDivision} width={16} height={16} />
-              )}
-              <span className="tabular-nums opacity-50">{role.current_rank_value}</span>
-              <span className="opacity-40">→</span>
-            </>
-          )}
-          {primaryDivision != null && (
-            <PlayerDivisionIcon division={primaryDivision} width={16} height={16} />
-          )}
-          <span className="tabular-nums">{primaryRank ?? "-"}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function RankAutofillDialog({
-  open,
-  onOpenChange,
-  preview,
-  loadingPreview,
-  applying,
-  mode,
-  onModeChange,
-  overwriteExisting,
-  onOverwriteChange,
-  addToBalancer,
-  onAddToBalancerChange,
-  assignmentConfirmed,
-  onAssignmentConfirmedChange,
-  onApply
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  preview: RegistrationRankAutofillResponse | undefined;
-  loadingPreview: boolean;
-  applying: boolean;
-  mode: RegistrationRankAutofillMode;
-  onModeChange: (mode: RegistrationRankAutofillMode) => void;
-  overwriteExisting: boolean;
-  onOverwriteChange: (checked: boolean) => void;
-  addToBalancer: boolean;
-  onAddToBalancerChange: (checked: boolean) => void;
-  assignmentConfirmed: boolean;
-  onAssignmentConfirmedChange: (checked: boolean) => void;
-  onApply: () => void;
-}) {
-  const updatablePlayers =
-    preview?.players.filter(
-      (player) => player.status === "will_update" || player.status === "applied"
-    ) ?? [];
-  const skippedPlayers = preview?.players.filter((player) => player.status === "skipped") ?? [];
-  const unchangedPlayers = preview?.players.filter((player) => player.status === "unchanged") ?? [];
-
-  const isApplyDisabled =
-    !preview ||
-    (preview.role_updates === 0 && preview.balancer_additions === 0) ||
-    !assignmentConfirmed ||
-    loadingPreview ||
-    applying;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
-        {/* ── Header ── */}
-        <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-3.5 text-left">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <DialogTitle className="text-lg font-semibold tracking-tight text-white">
-                Autofill parsed ranks
-              </DialogTitle>
-              <DialogDescription className="mt-0.5 text-xs text-white/40">
-                Priority fallback per role. Main BattleTag only.
-              </DialogDescription>
-            </div>
-            {/* Stats strip — visible once preview loads */}
-            {preview && !loadingPreview && (
-              <div className="flex shrink-0 items-center divide-x divide-white/10 rounded-lg border border-white/10 bg-white/[0.03]">
-                {[
-                  { label: "Players", value: preview.total_registrations, color: "" },
-                  {
-                    label: "Update",
-                    value: preview.updatable_registrations,
-                    color: "text-emerald-300"
-                  },
-                  { label: "Ranks", value: preview.role_updates, color: "text-emerald-300" },
-                  {
-                    label: "→ Balancer",
-                    value: preview.balancer_additions,
-                    color: "text-cyan-300"
-                  },
-                  {
-                    label: "Skipped",
-                    value: preview.skipped_registrations,
-                    color: preview.skipped_registrations > 0 ? "text-orange-300" : ""
-                  }
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="px-3 py-2 text-center">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
-                      {label}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-base font-semibold tabular-nums",
-                        color || "text-white/80"
-                      )}
-                    >
-                      {value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogHeader>
-
-        {/* ── Settings strip ── */}
-        <div className="shrink-0 border-b border-white/10 bg-white/[0.02] px-5 py-2.5">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Source priority mode */}
-            <div className="flex rounded-lg border border-white/10 p-0.5">
-              {(
-                [
-                  { value: "ow_first", label: "OW → balancer → analytics" },
-                  { value: "balancer_first", label: "Balancer → analytics → OW" }
-                ] as { value: RegistrationRankAutofillMode; label: string }[]
-              ).map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onModeChange(value)}
-                  disabled={loadingPreview || applying}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
-                    mode === value
-                      ? "bg-indigo-500/20 text-indigo-200"
-                      : "text-white/50 hover:text-white/80"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="h-5 w-px bg-white/10" aria-hidden="true" />
-
-            {/* Overwrite checkbox */}
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={overwriteExisting}
-                onCheckedChange={(checked) => onOverwriteChange(checked === true)}
-                disabled={loadingPreview || applying}
-                aria-label="Overwrite existing ranks"
-              />
-              <span className="text-xs text-white/65 select-none">Overwrite existing ranks</span>
-            </label>
-
-            {/* Add to balancer checkbox */}
-            <label className="flex cursor-pointer items-center gap-2">
-              <Checkbox
-                checked={addToBalancer}
-                onCheckedChange={(checked) => onAddToBalancerChange(checked === true)}
-                disabled={loadingPreview || applying}
-                aria-label="Move eligible players to balancer"
-              />
-              <span className="text-xs text-white/65 select-none">Move eligible to balancer</span>
-            </label>
-
-            {loadingPreview && (
-              <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Loading preview…
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Scrollable content ── */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {!preview && !loadingPreview ? (
-            <div className="flex h-32 items-center justify-center text-sm text-white/30">
-              Preview is not loaded.
-            </div>
-          ) : preview ? (
-            <div className="divide-y divide-white/[0.06]">
-              {/* Will be assigned */}
-              <div className="px-5 py-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-                    Will be assigned
-                  </span>
-                  <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-                    {updatablePlayers.length}
-                  </span>
-                </div>
-                {updatablePlayers.length === 0 ? (
-                  <p className="text-xs text-white/30">No ranks to update.</p>
-                ) : (
-                  <div className="overflow-hidden rounded-xl border border-white/10">
-                    {updatablePlayers.map((player) => (
-                      <div
-                        key={player.registration_id}
-                        className="flex min-w-0 items-center gap-3 border-b border-white/[0.06] px-3 py-2 last:border-b-0"
-                      >
-                        <div className="min-w-0 w-48 shrink-0">
-                          <div className="truncate text-sm font-medium text-white/85">
-                            {player.battle_tag ??
-                              player.display_name ??
-                              `#${player.registration_id}`}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[11px] text-white/30">
-                            <span>#{player.registration_id}</span>
-                            {player.will_add_to_balancer && (
-                              <span className="rounded border border-cyan-400/20 bg-cyan-500/10 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-cyan-200">
-                                → Balancer
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex min-w-0 flex-wrap gap-1.5">
-                          {player.roles
-                            .filter((r) => r.action === "set" || r.action === "overwrite")
-                            .map((role) => (
-                              <RankAutofillRolePill key={role.role} role={role} />
-                            ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Skipped + Already set — side by side */}
-              <div className="grid gap-px lg:grid-cols-2">
-                {/* Skipped */}
-                <div className="px-5 py-3">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-                      Skipped
-                    </span>
-                    {skippedPlayers.length > 0 && (
-                      <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300">
-                        {skippedPlayers.length}
-                      </span>
-                    )}
-                  </div>
-                  {skippedPlayers.length === 0 ? (
-                    <p className="text-xs text-white/30">None skipped.</p>
-                  ) : (
-                    <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
-                      {skippedPlayers.map((player) => (
-                        <div
-                          key={player.registration_id}
-                          className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
-                        >
-                          <div className="truncate text-xs font-medium text-white/75">
-                            {player.battle_tag ??
-                              player.display_name ??
-                              `#${player.registration_id}`}
-                          </div>
-                          <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
-                            {player.reason ?? "Skipped"}
-                          </div>
-                          {player.will_add_to_balancer ? (
-                            <div className="mt-0.5 text-[11px] text-cyan-200/70">
-                              Will be moved to balancer.
-                            </div>
-                          ) : player.balancer_reason ? (
-                            <div className="mt-0.5 text-[11px] text-white/30">
-                              {player.balancer_reason}
-                            </div>
-                          ) : null}
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {player.roles.map((role) => (
-                              <RankAutofillRolePill key={role.role} role={role} />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Already set */}
-                <div className="px-5 py-3 lg:border-l lg:border-white/[0.06]">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
-                      Already set
-                    </span>
-                    {unchangedPlayers.length > 0 && (
-                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
-                        {unchangedPlayers.length}
-                      </span>
-                    )}
-                  </div>
-                  {unchangedPlayers.length === 0 ? (
-                    <p className="text-xs text-white/30">No unchanged registrations.</p>
-                  ) : (
-                    <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
-                      {unchangedPlayers.map((player) => (
-                        <div
-                          key={player.registration_id}
-                          className="border-b border-white/[0.06] px-3 py-2 last:border-b-0"
-                        >
-                          <div className="truncate text-xs font-medium text-white/75">
-                            {player.battle_tag ??
-                              player.display_name ??
-                              `#${player.registration_id}`}
-                          </div>
-                          <div className="mt-0.5 text-[11px] leading-4 text-white/35">
-                            {player.reason ?? "No rank changes needed."}
-                          </div>
-                          {player.will_add_to_balancer ? (
-                            <div className="mt-0.5 text-[11px] text-cyan-200/70">
-                              Will be moved to balancer.
-                            </div>
-                          ) : player.balancer_reason ? (
-                            <div className="mt-0.5 text-[11px] text-white/30">
-                              {player.balancer_reason}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="shrink-0 border-t border-white/10 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <label className="flex flex-1 cursor-pointer items-center gap-2.5">
-              <Checkbox
-                checked={assignmentConfirmed}
-                onCheckedChange={(checked) => onAssignmentConfirmedChange(checked === true)}
-                disabled={
-                  !preview ||
-                  (preview.role_updates === 0 && preview.balancer_additions === 0) ||
-                  loadingPreview ||
-                  applying
-                }
-                aria-label="Confirm rank assignment"
-              />
-              <span className="text-xs text-white/60 select-none">
-                Confirm assigning ranks to listed players
-              </span>
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={applying}
-            >
-              Cancel
-            </Button>
-            <Button size="sm" onClick={onApply} disabled={isApplyDisabled}>
-              {applying ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Check className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Apply ranks
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function BalancerRegistrationsPage() {
   const tournamentId = useBalancerTournamentId();
   const queryClient = useQueryClient();
@@ -719,11 +259,6 @@ export default function BalancerRegistrationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRegistration, setEditingRegistration] = useState<AdminRegistration | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-  const [rankAutofillOpen, setRankAutofillOpen] = useState(false);
-  const [autofillMode, setAutofillMode] = useState<RegistrationRankAutofillMode>("ow_first");
-  const [overwriteExistingRanks, setOverwriteExistingRanks] = useState(false);
-  const [addAutofilledPlayersToBalancer, setAddAutofilledPlayersToBalancer] = useState(false);
-  const [rankAutofillConfirmed, setRankAutofillConfirmed] = useState(false);
 
   const toggleExpanded = (registrationId: number) =>
     setExpandedIds((current) => {
@@ -943,90 +478,6 @@ export default function BalancerRegistrationsPage() {
     }
   });
 
-  const rankAutofillPreviewMutation = useMutation({
-    mutationFn: ({ overwriteExisting, addToBalancer, mode }: RankAutofillPreviewOptions) => {
-      if (!tournamentId) {
-        throw new Error("Select a tournament first");
-      }
-      return balancerAdminService.previewRegistrationRankAutofill(tournamentId, {
-        overwrite_existing: overwriteExisting,
-        add_to_balancer: addToBalancer,
-        mode
-      });
-    },
-    onSuccess: () => {
-      setRankAutofillConfirmed(false);
-      setRankAutofillOpen(true);
-    }
-  });
-
-  const rankAutofillApplyMutation = useMutation({
-    mutationFn: () => {
-      if (!tournamentId) {
-        throw new Error("Select a tournament first");
-      }
-      return balancerAdminService.applyRegistrationRankAutofill(tournamentId, {
-        overwrite_existing: overwriteExistingRanks,
-        add_to_balancer: addAutofilledPlayersToBalancer,
-        mode: autofillMode
-      });
-    },
-    onSuccess: async (result) => {
-      await invalidateRegistrations();
-      setRankAutofillOpen(false);
-      notify.success("Ranks autofilled", {
-        description:
-          `${result.applied_registrations} player${
-            result.applied_registrations === 1 ? "" : "s"
-          }, ${result.role_updates} role rank${
-            result.role_updates === 1 ? "" : "s"
-          } updated. ${result.skipped_registrations} skipped.` +
-          (result.balancer_additions > 0 ? ` ${result.balancer_additions} moved to balancer.` : "")
-      });
-    }
-  });
-
-  const openRankAutofillPreview = () => {
-    setOverwriteExistingRanks(false);
-    setAddAutofilledPlayersToBalancer(false);
-    setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({
-      overwriteExisting: false,
-      addToBalancer: false,
-      mode: autofillMode
-    });
-  };
-
-  const handleAutofillModeChange = (mode: RegistrationRankAutofillMode) => {
-    setAutofillMode(mode);
-    setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({
-      overwriteExisting: overwriteExistingRanks,
-      addToBalancer: addAutofilledPlayersToBalancer,
-      mode
-    });
-  };
-
-  const handleRankOverwriteChange = (checked: boolean) => {
-    setOverwriteExistingRanks(checked);
-    setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({
-      overwriteExisting: checked,
-      addToBalancer: addAutofilledPlayersToBalancer,
-      mode: autofillMode
-    });
-  };
-
-  const handleAddToBalancerChange = (checked: boolean) => {
-    setAddAutofilledPlayersToBalancer(checked);
-    setRankAutofillConfirmed(false);
-    rankAutofillPreviewMutation.mutate({
-      overwriteExisting: overwriteExistingRanks,
-      addToBalancer: checked,
-      mode: autofillMode
-    });
-  };
-
   const registrations = registrationsQuery.data ?? [];
   const filteredRegistrations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -1182,19 +633,17 @@ export default function BalancerRegistrationsPage() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={openRankAutofillPreview}
-                disabled={
-                  rankAutofillPreviewMutation.isPending || rankAutofillApplyMutation.isPending
-                }
-              >
-                {rankAutofillPreviewMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
+              <Button variant="outline" asChild>
+                <Link
+                  href={
+                    searchParams.toString()
+                      ? `/balancer/registrations/rank-autofill?${searchParams.toString()}`
+                      : "/balancer/registrations/rank-autofill"
+                  }
+                >
                   <Sparkles className="mr-2 h-4 w-4" />
-                )}
-                Autofill ranks
+                  Autofill ranks
+                </Link>
               </Button>
               <Button
                 variant="outline"
@@ -1757,23 +1206,6 @@ export default function BalancerRegistrationsPage() {
           </div>
         </CardContent>
       </Card>
-
-      <RankAutofillDialog
-        open={rankAutofillOpen}
-        onOpenChange={setRankAutofillOpen}
-        preview={rankAutofillPreviewMutation.data}
-        loadingPreview={rankAutofillPreviewMutation.isPending}
-        applying={rankAutofillApplyMutation.isPending}
-        mode={autofillMode}
-        onModeChange={handleAutofillModeChange}
-        overwriteExisting={overwriteExistingRanks}
-        onOverwriteChange={handleRankOverwriteChange}
-        addToBalancer={addAutofilledPlayersToBalancer}
-        onAddToBalancerChange={handleAddToBalancerChange}
-        assignmentConfirmed={rankAutofillConfirmed}
-        onAssignmentConfirmedChange={setRankAutofillConfirmed}
-        onApply={() => rankAutofillApplyMutation.mutate()}
-      />
 
       <Dialog
         open={createOpen}

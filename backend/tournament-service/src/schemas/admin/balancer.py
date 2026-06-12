@@ -19,14 +19,18 @@ RankAutofillRoleAction = Literal[
     "set",
     "overwrite",
     "keep_existing",
+    "unverified",
     "missing_rank",
     "blocked",
 ]
 RankAutofillSource = Literal["analytics", "balancer"]
 RankAutofillUsedSource = Literal["division_history", "ow", "analytics"]
+# Individual source of a rank-autofill stage chain.
+RankAutofillSourceKey = Literal["ow", "division_history", "analytics"]
 # Priority chains for rank autofill:
 #   ow_first       -> OW (week composite) -> balancer (division history) -> analytics (past tournaments)
 #   balancer_first -> balancer -> analytics -> OW
+# Legacy presets; superseded by an explicit ``stages`` chain when one is supplied.
 RankAutofillMode = Literal["ow_first", "balancer_first"]
 
 __all__ = (
@@ -54,6 +58,7 @@ __all__ = (
     "BalancerRegistrationCreateRequest",
     "BalancerRegistrationExclusionRequest",
     "BalancerRegistrationRead",
+    "BalancerRankAutofillStage",
     "BalancerRegistrationRankAutofillRequest",
     "BalancerRegistrationRankAutofillResponse",
     "BalancerRegistrationRankAutofillPlayer",
@@ -220,11 +225,32 @@ class BalancerRegistrationRoleInput(BaseModel):
     top_heroes: list[str] | None = None
 
 
+class BalancerRankAutofillStage(BaseModel):
+    """A single source in the rank-autofill priority chain.
+
+    ``lookback_tournaments`` limits ``division_history``/``analytics`` to tournaments whose number is
+    within the last N before the current one; ``lookback_days`` overrides the OW weekly window. The
+    irrelevant lookback for a given ``source`` is ignored by the service.
+    """
+
+    source: RankAutofillSourceKey
+    enabled: bool = True
+    lookback_tournaments: int | None = Field(None, ge=1)
+    lookback_days: int | None = Field(None, ge=1)
+
+
 class BalancerRegistrationRankAutofillRequest(BaseModel):
     registration_ids: list[int] | None = None
     overwrite_existing: bool = False
     add_to_balancer: bool = False
+    # Apply found role ranks even when other active roles have no parsed rank (otherwise the whole
+    # registration is skipped). Never clears an existing rank — unfilled roles are left untouched.
+    allow_partial: bool = False
+    # Legacy preset; only used when ``stages`` is not supplied.
     mode: RankAutofillMode = "ow_first"
+    # Explicit ordered priority chain. When non-empty it supersedes ``mode``; disabled stages are
+    # dropped and duplicate sources are de-duplicated, preserving order.
+    stages: list[BalancerRankAutofillStage] | None = None
 
 
 class BalancerRegistrationRankAutofillRole(BaseModel):
@@ -254,6 +280,8 @@ class BalancerRegistrationRankAutofillPlayer(BaseModel):
     reason: str | None = None
     will_add_to_balancer: bool = False
     balancer_reason: str | None = None
+    # True when some active roles were filled but others had no parsed rank (allow_partial).
+    partial: bool = False
     roles: list[BalancerRegistrationRankAutofillRole] = Field(default_factory=list)
 
 
@@ -263,6 +291,8 @@ class BalancerRegistrationRankAutofillResponse(BaseModel):
     applied_registrations: int
     skipped_registrations: int
     unchanged_registrations: int
+    # Registrations with >=1 active role that has a current rank no enabled source could corroborate.
+    unverified_registrations: int
     role_updates: int
     overwrite_existing: bool
     add_to_balancer: bool

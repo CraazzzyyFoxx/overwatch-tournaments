@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -112,6 +112,20 @@ class _OwRankSignals:
 
     composite_rank_value: int | None = None
     latest_snapshot: models.UserRankSnapshot | Any | None = None
+
+
+@dataclass(frozen=True)
+class _ResolvedAutofillStage:
+    """One enabled source in the resolved autofill chain, with its lookback window.
+
+    ``lookback_tournaments`` applies to the tournament-based sources (``division_history``,
+    ``analytics``); ``lookback_days`` overrides the OW weekly window. The irrelevant field for a
+    given ``source`` is simply ignored by the orchestrator.
+    """
+
+    source: str
+    lookback_tournaments: int | None = None
+    lookback_days: int | None = None
 
 
 # Registration role code -> canonical RankRole value (e.g. dps -> damage). Single source of
@@ -1268,12 +1282,16 @@ def build_registration_rank_autofill_plan(
     *,
     battle_tag_linked: bool,
     overwrite_existing: bool,
+    allow_partial: bool = False,
     applied: bool = False,
 ) -> tuple[dict[str, Any], list[tuple[Any, Any]]]:
     """Build the rank autofill preview row and pending role updates.
 
-    Only active registration roles are considered, and parsed ranks are expected
-    to come from the registration's main battle tag only.
+    Only active registration roles are considered, and parsed ranks are expected to come from the
+    registration's main battle tag only. With ``allow_partial`` the found role ranks are still
+    applied when other active roles have no parsed rank (instead of skipping the whole registration);
+    unfilled roles are left untouched — an existing rank is never cleared. A role that has a current
+    rank no enabled source could corroborate is reported as ``unverified`` (informational only).
     """
 
     display_name = getattr(registration, "display_name", None)
@@ -1284,6 +1302,7 @@ def build_registration_rank_autofill_plan(
         "battle_tag": battle_tag,
         "status": "skipped",
         "reason": None,
+        "partial": False,
         "roles": [],
     }
 
@@ -1324,8 +1343,12 @@ def build_registration_rank_autofill_plan(
 
         if current_rank is not None and not overwrite_existing:
             kept_existing = True
-            role_row["action"] = "keep_existing"
-            role_row["reason"] = "Existing registration rank is kept. Enable overwrite to replace it."
+            if parsed_rank is None:
+                role_row["action"] = "unverified"
+                role_row["reason"] = "Current rank kept; no enabled source found a value to verify it."
+            else:
+                role_row["action"] = "keep_existing"
+                role_row["reason"] = "Existing registration rank is kept. Enable overwrite to replace it."
         elif parsed_rank is None:
             missing_roles.append(REGISTRATION_ROLE_LABELS.get(role_code, str(role_code)))
         elif current_rank == parsed_rank:
@@ -1339,7 +1362,8 @@ def build_registration_rank_autofill_plan(
 
         row["roles"].append(role_row)
 
-    if missing_roles:
+    if missing_roles and not allow_partial:
+        # All-or-nothing: one unparsed role skips the whole registration and blocks its updates.
         row["reason"] = f"No parsed rank for registered role(s): {', '.join(missing_roles)}."
         for role_row in row["roles"]:
             if role_row["action"] in {"set", "overwrite"}:
@@ -1349,7 +1373,16 @@ def build_registration_rank_autofill_plan(
 
     if updates:
         row["status"] = "applied" if applied else "will_update"
+        if missing_roles:
+            # allow_partial: apply what was found, leave the unparsed roles untouched.
+            row["partial"] = True
+            row["reason"] = f"Partial: applied found ranks; no parsed rank for {', '.join(missing_roles)}."
         return row, updates
+
+    if missing_roles:
+        # allow_partial but nothing to apply (the parsed roles already matched / were kept).
+        row["reason"] = f"No parsed rank for registered role(s): {', '.join(missing_roles)}."
+        return row, []
 
     row["status"] = "unchanged"
     row["reason"] = (
@@ -1459,48 +1492,53 @@ async def _load_latest_ranks_from_balancer_history(
     workspace_id: int,
     normalizer: DivisionGridNormalizer | None,
     target_grid: DivisionGrid,
+    min_tournament_number: int | None = None,
 ) -> dict[int, dict[str, int]]:
     """Return dict[user_id][role_code] → rank_value from past registration records.
 
     Searches the workspace's previous tournaments (excluding the current one), ordered
     by tournament number descending so the most recent entry wins. Ranks are normalized from
-    each source tournament's grid version into the target grid.
+    each source tournament's grid version into the target grid. When ``min_tournament_number`` is
+    set, only tournaments whose ``number`` is at least that cutoff are considered (recency window;
+    rows with a ``NULL`` number naturally fall outside the window).
     """
     if not user_ids:
         return {}
 
-    rows = (
-        await session.execute(
-            sa.select(
-                models.BalancerRegistration.user_id,
-                models.BalancerRegistrationRole.role,
-                models.BalancerRegistrationRole.rank_value,
-                models.Tournament.division_grid_version_id,
-            )
-            .join(
-                models.BalancerRegistrationRole,
-                models.BalancerRegistrationRole.registration_id == models.BalancerRegistration.id,
-            )
-            .join(
-                models.Tournament,
-                models.Tournament.id == models.BalancerRegistration.tournament_id,
-            )
-            .where(
-                models.BalancerRegistration.user_id.in_(user_ids),
-                models.Tournament.workspace_id == workspace_id,
-                models.BalancerRegistration.tournament_id != current_tournament_id,
-                models.BalancerRegistration.deleted_at.is_(None),
-                models.BalancerRegistrationRole.is_active.is_(True),
-                models.BalancerRegistrationRole.rank_value.is_not(None),
-            )
-            .order_by(
-                models.BalancerRegistration.user_id,
-                models.BalancerRegistrationRole.role,
-                models.Tournament.number.desc().nullslast(),
-                models.BalancerRegistration.tournament_id.desc(),
-            )
+    stmt = (
+        sa.select(
+            models.BalancerRegistration.user_id,
+            models.BalancerRegistrationRole.role,
+            models.BalancerRegistrationRole.rank_value,
+            models.Tournament.division_grid_version_id,
         )
-    ).all()
+        .join(
+            models.BalancerRegistrationRole,
+            models.BalancerRegistrationRole.registration_id == models.BalancerRegistration.id,
+        )
+        .join(
+            models.Tournament,
+            models.Tournament.id == models.BalancerRegistration.tournament_id,
+        )
+        .where(
+            models.BalancerRegistration.user_id.in_(user_ids),
+            models.Tournament.workspace_id == workspace_id,
+            models.BalancerRegistration.tournament_id != current_tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+            models.BalancerRegistrationRole.is_active.is_(True),
+            models.BalancerRegistrationRole.rank_value.is_not(None),
+        )
+        .order_by(
+            models.BalancerRegistration.user_id,
+            models.BalancerRegistrationRole.role,
+            models.Tournament.number.desc().nullslast(),
+            models.BalancerRegistration.tournament_id.desc(),
+        )
+    )
+    if min_tournament_number is not None:
+        stmt = stmt.where(models.Tournament.number >= min_tournament_number)
+
+    rows = (await session.execute(stmt)).all()
 
     latest: dict[int, dict[str, int]] = {}
     for row in rows:
@@ -1521,6 +1559,7 @@ async def _load_latest_ranks_from_tournament_history(
     workspace_id: int,
     normalizer: DivisionGridNormalizer | None,
     target_grid: DivisionGrid,
+    min_tournament_number: int | None = None,
 ) -> dict[int, dict[str, int]]:
     """Return dict[user_id][registration_role_code] → rank from past tournament participation.
 
@@ -1528,39 +1567,43 @@ async def _load_latest_ranks_from_tournament_history(
     (``tournament.player``), distinct from the balancer-registration history. Excludes the current
     tournament and substitution rows; the most recent tournament wins per role. ``Player.role`` is
     a HeroClass and is bridged to the registration role code (Damage → dps) to match keying. Ranks
-    are normalized from each source tournament's grid version into the target grid.
+    are normalized from each source tournament's grid version into the target grid. When
+    ``min_tournament_number`` is set, only tournaments whose ``number`` is at least that cutoff are
+    considered (recency window; rows with a ``NULL`` number naturally fall outside the window).
     """
     if not user_ids:
         return {}
 
-    rows = (
-        await session.execute(
-            sa.select(
-                models.Player.user_id,
-                models.Player.role,
-                models.Player.rank,
-                models.Tournament.division_grid_version_id,
-            )
-            .join(
-                models.Tournament,
-                models.Tournament.id == models.Player.tournament_id,
-            )
-            .where(
-                models.Player.user_id.in_(user_ids),
-                models.Tournament.workspace_id == workspace_id,
-                models.Player.tournament_id != current_tournament_id,
-                models.Player.role.is_not(None),
-                models.Player.is_substitution.is_(False),
-                models.Player.rank > 0,
-            )
-            .order_by(
-                models.Player.user_id,
-                models.Player.role,
-                models.Tournament.number.desc().nullslast(),
-                models.Player.tournament_id.desc(),
-            )
+    stmt = (
+        sa.select(
+            models.Player.user_id,
+            models.Player.role,
+            models.Player.rank,
+            models.Tournament.division_grid_version_id,
         )
-    ).all()
+        .join(
+            models.Tournament,
+            models.Tournament.id == models.Player.tournament_id,
+        )
+        .where(
+            models.Player.user_id.in_(user_ids),
+            models.Tournament.workspace_id == workspace_id,
+            models.Player.tournament_id != current_tournament_id,
+            models.Player.role.is_not(None),
+            models.Player.is_substitution.is_(False),
+            models.Player.rank > 0,
+        )
+        .order_by(
+            models.Player.user_id,
+            models.Player.role,
+            models.Tournament.number.desc().nullslast(),
+            models.Player.tournament_id.desc(),
+        )
+    )
+    if min_tournament_number is not None:
+        stmt = stmt.where(models.Tournament.number >= min_tournament_number)
+
+    rows = (await session.execute(stmt)).all()
 
     latest: dict[int, dict[str, int]] = {}
     for row in rows:
@@ -1678,6 +1721,7 @@ async def _load_ow_rank_signals_by_battle_tag_id(
     session: AsyncSession,
     battle_tag_ids: list[int],
     now: datetime,
+    week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> dict[int, dict[str, _OwRankSignals]]:
     """Return per (battle_tag_id, rank_role) the weekly OW rank composite + latest snapshot."""
     if not battle_tag_ids:
@@ -1692,17 +1736,18 @@ async def _load_ow_rank_signals_by_battle_tag_id(
         )
         .order_by(models.UserRankSnapshot.captured_at.desc(), models.UserRankSnapshot.id.desc())
     )
-    return _group_ow_rank_signals(result.scalars().all(), now)
+    return _group_ow_rank_signals(result.scalars().all(), now, week_window)
 
 
 def _group_ow_rank_signals(
     snapshots_newest_first: Iterable[models.UserRankSnapshot | Any],
     now: datetime,
+    week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> dict[int, dict[str, _OwRankSignals]]:
     """Group newest-first snapshots into per (battle_tag_id, role) weekly OW signals.
 
     Pure (no DB) so the windowing logic can be unit-tested. For each (tag, role) the composite
-    rank is ``round((max + mean) / 2)`` over the weekly window (see ``_compute_ow_week_rank_value``);
+    rank is ``round((max + mean) / 2)`` over the ``week_window`` (see ``_compute_ow_week_rank_value``);
     the first snapshot seen (newest) is kept as the latest for display metadata.
     """
     grouped: dict[int, dict[str, list[Any]]] = {}
@@ -1714,7 +1759,7 @@ def _group_ow_rank_signals(
         out = signals_by_tag_id.setdefault(tag_id, {})
         for role, snaps in role_map.items():
             out[role] = _OwRankSignals(
-                composite_rank_value=_compute_ow_week_rank_value(snaps, now),
+                composite_rank_value=_compute_ow_week_rank_value(snaps, now, week_window),
                 latest_snapshot=snaps[0] if snaps else None,
             )
     return signals_by_tag_id
@@ -1723,12 +1768,13 @@ def _group_ow_rank_signals(
 def _compute_ow_week_rank_value(
     snapshots: Iterable[models.UserRankSnapshot | Any],
     now: datetime,
+    week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> int | None:
     """Composite OW rank over a weekly window: ``round((max + mean) / 2)`` of mapped rank_value.
 
-    Window selection (per role):
-      1. snapshots captured within the last 7 days from ``now``;
-      2. if none, snapshots within 7 days of the player's most recent snapshot;
+    Window selection (per role), using ``week_window`` (default 7 days):
+      1. snapshots captured within the last ``week_window`` from ``now``;
+      2. if none, snapshots within ``week_window`` of the player's most recent snapshot;
       3. if still none (no usable timestamps), the single most-recent snapshot.
     Returns ``None`` only when there are no snapshots carrying a ``rank_value``.
     """
@@ -1737,10 +1783,10 @@ def _compute_ow_week_rank_value(
         return None
 
     dated = [s for s in snaps if getattr(s, "captured_at", None) is not None]
-    window = [s for s in dated if s.captured_at >= now - OW_RANK_WEEK_WINDOW]
+    window = [s for s in dated if s.captured_at >= now - week_window]
     if not window and dated:
         latest_at = max(s.captured_at for s in dated)
-        window = [s for s in dated if s.captured_at >= latest_at - OW_RANK_WEEK_WINDOW]
+        window = [s for s in dated if s.captured_at >= latest_at - week_window]
     if not window:
         window = [snaps[0]]
 
@@ -1748,19 +1794,60 @@ def _compute_ow_week_rank_value(
     return round((max(values) + sum(values) / len(values)) / 2)
 
 
+# Legacy ``mode`` presets, expressed as a default stage order. Used only when no explicit stage
+# chain is supplied on the request.
+_DEFAULT_STAGE_ORDER_BY_MODE: dict[str, tuple[str, ...]] = {
+    "ow_first": ("ow", "division_history", "analytics"),
+    "balancer_first": ("division_history", "analytics", "ow"),
+}
+
+
+def resolve_autofill_stages(
+    mode: str | None,
+    stages: Sequence[Any] | None,
+) -> list[_ResolvedAutofillStage]:
+    """Resolve the effective, ordered list of enabled autofill stages.
+
+    When ``stages`` is non-empty it wins: disabled entries are dropped and duplicate sources are
+    de-duplicated (first occurrence kept), preserving order. Otherwise the legacy ``mode`` preset
+    order is used, with no lookback windows. ``stages`` items are duck-typed (``source``,
+    ``enabled``, ``lookback_tournaments``, ``lookback_days``) so unit tests can pass simple objects.
+    """
+    if stages:
+        resolved: list[_ResolvedAutofillStage] = []
+        seen: set[str] = set()
+        for stage in stages:
+            if not getattr(stage, "enabled", True):
+                continue
+            source = getattr(stage, "source", None)
+            if source is None or source in seen:
+                continue
+            seen.add(source)
+            resolved.append(
+                _ResolvedAutofillStage(
+                    source=source,
+                    lookback_tournaments=getattr(stage, "lookback_tournaments", None),
+                    lookback_days=getattr(stage, "lookback_days", None),
+                )
+            )
+        return resolved
+
+    order = _DEFAULT_STAGE_ORDER_BY_MODE.get(mode or "ow_first", _DEFAULT_STAGE_ORDER_BY_MODE["ow_first"])
+    return [_ResolvedAutofillStage(source=source) for source in order]
+
+
 def _build_priority_rank_data(
-    mode: str,
+    order: Sequence[str],
     signals: _OwRankSignals | None,
     division_history_rank: int | None,
     analytics_rank: int | None,
     grid: DivisionGrid,
 ) -> _RankData | None:
-    """Pick a rank by strict priority fallback over OW / balancer / analytics for the given mode.
+    """Pick a rank by strict priority fallback over the given (enabled, ordered) source chain.
 
-    ``ow_first``       -> [OW (weekly composite), balancer (division history), analytics]
-    ``balancer_first`` -> [balancer, analytics, OW]
-    The first source carrying a value wins (no max blending). Returns ``None`` when every source
-    is empty (the role is then treated as missing).
+    ``order`` lists the enabled sources in priority order (subset of ``ow`` / ``division_history`` /
+    ``analytics``). The first source carrying a value wins (no max blending). Returns ``None`` when
+    no source in ``order`` carries a value (the role is then treated as missing).
     """
     latest_snapshot = signals.latest_snapshot if signals else None
     ow_rank = _map_ow_rank_value(signals.composite_rank_value, grid) if signals else None
@@ -1771,13 +1858,8 @@ def _build_priority_rank_data(
         "division_history": division_history_rank,
         "analytics": analytics_rank,
     }
-    order = (
-        ("division_history", "analytics", "ow")
-        if mode == "balancer_first"
-        else ("ow", "division_history", "analytics")
-    )
 
-    used_source = next((source for source in order if candidates[source] is not None), None)
+    used_source = next((source for source in order if candidates.get(source) is not None), None)
     if used_source is None:
         return None
     chosen = candidates[used_source]
@@ -1814,6 +1896,18 @@ def _map_ow_snapshot_rank(snapshot: models.UserRankSnapshot | Any | None, grid: 
     return _map_ow_rank_value(getattr(snapshot, "rank_value", None), grid)
 
 
+def _autofill_lookback_cutoff(target_number: int | None, lookback_tournaments: int | None) -> int | None:
+    """Min ``Tournament.number`` for a "last N tournaments" window, or None when not applicable.
+
+    Returns ``target_number - lookback_tournaments`` so that tournaments numbered
+    ``[target - N, target)`` (the N immediately preceding the current one, which is excluded
+    elsewhere) qualify. ``None`` when no window is requested or the current tournament has no number.
+    """
+    if lookback_tournaments is None or target_number is None:
+        return None
+    return target_number - lookback_tournaments
+
+
 async def autofill_registration_ranks_from_parsed(
     session: AsyncSession,
     tournament_id: int,
@@ -1821,29 +1915,51 @@ async def autofill_registration_ranks_from_parsed(
     registration_ids: list[int] | None = None,
     overwrite_existing: bool = False,
     add_to_balancer: bool = False,
+    allow_partial: bool = False,
     mode: str = "ow_first",
+    stages: Sequence[Any] | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
     if registration_ids is not None:
         registration_ids = list(dict.fromkeys(int(registration_id) for registration_id in registration_ids))
 
+    # Resolve the effective, ordered chain of enabled sources (explicit ``stages`` win over ``mode``).
+    resolved_stages = resolve_autofill_stages(mode, stages)
+    order = tuple(stage.source for stage in resolved_stages)
+    enabled_sources = set(order)
+    ow_lookback_days = next((s.lookback_days for s in resolved_stages if s.source == "ow"), None)
+    division_lookback = next(
+        (s.lookback_tournaments for s in resolved_stages if s.source == "division_history"), None
+    )
+    analytics_lookback = next(
+        (s.lookback_tournaments for s in resolved_stages if s.source == "analytics"), None
+    )
+
     now = datetime.now(UTC)
     tournament = await _load_tournament_for_autofill(session, tournament_id)
     grid = DivisionGrid.from_version(tournament.division_grid_version if tournament else None)
+    target_number = getattr(tournament, "number", None) if tournament is not None else None
 
     registrations = await _load_rank_autofill_registrations(session, tournament_id, registration_ids)
     battle_tags_by_key = await _load_main_battle_tags_by_key(session, registrations)
-    ow_signals_by_tag_id = await _load_ow_rank_signals_by_battle_tag_id(
-        session,
-        [battle_tag.id for battle_tag in battle_tags_by_key.values()],
-        now,
-    )
+
+    # Only load a source when its stage is enabled (skips its DB query otherwise). A disabled
+    # source contributes no candidate, so it can never win the priority chain.
+    ow_signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
+    if "ow" in enabled_sources:
+        ow_week_window = timedelta(days=ow_lookback_days) if ow_lookback_days else OW_RANK_WEEK_WINDOW
+        ow_signals_by_tag_id = await _load_ow_rank_signals_by_battle_tag_id(
+            session,
+            [battle_tag.id for battle_tag in battle_tags_by_key.values()],
+            now,
+            ow_week_window,
+        )
 
     # Balancer history (division_history) and tournament-participation history (analytics) are
     # both candidates in the priority chain, keyed by user_id then registration role code.
     balancer_history_by_user_id: dict[int, dict[str, int]] = {}
     analytics_history_by_user_id: dict[int, dict[str, int]] = {}
-    if tournament is not None:
+    if tournament is not None and ({"division_history", "analytics"} & enabled_sources):
         user_ids = [
             battle_tag.user_id
             for battle_tag in battle_tags_by_key.values()
@@ -1853,22 +1969,26 @@ async def autofill_registration_ranks_from_parsed(
         # tournament's grid. Best-effort: skip when the target version is unknown or the
         # normalizer cannot be built (loaders then fall back to raw ranks).
         normalizer = await _build_autofill_rank_normalizer(session, tournament)
-        balancer_history_by_user_id = await _load_latest_ranks_from_balancer_history(
-            session,
-            user_ids,
-            tournament_id,
-            tournament.workspace_id,
-            normalizer,
-            grid,
-        )
-        analytics_history_by_user_id = await _load_latest_ranks_from_tournament_history(
-            session,
-            user_ids,
-            tournament_id,
-            tournament.workspace_id,
-            normalizer,
-            grid,
-        )
+        if "division_history" in enabled_sources:
+            balancer_history_by_user_id = await _load_latest_ranks_from_balancer_history(
+                session,
+                user_ids,
+                tournament_id,
+                tournament.workspace_id,
+                normalizer,
+                grid,
+                _autofill_lookback_cutoff(target_number, division_lookback),
+            )
+        if "analytics" in enabled_sources:
+            analytics_history_by_user_id = await _load_latest_ranks_from_tournament_history(
+                session,
+                user_ids,
+                tournament_id,
+                tournament.workspace_id,
+                normalizer,
+                grid,
+                _autofill_lookback_cutoff(target_number, analytics_lookback),
+            )
 
     players: list[dict[str, Any]] = []
     applied_registrations = 0
@@ -1890,7 +2010,7 @@ async def autofill_registration_ranks_from_parsed(
         rank_data_by_role: dict[str, _RankData | Any] = {}
         for registration_role, rank_role in RANK_ROLE_BY_REGISTRATION_ROLE.items():
             resolved = _build_priority_rank_data(
-                mode,
+                order,
                 ow_signals_by_role.get(rank_role),
                 balancer_by_role.get(registration_role),
                 analytics_by_role.get(registration_role),
@@ -1904,6 +2024,7 @@ async def autofill_registration_ranks_from_parsed(
             rank_data_by_role,
             battle_tag_linked=main_battle_tag is not None,
             overwrite_existing=overwrite_existing,
+            allow_partial=allow_partial,
             applied=apply,
         )
         will_add_to_balancer, balancer_reason = _rank_autofill_balancer_addition(
@@ -1947,6 +2068,9 @@ async def autofill_registration_ranks_from_parsed(
     updatable_registrations = sum(1 for row in players if row["status"] in {"will_update", "applied"})
     skipped_registrations = sum(1 for row in players if row["status"] == "skipped")
     unchanged_registrations = sum(1 for row in players if row["status"] == "unchanged")
+    unverified_registrations = sum(
+        1 for row in players if any(role.get("action") == "unverified" for role in row["roles"])
+    )
 
     return {
         "total_registrations": len(players),
@@ -1954,6 +2078,7 @@ async def autofill_registration_ranks_from_parsed(
         "applied_registrations": applied_registrations,
         "skipped_registrations": skipped_registrations,
         "unchanged_registrations": unchanged_registrations,
+        "unverified_registrations": unverified_registrations,
         "role_updates": role_updates,
         "overwrite_existing": overwrite_existing,
         "add_to_balancer": add_to_balancer,
