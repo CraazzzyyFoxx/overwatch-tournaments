@@ -2509,7 +2509,7 @@ async def get_statistics_by_heroes_all_values_filtered(
 
 async def get_best_teammates(
     session: AsyncSession, user_id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None,
-) -> tuple[typing.Sequence[tuple[models.User, float, int, float | None, float | None]], int]:
+) -> tuple[typing.Sequence[tuple[models.User, float, int, int, float | None, float | None]], int]:
     """
     Retrieves a user's best teammates, including win rate, tournaments played together, and performance statistics.
 
@@ -2627,6 +2627,26 @@ async def get_best_teammates(
         .group_by(shared_teams.c.teammate_id)
     ).cte("stats_query")
 
+    # Distinct maps played together (separate CTE so the encounter→match fan-out
+    # does not skew the winrate/tournament aggregates in teammates_query).
+    maps_query = (
+        sa.select(
+            shared_teams.c.teammate_id.label("user_id"),
+            sa.func.count(sa.distinct(models.Match.map_id)).label("maps"),
+        )
+        .select_from(shared_teams)
+        .join(teammates_query, teammates_query.c.user_id == shared_teams.c.teammate_id)
+        .outerjoin(
+            models.Encounter,
+            sa.or_(
+                models.Encounter.home_team_id == shared_teams.c.team_id,
+                models.Encounter.away_team_id == shared_teams.c.team_id,
+            ),
+        )
+        .outerjoin(models.Match, models.Match.encounter_id == models.Encounter.id)
+        .group_by(shared_teams.c.teammate_id)
+    ).cte("maps_query")
+
     count_query = sa.select(sa.func.count(teammates_query.c.user_id))
 
     query = (
@@ -2634,12 +2654,14 @@ async def get_best_teammates(
             models.User,
             teammates_query.c.winrate,
             teammates_query.c.tournaments,
+            maps_query.c.maps,
             stats_query.c.performance,
             stats_query.c.kda,
         )
         .select_from(teammates_query)
         .join(models.User, models.User.id == teammates_query.c.user_id)
         .join(stats_query, stats_query.c.user_id == teammates_query.c.user_id)
+        .join(maps_query, maps_query.c.user_id == teammates_query.c.user_id)
     )
 
     query = params.apply_pagination_sort(query)

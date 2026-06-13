@@ -256,6 +256,7 @@ export interface UserMapsSummary {
 export interface UserBestTeammate {
   user: User;
   tournaments: number;
+  maps: number;
   winrate: number;
   stats: Record<LogStatsName, number>;
 }

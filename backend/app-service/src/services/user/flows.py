@@ -1316,12 +1316,13 @@ async def get_best_teammates(
                 user=await to_pydantic(session, teammate, []),
                 winrate=round(winrate, 2),
                 tournaments=tournaments,
+                maps=maps or 0,
                 stats={
                     enums.LogStatsName.Performance: (round(performance, 2) if performance else 0),
                     enums.LogStatsName.KDA: round(kda, 2) if kda else 0,
                 },
             )
-            for teammate, winrate, tournaments, performance, kda in teammates
+            for teammate, winrate, tournaments, maps, performance, kda in teammates
         ],
     )
 

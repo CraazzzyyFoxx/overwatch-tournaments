@@ -185,6 +185,10 @@ export default class userService {
       }
     }).then((res) => res.json());
   }
+  /** Direct (browser-navigable) URL for downloading a match's parsed log file. */
+  static matchLogDownloadUrl(matchId: number): string {
+    return `/api/v1/core/matches/${matchId}/log`;
+  }
   static async getUserBestTeammates(id: number): Promise<PaginatedResponse<UserBestTeammate>> {
     return apiFetch("app",`users/${id}/teammates`, {
       query: {

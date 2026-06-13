@@ -16,6 +16,7 @@ import {
 } from "@/app/(site)/users/components/redesign/atoms";
 import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import userService from "@/services/user.service";
 import type { Hero } from "@/types/hero.types";
 
 interface Props {
@@ -283,7 +284,15 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                         {enc.closeness != null ? `${(enc.closeness * 100).toFixed(0)}%` : "—"}
                       </td>
                       <td className="px-3.5 py-3" onClick={(e) => e.stopPropagation()}>
-                        <MatchLogIndicator hasLogs={enc.has_logs} />
+                        <MatchLogIndicator
+                          hasLogs={enc.has_logs}
+                          logs={
+                            enc.has_logs
+                              ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
+                              : undefined
+                          }
+                          hrefFor={userService.matchLogDownloadUrl}
+                        />
                       </td>
                     </tr>
                   );

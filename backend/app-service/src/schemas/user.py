@@ -344,6 +344,7 @@ class HeroWithUserStats(BaseModel):
 class UserBestTeammate(BaseModel):
     user: schemas.UserRead
     tournaments: int
+    maps: int
     winrate: float
     stats: dict[enums.LogStatsName, float | None]
 

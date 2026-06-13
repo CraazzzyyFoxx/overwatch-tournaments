@@ -21,6 +21,7 @@ import {
   groupTournamentsByLeague,
   leagueKey
 } from "@/app/(site)/users/components/redesign/tournaments-history.helpers";
+import userService from "@/services/user.service";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 
@@ -168,7 +169,15 @@ const EncounterRow = ({
 
       {/* Logs */}
       <div className="hidden justify-end md:flex" onClick={(e) => e.preventDefault()}>
-        <MatchLogIndicator hasLogs={enc.has_logs} />
+        <MatchLogIndicator
+          hasLogs={enc.has_logs}
+          logs={
+            enc.has_logs
+              ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
+              : undefined
+          }
+          hrefFor={userService.matchLogDownloadUrl}
+        />
       </div>
     </Link>
   );

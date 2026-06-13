@@ -161,7 +161,7 @@ const AllTeammatesTable = ({
         <table className="aqt-tnum w-full border-collapse text-[12.5px]">
           <thead>
             <tr>
-              {["Player", "×played", "WR", "KDA", "MVP"].map((h, i) => (
+              {["Player", "×played", "Maps", "WR", "KDA", "MVP"].map((h, i) => (
                 <th
                   key={h}
                   className={cnHeader(i === 0)}
@@ -183,6 +183,7 @@ const AllTeammatesTable = ({
                     </Link>
                   </td>
                   <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
+                  <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>
                   <td
                     className="aqt-mono px-3.5 py-2 text-right font-semibold"
                     style={{
@@ -202,7 +203,7 @@ const AllTeammatesTable = ({
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3.5 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
+                <td colSpan={6} className="px-3.5 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
                   No teammates match search
                 </td>
               </tr>
