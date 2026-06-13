@@ -45,7 +45,7 @@ const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPagePro
     resolvedTournamentId
       ? userService.getUserTournament(user.id, resolvedTournamentId)
       : Promise.resolve(null),
-    userService.getUserBestTeammates(user.id).catch(() => ({ results: [], total: 0 })),
+    userService.getUserBestTeammates(user.id, -1).catch(() => ({ results: [], total: 0 })),
     userService.getUserTournaments(user.id).catch(() => []),
     userService
       .getUserEncounters(user.id, 1, 5, "id", "desc", [

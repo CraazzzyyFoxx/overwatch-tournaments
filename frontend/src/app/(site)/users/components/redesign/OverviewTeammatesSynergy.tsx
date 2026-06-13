@@ -212,6 +212,18 @@ const AllTeammatesTable = ({
     return rows.filter((t) => t.user.name.toLowerCase().includes(q));
   }, [teammates, search]);
 
+  const perPage = 12;
+  const [page, setPage] = useState(1);
+  // Reset to first page when the search changes (render-time adjustment).
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (search !== prevSearch) {
+    setPrevSearch(search);
+    setPage(1);
+  }
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(page, pages);
+  const paged = filtered.slice((safePage - 1) * perPage, safePage * perPage);
+
   return (
     <div className="flex min-h-0 flex-col">
       <div className="border-b border-[color:var(--aqt-border)] px-5 py-3">
@@ -240,7 +252,7 @@ const AllTeammatesTable = ({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((tm) => {
+            {paged.map((tm) => {
               const [tmName, tmTag] = tm.user.name.split("#");
               return (
                 <tr key={tm.user.id} className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
@@ -279,6 +291,34 @@ const AllTeammatesTable = ({
           </tbody>
         </table>
       </div>
+      {filtered.length > perPage ? (
+        <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] px-5 py-2.5">
+          <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹
+            </button>
+            <span className="aqt-mono px-1.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
+              {safePage} / {pages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= pages}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
