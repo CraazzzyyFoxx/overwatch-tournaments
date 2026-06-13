@@ -24,12 +24,5 @@ export const parsePerPage = (value: string | null) => {
   return -1;
 };
 
-export const formatPercent = (value: number, digits = 0) => `${(value * 100).toFixed(digits)}%`;
-
-export const formatSeconds = (secondsRaw: number) => {
-  const seconds = Math.max(0, Math.floor(secondsRaw));
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-};
+// Promoted to a shared module; re-exported so existing maps imports keep working.
+export { formatPercent, formatSeconds } from "@/lib/format";

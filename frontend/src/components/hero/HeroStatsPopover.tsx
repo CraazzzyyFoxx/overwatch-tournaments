@@ -3,7 +3,7 @@ import Image from "next/image";
 import { UserMapHeroStats } from "@/types/user.types";
 import { Progress } from "@/components/ui/progress";
 import { getWinrateColor } from "@/utils/colors";
-import { formatPercent, formatSeconds } from "@/app/(site)/users/components/maps/utils";
+import { formatPercent, formatSeconds } from "@/lib/format";
 
 /**
  * Reusable hero-stats popover body (winrate / games / record / playtime share).

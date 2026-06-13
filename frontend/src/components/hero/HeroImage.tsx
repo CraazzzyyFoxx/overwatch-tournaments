@@ -5,7 +5,7 @@ import { Hero } from "@/types/hero.types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback, AvatarStack } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { heroVariantFromRole, heroInitials } from "@/app/(site)/users/components/shared/atoms";
+import { heroVariantFromRole, heroInitials } from "@/components/hero/heroRole";
 
 export type HeroImageSize = "sm" | "md" | "lg";
 
