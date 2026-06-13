@@ -1,11 +1,19 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Users } from "lucide-react";
 import Link from "next/link";
+import { Users } from "lucide-react";
 import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
 import { CardSurface, heroInitials } from "@/app/(site)/users/components/redesign/atoms";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 
 interface Props {
   teammates: UserBestTeammate[];
@@ -15,22 +23,12 @@ interface Props {
 }
 
 const TEAMMATE_COLORS = [
-  "linear-gradient(135deg, hsl(210 78% 72%), hsl(210 60% 48%))",
-  "linear-gradient(135deg, hsl(340 78% 72%), hsl(340 60% 48%))",
-  "linear-gradient(135deg, hsl(142 65% 65%), hsl(142 50% 42%))",
-  "linear-gradient(135deg, hsl(38 95% 68%), hsl(38 80% 48%))",
-  "linear-gradient(135deg, hsl(270 70% 72%), hsl(270 55% 50%))",
-  "linear-gradient(135deg, hsl(0 75% 70%), hsl(0 60% 48%))"
-];
-
-// Pre-compute layout positions for a synergy network (radial layout)
-const POSITIONS = [
-  { left: 18, top: 19 },
-  { left: 82, top: 23 },
-  { left: 12, top: 62 },
-  { left: 86, top: 66 },
-  { left: 41, top: 90 },
-  { left: 58, top: 8 }
+  "linear-gradient(135deg, hsl(210 85% 72%), hsl(210 65% 46%))",
+  "linear-gradient(135deg, hsl(340 85% 72%), hsl(340 65% 46%))",
+  "linear-gradient(135deg, hsl(142 70% 64%), hsl(142 52% 40%))",
+  "linear-gradient(135deg, hsl(38 95% 66%), hsl(38 82% 46%))",
+  "linear-gradient(135deg, hsl(270 75% 72%), hsl(270 58% 48%))",
+  "linear-gradient(135deg, hsl(0 80% 70%), hsl(0 62% 46%))"
 ];
 
 const playerSlug = (name: string) => name.replace(/#/g, "-");
@@ -39,7 +37,6 @@ const formatStat = (value: number | null | undefined, digits: number) =>
   value != null && Number.isFinite(value) ? value.toFixed(digits) : "—";
 
 const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }: Props) => {
-  const [view, setView] = useState<"network" | "all">("network");
   const [search, setSearch] = useState("");
 
   const top = teammates.slice(0, 6);
@@ -53,23 +50,32 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
       title="Best teammates"
       icon={<Users size={15} />}
       action={
-        <button
-          type="button"
-          className="aqt-seeall"
-          onClick={() => setView((v) => (v === "network" ? "all" : "network"))}
-        >
-          {view === "network" ? "All →" : "← Network"}
-        </button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <button type="button" className="aqt-seeall">
+              All →
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
+            <div className="aqt-player flex max-h-[80vh] flex-col">
+              <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
+                <DialogTitle className="text-[color:var(--aqt-fg)]">Best teammates</DialogTitle>
+                <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
+                  {totalCount} unique stack-mates · {totalMaps} maps together
+                </DialogDescription>
+              </DialogHeader>
+              <AllTeammatesTable teammates={teammates} search={search} onSearchChange={setSearch} />
+            </div>
+          </DialogContent>
+        </Dialog>
       }
     >
-      {view === "network" ? (
-        <NetworkView top={top} meInitials={meInitials} totalCount={totalCount} totalMaps={totalMaps} />
-      ) : (
-        <AllTeammatesTable teammates={teammates} search={search} onSearchChange={setSearch} />
-      )}
+      <NetworkView top={top} meInitials={meInitials} totalCount={totalCount} totalMaps={totalMaps} />
     </CardSurface>
   );
 };
+
+// ─── Radial synergy graph ───────────────────────────────────────────────────────
 
 const NetworkView = ({
   top,
@@ -81,50 +87,114 @@ const NetworkView = ({
   meInitials: string;
   totalCount: number;
   totalMaps: number;
-}) => (
-  <>
-    <div className="relative h-[280px] p-2">
-      <svg viewBox="0 0 320 260" preserveAspectRatio="none" className="absolute inset-0 h-full w-full pointer-events-none">
-        <defs>
-          <linearGradient id="syn-line" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="hsl(38 95% 55% / 0.5)" />
-            <stop offset="1" stopColor="hsl(174 72% 46% / 0.5)" />
-          </linearGradient>
-        </defs>
-        {top.map((tm, i) => {
-          const pos = POSITIONS[i] ?? POSITIONS[POSITIONS.length - 1];
-          const x = (pos.left / 100) * 320;
-          const y = (pos.top / 100) * 260;
-          const width = Math.max(1.5, Math.min(3, 1 + tm.tournaments * 0.7));
-          return <line key={tm.user.id} x1={160} y1={130} x2={x} y2={y} stroke="url(#syn-line)" strokeWidth={width} />;
+}) => {
+  const nodes = useMemo(() => {
+    const n = top.length;
+    const maxApp = Math.max(...top.map((t) => t.tournaments), 1);
+    return top.map((tm, i) => {
+      // Evenly distribute around the centre, starting at the top.
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      const left = 50 + Math.cos(angle) * 37;
+      const top_ = 50 + Math.sin(angle) * 36;
+      const strength = tm.tournaments / maxApp; // 0..1
+      return { tm, i, left, top: top_, strength };
+    });
+  }, [top]);
+
+  return (
+    <>
+      <div className="relative h-[300px]">
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          <defs>
+            <linearGradient id="syn-edge" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="hsl(38 95% 55% / 0.85)" />
+              <stop offset="1" stopColor="hsl(174 72% 46% / 0.85)" />
+            </linearGradient>
+          </defs>
+          {nodes.map(({ tm, left, top: top_, strength }) => (
+            <line
+              key={tm.user.id}
+              x1={50}
+              y1={50}
+              x2={left}
+              y2={top_}
+              stroke="url(#syn-edge)"
+              strokeWidth={1.2 + strength * 2.4}
+              strokeLinecap="round"
+              opacity={0.4 + strength * 0.45}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+
+        {/* Centre node (you) */}
+        <div
+          className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+          style={{ left: "50%", top: "50%" }}
+        >
+          <div
+            className="flex h-[58px] w-[58px] items-center justify-center rounded-full aqt-display text-[17px] font-extrabold"
+            style={{
+              background: "linear-gradient(135deg, hsl(38 90% 62%), hsl(28 70% 42%))",
+              color: "hsl(30 35% 10%)",
+              boxShadow: "0 0 0 4px hsl(38 95% 55% / 0.22), 0 6px 18px hsl(220 60% 4% / 0.5)"
+            }}
+          >
+            {meInitials}
+          </div>
+          <span className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--aqt-amber)" }}>
+            You
+          </span>
+        </div>
+
+        {/* Teammate nodes */}
+        {nodes.map(({ tm, i, left, top: top_, strength }) => {
+          const [nm, tag] = tm.user.name.split("#");
+          const size = 40 + strength * 12;
+          return (
+            <Link
+              key={tm.user.id}
+              href={`/users/${playerSlug(tm.user.name)}`}
+              className="group absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 text-center"
+              style={{ left: `${left}%`, top: `${top_}%` }}
+              title={tag ? `${nm}#${tag}` : nm}
+            >
+              <div
+                className="flex items-center justify-center rounded-full aqt-display font-extrabold transition-transform group-hover:scale-110"
+                style={{
+                  width: size,
+                  height: size,
+                  fontSize: size * 0.34,
+                  background: TEAMMATE_COLORS[i % TEAMMATE_COLORS.length],
+                  color: "hsl(220 30% 8%)",
+                  boxShadow: "0 4px 12px hsl(220 55% 4% / 0.45)"
+                }}
+              >
+                {heroInitials(nm)}
+              </div>
+              <div className="leading-tight">
+                <div className="max-w-[88px] truncate text-[11.5px] font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]">
+                  {nm}
+                </div>
+                <div className="aqt-mono text-[9.5px] text-[color:var(--aqt-fg-dim)]">
+                  ×{tm.tournaments} · {(tm.winrate * 100).toFixed(0)}%
+                </div>
+              </div>
+            </Link>
+          );
         })}
-      </svg>
-      <SynNode left={50} top={50} initials={meInitials} name="You" isMe accent="var(--aqt-amber)" />
-      {top.map((tm, i) => {
-        const pos = POSITIONS[i] ?? POSITIONS[POSITIONS.length - 1];
-        const [tmName, tmTag] = tm.user.name.split("#");
-        return (
-          <SynNode
-            key={tm.user.id}
-            left={pos.left}
-            top={pos.top}
-            initials={heroInitials(tmName)}
-            name={tmName}
-            tag={tmTag ? `#${tmTag}` : ""}
-            sub={`×${tm.tournaments} · ${(tm.winrate * 100).toFixed(0)}% WR`}
-            avBg={TEAMMATE_COLORS[i % TEAMMATE_COLORS.length]}
-          />
-        );
-      })}
-    </div>
-    <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[11px] text-[color:var(--aqt-fg-dim)]">
-      <span>Edges sized by appearances</span>
-      <span>
-        {totalCount} unique · {totalMaps} maps
-      </span>
-    </div>
-  </>
-);
+      </div>
+      <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[11px] text-[color:var(--aqt-fg-dim)]">
+        <span>Edges sized by appearances</span>
+        <span>
+          {totalCount} unique · {totalMaps} maps
+        </span>
+      </div>
+    </>
+  );
+};
+
+// ─── Full teammates table (in the "All" modal) ──────────────────────────────────
 
 const AllTeammatesTable = ({
   teammates,
@@ -143,8 +213,8 @@ const AllTeammatesTable = ({
   }, [teammates, search]);
 
   return (
-    <div className="flex flex-col">
-      <div className="border-b border-[color:var(--aqt-border)] px-3.5 py-2.5">
+    <div className="flex min-h-0 flex-col">
+      <div className="border-b border-[color:var(--aqt-border)] px-5 py-3">
         <div className="relative">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]">
             <circle cx="11" cy="11" r="7" />
@@ -154,19 +224,16 @@ const AllTeammatesTable = ({
             placeholder="Search teammates…"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[12.5px] text-[color:var(--aqt-fg)] outline-none"
+            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[13px] text-[color:var(--aqt-fg)] outline-none"
           />
         </div>
       </div>
-      <div className="max-h-[300px] overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         <table className="aqt-tnum w-full border-collapse text-[12.5px]">
-          <thead>
+          <thead className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
             <tr>
               {["Player", "×played", "Maps", "WR", "KDA", "MVP"].map((h, i) => (
-                <th
-                  key={h}
-                  className={cnHeader(i === 0)}
-                >
+                <th key={h} className={cnHeader(i === 0)}>
                   {h}
                 </th>
               ))}
@@ -177,26 +244,26 @@ const AllTeammatesTable = ({
               const [tmName, tmTag] = tm.user.name.split("#");
               return (
                 <tr key={tm.user.id} className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
-                  <td className="px-3.5 py-2">
+                  <td className="px-3 py-2">
                     <Link href={`/users/${playerSlug(tm.user.name)}`} className="inline-flex items-center gap-1.5 hover:text-[color:var(--aqt-teal)]">
                       <span className="font-semibold text-[color:var(--aqt-fg)]">{tmName}</span>
                       {tmTag ? <span className="aqt-mono text-[10px] text-[color:var(--aqt-fg-faint)]">#{tmTag}</span> : null}
                     </Link>
                   </td>
-                  <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
-                  <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>
+                  <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
+                  <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>
                   <td
-                    className="aqt-mono px-3.5 py-2 text-right font-semibold"
+                    className="aqt-mono px-3 py-2 text-right font-semibold"
                     style={{
                       color: tm.winrate >= 0.55 ? "var(--aqt-emerald)" : tm.winrate < 0.45 ? "var(--aqt-rose)" : "var(--aqt-amber)"
                     }}
                   >
                     {(tm.winrate * 100).toFixed(0)}%
                   </td>
-                  <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                  <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
                     {formatStat(tm.stats?.[LogStatsName.KDA], 2)}
                   </td>
-                  <td className="aqt-mono px-3.5 py-2 text-right text-[color:var(--aqt-fg-muted)]">
+                  <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">
                     {formatStat(tm.stats?.[LogStatsName.Performance], 1)}
                   </td>
                 </tr>
@@ -204,7 +271,7 @@ const AllTeammatesTable = ({
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3.5 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
+                <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
                   No teammates match search
                 </td>
               </tr>
@@ -217,46 +284,8 @@ const AllTeammatesTable = ({
 };
 
 const cnHeader = (left: boolean) =>
-  `aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)] ${
+  `aqt-mono border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)] ${
     left ? "text-left" : "text-right"
   }`;
-
-interface SynNodeProps {
-  left: number;
-  top: number;
-  initials: string;
-  name: string;
-  tag?: string;
-  sub?: string;
-  isMe?: boolean;
-  accent?: string;
-  avBg?: string;
-}
-
-const SynNode = ({ left, top, initials, name, tag, sub, isMe, accent, avBg }: SynNodeProps) => (
-  <div
-    className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 text-center"
-    style={{ left: `${left}%`, top: `${top}%` }}
-  >
-    <div
-      className="flex items-center justify-center rounded-full border border-[color:var(--aqt-border-2)] aqt-display font-extrabold text-[color:var(--aqt-fg-muted)]"
-      style={{
-        width: isMe ? 56 : 44,
-        height: isMe ? 56 : 44,
-        fontSize: isMe ? 16 : 13,
-        background: isMe ? "linear-gradient(135deg,#a87d4f,#5a3b22)" : (avBg ?? "linear-gradient(135deg,#3a5168,#1c2937)"),
-        color: isMe ? "hsl(30 30% 12%)" : "hsl(220 30% 8%)",
-        boxShadow: isMe ? "0 0 0 3px hsl(38 95% 55% / 0.25)" : "none"
-      }}
-    >
-      {initials}
-    </div>
-    <div className="whitespace-nowrap text-[11px] font-semibold" style={{ color: accent ?? "var(--aqt-fg)" }}>
-      {name}
-      {tag ? <span className="text-[color:var(--aqt-fg-faint)]"> {tag}</span> : null}
-    </div>
-    {sub ? <div className="aqt-mono text-[10px] text-[color:var(--aqt-fg-dim)]">{sub}</div> : null}
-  </div>
-);
 
 export default OverviewTeammatesSynergy;
