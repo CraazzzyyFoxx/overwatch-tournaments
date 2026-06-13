@@ -6,6 +6,7 @@ from shared.models.balancer import *
 from shared.models.challonge_sync import *
 from shared.models.division_grid import *
 from shared.models.encounter import *
+from shared.models.encounter_link import *
 from shared.models.encounter_map import *
 from shared.models.encounter_saved_view import *
 from shared.models.gamemode import *
