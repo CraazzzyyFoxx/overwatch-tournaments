@@ -1,8 +1,10 @@
 import { apiFetch } from "@/lib/api-fetch";
+import { rehydrateRegistrationList } from "@/services/registration.helpers";
 import type {
   Registration,
   RegistrationCreateInput,
   RegistrationForm,
+  RegistrationListResponse,
   RegistrationUpdateInput,
 } from "@/types/registration.types";
 
@@ -69,7 +71,8 @@ const registrationService = {
       "tournament",
       `tournaments/${tournamentId}/registration/list`,
     );
-    return response.json();
+    const data: RegistrationListResponse = await response.json();
+    return rehydrateRegistrationList(data);
   },
 };
 

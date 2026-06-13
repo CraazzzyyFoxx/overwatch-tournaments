@@ -71,6 +71,9 @@ export interface TournamentHistoryEntry {
   tournament_name: string;
   role: string | null;
   division: number | null;
+  /** Reference into `RegistrationListResponse.division_grids`. */
+  division_grid_version_id?: number | null;
+  /** Rehydrated from `division_grids` by `listRegistrations` for in-component use. */
   division_grid_version?: DivisionGridVersion | null;
 }
 
@@ -96,7 +99,17 @@ export interface Registration {
   profiles_open?: boolean | null;
   submitted_at: string | null;
   reviewed_at: string | null;
+  /** Capped to the most recent few entries; see `tournament_history_count` for the true total. */
   tournament_history?: TournamentHistoryEntry[];
+  tournament_history_count?: number;
+}
+
+/** Envelope returned by `GET /tournaments/{id}/registration/list`. Division grid
+ *  versions are deduplicated into `division_grids` (keyed by version id) and
+ *  referenced from each history entry via `division_grid_version_id`. */
+export interface RegistrationListResponse {
+  registrations: Registration[];
+  division_grids: Record<string, DivisionGridVersion>;
 }
 
 export interface RegistrationRole {

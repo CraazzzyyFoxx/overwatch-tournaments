@@ -25,8 +25,11 @@ const ROLE_TO_ICON: Record<string, string> = {
 
 export default function TournamentHistoryCell({
   history,
+  count,
 }: {
   history: TournamentHistoryEntry[];
+  /** True total of past tournaments; `history` may be capped to a recent subset. */
+  count?: number;
 }) {
   if (!history || history.length === 0) {
     return (
@@ -36,16 +39,20 @@ export default function TournamentHistoryCell({
     );
   }
 
+  // `history` is already capped server-side; `total` (true count) drives the badge
+  // and the "+N more" hint for the entries the backend trimmed.
+  const total = count ?? history.length;
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`${history.length} previous ${history.length === 1 ? "tournament" : "tournaments"}`}
+            aria-label={`${total} previous ${total === 1 ? "tournament" : "tournaments"}`}
             className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-xs font-medium text-white/65 transition hover:border-white/20 hover:bg-white/8 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]"
           >
-            {history.length}x
+            {total}x
           </button>
         </TooltipTrigger>
         <TooltipContent
@@ -53,7 +60,7 @@ export default function TournamentHistoryCell({
           className="max-w-xs border border-white/[0.08] bg-[#111113] px-3 py-2 text-white shadow-xl shadow-black/40"
         >
           <ul className="space-y-1 text-xs">
-            {history.slice(0, 10).map((h) => {
+            {history.map((h) => {
               return (
                 <li key={h.tournament_id} className="space-y-1">
                   <div className="text-white/80">{h.tournament_name}</div>
@@ -93,8 +100,8 @@ export default function TournamentHistoryCell({
                 </li>
               );
             })}
-            {history.length > 10 && (
-              <li className="text-white/30">+{history.length - 10} more</li>
+            {total > history.length && (
+              <li className="text-white/30">+{total - history.length} more</li>
             )}
           </ul>
         </TooltipContent>

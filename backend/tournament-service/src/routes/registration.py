@@ -9,18 +9,23 @@ from shared.balancer_registration_statuses import build_unknown_status_meta, get
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
+from shared.services.division_grid_access import (
+    get_effective_division_grid_version_id,
+    load_division_grid_snapshot,
+)
 from shared.services.profile_visibility import resolve_profiles_open
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src import models
 from src.core import auth, db
-from src.core.workspace import get_division_grid_version
 from src.schemas.division_grid import DivisionGridVersionRead
 from src.schemas.registration import (
     RegistrationCreate,
     RegistrationFormRead,
     RegistrationListRead,
+    RegistrationListResponse,
     RegistrationRead,
     RegistrationRoleRead,
     RegistrationStatusResponse,
@@ -34,6 +39,11 @@ router = APIRouter(
     prefix="/tournaments/{tournament_id}/registration",
     tags=["registration"],
 )
+
+# Max past-tournament history entries returned per participant. The public
+# participants table only renders the most recent few (in a hover tooltip), so the
+# full list is capped here and the true total is surfaced via ``tournament_history_count``.
+HISTORY_LIMIT = 10
 
 
 async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: int) -> int:
@@ -328,16 +338,19 @@ async def check_in_my_registration(
     return _reg_to_read(checked_in, status_meta_map=status_meta_map, show_ranks=form.show_ranks if form else False)
 
 
-@router.get("/list", response_model=list[RegistrationListRead])
+@router.get("/list", response_model=RegistrationListResponse)
 async def list_registrations(
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
 ):
     """Public list of registrations for a tournament (all statuses, non-deleted)."""
-    from sqlalchemy.orm import selectinload
-
     workspace_id = await _resolve_tournament_workspace(session, tournament_id)
 
+    # The registration list itself must always reflect live data, so the query (and
+    # the workspace-config reads that ride along with it) run with the query cache
+    # disabled. Tournament-history building is deliberately kept OUTSIDE this block:
+    # it relies on the Redis-cached division-grid snapshots, which share this global
+    # ``cache`` singleton and would otherwise be suppressed here.
     with cache.disabling(Command.GET, Command.SET):
         result = await session.execute(
             sa.select(models.BalancerRegistration)
@@ -356,14 +369,6 @@ async def list_registrations(
         registrations = result.scalars().all()
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
 
-        # Build tournament history for each participant
-        history_map = await _build_tournament_history(
-            session,
-            registrations,
-            tournament_id,
-            workspace_id,
-        )
-
         # "All profiles open" admission flag — only computed when the tournament
         # requires it (otherwise it never gates admission, so skip the query).
         form = await reg_service.get_registration_form(session, tournament_id)
@@ -374,17 +379,30 @@ async def list_registrations(
         )
         show_ranks = form.show_ranks if form is not None else False
 
-        return [
-            RegistrationListRead(
-                **_reg_to_read(r, status_meta_map=status_meta_map, show_ranks=show_ranks).model_dump(),
-                balancer_status=r.balancer_status,
-                balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
-                or build_unknown_status_meta("balancer", r.balancer_status),
-                profiles_open=profiles_open_map.get(r.id),
-                tournament_history=history_map.get(r.id, []),
-            )
-            for r in registrations
-        ]
+    # Build tournament history for each participant (division-grid Redis cache active).
+    history_map, history_count_map, division_grids = await _build_tournament_history(
+        session,
+        registrations,
+        tournament_id,
+        workspace_id,
+    )
+
+    registrations_read = [
+        RegistrationListRead(
+            **_reg_to_read(r, status_meta_map=status_meta_map, show_ranks=show_ranks).model_dump(),
+            balancer_status=r.balancer_status,
+            balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
+            or build_unknown_status_meta("balancer", r.balancer_status),
+            profiles_open=profiles_open_map.get(r.id),
+            tournament_history=history_map.get(r.id, []),
+            tournament_history_count=history_count_map.get(r.id, 0),
+        )
+        for r in registrations
+    ]
+    return RegistrationListResponse(
+        registrations=registrations_read,
+        division_grids=division_grids,
+    )
 
 
 async def _build_tournament_history(
@@ -392,7 +410,11 @@ async def _build_tournament_history(
     registrations: list[models.BalancerRegistration],
     current_tournament_id: int,
     workspace_id: int,
-) -> dict[int, list[TournamentHistoryEntry]]:
+) -> tuple[
+    dict[int, list[TournamentHistoryEntry]],
+    dict[int, int],
+    dict[str, DivisionGridVersionRead],
+]:
     """Batch-query past tournament participation from the analytics system.
 
     Uses tournament.player (the analytics table) — if a player record exists,
@@ -402,7 +424,12 @@ async def _build_tournament_history(
     1. user_id on the registration itself
     2. auth_user_id → AuthUserPlayer → player_id
 
-    Returns a mapping of registration_id -> list of history entries.
+    Returns a tuple of:
+    - ``history_map``: registration_id -> most-recent-first history entries,
+      capped at ``HISTORY_LIMIT`` and deduplicated by tournament.
+    - ``count_map``: registration_id -> true (pre-cap) number of past tournaments.
+    - ``division_grids``: stringified version_id -> ``DivisionGridVersionRead``,
+      containing only the versions actually referenced by the returned entries.
     """
     # --- Step 1: resolve analytics user_id for every registration ---
     auth_ids_to_resolve: list[int] = []
@@ -435,11 +462,20 @@ async def _build_tournament_history(
 
     player_ids = list(player_to_reg_ids.keys())
     if not player_ids:
-        return {}
+        return {}, {}, {}
 
-    # --- Step 2: query tournament.player for participation history ---
+    # --- Step 2: query tournament.player for participation history (columns only) ---
+    # Select scalar columns rather than full ``Player`` ORM objects: avoids hydrating
+    # thousands of rows and sidesteps any lazy-attribute access outside the greenlet.
+    # Ordered most-recent-first so the per-registration cap keeps the latest entries.
     result = await session.execute(
-        sa.select(models.Player)
+        sa.select(
+            models.Player.tournament_id,
+            models.Player.user_id,
+            models.Player.role,
+            models.Player.rank,
+            models.Tournament.name.label("tournament_name"),
+        )
         .join(
             models.Tournament,
             models.Player.tournament_id == models.Tournament.id,
@@ -449,53 +485,101 @@ async def _build_tournament_history(
             models.Player.tournament_id != current_tournament_id,
             models.Tournament.workspace_id == workspace_id,
         )
-        .add_columns(
-            models.Tournament.name.label("tournament_name"),
+        .order_by(
+            models.Tournament.start_date.desc().nullslast(),
+            models.Tournament.id.desc(),
         )
     )
+    rows = result.all()
 
+    # --- Step 3: resolve division-grid versions (Redis-cached, batched) ---
+    # ``get_effective_division_grid_version_id`` is Redis-backed, so the many past
+    # tournaments collapse to a handful of distinct version ids cheaply.
+    tournament_ids_with_rank = {
+        tournament_id for tournament_id, _uid, _role, rank, _name in rows if rank is not None
+    }
+    tournament_to_version: dict[int, int | None] = {}
+    for tid in tournament_ids_with_rank:
+        tournament_to_version[tid] = await get_effective_division_grid_version_id(
+            session, workspace_id, tournament_id=tid
+        )
+
+    distinct_version_ids = {vid for vid in tournament_to_version.values() if vid is not None}
+
+    # Runtime grids (for division-number resolution) come from the cached snapshot.
+    runtime_grid_by_version: dict[int, DivisionGrid] = {}
+    for vid in distinct_version_ids:
+        snapshot = await load_division_grid_snapshot(session, vid)
+        runtime_grid_by_version[vid] = (
+            snapshot.to_runtime_grid() if snapshot is not None else load_runtime_grid(None)
+        )
+
+    # Full version metadata for the response map — ONE batched query, validated once.
+    version_read_by_id: dict[int, DivisionGridVersionRead] = {}
+    if distinct_version_ids:
+        version_rows = await session.scalars(
+            sa.select(models.DivisionGridVersion)
+            .options(selectinload(models.DivisionGridVersion.tiers))
+            .where(models.DivisionGridVersion.id.in_(distinct_version_ids))
+        )
+        for version in version_rows:
+            version_read_by_id[int(version.id)] = DivisionGridVersionRead.model_validate(
+                version, from_attributes=True
+            )
+
+    # --- Step 4: build per-registration history (deduped by tournament, capped) ---
     history_map: dict[int, list[TournamentHistoryEntry]] = {}
-    grid_cache: dict[int, tuple[DivisionGrid, DivisionGridVersionRead | None]] = {}
+    count_map: dict[int, int] = {}
+    seen_per_reg: dict[int, set[int]] = {}
 
-    for row in result:
-        player: models.Player = row[0]
-        tournament_name: str = row[1]
-        role_str = player.role.value if player.role else None
+    for tournament_id, user_id, role, rank, tournament_name in rows:
+        reg_ids = player_to_reg_ids.get(user_id)
+        if not reg_ids:
+            continue
+
+        role_str = role.value if role else None
         division = None
-        division_grid_version = None
-        if player.rank is not None:
-            if player.tournament_id not in grid_cache:
-                version = await get_division_grid_version(
-                    session,
-                    workspace_id,
-                    tournament_id=player.tournament_id,
-                )
-                grid_cache[player.tournament_id] = (
-                    load_runtime_grid(version),
-                    DivisionGridVersionRead.model_validate(version, from_attributes=True)
-                    if version is not None
-                    else None,
-                )
-            grid, division_grid_version = grid_cache[player.tournament_id]
-            division = grid.resolve_division_number(player.rank)
+        version_id = None
+        if rank is not None:
+            version_id = tournament_to_version.get(tournament_id)
+            grid = runtime_grid_by_version.get(version_id) if version_id is not None else None
+            if grid is None:
+                grid = load_runtime_grid(None)
+            division = grid.resolve_division_number(rank)
+            # Only reference versions we actually have metadata for.
+            if version_id not in version_read_by_id:
+                version_id = None
 
         entry = TournamentHistoryEntry(
-            tournament_id=player.tournament_id,
+            tournament_id=tournament_id,
             tournament_name=tournament_name,
             role=role_str,
             division=division,
-            division_grid_version=division_grid_version,
+            division_grid_version_id=version_id,
         )
-        for reg_id in player_to_reg_ids.get(player.user_id, []):
-            history_map.setdefault(reg_id, []).append(entry)
+        for reg_id in reg_ids:
+            # A player can have multiple Player rows per tournament (e.g. substitution);
+            # keep one entry per tournament per registration.
+            seen = seen_per_reg.setdefault(reg_id, set())
+            if tournament_id in seen:
+                continue
+            seen.add(tournament_id)
+            count_map[reg_id] = count_map.get(reg_id, 0) + 1
+            entries = history_map.setdefault(reg_id, [])
+            if len(entries) < HISTORY_LIMIT:
+                entries.append(entry)
 
-    # Deduplicate: a player can have multiple Player records per tournament
-    # (e.g. substitution). Keep unique by tournament_id.
-    for reg_id, entries in history_map.items():
-        seen: dict[int, TournamentHistoryEntry] = {}
-        for e in entries:
-            if e.tournament_id not in seen:
-                seen[e.tournament_id] = e
-        history_map[reg_id] = list(seen.values())
+    # Keep only the versions still referenced after capping.
+    referenced_version_ids = {
+        entry.division_grid_version_id
+        for entries in history_map.values()
+        for entry in entries
+        if entry.division_grid_version_id is not None
+    }
+    division_grids = {
+        str(vid): version_read_by_id[vid]
+        for vid in referenced_version_ids
+        if vid in version_read_by_id
+    }
 
-    return history_map
+    return history_map, count_map, division_grids

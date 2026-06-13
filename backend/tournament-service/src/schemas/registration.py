@@ -143,7 +143,9 @@ class TournamentHistoryEntry(BaseModel):
     tournament_name: str
     role: str | None = None
     division: int | None = None
-    division_grid_version: DivisionGridVersionRead | None = None
+    # References a version in ``RegistrationListResponse.division_grids`` instead of
+    # embedding the (large) version per entry. ``None`` when the rank/division is unknown.
+    division_grid_version_id: int | None = None
 
 
 class RegistrationListRead(RegistrationRead):
@@ -153,7 +155,24 @@ class RegistrationListRead(RegistrationRead):
     # All-profiles-open verdict (only computed when the tournament requires it):
     # True = public, False = closed, None = unknown / not required.
     profiles_open: bool | None = None
+    # Capped to the most recent ``HISTORY_LIMIT`` entries; ``tournament_history_count``
+    # holds the true total so the UI can render an accurate count badge.
     tournament_history: list[TournamentHistoryEntry] = Field(default_factory=list)
+    tournament_history_count: int = 0
+
+
+class RegistrationListResponse(BaseModel):
+    """Envelope for the public registration list.
+
+    Division grid versions are deduplicated into ``division_grids`` (keyed by version
+    id) so each history entry only carries a ``division_grid_version_id`` reference,
+    keeping the payload small even when participants have long tournament histories.
+    """
+
+    registrations: list[RegistrationListRead] = Field(default_factory=list)
+    # Keyed by stringified version id to match the JSON wire format (object keys are
+    # always strings); ``TournamentHistoryEntry.division_grid_version_id`` references these.
+    division_grids: dict[str, DivisionGridVersionRead] = Field(default_factory=dict)
 
 
 class RegistrationStatusResponse(BaseModel):

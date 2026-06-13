@@ -666,7 +666,10 @@ export function buildParticipantColumns(
     responsive: "md",
     align: "center",
     render: (reg) => (
-      <TournamentHistoryCell history={reg.tournament_history ?? []} />
+      <TournamentHistoryCell
+        history={reg.tournament_history ?? []}
+        count={reg.tournament_history_count}
+      />
     ),
   });
 
