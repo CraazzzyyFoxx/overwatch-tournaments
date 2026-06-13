@@ -21,6 +21,7 @@ _db = create_database(
     pool_use_lifo=config.settings.db_pool_use_lifo,
     connect_timeout=config.settings.db_connect_timeout,
     statement_timeout=config.settings.db_statement_timeout,
+    pgbouncer=config.settings.db_pgbouncer,
 )
 
 async_engine = _db.async_engine

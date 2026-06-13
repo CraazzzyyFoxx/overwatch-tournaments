@@ -23,6 +23,7 @@ _db = create_database(
     pool_use_lifo=settings.db_pool_use_lifo,
     connect_timeout=settings.db_connect_timeout,
     statement_timeout=settings.db_statement_timeout,
+    pgbouncer=settings.db_pgbouncer,
 )
 
 async_engine = _db.async_engine

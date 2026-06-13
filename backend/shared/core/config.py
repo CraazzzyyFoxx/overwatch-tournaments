@@ -62,6 +62,10 @@ class BaseServiceSettings(BaseSettings):
     db_pool_use_lifo: bool = True
     db_connect_timeout: float = 10.0
     db_statement_timeout: int = 30000  # milliseconds
+    # Connect through pgBouncer (transaction pooling): disables asyncpg
+    # prepared-statement caching, uses NullPool, and applies statement_timeout
+    # per-transaction via SET LOCAL.
+    db_pgbouncer: bool = False
 
     # Circuit Breaker
     circuit_breaker_failure_threshold: int = 5
