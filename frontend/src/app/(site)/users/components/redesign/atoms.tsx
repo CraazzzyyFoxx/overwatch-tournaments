@@ -124,6 +124,30 @@ export const MvpPill = ({ rank, label, className }: { rank: MvpRank; label: stri
   <span className={cn("aqt-mvp-pill", rank !== "default" && rank, className)}>{label}</span>
 );
 
+/** Map a 1-based per-match performance placement to an MvpPill rank. */
+export const mvpRank = (performance: number | null | undefined): MvpRank => {
+  if (performance === 1) return "gold";
+  if (performance === 2) return "silver";
+  if (performance === 3) return "bronze";
+  return "default";
+};
+
+/** English ordinal for a positive integer (1 → "1st", 2 → "2nd", …). */
+export const ordinal = (n: number): string => {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+};
+
 export const PipRow = ({ results, tall = false, className }: { results: ScoreKind[]; tall?: boolean; className?: string }) => (
   <span className={cn("inline-flex gap-[3px]", className)}>
     {results.map((r, i) => (

@@ -59,6 +59,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
 
   const [rarityFilter, setRarityFilter] = useState<Rarity | null>(null);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"rarity" | "name" | "count">("rarity");
 
   const uniqueTournaments = useMemo(() => {
     const seen = new Set<number>();
@@ -120,10 +121,15 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           (a.description_ru?.toLowerCase().includes(q))
         );
       }
-      return list;
+      const sorted = [...list].sort((a, b) => {
+        if (sort === "name") return (a.name ?? "").localeCompare(b.name ?? "");
+        if (sort === "count") return b.count - a.count;
+        return a.rarity - b.rarity; // rarest first
+      });
+      return sorted;
     };
     return Object.fromEntries(RARITY_ORDER.map((r) => [r, filteredEntry(r)])) as Record<Rarity, AchievementRarity[]>;
-  }, [grouped, rarityFilter, search]);
+  }, [grouped, rarityFilter, search, sort]);
 
   return (
     <div className="aqt-player flex flex-col gap-3.5">
@@ -178,6 +184,16 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
             </SelectContent>
           </Select>
         )}
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as "rarity" | "name" | "count")}
+          title="Sort achievements"
+          className="aqt-mono cursor-pointer rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-2.5 py-1.5 text-[12px] text-[color:var(--aqt-fg)] outline-none"
+        >
+          <option value="rarity" className="bg-[#10151c]">Sort: Rarity</option>
+          <option value="name" className="bg-[#10151c]">Sort: Name</option>
+          <option value="count" className="bg-[#10151c]">Sort: Earned</option>
+        </select>
         <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
           <input
             placeholder="Search achievements…"

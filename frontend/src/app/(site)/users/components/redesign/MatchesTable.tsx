@@ -7,10 +7,14 @@ import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
 import {
   CardSurface,
+  MvpPill,
   ResTag,
   ScoreCell,
-  StagePill
+  StagePill,
+  mvpRank,
+  ordinal
 } from "@/app/(site)/users/components/redesign/atoms";
+import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import type { Hero } from "@/types/hero.types";
 
@@ -22,7 +26,7 @@ interface Props {
   selfUserId: number;
 }
 
-type Filter = "all" | "wins" | "losses" | "draws" | "group" | "playoffs" | "finals" | "has_logs";
+type Filter = "all" | "wins" | "losses" | "draws" | "group" | "playoffs" | "finals" | "mvp1" | "has_logs";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
@@ -32,8 +36,12 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "group", label: "Group" },
   { key: "playoffs", label: "Playoffs" },
   { key: "finals", label: "Finals" },
+  { key: "mvp1", label: "MVP 1st" },
   { key: "has_logs", label: "Has logs" }
 ];
+
+const encounterHasMvp1 = (enc: EncounterWithUserStats): boolean =>
+  (enc.matches ?? []).some((m) => m.performance === 1);
 
 const stageKindFor = (name: string | undefined): "group" | "playoffs" | "finals" | "default" => {
   if (!name) return "default";
@@ -44,10 +52,7 @@ const stageKindFor = (name: string | undefined): "group" | "playoffs" | "finals"
   return "default";
 };
 
-const stageShort = (name: string | undefined): string => {
-  if (!name) return "—";
-  return name.length > 8 ? name.slice(0, 8) : name;
-};
+const stageLabel = (name: string | undefined): string => name?.trim() || "—";
 
 const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) => {
   const router = useRouter();
@@ -75,6 +80,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
       if (filter === "group" && stageKind !== "group") return false;
       if (filter === "playoffs" && stageKind !== "playoffs") return false;
       if (filter === "finals" && stageKind !== "finals") return false;
+      if (filter === "mvp1" && !encounterHasMvp1(enc)) return false;
       if (filter === "has_logs" && !enc.has_logs) return false;
 
       return true;
@@ -91,6 +97,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
   }).length;
   const drawCount = encounters.length - winCount - lossCount;
   const logsCount = encounters.filter((e) => e.has_logs).length;
+  const mvp1Count = encounters.filter(encounterHasMvp1).length;
 
   const pages = Math.max(1, Math.ceil(total / perPage));
 
@@ -148,6 +155,8 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
               ? lossCount
               : f.key === "draws"
               ? drawCount
+              : f.key === "mvp1"
+              ? mvp1Count
               : f.key === "has_logs"
               ? logsCount
               : null;
@@ -184,7 +193,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
             <table className="aqt-tnum w-full border-collapse text-[13px]">
               <thead>
                 <tr>
-                  {["Tournament", "Stage", "Match", "Score", "Heroes", "Logs"].map((h) => (
+                  {["Tournament", "Stage", "Match", "Score", "Heroes", "MVP", "Close.", "Logs"].map((h) => (
                     <th
                       key={h}
                       className="aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
@@ -218,11 +227,18 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                     });
                   });
 
+                  const mvpMatches = (enc.matches ?? []).filter((m) => m.performance != null);
+
                   return (
-                    <tr key={enc.id} className="border-b border-[hsl(215_20%_10%)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]">
+                    <tr
+                      key={enc.id}
+                      onClick={() => router.push(`/encounters/${enc.id}`)}
+                      className="cursor-pointer border-b border-[hsl(215_20%_10%)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]"
+                    >
                       <td className="px-3.5 py-3">
                         <Link
                           href={`/tournaments/${enc.tournament_id}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="aqt-mono inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-[10.5px] font-bold"
                           style={{
                             background: "hsl(174 72% 46% / 0.08)",
@@ -234,12 +250,16 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                         </Link>
                       </td>
                       <td className="px-3.5 py-3">
-                        <StagePill kind={kind}>{stageShort(enc.stage_item?.name ?? enc.stage?.name)}</StagePill>
+                        <StagePill kind={kind}>{stageLabel(enc.stage_item?.name ?? enc.stage?.name)}</StagePill>
                       </td>
                       <td className="px-3.5 py-3">
                         <span className="inline-flex items-center gap-2">
                           <ResTag kind={resKind} />
-                          <Link href={`/encounters/${enc.id}`} className="hover:text-[color:var(--aqt-teal)]">
+                          <Link
+                            href={`/encounters/${enc.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-[color:var(--aqt-teal)]"
+                          >
                             {userTeamName} vs {opponentName}
                           </Link>
                         </span>
@@ -250,15 +270,27 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                       <td className="px-3.5 py-3">
                         <HeroStrip heroes={heroList} size="sm" limit={4} />
                       </td>
-                      <td className="px-3.5 py-3 text-center" style={{ color: enc.has_logs ? "var(--aqt-emerald)" : "var(--aqt-fg-faint)" }}>
-                        {enc.has_logs ? "⊕" : "—"}
+                      <td className="px-3.5 py-3">
+                        <span className="inline-flex items-center gap-1">
+                          {mvpMatches.length > 0
+                            ? mvpMatches.map((m) => (
+                                <MvpPill key={m.id} rank={mvpRank(m.performance)} label={ordinal(m.performance as number)} />
+                              ))
+                            : <span className="aqt-mono text-[color:var(--aqt-fg-faint)]">—</span>}
+                        </span>
+                      </td>
+                      <td className="aqt-mono px-3.5 py-3 text-[11px] text-[color:var(--aqt-fg-dim)]">
+                        {enc.closeness != null ? `${(enc.closeness * 100).toFixed(0)}%` : "—"}
+                      </td>
+                      <td className="px-3.5 py-3" onClick={(e) => e.stopPropagation()}>
+                        <MatchLogIndicator hasLogs={enc.has_logs} />
                       </td>
                     </tr>
                   );
                 })}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
+                    <td colSpan={8} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
                       No matches for current filter
                     </td>
                   </tr>
