@@ -11,6 +11,8 @@ class Settings(BaseServiceSettings):
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672"
     challonge_username: str = ""
     challonge_api_key: str = ""
+    challonge_auto_sync_enabled: bool = True
+    challonge_auto_sync_interval_minutes: int = 5
 
     tournaments_cache_ttl: int = 60 * 5
     teams_cache_ttl: int = 60 * 5

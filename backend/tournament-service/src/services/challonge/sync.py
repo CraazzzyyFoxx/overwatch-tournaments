@@ -19,15 +19,18 @@ from shared.services.distributed_lock import distributed_lock
 from shared.services.encounter_naming import build_encounter_name
 from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from src import models, schemas
 from src.core import config
 from src.services.challonge import service as challonge_service
 from src.services.encounter.finalize import finalize_encounter_score
-from src.services.tournament.events import enqueue_tournament_recalculation
+from src.services.tournament.events import (
+    enqueue_tournament_changed,
+    enqueue_tournament_recalculation,
+)
 
 _AMBIGUOUS = -1
 _SCORE_RE = re.compile(r"\s*(-?\d+)\s*-\s*(-?\d+)")
@@ -1459,6 +1462,26 @@ async def _build_match_lookup(
     )
 
 
+def _import_cache_invalidation_reason(stats: dict) -> str | None:
+    """Pick the ``tournament_changed`` reason for an import, or None if nothing changed.
+
+    ``structure_changed`` (stages/groups/stage-inputs/bracket-links) clears the full read-cache
+    pattern set (tournaments + teams + encounters); ``results_changed`` covers score/status
+    updates. Returns None for a no-op import so we don't emit spurious change events.
+    """
+    if (
+        stats["stages_created"]
+        or stats["groups_created"]
+        or stats["stage_inputs_created"]
+        or stats["bracket_links_created"]
+        or stats["bracket_links_updated"]
+    ):
+        return "structure_changed"
+    if stats["created"] or stats["updated"] or stats["matches_synced"]:
+        return "results_changed"
+    return None
+
+
 async def import_tournament(session: AsyncSession, tournament_id: int, *, dry_run: bool = False) -> dict:
     """Full import from Challonge: upsert encounters with scores and status."""
     async with _sync_job_lock(tournament_id, "import") as job_id:
@@ -1703,6 +1726,14 @@ async def import_tournament(session: AsyncSession, tournament_id: int, *, dry_ru
 
             if stats["matches_synced"] > 0:
                 await enqueue_tournament_recalculation(session, tournament_id)
+
+            # Invalidate read cache + push realtime via the outbox so it works regardless of
+            # the calling process: cashews is configured only in the API, so a direct
+            # invalidate_tournament_cache() from the worker (auto-sync) would be a no-op. The
+            # TournamentChangedEvent is drained and applied by the API-side subscriber instead.
+            change_reason = _import_cache_invalidation_reason(stats)
+            if change_reason is not None:
+                await enqueue_tournament_changed(session, tournament_id, change_reason)
             await session.commit()
         logger.info(f"Challonge import for tournament {tournament_id}: {stats}")
         return stats
@@ -1999,3 +2030,95 @@ async def get_sync_log(session: AsyncSession, tournament_id: int, limit: int = 5
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ── Background auto-sync (Challonge -> local) ────────────────────────────────
+
+# "Active" = matches are in play. Kept as a module constant so the set is easy to widen.
+ACTIVE_TOURNAMENT_STATUSES = (
+    enums.TournamentStatus.LIVE,
+    enums.TournamentStatus.PLAYOFFS,
+)
+
+
+async def list_active_challonge_tournament_ids(session: AsyncSession) -> list[int]:
+    """Active tournaments that have any Challonge link (legacy id, source, stage or group)."""
+    has_source = (
+        select(models.ChallongeSource.id).where(models.ChallongeSource.tournament_id == models.Tournament.id).exists()
+    )
+    has_stage_link = (
+        select(models.Stage.id)
+        .where(
+            models.Stage.tournament_id == models.Tournament.id,
+            models.Stage.challonge_id.is_not(None),
+        )
+        .exists()
+    )
+    has_group_link = (
+        select(models.TournamentGroup.id)
+        .where(
+            models.TournamentGroup.tournament_id == models.Tournament.id,
+            models.TournamentGroup.challonge_id.is_not(None),
+        )
+        .exists()
+    )
+    result = await session.execute(
+        select(models.Tournament.id)
+        .where(
+            models.Tournament.status.in_(ACTIVE_TOURNAMENT_STATUSES),
+            or_(
+                models.Tournament.challonge_id.is_not(None),
+                has_source,
+                has_stage_link,
+                has_group_link,
+            ),
+        )
+        .order_by(models.Tournament.id.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def sync_active_challonge_tournaments(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> list[dict]:
+    """Periodic pull: import every active Challonge-linked tournament.
+
+    Runs in the worker. No-ops when disabled or when credentials are missing (otherwise it would
+    spam 401s every interval). Each tournament is imported in its own session — ``import_tournament``
+    commits and takes its own Redis lock — so one failure never aborts the rest.
+    """
+    if not config.settings.challonge_auto_sync_enabled:
+        return []
+    if not (config.settings.challonge_username and config.settings.challonge_api_key):
+        logger.warning("Challonge auto-sync skipped: credentials are not configured")
+        return []
+
+    async with session_factory() as session:
+        tournament_ids = await list_active_challonge_tournament_ids(session)
+
+    results: list[dict] = []
+    for tournament_id in tournament_ids:
+        async with session_factory() as session:
+            try:
+                stats = await import_tournament(session, tournament_id)
+                results.append(
+                    {
+                        "tournament_id": tournament_id,
+                        "status": "success",
+                        "created": stats.get("created", 0),
+                        "updated": stats.get("updated", 0),
+                        "conflicts": stats.get("conflicts", 0),
+                        "errors": stats.get("errors", 0),
+                        "matches_synced": stats.get("matches_synced", 0),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Challonge auto-sync failed for tournament %s", tournament_id)
+                results.append(
+                    {
+                        "tournament_id": tournament_id,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
+    return results

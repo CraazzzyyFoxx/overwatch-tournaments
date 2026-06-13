@@ -20,6 +20,7 @@ from shared.observability import (
 from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
+from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
 from src.services.registration import admin as registration_service
@@ -49,6 +50,12 @@ async def sync_registration_google_sheet_feeds() -> None:
         logger.info("Registration Google Sheets sync completed", results=results)
 
 
+async def sync_challonge_active_tournaments() -> None:
+    results = await challonge_sync.sync_active_challonge_tournaments(db.async_session_maker)
+    if results:
+        logger.info("Challonge auto-sync completed", results=results)
+
+
 @app.on_startup
 async def start_worker() -> None:
     await broker.connect()
@@ -68,6 +75,12 @@ async def start_worker() -> None:
         "interval",
         minutes=5,
         id="registration_google_sheet_sync",
+    )
+    scheduler.add_job(
+        sync_challonge_active_tournaments,
+        "interval",
+        minutes=config.settings.challonge_auto_sync_interval_minutes,
+        id="challonge_active_sync",
     )
     scheduler.start()
     logger.info("Tournament worker scheduler started")
