@@ -1,4 +1,5 @@
 import React from "react";
+import { Layers } from "lucide-react";
 import { UserProfile, UserRole } from "@/types/user.types";
 import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/redesign/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
@@ -66,7 +67,7 @@ const OverviewRoleSplit = ({ profile }: Props) => {
   return (
     <CardSurface
       title="Role split"
-      icon={<span>▣</span>}
+      icon={<Layers size={15} />}
       subtitle={`${totalMaps} maps · ${profile.tournaments_count} tournaments`}
     >
       <div className="flex flex-col gap-3.5">

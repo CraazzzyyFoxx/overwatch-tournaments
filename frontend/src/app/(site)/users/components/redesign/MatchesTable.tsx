@@ -15,6 +15,7 @@ import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIn
 import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ArrowLeftRight, ListOrdered } from "lucide-react";
 import userService from "@/services/user.service";
 import type { Hero } from "@/types/hero.types";
 
@@ -331,7 +332,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
         </CardSurface>
 
         <aside className="flex flex-col gap-3.5 xl:sticky xl:top-22">
-          <CardSurface flush title="Most-fought opponents" icon={<span>↔</span>}>
+          <CardSurface flush title="Most-fought opponents" icon={<ArrowLeftRight size={15} />}>
             {opponentStats.map((opp, i) => (
               <div key={opp.name} className="aqt-opp-row">
                 <span className="aqt-rank">{String(i + 1).padStart(2, "0")}</span>
@@ -351,7 +352,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
             ) : null}
           </CardSurface>
 
-          <CardSurface flush title="By stage" icon={<span>≣</span>}>
+          <CardSurface flush title="By stage" icon={<ListOrdered size={15} />}>
             {(["group", "playoffs", "finals"] as const).map((k) => {
               const stats = stageStats[k];
               const total = stats.w + stats.l;

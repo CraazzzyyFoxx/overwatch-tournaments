@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { History } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -452,7 +453,7 @@ const TournamentsHistory = ({ tournaments, selfUserId }: Props) => {
     expandedLeagues[name] ?? entries.some((t) => t.id === selectedId);
 
   return (
-    <CardSurface flush title="Tournament history" icon={<span>▢</span>} subtitle="click to expand">
+    <CardSurface flush title="Tournament history" icon={<History size={15} />} subtitle="click to expand">
       {grouped.map((entry) => {
         if (!Array.isArray(entry)) {
           return (

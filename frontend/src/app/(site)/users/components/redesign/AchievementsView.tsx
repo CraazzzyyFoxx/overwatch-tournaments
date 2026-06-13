@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useTransition } from "react";
+import { Award, Crown, Gem, Sparkles } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -261,7 +262,9 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           <div key={r} className="aqt-card-surface">
             <div className="aqt-card-head">
               <div className="aqt-card-title">
-                <span className="aqt-card-title-ic">{r === "legendary" ? "★" : r === "epic" ? "▲" : r === "rare" ? "◆" : "●"}</span>
+                <span className="aqt-card-title-ic">
+                  {r === "legendary" ? <Crown size={15} /> : r === "epic" ? <Gem size={15} /> : r === "rare" ? <Sparkles size={15} /> : <Award size={15} />}
+                </span>
                 <span>{RARITY_TITLES[r]}</span>
               </div>
               <span className="aqt-card-sub">{sectionUnlocked} of {list.length} unlocked</span>

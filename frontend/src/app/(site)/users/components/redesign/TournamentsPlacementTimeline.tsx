@@ -1,4 +1,5 @@
 import React from "react";
+import { LineChart } from "lucide-react";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
 import { UserTournament } from "@/types/user.types";
 
@@ -32,7 +33,7 @@ const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
   return (
     <CardSurface
       title="Placement timeline"
-      icon={<span>⌁</span>}
+      icon={<LineChart size={15} />}
       subtitle={`${valid.length} tournaments · finish position vs field size`}
     >
       <div className="aqt-timeline">

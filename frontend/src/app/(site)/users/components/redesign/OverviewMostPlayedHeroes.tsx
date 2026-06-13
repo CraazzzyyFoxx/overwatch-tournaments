@@ -1,4 +1,5 @@
 import React from "react";
+import { Star } from "lucide-react";
 import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
@@ -31,7 +32,7 @@ const OverviewMostPlayedHeroes = ({ heroes, userSlug, totalCount, limit = 9 }: P
   return (
     <CardSurface
       title="Most played heroes"
-      icon={<span>★</span>}
+      icon={<Star size={15} />}
       action={
         <Link href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
           All {totalCount} →

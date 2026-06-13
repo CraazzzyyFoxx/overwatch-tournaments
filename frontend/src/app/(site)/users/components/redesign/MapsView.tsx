@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { LayoutGrid } from "lucide-react";
 import { getWinrateColor } from "@/utils/colors";
 
 interface Props {
@@ -222,7 +223,7 @@ const MapsView = ({ userId }: Props) => {
       {/* Mode breakdown */}
       <CardSurface
         title="By mode"
-        icon={<span>◫</span>}
+        icon={<LayoutGrid size={15} />}
         subtitle={`Winrate by game mode · ${modeStats.length} modes · ${allMaps.reduce((s, m) => s + m.count, 0)} games`}
       >
         <div className="aqt-mode-grid">

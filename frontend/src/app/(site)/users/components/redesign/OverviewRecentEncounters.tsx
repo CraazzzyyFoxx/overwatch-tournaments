@@ -1,4 +1,5 @@
 import React from "react";
+import { Swords } from "lucide-react";
 import Link from "next/link";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
@@ -35,7 +36,7 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
     <CardSurface
       flush
       title="Recent encounters"
-      icon={<span>⊟</span>}
+      icon={<Swords size={15} />}
       action={
         <Link href={`/users/${userSlug}?tab=matches`} className="aqt-seeall">
           All matches →

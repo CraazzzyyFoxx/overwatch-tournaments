@@ -1,4 +1,5 @@
 import React from "react";
+import { TrendingUp } from "lucide-react";
 import { CardSurface, PlacementSpark } from "@/app/(site)/users/components/redesign/atoms";
 import { UserTournament } from "@/types/user.types";
 
@@ -29,7 +30,7 @@ const OverviewPlacementSpark = ({ tournaments, limit = 12 }: Props) => {
   return (
     <CardSurface
       title="Placement trend"
-      icon={<span>▲</span>}
+      icon={<TrendingUp size={15} />}
       subtitle={`last ${recent.length} events · lower = better`}
     >
       <PlacementSpark data={points} max={fieldMax} />

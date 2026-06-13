@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
@@ -92,7 +93,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
           {tournament.name}
         </Link>
       }
-      icon={<span>◆</span>}
+      icon={<Trophy size={15} />}
       action={
         tournaments.length > 0 ? (
           <Select value={String(tournament.id)} onValueChange={onSelectTournament}>

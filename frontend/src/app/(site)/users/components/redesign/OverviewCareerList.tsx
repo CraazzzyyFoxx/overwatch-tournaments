@@ -1,4 +1,5 @@
 import React from "react";
+import { Medal } from "lucide-react";
 import { UserProfile } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
 
@@ -28,7 +29,7 @@ const OverviewCareerList = ({ profile }: Props) => {
   const proximity = profile.avg_closeness === null ? null : profile.avg_closeness * 100;
 
   return (
-    <CardSurface flush title="Career" icon={<span>◧</span>}>
+    <CardSurface flush title="Career" icon={<Medal size={15} />}>
       <Row label="Tournaments" value={`${profile.tournaments_count}`} />
       <Row
         label="Tournaments won"

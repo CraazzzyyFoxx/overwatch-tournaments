@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { Activity, Map as MapIcon, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeroWithUserStats } from "@/types/hero.types";
 import type { UserMapRead } from "@/types/user.types";
@@ -336,7 +337,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
         <CardSurface
           flush
           title="Hero pool"
-          icon={<span>≡</span>}
+          icon={<Swords size={15} />}
           subtitle="tracked > 60s"
           headerClassName="flex-col items-stretch gap-2.5"
         >
@@ -443,7 +444,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           {/* Radar + insights */}
           <CardSurface
             title="Insights"
-            icon={<span>◐</span>}
+            icon={<Activity size={15} />}
             subtitle={`${selected.hero.hero.name} · vs global avg/10`}
             action={
               <div className="aqt-filters !mb-0">
@@ -548,7 +549,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           </CardSurface>
 
           {/* Maps the selected hero was played on */}
-          <CardSurface flush title={`Maps for ${selected.hero.hero.name}`} icon={<span>▮</span>}>
+          <CardSurface flush title={`Maps for ${selected.hero.hero.name}`} icon={<MapIcon size={15} />}>
             {heroMaps.length > 0 ? (
               heroMaps.map((m, i) => {
                 const wr = m.winRate * 100;

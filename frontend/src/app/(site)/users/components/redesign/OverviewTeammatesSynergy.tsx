@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { Users } from "lucide-react";
 import Link from "next/link";
 import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -50,7 +51,7 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
     <CardSurface
       flush
       title="Best teammates"
-      icon={<span>⊕</span>}
+      icon={<Users size={15} />}
       action={
         <button
           type="button"
