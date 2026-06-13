@@ -1,16 +1,21 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 
 import Image from "next/image";
 import userService from "@/services/user.service";
-import { UserMapRead, UserMapsSummary } from "@/types/user.types";
+import { UserMapHeroStats, UserMapsSummary } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
-import HeroImage, { HeroStrip } from "@/components/hero/HeroImage";
+import SearchableImageSelect, {
+  type SearchableImageOption
+} from "@/app/(site)/users/compare/components/SearchableImageSelect";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { getWinrateColor } from "@/utils/colors";
+import { formatPercent, formatSeconds } from "@/app/(site)/users/components/user-maps-explorer/utils";
 
 interface Props {
   userId: number;
@@ -18,40 +23,243 @@ interface Props {
 
 const MODE_ORDER = ["Control", "Escort", "Hybrid", "Flashpoint", "Push", "Assault"] as const;
 
+type SortKey = "winrate" | "count" | "name";
+type OrderKey = "asc" | "desc";
+
+const MIN_COUNT_OPTIONS = [1, 3, 5, 10];
+const PER_PAGE_OPTIONS = [15, 30, -1];
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "winrate", label: "Winrate" },
+  { value: "count", label: "Games" },
+  { value: "name", label: "Name" }
+];
+
+// ─── Per-hero popover (winrate / games / record / playtime share on the map) ─────
+
+const HeroStatsChip = ({
+  heroStats,
+  open,
+  onRequestOpen,
+  onRequestClose
+}: {
+  heroStats: UserMapHeroStats;
+  open: boolean;
+  onRequestOpen: () => void;
+  onRequestClose: () => void;
+}) => {
+  const closeTimeoutRef = useRef<number | null>(null);
+  const winrateColor = getWinrateColor(heroStats.win_rate);
+  const shareValue = Math.max(0, Math.min(100, heroStats.playtime_share_on_map * 100));
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current === null) return;
+    window.clearTimeout(closeTimeoutRef.current);
+    closeTimeoutRef.current = null;
+  };
+
+  const scheduleClose = (delayMs = 120) => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => onRequestClose(), delayMs);
+  };
+
+  useEffect(() => {
+    return () => clearCloseTimeout();
+  }, []);
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => (nextOpen ? onRequestOpen() : onRequestClose())}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="relative h-7 w-7 overflow-hidden rounded-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+          aria-label={`${heroStats.hero.name} on this map`}
+          onPointerEnter={(e) => {
+            if (e.pointerType !== "mouse") return;
+            clearCloseTimeout();
+          }}
+          onPointerMove={(e) => {
+            if (e.pointerType !== "mouse") return;
+            clearCloseTimeout();
+            if (!open) onRequestOpen();
+          }}
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "mouse") return;
+            scheduleClose();
+          }}
+          onFocus={() => {
+            clearCloseTimeout();
+            if (!open) onRequestOpen();
+          }}
+          onBlur={() => scheduleClose(0)}
+        >
+          <Image
+            src={heroStats.hero.image_path}
+            alt={heroStats.hero.name}
+            fill
+            sizes="28px"
+            className="object-cover select-none"
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-80 data-[state=open]:animate-none data-[state=closed]:animate-none"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onPointerEnter={(e) => {
+          if (e.pointerType !== "mouse") return;
+          clearCloseTimeout();
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType !== "mouse") return;
+          scheduleClose();
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <div className="h-12 w-12 shrink-0">
+            <Image
+              src={heroStats.hero.image_path}
+              alt={heroStats.hero.name}
+              width={48}
+              height={48}
+              className="h-full w-full object-contain select-none"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{heroStats.hero.name}</div>
+            <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
+                <div className="text-muted-foreground">Winrate</div>
+                <div className="font-semibold tabular-nums" style={{ color: winrateColor }}>
+                  {formatPercent(heroStats.win_rate, 0)}
+                </div>
+              </div>
+              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
+                <div className="text-muted-foreground">Games</div>
+                <div className="font-semibold tabular-nums">{heroStats.games}</div>
+              </div>
+              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
+                <div className="text-muted-foreground">Record</div>
+                <div className="font-semibold tabular-nums">
+                  {heroStats.win}-{heroStats.loss}-{heroStats.draw}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Playtime on this map</span>
+            <span className="tabular-nums">
+              {formatSeconds(heroStats.playtime_seconds)} | {shareValue.toFixed(0)}%
+            </span>
+          </div>
+          <div className="mt-2">
+            <Progress value={shareValue} aria-label="Playtime share on this map" />
+          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            Games counted when hero time played is &gt; 60s.
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const AqtSelect = ({
+  value,
+  onChange,
+  options,
+  title
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  title?: string;
+}) => (
+  <select
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    title={title}
+    className="aqt-mono cursor-pointer rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-2.5 py-1.5 text-[12px] text-[color:var(--aqt-fg)] outline-none"
+  >
+    {options.map((o) => (
+      <option key={o.value} value={o.value} className="bg-[#10151c] text-[color:var(--aqt-fg)]">
+        {o.label}
+      </option>
+    ))}
+  </select>
+);
+
 const MapsView = ({ userId }: Props) => {
   const [modeFilter, setModeFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
-  const [sort] = useState<"winrate" | "count" | "name">("winrate");
-  const [order] = useState<"asc" | "desc">("desc");
+  const [sort, setSort] = useState<SortKey>("winrate");
+  const [order, setOrder] = useState<OrderKey>("desc");
   const [minCount, setMinCount] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [page, setPage] = useState(1);
+  const [tournamentId, setTournamentId] = useState<number | undefined>(undefined);
+  const [activeHeroPopoverKey, setActiveHeroPopoverKey] = useState<string | null>(null);
+
+  // Reset to first page whenever any filter/sort that changes the result set moves.
+  // Render-time adjustment (React-recommended) instead of an effect with setState.
+  const filterKey = `${modeFilter}|${sort}|${order}|${minCount}|${perPage}|${tournamentId}|${debouncedSearch}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  const tournamentsQuery = useQuery({
+    queryKey: ["user-tournaments", userId],
+    queryFn: () => userService.getUserTournaments(userId),
+    staleTime: 5 * 60 * 1000
+  });
+
+  const tournamentOptions = useMemo<SearchableImageOption[]>(
+    () => (tournamentsQuery.data ?? []).map((t) => ({ value: String(t.id), label: t.name })),
+    [tournamentsQuery.data]
+  );
 
   const mapsQuery = useQuery({
-    queryKey: ["user-maps-redesign", userId, debouncedSearch, minCount],
+    queryKey: ["user-maps-redesign", userId, debouncedSearch, minCount, tournamentId],
     queryFn: () =>
       userService.getUserMaps(userId, {
         page: 1,
         perPage: -1,
-        sort,
-        order,
+        sort: "winrate",
+        order: "desc",
         query: debouncedSearch.trim(),
-        minCount
+        minCount,
+        tournamentId
       }),
     staleTime: 60_000
   });
 
   const summaryQuery = useQuery({
-    queryKey: ["user-maps-summary-redesign", userId, debouncedSearch, minCount],
-    queryFn: () => userService.getUserMapsSummary(userId, { query: debouncedSearch.trim(), minCount }),
+    queryKey: ["user-maps-summary-redesign", userId, debouncedSearch, minCount, tournamentId],
+    queryFn: () =>
+      userService.getUserMapsSummary(userId, {
+        query: debouncedSearch.trim(),
+        minCount,
+        tournamentId
+      }),
     staleTime: 60_000
   });
 
   const summary = summaryQuery.data as UserMapsSummary | undefined;
   const allMaps = mapsQuery.data?.results ?? [];
 
-  // Aggregate by gamemode
+  // Aggregate by gamemode (over the full, tournament-scoped set).
   const modeStats = useMemo(() => {
-    const buckets = new Map<string, { mode: string; maps: Set<number>; games: number; win: number; loss: number; draw: number }>();
+    const buckets = new Map<
+      string,
+      { mode: string; maps: Set<number>; games: number; win: number; loss: number; draw: number }
+    >();
     allMaps.forEach((row) => {
       const mode = row.map.gamemode?.name ?? "Unknown";
       const b = buckets.get(mode) ?? { mode, maps: new Set<number>(), games: 0, win: 0, loss: 0, draw: 0 };
@@ -69,14 +277,22 @@ const MapsView = ({ userId }: Props) => {
     });
   }, [allMaps]);
 
-  const filteredMaps = useMemo(() => {
+  const sortedMaps = useMemo(() => {
     let rows = [...allMaps];
-    if (modeFilter) {
-      rows = rows.filter((r) => r.map.gamemode?.name === modeFilter);
-    }
-    rows.sort((a, b) => b.win_rate - a.win_rate);
+    if (modeFilter) rows = rows.filter((r) => r.map.gamemode?.name === modeFilter);
+    rows.sort((a, b) => {
+      let cmp = 0;
+      if (sort === "winrate") cmp = a.win_rate - b.win_rate;
+      else if (sort === "count") cmp = a.count - b.count;
+      else cmp = a.map.name.localeCompare(b.map.name);
+      return order === "asc" ? cmp : -cmp;
+    });
     return rows;
-  }, [allMaps, modeFilter]);
+  }, [allMaps, modeFilter, sort, order]);
+
+  const totalCount = sortedMaps.length;
+  const pages = perPage === -1 ? 1 : Math.max(1, Math.ceil(totalCount / perPage));
+  const pageMaps = perPage === -1 ? sortedMaps : sortedMaps.slice((page - 1) * perPage, page * perPage);
 
   const modeClass = (mode: string) => {
     const lower = mode.toLowerCase();
@@ -155,7 +371,7 @@ const MapsView = ({ userId }: Props) => {
         </div>
       </CardSurface>
 
-      {/* Filter chips */}
+      {/* Filter chips + controls */}
       <div className="aqt-filters">
         <span
           className={cn("aqt-filter-chip", modeFilter === null && "active")}
@@ -177,15 +393,47 @@ const MapsView = ({ userId }: Props) => {
           </span>
         ))}
         <span className="aqt-filter-divider" />
-        <span
-          className={cn("aqt-filter-chip", minCount === 3 && "active")}
-          onClick={() => setMinCount(minCount === 3 ? 1 : 3)}
-          role="button"
-          tabIndex={0}
+
+        <div className="w-48">
+          <SearchableImageSelect
+            value={tournamentId ? String(tournamentId) : undefined}
+            onValueChange={(val) => setTournamentId(val ? Number(val) : undefined)}
+            options={tournamentOptions}
+            placeholder="All tournaments"
+            searchPlaceholder="Search tournament…"
+            isLoading={tournamentsQuery.isLoading}
+            disabled={tournamentsQuery.isLoading || tournamentsQuery.isError}
+          />
+        </div>
+
+        <AqtSelect
+          title="Minimum games"
+          value={String(minCount)}
+          onChange={(v) => setMinCount(Number(v))}
+          options={MIN_COUNT_OPTIONS.map((n) => ({ value: String(n), label: `Min ${n} games` }))}
+        />
+        <AqtSelect
+          title="Rows per page"
+          value={String(perPage)}
+          onChange={(v) => setPerPage(Number(v))}
+          options={PER_PAGE_OPTIONS.map((n) => ({ value: String(n), label: n === -1 ? "Rows: All" : `Rows: ${n}` }))}
+        />
+        <AqtSelect
+          title="Sort by"
+          value={sort}
+          onChange={(v) => setSort(v as SortKey)}
+          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: `Sort: ${o.label}` }))}
+        />
+        <button
+          type="button"
+          onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
+          title={order === "asc" ? "Ascending" : "Descending"}
+          className="aqt-mono inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
         >
-          Min 3 games
-        </span>
-        <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
+          {order === "asc" ? "↑" : "↓"}
+        </button>
+
+        <div className="filter-search relative ml-auto min-w-[180px] max-w-[300px] flex-1">
           <input
             placeholder="Search maps…"
             value={search}
@@ -201,7 +449,7 @@ const MapsView = ({ userId }: Props) => {
 
       {/* Map rows */}
       <CardSurface flush>
-        <div className="border-b border-[color:var(--aqt-border)] px-[18px] py-3 grid grid-cols-[64px_1fr_1fr_80px_60px_50px] gap-3.5 items-center text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+        <div className="grid grid-cols-[64px_1fr_1fr_minmax(0,1.2fr)_60px_50px] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-[18px] py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           <div />
           <div>Map</div>
           <div>Winrate</div>
@@ -209,20 +457,15 @@ const MapsView = ({ userId }: Props) => {
           <div className="text-right">Record</div>
           <div className="text-right">Games</div>
         </div>
-        {filteredMaps.map((row) => {
+        {pageMaps.map((row) => {
           const wr = row.win_rate * 100;
           const wrCls = wr >= 60 ? "good" : wr <= 40 ? "bad" : "";
+          const heroStats = row.hero_stats ?? [];
           return (
-            <div key={row.map.id} className="aqt-map-row">
+            <div key={row.map.id} className="aqt-map-row" style={{ gridTemplateColumns: "64px 1fr 1fr minmax(0,1.2fr) 60px 50px" }}>
               <div className="aqt-map-thumb">
                 {row.map.image_path ? (
-                  <Image
-                    src={row.map.image_path}
-                    alt={row.map.name}
-                    fill
-                    sizes="56px"
-                    className="object-cover"
-                  />
+                  <Image src={row.map.image_path} alt={row.map.name} fill sizes="56px" className="object-cover" />
                 ) : (
                   <span>{row.map.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</span>
                 )}
@@ -239,10 +482,26 @@ const MapsView = ({ userId }: Props) => {
                 </div>
                 <span className={cn("aqt-num", wrCls)}>{wr.toFixed(0)}%</span>
               </div>
-              <HeroStrip
-                heroes={(row.hero_stats ?? row.heroes ?? []).slice(0, 4).map((h) => h.hero)}
-                size="sm"
-              />
+              <div className="flex flex-wrap items-center gap-1">
+                {heroStats.length > 0 ? (
+                  heroStats.slice(0, 8).map((hs) => {
+                    const key = `${row.map.id}:${hs.hero.id}`;
+                    return (
+                      <HeroStatsChip
+                        key={key}
+                        heroStats={hs}
+                        open={activeHeroPopoverKey === key}
+                        onRequestOpen={() => setActiveHeroPopoverKey(key)}
+                        onRequestClose={() =>
+                          setActiveHeroPopoverKey((cur) => (cur === key ? null : cur))
+                        }
+                      />
+                    );
+                  })
+                ) : (
+                  <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">—</span>
+                )}
+              </div>
               <span className="aqt-mono text-right text-[12.5px] font-semibold text-[color:var(--aqt-fg-muted)]">
                 {row.win}-{row.loss}-{row.draw}
               </span>
@@ -250,15 +509,63 @@ const MapsView = ({ userId }: Props) => {
             </div>
           );
         })}
-        {filteredMaps.length === 0 ? (
+        {pageMaps.length === 0 ? (
           <div className="py-10 text-center text-[color:var(--aqt-fg-dim)]">
             {mapsQuery.isLoading ? "Loading…" : "No maps match the filters"}
+          </div>
+        ) : null}
+
+        {/* Pagination footer */}
+        {perPage !== -1 && totalCount > 0 ? (
+          <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
+            <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+              Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, totalCount)} of {totalCount}
+            </span>
+            <div className="flex gap-1">
+              <PageBtn disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</PageBtn>
+              {Array.from({ length: Math.min(3, pages) }, (_, i) => i + 1).map((n) => (
+                <PageBtn key={n} active={n === page} onClick={() => setPage(n)}>{n}</PageBtn>
+              ))}
+              {pages > 3 ? (
+                <>
+                  {page > 4 ? <span className="aqt-mono px-2 text-[color:var(--aqt-fg-faint)]">…</span> : null}
+                  <PageBtn active={page === pages} onClick={() => setPage(pages)}>{pages}</PageBtn>
+                </>
+              ) : null}
+              <PageBtn disabled={page >= pages} onClick={() => setPage((p) => Math.min(pages, p + 1))}>›</PageBtn>
+            </div>
           </div>
         ) : null}
       </CardSurface>
     </div>
   );
 };
+
+const PageBtn = ({
+  active,
+  disabled,
+  onClick,
+  children
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={cn(
+      "aqt-mono inline-flex h-8 min-w-[32px] items-center justify-center rounded-[6px] border px-2 text-[12px] transition-colors",
+      active
+        ? "border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.12)] text-[color:var(--aqt-teal)]"
+        : "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
+      disabled && "cursor-not-allowed opacity-40"
+    )}
+  >
+    {children}
+  </button>
+);
 
 const KPI = ({ label, value, unit, color, sub }: { label: string; value: string; unit?: string; color?: string; sub?: string }) => (
   <CardSurface>

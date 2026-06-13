@@ -6,6 +6,7 @@ import { getPlayerImage } from "@/utils/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak, type FormResult } from "@/app/(site)/users/components/redesign/atoms";
+import ProfileToolbar from "@/app/(site)/users/components/redesign/ProfileToolbar";
 import userService from "@/services/user.service";
 
 export interface UserHeaderProps {
@@ -42,16 +43,6 @@ const primaryRoleOf = (profile: UserProfile) => {
   return profile.roles.reduce((best, current) => (current.tournaments > best.tournaments ? current : best));
 };
 
-const auraLabel = (profile: UserProfile): string | null => {
-  const role = primaryRoleOf(profile);
-  if (!role) return null;
-  const division = role.division;
-  if (division >= 16) return `${role.role} · Div ${division} · Anchor`;
-  if (division >= 11) return `Top ${role.role} · Div ${division}`;
-  if (division >= 6) return `${role.role} core · Div ${division}`;
-  return `Rising ${role.role} · Div ${division}`;
-};
-
 const UserHeader = async ({ profile, user }: UserHeaderProps) => {
   const [name, tag] = user.name.split("#");
   const primaryRole = primaryRoleOf(profile);
@@ -59,7 +50,6 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
 
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
   const formStreak = await deriveFormStreak(user.id);
-  const aura = auraLabel(profile);
   const roleSwatchColor =
     primaryRole?.role === "Tank"
       ? "var(--aqt-tank)"
@@ -86,11 +76,14 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
         style={{ background: "radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 58%)" }}
       />
 
-      <p className="relative z-[1] px-9 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-        <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
-        <span className="mx-1">·</span>
-        <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
-      </p>
+      <div className="relative z-[1] flex items-center justify-between gap-3 px-9 pt-5">
+        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+          <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
+          <span className="mx-1">·</span>
+          <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
+        </p>
+        <ProfileToolbar />
+      </div>
 
       <div className="relative z-[1] grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">
         <div className="relative h-[110px] w-[110px] flex-shrink-0">
@@ -217,18 +210,6 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             ) : (
               <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">No recent matches</span>
             )}
-            {aura ? (
-              <span
-                className="ml-auto inline-flex items-center gap-2 rounded-lg px-2.5 py-1"
-                style={{
-                  background: "hsl(38 95% 55% / 0.08)",
-                  border: "1px solid hsl(38 95% 55% / 0.25)"
-                }}
-              >
-                <span className="aqt-mono text-[10px] font-bold tracking-[0.1em] text-[color:var(--aqt-amber)]">AURA</span>
-                <span className="text-xs font-semibold text-[color:var(--aqt-fg)]">{aura}</span>
-              </span>
-            ) : null}
           </div>
         </div>
       </div>
