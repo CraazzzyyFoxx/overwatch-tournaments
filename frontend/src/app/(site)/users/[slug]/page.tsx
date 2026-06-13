@@ -25,7 +25,10 @@ import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
 import UserLiquidGlassProvider from "@/app/(site)/users/components/shared/UserLiquidGlassProvider";
 import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 
-export const dynamic = "force-dynamic";
+// The route still renders dynamically (api-fetch reads the workspace cookie),
+// but we no longer force `fetchCache: force-no-store` — public, workspace-scoped
+// profile reads are tagged + revalidated in the Data Cache (see user.service),
+// which cuts repeat TTFB and gives crawlers fast SSR HTML.
 
 const USER_TABS = ["overview", "tournaments", "matches", "heroes", "maps", "achievements"] as const;
 type UserTab = (typeof USER_TABS)[number];

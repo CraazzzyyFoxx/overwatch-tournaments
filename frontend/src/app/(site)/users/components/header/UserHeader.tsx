@@ -49,16 +49,20 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
   const avatarSrc = getPlayerImage(profile, user);
 
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
-  const formStreak = await deriveFormStreak(user.id);
 
   // No seasons in the system — show the trend from the most recent tournament:
   // its map winrate vs the user's career map winrate. One lightweight fetch.
   const lastSummary = profile.tournaments.length
     ? [...profile.tournaments].sort((a, b) => (b.number ?? 0) - (a.number ?? 0))[0]
     : null;
-  const lastTournament = lastSummary
-    ? await userService.getUserTournament(user.id, lastSummary.id).catch(() => null)
-    : null;
+  // The form streak and the last-tournament fetch are independent — run them
+  // in parallel instead of awaiting sequentially.
+  const [formStreak, lastTournament] = await Promise.all([
+    deriveFormStreak(user.id),
+    lastSummary
+      ? userService.getUserTournament(user.id, lastSummary.id).catch(() => null)
+      : Promise.resolve(null)
+  ]);
   const lastWinrate =
     lastTournament && lastTournament.maps > 0 ? (lastTournament.maps_won / lastTournament.maps) * 100 : null;
   const winrateDelta = lastWinrate !== null && winrate !== null ? lastWinrate - winrate : null;

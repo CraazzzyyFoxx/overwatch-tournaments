@@ -16,6 +16,13 @@ interface ApiFetchOptions {
   signal?: AbortSignal;
   headers?: Record<string, string>;
   cache?: RequestCache;
+  /**
+   * Next.js Data Cache options. Set `revalidate` (seconds) to cache a public,
+   * server-side GET in the Data Cache (works even after cookies() are read);
+   * `tags` enable on-demand `revalidateTag`. Ignored by the browser on client
+   * fetches. Only use for responses that depend solely on the URL (public data).
+   */
+  next?: { revalidate?: number | false; tags?: string[] };
   timeout?: number;
   skipWorkspace?: boolean;
   throwOnError?: boolean;
@@ -257,13 +264,21 @@ export async function apiFetch(
       requestHeaders.Authorization = `Bearer ${tokenToUse}`;
     }
 
-    return fetch(url, {
-      cache: options.cache ?? config.defaultCache,
+    const init: RequestInit & { next?: { revalidate?: number | false; tags?: string[] } } = {
       headers: requestHeaders,
       body: isFormData ? (options.body as FormData) : options.body ? JSON.stringify(options.body) : undefined,
       method: options.method || "GET",
       signal,
-    });
+    };
+    if (options.next) {
+      // An explicit revalidate enables the Data Cache even when the route is
+      // dynamic (cookies read) and the request carries an Authorization header.
+      init.next = options.next;
+      if (options.cache) init.cache = options.cache;
+    } else {
+      init.cache = options.cache ?? config.defaultCache;
+    }
+    return fetch(url, init);
   };
 
   try {

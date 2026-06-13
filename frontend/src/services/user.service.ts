@@ -22,6 +22,12 @@ import { AchievementRarity } from "@/types/achievement.types";
 import { LogStatsName } from "@/types/stats.types";
 import { apiFetch } from "@/lib/api-fetch";
 
+// Public, workspace-scoped profile reads are cached in the Next Data Cache for
+// this long (seconds) when fetched server-side. Tagged for future on-demand
+// revalidation (`revalidateTag("user:<id>")`). Client (react-query) fetches
+// ignore the `next` option.
+const USER_TTL_SECONDS = 300;
+
 export default class userService {
   static async getAll(params: SearchPaginationParams): Promise<PaginatedResponse<User>> {
     return apiFetch("app","users", {
@@ -35,17 +41,22 @@ export default class userService {
     return apiFetch("app", `users/${encodeURIComponent(apiName)}`, {
       query: {
         entities: ["twitch", "discord", "battle_tag"]
-      }
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: ["users"] }
     }).then((res) => res.json());
   }
   static async getUserProfile(id: number): Promise<UserProfile> {
-    return apiFetch("app",`users/${id}/profile`).then((res) => res.json());
+    return apiFetch("app", `users/${id}/profile`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
   }
   static async getUserTournament(
     id: number,
     tournamentId: number | null
   ): Promise<UserTournamentWithStats | null> {
-    return apiFetch("app",`users/${id}/tournaments/${tournamentId}`)
+    return apiFetch("app", `users/${id}/tournaments/${tournamentId}`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    })
       .then((res) => {
         if (res.status === 200) {
           return res.json();
@@ -63,6 +74,7 @@ export default class userService {
     return apiFetch("app", `users/${id}/tournaments`, {
       query,
       skipWorkspace,
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     }).then((res) => res.json());
   }
   static async getUserMaps(
@@ -161,7 +173,8 @@ export default class userService {
         mvp1: filters?.mvp1 ? true : undefined,
         has_logs: filters?.hasLogs ? true : undefined,
         opponent: filters?.opponent || undefined
-      }
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
     }).then((res) => res.json());
   }
   static async getUserHeroes(
@@ -209,7 +222,8 @@ export default class userService {
         per_page: perPage,
         sort: "winrate",
         order: "desc"
-      }
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     }).then((res) => res.json());
   }
   static async searchUsers(query: string, signal?: AbortSignal): Promise<MinimizedUser[]> {
