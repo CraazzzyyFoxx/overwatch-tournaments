@@ -50,6 +50,19 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
 
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
   const formStreak = await deriveFormStreak(user.id);
+
+  // No seasons in the system — show the trend from the most recent tournament:
+  // its map winrate vs the user's career map winrate. One lightweight fetch.
+  const lastSummary = profile.tournaments.length
+    ? [...profile.tournaments].sort((a, b) => (b.number ?? 0) - (a.number ?? 0))[0]
+    : null;
+  const lastTournament = lastSummary
+    ? await userService.getUserTournament(user.id, lastSummary.id).catch(() => null)
+    : null;
+  const lastWinrate =
+    lastTournament && lastTournament.maps > 0 ? (lastTournament.maps_won / lastTournament.maps) * 100 : null;
+  const winrateDelta = lastWinrate !== null && winrate !== null ? lastWinrate - winrate : null;
+
   const roleSwatchColor =
     primaryRole?.role === "Tank"
       ? "var(--aqt-tank)"
@@ -189,6 +202,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             label="Winrate"
             value={winrate !== null ? `${winrate.toFixed(2)}` : "-"}
             unit="%"
+            delta={winrateDelta !== null ? { value: winrateDelta, good: winrateDelta >= 0 } : undefined}
           />
           <PfStat
             label="Maps"
@@ -223,9 +237,11 @@ interface PfStatProps {
   unit?: string;
   valueSuffix?: string;
   sub?: string | null;
+  /** Signed change vs the last tournament; `good` controls arrow/colour. */
+  delta?: { value: number; good: boolean };
 }
 
-const PfStat = ({ label, value, unit, valueSuffix, sub }: PfStatProps) => (
+const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => (
   <div className="flex flex-col gap-1">
     <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
     <span className="aqt-display aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
@@ -235,6 +251,15 @@ const PfStat = ({ label, value, unit, valueSuffix, sub }: PfStatProps) => (
         <span className="text-[22px] text-[color:var(--aqt-fg-faint)]">{valueSuffix}</span>
       ) : null}
     </span>
+    {delta ? (
+      <span
+        className="aqt-mono inline-flex items-center gap-0.5 text-[11px] font-bold"
+        style={{ color: delta.good ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
+        title="Last tournament vs career"
+      >
+        {delta.good ? "↑" : "↓"} {Math.abs(delta.value).toFixed(1)}
+      </span>
+    ) : null}
     {sub ? <span className="text-[11px] text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
   </div>
 );
