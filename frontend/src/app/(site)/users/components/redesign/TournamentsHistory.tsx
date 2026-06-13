@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { UserTournament, EncounterWithUserStats } from "@/types/user.types";
 import type { Hero } from "@/types/hero.types";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import { TournamentTeamTable } from "@/components/TournamentTeamCard";
 import {
   CardSurface,
   PipRow,
@@ -300,38 +301,7 @@ const TournamentItem = ({
               <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                 Roster
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(t.players ?? []).map((p) => {
-                  const isSelf = p.user_id === selfUserId;
-                  return (
-                    <div key={p.id} className="grid grid-cols-[16px_1fr_auto] items-center gap-2">
-                      <PlayerRoleIcon role={p.role} size={14} color={roleColor(p.role)} />
-                      <div className="flex min-w-0 items-center gap-1.5 truncate text-[13px]">
-                        <span className={cn("truncate font-semibold", isSelf && "text-[color:var(--aqt-amber)]")}>
-                          {p.name?.split("#")[0]}
-                        </span>
-                        {p.name?.includes("#") ? (
-                          <span className="aqt-mono text-[10px] text-[color:var(--aqt-fg-faint)]">
-                            #{p.name.split("#")[1]}
-                          </span>
-                        ) : null}
-                        {p.is_newcomer ? (
-                          <span
-                            className="aqt-mono rounded-[4px] px-1 py-0.5 text-[8.5px] font-bold uppercase tracking-[0.08em]"
-                            style={{
-                              background: "hsl(174 72% 46% / 0.12)",
-                              color: "var(--aqt-teal)"
-                            }}
-                          >
-                            New
-                          </span>
-                        ) : null}
-                      </div>
-                      <DivisionIcon division={p.division} width={24} height={24} />
-                    </div>
-                  );
-                })}
-              </div>
+              <TournamentTeamTable players={t.players ?? []} tournamentGrid={t.division_grid_version} />
             </div>
           </div>
 
