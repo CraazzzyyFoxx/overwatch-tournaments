@@ -141,7 +141,6 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
                 <PlayerRoleIcon role={primaryRole.role} size={14} color={roleSwatchColor} />
               </span>
               <span>{primaryRole.role}</span>
-              <span>· Div {primaryRole.division}</span>
               <span>· {profile.tournaments_count} tournaments</span>
               <span>· {profile.maps_total} maps</span>
             </div>
