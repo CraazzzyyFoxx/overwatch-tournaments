@@ -29,6 +29,13 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
     staleTime: 5 * 60 * 1000
   });
 
+  // Maps (with per-hero stats) power the "Maps for [Hero]" panel in HeroesView.
+  const mapsQuery = useQuery({
+    queryKey: ["user-heroes-maps", userId, tournamentId],
+    queryFn: () => userService.getUserMaps(userId, { perPage: -1, minCount: 1, tournamentId }),
+    staleTime: 5 * 60 * 1000
+  });
+
   const tournamentOptions = useMemo<SearchableImageOption[]>(() => {
     return (tournamentsQuery.data ?? []).map((t) => ({
       value: String(t.id),
@@ -68,7 +75,7 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
     </div>
   );
 
-  return <HeroesView heroes={heroes} filterSlot={filterSlot} />;
+  return <HeroesView heroes={heroes} filterSlot={filterSlot} maps={mapsQuery.data?.results ?? []} />;
 };
 
 export default UserHeroesContainer;

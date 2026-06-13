@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { HeroWithUserStats } from "@/types/hero.types";
+import type { UserMapRead } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
 import { getHumanizedStats } from "@/utils/stats";
 import {
@@ -24,6 +25,8 @@ import {
 interface Props {
   heroes: HeroWithUserStats[];
   filterSlot?: React.ReactNode;
+  /** User maps (with per-hero stats) — powers the "Maps for [Hero]" panel. */
+  maps?: UserMapRead[];
 }
 
 type StatSortKey = "delta" | "overall" | "avg10" | "name";
@@ -80,7 +83,7 @@ const radarSpoke = (i: number, n: number, radius = 100): { x: number; y: number 
   };
 };
 
-const HeroesView = ({ heroes, filterSlot }: Props) => {
+const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
   const safeHeroes = Array.isArray(heroes) ? heroes : [];
 
   const items = useMemo(() => {
@@ -209,6 +212,20 @@ const HeroesView = ({ heroes, filterSlot }: Props) => {
     });
     return rows;
   }, [selected, statSearch, statSort]);
+
+  // Maps the selected hero was played on, with the user's record on each.
+  const heroMaps = useMemo(() => {
+    if (!selected || !maps || maps.length === 0) return [];
+    const heroId = selected.hero.hero.id;
+    const rows = maps
+      .map((m) => {
+        const hs = (m.hero_stats ?? []).find((h) => h.hero.id === heroId);
+        return hs ? { id: m.map.id, name: m.map.name, mode: m.map.gamemode?.name ?? "—", winRate: hs.win_rate, win: hs.win, loss: hs.loss } : null;
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    rows.sort((a, b) => b.winRate - a.winRate || b.win + b.loss - (a.win + a.loss));
+    return rows.slice(0, 6);
+  }, [selected, maps]);
 
   const mostEffective = useMemo(() => {
     let best: typeof enriched[0] | null = null;
@@ -527,6 +544,44 @@ const HeroesView = ({ heroes, filterSlot }: Props) => {
                 search={statSearch}
                 onSearchChange={setStatSearch}
               />
+            )}
+          </CardSurface>
+
+          {/* Maps the selected hero was played on */}
+          <CardSurface flush title={`Maps for ${selected.hero.hero.name}`} icon={<span>▮</span>}>
+            {heroMaps.length > 0 ? (
+              heroMaps.map((m, i) => {
+                const wr = m.winRate * 100;
+                return (
+                  <div
+                    key={m.id}
+                    className="grid grid-cols-[26px_1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 last:border-b-0"
+                  >
+                    <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-[13px] font-medium text-[color:var(--aqt-fg)]">{m.name}</span>
+                      <span className="aqt-mono text-[10px] uppercase tracking-[0.06em] text-[color:var(--aqt-fg-dim)]">
+                        {m.mode}
+                      </span>
+                    </div>
+                    <span
+                      className="aqt-mono text-right text-[12.5px] font-bold"
+                      style={{ color: wr >= 55 ? "var(--aqt-emerald)" : wr < 45 ? "var(--aqt-rose)" : "var(--aqt-amber)" }}
+                    >
+                      {wr.toFixed(0)}%
+                    </span>
+                    <span className="aqt-mono text-right text-[11.5px] text-[color:var(--aqt-fg-muted)]">
+                      {m.win}-{m.loss}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
+                No map data for this hero yet.
+              </div>
             )}
           </CardSurface>
         </div>
