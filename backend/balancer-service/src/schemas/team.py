@@ -42,6 +42,11 @@ class InternalBalancerPlayer(BaseModel):
     is_flex: bool = False
     sub_role: str | None = None
     all_ratings: dict[str, typing.Any] | None = None
+    # Per-role discomfort snapshot the editor attaches to every player so it can
+    # re-derive discomfort on drag-and-drop without re-running the solver. Mirror
+    # of ``PlayerData.all_discomforts`` so the save round-trip accepts it.
+    # Defaulted for legacy payloads.
+    all_discomforts: dict[str, int] = Field(default_factory=dict)
 
     @property
     def rating(self) -> int:

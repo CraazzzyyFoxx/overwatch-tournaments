@@ -200,6 +200,100 @@ def test_internal_balance_payload_accepts_public_player_shape_with_is_flex() -> 
     assert player.preferences == ["Damage", "Support"]
 
 
+def test_internal_balance_payload_accepts_all_discomforts_snapshot() -> None:
+    """Regression: the save round-trip must accept the per-role discomfort
+    snapshot the editor attaches to every player for drag-and-drop recompute.
+
+    ``PlayerData`` (the response model) carries ``all_discomforts`` and the
+    normalizer re-emits it, so ``InternalBalancerPlayer`` (the save model) must
+    accept it too — otherwise PUT /balance 422s on a normal edited payload.
+    """
+
+    payload = InternalBalancerTeamsPayload.model_validate(
+        {
+            "teams": [
+                {
+                    "id": 1,
+                    "name": "Team 1",
+                    "average_mmr": 2500.0,
+                    "rating_variance": 0.0,
+                    "total_discomfort": 0,
+                    "max_discomfort": 0,
+                    "roster": {
+                        "Damage": [
+                            {
+                                "uuid": "player-1",
+                                "name": "Player#1234",
+                                "assigned_rating": 2500,
+                                "role_discomfort": 0,
+                                "is_captain": False,
+                                "role_preferences": ["Damage", "Support"],
+                                "all_ratings": {"Damage": 2500, "Support": 2400},
+                                "all_discomforts": {"Tank": 5000, "Damage": 0, "Support": 100},
+                                "is_flex": False,
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    )
+
+    player = payload.teams[0].roster["Damage"][0]
+    assert player.all_discomforts == {"Tank": 5000, "Damage": 0, "Support": 100}
+
+
+def test_normalize_then_validate_round_trips_all_discomforts() -> None:
+    """The full save path (normalize_balance_response_payload -> internal
+    schema) must not 422 when the editor sends ``all_discomforts``.
+    """
+
+    from src.services.balancer.config.public_contract import (
+        normalize_balance_response_payload,
+    )
+
+    result_json = {
+        "teams": [
+            {
+                "id": 1,
+                "name": "Team 1",
+                "average_mmr": 2500.0,
+                "rating_variance": 0.0,
+                "total_discomfort": 100,
+                "max_discomfort": 100,
+                "roster": {
+                    "Tank": [
+                        {
+                            "uuid": "player-1",
+                            "name": "Player#1234",
+                            "assigned_rating": 2500,
+                            "role_discomfort": 0,
+                            "is_captain": True,
+                            "role_preferences": ["Tank"],
+                            "all_ratings": {"Tank": 2500},
+                            "all_discomforts": {"Tank": 0, "Damage": 100, "Support": 200},
+                            "is_flex": False,
+                        }
+                    ]
+                },
+            }
+        ],
+        "statistics": {
+            "average_mmr": 2500.0,
+            "mmr_std_dev": 0.0,
+            "total_teams": 1,
+            "players_per_team": 1,
+        },
+        "benched_players": [],
+    }
+
+    normalized = normalize_balance_response_payload(result_json)
+    payload = InternalBalancerTeamsPayload.model_validate(normalized)
+
+    player = payload.teams[0].roster["Tank"][0]
+    assert player.all_discomforts == {"Tank": 0, "Damage": 100, "Support": 200}
+
+
 def test_rank_comfort_tilt_field_exposed() -> None:
     from src.services.balancer.config.provider import get_balancer_config_payload
 
