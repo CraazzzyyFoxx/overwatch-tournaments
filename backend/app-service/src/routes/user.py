@@ -274,10 +274,23 @@ async def get_encounters(
     params: pagination.PaginationSortQueryParams[
         typing.Literal["id", "name", "home_team_id", "away_team_id", "closeness", "round"]
     ] = Depends(),
+    result: typing.Literal["win", "loss", "draw"] | None = Query(None),
+    stage: typing.Literal["group", "playoffs", "finals"] | None = Query(None),
+    mvp1: bool = Query(False),
+    has_logs: bool | None = Query(None),
+    opponent: str | None = Query(None),
     workspace_id: WorkspaceQuery = None,
 ):
     encounters = await user_flows.get_encounters_by_user(
-        session, id, pagination.PaginationSortParams.from_query_params(params), workspace_id=workspace_id
+        session,
+        id,
+        pagination.PaginationSortParams.from_query_params(params),
+        workspace_id=workspace_id,
+        result=result,
+        stage=stage,
+        mvp1=mvp1,
+        has_logs=has_logs,
+        opponent=opponent,
     )
     return encounters
 

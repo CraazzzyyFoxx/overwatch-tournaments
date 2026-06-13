@@ -139,6 +139,12 @@ async def get_user_encounters_paginated(
     user_id: int,
     params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
+    *,
+    result: str | None = None,
+    stage: str | None = None,
+    mvp1: bool = False,
+    has_logs: bool | None = None,
+    opponent: str | None = None,
 ) -> tuple[
     typing.Sequence[tuple[models.Encounter, models.Match | None, int | None, list[dict] | None]],
     int,
@@ -186,6 +192,78 @@ async def get_user_encounters_paginated(
         encounters_query = encounters_query.join(
             models.Tournament, models.Encounter.tournament_id == models.Tournament.id
         ).where(*workspace_filter(workspace_id))
+
+    def apply_filters(q: sa.Select) -> sa.Select:
+        """Apply the Matches-tab filters server-side. Both the count and the
+        result query must get identical filters so pagination stays correct.
+        `models.Player.team_id` is the viewer's team for the encounter (joined
+        above), which lets us express win/loss and opponent-name conditions."""
+        if has_logs is not None:
+            q = q.where(models.Encounter.has_logs.is_(has_logs))
+
+        if result == "win":
+            q = q.where(
+                sa.or_(
+                    sa.and_(models.Encounter.home_team_id == models.Player.team_id, models.Encounter.home_score > models.Encounter.away_score),
+                    sa.and_(models.Encounter.away_team_id == models.Player.team_id, models.Encounter.away_score > models.Encounter.home_score),
+                )
+            )
+        elif result == "loss":
+            q = q.where(
+                sa.or_(
+                    sa.and_(models.Encounter.home_team_id == models.Player.team_id, models.Encounter.home_score < models.Encounter.away_score),
+                    sa.and_(models.Encounter.away_team_id == models.Player.team_id, models.Encounter.away_score < models.Encounter.home_score),
+                )
+            )
+        elif result == "draw":
+            q = q.where(models.Encounter.home_score == models.Encounter.away_score)
+
+        if stage in ("group", "playoffs", "finals"):
+            stage_item = sa.orm.aliased(models.StageItem)
+            stage_obj = sa.orm.aliased(models.Stage)
+            q = q.outerjoin(stage_item, models.Encounter.stage_item_id == stage_item.id).outerjoin(
+                stage_obj, models.Encounter.stage_id == stage_obj.id
+            )
+            stage_name = sa.func.coalesce(stage_item.name, stage_obj.name)
+            if stage == "finals":
+                q = q.where(stage_name.ilike("%final%"))
+            elif stage == "playoffs":
+                q = q.where(sa.or_(stage_name.ilike("%playoff%"), stage_name.ilike("%bracket%")))
+            else:
+                q = q.where(sa.or_(stage_name.ilike("%group%"), stage_name.op("~*")("^[a-h]$")))
+
+        if mvp1:
+            mvp_subq = (
+                sa.select(models.Match.encounter_id)
+                .join(models.MatchStatistics, models.MatchStatistics.match_id == models.Match.id)
+                .where(
+                    models.MatchStatistics.user_id == user_id,
+                    models.MatchStatistics.name == enums.LogStatsName.Performance,
+                    models.MatchStatistics.hero_id.is_(None),
+                    models.MatchStatistics.round == 0,
+                    models.MatchStatistics.value == 1,
+                )
+            )
+            q = q.where(models.Encounter.id.in_(mvp_subq))
+
+        if opponent:
+            home_t = sa.orm.aliased(models.Team)
+            away_t = sa.orm.aliased(models.Team)
+            like = f"%{opponent}%"
+            q = q.outerjoin(home_t, models.Encounter.home_team_id == home_t.id).outerjoin(
+                away_t, models.Encounter.away_team_id == away_t.id
+            )
+            q = q.where(
+                sa.or_(
+                    sa.and_(models.Encounter.home_team_id == models.Player.team_id, away_t.name.ilike(like)),
+                    sa.and_(models.Encounter.away_team_id == models.Player.team_id, home_t.name.ilike(like)),
+                )
+            )
+
+        return q
+
+    total_query = apply_filters(total_query)
+    encounters_query = apply_filters(encounters_query)
 
     encounters_query = params.apply_pagination_sort(encounters_query)
     encounters_query = encounters_query.subquery()

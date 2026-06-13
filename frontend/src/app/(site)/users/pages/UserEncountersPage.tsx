@@ -2,7 +2,7 @@ import React from "react";
 import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
 import { Skeleton } from "@/components/ui/skeleton";
-import MatchesTable from "@/app/(site)/users/components/redesign/MatchesTable";
+import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/redesign/MatchesTable";
 
 export const UserEncountersPageSkeleton = () => {
   return (
@@ -13,12 +13,20 @@ export const UserEncountersPageSkeleton = () => {
   );
 };
 
-export const UserEncountersPage = async ({ user, page }: { user: User; page: number }) => {
+export const UserEncountersPage = async ({
+  user,
+  page,
+  filters
+}: {
+  user: User;
+  page: number;
+  filters?: MatchesFilters;
+}) => {
   const perPage = 15;
 
   let encounters: Awaited<ReturnType<typeof userService.getUserEncounters>>;
   try {
-    encounters = await userService.getUserEncounters(user.id, page, perPage);
+    encounters = await userService.getUserEncounters(user.id, page, perPage, undefined, undefined, undefined, filters);
   } catch {
     return (
       <div className="aqt-player rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-6 py-10 text-center text-[13px] text-[color:var(--aqt-fg-muted)]">

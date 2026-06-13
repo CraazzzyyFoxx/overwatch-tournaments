@@ -10,6 +10,7 @@ import {
   UserEncountersPageSkeleton,
   UserEncountersPage
 } from "@/app/(site)/users/pages/UserEncountersPage";
+import type { MatchesFilters } from "@/app/(site)/users/components/redesign/MatchesTable";
 import { Metadata } from "next";
 import {
   UserTournamentsPage,
@@ -35,6 +36,12 @@ type UserPageSearchParams = {
   page?: string;
   selectedTournamentId?: string;
   achievementTournamentId?: string;
+  // Matches-tab server-side filters
+  mResult?: string;
+  mStage?: string;
+  mMvp1?: string;
+  mLogs?: string;
+  mOpp?: string;
 };
 
 const isUserTab = (value: string): value is UserTab => {
@@ -122,9 +129,17 @@ const UserTournamentsTab = async ({ userAndProfile }: { userAndProfile: Promise<
   return <UserTournamentsPage user={user} />;
 };
 
-const UserMatchesTab = async ({ userAndProfile, page }: { userAndProfile: Promise<UserAndProfile>; page: number }) => {
+const UserMatchesTab = async ({
+  userAndProfile,
+  page,
+  filters
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  page: number;
+  filters?: MatchesFilters;
+}) => {
   const { user } = await userAndProfile;
-  return <UserEncountersPage user={user} page={page} />;
+  return <UserEncountersPage user={user} page={page} filters={filters} />;
 };
 
 const UserMapsTab = async ({ userAndProfile }: { userAndProfile: Promise<UserAndProfile> }) => {
@@ -153,13 +168,15 @@ const resolveTabContent = ({
   userAndProfile,
   tournamentId,
   pageNumber,
-  achievementTournamentId
+  achievementTournamentId,
+  matchFilters
 }: {
   activeTab: UserTab;
   userAndProfile: Promise<UserAndProfile>;
   tournamentId?: number;
   pageNumber: number;
   achievementTournamentId?: string;
+  matchFilters?: MatchesFilters;
 }) => {
   switch (activeTab) {
     case "overview":
@@ -178,7 +195,7 @@ const resolveTabContent = ({
       return {
         value: "matches",
         fallback: <UserEncountersPageSkeleton />,
-        content: <UserMatchesTab userAndProfile={userAndProfile} page={pageNumber} />
+        content: <UserMatchesTab userAndProfile={userAndProfile} page={pageNumber} filters={matchFilters} />
       };
     case "maps":
       return {
@@ -263,12 +280,21 @@ export default async function UserPage({
   const tournamentId = toPositiveInt(resolvedSearchParams.tournamentId, 0) || undefined;
   const pageNumber = toPositiveInt(resolvedSearchParams.page, 1);
   const achievementTournamentId = resolvedSearchParams.achievementTournamentId;
+  const { mResult, mStage, mMvp1, mLogs, mOpp } = resolvedSearchParams;
+  const matchFilters: MatchesFilters = {
+    result: mResult === "win" || mResult === "loss" || mResult === "draw" ? mResult : undefined,
+    stage: mStage === "group" || mStage === "playoffs" || mStage === "finals" ? mStage : undefined,
+    mvp1: mMvp1 === "1",
+    hasLogs: mLogs === "1",
+    opponent: mOpp || undefined
+  };
   const tabContent = resolveTabContent({
     activeTab,
     userAndProfile,
     tournamentId,
     pageNumber,
-    achievementTournamentId
+    achievementTournamentId,
+    matchFilters
   });
 
   return (

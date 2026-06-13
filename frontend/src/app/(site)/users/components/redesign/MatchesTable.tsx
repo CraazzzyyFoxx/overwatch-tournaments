@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
 import {
@@ -26,6 +27,15 @@ interface Props {
   selfUserId: number;
 }
 
+/** Server-side Matches-tab filters (mirrors the encounters endpoint params). */
+export interface MatchesFilters {
+  result?: "win" | "loss" | "draw";
+  stage?: "group" | "playoffs" | "finals";
+  mvp1?: boolean;
+  hasLogs?: boolean;
+  opponent?: string;
+}
+
 type Filter = "all" | "wins" | "losses" | "draws" | "group" | "playoffs" | "finals" | "mvp1" | "has_logs";
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -39,9 +49,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "mvp1", label: "MVP 1st" },
   { key: "has_logs", label: "Has logs" }
 ];
-
-const encounterHasMvp1 = (enc: EncounterWithUserStats): boolean =>
-  (enc.matches ?? []).some((m) => m.performance === 1);
 
 const stageKindFor = (name: string | undefined): "group" | "playoffs" | "finals" | "default" => {
   if (!name) return "default";
@@ -58,46 +65,59 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
+  // Filters live in the URL and are applied server-side (the page refetches),
+  // so they work across all pages — not just the current one.
+  const urlOpp = searchParams.get("mOpp") ?? "";
+  const [search, setSearch] = useState(urlOpp);
+  const [debouncedSearch] = useDebounce(search, 400);
 
-  const filtered = useMemo(() => {
-    return encounters.filter((enc) => {
-      const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
-      const userScore = isUserHome ? enc.score.home : enc.score.away;
-      const oppScore = isUserHome ? enc.score.away : enc.score.home;
+  const activeFilter: Filter = (() => {
+    const r = searchParams.get("mResult");
+    if (r === "win") return "wins";
+    if (r === "loss") return "losses";
+    if (r === "draw") return "draws";
+    const s = searchParams.get("mStage");
+    if (s === "group") return "group";
+    if (s === "playoffs") return "playoffs";
+    if (s === "finals") return "finals";
+    if (searchParams.get("mMvp1") === "1") return "mvp1";
+    if (searchParams.get("mLogs") === "1") return "has_logs";
+    return "all";
+  })();
 
-      if (search) {
-        const oppName = isUserHome ? enc.away_team?.name : enc.home_team?.name;
-        if (!oppName?.toLowerCase().includes(search.toLowerCase())) return false;
-      }
+  const pushParams = (mutate: (p: URLSearchParams) => void) => {
+    const params = new URLSearchParams(searchParams?.toString());
+    mutate(params);
+    params.set("page", "1");
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
-      const stageKind = stageKindFor(enc.stage_item?.name ?? enc.stage?.name);
-
-      if (filter === "wins" && userScore <= oppScore) return false;
-      if (filter === "losses" && userScore >= oppScore) return false;
-      if (filter === "draws" && userScore !== oppScore) return false;
-      if (filter === "group" && stageKind !== "group") return false;
-      if (filter === "playoffs" && stageKind !== "playoffs") return false;
-      if (filter === "finals" && stageKind !== "finals") return false;
-      if (filter === "mvp1" && !encounterHasMvp1(enc)) return false;
-      if (filter === "has_logs" && !enc.has_logs) return false;
-
-      return true;
+  const applyFilter = (key: Filter) => {
+    pushParams((p) => {
+      p.delete("mResult");
+      p.delete("mStage");
+      p.delete("mMvp1");
+      p.delete("mLogs");
+      if (key === "wins") p.set("mResult", "win");
+      else if (key === "losses") p.set("mResult", "loss");
+      else if (key === "draws") p.set("mResult", "draw");
+      else if (key === "group") p.set("mStage", "group");
+      else if (key === "playoffs") p.set("mStage", "playoffs");
+      else if (key === "finals") p.set("mStage", "finals");
+      else if (key === "mvp1") p.set("mMvp1", "1");
+      else if (key === "has_logs") p.set("mLogs", "1");
     });
-  }, [encounters, filter, search, selfUserId]);
+  };
 
-  const winCount = encounters.filter((enc) => {
-    const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
-    return (isUserHome ? enc.score.home : enc.score.away) > (isUserHome ? enc.score.away : enc.score.home);
-  }).length;
-  const lossCount = encounters.filter((enc) => {
-    const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
-    return (isUserHome ? enc.score.home : enc.score.away) < (isUserHome ? enc.score.away : enc.score.home);
-  }).length;
-  const drawCount = encounters.length - winCount - lossCount;
-  const logsCount = encounters.filter((e) => e.has_logs).length;
-  const mvp1Count = encounters.filter(encounterHasMvp1).length;
+  // Push the debounced opponent search to the URL (server-side filter).
+  useEffect(() => {
+    if (debouncedSearch.trim() === urlOpp) return;
+    pushParams((p) => {
+      const v = debouncedSearch.trim();
+      if (v) p.set("mOpp", v);
+      else p.delete("mOpp");
+    });
+  }, [debouncedSearch]);
 
   const pages = Math.max(1, Math.ceil(total / perPage));
 
@@ -145,34 +165,17 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
   return (
     <div className="aqt-player">
       <div className="aqt-filters mb-3.5">
-        {FILTERS.map((f) => {
-          const count =
-            f.key === "all"
-              ? encounters.length
-              : f.key === "wins"
-              ? winCount
-              : f.key === "losses"
-              ? lossCount
-              : f.key === "draws"
-              ? drawCount
-              : f.key === "mvp1"
-              ? mvp1Count
-              : f.key === "has_logs"
-              ? logsCount
-              : null;
-          return (
-            <span
-              key={f.key}
-              className={cn("aqt-filter-chip", filter === f.key && "active")}
-              onClick={() => setFilter(f.key)}
-              role="button"
-              tabIndex={0}
-            >
-              {f.label}
-              {count !== null ? <span className="aqt-count">{count}</span> : null}
-            </span>
-          );
-        })}
+        {FILTERS.map((f) => (
+          <span
+            key={f.key}
+            className={cn("aqt-filter-chip", activeFilter === f.key && "active")}
+            onClick={() => applyFilter(f.key)}
+            role="button"
+            tabIndex={0}
+          >
+            {f.label}
+          </span>
+        ))}
         <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
           <input
             placeholder="Search opponent…"
@@ -204,7 +207,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((enc) => {
+                {encounters.map((enc) => {
                   const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
                   const userScore = isUserHome ? enc.score.home : enc.score.away;
                   const oppScore = isUserHome ? enc.score.away : enc.score.home;
@@ -299,7 +302,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                     </tr>
                   );
                 })}
-                {filtered.length === 0 ? (
+                {encounters.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
                       No matches for current filter
@@ -311,7 +314,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
           </div>
           <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
             <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
-              Showing {(page - 1) * perPage + 1}–{(page - 1) * perPage + filtered.length} of {total}
+              Showing {(page - 1) * perPage + 1}–{(page - 1) * perPage + encounters.length} of {total}
             </span>
             <div className="flex gap-1">
               <PageBtn disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>‹</PageBtn>

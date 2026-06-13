@@ -1332,6 +1332,12 @@ async def get_encounters_by_user(
     user_id: int,
     params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
+    *,
+    result: str | None = None,
+    stage: str | None = None,
+    mvp1: bool = False,
+    has_logs: bool | None = None,
+    opponent: str | None = None,
 ) -> pagination.Paginated[schemas.EncounterReadWithUserStats]:
     """Paginated encounters involving a specific user, with per-user stats.
 
@@ -1342,7 +1348,15 @@ async def get_encounters_by_user(
     """
     user = await get(session, user_id, [])
     encounters, total = await _repositories.get_user_encounters_paginated(
-        session, user.id, params, workspace_id=workspace_id
+        session,
+        user.id,
+        params,
+        workspace_id=workspace_id,
+        result=result,
+        stage=stage,
+        mvp1=mvp1,
+        has_logs=has_logs,
+        opponent=opponent,
     )
     encounters_read: list[schemas.EncounterReadWithUserStats] = []
     encounters_cache: dict[int, models.Encounter] = {}

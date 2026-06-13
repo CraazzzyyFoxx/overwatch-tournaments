@@ -140,7 +140,14 @@ export default class userService {
       "away_team",
       "away_team.players",
       "matches.map"
-    ]
+    ],
+    filters?: {
+      result?: "win" | "loss" | "draw";
+      stage?: "group" | "playoffs" | "finals";
+      mvp1?: boolean;
+      hasLogs?: boolean;
+      opponent?: string;
+    }
   ): Promise<PaginatedResponse<EncounterWithUserStats>> {
     return apiFetch("app",`users/${id}/encounters`, {
       query: {
@@ -148,7 +155,12 @@ export default class userService {
         per_page: perPage,
         sort: sort,
         order: order,
-        entities
+        entities,
+        result: filters?.result,
+        stage: filters?.stage,
+        mvp1: filters?.mvp1 ? true : undefined,
+        has_logs: filters?.hasLogs ? true : undefined,
+        opponent: filters?.opponent || undefined
       }
     }).then((res) => res.json());
   }
