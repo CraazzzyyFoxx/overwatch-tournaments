@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import sqlalchemy as sa
+from shared.models.achievement import AchievementRule
+from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
-from shared.models.achievement import AchievementRule
-from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from src import models
 from src.core import pagination, utils
 
@@ -143,6 +143,27 @@ async def get_all(
     count = await session.execute(count_query)
     results = await session.execute(query)
     return results.all(), count.scalar()
+
+
+async def get_all_rules_with_rarity(
+    session: AsyncSession,
+    workspace_id: int | None = None,
+) -> typing.Sequence[tuple[AchievementRule, float | None]]:
+    """All enabled rules with rarity, unpaginated — used to derive locked achievements."""
+    rarity_subq = get_rarity_subq(workspace_id=workspace_id)
+    query = (
+        sa.select(AchievementRule, rarity_subq.c.rarity.label("rarity"))
+        .outerjoin(
+            rarity_subq,
+            AchievementRule.id == rarity_subq.c.achievement_rule_id,
+        )
+        .where(AchievementRule.enabled.is_(True))
+    )
+    if workspace_id:
+        query = query.where(AchievementRule.workspace_id == workspace_id)
+
+    result = await session.execute(query)
+    return result.all()
 
 
 async def get_count_users(

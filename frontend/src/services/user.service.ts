@@ -171,17 +171,20 @@ export default class userService {
     id: number,
     {
       tournamentId,
-      withoutTournament
+      withoutTournament,
+      includeLocked
     }: {
       tournamentId?: number;
       withoutTournament?: boolean;
+      includeLocked?: boolean;
     } = {}
   ): Promise<AchievementRarity[]> {
     return apiFetch("app",`achievements/user/${id}`, {
       query: {
         entities: ["tournaments", "matches"],
         tournament_id: tournamentId,
-        without_tournament: withoutTournament
+        without_tournament: withoutTournament,
+        include_locked: includeLocked
       }
     }).then((res) => res.json());
   }

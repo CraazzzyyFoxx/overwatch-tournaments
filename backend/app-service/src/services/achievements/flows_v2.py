@@ -5,15 +5,16 @@ Drop-in replacement for flows.py. Uses service_v2 under the hood.
 
 import typing
 
+from shared.models.achievement import AchievementRule
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.achievement import AchievementRule
 from src import schemas
 from src.core import errors, pagination
 from src.services.hero import flows as hero_flows
 from src.services.user import flows as user_flows
 
-from . import _mappers, _repositories, service_v2 as service
+from . import _mappers, _repositories
+from . import service_v2 as service
 
 
 async def to_pydantic(
@@ -109,6 +110,7 @@ async def get_user_achievements(
     tournament_id: int | None = None,
     without_tournament: bool = False,
     workspace_id: int | None = None,
+    include_locked: bool = False,
 ) -> list[schemas.UserAchievementRead]:
     user = await user_flows.get(session, user_id, [])
     results = await service.get_user_results(
@@ -149,6 +151,24 @@ async def get_user_achievements(
     for achievement in cache.values():
         achievement.tournaments_ids.sort()
         achievement.matches_ids.sort()
+
+    # Append not-yet-earned rules as locked entries (count=0). Only meaningful for
+    # the global view — a per-tournament filter scopes to what was earned there.
+    if include_locked and tournament_id is None and not without_tournament:
+        all_rules = await service.get_all_rules_with_rarity(session, workspace_id=workspace_id)
+        for rule, rarity in all_rules:
+            if rule.id in cache:
+                continue
+            cache[rule.id] = schemas.UserAchievementRead(
+                **rule.to_dict(),
+                rarity=rarity or 0.0,
+                count=0,
+                tournaments_ids=[],
+                matches_ids=[],
+                tournaments=[],
+                matches=[],
+                hero=None,
+            )
 
     # Bulk-fetch tournaments and matches in one DB hit each, then map back to
     # achievements. Previous loop did one round-trip per (achievement, tid),

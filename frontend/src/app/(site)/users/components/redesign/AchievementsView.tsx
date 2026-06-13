@@ -58,6 +58,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
   const [, startTransition] = useTransition();
 
   const [rarityFilter, setRarityFilter] = useState<Rarity | null>(null);
+  const [lockFilter, setLockFilter] = useState<"all" | "unlocked" | "locked">("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"rarity" | "name" | "count">("rarity");
 
@@ -107,13 +108,30 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
     };
   }, [grouped]);
 
-  const totalUnlocked = achievements.length;
+  // An achievement with count === 0 is a not-yet-earned (locked) entry.
+  const unlockedCounts = useMemo(() => {
+    const f = (list: AchievementRarity[]) => list.filter((a) => a.count > 0).length;
+    return {
+      legendary: f(grouped.legendary),
+      epic: f(grouped.epic),
+      rare: f(grouped.rare),
+      uncommon: f(grouped.uncommon),
+      common: f(grouped.common)
+    };
+  }, [grouped]);
+
+  const totalCount = achievements.length;
+  const unlockedCount = useMemo(() => achievements.filter((a) => a.count > 0).length, [achievements]);
+  const lockedCount = totalCount - unlockedCount;
+  const hasLocked = lockedCount > 0;
 
   const visibleGrouped = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filteredEntry = (rarity: Rarity): AchievementRarity[] => {
       if (rarityFilter && rarityFilter !== rarity) return [];
       let list = grouped[rarity];
+      if (lockFilter === "unlocked") list = list.filter((a) => a.count > 0);
+      else if (lockFilter === "locked") list = list.filter((a) => a.count === 0);
       if (q) {
         list = list.filter((a) =>
           (a.name?.toLowerCase().includes(q)) ||
@@ -129,7 +147,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
       return sorted;
     };
     return Object.fromEntries(RARITY_ORDER.map((r) => [r, filteredEntry(r)])) as Record<Rarity, AchievementRarity[]>;
-  }, [grouped, rarityFilter, search, sort]);
+  }, [grouped, rarityFilter, lockFilter, search, sort]);
 
   return (
     <div className="aqt-player flex flex-col gap-3.5">
@@ -138,7 +156,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         {RARITY_ORDER.map((r) => (
           <div key={r} className={cn("aqt-tier", r)}>
             <span className="aqt-l">{r}</span>
-            <span className="aqt-n">{counts[r]}</span>
+            <span className="aqt-n">{unlockedCounts[r]}</span>
             <span className="aqt-sub">{RARITY_RANGE[r]}</span>
           </div>
         ))}
@@ -147,13 +165,36 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
       {/* Filters */}
       <div className="aqt-filters">
         <span
-          className={cn("aqt-filter-chip", rarityFilter === null && "active")}
-          onClick={() => setRarityFilter(null)}
+          className={cn("aqt-filter-chip", rarityFilter === null && lockFilter === "all" && "active")}
+          onClick={() => {
+            setRarityFilter(null);
+            setLockFilter("all");
+          }}
           role="button"
           tabIndex={0}
         >
-          All <span className="aqt-count">{totalUnlocked}</span>
+          All <span className="aqt-count">{totalCount}</span>
         </span>
+        {hasLocked ? (
+          <>
+            <span
+              className={cn("aqt-filter-chip", lockFilter === "unlocked" && "active")}
+              onClick={() => setLockFilter(lockFilter === "unlocked" ? "all" : "unlocked")}
+              role="button"
+              tabIndex={0}
+            >
+              Unlocked <span className="aqt-count">{unlockedCount}</span>
+            </span>
+            <span
+              className={cn("aqt-filter-chip", lockFilter === "locked" && "active")}
+              onClick={() => setLockFilter(lockFilter === "locked" ? "all" : "locked")}
+              role="button"
+              tabIndex={0}
+            >
+              Locked <span className="aqt-count">{lockedCount}</span>
+            </span>
+          </>
+        ) : null}
         <span className="aqt-filter-divider" />
         {RARITY_ORDER.map((r) => (
           <span
@@ -212,6 +253,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
       {RARITY_ORDER.map((r) => {
         const list = visibleGrouped[r];
         if (list.length === 0) return null;
+        const sectionUnlocked = list.filter((a) => a.count > 0).length;
         return (
           <div key={r} className="aqt-card-surface">
             <div className="aqt-card-head">
@@ -219,18 +261,20 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                 <span className="aqt-card-title-ic">{r === "legendary" ? "★" : r === "epic" ? "▲" : r === "rare" ? "◆" : "●"}</span>
                 <span>{RARITY_TITLES[r]}</span>
               </div>
-              <span className="aqt-card-sub">{list.length} unlocked</span>
+              <span className="aqt-card-sub">{sectionUnlocked} of {list.length} unlocked</span>
             </div>
             <div className="aqt-card-body">
               <div className="aqt-ach-grid">
                 {list.map((ach) => {
                   const imgSrc = ach.image_url ?? `/achievements/${ach.slug}.webp`;
                   const initial = (ach.name ?? "?").slice(0, 1).toUpperCase();
+                  const locked = ach.count === 0;
                   return (
                     <Link
                       key={ach.id}
                       href={`/achievements/${ach.id}`}
-                      className={cn("aqt-ach-card", r)}
+                      className={cn("aqt-ach-card", r, locked && "locked")}
+                      style={locked ? { opacity: 0.6, filter: "grayscale(0.5)" } : undefined}
                     >
                       {ach.count > 0 ? (
                         <span className="aqt-stamp x">×{ach.count}</span>
@@ -257,7 +301,11 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                         </div>
                       </div>
                       <div className="mt-auto flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-2 text-[10.5px] text-[color:var(--aqt-fg-muted)]">
-                        <span className="aqt-rarity">◆ <span className="capitalize">{r}</span></span>
+                        {locked ? (
+                          <span className="aqt-rarity">Locked</span>
+                        ) : (
+                          <span className="aqt-rarity">◆ <span className="capitalize">{r}</span></span>
+                        )}
                         <span className="aqt-mono">{(ach.rarity * 100).toFixed(2)}%</span>
                       </div>
                     </Link>

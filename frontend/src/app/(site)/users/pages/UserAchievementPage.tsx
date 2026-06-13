@@ -40,7 +40,12 @@ const UserAchievementPage = async ({ user, selectedTournamentId }: UserAchieveme
   try {
     [achievements, profile] = await Promise.all([
       userService
-        .getUserAchievements(user.id, { tournamentId, withoutTournament })
+        .getUserAchievements(user.id, {
+          tournamentId,
+          withoutTournament,
+          // Locked achievements only make sense for the global (all-tournaments) view.
+          includeLocked: selectValue === "all"
+        })
         .catch(() => [] as AchievementRarity[]),
       userService.getUserProfile(user.id)
     ]);

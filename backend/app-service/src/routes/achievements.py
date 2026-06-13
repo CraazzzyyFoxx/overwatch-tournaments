@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import schemas
 from src.core import config, db, enums, errors, pagination
 from src.core.workspace import WorkspaceQuery
-
 from src.services.achievements import flows_v2 as achievements_flows
 
 router = APIRouter(prefix="/achievements", tags=[enums.RouteTag.ACHIEVEMENTS])
@@ -79,6 +78,7 @@ async def get_user_achievements(
     entities: list[str] = Query([]),
     tournament_id: int | None = Query(None),
     without_tournament: bool = Query(False),
+    include_locked: bool = Query(False),
     workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
@@ -100,4 +100,5 @@ async def get_user_achievements(
         tournament_id=tournament_id,
         without_tournament=without_tournament,
         workspace_id=workspace_id,
+        include_locked=include_locked,
     )
