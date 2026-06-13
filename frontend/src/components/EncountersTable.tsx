@@ -12,6 +12,7 @@ import { PaginatedResponse } from "@/types/pagination.types";
 import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 
 const COMPLETED_STATUSES = new Set(["completed", "finished", "closed"]);
 const PER_PAGE = 15;
@@ -304,10 +305,22 @@ const EncountersTable = ({
                       </td>
 
                       <td className="c">
-                        <div className="m-media" style={{ justifyContent: "center" }}>
-                          <span className={cn("pill", encounter.has_logs ? "has" : "empty")}>
-                            Logs
-                          </span>
+                        <div
+                          className="m-media"
+                          style={{ justifyContent: "center" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MatchLogIndicator
+                            hasLogs={encounter.has_logs}
+                            logs={
+                              encounter.has_logs
+                                ? (encounter.matches ?? []).map((m, i) => ({
+                                    matchId: m.id,
+                                    label: m.map?.name ?? `Map ${i + 1}`
+                                  }))
+                                : undefined
+                            }
+                          />
                         </div>
                       </td>
                     </tr>

@@ -2,6 +2,7 @@ import React from "react";
 import { Swords } from "lucide-react";
 import Link from "next/link";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
 import { cn } from "@/lib/utils";
 
@@ -62,13 +63,13 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
           return "draw";
         });
         const stageShort = stage ? stage.split(" ")[0] : "";
-        const subText = enc.has_logs ? `${stage || "BO" + (enc.best_of || "?")} · logs available` : `${stage || ""} · ${enc.matches?.length || 0} maps played`;
+        const subText = `${stage || "BO" + (enc.best_of || "?")} · ${enc.matches?.length || 0} maps`;
 
         return (
           <Link
             key={enc.id}
             href={`/encounters/${enc.id}`}
-            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
+            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
           >
             <span className="aqt-mono min-w-[42px] text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
               {tournamentLabel}{stageShort ? `·${stageShort.charAt(0)}` : ""}
@@ -91,6 +92,7 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
             >
               {scoreStr}
             </span>
+            <MatchLogIndicator hasLogs={enc.has_logs} size={13} className="h-6 w-6" />
           </Link>
         );
       })}

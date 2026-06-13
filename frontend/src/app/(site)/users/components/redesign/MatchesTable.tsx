@@ -11,12 +11,11 @@ import {
   ScoreCell,
   StagePill
 } from "@/app/(site)/users/components/redesign/atoms";
-import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
 import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
+import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ArrowLeftRight, ListOrdered } from "lucide-react";
-import userService from "@/services/user.service";
 import type { Hero } from "@/types/hero.types";
 
 interface Props {
@@ -295,7 +294,6 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                               ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
                               : undefined
                           }
-                          hrefFor={userService.matchLogDownloadUrl}
                         />
                       </td>
                     </tr>

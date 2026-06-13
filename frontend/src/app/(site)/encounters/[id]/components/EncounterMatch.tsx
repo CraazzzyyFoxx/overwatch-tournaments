@@ -10,6 +10,7 @@ import MatchTeamTable from "@/app/(site)/matches/[id]/components/MatchTeamTable"
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import MatchStatsChart from "@/app/(site)/encounters/[id]/components/MatchStatsChart";
+import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 
 const EncounterMatch = async ({ match }: { match: Match }) => {
   const mapImagePath: string = match.map ? match.map?.image_path : "";
@@ -116,9 +117,15 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
 
               <div className="flex flex-col text-right">
                 <p className="leading-7">Log name</p>
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                  {match.log_name}
-                </h4>
+                <div className="flex items-center justify-end gap-2">
+                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
+                    {match.log_name}
+                  </h4>
+                  <MatchLogIndicator
+                    hasLogs={Boolean(match.log_name)}
+                    logs={match.log_name ? [{ matchId: match.id, label: match.map?.name ?? undefined }] : undefined}
+                  />
+                </div>
               </div>
             </div>
             <Link href={`/matches/${data.id}`} target="_blank" rel="noopener noreferrer">

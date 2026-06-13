@@ -15,14 +15,13 @@ import {
   StagePill,
   type ScoreKind
 } from "@/app/(site)/users/components/redesign/atoms";
-import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
 import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
+import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   groupTournamentsByLeague,
   leagueKey
 } from "@/app/(site)/users/components/redesign/tournaments-history.helpers";
-import userService from "@/services/user.service";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 
@@ -177,7 +176,6 @@ const EncounterRow = ({
               ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
               : undefined
           }
-          hrefFor={userService.matchLogDownloadUrl}
         />
       </div>
     </Link>
