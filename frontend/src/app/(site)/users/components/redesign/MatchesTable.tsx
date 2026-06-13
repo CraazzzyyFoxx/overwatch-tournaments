@@ -7,15 +7,14 @@ import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
 import {
   CardSurface,
-  MvpPill,
   ResTag,
   ScoreCell,
-  StagePill,
-  mvpRank,
-  ordinal
+  StagePill
 } from "@/app/(site)/users/components/redesign/atoms";
 import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
+import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import userService from "@/services/user.service";
 import type { Hero } from "@/types/hero.types";
 
@@ -272,13 +271,17 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
                         <HeroStrip heroes={heroList} size="sm" limit={4} />
                       </td>
                       <td className="px-3.5 py-3">
-                        <span className="inline-flex items-center gap-1">
-                          {mvpMatches.length > 0
-                            ? mvpMatches.map((m) => (
-                                <MvpPill key={m.id} rank={mvpRank(m.performance)} label={ordinal(m.performance as number)} />
-                              ))
-                            : <span className="aqt-mono text-[color:var(--aqt-fg-faint)]">—</span>}
-                        </span>
+                        {mvpMatches.length > 0 ? (
+                          <TooltipProvider delayDuration={150}>
+                            <span className="inline-flex items-center gap-1">
+                              {mvpMatches.map((m) => (
+                                <MvpMatchPill key={m.id} match={m} />
+                              ))}
+                            </span>
+                          </TooltipProvider>
+                        ) : (
+                          <span className="aqt-mono text-[color:var(--aqt-fg-faint)]">—</span>
+                        )}
                       </td>
                       <td className="aqt-mono px-3.5 py-3 text-[11px] text-[color:var(--aqt-fg-dim)]">
                         {enc.closeness != null ? `${(enc.closeness * 100).toFixed(0)}%` : "—"}

@@ -15,6 +15,13 @@ import SearchableImageSelect, {
 import HeroImage from "@/components/hero/HeroImage";
 import HeroStatsPopover from "@/components/hero/HeroStatsPopover";
 import { AvatarStack } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { getWinrateColor } from "@/utils/colors";
 
 interface Props {
@@ -38,25 +45,33 @@ const AqtSelect = ({
   value,
   onChange,
   options,
-  title
+  title,
+  width = "w-[150px]"
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   title?: string;
+  width?: string;
 }) => (
-  <select
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    title={title}
-    className="aqt-mono cursor-pointer rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-2.5 py-1.5 text-[12px] text-[color:var(--aqt-fg)] outline-none"
-  >
-    {options.map((o) => (
-      <option key={o.value} value={o.value} className="bg-[#10151c] text-[color:var(--aqt-fg)]">
-        {o.label}
-      </option>
-    ))}
-  </select>
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger
+      title={title}
+      className={cn(
+        "aqt-mono h-8 shadow-none border-white/[0.07] bg-white/[0.02] text-[12px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0",
+        width
+      )}
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
+      {options.map((o) => (
+        <SelectItem key={o.value} value={o.value}>
+          {o.label}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 );
 
 const MapsView = ({ userId }: Props) => {

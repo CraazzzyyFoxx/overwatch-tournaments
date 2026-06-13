@@ -12,12 +12,11 @@ import {
   CardSurface,
   PipRow,
   StagePill,
-  MvpPill,
-  mvpRank,
-  ordinal,
   type ScoreKind
 } from "@/app/(site)/users/components/redesign/atoms";
 import MatchLogIndicator from "@/app/(site)/users/components/redesign/MatchLogIndicator";
+import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   groupTournamentsByLeague,
   leagueKey
@@ -138,13 +137,13 @@ const EncounterRow = ({
         <HeroStrip heroes={heroes} size="sm" limit={6} />
       </div>
 
-      {/* MVP pills (per map) */}
+      {/* MVP pills (per map) — hover shows the map it was earned on */}
       <div className="hidden items-center gap-1 md:flex">
-        {(enc.matches ?? []).map((m) =>
-          m.performance != null ? (
-            <MvpPill key={m.id} rank={mvpRank(m.performance)} label={ordinal(m.performance)} />
-          ) : null
-        )}
+        <TooltipProvider delayDuration={150}>
+          {(enc.matches ?? []).map((m) => (
+            <MvpMatchPill key={m.id} match={m} />
+          ))}
+        </TooltipProvider>
       </div>
 
       {/* Closeness */}

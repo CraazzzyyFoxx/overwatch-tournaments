@@ -225,16 +225,19 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
             </SelectContent>
           </Select>
         )}
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as "rarity" | "name" | "count")}
-          title="Sort achievements"
-          className="aqt-mono cursor-pointer rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-2.5 py-1.5 text-[12px] text-[color:var(--aqt-fg)] outline-none"
-        >
-          <option value="rarity" className="bg-[#10151c]">Sort: Rarity</option>
-          <option value="name" className="bg-[#10151c]">Sort: Name</option>
-          <option value="count" className="bg-[#10151c]">Sort: Earned</option>
-        </select>
+        <Select value={sort} onValueChange={(v) => setSort(v as "rarity" | "name" | "count")}>
+          <SelectTrigger
+            title="Sort achievements"
+            className="aqt-mono h-8 w-[150px] shadow-none border-white/[0.07] bg-white/[0.02] text-[12px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="rarity">Sort: Rarity</SelectItem>
+            <SelectItem value="name">Sort: Name</SelectItem>
+            <SelectItem value="count">Sort: Earned</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
           <input
             placeholder="Search achievements…"
