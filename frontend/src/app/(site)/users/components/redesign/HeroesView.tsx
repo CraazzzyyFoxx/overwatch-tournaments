@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -392,15 +391,7 @@ const HeroesView = ({ heroes, filterSlot }: Props) => {
                 borderColor: selected.hero.hero.color || `hsl(${heroVariant === "tank" ? "210" : heroVariant === "support" ? "142" : "340"} 50% 35%)`
               }}
             >
-              {selected.hero.hero.image_path ? (
-                <Image
-                  src={selected.hero.hero.image_path}
-                  alt={selected.hero.hero.name}
-                  fill
-                  sizes="96px"
-                  className="object-cover"
-                />
-              ) : null}
+              <HeroImage hero={selected.hero.hero} size={96} rounded="lg" />
             </div>
             <div className="relative z-[1] flex flex-col gap-1.5">
               <div className="aqt-display text-[34px] font-bold uppercase leading-none tracking-[0.02em]">

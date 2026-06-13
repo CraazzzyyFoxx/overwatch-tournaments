@@ -1,21 +1,21 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 
 import Image from "next/image";
 import userService from "@/services/user.service";
-import { UserMapHeroStats, UserMapsSummary } from "@/types/user.types";
+import { UserMapsSummary } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
 import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
+import HeroImage from "@/components/hero/HeroImage";
+import HeroStatsPopover from "@/components/hero/HeroStatsPopover";
+import { AvatarStack } from "@/components/ui/avatar";
 import { getWinrateColor } from "@/utils/colors";
-import { formatPercent, formatSeconds } from "@/app/(site)/users/components/user-maps-explorer/utils";
 
 interface Props {
   userId: number;
@@ -33,140 +33,6 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "count", label: "Games" },
   { value: "name", label: "Name" }
 ];
-
-// ─── Per-hero popover (winrate / games / record / playtime share on the map) ─────
-
-const HeroStatsChip = ({
-  heroStats,
-  open,
-  onRequestOpen,
-  onRequestClose
-}: {
-  heroStats: UserMapHeroStats;
-  open: boolean;
-  onRequestOpen: () => void;
-  onRequestClose: () => void;
-}) => {
-  const closeTimeoutRef = useRef<number | null>(null);
-  const winrateColor = getWinrateColor(heroStats.win_rate);
-  const shareValue = Math.max(0, Math.min(100, heroStats.playtime_share_on_map * 100));
-
-  const clearCloseTimeout = () => {
-    if (closeTimeoutRef.current === null) return;
-    window.clearTimeout(closeTimeoutRef.current);
-    closeTimeoutRef.current = null;
-  };
-
-  const scheduleClose = (delayMs = 120) => {
-    clearCloseTimeout();
-    closeTimeoutRef.current = window.setTimeout(() => onRequestClose(), delayMs);
-  };
-
-  useEffect(() => {
-    return () => clearCloseTimeout();
-  }, []);
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(nextOpen) => (nextOpen ? onRequestOpen() : onRequestClose())}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="relative h-7 w-7 overflow-hidden rounded-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-          aria-label={`${heroStats.hero.name} on this map`}
-          onPointerEnter={(e) => {
-            if (e.pointerType !== "mouse") return;
-            clearCloseTimeout();
-          }}
-          onPointerMove={(e) => {
-            if (e.pointerType !== "mouse") return;
-            clearCloseTimeout();
-            if (!open) onRequestOpen();
-          }}
-          onPointerLeave={(e) => {
-            if (e.pointerType !== "mouse") return;
-            scheduleClose();
-          }}
-          onFocus={() => {
-            clearCloseTimeout();
-            if (!open) onRequestOpen();
-          }}
-          onBlur={() => scheduleClose(0)}
-        >
-          <Image
-            src={heroStats.hero.image_path}
-            alt={heroStats.hero.name}
-            fill
-            sizes="28px"
-            className="object-cover select-none"
-          />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-80 data-[state=open]:animate-none data-[state=closed]:animate-none"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onPointerEnter={(e) => {
-          if (e.pointerType !== "mouse") return;
-          clearCloseTimeout();
-        }}
-        onPointerLeave={(e) => {
-          if (e.pointerType !== "mouse") return;
-          scheduleClose();
-        }}
-      >
-        <div className="flex items-start gap-3">
-          <div className="h-12 w-12 shrink-0">
-            <Image
-              src={heroStats.hero.image_path}
-              alt={heroStats.hero.name}
-              width={48}
-              height={48}
-              className="h-full w-full object-contain select-none"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{heroStats.hero.name}</div>
-            <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
-                <div className="text-muted-foreground">Winrate</div>
-                <div className="font-semibold tabular-nums" style={{ color: winrateColor }}>
-                  {formatPercent(heroStats.win_rate, 0)}
-                </div>
-              </div>
-              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
-                <div className="text-muted-foreground">Games</div>
-                <div className="font-semibold tabular-nums">{heroStats.games}</div>
-              </div>
-              <div className="rounded-md border border-border/50 bg-muted/10 px-2 py-1">
-                <div className="text-muted-foreground">Record</div>
-                <div className="font-semibold tabular-nums">
-                  {heroStats.win}-{heroStats.loss}-{heroStats.draw}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Playtime on this map</span>
-            <span className="tabular-nums">
-              {formatSeconds(heroStats.playtime_seconds)} | {shareValue.toFixed(0)}%
-            </span>
-          </div>
-          <div className="mt-2">
-            <Progress value={shareValue} aria-label="Playtime share on this map" />
-          </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            Games counted when hero time played is &gt; 60s.
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 const AqtSelect = ({
   value,
@@ -203,7 +69,6 @@ const MapsView = ({ userId }: Props) => {
   const [perPage, setPerPage] = useState(15);
   const [page, setPage] = useState(1);
   const [tournamentId, setTournamentId] = useState<number | undefined>(undefined);
-  const [activeHeroPopoverKey, setActiveHeroPopoverKey] = useState<string | null>(null);
 
   // Reset to first page whenever any filter/sort that changes the result set moves.
   // Render-time adjustment (React-recommended) instead of an effect with setState.
@@ -482,26 +347,20 @@ const MapsView = ({ userId }: Props) => {
                 </div>
                 <span className={cn("aqt-num", wrCls)}>{wr.toFixed(0)}%</span>
               </div>
-              <div className="flex flex-wrap items-center gap-1">
-                {heroStats.length > 0 ? (
-                  heroStats.slice(0, 8).map((hs) => {
-                    const key = `${row.map.id}:${hs.hero.id}`;
-                    return (
-                      <HeroStatsChip
-                        key={key}
-                        heroStats={hs}
-                        open={activeHeroPopoverKey === key}
-                        onRequestOpen={() => setActiveHeroPopoverKey(key)}
-                        onRequestClose={() =>
-                          setActiveHeroPopoverKey((cur) => (cur === key ? null : cur))
-                        }
-                      />
-                    );
-                  })
-                ) : (
-                  <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">—</span>
-                )}
-              </div>
+              {heroStats.length > 0 ? (
+                <AvatarStack max={8} size={26}>
+                  {heroStats.map((hs) => (
+                    <HeroImage
+                      key={`${row.map.id}:${hs.hero.id}`}
+                      hero={hs.hero}
+                      size="sm"
+                      popover={<HeroStatsPopover stats={hs} />}
+                    />
+                  ))}
+                </AvatarStack>
+              ) : (
+                <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">—</span>
+              )}
               <span className="aqt-mono text-right text-[12.5px] font-semibold text-[color:var(--aqt-fg-muted)]">
                 {row.win}-{row.loss}-{row.draw}
               </span>

@@ -2,10 +2,11 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { UserTournament, EncounterWithUserStats } from "@/types/user.types";
+import type { Hero } from "@/types/hero.types";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import {
   CardSurface,
   PipRow,
@@ -103,14 +104,15 @@ const EncounterRow = ({
 
   const opponent = isUserHome ? enc.away_team?.name : enc.home_team?.name;
 
-  // Unique hero images across all maps in the encounter.
-  const heroImgs: string[] = [];
+  // Unique heroes across all maps in the encounter.
+  const heroes: Hero[] = [];
   const seen = new Set<string>();
   for (const m of enc.matches ?? []) {
     for (const h of m.heroes ?? []) {
-      if (h.image_path && !seen.has(h.image_path)) {
-        seen.add(h.image_path);
-        heroImgs.push(h.image_path);
+      const key = h.image_path || h.name;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        heroes.push(h);
       }
     }
   }
@@ -129,13 +131,9 @@ const EncounterRow = ({
         <span className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-dim)]">{stageLabel}</span>
       </div>
 
-      {/* Hero images */}
-      <div className="hidden items-center gap-0.5 md:flex">
-        {heroImgs.slice(0, 6).map((src) => (
-          <div key={src} className="relative h-5 w-5 overflow-hidden rounded-sm">
-            <Image src={src} alt="" fill sizes="20px" className="object-cover" />
-          </div>
-        ))}
+      {/* Heroes */}
+      <div className="hidden items-center md:flex">
+        <HeroStrip heroes={heroes} size="sm" limit={6} />
       </div>
 
       {/* MVP pills (per map) */}
