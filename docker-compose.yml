@@ -546,6 +546,7 @@ services:
       - ./backend/analytics-service:/app/analytics-service
       - ./backend/shared:/app/shared
       - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
       - ./logs/analytics:/logs
     networks:
       - app-network
@@ -594,6 +595,7 @@ services:
       - ./backend/analytics-service:/app/analytics-service
       - ./backend/shared:/app/shared
       - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
       - ./logs/analytics-worker:/logs
     networks:
       - app-network
@@ -929,6 +931,7 @@ volumes:
   postgres-data:
   redis-data:
   rabbitmq-data:
+  analytics-models:
   frontend-node-modules:
   prometheus_data:
   loki_data:

@@ -505,6 +505,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
       - ./logs/analytics:/logs
     networks:
       - app-network
@@ -680,6 +681,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
       - ./logs/analytics-worker:/logs
     networks:
       - app-network
@@ -764,6 +766,7 @@ services:
 volumes:
   redis-data:
   rabbitmq-data:
+  analytics-models:
 
 networks:
   app-network:
