@@ -5,23 +5,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 
-import Image from "next/image";
 import userService from "@/services/user.service";
 import { UserMapsSummary } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import SearchableImageSelect, {
-  type SearchableImageOption
-} from "@/app/(site)/users/compare/components/SearchableImageSelect";
-import HeroImage from "@/components/hero/HeroImage";
-import HeroStatsPopover from "@/components/hero/HeroStatsPopover";
-import { AvatarStack } from "@/components/ui/avatar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { type SearchableImageOption } from "@/app/(site)/users/compare/components/SearchableImageSelect";
+import { KPI, PageBtn } from "@/app/(site)/users/components/maps/atoms";
+import MapRow from "@/app/(site)/users/components/maps/MapRow";
+import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { LayoutGrid } from "lucide-react";
 import { getWinrateColor } from "@/utils/colors";
 
@@ -33,47 +23,6 @@ const MODE_ORDER = ["Control", "Escort", "Hybrid", "Flashpoint", "Push", "Assaul
 
 type SortKey = "winrate" | "count" | "name";
 type OrderKey = "asc" | "desc";
-
-const MIN_COUNT_OPTIONS = [1, 3, 5, 10];
-const PER_PAGE_OPTIONS = [15, 30, -1];
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: "winrate", label: "Winrate" },
-  { value: "count", label: "Games" },
-  { value: "name", label: "Name" }
-];
-
-const AqtSelect = ({
-  value,
-  onChange,
-  options,
-  title,
-  width = "w-[150px]"
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  title?: string;
-  width?: string;
-}) => (
-  <Select value={value} onValueChange={onChange}>
-    <SelectTrigger
-      title={title}
-      className={cn(
-        "aqt-mono h-8 shadow-none border-white/[0.07] bg-white/[0.02] text-[12px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0",
-        width
-      )}
-    >
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
-      {options.map((o) => (
-        <SelectItem key={o.value} value={o.value}>
-          {o.label}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-);
 
 const MapsView = ({ userId }: Props) => {
   const [modeFilter, setModeFilter] = useState<string | null>(null);
@@ -253,80 +202,26 @@ const MapsView = ({ userId }: Props) => {
       </CardSurface>
 
       {/* Filter chips + controls */}
-      <div className="aqt-filters">
-        <span
-          className={cn("aqt-filter-chip", modeFilter === null && "active")}
-          onClick={() => setModeFilter(null)}
-          role="button"
-          tabIndex={0}
-        >
-          All modes
-        </span>
-        {modeStats.map((b) => (
-          <span
-            key={b.mode}
-            className={cn("aqt-filter-chip", modeFilter === b.mode && "active")}
-            onClick={() => setModeFilter(b.mode)}
-            role="button"
-            tabIndex={0}
-          >
-            {b.mode}
-          </span>
-        ))}
-        <span className="aqt-filter-divider" />
-
-        <div className="w-48">
-          <SearchableImageSelect
-            value={tournamentId ? String(tournamentId) : undefined}
-            onValueChange={(val) => setTournamentId(val ? Number(val) : undefined)}
-            options={tournamentOptions}
-            placeholder="All tournaments"
-            searchPlaceholder="Search tournament…"
-            isLoading={tournamentsQuery.isLoading}
-            disabled={tournamentsQuery.isLoading || tournamentsQuery.isError}
-          />
-        </div>
-
-        <AqtSelect
-          title="Minimum games"
-          value={String(minCount)}
-          onChange={(v) => setMinCount(Number(v))}
-          options={MIN_COUNT_OPTIONS.map((n) => ({ value: String(n), label: `Min ${n} games` }))}
-        />
-        <AqtSelect
-          title="Rows per page"
-          value={String(perPage)}
-          onChange={(v) => setPerPage(Number(v))}
-          options={PER_PAGE_OPTIONS.map((n) => ({ value: String(n), label: n === -1 ? "Rows: All" : `Rows: ${n}` }))}
-        />
-        <AqtSelect
-          title="Sort by"
-          value={sort}
-          onChange={(v) => setSort(v as SortKey)}
-          options={SORT_OPTIONS.map((o) => ({ value: o.value, label: `Sort: ${o.label}` }))}
-        />
-        <button
-          type="button"
-          onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
-          title={order === "asc" ? "Ascending" : "Descending"}
-          className="aqt-mono inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
-        >
-          {order === "asc" ? "↑" : "↓"}
-        </button>
-
-        <div className="filter-search relative ml-auto min-w-[180px] max-w-[300px] flex-1">
-          <input
-            placeholder="Search maps…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[13px] outline-none"
-          />
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-        </div>
-      </div>
+      <MapsFilters
+        modes={modeStats.map((b) => b.mode)}
+        modeFilter={modeFilter}
+        onModeFilterChange={setModeFilter}
+        tournamentId={tournamentId}
+        onTournamentIdChange={setTournamentId}
+        tournamentOptions={tournamentOptions}
+        tournamentsLoading={tournamentsQuery.isLoading}
+        tournamentsError={tournamentsQuery.isError}
+        minCount={minCount}
+        onMinCountChange={setMinCount}
+        perPage={perPage}
+        onPerPageChange={setPerPage}
+        sort={sort}
+        onSortChange={setSort}
+        order={order}
+        onOrderToggle={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
+        search={search}
+        onSearchChange={setSearch}
+      />
 
       {/* Map rows */}
       <CardSurface flush>
@@ -338,52 +233,9 @@ const MapsView = ({ userId }: Props) => {
           <div className="text-right">Record</div>
           <div className="text-right">Games</div>
         </div>
-        {pageMaps.map((row) => {
-          const wr = row.win_rate * 100;
-          const wrCls = wr >= 60 ? "good" : wr <= 40 ? "bad" : "";
-          const heroStats = row.hero_stats ?? [];
-          return (
-            <div key={row.map.id} className="aqt-map-row" style={{ gridTemplateColumns: "64px 1fr 1fr minmax(0,1.2fr) 60px 50px" }}>
-              <div className="aqt-map-thumb">
-                {row.map.image_path ? (
-                  <Image src={row.map.image_path} alt={row.map.name} fill sizes="56px" className="object-cover" />
-                ) : (
-                  <span>{row.map.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</span>
-                )}
-              </div>
-              <div className="flex flex-col leading-tight">
-                <div className="text-[13.5px] font-semibold text-[color:var(--aqt-fg)]">{row.map.name}</div>
-                <div className="aqt-mono text-[10.5px] uppercase tracking-[0.06em] text-[color:var(--aqt-fg-dim)]">
-                  {row.map.gamemode?.name ?? "—"}
-                </div>
-              </div>
-              <div className="aqt-wr-bar">
-                <div className="aqt-track">
-                  <div className="aqt-fill" style={{ width: `${wr}%` }} />
-                </div>
-                <span className={cn("aqt-num", wrCls)}>{wr.toFixed(0)}%</span>
-              </div>
-              {heroStats.length > 0 ? (
-                <AvatarStack max={8} size={26}>
-                  {heroStats.map((hs) => (
-                    <HeroImage
-                      key={`${row.map.id}:${hs.hero.id}`}
-                      hero={hs.hero}
-                      size="sm"
-                      popover={<HeroStatsPopover stats={hs} />}
-                    />
-                  ))}
-                </AvatarStack>
-              ) : (
-                <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">—</span>
-              )}
-              <span className="aqt-mono text-right text-[12.5px] font-semibold text-[color:var(--aqt-fg-muted)]">
-                {row.win}-{row.loss}-{row.draw}
-              </span>
-              <span className="aqt-mono text-right text-[13px] font-semibold">{row.count}</span>
-            </div>
-          );
-        })}
+        {pageMaps.map((row) => (
+          <MapRow key={row.map.id} row={row} />
+        ))}
         {pageMaps.length === 0 ? (
           <div className="py-10 text-center text-[color:var(--aqt-fg-dim)]">
             {mapsQuery.isLoading ? "Loading…" : "No maps match the filters"}
@@ -415,44 +267,5 @@ const MapsView = ({ userId }: Props) => {
     </div>
   );
 };
-
-const PageBtn = ({
-  active,
-  disabled,
-  onClick,
-  children
-}: {
-  active?: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-  children: React.ReactNode;
-}) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={cn(
-      "aqt-mono inline-flex h-8 min-w-[32px] items-center justify-center rounded-[6px] border px-2 text-[12px] transition-colors",
-      active
-        ? "border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.12)] text-[color:var(--aqt-teal)]"
-        : "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
-      disabled && "cursor-not-allowed opacity-40"
-    )}
-  >
-    {children}
-  </button>
-);
-
-const KPI = ({ label, value, unit, color, sub }: { label: string; value: string; unit?: string; color?: string; sub?: string }) => (
-  <CardSurface>
-    <div className="flex flex-col gap-1">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</div>
-      <div className="aqt-display text-[38px] font-bold leading-[1.1]" style={{ color: color ?? "var(--aqt-fg)" }}>
-        {value}
-        {unit ? <span className="text-[22px] text-[color:var(--aqt-fg-faint)]">{unit}</span> : null}
-      </div>
-      {sub ? <div className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">{sub}</div> : null}
-    </div>
-  </CardSurface>
-);
 
 export default MapsView;
