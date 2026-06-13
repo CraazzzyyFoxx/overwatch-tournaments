@@ -2,13 +2,13 @@ import React from "react";
 import { User, UserProfile } from "@/types/user.types";
 import userService from "@/services/user.service";
 import { Skeleton } from "@/components/ui/skeleton";
-import OverviewLastTournamentCard from "@/app/(site)/users/components/redesign/OverviewLastTournamentCard";
-import OverviewPlacementSpark from "@/app/(site)/users/components/redesign/OverviewPlacementSpark";
-import OverviewRoleSplit from "@/app/(site)/users/components/redesign/OverviewRoleSplit";
-import OverviewMostPlayedHeroes from "@/app/(site)/users/components/redesign/OverviewMostPlayedHeroes";
-import OverviewRecentEncounters from "@/app/(site)/users/components/redesign/OverviewRecentEncounters";
-import OverviewCareerList from "@/app/(site)/users/components/redesign/OverviewCareerList";
-import OverviewTeammatesSynergy from "@/app/(site)/users/components/redesign/OverviewTeammatesSynergy";
+import OverviewLastTournamentCard from "@/app/(site)/users/components/overview/OverviewLastTournamentCard";
+import OverviewPlacementSpark from "@/app/(site)/users/components/overview/OverviewPlacementSpark";
+import OverviewRoleSplit from "@/app/(site)/users/components/overview/OverviewRoleSplit";
+import OverviewMostPlayedHeroes from "@/app/(site)/users/components/overview/OverviewMostPlayedHeroes";
+import OverviewRecentEncounters from "@/app/(site)/users/components/overview/OverviewRecentEncounters";
+import OverviewCareerList from "@/app/(site)/users/components/overview/OverviewCareerList";
+import OverviewTeammatesSynergy from "@/app/(site)/users/components/overview/OverviewTeammatesSynergy";
 
 export interface OverviewPageProps {
   profile: UserProfile;

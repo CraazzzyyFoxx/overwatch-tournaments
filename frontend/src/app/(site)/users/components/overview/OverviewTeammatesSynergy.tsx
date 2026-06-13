@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
-import { CardSurface, heroInitials } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface, heroInitials } from "@/app/(site)/users/components/shared/atoms";
 import {
   Dialog,
   DialogContent,

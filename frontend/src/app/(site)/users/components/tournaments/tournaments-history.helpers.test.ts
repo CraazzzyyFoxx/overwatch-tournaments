@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   groupTournamentsByLeague,
   leagueKey
-} from "@/app/(site)/users/components/redesign/tournaments-history.helpers";
+} from "@/app/(site)/users/components/tournaments/tournaments-history.helpers";
 import type { UserTournament } from "@/types/user.types";
 
 const buildTournament = (id: number, name: string, isLeague: boolean): UserTournament =>

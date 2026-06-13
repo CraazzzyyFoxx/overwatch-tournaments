@@ -1,7 +1,7 @@
 import React from "react";
 import { Layers } from "lucide-react";
 import { UserProfile, UserRole } from "@/types/user.types";
-import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 

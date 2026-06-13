@@ -1,7 +1,7 @@
 import React from "react";
 import { Swords } from "lucide-react";
 import Link from "next/link";
-import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
 import { cn } from "@/lib/utils";

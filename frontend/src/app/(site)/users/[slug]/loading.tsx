@@ -2,7 +2,7 @@ import React from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserOverviewPageSkeleton } from "@/app/(site)/users/pages/UserOverviewPage";
-import UserHeaderSkeleton from "@/app/(site)/users/components/UserHeaderSkeleton";
+import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 
 export default function Loading() {
   return (

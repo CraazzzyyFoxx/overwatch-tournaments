@@ -1,6 +1,6 @@
 import React from "react";
 import { LineChart } from "lucide-react";
-import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { UserTournament } from "@/types/user.types";
 
 interface Props {

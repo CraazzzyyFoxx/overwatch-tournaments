@@ -7,7 +7,7 @@ import userService from "@/services/user.service";
 import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";
-import HeroesView from "@/app/(site)/users/components/redesign/HeroesView";
+import HeroesView from "@/app/(site)/users/components/heroes/HeroesView";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserHeroesContainerProps {

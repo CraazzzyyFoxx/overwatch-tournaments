@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useTransition } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import UserProfileTabList, { type TabBadges } from "@/app/(site)/users/components/UserProfileTabList";
+import UserProfileTabList, { type TabBadges } from "@/app/(site)/users/components/tabs/UserProfileTabList";
 
 export interface UserTabsClientProps {
   activeTab: string;

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import userService from "@/services/user.service";
 import { UserMapsSummary } from "@/types/user.types";
-import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import SearchableImageSelect, {
   type SearchableImageOption
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";

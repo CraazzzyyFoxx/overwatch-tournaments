@@ -1,6 +1,6 @@
 import React, { Suspense, cache } from "react";
 import userService from "@/services/user.service";
-import UserHeader from "@/app/(site)/users/components/UserHeader";
+import UserHeader from "@/app/(site)/users/components/header/UserHeader";
 import { TabsContent } from "@/components/ui/tabs";
 import UserOverviewPage, { UserOverviewPageSkeleton } from "@/app/(site)/users/pages/UserOverviewPage";
 import UserMapsPage from "@/app/(site)/users/pages/UserMapsPage";
@@ -10,7 +10,7 @@ import {
   UserEncountersPageSkeleton,
   UserEncountersPage
 } from "@/app/(site)/users/pages/UserEncountersPage";
-import type { MatchesFilters } from "@/app/(site)/users/components/redesign/MatchesTable";
+import type { MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
 import { Metadata } from "next";
 import {
   UserTournamentsPage,
@@ -21,9 +21,9 @@ import { SITE_NAME } from "@/config/site";
 import { ApiError } from "@/lib/api-error";
 import { decodePlayerSlug } from "@/utils/player";
 import { Skeleton } from "@/components/ui/skeleton";
-import UserTabsClient from "@/app/(site)/users/components/UserTabsClient";
-import UserLiquidGlassProvider from "@/app/(site)/users/components/UserLiquidGlassProvider";
-import UserHeaderSkeleton from "@/app/(site)/users/components/UserHeaderSkeleton";
+import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
+import UserLiquidGlassProvider from "@/app/(site)/users/components/shared/UserLiquidGlassProvider";
+import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 
 export const dynamic = "force-dynamic";
 

@@ -11,8 +11,8 @@ import {
   ResTag,
   ScoreCell,
   StagePill
-} from "@/app/(site)/users/components/redesign/atoms";
-import MvpMatchPill from "@/app/(site)/users/components/redesign/MvpMatchPill";
+} from "@/app/(site)/users/components/shared/atoms";
+import MvpMatchPill from "@/app/(site)/users/components/matches/MvpMatchPill";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";

@@ -11,7 +11,7 @@ import {
   CardSurface,
   heroVariantFromRole,
   type AqtRoleKey
-} from "@/app/(site)/users/components/redesign/atoms";
+} from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
 import {
   computeDelta,
@@ -21,7 +21,7 @@ import {
   formatStatValue,
   getOverall,
   isRevertedStat
-} from "@/app/(site)/users/components/user-heroes/utils";
+} from "@/app/(site)/users/components/heroes/utils";
 
 interface Props {
   heroes: HeroWithUserStats[];

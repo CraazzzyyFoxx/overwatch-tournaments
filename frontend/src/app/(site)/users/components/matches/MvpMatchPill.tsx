@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { MvpPill, mvpRank, ordinal } from "@/app/(site)/users/components/redesign/atoms";
+import { MvpPill, mvpRank, ordinal } from "@/app/(site)/users/components/shared/atoms";
 import type { MatchWithUserStats } from "@/types/user.types";
 
 /**

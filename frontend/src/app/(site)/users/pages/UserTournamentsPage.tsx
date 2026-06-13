@@ -2,8 +2,8 @@ import React from "react";
 import { User } from "@/types/user.types";
 import { Skeleton } from "@/components/ui/skeleton";
 import userService from "@/services/user.service";
-import TournamentsPlacementTimeline from "@/app/(site)/users/components/redesign/TournamentsPlacementTimeline";
-import TournamentsHistory from "@/app/(site)/users/components/redesign/TournamentsHistory";
+import TournamentsPlacementTimeline from "@/app/(site)/users/components/tournaments/TournamentsPlacementTimeline";
+import TournamentsHistory from "@/app/(site)/users/components/tournaments/TournamentsHistory";
 
 export const UserTournamentsPageSkeleton = () => {
   return (

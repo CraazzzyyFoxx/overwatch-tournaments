@@ -2,7 +2,7 @@ import React from "react";
 import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
 import { Skeleton } from "@/components/ui/skeleton";
-import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/redesign/MatchesTable";
+import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
 
 export const UserEncountersPageSkeleton = () => {
   return (

@@ -1,7 +1,7 @@
 import React from "react";
 import { Medal } from "lucide-react";
 import { UserProfile } from "@/types/user.types";
-import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 
 interface Props {
   profile: UserProfile;

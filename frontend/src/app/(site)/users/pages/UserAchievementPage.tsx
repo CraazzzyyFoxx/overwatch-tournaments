@@ -2,7 +2,7 @@ import React from "react";
 import { User } from "@/types/user.types";
 import userService from "@/services/user.service";
 import { AchievementRarity } from "@/types/achievement.types";
-import AchievementsView from "@/app/(site)/users/components/redesign/AchievementsView";
+import AchievementsView from "@/app/(site)/users/components/achievements/AchievementsView";
 
 interface UserAchievementPageProps {
   user: User;

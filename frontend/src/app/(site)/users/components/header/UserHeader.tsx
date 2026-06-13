@@ -5,8 +5,8 @@ import { User, UserProfile } from "@/types/user.types";
 import { getPlayerImage } from "@/utils/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { FormStreak, type FormResult } from "@/app/(site)/users/components/redesign/atoms";
-import ProfileToolbar from "@/app/(site)/users/components/redesign/ProfileToolbar";
+import { FormStreak, type FormResult } from "@/app/(site)/users/components/shared/atoms";
+import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
 
 export interface UserHeaderProps {

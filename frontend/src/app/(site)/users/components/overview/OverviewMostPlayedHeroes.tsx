@@ -2,7 +2,7 @@ import React from "react";
 import { Star } from "lucide-react";
 import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
-import { CardSurface } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
 
 interface Props {

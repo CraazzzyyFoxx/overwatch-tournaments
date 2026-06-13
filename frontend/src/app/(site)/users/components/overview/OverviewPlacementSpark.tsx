@@ -1,6 +1,6 @@
 import React from "react";
 import { TrendingUp } from "lucide-react";
-import { CardSurface, PlacementSpark } from "@/app/(site)/users/components/redesign/atoms";
+import { CardSurface, PlacementSpark } from "@/app/(site)/users/components/shared/atoms";
 import { UserTournament } from "@/types/user.types";
 
 interface Props {
