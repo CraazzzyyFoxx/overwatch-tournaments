@@ -3,13 +3,16 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import asyncpg
 import discord
 import httpx
-from faststream.rabbit import RabbitBroker
+from faststream.rabbit import RabbitBroker, RabbitQueue
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
-from shared.messaging.config import DISCORD_COMMANDS_QUEUE, PROCESS_MATCH_LOG_QUEUE
+from shared.messaging.config import (
+    DISCORD_COMMANDS_QUEUE,
+    MATCH_LOG_RESULT_EXCHANGE,
+    PROCESS_MATCH_LOG_QUEUE,
+)
 from shared.models import Tournament, TournamentDiscordChannel
 from shared.models.log_processing import LogProcessingRecord, LogProcessingStatus
 from shared.observability import (
@@ -19,7 +22,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
-from shared.schemas.events import DiscordCommandEvent, ProcessMatchLogEvent
+from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent, ProcessMatchLogEvent
 from sqlalchemy import select
 
 from src.core.config import settings
@@ -29,6 +32,7 @@ from src.feedback import (
     AttachmentFeedbackState,
     build_message_feedback,
 )
+from src.result_waiter import ResultWaiter
 
 # Setup structured logging (replaces old src.core.logging)
 logger = setup_logging(
@@ -174,66 +178,10 @@ async def load_active_channels():
 
 _PROCESSING_RESULT_TIMEOUT = 120  # seconds before giving up
 
-# Futures waiting for pg_notify('log_processed', ...) keyed by (tournament_id, filename)
-_pending_results: dict[tuple, asyncio.Future] = {}
-
-_pg_listener_conn: asyncpg.Connection | None = None
-
-
-def _on_log_processed(_conn, _pid, _channel, payload: str) -> None:
-    """Called by asyncpg when a log_processed notification arrives."""
-    try:
-        parts = payload.split("|", 2)
-        if len(parts) != 3:
-            return
-        key = (int(parts[0]), parts[1])
-        success = parts[2] == "done"
-        fut = _pending_results.pop(key, None)
-        if fut and not fut.done():
-            fut.set_result(success)
-    except Exception as exc:
-        logger.warning(f"Error handling log_processed notification: {exc}")
-
-
-async def start_pg_listener() -> None:
-    global _pg_listener_conn
-    try:
-        _pg_listener_conn = await asyncpg.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            database=settings.postgres_db,
-        )
-        await _pg_listener_conn.add_listener("log_processed", _on_log_processed)
-        logger.success("✅ PostgreSQL LISTEN log_processed started")
-    except Exception as exc:
-        logger.error(f"❌ Failed to start pg listener: {exc}")
-
-
-async def stop_pg_listener() -> None:
-    global _pg_listener_conn
-    if _pg_listener_conn:
-        try:
-            await _pg_listener_conn.close()
-        except Exception:
-            pass
-        finally:
-            _pg_listener_conn = None
-
-
-async def _wait_for_processing_result(tournament_id: int, filename: str) -> bool | None:
-    """Await a pg_notify push from parser-service; resolves when done/failed or times out."""
-    key = (tournament_id, filename)
-    loop = asyncio.get_event_loop()
-    fut: asyncio.Future = loop.create_future()
-    _pending_results[key] = fut
-    try:
-        return await asyncio.wait_for(fut, timeout=_PROCESSING_RESULT_TIMEOUT)
-    except TimeoutError:
-        logger.warning(f"⏱️ Timed out waiting for processing result of {filename}")
-        _pending_results.pop(key, None)
-        return None
+# Tracks in-flight uploads waiting for their parser processing result. Results
+# arrive over RabbitMQ (see handle_match_log_result in register_rabbit_handlers)
+# instead of pg LISTEN/NOTIFY, which pgBouncer transaction pooling silently breaks.
+result_waiter = ResultWaiter(timeout=_PROCESSING_RESULT_TIMEOUT)
 
 
 async def _get_latest_log_error(tournament_id: int, filename: str) -> str | None:
@@ -326,13 +274,14 @@ async def process_attachment(
             )
 
         if wait_for_result:
-            processing_result = await _wait_for_processing_result(tournament_id, attachment.filename)
+            processing_result = await result_waiter.wait(tournament_id, attachment.filename)
             if processing_result is True:
                 return AttachmentFeedbackResult(
                     filename=attachment.filename,
                     state=AttachmentFeedbackState.PROCESSED_OK,
                 )
             if processing_result is None:
+                logger.warning(f"⏱️ Timed out waiting for processing result of {attachment.filename}")
                 return AttachmentFeedbackResult(
                     filename=attachment.filename,
                     state=AttachmentFeedbackState.TIMED_OUT,
@@ -536,6 +485,20 @@ def register_rabbit_handlers(broker: RabbitBroker) -> None:
                 await msg.nack()  # Requeue for retry
                 raise
 
+    # Per-instance, server-named exclusive queue bound to the fanout exchange so
+    # every replica receives every result; the one holding the matching pending
+    # future resolves it, the rest no-op. Replaces pg LISTEN/NOTIFY.
+    result_queue = RabbitQueue("", exclusive=True, auto_delete=True)
+
+    @broker.subscriber(result_queue, MATCH_LOG_RESULT_EXCHANGE)
+    async def handle_match_log_result(body: dict[str, Any], msg: RabbitMessage):
+        try:
+            event = MatchLogProcessedEvent.model_validate(body)
+        except ValidationError as e:
+            logger.error(f"❌ Invalid match_log_processed payload: {e}")
+            return
+        result_waiter.resolve(event.tournament_id, event.filename, event.status == "done")
+
 
 async def start_rabbitmq_listener() -> None:
     global rabbit_broker
@@ -652,7 +615,6 @@ async def main():
         )
         start_worker_metrics_server(settings.worker_metrics_port)
         await start_rabbitmq_listener()
-        await start_pg_listener()
         await client.start(settings.discord_token)
     except KeyboardInterrupt:
         logger.info("⏸️ Shutting down bot...")
@@ -660,7 +622,6 @@ async def main():
         logger.error(f"❌ Fatal error: {e}")
     finally:
         await stop_rabbitmq_listener()
-        await stop_pg_listener()
         await client.close()
         logger.info("👋 Bot stopped")
 

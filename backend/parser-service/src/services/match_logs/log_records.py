@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from loguru import logger
 from shared.models.log_processing import LogProcessingRecord, LogProcessingSource, LogProcessingStatus
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -35,15 +35,6 @@ async def is_already_processed(
         .limit(1)
     )
     return result.scalar_one_or_none() is not None
-
-
-async def _notify_result(session: AsyncSession, record: LogProcessingRecord, status: str) -> None:
-    """Send pg_notify so discord-service can resolve waiting futures immediately."""
-    payload = f"{record.tournament_id}|{record.filename}|{status}"
-    try:
-        await session.execute(text("SELECT pg_notify('log_processed', :p)"), {"p": payload})
-    except Exception as exc:
-        logger.warning(f"Failed to send pg_notify for log result: {exc}")
 
 
 async def upsert_log_record(
@@ -181,7 +172,6 @@ async def set_done(session: AsyncSession, record: LogProcessingRecord) -> None:
     record.status = LogProcessingStatus.done
     record.finished_at = datetime.now(UTC)
     try:
-        await _notify_result(session, record, "done")
         await session.commit()
     except Exception as exc:
         logger.warning(f"Failed to mark log record as done: {exc}")
@@ -194,7 +184,6 @@ async def set_failed(session: AsyncSession, record: LogProcessingRecord, error: 
     record.finished_at = datetime.now(UTC)
     record.error_message = error[:2000]  # guard against huge tracebacks
     try:
-        await _notify_result(session, record, "failed")
         await session.commit()
     except Exception as exc:
         logger.warning(f"Failed to mark log record as failed: {exc}")

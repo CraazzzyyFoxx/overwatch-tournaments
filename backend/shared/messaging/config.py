@@ -49,6 +49,21 @@ PROCESS_MATCH_LOG_DLQ = RabbitQueue(
 )
 
 # ============================================================================
+# Match Log Result (parser worker -> discord)
+# ============================================================================
+# Fanout so every discord-service replica receives every result; the replica
+# holding the pending upload future resolves it and the rest no-op. This mirrors
+# the broadcast semantics of the pg LISTEN/NOTIFY channel it replaces, which
+# pgBouncer transaction pooling breaks. Consumers bind their own exclusive,
+# auto-deleted (server-named) queue to this exchange — no durable shared queue,
+# which would round-robin results to the wrong replica.
+MATCH_LOG_RESULT_EXCHANGE = RabbitExchange(
+    "match_log.result",
+    type=ExchangeType.FANOUT,
+    durable=True,
+)
+
+# ============================================================================
 # Process Tournament Logs Queue
 # ============================================================================
 

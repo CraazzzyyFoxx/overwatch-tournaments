@@ -54,6 +54,24 @@ class ProcessMatchLogEvent(BaseEvent):
     filename: str = Field(..., description="Match log filename to process")
 
 
+class MatchLogProcessedEvent(BaseEvent):
+    """Result of processing a single match log, sent back to the uploader.
+
+    Published by: parser-service (worker, after process_match_log finishes)
+    Consumed by: discord-service (resolves the pending upload future)
+
+    Broadcast over a fanout exchange so every discord-service replica receives a
+    copy; the replica holding the matching pending future resolves it and the
+    rest no-op. Replaces the former pg LISTEN/NOTIFY 'log_processed' channel,
+    which pgBouncer transaction pooling silently breaks.
+    """
+
+    event_type: str = Field(default="match_log_processed", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID")
+    filename: str = Field(..., description="Processed match log filename")
+    status: Literal["done", "failed"] = Field(..., description="Processing outcome")
+
+
 class ProcessTournamentLogsEvent(BaseEvent):
     """Event for processing all logs for a tournament.
 

@@ -31,6 +31,7 @@ from src import models
 from src.core import config, db
 from src.services.achievement.engine.consumer import handle_achievement_evaluate
 from src.services.match_logs import flows as logs_flows
+from src.services.match_logs.result_events import publish_match_log_result
 from src.services.overwatch_rank import tasks as rank_tasks
 from src.services.s3 import service as s3_service
 
@@ -84,36 +85,45 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
         logger=logger,
     ):
         event = ProcessMatchLogEvent.model_validate(data)
-        logger.bind(tournament_id=event.tournament_id, filename=event.filename).info("Processing match log from queue")
+        log = logger.bind(tournament_id=event.tournament_id, filename=event.filename)
+        log.info("Processing match log from queue")
+
+        # Process the log and report the outcome to the uploading bot. The result
+        # is published exactly once per attempt, based solely on whether
+        # process_match_log succeeded — the achievement evaluation below must not
+        # flip it (and on retry the log is deduped, so it won't be reprocessed).
         try:
             async with db.async_session_maker() as session:
                 await logs_flows.process_match_log(
                     session, event.tournament_id, event.filename, s3_client, is_raise=True
                 )
-                workspace_id = await session.scalar(
-                    sa.select(models.Tournament.workspace_id).where(models.Tournament.id == event.tournament_id)
-                )
-                if workspace_id is None:
-                    raise RuntimeError(f"Tournament {event.tournament_id} not found")
-                achievement_event = AchievementEvaluateEvent(
-                    workspace_id=workspace_id,
-                    tournament_id=event.tournament_id,
-                    changed_tables=["matches.statistics", "matches.match", "tournament.encounter"],
-                )
-                await publish_message(
-                    broker,
-                    achievement_event.model_dump(),
-                    ACHIEVEMENT_EVALUATE_QUEUE,
-                    logger=logger.bind(
-                        workspace_id=workspace_id,
-                        tournament_id=event.tournament_id,
-                    ),
-                )
         except Exception:
-            logger.exception(
+            await publish_match_log_result(broker, event.tournament_id, event.filename, "failed", logger=log)
+            log.exception(
                 f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}"
             )
             raise
+        else:
+            await publish_match_log_result(broker, event.tournament_id, event.filename, "done", logger=log)
+
+        # Best-effort achievement evaluation (failure here retries the message).
+        async with db.async_session_maker() as session:
+            workspace_id = await session.scalar(
+                sa.select(models.Tournament.workspace_id).where(models.Tournament.id == event.tournament_id)
+            )
+            if workspace_id is None:
+                raise RuntimeError(f"Tournament {event.tournament_id} not found")
+            achievement_event = AchievementEvaluateEvent(
+                workspace_id=workspace_id,
+                tournament_id=event.tournament_id,
+                changed_tables=["matches.statistics", "matches.match", "tournament.encounter"],
+            )
+            await publish_message(
+                broker,
+                achievement_event.model_dump(),
+                ACHIEVEMENT_EVALUATE_QUEUE,
+                logger=log,
+            )
 
 
 @broker.subscriber(PROCESS_TOURNAMENT_LOGS_QUEUE)
