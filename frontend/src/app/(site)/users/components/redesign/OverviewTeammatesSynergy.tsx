@@ -57,7 +57,7 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
             </button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
-            <div className="aqt-player flex max-h-[80vh] flex-col">
+            <div className="aqt-player aqt-profile-scale flex max-h-[80vh] flex-col">
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
                 <DialogTitle className="text-[color:var(--aqt-fg)]">Best teammates</DialogTitle>
                 <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
