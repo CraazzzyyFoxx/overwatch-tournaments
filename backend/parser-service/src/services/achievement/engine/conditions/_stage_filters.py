@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-
 from shared.core.enums import StageItemType, StageType
+
 from src import models
 
 BRACKET_STAGE_TYPES = (
@@ -105,5 +105,26 @@ def standing_is_elimination(
         sa.and_(
             stage.id.is_(None),
             standing.buchholz.is_(None),
+        ),
+    )
+
+
+def standing_is_groups(
+    *,
+    standing=models.Standing,
+    stage=models.Stage,
+) -> sa.ColumnElement[bool]:
+    """Explicit dual of ``standing_is_elimination``.
+
+    Matches group-stage standings: a round-robin/swiss stage, or a legacy
+    standing with no stage but a non-null buchholz score. Written explicitly
+    (rather than negating ``standing_is_elimination``) because NULL stage rows
+    make boolean negation unreliable for legacy data.
+    """
+    return sa.or_(
+        stage.stage_type.in_(GROUP_STAGE_TYPES),
+        sa.and_(
+            stage.id.is_(None),
+            standing.buchholz.is_not(None),
         ),
     )

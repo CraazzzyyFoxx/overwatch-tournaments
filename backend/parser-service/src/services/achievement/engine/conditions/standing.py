@@ -11,7 +11,7 @@ from src import models
 
 from ..context import EvalContext
 from . import ResultSet, register
-from ._stage_filters import standing_is_elimination
+from ._stage_filters import standing_is_elimination, standing_is_groups
 from .stat_threshold import OPERATORS
 
 
@@ -73,11 +73,18 @@ async def execute_record(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Check standing record fields: wins, losses, draws, points, buchholz."""
+    """Check standing record fields: wins, losses, draws, points, buchholz.
+
+    Stage targeting:
+        groups_only=True → only group-stage standings (round-robin/swiss/legacy groups).
+        include_groups=True → both group and elimination standings.
+        default → elimination/bracket standings only.
+    """
     field = params["field"]
     op = params["op"]
     value = params["value"]
     include_groups = params.get("include_groups", False)
+    groups_only = params.get("groups_only", False)
 
     column_map = {
         "wins": models.Standing.win,
@@ -95,7 +102,14 @@ async def execute_record(
         models.Tournament.workspace_id == context.workspace_id,
         models.Player.is_substitution.is_(False),
     ]
-    if not include_groups:
+    if groups_only:
+        where_clauses.append(
+            standing_is_groups(
+                standing=models.Standing,
+                stage=models.Stage,
+            )
+        )
+    elif not include_groups:
         where_clauses.append(
             standing_is_elimination(
                 standing=models.Standing,

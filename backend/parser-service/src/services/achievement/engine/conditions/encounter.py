@@ -34,10 +34,20 @@ async def execute_encounter_score(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Encounter with specific score pattern. Grain: user_tournament."""
+    """Encounter with specific score pattern. Grain: user_tournament.
+
+    params:
+        scores: list of [home_score, away_score] pairs to match.
+        round_type: "any" (default) | "final".
+        side: which players to award — "winner" (default), "loser", or "both".
+        winner: legacy bool alias — True → side="winner", False → side="both".
+            Ignored when ``side`` is provided explicitly.
+    """
     round_type = params.get("round_type", "any")
     scores = params["scores"]
-    winner_only = params.get("winner", True)
+    side = params.get("side")
+    if side is None:
+        side = "winner" if params.get("winner", True) else "both"
 
     score_conditions = [
         sa.and_(
@@ -123,22 +133,31 @@ async def execute_encounter_score(
             models.Encounter.tournament_id,
         )
 
-    if winner_only:
-        winning_team_id = sa.case(
-            (
-                models.Encounter.home_score > models.Encounter.away_score,
-                models.Encounter.home_team_id,
-            ),
-            else_=models.Encounter.away_team_id,
-        )
+    if side in ("winner", "loser"):
+        if side == "winner":
+            target_team_id = sa.case(
+                (
+                    models.Encounter.home_score > models.Encounter.away_score,
+                    models.Encounter.home_team_id,
+                ),
+                else_=models.Encounter.away_team_id,
+            )
+        else:  # loser
+            target_team_id = sa.case(
+                (
+                    models.Encounter.home_score < models.Encounter.away_score,
+                    models.Encounter.home_team_id,
+                ),
+                else_=models.Encounter.away_team_id,
+            )
         query = query.join(
             models.Player,
             sa.and_(
-                models.Player.team_id == winning_team_id,
+                models.Player.team_id == target_team_id,
                 models.Player.tournament_id == models.Encounter.tournament_id,
             ),
         )
-    else:
+    else:  # both
         query = query.join(
             models.Player,
             sa.and_(

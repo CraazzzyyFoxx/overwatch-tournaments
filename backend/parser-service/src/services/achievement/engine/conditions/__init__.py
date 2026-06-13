@@ -6,12 +6,13 @@ Each leaf executor is an async function with signature:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import sqlalchemy as sa
+from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import LogStatsName
 from src import models
 
 # PostgreSQL enum stores PascalCase names (e.g. 'Performance'),
@@ -50,7 +51,7 @@ def validate_stat_name(raw: str) -> str | None:
         return None
     return f"unknown stat '{raw}'"
 
-from ..context import EvalContext
+from ..context import EvalContext  # noqa: E402
 
 ResultSet = set[tuple[int, ...]]
 
@@ -108,16 +109,24 @@ def get_registered_types() -> list[str]:
 from . import (  # noqa: E402, F401
     aggregate,
     bracket,
+    div_span,
     division,
     encounter,
     hero,
+    hero_pickrate,
+    log_stat_rank,
     match_criteria,
     match_win,
     mvp,
     player,
+    reached_playoffs,
     standing,
+    standing_count,
     stat_threshold,
     streak,
     team,
+    team_otp,
+    teammate_recurrence,
     tournament_format,
+    tournament_winrate,
 )

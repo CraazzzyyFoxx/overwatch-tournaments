@@ -129,18 +129,36 @@ async def execute_tournament_count(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Number of tournaments played. Grain: user (global)."""
+    """Number of tournaments played. Grain: user (global).
+
+    Optional filters narrow which tournaments are counted:
+        is_league: bool | None — filter Tournament.is_league
+        number_min / number_max: int — filter Tournament.number range
+            (e.g. number_max=18 for OW1, number_min=19 for OW2)
+    """
     op = params["op"]
     value = params["value"]
     op_fn = OPERATORS[op]
 
+    is_league = params.get("is_league")
+    number_min = params.get("number_min")
+    number_max = params.get("number_max")
+
+    where_clauses = [
+        models.Tournament.workspace_id == context.workspace_id,
+        models.Player.is_substitution.is_(False),
+    ]
+    if is_league is not None:
+        where_clauses.append(models.Tournament.is_league.is_(is_league))
+    if number_min is not None:
+        where_clauses.append(models.Tournament.number >= number_min)
+    if number_max is not None:
+        where_clauses.append(models.Tournament.number <= number_max)
+
     query = (
         sa.select(models.Player.user_id)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-        .where(
-            models.Tournament.workspace_id == context.workspace_id,
-            models.Player.is_substitution.is_(False),
-        )
+        .where(*where_clauses)
         .group_by(models.Player.user_id)
         .having(op_fn(sa.func.count(models.Player.tournament_id.distinct()), value))
     )

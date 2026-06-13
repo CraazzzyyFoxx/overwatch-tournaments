@@ -8,6 +8,7 @@ from shared.models.achievement import AchievementGrain
 
 from .conditions import get_registered_types, validate_stat_name
 
+# Types accepted inside player sub-condition trees (team_players_match / captain_property).
 SUBCONDITION_ONLY_TYPES = {
     "player_role",
     "player_flag",
@@ -15,6 +16,12 @@ SUBCONDITION_ONLY_TYPES = {
     "player_div",
     "is_newcomer",
 }
+
+# Types that have no standalone executor and therefore cannot appear at the top
+# level. ``is_newcomer`` is dual-use — it has a real top-level executor (e.g. the
+# legacy ``dirty-smurf`` rule) and is also valid inside player sub-conditions — so
+# it is intentionally excluded here.
+TOP_LEVEL_FORBIDDEN_TYPES = SUBCONDITION_ONLY_TYPES - {"is_newcomer"}
 
 # Grain produced by each leaf condition type.
 LEAF_GRAINS: dict[str, AchievementGrain] = {
@@ -39,6 +46,11 @@ LEAF_GRAINS: dict[str, AchievementGrain] = {
     "encounter_revenge": AchievementGrain.user_tournament,
     "bracket_path": AchievementGrain.user_tournament,
     "tournament_format": AchievementGrain.user_tournament,
+    "log_stat_rank": AchievementGrain.user_tournament,
+    "tournament_winrate": AchievementGrain.user_tournament,
+    "hero_pickrate": AchievementGrain.user_tournament,
+    "team_otp_count": AchievementGrain.user_tournament,
+    "reached_playoffs": AchievementGrain.user_tournament,  # user when scope="global"
     # Global grain
     "global_stat_sum": AchievementGrain.user,
     "tournament_count": AchievementGrain.user,
@@ -46,6 +58,9 @@ LEAF_GRAINS: dict[str, AchievementGrain] = {
     "distinct_count": AchievementGrain.user,  # can be user or user_tournament depending on scope
     "consecutive": AchievementGrain.user,
     "stable_streak": AchievementGrain.user,
+    "standing_count": AchievementGrain.user,
+    "div_span": AchievementGrain.user,
+    "teammate_recurrence": AchievementGrain.user,
 }
 
 # Grain ordering: finer grains are "larger" (more specific).
@@ -141,7 +156,7 @@ def _validate_node(
         errors.append(f"{path}: unsupported player sub-condition type '{ctype}'")
         return
 
-    if not in_player_subcondition and ctype in SUBCONDITION_ONLY_TYPES:
+    if not in_player_subcondition and ctype in TOP_LEVEL_FORBIDDEN_TYPES:
         errors.append(f"{path}: '{ctype}' cannot be used as a top-level condition")
         return
 
@@ -230,6 +245,23 @@ def _validate_leaf_params(
         _require_keys(params, ["metric", "min_streak"], errors, path)
     elif ctype == "stable_streak":
         _require_keys(params, ["fields", "min_streak"], errors, path)
+    elif ctype == "log_stat_rank":
+        _require_keys(params, ["stat"], errors, path)
+        _validate_stat_param(params, errors, path)
+    elif ctype == "standing_count":
+        _require_keys(params, ["op", "value"], errors, path)
+    elif ctype == "tournament_winrate":
+        _require_keys(params, ["op", "value"], errors, path)
+    elif ctype == "div_span":
+        _require_keys(params, ["op", "value"], errors, path)
+    elif ctype == "hero_pickrate":
+        pass  # op/value optional with defaults
+    elif ctype == "teammate_recurrence":
+        pass  # op/value optional with defaults
+    elif ctype == "team_otp_count":
+        pass  # op/value optional with defaults
+    elif ctype == "reached_playoffs":
+        pass  # scope/op/value optional with defaults
     elif ctype == "player_role":
         _require_keys(params, ["role"], errors, path)
     elif ctype == "player_flag":
@@ -279,8 +311,11 @@ def _collect_grains(node: dict[str, Any]) -> list[AchievementGrain]:
 
     ctype = node.get("type")
     if ctype and ctype in LEAF_GRAINS:
-        if ctype == "distinct_count" and node.get("params", {}).get("scope") == "tournament":
+        scope = node.get("params", {}).get("scope")
+        if ctype == "distinct_count" and scope == "tournament":
             grains.append(AchievementGrain.user_tournament)
+        elif ctype == "reached_playoffs" and scope == "global":
+            grains.append(AchievementGrain.user)
         else:
             grains.append(LEAF_GRAINS[ctype])
 

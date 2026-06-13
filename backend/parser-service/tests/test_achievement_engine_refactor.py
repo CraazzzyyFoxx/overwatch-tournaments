@@ -33,16 +33,24 @@ from shared.core.enums import StageType  # noqa: E402
 from shared.models.achievement import AchievementGrain, AchievementRule  # noqa: E402
 from shared.services.achievement_effective import override_applies_to_scope  # noqa: E402
 
+from src.services.achievement.engine.conditions import (  # noqa: E402
+    get_registered_types,
+    resolve_stat_name,
+)
 from src.services.achievement.engine.conditions.tournament_format import (  # noqa: E402
     matches_tournament_format,
 )
 from src.services.achievement.engine.differ import EvaluationSlice, diff_and_apply  # noqa: E402
 from src.services.achievement.engine.seeder import (  # noqa: E402
     _all_default_rules,
+    _hero_kd_rules,
     get_canonical_rule_catalog,
 )
-from src.services.achievement.engine.conditions import resolve_stat_name  # noqa: E402
-from src.services.achievement.engine.validation import infer_grain, validate_condition_tree  # noqa: E402
+from src.services.achievement.engine.validation import (  # noqa: E402
+    LEAF_GRAINS,
+    infer_grain,
+    validate_condition_tree,
+)
 
 
 def _legacy_rule_catalog() -> dict[str, tuple[str, str, str]]:
@@ -126,6 +134,61 @@ class ValidationTests(TestCase):
         ]
         self.assertEqual([], mismatches)
 
+    def test_all_default_rules_are_implemented(self) -> None:
+        """Every canonical achievement has a real condition tree (no placeholders)."""
+        placeholders = [rule.slug for rule in _all_default_rules(1) if not rule.condition_tree]
+        self.assertEqual([], placeholders)
+
+    def test_all_default_condition_trees_validate(self) -> None:
+        errors = {
+            rule.slug: validate_condition_tree(rule.condition_tree)
+            for rule in _all_default_rules(1)
+            if rule.condition_tree and validate_condition_tree(rule.condition_tree)
+        }
+        self.assertEqual({}, errors)
+
+    def test_new_leaf_types_registered_with_grain(self) -> None:
+        registered = set(get_registered_types())
+        for ctype in (
+            "log_stat_rank",
+            "standing_count",
+            "tournament_winrate",
+            "div_span",
+            "hero_pickrate",
+            "teammate_recurrence",
+            "team_otp_count",
+            "reached_playoffs",
+        ):
+            self.assertIn(ctype, registered)
+            self.assertIn(ctype, LEAF_GRAINS)
+
+    def test_reached_playoffs_scope_drives_grain(self) -> None:
+        self.assertEqual(
+            AchievementGrain.user,
+            infer_grain(
+                {"type": "reached_playoffs", "params": {"scope": "global", "op": "==", "value": 0}}
+            ),
+        )
+        self.assertEqual(
+            AchievementGrain.user_tournament,
+            infer_grain({"type": "reached_playoffs", "params": {"scope": "tournament"}}),
+        )
+
+    def test_log_stat_rank_requires_stat(self) -> None:
+        self.assertTrue(validate_condition_tree({"type": "log_stat_rank", "params": {}}))
+        self.assertEqual(
+            [], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}})
+        )
+
+    def test_standing_count_requires_op_and_value(self) -> None:
+        self.assertTrue(validate_condition_tree({"type": "standing_count", "params": {}}))
+        self.assertEqual(
+            [],
+            validate_condition_tree(
+                {"type": "standing_count", "params": {"op": ">=", "value": 2}}
+            ),
+        )
+
     def test_default_rule_catalog_matches_legacy_consts(self) -> None:
         rules = {rule.slug: rule for rule in _all_default_rules(1)}
         self.assertEqual(sorted(EXPECTED_LEGACY_RULES), sorted(rules))
@@ -164,6 +227,50 @@ class TournamentFormatTests(TestCase):
         self.assertTrue(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "double_elim"))
         self.assertTrue(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "has_bracket"))
         self.assertFalse(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "single_elim"))
+
+
+class DynamicHeroRuleTests(TestCase):
+    @staticmethod
+    def _hero(hero_id: int, slug: str, name: str, image_path: str = "/img.png") -> SimpleNamespace:
+        return SimpleNamespace(id=hero_id, slug=slug, name=name, image_path=image_path)
+
+    def test_db_heroes_generate_kd_rules_with_metadata(self) -> None:
+        heroes = [
+            self._hero(1, "tracer", "Tracer"),  # known catalog hero
+            self._hero(2, "newhero", "New Hero"),  # synced hero not in catalog
+            self._hero(3, "freak", "Freak"),  # non-K/D slug → must be skipped
+        ]
+        rules = {rule.slug: rule for rule in _hero_kd_rules(1, heroes)}
+
+        # Catalog hero keeps its legacy flavour name and gains hero linkage.
+        self.assertEqual("Déjà vu", rules["tracer"].name)
+        self.assertEqual(1, rules["tracer"].hero_id)
+        self.assertEqual("/img.png", rules["tracer"].image_url)
+        self.assertEqual(
+            {"type": "hero_kd_best", "params": {"hero_slug": "tracer", "min_time": 600, "min_matches": 3}},
+            rules["tracer"].condition_tree,
+        )
+
+        # Unknown hero gets generic metadata and hero linkage.
+        self.assertIn("newhero", rules)
+        self.assertEqual("New Hero", rules["newhero"].name)
+        self.assertIn("New Hero", rules["newhero"].description_en)
+        self.assertEqual(2, rules["newhero"].hero_id)
+        self.assertEqual("/img.png", rules["newhero"].image_url)
+
+        # Non-K/D hero slugs never become hero K/D rules.
+        self.assertNotIn("freak", rules)
+
+    def test_catalog_heroes_covered_when_missing_from_db(self) -> None:
+        # Only one hero in the DB, but every catalog K/D hero must still be covered.
+        rules = {rule.slug: rule for rule in _hero_kd_rules(1, [self._hero(1, "tracer", "Tracer")])}
+        self.assertIn("dva", rules)  # catalog hero absent from the DB
+        self.assertIsNone(rules["dva"].hero_id)
+
+    def test_sync_path_uses_catalog_only(self) -> None:
+        rules = {rule.slug: rule for rule in _hero_kd_rules(1, None)}
+        self.assertIn("tracer", rules)
+        self.assertIsNone(rules["tracer"].hero_id)
 
 
 class OverrideScopeTests(TestCase):

@@ -55,12 +55,22 @@ async def execute_global_winrate(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Top/bottom N by winrate. Grain: user."""
+    """Top/bottom N by winrate (or won maps). Grain: user.
+
+    params:
+        metric: "winrate" (default) | "won_maps" — ranking key. "won_maps" ranks
+            by the total number of won maps (sum of the player's map scores).
+        op/value: optional HAVING filter on winrate.
+        order: "desc" (default) | "asc".
+        limit: optional top/bottom N.
+        include_league: bool (default False).
+    """
     op = params.get("op")
     value = params.get("value")
     order = params.get("order", "desc")
     limit = params.get("limit")
     include_league = params.get("include_league", False)
+    metric = params.get("metric", "winrate")
 
     home_score = sa.case(
         (models.Encounter.home_team_id == models.Team.id, models.Encounter.home_score),
@@ -74,6 +84,7 @@ async def execute_global_winrate(
     sum_home = sa.func.sum(home_score)
     sum_away = sa.func.sum(away_score)
     winrate = sum_home / sa.func.nullif(sum_home + sum_away, 0)
+    rank_expr = sum_home if metric == "won_maps" else winrate
 
     query = (
         sa.select(models.Player.user_id)
@@ -98,7 +109,7 @@ async def execute_global_winrate(
         op_fn = OPERATORS[op]
         query = query.having(op_fn(winrate, value))
 
-    order_expr = winrate.desc() if order == "desc" else winrate.asc()
+    order_expr = rank_expr.desc() if order == "desc" else rank_expr.asc()
     query = query.order_by(order_expr)
 
     if limit:

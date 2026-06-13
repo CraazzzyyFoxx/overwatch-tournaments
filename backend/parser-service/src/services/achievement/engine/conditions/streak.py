@@ -29,7 +29,7 @@ async def execute_consecutive(
     consecutive sequences.
 
     params:
-        metric: "win" | "day_two" — what constitutes a qualifying tournament
+        metric: "win" | "day_two" | "playoffs" — what constitutes a qualifying tournament
         min_streak: int — minimum consecutive count
         position_op: str (optional) — for "day_two", position threshold operator
         position_value: int (optional) — for "day_two", position threshold
@@ -83,6 +83,30 @@ async def execute_consecutive(
             .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
             .where(
                 op_fn(models.Standing.overall_position, position_value),
+                standing_is_elimination(standing=models.Standing, stage=models.Stage),
+                models.Tournament.is_league.is_(False),
+                models.Tournament.workspace_id == context.workspace_id,
+                models.Player.is_substitution.is_(False),
+                models.Tournament.number.isnot(None),
+            )
+        ).subquery("qualifying")
+
+    elif metric == "playoffs":
+        # Tournaments where the player reached the playoff/elimination bracket
+        # (group→playoff transition visible via the stage system).
+        qualifying = (
+            sa.select(
+                models.Player.user_id,
+                models.Tournament.number.label("t_num"),
+            )
+            .join(models.Team, models.Team.id == models.Player.team_id)
+            .join(models.Standing, sa.and_(
+                models.Standing.team_id == models.Team.id,
+                models.Standing.tournament_id == models.Player.tournament_id,
+            ))
+            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
+            .where(
                 standing_is_elimination(standing=models.Standing, stage=models.Stage),
                 models.Tournament.is_league.is_(False),
                 models.Tournament.workspace_id == context.workspace_id,
