@@ -123,13 +123,13 @@ const EncounterRow = ({
   return (
     <Link
       href={`/encounters/${enc.id}`}
-      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-[13px] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)] md:grid-cols-[1fr_auto_auto_auto_auto_auto]"
+      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-[14px] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)] md:grid-cols-[1fr_auto_auto_auto_auto_auto]"
       style={{ boxShadow: `inset 3px 0 0 0 ${scoreAccent[scoreKind]}` }}
     >
       {/* Stage + opponent */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate font-medium text-[color:var(--aqt-fg)]">{opponent ?? enc.name}</span>
-        <span className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-dim)]">{stageLabel}</span>
+        <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{stageLabel}</span>
       </div>
 
       {/* Heroes */}
@@ -148,7 +148,7 @@ const EncounterRow = ({
 
       {/* Closeness */}
       {enc.closeness != null ? (
-        <span className="aqt-mono hidden text-[11px] text-[color:var(--aqt-fg-dim)] md:block">
+        <span className="aqt-mono hidden text-[12px] text-[color:var(--aqt-fg-dim)] md:block">
           {(enc.closeness * 100).toFixed(0)}%
         </span>
       ) : (
@@ -158,7 +158,7 @@ const EncounterRow = ({
       {/* Score */}
       <span
         className={cn(
-          "aqt-mono min-w-[52px] text-right text-[15px] font-bold",
+          "aqt-mono min-w-[52px] text-right text-[16px] font-bold",
           scoreKind === "win" && "text-[color:var(--aqt-emerald)]",
           scoreKind === "loss" && "text-[color:var(--aqt-rose)]",
           scoreKind === "draw" && "text-[color:var(--aqt-amber)]"
@@ -214,12 +214,12 @@ const TournamentItem = ({
           if (e.key === "Enter" || e.key === " ") onToggle();
         }}
       >
-        <div className="aqt-display text-[24px] font-extrabold leading-none text-[color:var(--aqt-fg-muted)]">
+        <div className="aqt-display text-[28px] font-extrabold leading-none text-[color:var(--aqt-fg-muted)]">
           {tournamentNumber}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <div className="text-[15px] font-semibold text-[color:var(--aqt-fg)]">
+          <div className="text-[17px] font-semibold text-[color:var(--aqt-fg)]">
             <Link
               href={`/tournaments/${t.id}`}
               onClick={(e) => e.stopPropagation()}
@@ -228,20 +228,20 @@ const TournamentItem = ({
               {t.name}
             </Link>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--aqt-fg-dim)]">
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-[color:var(--aqt-fg-dim)]">
             <StagePill kind={stageKindForTournament(t)}>
               {t.placement === 1 ? "Grand finals" : t.placement <= 3 ? "Playoffs reached" : "Groups"}
             </StagePill>
-            <span className="inline-flex items-center gap-1">
-              <PlayerRoleIcon role={t.role} size={11} color={roleColor(t.role)} />
-              Team {t.team} · {t.role}
+            <span className="inline-flex items-center gap-1.5" title={t.role}>
+              <PlayerRoleIcon role={t.role} size={15} color={roleColor(t.role)} />
+              Team {t.team}
             </span>
           </div>
         </div>
 
-        <div className="aqt-mono inline-flex items-center gap-2 text-[12px] text-[color:var(--aqt-fg-muted)]">
-          <DivisionIcon division={t.division} tournamentGrid={t.division_grid_version} width={26} height={26} />
-          <span className="aqt-display aqt-tnum text-[20px] font-bold text-[color:var(--aqt-fg)]">
+        <div className="aqt-mono inline-flex items-center gap-2 text-[13px] text-[color:var(--aqt-fg-muted)]">
+          <DivisionIcon division={t.division} tournamentGrid={t.division_grid_version} width={28} height={28} />
+          <span className="aqt-display aqt-tnum text-[23px] font-bold text-[color:var(--aqt-fg)]">
             {t.placement || "—"}
           </span>
           <span className="text-[color:var(--aqt-fg-faint)]">/ {t.count_teams}</span>
@@ -264,10 +264,10 @@ const TournamentItem = ({
             {/* Stats */}
             <div className="flex flex-col gap-3 rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
               <div className="flex items-baseline justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                   Matches
                 </span>
-                <span className="aqt-display text-[22px] font-bold leading-none">{t.won + t.lost + t.draw}</span>
+                <span className="aqt-display text-[26px] font-bold leading-none">{t.won + t.lost + t.draw}</span>
               </div>
               <StatLine label="Record">
                 <span style={{ color: "var(--aqt-emerald)" }}>{t.won}W</span>{" "}
@@ -296,7 +296,7 @@ const TournamentItem = ({
 
             {/* Roster (full) */}
             <div className="rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
-              <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+              <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                 Roster
               </div>
               <TournamentTeamTable players={t.players ?? []} tournamentGrid={t.division_grid_version} />
@@ -326,7 +326,7 @@ const TournamentItem = ({
 };
 
 const StatLine = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="grid grid-cols-[1fr_auto] gap-1.5 text-[12.5px] text-[color:var(--aqt-fg-muted)]">
+  <div className="grid grid-cols-[1fr_auto] gap-1.5 text-[13.5px] text-[color:var(--aqt-fg-muted)]">
     <span>{label}</span>
     <span className="aqt-mono">{children}</span>
   </div>
@@ -335,7 +335,7 @@ const StatLine = ({ label, children }: { label: string; children: React.ReactNod
 const HeaderCell = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <span
     className={cn(
-      "text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]",
+      "text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]",
       className
     )}
   >
@@ -385,8 +385,8 @@ const LeagueGroup = ({
         >
           League
         </span>
-        <span className="flex-1 truncate text-[15px] font-semibold text-[color:var(--aqt-fg)]">{name}</span>
-        <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+        <span className="flex-1 truncate text-[17px] font-semibold text-[color:var(--aqt-fg)]">{name}</span>
+        <span className="aqt-mono text-[12.5px] text-[color:var(--aqt-fg-dim)]">
           {entries.length} divisions
           {bestPlacement !== Infinity ? ` · best #${bestPlacement}` : ""}
         </span>
