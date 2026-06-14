@@ -344,6 +344,132 @@ async def get_user_encounters_paginated(
     )
 
 
+def _user_win_case():
+    """1 when the viewer's team (Player.team_id) won the encounter, else 0."""
+    ut = models.Player.team_id
+    return sa.case(
+        (
+            sa.or_(
+                sa.and_(models.Encounter.home_team_id == ut, models.Encounter.home_score > models.Encounter.away_score),
+                sa.and_(models.Encounter.away_team_id == ut, models.Encounter.away_score > models.Encounter.home_score),
+            ),
+            1,
+        ),
+        else_=0,
+    )
+
+
+def _user_loss_case():
+    """1 when the viewer's team (Player.team_id) lost the encounter, else 0."""
+    ut = models.Player.team_id
+    return sa.case(
+        (
+            sa.or_(
+                sa.and_(models.Encounter.home_team_id == ut, models.Encounter.home_score < models.Encounter.away_score),
+                sa.and_(models.Encounter.away_team_id == ut, models.Encounter.away_score < models.Encounter.home_score),
+            ),
+            1,
+        ),
+        else_=0,
+    )
+
+
+_USER_ENCOUNTER_JOIN = sa.or_(
+    models.Encounter.home_team_id == models.Player.team_id,
+    models.Encounter.away_team_id == models.Player.team_id,
+)
+
+
+def _user_player_where(user_id: int):
+    return (
+        models.Player.user_id == user_id,
+        models.Player.is_substitution.is_(False),
+    )
+
+
+async def get_user_opponents(
+    session: AsyncSession,
+    user_id: int,
+    workspace_id: int | None = None,
+    *,
+    limit: int = 8,
+):
+    """Most-fought opponents across ALL of the user's encounters: opponent team
+    name + win/loss/draw record, ordered by number of meetings (desc)."""
+    user_team = models.Player.team_id
+    home_t = sa.orm.aliased(models.Team)
+    away_t = sa.orm.aliased(models.Team)
+    opp_name = sa.case(
+        (models.Encounter.home_team_id == user_team, away_t.name),
+        else_=home_t.name,
+    )
+    draw = sa.case((models.Encounter.home_score == models.Encounter.away_score, 1), else_=0)
+
+    query = (
+        sa.select(
+            opp_name.label("name"),
+            sa.func.sum(_user_win_case()).label("wins"),
+            sa.func.sum(_user_loss_case()).label("losses"),
+            sa.func.sum(draw).label("draws"),
+        )
+        .select_from(models.Player)
+        .join(models.Encounter, _USER_ENCOUNTER_JOIN)
+        .join(home_t, models.Encounter.home_team_id == home_t.id)
+        .join(away_t, models.Encounter.away_team_id == away_t.id)
+        .where(*_user_player_where(user_id))
+    )
+
+    if workspace_id is not None:
+        query = query.join(
+            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
+        ).where(*workspace_filter(workspace_id))
+
+    query = query.group_by(opp_name).order_by(sa.func.count(models.Encounter.id).desc()).limit(limit)
+
+    return (await session.execute(query)).all()
+
+
+async def get_user_stage_breakdown(
+    session: AsyncSession,
+    user_id: int,
+    workspace_id: int | None = None,
+):
+    """Per-stage (group / playoffs / finals) win-loss record across ALL of the
+    user's encounters. Rows whose stage doesn't classify get a NULL `kind` and
+    are ignored by the caller."""
+    stage_item = sa.orm.aliased(models.StageItem)
+    stage_obj = sa.orm.aliased(models.Stage)
+    stage_name = sa.func.coalesce(stage_item.name, stage_obj.name)
+    stage_kind = sa.case(
+        (stage_name.ilike("%final%"), "finals"),
+        (sa.or_(stage_name.ilike("%playoff%"), stage_name.ilike("%bracket%")), "playoffs"),
+        (sa.or_(stage_name.ilike("%group%"), stage_name.op("~*")("^[a-h]$")), "group"),
+        else_=None,
+    )
+
+    query = (
+        sa.select(
+            stage_kind.label("kind"),
+            sa.func.sum(_user_win_case()).label("w"),
+            sa.func.sum(_user_loss_case()).label("l"),
+        )
+        .select_from(models.Player)
+        .join(models.Encounter, _USER_ENCOUNTER_JOIN)
+        .outerjoin(stage_item, models.Encounter.stage_item_id == stage_item.id)
+        .outerjoin(stage_obj, models.Encounter.stage_id == stage_obj.id)
+        .where(*_user_player_where(user_id))
+    )
+
+    if workspace_id is not None:
+        query = query.join(
+            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
+        ).where(*workspace_filter(workspace_id))
+
+    query = query.group_by(stage_kind)
+
+    return (await session.execute(query)).all()
+
+
 async def count_teams_by_tournament_bulk(
     session: AsyncSession, tournaments_ids: list[int]
 ) -> dict[int, int]:

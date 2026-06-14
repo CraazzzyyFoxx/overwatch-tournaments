@@ -296,6 +296,22 @@ async def get_encounters(
 
 
 @router.get(
+    path="/{id}/matches/summary",
+    response_model=schemas.UserMatchesSummary,
+    description="Most-fought opponents + per-stage win/loss record for a user, "
+    "aggregated over ALL of their encounters (for the Matches-tab sidebars). "
+    f"**Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
+    summary="Get user matches summary",
+)
+async def get_matches_summary(
+    id: int,
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_matches_summary(session, id, workspace_id=workspace_id)
+
+
+@router.get(
     path="/{id}/heroes",
     response_model=pagination.Paginated[schemas.HeroWithUserStats],
     description="Retrieve the list of heroes associated with a user by ID, along with their stats."

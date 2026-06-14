@@ -1388,3 +1388,39 @@ async def get_encounters_by_user(
         page=params.page,
         results=encounters_read,
     )
+
+
+async def get_matches_summary(
+    session: AsyncSession,
+    user_id: int,
+    workspace_id: int | None = None,
+    *,
+    opponents_limit: int = 8,
+) -> schemas.UserMatchesSummary:
+    """Most-fought opponents + per-stage win/loss record for the Matches-tab
+    sidebars, aggregated over ALL of the user's encounters (not the current
+    page, which is what the old client-side computation was limited to)."""
+    user = await get(session, user_id, [])
+    opponent_rows = await _repositories.get_user_opponents(
+        session, user.id, workspace_id, limit=opponents_limit
+    )
+    stage_rows = await _repositories.get_user_stage_breakdown(session, user.id, workspace_id)
+
+    stages = {kind: schemas.UserStageRecord(w=0, l=0) for kind in ("group", "playoffs", "finals")}
+    for row in stage_rows:
+        if row.kind in stages:
+            stages[row.kind] = schemas.UserStageRecord(w=row.w or 0, l=row.l or 0)
+
+    return schemas.UserMatchesSummary(
+        opponents=[
+            schemas.UserOpponentStat(
+                name=row.name,
+                wins=row.wins or 0,
+                losses=row.losses or 0,
+                draws=row.draws or 0,
+            )
+            for row in opponent_rows
+            if row.name
+        ],
+        stages=stages,
+    )

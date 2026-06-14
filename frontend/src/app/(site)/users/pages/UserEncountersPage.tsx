@@ -3,6 +3,13 @@ import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
 import { Skeleton } from "@/components/ui/skeleton";
 import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
+import type { StageStats } from "@/app/(site)/users/components/matches/MatchesSidebars";
+
+const EMPTY_STAGES: StageStats = {
+  group: { w: 0, l: 0 },
+  playoffs: { w: 0, l: 0 },
+  finals: { w: 0, l: 0 }
+};
 
 export const UserEncountersPageSkeleton = () => {
   return (
@@ -25,8 +32,14 @@ export const UserEncountersPage = async ({
   const perPage = 15;
 
   let encounters: Awaited<ReturnType<typeof userService.getUserEncounters>>;
+  // Most-fought opponents + per-stage record are aggregated server-side over
+  // ALL the user's encounters (not just this page); failure is non-fatal.
+  let summary: Awaited<ReturnType<typeof userService.getUserMatchesSummary>> | null = null;
   try {
-    encounters = await userService.getUserEncounters(user.id, page, perPage, undefined, undefined, undefined, filters);
+    [encounters, summary] = await Promise.all([
+      userService.getUserEncounters(user.id, page, perPage, undefined, undefined, undefined, filters),
+      userService.getUserMatchesSummary(user.id).catch(() => null)
+    ]);
   } catch {
     return (
       <div className="aqt-player rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-6 py-10 text-center text-[13px] text-[color:var(--aqt-fg-muted)]">
@@ -42,6 +55,8 @@ export const UserEncountersPage = async ({
       page={page}
       perPage={perPage}
       selfUserId={user.id}
+      opponents={summary?.opponents ?? []}
+      stages={summary?.stages ?? EMPTY_STAGES}
     />
   );
 };

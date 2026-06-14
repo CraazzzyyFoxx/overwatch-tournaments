@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import MatchRow, { stageKindFor } from "@/app/(site)/users/components/matches/MatchRow";
+import MatchRow from "@/app/(site)/users/components/matches/MatchRow";
 import MatchesFilterBar, { type Filter } from "@/app/(site)/users/components/matches/MatchesFilterBar";
-import MatchesSidebars from "@/app/(site)/users/components/matches/MatchesSidebars";
+import MatchesSidebars, {
+  type OpponentStat,
+  type StageStats
+} from "@/app/(site)/users/components/matches/MatchesSidebars";
 
 interface Props {
   encounters: EncounterWithUserStats[];
@@ -16,6 +19,9 @@ interface Props {
   page: number;
   perPage: number;
   selfUserId: number;
+  /** Aggregated server-side over ALL the user's encounters (Matches sidebars). */
+  opponents: OpponentStat[];
+  stages: StageStats;
 }
 
 /** Server-side Matches-tab filters (mirrors the encounters endpoint params). */
@@ -27,7 +33,7 @@ export interface MatchesFilters {
   opponent?: string;
 }
 
-const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) => {
+const MatchesTable = ({ encounters, total, page, perPage, selfUserId, opponents, stages }: Props) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -93,40 +99,8 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Most-fought opponents
-  const opponentStats = useMemo(() => {
-    const map = new Map<string, { name: string; wins: number; losses: number; draws: number }>();
-    encounters.forEach((enc) => {
-      const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
-      const oppName = isUserHome ? enc.away_team?.name : enc.home_team?.name;
-      if (!oppName) return;
-      const userScore = isUserHome ? enc.score.home : enc.score.away;
-      const oppScore = isUserHome ? enc.score.away : enc.score.home;
-      const entry = map.get(oppName) ?? { name: oppName, wins: 0, losses: 0, draws: 0 };
-      if (userScore > oppScore) entry.wins++;
-      else if (userScore < oppScore) entry.losses++;
-      else entry.draws++;
-      map.set(oppName, entry);
-    });
-    return Array.from(map.values()).sort((a, b) =>
-      (b.wins + b.losses + b.draws) - (a.wins + a.losses + a.draws)
-    ).slice(0, 8);
-  }, [encounters, selfUserId]);
-
-  // Stage stats
-  const stageStats = useMemo(() => {
-    const acc = { group: { w: 0, l: 0 }, playoffs: { w: 0, l: 0 }, finals: { w: 0, l: 0 } };
-    encounters.forEach((enc) => {
-      const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
-      const userScore = isUserHome ? enc.score.home : enc.score.away;
-      const oppScore = isUserHome ? enc.score.away : enc.score.home;
-      const kind = stageKindFor(enc.stage_item?.name ?? enc.stage?.name);
-      if (kind === "default") return;
-      if (userScore > oppScore) acc[kind].w++;
-      else if (userScore < oppScore) acc[kind].l++;
-    });
-    return acc;
-  }, [encounters, selfUserId]);
+  // `opponents` and `stages` are computed on the backend over all the user's
+  // encounters (see UserEncountersPage / users/{id}/matches/summary).
 
   return (
     <div className="aqt-player">
@@ -187,7 +161,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
           </div>
         </CardSurface>
 
-        <MatchesSidebars opponentStats={opponentStats} stageStats={stageStats} />
+        <MatchesSidebars opponentStats={opponents} stageStats={stages} />
       </div>
     </div>
   );

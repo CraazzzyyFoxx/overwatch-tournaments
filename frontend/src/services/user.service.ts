@@ -6,6 +6,7 @@ import {
   UserHeroCompareResponse,
   User,
   UserBestTeammate,
+  UserMatchesSummary,
   UserMapRead,
   UserMapsSummary,
   UserOverviewRow,
@@ -224,6 +225,11 @@ export default class userService {
         order: "desc"
       },
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
+  }
+  static async getUserMatchesSummary(id: number): Promise<UserMatchesSummary> {
+    return apiFetch("app", `users/${id}/matches/summary`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
     }).then((res) => res.json());
   }
   static async searchUsers(query: string, signal?: AbortSignal): Promise<MinimizedUser[]> {

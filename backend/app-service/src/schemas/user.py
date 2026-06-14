@@ -35,6 +35,9 @@ __all__ = (
     "HeroWithUserStats",
     "HeroStatBest",
     "UserBestTeammate",
+    "UserOpponentStat",
+    "UserStageRecord",
+    "UserMatchesSummary",
     "UserSearch",
     "UserOverviewRoleDivision",
     "UserOverviewHeroMetric",
@@ -347,6 +350,27 @@ class UserBestTeammate(BaseModel):
     maps: int
     winrate: float
     stats: dict[enums.LogStatsName, float | None]
+
+
+class UserOpponentStat(BaseModel):
+    name: str
+    wins: int
+    losses: int
+    draws: int
+
+
+class UserStageRecord(BaseModel):
+    w: int
+    l: int  # noqa: E741 — terse {w,l} record mirrored by the Matches-tab sidebar
+
+
+class UserMatchesSummary(BaseModel):
+    """Aggregates for the Matches-tab sidebars, computed over ALL the user's
+    encounters (not just the current page): most-fought opponents + per-stage
+    win/loss record."""
+
+    opponents: list[UserOpponentStat]
+    stages: dict[str, UserStageRecord]
 
 
 class UserSearch(BaseModel):

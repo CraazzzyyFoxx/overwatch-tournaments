@@ -261,6 +261,23 @@ export interface UserBestTeammate {
   stats: Record<LogStatsName, number>;
 }
 
+export interface UserOpponentStat {
+  name: string;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface UserStageRecord {
+  w: number;
+  l: number;
+}
+
+export interface UserMatchesSummary {
+  opponents: UserOpponentStat[];
+  stages: Record<"group" | "playoffs" | "finals", UserStageRecord>;
+}
+
 export interface MinimizedUser {
   id: number;
   name: string;
