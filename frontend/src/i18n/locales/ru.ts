@@ -567,6 +567,43 @@ export const ru = {
       title: "Флаги аномалий",
       note: "Флаги — это подсказки к разбору, а не вердикты."
     },
+    explanation: {
+      trigger: "Почему такая оценка?",
+      title: "Что повлияло на оценку",
+      subtitle: "Статы, которые подняли или опустили её относительно средней по этой роли.",
+      raised: "подняла",
+      lowered: "опустила",
+      loading: "Загрузка…",
+      unavailable: "Объяснение пока недоступно."
+    },
+    features: {
+      final_blows_p10: "Добивания / 10 мин",
+      hero_damage_p10: "Урон по героям / 10 мин",
+      all_damage_p10: "Весь урон / 10 мин",
+      damage_blocked_p10: "Заблокированный урон / 10 мин",
+      damage_taken_p10: "Полученный урон / 10 мин",
+      objective_kills_p10: "Убийства на точке / 10 мин",
+      solo_kills_p10: "Соло-убийства / 10 мин",
+      eliminations_p10: "Убийства / 10 мин",
+      deaths_p10: "Смерти / 10 мин",
+      healing_p10: "Лечение / 10 мин",
+      self_healing_p10: "Самолечение / 10 мин",
+      defensive_assists_p10: "Защитные ассисты / 10 мин",
+      offensive_assists_p10: "Атакующие ассисты / 10 мин",
+      weapon_accuracy: "Точность оружия",
+      critical_hit_accuracy: "Точность по криту",
+      ult_economy: "Экономика ультимейта",
+      mu_gap: "Разрыв в силе с соперником",
+      opp_avg_mu: "Сила соперника",
+      team_avg_mu: "Сила своей команды",
+      rank: "SR при регистрации",
+      won: "Победа на карте",
+      score_delta: "Разница счёта",
+      is_home: "Игра дома",
+      is_newcomer: "Новичок",
+      home_score: "Счёт дома",
+      away_score: "Счёт в гостях"
+    },
     glossary: {
       confidence: {
         label: "Уверенность",

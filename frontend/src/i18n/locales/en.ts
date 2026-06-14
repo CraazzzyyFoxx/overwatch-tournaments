@@ -565,6 +565,43 @@ export const en = {
       title: "Anomaly flags",
       note: "Flags are review hints, not verdicts."
     },
+    explanation: {
+      trigger: "Why this score?",
+      title: "What drove this score",
+      subtitle: "The stats that pushed it above or below the average for this role.",
+      raised: "raised",
+      lowered: "lowered",
+      loading: "Loading…",
+      unavailable: "No explanation available yet."
+    },
+    features: {
+      final_blows_p10: "Final blows / 10 min",
+      hero_damage_p10: "Hero damage / 10 min",
+      all_damage_p10: "All damage / 10 min",
+      damage_blocked_p10: "Damage blocked / 10 min",
+      damage_taken_p10: "Damage taken / 10 min",
+      objective_kills_p10: "Objective kills / 10 min",
+      solo_kills_p10: "Solo kills / 10 min",
+      eliminations_p10: "Eliminations / 10 min",
+      deaths_p10: "Deaths / 10 min",
+      healing_p10: "Healing / 10 min",
+      self_healing_p10: "Self-healing / 10 min",
+      defensive_assists_p10: "Defensive assists / 10 min",
+      offensive_assists_p10: "Offensive assists / 10 min",
+      weapon_accuracy: "Weapon accuracy",
+      critical_hit_accuracy: "Critical-hit accuracy",
+      ult_economy: "Ult economy",
+      mu_gap: "Skill gap vs opponent",
+      opp_avg_mu: "Opponent strength",
+      team_avg_mu: "Own team strength",
+      rank: "Registration SR",
+      won: "Won the map",
+      score_delta: "Score margin",
+      is_home: "Played at home",
+      is_newcomer: "Newcomer",
+      home_score: "Home score",
+      away_score: "Away score"
+    },
     glossary: {
       confidence: {
         label: "Confidence",
