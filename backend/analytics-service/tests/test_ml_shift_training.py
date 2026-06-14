@@ -31,7 +31,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 performance_v2 = importlib.import_module("src.services.ml.models.performance_v2")
 shift_features = importlib.import_module("src.services.ml.features.shift_features")
 shift_v2 = importlib.import_module("src.services.ml.models.shift_v2")
-orchestrator = importlib.import_module("src.services.ml.training.orchestrator")
 
 
 class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
@@ -81,15 +80,8 @@ class ShiftBlendTests(TestCase):
         self.assertIn("os_shift", shift_v2.SHIFT_BLEND_COLUMNS)
         self.assertIn("performance_v2_local_zscore", shift_v2.SHIFT_BLEND_COLUMNS)
 
-    def test_empty_label_error_when_no_realised_move(self) -> None:
-        # No realised-move label (current_div / next_tournament_div) → nothing to fit.
-        frame = pd.DataFrame({"linear_stable_shift": [0.5], "os_shift": [0.4]})
-
-        with self.assertRaisesRegex(ValueError, r"no labelled rows"):
-            shift_v2.train_shift_v2(frame)
-
-    def test_blend_is_weighted_team_os_impact(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
+    def test_backbone_is_weighted_team_plus_os(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5)
         frame = pd.DataFrame(
             {
                 "linear_stable_shift": [1.0],
@@ -100,90 +92,89 @@ class ShiftBlendTests(TestCase):
             }
         )
 
-        shift = float(model.predict(frame).iloc[0])
-        # 0.6*1.0 + 0.3*(-2.0) + 0.1*0 = 0.0
-        self.assertAlmostEqual(0.0, shift, places=6)
+        # backbone = 0.7*1.0 + 0.3*(-2.0) = 0.1; indiv = 0.5*0 = 0.
+        self.assertAlmostEqual(0.1, float(model.predict(frame).iloc[0]), places=6)
 
-    def test_individual_modulation_is_bounded_and_cannot_flip_team(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
-        base = {
-            "linear_stable_shift": [2.0],
-            "os_shift": [2.0],
-            "tournaments_played": [3],
-            "is_newcomer": [False],
-        }
-        hi = model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [10.0]}))
-        lo = model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [-10.0]}))
-        # Even a huge |z| moves the shift by at most w_impact * 2*INDIV_MOD_CLAMP.
-        self.assertLessEqual(
-            abs(float(hi.iloc[0]) - float(lo.iloc[0])),
-            0.1 * 2 * shift_v2.INDIV_MOD_CLAMP + 1e-9,
+    def test_individual_skill_is_additive_and_widened(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "tournaments_played": [3], "is_newcomer": [False]}
+
+        # A clear individual outlier on a flat team still moves: 0.5*3 = 1.5
+        # (vs the old ±0.5/weight-0 design where it was ~0).
+        s3 = float(model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [3.0]})).iloc[0])
+        s1 = float(model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [1.0]})).iloc[0])
+        self.assertAlmostEqual(1.5, s3, places=6)
+        self.assertAlmostEqual(0.5, s1, places=6)
+        # Clamped: a huge z saturates at indiv_clamp, not beyond.
+        s_big = float(model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [9.0]})).iloc[0])
+        self.assertAlmostEqual(1.5, s_big, places=6)
+
+    def test_individual_lifts_outlier_on_top_of_team(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
+        frame = pd.DataFrame(
+            {
+                "linear_stable_shift": [1.0],
+                "os_shift": [1.0],
+                "performance_v2_local_zscore": [2.0],
+                "tournaments_played": [3],
+                "is_newcomer": [False],
+            }
         )
-        # The strong positive team signal stays positive regardless of impact.
-        self.assertGreater(float(lo.iloc[0]), 0.0)
+        # backbone = 1.0; indiv = 0.5*2 = 1.0 → 2.0 (individual adds on top).
+        self.assertAlmostEqual(2.0, float(model.predict(frame).iloc[0]), places=6)
 
-    def test_newcomer_uses_clipped_team_baseline(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
+    def test_newcomer_uses_clipped_team_backbone_only(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
         frame = pd.DataFrame(
             {
                 "linear_stable_shift": [2.0],
-                "os_shift": [-2.5],
+                "os_shift": [2.0],
                 "performance_v2_local_zscore": [3.0],
                 "tournaments_played": [1],  # newcomer
                 "is_newcomer": [True],
             }
         )
-
-        # Newcomer → clipped team baseline (2.0 → 1.5), ignoring os/impact.
+        # backbone = 2.0 → clipped to newcomer range 1.5; individual term ignored.
         self.assertAlmostEqual(1.5, float(model.predict(frame).iloc[0]), places=6)
 
-    def test_validation_rows_are_reused_when_they_are_the_only_labelled_rows(self) -> None:
-        # "Labelled" = has the realised-move label (current_div + next_tournament_div).
-        train_df = pd.DataFrame(
-            {"tournament_id": [62], "current_div": [None], "next_tournament_div": [6.0]}
-        )
-        val_df = pd.DataFrame(
-            {"tournament_id": [63], "current_div": [6.0], "next_tournament_div": [5.0]}
-        )
 
-        prepared_train, prepared_val = orchestrator._prepare_shift_training_frames(
-            train_df, val_df
-        )
-
-        self.assertEqual([63], prepared_train["tournament_id"].tolist())
-        self.assertTrue(prepared_val.empty)
-
-
-class ShiftFitTests(TestCase):
+class ShiftTrainTests(TestCase):
     def _frame(self, n: int, *, seed: int) -> pd.DataFrame:
         rng = np.random.default_rng(seed)
-        team = rng.uniform(-1.5, 1.5, n)  # team-result drives the realised move
+        team = rng.uniform(-1.5, 1.5, n)
         current_div = np.full(n, 10.0)
         return pd.DataFrame(
             {
                 "tournament_id": [seed] * n,
                 "current_div": current_div,
-                "next_tournament_div": current_div - team,  # realised = team
+                "next_tournament_div": current_div - team,
                 "linear_stable_shift": team,
                 "os_shift": rng.normal(0.0, 0.2, n),
                 "performance_v2_local_zscore": rng.normal(0.0, 1.0, n),
             }
         )
 
-    def test_fit_makes_team_weight_dominant(self) -> None:
-        result = shift_v2.train_shift_v2(self._frame(120, seed=1))
-        m = result.metrics
-        self.assertGreater(m["w_team"], m["w_os"])
-        self.assertGreater(m["w_team"], m["w_impact"])
-        self.assertAlmostEqual(1.0, m["w_team"] + m["w_os"] + m["w_impact"], places=6)
+    def test_empty_frame_raises(self) -> None:
+        with self.assertRaisesRegex(ValueError, r"empty"):
+            shift_v2.train_shift_v2(pd.DataFrame())
+
+    def test_snapshots_config_weights(self) -> None:
+        result = shift_v2.train_shift_v2(
+            self._frame(60, seed=1), w_team=0.8, w_os=0.2, indiv_scale=0.4, indiv_clamp=2.0
+        )
+        self.assertEqual(0.8, result.model.w_team)
+        self.assertEqual(0.4, result.model.indiv_scale)
+        self.assertEqual(2.0, result.model.indiv_clamp)
+        self.assertEqual(0.8, result.metrics["w_team"])
 
     def test_validation_frame_produces_held_out_metric(self) -> None:
-        result = shift_v2.train_shift_v2(self._frame(120, seed=1), val_df=self._frame(40, seed=2))
+        result = shift_v2.train_shift_v2(self._frame(60, seed=1), val_df=self._frame(40, seed=2))
         self.assertIn("mae_vs_realised_val", result.metrics)
         self.assertEqual(40.0, result.metrics["n_rows_val"])
 
     def test_no_validation_frame_omits_held_out_metric(self) -> None:
-        result = shift_v2.train_shift_v2(self._frame(120, seed=3))
+        result = shift_v2.train_shift_v2(self._frame(60, seed=3))
         self.assertNotIn("mae_vs_realised_val", result.metrics)
 
 
