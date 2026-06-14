@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
         dsn=config.sentry_dsn,
         traces_sample_rate=config.sentry_traces_sample_rate,
         profiles_sample_rate=config.sentry_profiles_sample_rate,
+        service_name="balancer-service",
         environment=config.environment,
         release=config.version,
         http_proxy=config.sentry_http_proxy_url,

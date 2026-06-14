@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
         dsn=settings.sentry_dsn,
         traces_sample_rate=settings.sentry_traces_sample_rate,
         profiles_sample_rate=settings.sentry_profiles_sample_rate,
+        service_name="auth-service",
         environment=settings.environment,
         http_proxy=settings.sentry_http_proxy_url,
         https_proxy=settings.sentry_https_proxy_url,

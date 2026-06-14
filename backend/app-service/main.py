@@ -62,6 +62,7 @@ async def lifespan(_: FastAPI):
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
         profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
+        service_name="app-service",
         environment=config.settings.environment,
         release=config.settings.version,
         http_proxy=config.settings.sentry_http_proxy_url,

@@ -10,6 +10,7 @@ from shared.messaging.config import (
 from shared.observability import (
     observe_message_processing,
     setup_logging,
+    setup_sentry,
     setup_tracing,
     start_worker_metrics_server,
 )
@@ -41,6 +42,16 @@ redis_client: Redis | None = None
 @app.on_startup
 async def start_worker() -> None:
     global redis_client
+    setup_sentry(
+        dsn=config.settings.sentry_dsn,
+        traces_sample_rate=config.settings.sentry_traces_sample_rate,
+        profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
+        service_name="analytics-worker",
+        environment=config.settings.environment,
+        release=config.settings.version,
+        http_proxy=config.settings.sentry_http_proxy_url,
+        https_proxy=config.settings.sentry_https_proxy_url,
+    )
     setup_tracing(
         service_name="analytics-worker",
         otlp_endpoint=config.settings.otlp_endpoint,

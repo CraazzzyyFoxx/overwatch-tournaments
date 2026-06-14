@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 from shared.messaging.config import BALANCER_JOBS_QUEUE
 from shared.observability import (
     setup_logging,
+    setup_sentry,
     setup_tracing,
     start_worker_metrics_server,
 )
@@ -45,6 +46,16 @@ def _decode_balancer_message(message: Any) -> Any:
 
 @app.on_startup
 async def setup_worker_observability() -> None:
+    setup_sentry(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=config.sentry_traces_sample_rate,
+        profiles_sample_rate=config.sentry_profiles_sample_rate,
+        service_name="balancer-worker",
+        environment=config.environment,
+        release=config.version,
+        http_proxy=config.sentry_http_proxy_url,
+        https_proxy=config.sentry_https_proxy_url,
+    )
     setup_tracing(
         service_name="balancer-worker",
         otlp_endpoint=config.otlp_endpoint,

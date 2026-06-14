@@ -14,12 +14,18 @@ def setup_sentry(
     environment: str,
     traces_sample_rate: float,
     profiles_sample_rate: float,
+    service_name: str | None = None,
     release: str | None = None,
     http_proxy: str | None = None,
     https_proxy: str | None = None,
     proxy_headers: dict[str, str] | None = None,
 ) -> bool:
-    """Initialize Sentry with optional proxy support."""
+    """Initialize Sentry with optional proxy support.
+
+    When ``service_name`` is provided, a ``service`` tag is set on the global
+    scope so that every event from this process is attributed to the service
+    even though all services share a single DSN.
+    """
     if not dsn:
         return False
 
@@ -39,8 +45,14 @@ def setup_sentry(
         init_kwargs["proxy_headers"] = proxy_headers
 
     sentry_sdk.init(**init_kwargs)
+
+    if service_name:
+        # Global scope tags apply to all events, including those raised in
+        # background tasks/workers that run outside a request scope.
+        sentry_sdk.get_global_scope().set_tag("service", service_name)
+
     logger.info(
-        "Sentry initialized "
-        f"(sampling={traces_sample_rate}, http_proxy={http_proxy}, https_proxy={https_proxy})"
+        f"Sentry initialized (service={service_name}, sampling={traces_sample_rate}, "
+        f"http_proxy={http_proxy}, https_proxy={https_proxy})"
     )
     return True

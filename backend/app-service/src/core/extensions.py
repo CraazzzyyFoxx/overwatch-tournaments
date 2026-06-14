@@ -11,6 +11,7 @@ def configure_extensions() -> None:
         environment=config.settings.environment,
         traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
+        service_name="app-service",
         release=config.settings.version,
         http_proxy=config.settings.sentry_http_proxy_url,
         https_proxy=config.settings.sentry_https_proxy_url,

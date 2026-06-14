@@ -17,6 +17,7 @@ from shared.observability import (
     observe_message_processing,
     publish_message,
     setup_logging,
+    setup_sentry,
     setup_tracing,
     start_worker_metrics_server,
 )
@@ -56,6 +57,16 @@ s3_client = S3Client(
 
 @app.on_startup
 async def start_worker() -> None:
+    setup_sentry(
+        dsn=config.settings.sentry_dsn,
+        traces_sample_rate=config.settings.sentry_traces_sample_rate,
+        profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
+        service_name="parser-worker",
+        environment=config.settings.environment,
+        release=config.settings.version,
+        http_proxy=config.settings.sentry_http_proxy_url,
+        https_proxy=config.settings.sentry_https_proxy_url,
+    )
     setup_tracing(
         service_name="parser-worker",
         otlp_endpoint=config.settings.otlp_endpoint,
