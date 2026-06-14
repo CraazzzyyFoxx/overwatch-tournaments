@@ -13,10 +13,10 @@ const fmt = (value: number | null | undefined, digits = 2, suffix = "") => {
 };
 
 const Row = ({ label, value, highlight }: { label: string; value: string; highlight?: string }) => (
-  <div className="flex items-center justify-between border-b border-[color:var(--aqt-border)] px-[18px] py-[11px] last:border-b-0">
-    <span className="text-[color:var(--aqt-fg-muted)]">{label}</span>
+  <div className="flex items-center justify-between border-b border-[color:var(--aqt-border)] px-[18px] py-[9px] last:border-b-0">
+    <span className="text-[12.5px] text-[color:var(--aqt-fg-muted)]">{label}</span>
     <span
-      className="aqt-tnum text-[15px] font-bold"
+      className="aqt-tnum text-[13px] font-bold"
       style={{ color: highlight ?? "var(--aqt-fg)" }}
     >
       {value}
