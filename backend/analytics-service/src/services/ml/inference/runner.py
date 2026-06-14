@@ -16,6 +16,7 @@ from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.core.config import settings
 from src.core.workspace import get_division_grid
 
 from ..features.aggregations import build_match_features_with_strength
@@ -376,13 +377,20 @@ async def run_standings_for_tournament(
     *,
     workspace_id: int | None = None,
     n_iter: int = 5000,
+    prob_sharpening: float | None = None,
 ) -> int:
     """Compute Monte Carlo standings distribution and upsert results.
 
     Also writes ``round(mean_position)`` into the legacy
     ``analytics.predictions`` table so v1 integer-place consumers stay live.
     Returns the number of team rows persisted.
+
+    ``prob_sharpening`` controls how decisively calibrated win-probabilities are
+    pushed away from 0.5 before the simulation (see :func:`simulate_standings`);
+    when ``None`` it falls back to ``settings.standings_prob_sharpening``.
     """
+    if prob_sharpening is None:
+        prob_sharpening = settings.standings_prob_sharpening
     algorithm_id = await _algorithm_id(session, STANDINGS_ALGORITHM_NAME)
     if algorithm_id is None:
         logger.warning(
@@ -421,7 +429,9 @@ async def run_standings_for_tournament(
     teams = sorted(
         {int(t) for t in matchups["home_team_id"].tolist() + matchups["away_team_id"].tolist()}
     )
-    distribution = simulate_standings(matchups, teams, n_iter=n_iter)
+    distribution = simulate_standings(
+        matchups, teams, n_iter=n_iter, prob_sharpening=prob_sharpening
+    )
     if distribution.empty:
         return 0
 

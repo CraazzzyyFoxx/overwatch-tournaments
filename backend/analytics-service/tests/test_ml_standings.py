@@ -150,3 +150,99 @@ class RoundRobinTieBreakTests(TestCase):
 
         self.assertEqual({1, 2, 3, 4}, set(standing.keys()))
         self.assertEqual([1, 2, 3, 4], sorted(standing.values()))
+
+
+class SharpenProbabilitiesTests(TestCase):
+    """``_sharpen_probabilities`` pushes win-probabilities away from 0.5."""
+
+    def test_k_one_is_noop(self) -> None:
+        p = np.array([0.2, 0.5, 0.8])
+        out = standings_v2._sharpen_probabilities(p, 1.0)
+        np.testing.assert_allclose(out, p)
+
+    def test_half_is_a_fixed_point(self) -> None:
+        self.assertAlmostEqual(0.5, standings_v2._sharpen_probabilities(0.5, 3.0))
+
+    def test_k_above_one_pushes_away_from_half(self) -> None:
+        # Favourites get more confident, underdogs less — spread grows.
+        self.assertGreater(standings_v2._sharpen_probabilities(0.6, 2.0), 0.6)
+        self.assertLess(standings_v2._sharpen_probabilities(0.4, 2.0), 0.4)
+
+    def test_symmetric_around_half(self) -> None:
+        # sharpen(1 - p) == 1 - sharpen(p): no home/away bias.
+        self.assertAlmostEqual(
+            standings_v2._sharpen_probabilities(0.3, 2.5),
+            1.0 - standings_v2._sharpen_probabilities(0.7, 2.5),
+        )
+
+    def test_monotonic_increasing(self) -> None:
+        out = standings_v2._sharpen_probabilities(np.array([0.1, 0.3, 0.5, 0.7, 0.9]), 2.0)
+        self.assertTrue(np.all(np.diff(out) > 0))
+
+    def test_clamps_extremes_to_finite_open_interval(self) -> None:
+        lo = standings_v2._sharpen_probabilities(0.0, 2.0)
+        hi = standings_v2._sharpen_probabilities(1.0, 2.0)
+        for v in (lo, hi):
+            self.assertTrue(np.isfinite(v))
+        self.assertGreater(lo, 0.0)
+        self.assertLess(hi, 1.0)
+
+    def test_scalar_returns_float_array_returns_ndarray(self) -> None:
+        self.assertIsInstance(standings_v2._sharpen_probabilities(0.6, 2.0), float)
+        self.assertIsInstance(
+            standings_v2._sharpen_probabilities(np.array([0.6, 0.4]), 2.0), np.ndarray
+        )
+
+
+class SimulateStandingsSharpeningTests(TestCase):
+    """Sharpening widens the spread of predicted places across teams."""
+
+    @staticmethod
+    def _round_robin_matchups(strengths: dict[int, float]) -> pd.DataFrame:
+        # Mild logistic edges (slope 0.2) keep p_home near 0.5 — the
+        # under-dispersed regime that collapses mean_position to the centre.
+        teams = list(strengths)
+        rows = []
+        for i in range(len(teams)):
+            for j in range(i + 1, len(teams)):
+                home, away = teams[i], teams[j]
+                diff = strengths[home] - strengths[away]
+                p = 1.0 / (1.0 + np.exp(-0.2 * diff))
+                rows.append((home, away, p))
+        return pd.DataFrame(rows, columns=["home_team_id", "away_team_id", "p_home_wins"])
+
+    def test_sharpening_widens_position_spread(self) -> None:
+        strengths = {1: 5.0, 2: 4.0, 3: 3.0, 4: 2.0, 5: 1.0, 6: 0.0}
+        teams = list(strengths)
+        matchups = self._round_robin_matchups(strengths)
+
+        base = standings_v2.simulate_standings(
+            matchups, teams, n_iter=3000, rng=np.random.default_rng(0), prob_sharpening=1.0
+        )
+        sharp = standings_v2.simulate_standings(
+            matchups, teams, n_iter=3000, rng=np.random.default_rng(0), prob_sharpening=2.0
+        )
+
+        base_spread = float(base["mean_position"].std())
+        sharp_spread = float(sharp["mean_position"].std())
+        self.assertGreater(sharp_spread, base_spread)
+        # Every team still lands in a valid [1, n_teams] mean position.
+        for frame in (base, sharp):
+            self.assertTrue(((frame["mean_position"] >= 1.0) & (frame["mean_position"] <= 6.0)).all())
+
+    def test_default_is_noop_identical_to_explicit_one(self) -> None:
+        strengths = {1: 3.0, 2: 1.0, 3: 0.0}
+        teams = list(strengths)
+        matchups = self._round_robin_matchups(strengths)
+
+        default = standings_v2.simulate_standings(
+            matchups, teams, n_iter=1500, rng=np.random.default_rng(7)
+        )
+        explicit = standings_v2.simulate_standings(
+            matchups, teams, n_iter=1500, rng=np.random.default_rng(7), prob_sharpening=1.0
+        )
+
+        np.testing.assert_allclose(
+            default.set_index("team_id")["mean_position"].to_numpy(),
+            explicit.set_index("team_id")["mean_position"].to_numpy(),
+        )

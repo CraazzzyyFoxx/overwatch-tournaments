@@ -31,6 +31,12 @@ class AppConfig(BaseServiceSettings):
     ml_train_device: typing.Literal["auto", "cpu", "cuda", "gpu"] = "auto"
     ml_gpu_fallback: bool = True
 
+    # Standings v2 Monte-Carlo win-probability sharpening exponent. ``1.0``
+    # disables it; ``>1`` pushes calibrated P(home wins) away from 0.5 before the
+    # simulation so predicted places spread across the field instead of
+    # collapsing toward the median rank. Applied at inference (no retrain).
+    standings_prob_sharpening: float = 1.5
+
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5
 

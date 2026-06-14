@@ -266,12 +266,36 @@ def _round_robin_standings(
     return {tid: idx + 1 for idx, tid in enumerate(sorted_teams)}
 
 
+def _sharpen_probabilities(p: typing.Any, k: float) -> typing.Any:
+    """Push calibrated win-probabilities away from 0.5 by exponent ``k``.
+
+    ``sharpen(p, k) = p**k / (p**k + (1-p)**k)``. ``k == 1`` is a no-op; ``k > 1``
+    makes probabilities more decisive so the Monte-Carlo standings spread out
+    instead of collapsing to the median rank; ``k < 1`` would flatten them. The
+    transform is symmetric around 0.5 (``sharpen(1-p) = 1 - sharpen(p)``) — it
+    adds no home/away bias — and keeps 0.5 as a fixed point, so evenly-matched
+    teams stay centred (spread is amplified, never invented). Inputs are clamped
+    to ``[1e-6, 1-1e-6]`` so extreme values never yield 0/0.
+
+    Accepts a scalar or an array; returns the matching shape.
+    """
+    arr = np.asarray(p, dtype=float)
+    if k == 1.0:
+        out = arr
+    else:
+        clipped = np.clip(arr, 1e-6, 1.0 - 1e-6)
+        pk = clipped**k
+        out = pk / (pk + (1.0 - clipped) ** k)
+    return float(out) if np.ndim(out) == 0 else out
+
+
 def simulate_standings(
     matchups: pd.DataFrame,
     team_ids: typing.Sequence[int],
     *,
     n_iter: int = 5000,
     rng: np.random.Generator | None = None,
+    prob_sharpening: float = 1.0,
 ) -> pd.DataFrame:
     """Run the Monte Carlo simulator.
 
@@ -279,6 +303,10 @@ def simulate_standings(
     Returns one row per team with ``mean_position``, ``median_position``,
     ``p10_position``, ``p90_position``, ``prob_top1``, ``prob_top3``,
     ``prob_top8``, and ``position_histogram`` (dict ``{position: count}``).
+
+    ``prob_sharpening`` (>1) sharpens the per-match win-probabilities before
+    sampling via :func:`_sharpen_probabilities`, widening the spread of predicted
+    places across teams; ``1.0`` (default) leaves probabilities untouched.
     """
     rng = rng or np.random.default_rng()
     team_ids = list({int(t) for t in team_ids})
@@ -300,9 +328,12 @@ def simulate_standings(
             }
         )
 
+    sharp_p = _sharpen_probabilities(
+        matchups["p_home_wins"].to_numpy(dtype=float), prob_sharpening
+    )
     triples = [
-        (int(row.home_team_id), int(row.away_team_id), float(row.p_home_wins))
-        for row in matchups.itertuples()
+        (int(row.home_team_id), int(row.away_team_id), float(p))
+        for row, p in zip(matchups.itertuples(), sharp_p, strict=False)
     ]
 
     n_teams = len(team_ids)
