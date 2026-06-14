@@ -33,6 +33,16 @@ __all__ = (
     "compute_match_quality",
 )
 
+# Default component weights for the composite quality score. Named (not inline
+# literals) so they can be overridden per call / from config.
+COMPETITIVENESS_WEIGHT = 0.4
+PREDICTABILITY_WEIGHT = 0.3
+SKILL_BALANCE_WEIGHT = 0.3
+
+# Fallback skill-balance scale (OpenSkill sigma) when no per-tournament mu gap
+# distribution is available to derive one from.
+DEFAULT_SIGMA_POOL = 300.0
+
 
 @dataclass
 class MatchQualityComponents:
@@ -87,20 +97,40 @@ def _predictability(home_won: float | None, p_home: float | None) -> float:
     return float(np.clip(1 - abs(home_won - p_home), 0.0, 1.0)) * 100.0
 
 
-def _skill_balance(home_mu: float | None, away_mu: float | None, sigma_pool: float = 300.0) -> float:
+def _skill_balance(
+    home_mu: float | None, away_mu: float | None, sigma_pool: float = DEFAULT_SIGMA_POOL
+) -> float:
     if home_mu is None or away_mu is None or sigma_pool <= 0:
         return 50.0
     diff = abs(home_mu - away_mu)
     return float(np.clip(1 - diff / sigma_pool, 0.0, 1.0)) * 100.0
 
 
+def _derive_sigma_pool(gaps: typing.Sequence[float]) -> float:
+    """Skill-balance scale from the field's own mu-gap distribution.
+
+    A hardcoded 300 makes every encounter with a >300 mu gap collapse to a
+    skill_balance of 0, regardless of how the field is actually spread. Using
+    the 90th percentile of the observed ``|home_mu - away_mu|`` means the most
+    lopsided matches of *this* tournament anchor 0 and even matches anchor 100.
+    The scale is per-tournament, so ``skill_balance`` is a *within-field relative*
+    measure (a 0 in two tournaments need not be the same absolute mu gap), not an
+    absolute one. Falls back to :data:`DEFAULT_SIGMA_POOL` when there are no gaps.
+    """
+    cleaned = [abs(float(gap)) for gap in gaps if gap is not None and np.isfinite(gap)]
+    if not cleaned:
+        return DEFAULT_SIGMA_POOL
+    return max(float(np.percentile(cleaned, 90)), 1.0)
+
+
 def compute_match_quality(
     encounters: pd.DataFrame,
     match_scores: pd.DataFrame,
     *,
-    competitiveness_weight: float = 0.4,
-    predictability_weight: float = 0.3,
-    skill_balance_weight: float = 0.3,
+    competitiveness_weight: float = COMPETITIVENESS_WEIGHT,
+    predictability_weight: float = PREDICTABILITY_WEIGHT,
+    skill_balance_weight: float = SKILL_BALANCE_WEIGHT,
+    sigma_pool: float | None = None,
 ) -> pd.DataFrame:
     """Return one row per encounter with the four sub-scores.
 
@@ -108,6 +138,10 @@ def compute_match_quality(
     ``away_avg_mu``, ``home_won`` (1/0/0.5/NaN), ``p_home_wins`` (optional).
     Required columns in ``match_scores``: ``encounter_id``, ``home_score``,
     ``away_score``.
+
+    ``sigma_pool`` controls the skill-balance scale; when omitted it is derived
+    from this field's own ``|home_avg_mu - away_avg_mu|`` distribution instead of
+    a fixed 300 (see :func:`_derive_sigma_pool`).
     """
     if encounters.empty:
         return pd.DataFrame(
@@ -119,6 +153,21 @@ def compute_match_quality(
                 "quality_score",
             ]
         )
+
+    if sigma_pool is None:
+        gaps = [
+            float(home) - float(away)
+            for home, away in zip(
+                encounters.get("home_avg_mu", pd.Series(dtype=float)),
+                encounters.get("away_avg_mu", pd.Series(dtype=float)),
+                strict=False,
+            )
+            if home is not None
+            and away is not None
+            and not pd.isna(home)
+            and not pd.isna(away)
+        ]
+        sigma_pool = _derive_sigma_pool(gaps)
 
     scores_by_enc: dict[int, list[tuple[int, int]]] = {}
     if not match_scores.empty:
@@ -138,6 +187,7 @@ def compute_match_quality(
         skill = _skill_balance(
             getattr(row, "home_avg_mu", None),
             getattr(row, "away_avg_mu", None),
+            sigma_pool=sigma_pool,
         )
         weighted = (
             competitiveness_weight * comp

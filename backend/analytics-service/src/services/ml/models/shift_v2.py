@@ -248,6 +248,8 @@ def _train_shift_v2_with_device(
 
     booster = lgb.LGBMRegressor(**_params(objective="regression_l1", device=device))
     fit_kwargs: dict[str, typing.Any] = {}
+    val_X: pd.DataFrame | None = None
+    val_target: pd.Series | None = None
     if val_df is not None and not val_df.empty:
         val = val_df.dropna(subset=["next_tournament_div", "current_div", "os_shift"])
         if not val.empty:
@@ -274,6 +276,21 @@ def _train_shift_v2_with_device(
     if not math.isfinite(r2):
         r2 = 0.0
     metrics = {"mae_train": mae, "r2_train": r2, "n_rows": float(len(labelled))}
+
+    # Held-out metrics on the validation tournament (when present).
+    if val_X is not None and val_target is not None and not val_target.empty:
+        val_pred = booster.predict(val_X)
+        val_resid = val_target.to_numpy() - val_pred
+        val_mae = float(np.mean(np.abs(val_resid)))
+        val_var = float(np.var(val_target.to_numpy()))
+        val_r2 = (
+            float(1 - np.sum(val_resid**2) / (len(val_target) * val_var))
+            if val_var > 0
+            else 0.0
+        )
+        metrics["mae_val"] = val_mae
+        metrics["r2_val"] = val_r2 if math.isfinite(val_r2) else 0.0
+        metrics["n_rows_val"] = float(len(val_target))
 
     try:
         importances = booster.booster_.feature_importance(importance_type="gain")

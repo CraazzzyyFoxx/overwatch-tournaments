@@ -3,13 +3,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import copysign
 from statistics import fmean
-from typing import Sequence
+from typing import Mapping, Sequence
 
 LOW_EVIDENCE_SHIFT_CAP = 1.5
 STABLE_SHIFT_SCALE = 6.25
 STABLE_SHRINKAGE_PRIOR = 1.5
 STABLE_SHIFT_CLAMP = 3.0
 TREND_SHIFT_CLAMP = 3.5
+
+# Relative weights of the three raw signal components. These were hand-picked
+# historically; ``fit_raw_signal_weights`` can refit them against realised
+# division moves so they stop being unvalidated magic numbers. Kept summing to
+# 1 so ``STABLE_SHIFT_SCALE`` keeps the same meaning regardless of the split.
+RAW_SIGNAL_WEIGHTS: Mapping[str, float] = {
+    "map_diff": 0.50,
+    "placement_score": 0.35,
+    "log_residual": 0.15,
+}
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -44,8 +54,14 @@ def _weight(signal: TournamentSignal) -> float:
     return signal.recency_decay * signal.coverage_weight * signal.newcomer_weight
 
 
-def _raw_signal(signal: TournamentSignal) -> float:
-    return 0.50 * signal.map_diff + 0.35 * signal.placement_score + 0.15 * signal.log_residual
+def _raw_signal(
+    signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS
+) -> float:
+    return (
+        weights["map_diff"] * signal.map_diff
+        + weights["placement_score"] * signal.placement_score
+        + weights["log_residual"] * signal.log_residual
+    )
 
 
 def _ema(values: Sequence[float], period: int) -> float:
@@ -73,10 +89,48 @@ def _apply_low_evidence_cap(value: float, *, sample_tournaments: int, effective_
     return value
 
 
+def fit_raw_signal_weights(
+    components: Sequence[Sequence[float]],
+    realised: Sequence[float],
+    *,
+    min_samples: int = 30,
+) -> dict[str, float]:
+    """Refit the raw-signal weights against realised division moves.
+
+    ``components`` is an ``(n, 3)`` matrix of ``(map_diff, placement_score,
+    log_residual)`` and ``realised`` the per-row realised stable shift. Uses
+    non-negative least squares and normalises the coefficients to sum to 1 so
+    the fitted weights drop into :data:`RAW_SIGNAL_WEIGHTS` without rescaling
+    ``STABLE_SHIFT_SCALE``. Falls back to the current defaults when there is too
+    little data or the fit is degenerate. Offline helper — callers persist the
+    result to config rather than hardcoding new literals.
+    """
+    import numpy as np
+    from scipy.optimize import nnls
+
+    matrix = np.asarray(components, dtype=float)
+    target = np.asarray(realised, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[1] != 3 or len(target) < min_samples:
+        return dict(RAW_SIGNAL_WEIGHTS)
+
+    coef, _ = nnls(matrix, target)
+    total = float(coef.sum())
+    if not np.isfinite(total) or total <= 1e-9:
+        return dict(RAW_SIGNAL_WEIGHTS)
+
+    weights = coef / total
+    return {
+        "map_diff": float(weights[0]),
+        "placement_score": float(weights[1]),
+        "log_residual": float(weights[2]),
+    }
+
+
 def score_history(
     signals: Sequence[TournamentSignal],
     *,
     openskill_shift: float | None = None,
+    weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS,
 ) -> LinearAnalyticsMetrics:
     if not signals:
         return LinearAnalyticsMetrics(
@@ -90,15 +144,17 @@ def score_history(
             log_coverage=0.0,
         )
 
-    weights = [_weight(signal) for signal in signals]
-    raws = [_raw_signal(signal) for signal in signals]
+    evidence_weights = [_weight(signal) for signal in signals]
+    raws = [_raw_signal(signal, weights) for signal in signals]
 
-    effective_evidence = sum(weights)
+    effective_evidence = sum(evidence_weights)
     sample_tournaments = len(signals)
     sample_matches = sum(max(signal.match_count, 0) for signal in signals)
     log_coverage = fmean(signal.log_available for signal in signals)
 
-    weighted_raw = sum(weight * raw for weight, raw in zip(weights, raws, strict=True))
+    weighted_raw = sum(
+        weight * raw for weight, raw in zip(evidence_weights, raws, strict=True)
+    )
     stable_shift = clamp(
         STABLE_SHIFT_SCALE * weighted_raw / (STABLE_SHRINKAGE_PRIOR + effective_evidence),
         -STABLE_SHIFT_CLAMP,

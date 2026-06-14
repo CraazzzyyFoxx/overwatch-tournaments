@@ -8,7 +8,7 @@ from unittest import TestCase
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "parser-service"))
+sys.path.insert(0, str(backend_root / "analytics-service"))
 
 os.environ.setdefault("PROJECT_URL", "http://localhost")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -173,3 +173,41 @@ class LinearAnalyticsTests(TestCase):
         )
 
         self.assertLess(conflicting.confidence, aligned.confidence)
+
+    def test_custom_weights_change_stable_shift(self) -> None:
+        signals = [self.signal(map_diff=1.0, placement_score=0.0, log_residual=0.0)]
+
+        default = linear.score_history(signals)
+        # All weight on log_residual (which is 0 here) ⇒ raw signal collapses.
+        log_only = linear.score_history(
+            signals,
+            weights={"map_diff": 0.0, "placement_score": 0.0, "log_residual": 1.0},
+        )
+
+        self.assertGreater(abs(default.stable_shift), 0.0)
+        self.assertAlmostEqual(0.0, log_only.stable_shift, places=6)
+
+    def test_default_weights_sum_to_one(self) -> None:
+        self.assertAlmostEqual(1.0, sum(linear.RAW_SIGNAL_WEIGHTS.values()), places=6)
+
+
+class FitRawSignalWeightsTests(TestCase):
+    def test_recovers_known_weights_on_clean_data(self) -> None:
+        import numpy as np
+
+        rng = np.random.default_rng(0)
+        components = rng.uniform(-1.0, 1.0, size=(400, 3))
+        # realised = 0.6*map_diff + 0.3*placement + 0.1*log_residual (sums to 1).
+        realised = components @ np.array([0.6, 0.3, 0.1])
+
+        weights = linear.fit_raw_signal_weights(components, realised)
+
+        self.assertAlmostEqual(0.6, weights["map_diff"], places=2)
+        self.assertAlmostEqual(0.3, weights["placement_score"], places=2)
+        self.assertAlmostEqual(0.1, weights["log_residual"], places=2)
+        self.assertAlmostEqual(1.0, sum(weights.values()), places=6)
+
+    def test_falls_back_to_defaults_on_too_few_samples(self) -> None:
+        weights = linear.fit_raw_signal_weights([[1.0, 0.0, 0.0]], [0.5])
+
+        self.assertEqual(dict(linear.RAW_SIGNAL_WEIGHTS), weights)

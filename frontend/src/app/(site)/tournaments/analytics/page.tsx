@@ -10,6 +10,8 @@ import AnalyticsKpiStrip from "@/app/(site)/tournaments/analytics/components/Ana
 import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
 import AnalyticsHorizon from "@/app/(site)/tournaments/analytics/components/AnalyticsHorizon";
 import AnalyticsInsights from "@/app/(site)/tournaments/analytics/components/AnalyticsInsights";
+import StandingsDistributionCard from "@/app/(site)/tournaments/analytics/components/StandingsDistributionCard";
+import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/MatchQualityCard";
 import MLAdminToolbar from "@/app/(site)/tournaments/analytics/components/MLAdminToolbar";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
@@ -55,8 +57,13 @@ const AnalyticsPage = () => {
     isLoading: loadingAlgorithms,
     isError: isErrorAlgorithms
   } = useQuery({
-    queryKey: ["analytics", "algorithms"],
-    queryFn: () => analyticsService.getAlgorithms()
+    // Keyed by tournament so each list carries `has_data` for that tournament,
+    // letting the default prefer "OpenSkill + ML" only when it is populated.
+    // Keep the previous list while refetching on a tournament switch so the
+    // algorithm stays "known" (no stale-id analytics flash before has_data lands).
+    queryKey: ["analytics", "algorithms", tournamentId],
+    queryFn: () => analyticsService.getAlgorithms(tournamentId),
+    placeholderData: (previousData) => previousData
   });
 
   const availableAlgorithms = useMemo(
@@ -93,6 +100,20 @@ const AnalyticsPage = () => {
         (performanceRows ?? []).map((row) => [row.player_id, row])
       ),
     [performanceRows]
+  );
+
+  // Monte Carlo standings distribution — same query key as
+  // StandingsDistributionCard so react-query serves both from one request.
+  const { data: standingsRows } = useQuery({
+    queryKey: ["analytics-standings-distribution", tournamentId, undefined],
+    queryFn: () => analyticsService.getStandingsDistribution(tournamentId!),
+    enabled: tournamentId != null,
+    staleTime: 60_000
+  });
+
+  const distributionByTeam = useMemo(
+    () => new Map((standingsRows ?? []).map((row) => [row.team_id, row])),
+    [standingsRows]
   );
 
   const activeTournament = useMemo(() => {
@@ -210,11 +231,21 @@ const AnalyticsPage = () => {
       ) : (
         <>
           <AnalyticsKpiStrip summary={analytics.summary} teams={analytics.teams} />
-          <AnalyticsStandings teams={analytics.teams} performanceByPlayer={performanceByPlayer} />
+          <AnalyticsStandings
+            teams={analytics.teams}
+            performanceByPlayer={performanceByPlayer}
+            distributionByTeam={distributionByTeam}
+          />
           <div className={styles.split}>
             <AnalyticsHorizon teams={analytics.teams} />
             <AnalyticsInsights teams={analytics.teams} />
           </div>
+          {tournamentId != null ? (
+            <div className={styles.split}>
+              <StandingsDistributionCard tournamentId={tournamentId} teams={analytics.teams} />
+              <MatchQualityCard tournamentId={tournamentId} />
+            </div>
+          ) : null}
         </>
       )}
     </div>

@@ -238,23 +238,44 @@ def _average(values: typing.Iterable[float]) -> float:
 
 
 async def to_pydantic(
-    session: AsyncSession, algorithm: models.AnalyticsAlgorithm
+    session: AsyncSession,
+    algorithm: models.AnalyticsAlgorithm,
+    *,
+    has_data: bool | None = None,
 ) -> schemas.AnalyticsAlgorithmRead:
     return schemas.AnalyticsAlgorithmRead(
         id=algorithm.id,
         created_at=algorithm.created_at,
         updated_at=algorithm.updated_at,
         name=algorithm.name,
+        has_data=has_data,
     )
 
 
 async def get_algorithms(
-    session: AsyncSession, params: pagination.PaginationParams
+    session: AsyncSession,
+    params: pagination.PaginationParams,
+    *,
+    tournament_id: int | None = None,
 ) -> pagination.Paginated[schemas.AnalyticsAlgorithmRead]:
     algorithms = await service.get_algorithms(session)
+    ids_with_data: set[int] | None = None
+    if tournament_id is not None:
+        ids_with_data = await service.get_algorithm_ids_with_shift_data(
+            session, tournament_id
+        )
     return pagination.Paginated(
         total=len(algorithms),
-        results=[await to_pydantic(session, algorithm) for algorithm in algorithms],
+        results=[
+            await to_pydantic(
+                session,
+                algorithm,
+                has_data=(algorithm.id in ids_with_data)
+                if ids_with_data is not None
+                else None,
+            )
+            for algorithm in algorithms
+        ],
         page=params.page,
         per_page=params.per_page,
     )

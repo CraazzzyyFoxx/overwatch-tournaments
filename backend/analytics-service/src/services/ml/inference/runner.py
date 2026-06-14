@@ -27,6 +27,7 @@ from ..models.performance_v2 import (
     PerformanceModelV2,
     aggregate_to_tournament,
     impact_score_within_role,
+    stabilize_small_cohort_impact,
 )
 from ..models.shift_v2 import ShiftModelV2
 from ..models.standings_v2 import WinProbabilityModel, simulate_standings
@@ -204,6 +205,9 @@ async def run_performance_for_tournament(
         )
     )
     per_player = attach_local_performance(per_player)
+    # Small (tournament, role) cohorts get a smooth normal-CDF impact score
+    # instead of a coarse, unstable empirical percentile.
+    per_player = stabilize_small_cohort_impact(per_player)
 
     # Optional: SHAP top-5 contributions denormalised into ``top_features``.
     if include_shap:

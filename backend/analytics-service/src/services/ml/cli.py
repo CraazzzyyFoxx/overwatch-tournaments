@@ -81,6 +81,8 @@ async def _cmd_backtest(args: argparse.Namespace) -> int:
             cutoff_tournament_id=int(args.cutoff) if args.cutoff else None,
             workspace_id=args.workspace_id,
         )
+        if getattr(args, "persist", True):
+            await bt.persist_backtest_summary(session, report)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2, default=str)
@@ -119,6 +121,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("--window", type=int, default=5)
     p_bt.add_argument("--cutoff", default=None)
     p_bt.add_argument("--output", default=None)
+    p_bt.add_argument(
+        "--no-persist",
+        dest="persist",
+        action="store_false",
+        default=True,
+        help="Do not write the backtest summary into active artifact metrics",
+    )
 
     return parser
 

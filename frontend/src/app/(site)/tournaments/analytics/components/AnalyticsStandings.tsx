@@ -1,9 +1,16 @@
 import React, { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronRight, Minus } from "lucide-react";
-import { AnalyticsAnomaly, PerformanceV2, PlayerAnalytics, TeamAnalytics } from "@/types/analytics.types";
+import {
+  AnalyticsAnomaly,
+  PerformanceV2,
+  PlayerAnalytics,
+  StandingsDistribution,
+  TeamAnalytics
+} from "@/types/analytics.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { formatAnalyticsNumber, formatConfidencePercent } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import { sortTeamPlayers } from "@/utils/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -28,6 +35,7 @@ type SortMode = "standings" | "predicted" | "shift";
 interface AnalyticsStandingsProps {
   teams: TeamAnalytics[];
   performanceByPlayer: Map<number, PerformanceV2>;
+  distributionByTeam?: Map<number, StandingsDistribution>;
 }
 
 interface ShiftDomain {
@@ -311,7 +319,20 @@ const TeamDetail = ({
                     {formatAnalyticsNumber(player.points)}
                   </td>
                   <td className={styles.center}>
-                    {performance ? formatAnalyticsNumber(performance.impact_score, 0) : "-"}
+                    {performance ? (
+                      <span className="inline-flex items-center justify-center gap-1">
+                        {formatAnalyticsNumber(performance.impact_score, 0)}
+                        {/* No algorithmId: SHAP explanations are produced by the
+                            Performance ML v2 algorithm, not the selected shift
+                            algorithm, so the latest explanation is the right one. */}
+                        <ExplanationPopover
+                          playerId={player.id}
+                          tournamentId={player.tournament_id}
+                        />
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className={styles.center}>
                     {performance ? (
@@ -395,13 +416,15 @@ const TeamRow = ({
   open,
   onToggle,
   shiftDomain,
-  performanceByPlayer
+  performanceByPlayer,
+  distribution
 }: {
   team: TeamAnalytics;
   open: boolean;
   onToggle: () => void;
   shiftDomain: ShiftDomain;
   performanceByPlayer: Map<number, PerformanceV2>;
+  distribution?: StandingsDistribution;
 }) => {
   const groupName = team.group?.name ?? "-";
   const groupClass = groupName === "A"
@@ -452,7 +475,18 @@ const TeamRow = ({
           </div>
           <div className={styles.teamMeta}>
             <span>Group {groupName}</span>
-            <span>Predicted {team.predicted_place ?? "-"}</span>
+            {distribution ? (
+              <span
+                title={`Monte Carlo: mean ${distribution.mean_position.toFixed(1)}, P(top1) ${(distribution.prob_top1 * 100).toFixed(0)}%`}
+              >
+                Predicted {distribution.mean_position.toFixed(1)}{" "}
+                <span className="text-muted-foreground">
+                  (p10–p90 {distribution.p10_position.toFixed(0)}–{distribution.p90_position.toFixed(0)})
+                </span>
+              </span>
+            ) : (
+              <span>Predicted {team.predicted_place ?? "-"}</span>
+            )}
           </div>
         </div>
         <RoleLane team={team} />
@@ -516,7 +550,7 @@ const sortedTeams = (teams: TeamAnalytics[], mode: SortMode) => {
   );
 };
 
-const AnalyticsStandings = ({ teams, performanceByPlayer }: AnalyticsStandingsProps) => {
+const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: AnalyticsStandingsProps) => {
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
   const visibleTeams = useMemo(() => sortedTeams(teams, mode), [teams, mode]);
@@ -568,6 +602,7 @@ const AnalyticsStandings = ({ teams, performanceByPlayer }: AnalyticsStandingsPr
             onToggle={() => setExpandedId((current) => current === team.id ? null : team.id)}
             shiftDomain={shiftDomain}
             performanceByPlayer={performanceByPlayer}
+            distribution={distributionByTeam?.get(team.id)}
           />
         ))}
       </div>

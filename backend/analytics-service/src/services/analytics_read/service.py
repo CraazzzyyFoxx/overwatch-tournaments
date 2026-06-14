@@ -33,6 +33,23 @@ async def get_algorithms(
     return result.scalars().all()
 
 
+async def get_algorithm_ids_with_shift_data(
+    session: AsyncSession, tournament_id: int
+) -> set[int]:
+    """Return the algorithm IDs that have computed shift rows for a tournament.
+
+    Used to mark which algorithms are actually populated (e.g. ``OpenSkill + ML``
+    only after a v2 inference run) so the UI can prefer a richer algorithm by
+    default and fall back when it has no data yet.
+    """
+    result = await session.scalars(
+        sa.select(models.AnalyticsShift.algorithm_id)
+        .where(models.AnalyticsShift.tournament_id == tournament_id)
+        .distinct()
+    )
+    return {int(algorithm_id) for algorithm_id in result.all()}
+
+
 async def get_algorithm(session: AsyncSession, id: int) -> models.AnalyticsAlgorithm:
     query = sa.select(models.AnalyticsAlgorithm).where(
         models.AnalyticsAlgorithm.id == id,

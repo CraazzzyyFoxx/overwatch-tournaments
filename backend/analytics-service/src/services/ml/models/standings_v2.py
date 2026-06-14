@@ -232,21 +232,37 @@ def _round_robin_standings(
 ) -> dict[int, int]:
     """Return ``{team_id: position}`` from a list of ``(home, away, p_home)`` matchups.
 
-    Sampling: each match is decided by ``rng.random() < p_home``. Standings
-    are ranked by descending wins, ties broken randomly (stable per-call).
+    Sampling: each match is decided by ``rng.random() < p_home``. Standings are
+    ranked by descending wins, then by a **map differential** that mirrors real
+    Overwatch tie-breaking instead of a pure coin flip. Since we only model the
+    encounter winner (not the map score), the winner's map margin is sampled
+    1 or 2 with the probability of a 2-map ("clean sweep") win rising with the
+    **winner's own** win probability (``2·p_win − 1``): an expected win tends to
+    be dominant, while a fluke upset stays a narrow 1-map win (``2·p_win − 1 ≤ 0``
+    ⇒ always margin 1). So a team that wins its matches more convincingly edges
+    ahead of an equal-win team; a random shuffle still breaks exact
+    ``(wins, map_diff)`` ties fairly.
     """
     wins = dict.fromkeys(team_ids, 0)
+    map_diff: dict[int, int] = dict.fromkeys(team_ids, 0)
     for home, away, p_home in matches:
         if home not in wins or away not in wins:
             continue
         if rng.random() < p_home:
-            wins[home] = wins[home] + 1
+            winner, loser, p_win = home, away, p_home
         else:
-            wins[away] = wins[away] + 1
-    # Sort: more wins → better position; tie-break by deterministic shuffle.
+            winner, loser, p_win = away, home, 1.0 - p_home
+        # Margin reflects the winner's dominance, not the matchup's a-priori
+        # spread — so an upset win is recorded as narrow, not a 2-0 sweep.
+        margin = 2 if rng.random() < (2.0 * p_win - 1.0) else 1
+        wins[winner] += 1
+        map_diff[winner] += margin
+        map_diff[loser] -= margin
+    # Sort: more wins → better position; map differential breaks win ties; a
+    # shuffle only decides exact (wins, map_diff) ties.
     keys = list(wins.keys())
     rng.shuffle(keys)
-    sorted_teams = sorted(keys, key=lambda tid: -wins[tid])
+    sorted_teams = sorted(keys, key=lambda tid: (-wins[tid], -map_diff[tid]))
     return {tid: idx + 1 for idx, tid in enumerate(sorted_teams)}
 
 

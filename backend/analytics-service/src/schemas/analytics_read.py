@@ -19,6 +19,9 @@ __all__ = (
 
 class AnalyticsAlgorithmRead(BaseRead):
     name: str
+    # Whether this algorithm has computed shift rows for the queried tournament.
+    # ``None`` when the algorithms were listed without a tournament context.
+    has_data: bool | None = None
 
 
 class AnalyticsAnomaly(BaseModel):

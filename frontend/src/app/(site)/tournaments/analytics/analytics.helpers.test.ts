@@ -12,12 +12,32 @@ describe("analytics helpers", () => {
     expect(canShowAnalyticsAdminToolbar(false)).toBe(false);
   });
 
-  it("prefers Linear as the default analytics algorithm", () => {
+  it("prefers Linear as the default analytics algorithm without tournament data", () => {
     expect(
       getPreferredAnalyticsAlgorithmId([
         { id: 1, name: "Points" },
         { id: 2, name: "OpenSkill + ML" },
         { id: 3, name: "Linear" },
+      ]),
+    ).toBe(3);
+  });
+
+  it("prefers OpenSkill + ML when it has computed data for the tournament", () => {
+    expect(
+      getPreferredAnalyticsAlgorithmId([
+        { id: 1, name: "Points", has_data: true },
+        { id: 2, name: "OpenSkill + ML", has_data: true },
+        { id: 3, name: "Linear", has_data: true },
+      ]),
+    ).toBe(2);
+  });
+
+  it("falls back to Linear when OpenSkill + ML has no data yet", () => {
+    expect(
+      getPreferredAnalyticsAlgorithmId([
+        { id: 1, name: "Points", has_data: true },
+        { id: 2, name: "OpenSkill + ML", has_data: false },
+        { id: 3, name: "Linear", has_data: true },
       ]),
     ).toBe(3);
   });

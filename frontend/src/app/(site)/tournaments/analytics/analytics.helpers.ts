@@ -6,6 +6,11 @@ const RECOMMENDED_ALGORITHM_ORDER = [
   "OpenSkill + ML",
 ] as const;
 
+// The ML shift algorithm is preferred as the default *when it has data* for the
+// tournament — it consumes Performance v2 and is the richest signal. Until a v2
+// inference run populates it, the display/fallback order above still applies.
+export const PREFERRED_ML_ALGORITHM_NAME = "OpenSkill + ML";
+
 const algorithmPriority = new Map<string, number>(
   RECOMMENDED_ALGORITHM_ORDER.map((name, index) => [name, index]),
 );
@@ -28,6 +33,14 @@ export function sortAnalyticsAlgorithms(
 export function getPreferredAnalyticsAlgorithmId(
   algorithms: AlgorithmAnalytics[],
 ): number | null {
+  // Prefer the ML shift algorithm when it has computed data for the tournament;
+  // otherwise fall back to the recommended display order (Linear › Points › ML).
+  const mlWithData = algorithms.find(
+    (algorithm) => algorithm.name === PREFERRED_ML_ALGORITHM_NAME && algorithm.has_data === true,
+  );
+  if (mlWithData) {
+    return mlWithData.id;
+  }
   return sortAnalyticsAlgorithms(algorithms)[0]?.id ?? null;
 }
 

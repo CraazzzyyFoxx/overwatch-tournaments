@@ -56,13 +56,16 @@ export default class analyticsService {
     }).then((response) => response.json());
   }
 
-  static async getAlgorithms(): Promise<PaginatedResponse<AlgorithmAnalytics>> {
+  static async getAlgorithms(
+    tournamentId?: number | null,
+  ): Promise<PaginatedResponse<AlgorithmAnalytics>> {
     return apiFetch("analytics", `analytics/algorithms`, {
       query: {
         page: 1,
         per_page: -1,
         sort: "id",
         order: "desc",
+        ...(tournamentId != null ? { tournament_id: tournamentId } : {}),
       },
     }).then((response) => response.json());
   }

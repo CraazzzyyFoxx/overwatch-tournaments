@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock
 
+import numpy as np
 import pandas as pd
 
 backend_root = Path(__file__).resolve().parents[2]
@@ -181,6 +182,98 @@ class ShiftTrainingDiagnosticsTests(TestCase):
         self.assertTrue(prepared_val.empty)
 
 
+class ShiftValidationMetricsTests(TestCase):
+    def _frame(self, n: int, *, seed: int) -> pd.DataFrame:
+        rng = np.random.default_rng(seed)
+        zscore = rng.normal(0.0, 1.0, n)
+        baseline = rng.uniform(-1.0, 1.0, n)
+        residual = 0.5 * zscore  # learnable signal in the residual
+        realised = baseline + residual
+        current_div = np.full(n, 10.0)
+        return pd.DataFrame(
+            {
+                "tournament_id": [seed] * n,
+                "current_div": current_div,
+                "next_tournament_div": current_div - realised,
+                "os_shift": baseline,
+                "linear_stable_shift": baseline,
+                "performance_v2_local_zscore": zscore,
+            }
+        )
+
+    def test_validation_frame_produces_held_out_metrics(self) -> None:
+        train_df = self._frame(60, seed=1)
+        val_df = self._frame(20, seed=2)
+
+        result = shift_v2.train_shift_v2(train_df, val_df=val_df)
+
+        self.assertIn("mae_val", result.metrics)
+        self.assertIn("r2_val", result.metrics)
+        self.assertEqual(20.0, result.metrics["n_rows_val"])
+
+    def test_no_validation_frame_omits_held_out_metrics(self) -> None:
+        result = shift_v2.train_shift_v2(self._frame(60, seed=3))
+
+        self.assertNotIn("mae_val", result.metrics)
+
+
+class ImpactScoreStabilizationTests(TestCase):
+    def test_small_cohort_uses_normal_cdf_of_local_zscore(self) -> None:
+        from scipy.special import ndtr
+
+        per_player = pd.DataFrame(
+            {
+                "tournament_id": [1, 1, 1],
+                "role": ["tank", "tank", "tank"],
+                "player_id": [10, 11, 12],
+                "raw_value": [0.3, 0.1, -0.2],
+                "impact_score": [100.0, 50.0, 0.0],  # coarse empirical percentile
+                "local_zscore": [1.2, 0.0, -0.8],
+            }
+        )
+
+        out = performance_v2.stabilize_small_cohort_impact(per_player, min_cohort=8)
+
+        expected = ndtr(np.array([1.2, 0.0, -0.8])) * 100.0
+        np.testing.assert_allclose(out["impact_score"].to_numpy(), expected, rtol=1e-6)
+        # The neutral player lands at ~50 instead of the coarse 50/100/0 ladder.
+        self.assertAlmostEqual(50.0, float(out["impact_score"].iloc[1]), places=4)
+
+    def test_large_cohort_keeps_empirical_percentile(self) -> None:
+        n = 10
+        per_player = pd.DataFrame(
+            {
+                "tournament_id": [1] * n,
+                "role": ["damage"] * n,
+                "player_id": list(range(n)),
+                "raw_value": np.linspace(-1, 1, n),
+                "impact_score": np.linspace(0, 100, n),
+                "local_zscore": np.linspace(-2, 2, n),
+            }
+        )
+
+        out = performance_v2.stabilize_small_cohort_impact(per_player, min_cohort=8)
+
+        # Cohort of 10 >= min_cohort ⇒ empirical impact_score is untouched.
+        np.testing.assert_allclose(
+            out["impact_score"].to_numpy(), np.linspace(0, 100, n)
+        )
+
+    def test_noop_without_local_zscore(self) -> None:
+        per_player = pd.DataFrame(
+            {
+                "tournament_id": [1, 1],
+                "role": ["tank", "tank"],
+                "player_id": [1, 2],
+                "impact_score": [25.0, 75.0],
+            }
+        )
+
+        out = performance_v2.stabilize_small_cohort_impact(per_player)
+
+        np.testing.assert_allclose(out["impact_score"].to_numpy(), [25.0, 75.0])
+
+
 class PerformanceBaselineTests(TestCase):
     def test_logistic_baseline_scales_features(self) -> None:
         frame = pd.DataFrame(
@@ -199,3 +292,46 @@ class PerformanceBaselineTests(TestCase):
             1000,
             baseline.named_steps["logisticregression"].max_iter,
         )
+
+    def test_single_class_falls_back_to_constant_baseline(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "team_avg_mu": [1500.0, 1600.0],
+                "opp_avg_mu": [1600.0, 1500.0],
+                "mu_gap": [-100.0, 100.0],
+                "won": [1, 1],
+            }
+        )
+
+        y_perf, baseline = performance_v2.build_target(frame)
+
+        self.assertIsInstance(baseline, performance_v2._ConstantClassifier)
+        self.assertEqual(2, len(y_perf))
+
+    def test_target_uses_out_of_fold_probabilities(self) -> None:
+        rng = np.random.default_rng(0)
+        won = np.array([0] * 20 + [1] * 20)
+        mu = np.concatenate([rng.normal(-1.0, 1.0, 20), rng.normal(1.0, 1.0, 20)])
+        frame = pd.DataFrame(
+            {"team_avg_mu": mu, "opp_avg_mu": -mu, "mu_gap": 2 * mu, "won": won}
+        )
+
+        y_perf, baseline = performance_v2.build_target(frame)
+
+        # Reconstruct the expected out-of-fold residual with the same estimator,
+        # folds and seed; build_target must match it (i.e. not be in-sample).
+        from sklearn.model_selection import StratifiedKFold, cross_val_predict
+
+        X = frame[["team_avg_mu", "opp_avg_mu", "mu_gap"]].to_numpy()
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+        expected_oof = cross_val_predict(
+            performance_v2._make_logistic_baseline(),
+            X,
+            won,
+            cv=cv,
+            method="predict_proba",
+        )[:, 1]
+
+        np.testing.assert_allclose(y_perf.to_numpy(), won - expected_oof, rtol=1e-6)
+        # Baseline is still fit on all rows (usable for inference).
+        self.assertEqual((40, 2), baseline.predict_proba(X).shape)

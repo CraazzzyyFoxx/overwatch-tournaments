@@ -35,7 +35,9 @@ from dataclasses import dataclass, field
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from scipy.special import ndtr
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -48,6 +50,7 @@ __all__ = (
     "PerformanceTrainingResult",
     "train_performance_v2",
     "build_target",
+    "stabilize_small_cohort_impact",
 )
 
 logger = logging.getLogger(__name__)
@@ -76,11 +79,32 @@ def _make_logistic_baseline() -> typing.Any:
     return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, C=1.0))
 
 
+def _oof_baseline_proba(X: np.ndarray, y_win: np.ndarray) -> np.ndarray:
+    """Out-of-fold ``P(win)`` so the residual target is not fit in-sample.
+
+    Each row's probability comes from a baseline trained on the *other* folds,
+    removing the optimistic bias of predicting the same rows the model was fit
+    on. Falls back to an in-sample fit only when a class is too small to
+    stratify (rare, tiny tournaments).
+    """
+    counts = np.bincount(y_win)
+    min_class = int(counts[counts > 0].min()) if counts.size else 0
+    n_splits = min(5, min_class)
+    if n_splits < 2:
+        return _make_logistic_baseline().fit(X, y_win).predict_proba(X)[:, 1]
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
+    return cross_val_predict(
+        _make_logistic_baseline(), X, y_win, cv=cv, method="predict_proba"
+    )[:, 1]
+
+
 def build_target(df: pd.DataFrame) -> tuple[pd.Series, typing.Any]:
     """Fit the baseline and return ``(y_perf, baseline)``.
 
     ``y_perf`` ∈ [-1, 1] = observed map-win - baseline P(team wins | mu features).
-    The baseline is returned so it can be saved alongside the LGBM booster.
+    The probability that builds the target is computed **out-of-fold** to avoid
+    the baseline leaking each row's own outcome into its residual; the returned
+    baseline is still fit on all rows so it can be saved and reused at inference.
     """
     if df.empty:
         return pd.Series(dtype=float), _make_logistic_baseline()
@@ -88,16 +112,17 @@ def build_target(df: pd.DataFrame) -> tuple[pd.Series, typing.Any]:
     X = _safe_baseline_features(df).to_numpy()
     y_win = df["won"].astype(int).to_numpy()
 
-    baseline = _make_logistic_baseline()
     # When all labels are identical the LR fit is degenerate; fall back to a
-    # constant predictor.
+    # constant predictor (no cross-validation possible either).
     if len(set(y_win)) < 2:
         baseline = _ConstantClassifier(prior=float(np.mean(y_win) if len(y_win) else 0.5))
-    else:
-        baseline.fit(X, y_win)
+        baseline_p = baseline.predict_proba(X)[:, 1]
+        return pd.Series(y_win - baseline_p, index=df.index, name="y_perf"), baseline
 
-    baseline_p = baseline.predict_proba(X)[:, 1]
-    y_perf = pd.Series(y_win - baseline_p, index=df.index, name="y_perf")
+    oof_p = _oof_baseline_proba(X, y_win)
+    baseline = _make_logistic_baseline()
+    baseline.fit(X, y_win)
+    y_perf = pd.Series(y_win - oof_p, index=df.index, name="y_perf")
     return y_perf, baseline
 
 
@@ -260,13 +285,16 @@ def _train_performance_v2_with_device(
     main_params = _booster_params(objective="regression_l1", device=device)
     booster = lgb.LGBMRegressor(**main_params)
     fit_kwargs: dict[str, typing.Any] = {}
+    val_X: pd.DataFrame | None = None
+    val_y: np.ndarray | None = None
     if val_df is not None and not val_df.empty:
         val_role = val_df[val_df["role"].str.lower() == role.lower()].copy()
         if not val_role.empty:
             v_y, _ = build_target(val_role)
             val_role["_y"] = v_y.values
-            X_val = align_features(val_role, feature_order)
-            fit_kwargs["eval_set"] = [(X_val, val_role["_y"])]
+            val_X = align_features(val_role, feature_order)
+            val_y = val_role["_y"].to_numpy()
+            fit_kwargs["eval_set"] = [(val_X, val_role["_y"])]
             fit_kwargs["callbacks"] = [lgb.early_stopping(stopping_rounds=20, verbose=False)]
     booster.fit(X, role_df["_y"], **fit_kwargs)
 
@@ -300,6 +328,22 @@ def _train_performance_v2_with_device(
     metrics = {"mae_train": mae, "r2_train": r2, "n_rows": float(len(role_df))}
     if not math.isfinite(metrics["r2_train"]):
         metrics["r2_train"] = 0.0
+
+    # Honest held-out metrics when a validation tournament is available — these,
+    # not the in-sample ``*_train`` figures, reflect real generalisation.
+    if val_X is not None and val_y is not None and len(val_y) > 0:
+        val_pred = booster.predict(val_X)
+        val_resid = val_y - val_pred
+        val_mae = float(np.mean(np.abs(val_resid)))
+        val_var = float(np.var(val_y))
+        val_r2 = (
+            float(1 - np.sum(val_resid**2) / (len(val_y) * val_var))
+            if val_var > 0
+            else 0.0
+        )
+        metrics["mae_val"] = val_mae
+        metrics["r2_val"] = val_r2 if math.isfinite(val_r2) else 0.0
+        metrics["n_rows_val"] = float(len(val_y))
 
     importance = _feature_importance(booster, feature_order)
 
@@ -426,4 +470,32 @@ def impact_score_within_role(per_player: pd.DataFrame) -> pd.Series:
         ["tournament_id", "role"], dropna=False
     )["raw_value"].rank(pct=True) * 100.0
     out.name = "impact_score"
+    return out
+
+
+def stabilize_small_cohort_impact(
+    per_player: pd.DataFrame, *, min_cohort: int = 8
+) -> pd.DataFrame:
+    """Replace the noisy empirical percentile with a smooth one for tiny cohorts.
+
+    An empirical percentile rank over a handful of players collapses to a few
+    coarse values (0/25/50/75/100 for n=5) and is unstable. For
+    ``(tournament, role)`` groups smaller than ``min_cohort`` we instead map the
+    already shrunk ``local_zscore`` (see :mod:`local_performance`) through the
+    standard-normal CDF, so small samples are pulled toward a neutral 50 rather
+    than claiming spurious extremes. Larger cohorts keep the empirical rank.
+
+    Requires ``local_zscore`` (attached by ``attach_local_performance``); a
+    no-op when it is missing.
+    """
+    if per_player.empty or "local_zscore" not in per_player.columns:
+        return per_player
+    out = per_player.copy()
+    sizes = out.groupby(["tournament_id", "role"], dropna=False)["player_id"].transform(
+        "size"
+    )
+    small = sizes < min_cohort
+    if small.any():
+        z = pd.to_numeric(out.loc[small, "local_zscore"], errors="coerce").fillna(0.0)
+        out.loc[small, "impact_score"] = ndtr(z.to_numpy()) * 100.0
     return out

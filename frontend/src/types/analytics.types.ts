@@ -7,6 +7,13 @@ import { Player, Team } from "@/types/team.types";
 export interface AlgorithmAnalytics {
   id: number;
   name: string;
+  /**
+   * Whether this algorithm has computed shift rows for the queried tournament.
+   * Populated only when algorithms are fetched with a tournament context; used
+   * to prefer a richer algorithm (e.g. "OpenSkill + ML") as the default when it
+   * actually has data, and fall back otherwise.
+   */
+  has_data?: boolean | null;
 }
 
 export interface PlayerAnalytics extends Player {

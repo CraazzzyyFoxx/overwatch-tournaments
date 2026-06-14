@@ -38,9 +38,14 @@ async def get_one(
 )
 async def get_all_tournaments(
     params: pagination.PaginationQueryParams = Depends(),
+    tournament_id: int | None = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    return await analytics_flows.get_algorithms(session, pagination.PaginationParams.from_query_params(params))
+    return await analytics_flows.get_algorithms(
+        session,
+        pagination.PaginationParams.from_query_params(params),
+        tournament_id=tournament_id,
+    )
 
 
 @router.get(
