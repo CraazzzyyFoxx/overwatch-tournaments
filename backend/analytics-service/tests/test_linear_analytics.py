@@ -29,7 +29,8 @@ class LinearAnalyticsTests(TestCase):
     def signal(
         self,
         *,
-        perf_merit: float,
+        map_diff: float = 0.0,
+        placement_score: float = 0.0,
         recency_decay: float = 1.0,
         coverage_weight: float = 1.0,
         newcomer_weight: float = 1.0,
@@ -37,7 +38,8 @@ class LinearAnalyticsTests(TestCase):
         log_available: float = 1.0,
     ):
         return linear.TournamentSignal(
-            perf_merit=perf_merit,
+            map_diff=map_diff,
+            placement_score=placement_score,
             recency_decay=recency_decay,
             coverage_weight=coverage_weight,
             newcomer_weight=newcomer_weight,
@@ -46,7 +48,7 @@ class LinearAnalyticsTests(TestCase):
         )
 
     def test_first_tournament_shift_is_hard_capped(self) -> None:
-        metrics = linear.score_history([self.signal(perf_merit=1.0, match_count=3)])
+        metrics = linear.score_history([self.signal(map_diff=1.0, match_count=3)])
 
         self.assertEqual(1, metrics.sample_tournaments)
         self.assertLessEqual(abs(metrics.stable_shift), 1.5)
@@ -56,7 +58,7 @@ class LinearAnalyticsTests(TestCase):
         metrics = linear.score_history(
             [
                 self.signal(
-                    perf_merit=1.0,
+                    map_diff=1.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     match_count=3,
@@ -70,8 +72,8 @@ class LinearAnalyticsTests(TestCase):
     def test_trend_requires_three_tournaments(self) -> None:
         short_history = linear.score_history(
             [
-                self.signal(perf_merit=0.3),
-                self.signal(perf_merit=0.4, recency_decay=0.85),
+                self.signal(map_diff=0.3),
+                self.signal(map_diff=0.4, recency_decay=0.85),
             ]
         )
 
@@ -80,14 +82,14 @@ class LinearAnalyticsTests(TestCase):
     def test_newcomer_weight_damps_shift_and_evidence(self) -> None:
         veteran = linear.score_history(
             [
-                self.signal(perf_merit=0.6),
-                self.signal(perf_merit=0.5, recency_decay=0.85),
+                self.signal(map_diff=0.6),
+                self.signal(map_diff=0.5, recency_decay=0.85),
             ]
         )
         newcomer = linear.score_history(
             [
-                self.signal(perf_merit=0.6, newcomer_weight=0.75),
-                self.signal(perf_merit=0.5, recency_decay=0.85, newcomer_weight=0.75),
+                self.signal(map_diff=0.6, newcomer_weight=0.75),
+                self.signal(map_diff=0.5, recency_decay=0.85, newcomer_weight=0.75),
             ]
         )
 
@@ -98,13 +100,13 @@ class LinearAnalyticsTests(TestCase):
         metrics = linear.score_history(
             [
                 self.signal(
-                    perf_merit=0.0,
+                    map_diff=0.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     match_count=2,
                 ),
                 self.signal(
-                    perf_merit=0.0,
+                    map_diff=0.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     recency_decay=0.85,
@@ -120,8 +122,8 @@ class LinearAnalyticsTests(TestCase):
     def test_hybrid_stays_close_to_stable_when_match_sample_is_low(self) -> None:
         metrics = linear.score_history(
             [
-                self.signal(perf_merit=0.2, match_count=1),
-                self.signal(perf_merit=0.3, match_count=1, recency_decay=0.85),
+                self.signal(map_diff=0.2, match_count=1),
+                self.signal(map_diff=0.3, match_count=1, recency_decay=0.85),
             ],
             openskill_shift=1.8,
         )
@@ -129,11 +131,13 @@ class LinearAnalyticsTests(TestCase):
         self.assertLess(abs(metrics.hybrid_shift - metrics.stable_shift), 0.1)
 
     def test_custom_weights_change_stable_shift(self) -> None:
-        signals = [self.signal(perf_merit=1.0)]
+        signals = [self.signal(map_diff=1.0)]
 
         default = linear.score_history(signals)
-        # Zero weight on the only signal ⇒ the raw signal collapses to 0.
-        zeroed = linear.score_history(signals, weights={"perf_merit": 0.0})
+        # Zero weight on every team component ⇒ the raw signal collapses to 0.
+        zeroed = linear.score_history(
+            signals, weights={"map_diff": 0.0, "placement_score": 0.0}
+        )
 
         self.assertGreater(abs(default.stable_shift), 0.0)
         self.assertAlmostEqual(0.0, zeroed.stable_shift, places=6)
@@ -144,32 +148,11 @@ class LinearAnalyticsTests(TestCase):
     def test_shift_scale_scales_stable_shift_linearly(self) -> None:
         # A small signal stays well below the clamps, so doubling the scale
         # doubles the stable shift.
-        signals = [self.signal(perf_merit=0.2)]
+        signals = [self.signal(map_diff=0.2)]
         base = linear.score_history(signals, shift_scale=1.0)
         doubled = linear.score_history(signals, shift_scale=2.0)
 
         self.assertAlmostEqual(2.0 * base.stable_shift, doubled.stable_shift, places=6)
-
-
-class SuggestShiftScaleTests(TestCase):
-    def test_matches_percentile_spread(self) -> None:
-        # Unit Linear |shift| P90 = 0.2, merit |shift| P90 = 0.6 ⇒ scale 3.0.
-        unit = [0.2] * 50
-        merit = [0.6] * 50
-
-        scale = linear.suggest_shift_scale(unit, merit)
-
-        self.assertAlmostEqual(3.0, scale, places=6)
-
-    def test_falls_back_on_too_few_samples(self) -> None:
-        scale = linear.suggest_shift_scale([0.2, 0.1], [0.6, 0.3], fallback=6.25)
-
-        self.assertEqual(6.25, scale)
-
-    def test_falls_back_on_degenerate_linear_spread(self) -> None:
-        scale = linear.suggest_shift_scale([0.0] * 40, [0.5] * 40, fallback=6.25)
-
-        self.assertEqual(6.25, scale)
 
 
 class FitRawSignalWeightsTests(TestCase):

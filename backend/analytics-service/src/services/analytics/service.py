@@ -265,26 +265,6 @@ async def lookback_start_tournament_id(
     return min(ids) if ids else int(end_tournament_id)
 
 
-async def get_performance_merit(session: AsyncSession) -> dict[int, float]:
-    """Return ``{player_id: local_zscore}`` from materialised Performance v2 rows.
-
-    ``local_zscore`` is the player's **context-adjusted individual** impact —
-    their contribution to winning above what their team's and opponents' strength
-    predicted (the Performance v2 target is ``won − baseline_win_prob`` fit over
-    team/opp mu), standardised against the same-role + nearby-division cohort.
-    Used as the individual core of the Linear shift signal so team strength
-    enters as *context*, not as the signal. Players without a Performance v2 row
-    are simply absent; callers fall back to the context-blind log residual.
-    """
-    rows = await session.execute(
-        sa.select(
-            models.AnalyticsPerformance.player_id,
-            models.AnalyticsPerformance.local_zscore,
-        ).where(models.AnalyticsPerformance.local_zscore.isnot(None))
-    )
-    return {int(player_id): float(zscore) for player_id, zscore in rows.all()}
-
-
 async def get_algorithm(session: AsyncSession, name: str) -> models.AnalyticsAlgorithm:
     query = sa.select(models.AnalyticsAlgorithm).where(models.AnalyticsAlgorithm.name == name)
     result = await session.execute(query)

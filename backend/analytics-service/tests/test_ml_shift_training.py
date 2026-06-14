@@ -34,14 +34,6 @@ shift_v2 = importlib.import_module("src.services.ml.models.shift_v2")
 orchestrator = importlib.import_module("src.services.ml.training.orchestrator")
 
 
-class _ConstantBooster:
-    def __init__(self, value: float) -> None:
-        self.value = value
-
-    def predict(self, frame: pd.DataFrame):
-        return [self.value] * len(frame)
-
-
 class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
     async def test_explicit_history_horizon_keeps_sparse_future_tournament_labels(self) -> None:
         rows = [
@@ -83,150 +75,116 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
         self.assertIn(20, params.values())
 
 
-class ShiftTrainingDiagnosticsTests(TestCase):
-    def test_shift_feature_order_includes_level_adjusted_performance(self) -> None:
-        self.assertIn("linear_stable_shift", shift_v2.SHIFT_FEATURE_ORDER)
-        self.assertIn("linear_confidence", shift_v2.SHIFT_FEATURE_ORDER)
-        self.assertIn("performance_v2_local_residual", shift_v2.SHIFT_FEATURE_ORDER)
-        self.assertIn("performance_v2_local_zscore", shift_v2.SHIFT_FEATURE_ORDER)
-        self.assertIn("performance_v2_local_percentile", shift_v2.SHIFT_FEATURE_ORDER)
+class ShiftBlendTests(TestCase):
+    def test_blend_columns_cover_team_os_and_impact(self) -> None:
+        self.assertIn("linear_stable_shift", shift_v2.SHIFT_BLEND_COLUMNS)
+        self.assertIn("os_shift", shift_v2.SHIFT_BLEND_COLUMNS)
+        self.assertIn("performance_v2_local_zscore", shift_v2.SHIFT_BLEND_COLUMNS)
 
-    def test_empty_label_error_when_no_performance_rows(self) -> None:
-        # No Performance v2 merit label anywhere → nothing to supervise.
-        frame = pd.DataFrame(
-            {
-                "current_div": [4.0],
-                "os_shift": [0.5],
-            }
-        )
+    def test_empty_label_error_when_no_realised_move(self) -> None:
+        # No realised-move label (current_div / next_tournament_div) → nothing to fit.
+        frame = pd.DataFrame({"linear_stable_shift": [0.5], "os_shift": [0.4]})
 
-        with self.assertRaisesRegex(
-            ValueError, r"rows with Performance v2: 0"
-        ):
+        with self.assertRaisesRegex(ValueError, r"no labelled rows"):
             shift_v2.train_shift_v2(frame)
 
-    def test_merit_target_scales_context_adjusted_overperformance(self) -> None:
-        # Merit comes from Performance v2 local_zscore (context-adjusted), not the
-        # realised next-tournament move. +2σ ≈ +1 division at the default scale.
-        frame = pd.DataFrame({"performance_v2_local_zscore": [2.0, 0.0, -1.0]})
-
-        target = shift_v2.build_merit_target(frame, merit_scale=0.5)
-
-        self.assertAlmostEqual(1.0, float(target.iloc[0]))  # overperformer → up
-        self.assertAlmostEqual(0.0, float(target.iloc[1]))  # average → no move
-        self.assertAlmostEqual(-0.5, float(target.iloc[2]))  # underperformer → down
-
-    def test_merit_target_is_dense_independent_of_realised_move(self) -> None:
-        # Even when the player did NOT change division (the old target would be 0),
-        # a strong individual performance still yields a positive merit signal.
+    def test_blend_is_weighted_team_os_impact(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
         frame = pd.DataFrame(
             {
-                "current_div": [10.0],
-                "next_tournament_div": [10.0],  # no realised move
-                "performance_v2_local_zscore": [2.0],
-            }
-        )
-
-        target = shift_v2.build_merit_target(frame, merit_scale=0.5)
-
-        self.assertGreater(float(target.iloc[0]), 0.5)
-
-    def test_residual_target_is_merit_minus_baseline(self) -> None:
-        frame = pd.DataFrame(
-            {
-                "performance_v2_local_zscore": [2.0],
-                "os_shift": [-1.0],
-                "linear_stable_shift": [0.4],
-            }
-        )
-
-        # merit = 0.5 * 2.0 = 1.0; baseline = linear_stable_shift = 0.4.
-        target = shift_v2.build_residual_target(frame, merit_scale=0.5)
-
-        self.assertAlmostEqual(0.6, float(target.iloc[0]))
-
-    def test_prediction_anchors_to_linear_stable_baseline(self) -> None:
-        model = shift_v2.ShiftModelV2(
-            booster=_ConstantBooster(0.0),
-            booster_q10=_ConstantBooster(-0.1),
-            booster_q90=_ConstantBooster(0.1),
-        )
-        frame = pd.DataFrame(
-            {
-                "os_shift": [-2.5],
                 "linear_stable_shift": [1.0],
-                "linear_confidence": [0.8],
+                "os_shift": [-2.0],
+                "performance_v2_local_zscore": [0.0],
                 "tournaments_played": [3],
                 "is_newcomer": [False],
             }
         )
 
-        prediction = model.predict_with_confidence(frame)
+        shift = float(model.predict(frame).iloc[0])
+        # 0.6*1.0 + 0.3*(-2.0) + 0.1*0 = 0.0
+        self.assertAlmostEqual(0.0, shift, places=6)
 
-        self.assertAlmostEqual(1.0, float(prediction["shift_v2"].iloc[0]))
-        self.assertLess(float(prediction["confidence"].iloc[0]), 1.0)
+    def test_individual_modulation_is_bounded_and_cannot_flip_team(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
+        base = {
+            "linear_stable_shift": [2.0],
+            "os_shift": [2.0],
+            "tournaments_played": [3],
+            "is_newcomer": [False],
+        }
+        hi = model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [10.0]}))
+        lo = model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [-10.0]}))
+        # Even a huge |z| moves the shift by at most w_impact * 2*INDIV_MOD_CLAMP.
+        self.assertLessEqual(
+            abs(float(hi.iloc[0]) - float(lo.iloc[0])),
+            0.1 * 2 * shift_v2.INDIV_MOD_CLAMP + 1e-9,
+        )
+        # The strong positive team signal stays positive regardless of impact.
+        self.assertGreater(float(lo.iloc[0]), 0.0)
 
-    def test_validation_rows_are_reused_when_they_are_the_only_labelled_rows(self) -> None:
-        # "Labelled" now means a Performance v2 merit row (has_perf_v2). The train
-        # frame has none; the validation frame is the only supervised one.
-        train_df = pd.DataFrame(
+    def test_newcomer_uses_clipped_team_baseline(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.6, w_os=0.3, w_impact=0.1)
+        frame = pd.DataFrame(
             {
-                "tournament_id": [62],
-                "has_perf_v2": [False],
-                "os_shift": [0.2],
+                "linear_stable_shift": [2.0],
+                "os_shift": [-2.5],
+                "performance_v2_local_zscore": [3.0],
+                "tournaments_played": [1],  # newcomer
+                "is_newcomer": [True],
             }
         )
+
+        # Newcomer → clipped team baseline (2.0 → 1.5), ignoring os/impact.
+        self.assertAlmostEqual(1.5, float(model.predict(frame).iloc[0]), places=6)
+
+    def test_validation_rows_are_reused_when_they_are_the_only_labelled_rows(self) -> None:
+        # "Labelled" = has the realised-move label (current_div + next_tournament_div).
+        train_df = pd.DataFrame(
+            {"tournament_id": [62], "current_div": [None], "next_tournament_div": [6.0]}
+        )
         val_df = pd.DataFrame(
-            {
-                "tournament_id": [63],
-                "has_perf_v2": [True],
-                "performance_v2_local_zscore": [1.1],
-                "os_shift": [0.3],
-            }
+            {"tournament_id": [63], "current_div": [6.0], "next_tournament_div": [5.0]}
         )
 
         prepared_train, prepared_val = orchestrator._prepare_shift_training_frames(
-            train_df,
-            val_df,
+            train_df, val_df
         )
 
         self.assertEqual([63], prepared_train["tournament_id"].tolist())
         self.assertTrue(prepared_val.empty)
 
 
-class ShiftValidationMetricsTests(TestCase):
+class ShiftFitTests(TestCase):
     def _frame(self, n: int, *, seed: int) -> pd.DataFrame:
         rng = np.random.default_rng(seed)
-        zscore = rng.normal(0.0, 1.0, n)
-        baseline = rng.uniform(-1.0, 1.0, n)
-        residual = 0.5 * zscore  # learnable signal in the residual
-        realised = baseline + residual
+        team = rng.uniform(-1.5, 1.5, n)  # team-result drives the realised move
         current_div = np.full(n, 10.0)
         return pd.DataFrame(
             {
                 "tournament_id": [seed] * n,
                 "current_div": current_div,
-                "next_tournament_div": current_div - realised,
-                "os_shift": baseline,
-                "linear_stable_shift": baseline,
-                "performance_v2_local_zscore": zscore,
+                "next_tournament_div": current_div - team,  # realised = team
+                "linear_stable_shift": team,
+                "os_shift": rng.normal(0.0, 0.2, n),
+                "performance_v2_local_zscore": rng.normal(0.0, 1.0, n),
             }
         )
 
-    def test_validation_frame_produces_held_out_metrics(self) -> None:
-        train_df = self._frame(60, seed=1)
-        val_df = self._frame(20, seed=2)
+    def test_fit_makes_team_weight_dominant(self) -> None:
+        result = shift_v2.train_shift_v2(self._frame(120, seed=1))
+        m = result.metrics
+        self.assertGreater(m["w_team"], m["w_os"])
+        self.assertGreater(m["w_team"], m["w_impact"])
+        self.assertAlmostEqual(1.0, m["w_team"] + m["w_os"] + m["w_impact"], places=6)
 
-        result = shift_v2.train_shift_v2(train_df, val_df=val_df)
+    def test_validation_frame_produces_held_out_metric(self) -> None:
+        result = shift_v2.train_shift_v2(self._frame(120, seed=1), val_df=self._frame(40, seed=2))
+        self.assertIn("mae_vs_realised_val", result.metrics)
+        self.assertEqual(40.0, result.metrics["n_rows_val"])
 
-        self.assertIn("mae_val", result.metrics)
-        self.assertIn("r2_val", result.metrics)
-        self.assertEqual(20.0, result.metrics["n_rows_val"])
-
-    def test_no_validation_frame_omits_held_out_metrics(self) -> None:
-        result = shift_v2.train_shift_v2(self._frame(60, seed=3))
-
-        self.assertNotIn("mae_val", result.metrics)
+    def test_no_validation_frame_omits_held_out_metric(self) -> None:
+        result = shift_v2.train_shift_v2(self._frame(120, seed=3))
+        self.assertNotIn("mae_vs_realised_val", result.metrics)
 
 
 class ImpactScoreStabilizationTests(TestCase):

@@ -1,91 +1,95 @@
-"""Shift v2 — Linear baseline + OpenSkill/ML residual correction.
+"""Shift v2 ("OpenSkill + ML") — transparent team-result × individual blend.
 
-The v1 ``Linear`` algorithm is the conservative player-shift baseline.
-Shift v2 keeps that baseline and uses OpenSkill, Performance v2, local
-residuals, and sample-size features to learn a supervised residual correction:
+Prod analysis showed the **team result** (W/L overperformance vs the balanced
+seeding) is by far the strongest predictor of realised division moves, while
+individual impact adds ~0 on top of it. So Shift v2 is no longer a residual
+regressor toward the (mostly-zero) realised move — that collapsed confident
+signals to nil. Instead it is a convex blend of three division-unit shift
+components:
 
-    final_shift = linear_stable_shift + residual_pred
+    shift_v2 = clamp( w_team·team_result + w_os·os_shift + w_imp·indiv_mod , ±3 )
 
-where the supervised target is ``current_div - next_tournament_div`` from the
-historical ``Player.rank`` evolution. Positive shift means moving upward to a
-lower division number, matching the legacy analytics convention. Confidence is
-derived from quantile spread and Linear evidence.
+- ``team_result`` — the v1 team-result Linear ``stable_shift`` (backbone).
+- ``os_shift``    — OpenSkill mu-implied shift (rating context, the "OpenSkill").
+- ``indiv_mod``   — Performance v2 ``local_zscore`` scaled small and hard-clamped
+  to ±0.5 div (the "ML" part): differentiates carry vs passenger WITHIN a team
+  but cannot flip or cancel the team signal.
 
-Newcomers (no prior tournament) bypass the residual and return the clipped
-baseline shift with halved confidence — the residual model has no signal on
-them.
+Weights are fit from data (NNLS vs realised move, normalised to sum 1 so the
+blend keeps ``team_result``'s calibration and never collapses). Newcomers
+(no prior tournament) return the clipped team baseline with halved confidence.
 """
 
 from __future__ import annotations
 
 import logging
-import math
-import typing
 from dataclasses import dataclass, field
 
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from ..device import MLTrainDevice, lightgbm_devices, lightgbm_params
-from .base import MLModel, align_features
+from .base import MLModel
 
 __all__ = (
     "ShiftModelV2",
     "ShiftTrainingResult",
-    "build_merit_target",
-    "build_residual_target",
     "train_shift_v2",
 )
 
 logger = logging.getLogger(__name__)
 
+# Output bounds (match the v1 linear stable clamp) and individual-modulation
+# calibration: divisions of nudge per 1 std-dev of individual impact, hard-capped
+# so it can only tilt the team signal, never override it.
+SHIFT_RANGE: float = 3.0
+NEWCOMER_SHIFT_RANGE: float = 1.5
+INDIV_MOD_SCALE: float = 0.25
+INDIV_MOD_CLAMP: float = 0.5
 
-SHIFT_FEATURE_ORDER: tuple[str, ...] = (
-    "os_shift",
+# Fallback blend weights (team-dominant) when the fit is degenerate / data-poor.
+DEFAULT_BLEND: dict[str, float] = {"team": 0.6, "os": 0.3, "impact": 0.1}
+
+# Columns the blend reads (for MLModel/feature introspection).
+SHIFT_BLEND_COLUMNS: tuple[str, ...] = (
     "linear_stable_shift",
-    "linear_trend_shift",
-    "linear_confidence",
-    "linear_effective_evidence",
-    "linear_sample_tournaments",
-    "linear_sample_matches",
-    "prior_div",
-    "tournaments_played",
-    "tournaments_at_current_div",
-    "confidence_v1",
-    "log_coverage",
-    "match_count",
-    "team_avg_mu",
-    "opp_avg_mu",
-    "mu_gap",
-    "performance_v2_raw",  # filled from Performance v2 if available, else 0
-    "performance_v2_confidence",
-    "performance_v2_local_residual",
+    "os_shift",
     "performance_v2_local_zscore",
-    "performance_v2_local_percentile",
-    "performance_v2_local_reference_n",
 )
 
 
-# Shift output is bounded to ±3 divisions to match v1 linear stable clamp.
-SHIFT_RANGE: float = 3.0
-NEWCOMER_SHIFT_RANGE: float = 1.5
-
-# Merit calibration: divisions of suggested shift per 1 std-dev of context-adjusted
-# individual over/under-performance. Default +2σ ≈ +1 division. Tunable from config.
-MERIT_SHIFT_SCALE: float = 0.5
+def _clip(arr: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    return np.clip(arr, lo, hi)
 
 
-def _baseline_shift(df: pd.DataFrame) -> pd.Series:
-    """Return the conservative baseline used before applying ML residuals."""
+def _team_result(df: pd.DataFrame) -> pd.Series:
+    """Team-result backbone: v1 Linear ``stable_shift``, falling back to os_shift."""
     fallback = pd.to_numeric(
-        df.get("os_shift", pd.Series(0.0, index=df.index)),
-        errors="coerce",
+        df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce"
     ).fillna(0.0)
     if "linear_stable_shift" not in df.columns:
         return fallback
     stable = pd.to_numeric(df["linear_stable_shift"], errors="coerce")
     return stable.where(stable.notna(), fallback).fillna(0.0)
+
+
+def _os_shift(df: pd.DataFrame) -> pd.Series:
+    return pd.to_numeric(
+        df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce"
+    ).fillna(0.0)
+
+
+def _indiv_mod(df: pd.DataFrame) -> pd.Series:
+    """Individual carry/passenger nudge from Performance v2 local z-score.
+
+    Scaled small and hard-clamped to ±``INDIV_MOD_CLAMP`` divisions so it can only
+    tilt the team-result backbone, not override it. Zero where Performance v2 is
+    absent.
+    """
+    z = pd.to_numeric(
+        df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    return (INDIV_MOD_SCALE * z).clip(-INDIV_MOD_CLAMP, INDIV_MOD_CLAMP)
 
 
 def _linear_confidence(df: pd.DataFrame) -> pd.Series:
@@ -94,134 +98,53 @@ def _linear_confidence(df: pd.DataFrame) -> pd.Series:
     return pd.to_numeric(df["linear_confidence"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
 
 
-def build_merit_target(df: pd.DataFrame, *, merit_scale: float = MERIT_SHIFT_SCALE) -> pd.Series:
-    """Context-adjusted individual merit shift, in division units.
-
-    Built from Performance v2 ``local_zscore`` — the player's contribution to
-    winning ABOVE what their team's and opponents' strength predicted (the v2
-    target is ``won − baseline_win_prob`` fit over ``team/opp mu``), z-scored
-    against the same-role + nearby-division cohort. So team strength enters as
-    *context*, not as the signal: carrying a weak roster scores high, coasting on
-    a stacked one scores ~0. Positive z (overperformed for the division) →
-    positive shift (move up to a lower division number).
-
-    Unlike the old ``current_div − next_tournament_div`` target, this is *dense*
-    (every player who played has a perf row), so the residual learner no longer
-    regresses toward the sparse "nobody actually moves" base rate and flattens
-    confident signals to nil.
-    """
-    if df.empty:
-        return pd.Series(dtype=float)
-    z = pd.to_numeric(
-        df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
-        errors="coerce",
-    ).fillna(0.0)
-    return (merit_scale * z).clip(-SHIFT_RANGE, SHIFT_RANGE).rename("merit_target")
-
-
-def build_residual_target(df: pd.DataFrame, *, merit_scale: float = MERIT_SHIFT_SCALE) -> pd.Series:
-    """Return ``merit_target − baseline_shift`` for the residual learner.
-
-    The supervised signal is the context-adjusted individual *merit* (see
-    :func:`build_merit_target`), NOT the realised next-tournament division move:
-    we recommend what a player's individual performance *deserves*, not whether an
-    admin will actually move them (almost always "no" → collapse). Rows without a
-    Performance v2 row (no merit label) are dropped by the caller via
-    ``has_perf_v2``.
-    """
-    if df.empty:
-        return pd.Series(dtype=float)
-    merit = build_merit_target(df, merit_scale=merit_scale)
-    return (merit - _baseline_shift(df)).rename("residual_target")
+def _newcomer_mask(df: pd.DataFrame) -> np.ndarray:
+    return (
+        df.get("is_newcomer", pd.Series(False, index=df.index)).fillna(False).astype(bool)
+        | (pd.to_numeric(df.get("tournaments_played", 0), errors="coerce").fillna(0) <= 1)
+    ).to_numpy()
 
 
 @dataclass
 class ShiftModelV2(MLModel):
-    """Hybrid Shift estimator: OpenSkill + LGBM residual + quantile bands."""
+    """Transparent convex blend of team-result, OpenSkill and individual impact."""
 
-    booster: lgb.LGBMRegressor
-    booster_q10: lgb.LGBMRegressor
-    booster_q90: lgb.LGBMRegressor
-    feature_order: list[str] = field(default_factory=lambda: list(SHIFT_FEATURE_ORDER))
+    w_team: float = DEFAULT_BLEND["team"]
+    w_os: float = DEFAULT_BLEND["os"]
+    w_impact: float = DEFAULT_BLEND["impact"]
     shift_range: float = SHIFT_RANGE
+    feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
+
+    def _shift_array(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        team = _team_result(df).to_numpy()
+        blend = (
+            self.w_team * team
+            + self.w_os * _os_shift(df).to_numpy()
+            + self.w_impact * _indiv_mod(df).to_numpy()
+        )
+        shift = _clip(blend, -self.shift_range, self.shift_range)
+        # Newcomers: pure team baseline (the blend's individual/os terms are noisy
+        # with no history), clipped to the conservative newcomer range.
+        newcomer = _newcomer_mask(df)
+        shift = np.where(
+            newcomer, _clip(team, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE), shift
+        )
+        return shift, newcomer
 
     def predict(self, df: pd.DataFrame) -> pd.Series:
-        """Return the final ``shift_v2`` series; respects the newcomer rule."""
         if df.empty:
             return pd.Series(dtype=float)
-        X = align_features(df, self.feature_order)
-        residual = self.booster.predict(X)
-        baseline = _baseline_shift(X).to_numpy()
-        shift = np.clip(
-            baseline + residual,
-            -self.shift_range,
-            self.shift_range,
-        )
-
-        # Newcomer rule: tournaments_played == 1 or is_newcomer True → pure OS.
-        newcomer = (
-            df.get("is_newcomer", pd.Series(False, index=df.index)).fillna(False).astype(bool)
-            | (df["tournaments_played"].fillna(0) <= 1)
-        ).to_numpy()
-        shift = np.where(
-            newcomer,
-            np.clip(baseline, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE),
-            shift,
-        )
+        shift, _ = self._shift_array(df)
         return pd.Series(shift, index=df.index, name="shift_v2")
 
     def predict_with_confidence(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Return ``shift_v2``, ``confidence`` (and quantile bands) per row."""
         if df.empty:
-            return pd.DataFrame(
-                columns=["shift_v2", "confidence", "q10", "q90"], dtype=float
-        )
-        X = align_features(df, self.feature_order)
-        residual = self.booster.predict(X)
-        baseline = _baseline_shift(X).to_numpy()
-        q10 = np.clip(
-            baseline + self.booster_q10.predict(X),
-            -self.shift_range,
-            self.shift_range,
-        )
-        q90 = np.clip(
-            baseline + self.booster_q90.predict(X),
-            -self.shift_range,
-            self.shift_range,
-        )
-        shift = np.clip(
-            baseline + residual,
-            -self.shift_range,
-            self.shift_range,
-        )
-
-        newcomer = (
-            df.get("is_newcomer", pd.Series(False, index=df.index)).fillna(False).astype(bool)
-            | (df["tournaments_played"].fillna(0) <= 1)
-        ).to_numpy()
-        newcomer_shift = np.clip(baseline, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE)
-        shift = np.where(newcomer, newcomer_shift, shift)
-
-        spread = np.abs(q90 - q10)
-        quantile_confidence = np.clip(1 - spread / (2 * self.shift_range), 0.0, 1.0)
-        confidence = 0.55 * quantile_confidence + 0.45 * _linear_confidence(X).to_numpy()
-        baseline_sign = np.sign(baseline)
-        shift_sign = np.sign(shift)
-        disagrees_with_baseline = (
-            (np.abs(baseline) >= 0.5)
-            & (np.abs(shift) >= 0.5)
-            & (baseline_sign != shift_sign)
-        )
-        confidence = np.where(disagrees_with_baseline, confidence * 0.65, confidence)
-        # Newcomers — halved confidence.
+            return pd.DataFrame(columns=["shift_v2", "confidence"], dtype=float)
+        shift, newcomer = self._shift_array(df)
+        confidence = _linear_confidence(df).to_numpy()
         confidence = np.where(newcomer, confidence * 0.5, confidence)
         return pd.DataFrame(
-            {
-                "shift_v2": shift,
-                "confidence": confidence,
-                "q10": q10,
-                "q90": q90,
-            },
+            {"shift_v2": shift, "confidence": np.clip(confidence, 0.0, 1.0)},
             index=df.index,
         )
 
@@ -233,149 +156,90 @@ class ShiftTrainingResult:
     feature_importance: dict[str, float]
 
 
-def _params(
-    *,
-    objective: str,
-    alpha: float | None = None,
-    device: MLTrainDevice,
-) -> dict[str, typing.Any]:
-    params: dict[str, typing.Any] = {
-        "objective": objective,
-        "num_leaves": 31,
-        "min_data_in_leaf": 20,
-        "learning_rate": 0.05,
-        "feature_fraction": 0.8,
-        "n_estimators": 300,
-        "verbose": -1,
-        **lightgbm_params(device),
-    }
-    if alpha is not None:
-        params["alpha"] = alpha
-    return params
+def _fit_blend_weights(
+    components: np.ndarray, realised: np.ndarray, *, min_samples: int = 30
+) -> tuple[float, float, float]:
+    """Fit convex blend weights via NNLS against realised division moves.
 
+    Non-negative least squares finds the relative importance of
+    ``[team_result, os_shift, indiv_mod]``; the coefficients are normalised to
+    sum to 1 so the blend keeps ``team_result``'s scale (this is what prevents the
+    collapse the old residual-toward-realised regression suffered). Falls back to
+    :data:`DEFAULT_BLEND` on too little data or a degenerate fit.
+    """
+    from scipy.optimize import nnls
 
-def _has_perf_v2(df: pd.DataFrame) -> pd.Series:
-    """Boolean mask of rows that carry a real Performance v2 merit label."""
-    if "has_perf_v2" in df.columns:
-        return df["has_perf_v2"].fillna(False).astype(bool)
-    # Fallback for frames built before the flag existed: treat a present (and
-    # non-zero, i.e. not the fillna sentinel) local_zscore as a real row.
-    if "performance_v2_local_zscore" in df.columns:
-        z = pd.to_numeric(df["performance_v2_local_zscore"], errors="coerce")
-        return z.notna() & (z != 0.0)
-    return pd.Series(False, index=df.index)
-
-
-def _train_shift_v2_with_device(
-    df: pd.DataFrame,
-    *,
-    val_df: pd.DataFrame | None = None,
-    device: MLTrainDevice,
-    merit_scale: float = MERIT_SHIFT_SCALE,
-) -> ShiftTrainingResult:
-    """Train the residual booster against the context-adjusted merit target.
-
-    ``df`` must carry Performance v2 merit inputs (``has_perf_v2`` /
-    ``performance_v2_local_zscore``); rows without a perf row are skipped."""
-    if df.empty:
-        raise ValueError("training DataFrame is empty")
-
-    labelled = df[_has_perf_v2(df)].copy()
-    if labelled.empty:
-        raise ValueError(
-            "no labelled rows for shift v2 training "
-            f"(rows with Performance v2: {int(_has_perf_v2(df).sum())})"
-        )
-
-    target = build_residual_target(labelled, merit_scale=merit_scale)
-    X = align_features(labelled, SHIFT_FEATURE_ORDER)
-
-    booster = lgb.LGBMRegressor(**_params(objective="regression_l1", device=device))
-    fit_kwargs: dict[str, typing.Any] = {}
-    val_X: pd.DataFrame | None = None
-    val_target: pd.Series | None = None
-    if val_df is not None and not val_df.empty:
-        val = val_df[_has_perf_v2(val_df)]
-        if not val.empty:
-            val_target = build_residual_target(val, merit_scale=merit_scale)
-            val_X = align_features(val, SHIFT_FEATURE_ORDER)
-            fit_kwargs["eval_set"] = [(val_X, val_target)]
-            fit_kwargs["callbacks"] = [lgb.early_stopping(stopping_rounds=20, verbose=False)]
-    booster.fit(X, target, **fit_kwargs)
-
-    booster_q10 = lgb.LGBMRegressor(
-        **_params(objective="quantile", alpha=0.1, device=device)
-    )
-    booster_q90 = lgb.LGBMRegressor(
-        **_params(objective="quantile", alpha=0.9, device=device)
-    )
-    booster_q10.fit(X, target)
-    booster_q90.fit(X, target)
-
-    yhat = booster.predict(X)
-    residuals = target.to_numpy() - yhat
-    mae = float(np.mean(np.abs(residuals)))
-    var = float(np.var(target.to_numpy()))
-    r2 = float(1 - np.sum(residuals ** 2) / (len(labelled) * var)) if var > 0 else 0.0
-    if not math.isfinite(r2):
-        r2 = 0.0
-    metrics = {"mae_train": mae, "r2_train": r2, "n_rows": float(len(labelled))}
-
-    # Held-out metrics on the validation tournament (when present).
-    if val_X is not None and val_target is not None and not val_target.empty:
-        val_pred = booster.predict(val_X)
-        val_resid = val_target.to_numpy() - val_pred
-        val_mae = float(np.mean(np.abs(val_resid)))
-        val_var = float(np.var(val_target.to_numpy()))
-        val_r2 = (
-            float(1 - np.sum(val_resid**2) / (len(val_target) * val_var))
-            if val_var > 0
-            else 0.0
-        )
-        metrics["mae_val"] = val_mae
-        metrics["r2_val"] = val_r2 if math.isfinite(val_r2) else 0.0
-        metrics["n_rows_val"] = float(len(val_target))
-
-    try:
-        importances = booster.booster_.feature_importance(importance_type="gain")
-    except Exception:  # pragma: no cover
-        importances = [0.0] * len(SHIFT_FEATURE_ORDER)
-    feature_importance = {
-        col: float(v) for col, v in zip(SHIFT_FEATURE_ORDER, importances, strict=False)
-    }
-
-    model = ShiftModelV2(
-        booster=booster, booster_q10=booster_q10, booster_q90=booster_q90
-    )
-    return ShiftTrainingResult(
-        model=model, metrics=metrics, feature_importance=feature_importance
-    )
+    X = np.asarray(components, dtype=float)
+    y = np.asarray(realised, dtype=float)
+    default = (DEFAULT_BLEND["team"], DEFAULT_BLEND["os"], DEFAULT_BLEND["impact"])
+    if X.ndim != 2 or X.shape[1] != 3 or len(y) < min_samples:
+        return default
+    coef, _ = nnls(X, y)
+    total = float(coef.sum())
+    if not np.isfinite(total) or total <= 1e-9:
+        return default
+    w = coef / total
+    return (float(w[0]), float(w[1]), float(w[2]))
 
 
 def train_shift_v2(
-    df: pd.DataFrame,
-    *,
-    val_df: pd.DataFrame | None = None,
-    merit_scale: float = MERIT_SHIFT_SCALE,
+    df: pd.DataFrame, *, val_df: pd.DataFrame | None = None
 ) -> ShiftTrainingResult:
-    """Train Shift v2 with optional LightGBM GPU fallback."""
-    last_exc: Exception | None = None
-    for device in lightgbm_devices():
-        try:
-            result = _train_shift_v2_with_device(
-                df, val_df=val_df, device=device, merit_scale=merit_scale
+    """Fit the blend weights from realised division moves.
+
+    ``df`` must carry ``current_div`` and ``next_tournament_div`` (the realised
+    move label) plus the blend component columns. Rows without the future label
+    are dropped for the fit; the resulting model still scores everyone.
+    """
+    if df.empty:
+        raise ValueError("training DataFrame is empty")
+    label_cols = ("current_div", "next_tournament_div")
+    if any(c not in df.columns for c in label_cols):
+        raise ValueError(
+            "no labelled rows for shift v2 (need current_div + next_tournament_div)"
+        )
+    labelled = df.dropna(subset=list(label_cols)).copy()
+    if labelled.empty:
+        raise ValueError(
+            "no labelled rows for shift v2 (need current_div + next_tournament_div)"
+        )
+
+    realised = (
+        labelled["current_div"].astype(float) - labelled["next_tournament_div"].astype(float)
+    ).to_numpy()
+    team = _team_result(labelled).to_numpy()
+    os_ = _os_shift(labelled).to_numpy()
+    indiv = _indiv_mod(labelled).to_numpy()
+    components = np.column_stack([team, os_, indiv])
+
+    w_team, w_os, w_impact = _fit_blend_weights(components, realised)
+    model = ShiftModelV2(w_team=w_team, w_os=w_os, w_impact=w_impact)
+
+    blend = components @ np.array([w_team, w_os, w_impact])
+    blend = np.clip(blend, -SHIFT_RANGE, SHIFT_RANGE)
+    mae = float(np.mean(np.abs(blend - realised)))
+    metrics = {
+        "n_rows": float(len(labelled)),
+        "w_team": w_team,
+        "w_os": w_os,
+        "w_impact": w_impact,
+        "mae_vs_realised": mae,
+    }
+    if val_df is not None and not val_df.empty:
+        v = val_df.dropna(subset=["current_div", "next_tournament_div"])
+        if not v.empty:
+            vr = (v["current_div"].astype(float) - v["next_tournament_div"].astype(float)).to_numpy()
+            vb = np.clip(
+                np.column_stack([_team_result(v).to_numpy(), _os_shift(v).to_numpy(), _indiv_mod(v).to_numpy()])
+                @ np.array([w_team, w_os, w_impact]),
+                -SHIFT_RANGE,
+                SHIFT_RANGE,
             )
-            logger.info("Shift v2 trained device=%s", device)
-            return result
-        except Exception as exc:
-            last_exc = exc
-            if device == "cpu":
-                raise
-            logger.warning(
-                "Shift v2 training failed on LightGBM device=%s; trying fallback if available: %s",
-                device,
-                exc,
-            )
-    if last_exc is not None:
-        raise last_exc
-    raise RuntimeError("no LightGBM training devices configured")
+            metrics["mae_vs_realised_val"] = float(np.mean(np.abs(vb - vr)))
+            metrics["n_rows_val"] = float(len(v))
+
+    return ShiftTrainingResult(
+        model=model,
+        metrics=metrics,
+        feature_importance={"team": w_team, "os": w_os, "impact": w_impact},
+    )

@@ -37,16 +37,9 @@ class AppConfig(BaseServiceSettings):
     # collapsing toward the median rank. Applied at inference (no retrain).
     standings_prob_sharpening: float = 1.5
 
-    # Shift v2 merit calibration: divisions of suggested shift per 1 std-dev of
-    # context-adjusted individual over/under-performance (Performance v2
-    # local_zscore). Default +2σ ≈ +1 division. Used as the supervised target
-    # when training Shift v2 — retrain to take effect.
-    shift_merit_scale: float = 0.5
-
     # Linear shift signal scale (the v1 "Linear" algorithm and the v2 baseline).
-    # Maps the EMA-weighted per-tournament merit signal to division units. Tune
-    # via the `fit-weights` CLI to align Linear's spread with the v2 merit scale
-    # above; applied at read time (recompute v1 shifts to refresh stored rows).
+    # Maps the EMA-weighted per-tournament team-result signal to division units.
+    # Applied at read time — recompute v1 shifts to refresh stored rows.
     linear_shift_scale: float = 6.25
 
     # Read-side cache TTL (matches the app-service default).

@@ -46,35 +46,6 @@ def rating_to_division(grid: DivisionGrid, rating_mu: float) -> int:
     )
 
 
-def _division_local_residual(df: pd.DataFrame) -> pd.Series:
-    """Division-band-normalised z-score of ``performance_points``.
-
-    The fallback individual signal used when Performance v2 is not materialised.
-    Mirrors Performance v2's local cohort (same tournament + role + nearby
-    division via the tournament's DivisionGrid, shrunk toward the role-wide
-    moments when sparse) so the fallback is **not** biased against low divisions
-    the way a plain ``(tournament, role)`` z-score is — there, low-division
-    players are scored against higher-division peers and almost always come out
-    negative. Players without logs get 0 (neutral). Clipped to ±1 to match the
-    historical ``log_residual`` range.
-    """
-    # Reuses the same local-cohort logic as Performance v2's local layer. Lazy
-    # import keeps the v1 analytics module import-order-independent of ml.features.
-    from src.services.ml.features.local_performance import attach_local_performance
-
-    result = pd.Series(0.0, index=df.index, dtype=float)
-    mask = df["performance_points"].notna()
-    if not mask.any():
-        return result
-    sub = df.loc[mask, ["tournament_id", "player_id", "role", "div"]].rename(
-        columns={"div": "division"}
-    )
-    sub["raw_value"] = pd.to_numeric(df.loc[mask, "performance_points"], errors="coerce")
-    local = attach_local_performance(sub)
-    result.loc[mask] = local["local_zscore"].clip(-1.0, 1.0).to_numpy()
-    return result
-
-
 async def get_data_frame(
     session: AsyncSession,
     workspace_id: int | None = None,
@@ -205,19 +176,9 @@ async def get_data_frame(
         axis=1,
     )
 
-    # Fallback individual signal: division-band-normalised z-score of
-    # performance_points (NOT a plain (tournament, role) z-score, which mixes all
-    # divisions and biases against low ones). See _division_local_residual.
-    df["log_residual"] = _division_local_residual(df)
-
-    # Context-adjusted individual merit: Performance v2 local z-score (clipped to
-    # the same ±1 band as ``log_residual`` so the existing STABLE_SHIFT_SCALE
-    # stays meaningful). Where Performance v2 has not been materialised for a
-    # player, fall back to the division-normalised ``log_residual``.
-    perf_merit = await service.get_performance_merit(session)
-    merit = pd.to_numeric(df["player_id"].map(perf_merit), errors="coerce").clip(-1.0, 1.0)
-    df["perf_merit"] = merit.where(merit.notna(), df["log_residual"])
-
+    # The shift signal is team-result only (map_diff + placement_score, computed
+    # above). Individual performance is intentionally NOT folded into the Linear
+    # signal — prod analysis showed it adds ~0 over team W/L.
     return df
 
 
@@ -312,9 +273,8 @@ def compute_linear_metrics(
                 history = group_rows[history_position]
                 signals.append(
                     TournamentSignal(
-                        perf_merit=float(
-                            history.get("perf_merit", history.get("log_residual", 0.0))
-                        ),
+                        map_diff=float(history["map_diff"]),
+                        placement_score=float(history["placement_score"]),
                         recency_decay=float(0.85 ** (position - history_position)),
                         coverage_weight=float(0.7 + 0.3 * history["log_available"]),
                         newcomer_weight=0.75

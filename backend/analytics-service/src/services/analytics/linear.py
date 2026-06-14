@@ -10,16 +10,17 @@ STABLE_SHRINKAGE_PRIOR = 1.5
 STABLE_SHIFT_CLAMP = 3.0
 TREND_SHIFT_CLAMP = 3.5
 
-# The shift signal is the player's CONTEXT-ADJUSTED INDIVIDUAL merit: their
-# Performance v2 local z-score — contribution to winning ABOVE what their team's
-# and opponents' strength predicted. Team OUTCOME (placement, win/loss) is
-# deliberately excluded: on draft/balancer rosters it reflects luck of the draw,
-# not the player. Team strength still matters, but enters as *context* baked into
-# ``perf_merit`` (via the Performance v2 mu baseline), not as a component here.
-# ``fit_raw_signal_weights`` recalibrates these when more individual components
-# are added; kept summing to 1 so ``STABLE_SHIFT_SCALE`` keeps its meaning.
+# The shift signal is the TEAM RESULT: how much the team over/under-performed in
+# this tournament. On balancer-formed rosters (≈equal by rank) a team that wins
+# more than expected means its players were under-rated → they deserve to move
+# up; W/L deviation is therefore a direct, low-variance mis-rating signal, not
+# "luck of the draw". Prod analysis confirms team W/L is by far the strongest
+# predictor of realised division moves (Spearman ≈0.38), and individual impact
+# adds ~0 on top of it. ``fit_raw_signal_weights`` can recalibrate; kept summing
+# to 1 so ``STABLE_SHIFT_SCALE`` keeps its meaning.
 RAW_SIGNAL_WEIGHTS: Mapping[str, float] = {
-    "perf_merit": 1.0,
+    "map_diff": 0.6,
+    "placement_score": 0.4,
 }
 
 
@@ -29,10 +30,9 @@ def clamp(value: float, lower: float, upper: float) -> float:
 
 @dataclass(frozen=True)
 class TournamentSignal:
-    # Context-adjusted individual merit (Performance v2 local z-score, clipped),
-    # with a fallback to the context-blind log residual when Performance v2 has
-    # not been materialised for the tournament.
-    perf_merit: float
+    # Team-result components: normalised win/loss differential and team placement.
+    map_diff: float
+    placement_score: float
     recency_decay: float
     coverage_weight: float
     newcomer_weight: float
@@ -59,7 +59,10 @@ def _weight(signal: TournamentSignal) -> float:
 def _raw_signal(
     signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS
 ) -> float:
-    return weights.get("perf_merit", 1.0) * signal.perf_merit
+    return (
+        weights.get("map_diff", 0.0) * signal.map_diff
+        + weights.get("placement_score", 0.0) * signal.placement_score
+    )
 
 
 def _ema(values: Sequence[float], period: int) -> float:
@@ -112,38 +115,6 @@ def fit_raw_signal_weights(
 
     weights = coef / total
     return {name: float(w) for name, w in zip(names, weights, strict=True)}
-
-
-def suggest_shift_scale(
-    unit_shifts: Sequence[float],
-    merit_targets: Sequence[float],
-    *,
-    percentile: float = 90.0,
-    min_samples: int = 30,
-    fallback: float = STABLE_SHIFT_SCALE,
-) -> float:
-    """Suggest a ``shift_scale`` that aligns Linear's spread with the v2 merit spread.
-
-    ``unit_shifts`` are Linear ``stable_shift`` values computed at ``shift_scale=1``
-    per player; ``merit_targets`` the v2 merit shift (in divisions) for the same
-    players. Returns the scale that matches the ``percentile``-th percentile of
-    ``|scale · unit_shift|`` to that of ``|merit_target|`` so the displayed Linear
-    and the v2 merit land in the same division units. Falls back to the default on
-    too little data or a degenerate (~0) Linear spread. Offline calibration helper.
-    """
-    import numpy as np
-
-    u = np.abs(np.asarray(unit_shifts, dtype=float))
-    m = np.abs(np.asarray(merit_targets, dtype=float))
-    u = u[np.isfinite(u)]
-    m = m[np.isfinite(m)]
-    if len(u) < min_samples or len(m) < min_samples:
-        return float(fallback)
-    p_unit = float(np.percentile(u, percentile))
-    p_merit = float(np.percentile(m, percentile))
-    if p_unit <= 1e-9:
-        return float(fallback)
-    return p_merit / p_unit
 
 
 def score_history(

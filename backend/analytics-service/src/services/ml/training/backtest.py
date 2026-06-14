@@ -27,7 +27,6 @@ from src.core.workspace import workspace_scope_filter
 from ..inference.runner import run_for_tournament
 from .calibration import compute_calibration_report
 from .orchestrator import (
-    PERFORMANCE_ALGORITHM_NAME,
     SHIFT_ALGORITHM_NAME,
     STANDINGS_ALGORITHM_NAME,
     train_all_models,
@@ -103,8 +102,9 @@ async def _realised_shift_map(
     """Return ``{player_id: realised_shift}`` for one fold tournament.
 
     ``realised_shift = current_div - next_tournament_div`` — the same sign
-    convention as :func:`shift_v2.build_residual_target` (positive = moved up to
-    a lower division number). The division is resolved with ``DEFAULT_GRID`` to
+    convention as the shift signal (positive = moved up to a lower division
+    number) and the label Shift v2 fits its blend weights against. The division
+    is resolved with ``DEFAULT_GRID`` to
     match :func:`shift_features._player_rank_history`, so the label scale lines
     up with what the model was trained to predict.
 
