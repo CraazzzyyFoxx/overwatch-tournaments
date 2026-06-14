@@ -17,13 +17,14 @@ import {
   UserTournamentsPageSkeleton
 } from "@/app/(site)/users/pages/UserTournamentsPage";
 import UserAchievementPage from "@/app/(site)/users/pages/UserAchievementPage";
-import { SITE_NAME } from "@/config/site";
+import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
 import { ApiError } from "@/lib/api-error";
 import { decodePlayerSlug } from "@/utils/player";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
 import UserLiquidGlassProvider from "@/app/(site)/users/components/shared/UserLiquidGlassProvider";
 import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
+import { ProfileJsonLd } from "@/app/(site)/users/components/shared/profile-jsonld";
 
 // The route still renders dynamically (api-fetch reads the workspace cookie),
 // but we no longer force `fetchCache: force-no-store` — public, workspace-scoped
@@ -66,23 +67,29 @@ export async function generateMetadata(props: {
   try {
     const user = await userService.getUserByName(decodePlayerSlug(params.slug));
 
+    const title = `${user.name} — Player Profile | ${SITE_NAME}`;
+    const description = `${user.name}'s Overwatch tournament profile on ${SITE_NAME}: match history, heroes, maps, teammates, achievements and career stats.`;
+    const canonical = new URL(`/users/${params.slug}`, SITE_URL_OBJ).toString();
+
+    // OG/Twitter images are supplied by the colocated opengraph-image route
+    // (Next auto-injects og:image + twitter:image), so we don't set them here.
     return {
-      title: `${user.name} Overview | ${SITE_NAME}`,
-      description: `Overview for ${user.name} on ${SITE_NAME}.`,
+      title,
+      description,
+      alternates: { canonical },
+      robots: { index: true, follow: true },
       openGraph: {
-        title: `${user.name} Overview | on ${SITE_NAME}.`,
-        description: `Overview for ${user.name} on ${SITE_NAME}.`,
-        url: SITE_NAME,
-        type: "website",
-        siteName: "AQT",
-        images: [
-          {
-            url: `/avatar/${user.id % 10}.png`,
-            width: 1200,
-            height: 630
-          }
-        ],
+        title,
+        description,
+        url: canonical,
+        type: "profile",
+        siteName: SITE_NAME,
         locale: "en_US"
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description
       }
     };
   } catch (error) {
@@ -111,9 +118,21 @@ const getUserAndProfile = cache(async (slug: string) => {
 
 type UserAndProfile = Awaited<ReturnType<typeof getUserAndProfile>>;
 
-const UserHeaderSection = async ({ userAndProfile }: { userAndProfile: Promise<UserAndProfile> }) => {
+const UserHeaderSection = async ({
+  userAndProfile,
+  slug
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  slug: string;
+}) => {
   const { user, profile } = await userAndProfile;
-  return <UserHeader user={user} profile={profile} />;
+  const canonical = new URL(`/users/${slug}`, SITE_URL_OBJ).toString();
+  return (
+    <>
+      <ProfileJsonLd user={user} profile={profile} url={canonical} />
+      <UserHeader user={user} profile={profile} />
+    </>
+  );
 };
 
 const UserOverviewTab = async ({
@@ -303,7 +322,7 @@ export default async function UserPage({
   return (
     <UserLiquidGlassProvider>
       <Suspense fallback={<UserHeaderSkeleton />}>
-        <UserHeaderSection userAndProfile={userAndProfile} />
+        <UserHeaderSection userAndProfile={userAndProfile} slug={resolvedParams.slug} />
       </Suspense>
       <Suspense
         fallback={
