@@ -560,6 +560,11 @@ export const en = {
       confirm: "Confirm — true positive",
       dismiss: "Dismiss — false positive"
     },
+    anomalyLegend: {
+      trigger: "What flags mean",
+      title: "Anomaly flags",
+      note: "Flags are review hints, not verdicts."
+    },
     glossary: {
       confidence: {
         label: "Confidence",

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { isAnomalyGlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
+import AnomalyLegend from "@/app/(site)/tournaments/analytics/components/AnomalyLegend";
 
 interface AttentionTriageProps {
   teams: TeamAnalytics[];
@@ -82,12 +83,14 @@ function GroupCard({
   icon,
   count,
   tone,
+  action,
   children,
 }: {
   title: React.ReactNode;
   icon: React.ReactNode;
   count: number;
   tone: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -95,6 +98,7 @@ function GroupCard({
       <div className="mb-2 flex items-center gap-2">
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-md", tone)}>{icon}</span>
         <span className="text-[13px] font-semibold text-foreground">{title}</span>
+        {action}
         <span className="ml-auto rounded-full bg-muted/60 px-1.5 text-[11px] font-bold tabular-nums text-muted-foreground">
           {count}
         </span>
@@ -170,6 +174,7 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
               icon={<AlertTriangle className="h-3.5 w-3.5" />}
               tone="bg-amber-500/15 text-amber-300"
               count={flags.length}
+              action={<AnomalyLegend />}
             >
               {flags.slice(0, GROUP_LIMIT).map((flag, index) => (
                 <div

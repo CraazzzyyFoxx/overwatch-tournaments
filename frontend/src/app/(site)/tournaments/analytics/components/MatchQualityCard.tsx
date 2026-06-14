@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { cn } from "@/lib/utils";
+import { isAnomalyGlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
+import AnomalyLegend from "@/app/(site)/tournaments/analytics/components/AnomalyLegend";
 
 interface MatchQualityCardProps {
   tournamentId: number;
@@ -138,7 +140,10 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{t("analytics.matchQuality.title")}</CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base">{t("analytics.matchQuality.title")}</CardTitle>
+          <AnomalyLegend className="shrink-0" />
+        </div>
         <p className="text-xs text-muted-foreground">
           {t("analytics.matchQuality.subtitle")}
         </p>
@@ -193,7 +198,14 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
                       <Badge
                         variant="outline"
                         className={cn("text-[10px] uppercase", anomalyTone(flag.kind))}
-                        title={flag.reasons.join("\n")}
+                        title={[
+                          isAnomalyGlossaryTerm(flag.kind)
+                            ? `${t(`analytics.glossary.${flag.kind}.label`)} — ${t(`analytics.glossary.${flag.kind}.plain`)}`
+                            : null,
+                          ...flag.reasons,
+                        ]
+                          .filter(Boolean)
+                          .join("\n")}
                       >
                         {flag.kind} · #{flag.player_id}
                       </Badge>

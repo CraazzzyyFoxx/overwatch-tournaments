@@ -562,6 +562,11 @@ export const ru = {
       confirm: "Подтвердить — это правда",
       dismiss: "Отклонить — ложный флаг"
     },
+    anomalyLegend: {
+      trigger: "Что значат флаги",
+      title: "Флаги аномалий",
+      note: "Флаги — это подсказки к разбору, а не вердикты."
+    },
     glossary: {
       confidence: {
         label: "Уверенность",
