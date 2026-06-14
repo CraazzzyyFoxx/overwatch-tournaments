@@ -33,6 +33,7 @@ import HeroStatsTable, {
 } from "@/app/(site)/users/components/heroes/HeroStatsTable";
 import MapsForHero from "@/app/(site)/users/components/heroes/MapsForHero";
 import HeroOverviewTable, { type HeroOverviewRow } from "@/app/(site)/users/components/heroes/HeroOverviewTable";
+import HeroBestGames from "@/app/(site)/users/components/heroes/HeroBestGames";
 
 interface Props {
   heroes: HeroWithUserStats[];
@@ -240,7 +241,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
     rows.sort((a, b) => b.winRate - a.winRate || b.win + b.loss - (a.win + a.loss));
-    return rows.slice(0, 6);
+    return rows;
   }, [selected, maps]);
 
   const mostEffective = useMemo(() => {
@@ -406,7 +407,10 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
             )}
           </CardSurface>
 
-          {/* Maps the selected hero was played on */}
+          {/* Career-best single-game performances for the selected hero */}
+          <HeroBestGames hero={selected.hero} />
+
+          {/* Maps the selected hero was played on (best → worst) */}
           <MapsForHero heroName={selected.hero.hero.name} heroMaps={heroMaps} />
         </div>
     </div>

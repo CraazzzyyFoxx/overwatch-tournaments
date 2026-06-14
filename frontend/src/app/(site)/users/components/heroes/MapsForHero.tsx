@@ -14,9 +14,15 @@ export interface HeroMapRow {
 }
 
 const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroMapRow[] }) => (
-  <CardSurface flush title={`Maps for ${heroName}`} icon={<MapIcon size={15} />}>
+  <CardSurface
+    flush
+    title={`Maps for ${heroName}`}
+    icon={<MapIcon size={15} />}
+    subtitle={heroMaps.length > 0 ? `${heroMaps.length} maps · best → worst` : undefined}
+  >
     {heroMaps.length > 0 ? (
-      heroMaps.map((m, i) => {
+      <div className="max-h-[360px] overflow-y-auto">
+        {heroMaps.map((m, i) => {
         const wr = m.winRate * 100;
         return (
           <div
@@ -43,7 +49,8 @@ const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroM
             </span>
           </div>
         );
-      })
+      })}
+      </div>
     ) : (
       <div className="py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
         No map data for this hero yet.
