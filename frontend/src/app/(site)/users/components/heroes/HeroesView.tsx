@@ -34,6 +34,7 @@ import HeroStatsTable, {
 import MapsForHero from "@/app/(site)/users/components/heroes/MapsForHero";
 import HeroRail, { type HeroRow } from "@/app/(site)/users/components/heroes/HeroRail";
 import HeroBestGames from "@/app/(site)/users/components/heroes/HeroBestGames";
+import RadarAxisPicker from "@/app/(site)/users/components/heroes/RadarAxisPicker";
 
 interface Props {
   heroes: HeroWithUserStats[];
@@ -356,22 +357,9 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 {radarCandidates.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
                     <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-                      Radar axes · pick 3–8
+                      Radar axes · 3–8
                     </span>
-                    <div className="flex flex-wrap justify-center gap-1.5">
-                      {radarCandidates.map((name) => (
-                        <span
-                          key={name}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => toggleRadarStat(name)}
-                          className={cn("aqt-filter-chip", radarStats.includes(name) && "active")}
-                          title={getHumanizedStats(name)}
-                        >
-                          {getHumanizedStats(name)}
-                        </span>
-                      ))}
-                    </div>
+                    <RadarAxisPicker selected={radarStats} candidates={radarCandidates} onToggle={toggleRadarStat} />
                   </div>
                 ) : null}
               </div>
