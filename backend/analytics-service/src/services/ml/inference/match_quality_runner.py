@@ -189,12 +189,20 @@ async def run_match_quality_for_tournament(
             }
         )
 
+    # Idempotent upsert: clear every row for THIS tournament's encounters under
+    # this algorithm before re-inserting. Scoping the delete by the tournament's
+    # encounters (not by the ``encounters`` frame's ids) keeps it correct even
+    # when the scored set (``quality``) and the standings frame diverge — a
+    # mismatch otherwise leaves stale rows and a re-run hits
+    # ``uq_analytics_match_quality (encounter_id, algorithm_id)``.
     await session.execute(
         sa.delete(models.AnalyticsMatchQuality).where(
-            models.AnalyticsMatchQuality.encounter_id.in_(
-                [int(e) for e in encounters["encounter_id"].astype(int).unique()]
-            ),
             models.AnalyticsMatchQuality.algorithm_id == algorithm.id,
+            models.AnalyticsMatchQuality.encounter_id.in_(
+                sa.select(models.Encounter.id).where(
+                    models.Encounter.tournament_id == tournament_id
+                )
+            ),
         )
     )
     if rows:
