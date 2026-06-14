@@ -17,6 +17,7 @@ import {
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { sortTeamPlayers } from "@/utils/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -186,6 +187,7 @@ const TeamDetail = ({
 }) => {
   const [editingPlayer, setEditingPlayer] = useState<PlayerAnalytics | null>(null);
   const { hasPermission } = usePermissions();
+  const { t } = useTranslation();
   const canEdit = hasPermission("analytics.update");
   const tournamentGrid = team.tournament?.division_grid_version;
   const players = useMemo(() => sortTeamPlayers(team.players), [team.players]);
@@ -196,32 +198,46 @@ const TeamDetail = ({
         <table className={styles.detailTable}>
           <thead>
             <tr>
-              <th>Role</th>
-              <th>Battle tag</th>
-              <th className={styles.center}>Current</th>
-              <th className={styles.center}>Forecast</th>
+              <th>{t("analytics.standings.colRole")}</th>
+              <th>{t("analytics.standings.colBattleTag")}</th>
+              <th className={styles.center}>{t("analytics.standings.colCurrent")}</th>
+              <th className={styles.center}>{t("analytics.standings.colForecast")}</th>
               <th className={styles.center}>
-                <MetricTooltip term="recent_moves" showIcon>Move 2</MetricTooltip>
+                <MetricTooltip term="recent_moves" showIcon>
+                  {t("analytics.standings.colMove2")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="recent_moves" showIcon>Move 1</MetricTooltip>
+                <MetricTooltip term="recent_moves" showIcon>
+                  {t("analytics.standings.colMove1")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="points" showIcon>Signal</MetricTooltip>
+                <MetricTooltip term="points" showIcon>
+                  {t("analytics.standings.colSignal")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="impact" showIcon>Impact</MetricTooltip>
+                <MetricTooltip term="impact" showIcon>
+                  {t("analytics.standings.colImpact")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="vs_local" showIcon>vs similar</MetricTooltip>
+                <MetricTooltip term="vs_local" showIcon>
+                  {t("analytics.standings.colVsLocal")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="confidence" showIcon>Confidence</MetricTooltip>
+                <MetricTooltip term="confidence" showIcon>
+                  {t("analytics.standings.colConfidence")}
+                </MetricTooltip>
               </th>
               <th className={styles.center}>
-                <MetricTooltip term="shift" showIcon>Manual</MetricTooltip>
+                <MetricTooltip term="shift" showIcon>
+                  {t("analytics.standings.colManual")}
+                </MetricTooltip>
               </th>
-              <th>Flags</th>
+              <th>{t("analytics.standings.colFlags")}</th>
             </tr>
           </thead>
           <tbody>
@@ -245,7 +261,13 @@ const TeamDetail = ({
                       </div>
                       {player.is_newcomer || player.is_newcomer_role ? (
                         <div className="mt-1">
-                          <AnomalyChip label={player.is_newcomer ? "new" : "new role"} />
+                          <AnomalyChip
+                            label={
+                              player.is_newcomer
+                                ? t("analytics.triage.newPlayer")
+                                : t("analytics.triage.newRole")
+                            }
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -303,7 +325,7 @@ const TeamDetail = ({
                         size="sm"
                         className="h-8 px-2 tabular-nums"
                         onClick={() => setEditingPlayer(player)}
-                        title="Edit manual shift"
+                        title={t("analytics.standings.editManualShift")}
                       >
                         {formatAnalyticsNumber(player.shift)}
                       </Button>
@@ -381,6 +403,7 @@ const TeamRow = ({
   performanceByPlayer: Map<number, PerformanceV2>;
   distribution?: StandingsDistribution;
 }) => {
+  const { t } = useTranslation();
   const groupName = team.group?.name ?? "-";
   const conf = confidenceWord(team.avg_confidence);
   const shiftDirection =
@@ -432,18 +455,19 @@ const TeamRow = ({
             {team.name}
           </div>
           <div className={styles.teamMeta}>
-            <span>Group {groupName}</span>
+            <span>{t("common.group")} {groupName}</span>
             {distribution ? (
               <span
                 title={`Monte Carlo: mean ${distribution.mean_position.toFixed(1)}, P(top1) ${(distribution.prob_top1 * 100).toFixed(0)}%`}
               >
-                Predicted {distribution.mean_position.toFixed(1)}{" "}
-                <span className="text-muted-foreground">
-                  (p10–p90 {distribution.p10_position.toFixed(0)}–{distribution.p90_position.toFixed(0)})
-                </span>
+                {t("analytics.standings.predictedRange", {
+                  mean: distribution.mean_position.toFixed(1),
+                  p10: distribution.p10_position.toFixed(0),
+                  p90: distribution.p90_position.toFixed(0)
+                })}
               </span>
             ) : (
-              <span>Predicted {team.predicted_place ?? "-"}</span>
+              <span>{t("analytics.standings.predicted", { place: team.predicted_place ?? "-" })}</span>
             )}
           </div>
         </div>
@@ -452,19 +476,19 @@ const TeamRow = ({
           <span className={styles.wins}>{team.wins}</span>
           <span className="mx-1 text-muted-foreground">/</span>
           <span className={styles.losses}>{team.losses}</span>
-          <div className="text-[11px] text-muted-foreground">record</div>
+          <div className="text-[11px] text-muted-foreground">{t("analytics.standings.record")}</div>
         </div>
         <div className={styles.confidence}>
           <div className={styles.confidenceText}>
             <MetricTooltip term="confidence" focusable={false}>
-              <span className="text-muted-foreground">confidence</span>
+              <span className="text-muted-foreground">{t("analytics.standings.confidence")}</span>
             </MetricTooltip>
             <br />
             <span
               className={cn("font-semibold", CONFIDENCE_TONE_CLASS[conf.tone])}
               title={formatConfidencePercent(team.avg_confidence)}
             >
-              {conf.label}
+              {t(`analytics.confidence.${conf.tone}`)}
             </span>
           </div>
         </div>
@@ -472,7 +496,6 @@ const TeamRow = ({
           <ForecastChip
             direction={shiftDirection}
             magnitude={Math.abs(team.total_shift)}
-            unit="div"
             focusable={false}
             rawTooltip={`Balancer ${formatAnalyticsNumber(team.balancer_shift, 1)} · manual ${formatAnalyticsNumber(team.manual_shift, 1)}`}
           />
@@ -481,7 +504,9 @@ const TeamRow = ({
           {team.anomalies.slice(0, 2).map((anomaly, index) => (
             <AnomalyChip key={`${team.id}-${anomaly.kind}-${index}`} anomaly={anomaly} />
           ))}
-          {team.manual_shift_points !== 0 ? <AnomalyChip label="manual" /> : null}
+          {team.manual_shift_points !== 0 ? (
+            <AnomalyChip label={t("analytics.standings.manual")} />
+          ) : null}
         </div>
         <ChevronRight
           className={cn(styles.chevron, open && styles.chevronOpen)}
@@ -519,38 +544,46 @@ const sortedTeams = (teams: TeamAnalytics[], mode: SortMode) => {
 };
 
 const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: AnalyticsStandingsProps) => {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
   const visibleTeams = useMemo(() => sortedTeams(teams, mode), [teams, mode]);
+  const modeLabel: Record<SortMode, string> = {
+    standings: t("analytics.standings.sortStandings"),
+    predicted: t("analytics.standings.sortPredicted"),
+    shift: t("analytics.standings.sortShift")
+  };
 
   return (
     <Card className="overflow-hidden">
       <div className={styles.sectionHead}>
         <div>
-          <div className={styles.sectionTitle}>Standings</div>
-          <div className={styles.sectionSub}>{teams.length} teams / sorted by {mode}</div>
+          <div className={styles.sectionTitle}>{t("analytics.standings.title")}</div>
+          <div className={styles.sectionSub}>
+            {t("analytics.standings.sortedBy", { count: teams.length, mode: modeLabel[mode] })}
+          </div>
         </div>
-        <div className={styles.sectionTabs} aria-label="Standings sort">
+        <div className={styles.sectionTabs} aria-label={t("analytics.standings.title")}>
           <button
             type="button"
             className={cn(styles.sectionTab, mode === "standings" && styles.sectionTabActive)}
             onClick={() => setMode("standings")}
           >
-            Standings
+            {modeLabel.standings}
           </button>
           <button
             type="button"
             className={cn(styles.sectionTab, mode === "predicted" && styles.sectionTabActive)}
             onClick={() => setMode("predicted")}
           >
-            By predicted
+            {modeLabel.predicted}
           </button>
           <button
             type="button"
             className={cn(styles.sectionTab, mode === "shift" && styles.sectionTabActive)}
             onClick={() => setMode("shift")}
           >
-            By shift
+            {modeLabel.shift}
           </button>
         </div>
       </div>

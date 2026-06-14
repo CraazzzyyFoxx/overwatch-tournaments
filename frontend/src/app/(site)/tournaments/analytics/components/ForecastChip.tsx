@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { confidenceWord, formatAnalyticsNumber } from "../analytics.helpers";
 
 export type ForecastDirection = "promote" | "demote" | "flat";
@@ -18,7 +19,7 @@ interface ForecastChipProps {
   direction: ForecastDirection;
   /** Magnitude of the move (absolute), e.g. divisions or places. */
   magnitude?: number;
-  /** Unit label shown after the magnitude. */
+  /** Unit label after the magnitude; defaults to the translated "div". */
   unit?: string;
   /** Model confidence 0–1; rendered as a plain word (High/Medium/Low). */
   confidence?: number;
@@ -34,11 +35,11 @@ interface ForecastChipProps {
 
 const DIRECTION_META: Record<
   ForecastDirection,
-  { label: string; cls: string; Icon: typeof ArrowUp }
+  { key: "up" | "down" | "hold"; cls: string; Icon: typeof ArrowUp }
 > = {
-  promote: { label: "Moving up", cls: "border-emerald-500/40 text-emerald-300 bg-emerald-500/10", Icon: ArrowUp },
-  demote: { label: "Moving down", cls: "border-rose-500/40 text-rose-300 bg-rose-500/10", Icon: ArrowDown },
-  flat: { label: "Holding", cls: "border-border text-muted-foreground bg-muted/40", Icon: Minus },
+  promote: { key: "up", cls: "border-emerald-500/40 text-emerald-300 bg-emerald-500/10", Icon: ArrowUp },
+  demote: { key: "down", cls: "border-rose-500/40 text-rose-300 bg-rose-500/10", Icon: ArrowDown },
+  flat: { key: "hold", cls: "border-border text-muted-foreground bg-muted/40", Icon: Minus },
 };
 
 const TONE_CLS: Record<"high" | "medium" | "low", string> = {
@@ -49,31 +50,31 @@ const TONE_CLS: Record<"high" | "medium" | "low", string> = {
 
 /**
  * One chip that says, in plain language, which way the model expects a player /
- * team to move, by how much, and how sure it is — replacing the separate
- * confidence donut + signed shift bar. Raw numbers stay in the tooltip.
+ * team to move, by how much, and how sure it is. Raw numbers stay in the
+ * tooltip. All copy is translated via the `analytics.forecast` namespace.
  */
 export default function ForecastChip({
   direction,
   magnitude,
-  unit = "div",
+  unit,
   confidence,
   rawTooltip,
   className,
   focusable = true,
 }: ForecastChipProps) {
+  const { t } = useTranslation();
   const meta = DIRECTION_META[direction];
   const { Icon } = meta;
+  const label = t(`analytics.forecast.${meta.key}`);
+  const resolvedUnit = unit ?? t("analytics.forecast.divisionUnit");
   const conf = confidence != null ? confidenceWord(confidence) : null;
-  const magnitudeText =
-    direction !== "flat" && magnitude != null && magnitude > 0
-      ? `${formatAnalyticsNumber(magnitude, 1)} ${unit}`
-      : meta.label;
+  const confLabel = conf ? t(`analytics.confidence.${conf.tone}`) : null;
+  const hasMove = direction !== "flat" && magnitude != null && magnitude > 0;
+  const magnitudeText = hasMove ? `${formatAnalyticsNumber(magnitude!, 1)} ${resolvedUnit}` : label;
   const ariaLabel = [
-    meta.label,
-    direction !== "flat" && magnitude != null && magnitude > 0
-      ? `by ${formatAnalyticsNumber(magnitude, 1)} ${unit}`
-      : null,
-    conf ? `${conf.label} confidence` : null,
+    label,
+    hasMove ? t("analytics.forecast.by", { magnitude: formatAnalyticsNumber(magnitude!, 1), unit: resolvedUnit }) : null,
+    confLabel ? t("analytics.forecast.confidence", { label: confLabel }) : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -93,8 +94,8 @@ export default function ForecastChip({
           >
             <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span>{magnitudeText}</span>
-            {conf ? (
-              <span className={cn("font-normal opacity-90", TONE_CLS[conf.tone])}>· {conf.label}</span>
+            {confLabel ? (
+              <span className={cn("font-normal opacity-90", TONE_CLS[conf!.tone])}>· {confLabel}</span>
             ) : null}
           </span>
         </TooltipTrigger>
@@ -102,16 +103,21 @@ export default function ForecastChip({
           side="top"
           className="max-w-[240px] border border-border bg-popover text-popover-foreground"
         >
-          <span className="block text-xs font-semibold">{meta.label}</span>
-          {direction !== "flat" && magnitude != null && magnitude > 0 ? (
+          <span className="block text-xs font-semibold">{label}</span>
+          {hasMove ? (
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              by ~{formatAnalyticsNumber(magnitude, 1)} {unit}
+              {t("analytics.forecast.by", {
+                magnitude: formatAnalyticsNumber(magnitude!, 1),
+                unit: resolvedUnit,
+              })}
             </span>
           ) : null}
-          {conf ? (
+          {confLabel ? (
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              Confidence: {conf.label}
-              {confidence != null ? ` (${Math.round(confidence * 100)}%)` : ""}
+              {t("analytics.forecast.confidenceWithPct", {
+                label: confLabel,
+                pct: Math.round((confidence ?? 0) * 100),
+              })}
             </span>
           ) : null}
           {rawTooltip ? (

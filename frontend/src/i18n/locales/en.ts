@@ -437,5 +437,214 @@ export const en = {
       daysPlaceholder: "7",
       tournamentsPlaceholder: "all"
     }
+  },
+  analytics: {
+    briefing: {
+      eyebrow: "Tournament analytics",
+      rankedBy: "ranked by {algorithm}",
+      titleFallback: "Tournament analytics",
+      pickPrompt: "Pick a tournament and an algorithm to see the briefing.",
+      tournament: "Tournament",
+      algorithm: "Algorithm",
+      selectTournament: "Select a tournament",
+      selectAlgorithm: "Select an algorithm",
+      loadingTournaments: "Loading tournaments...",
+      loadingAlgorithms: "Loading algorithms...",
+      errorTournaments: "Failed to load tournaments",
+      errorAlgorithms: "Failed to load algorithms"
+    },
+    verdict: {
+      headline: "{teams} teams · {players} players",
+      moves: "{count} likely division changes",
+      flags: "{count} flags to review",
+      misses: "{count} teams the forecast missed badly",
+      newcomers: "{count} newcomers",
+      forecast: "forecast off by ~{delta} places on average"
+    },
+    triage: {
+      title: "Needs attention",
+      allClear: "All clear — no flags, surprises or first-timers to look at.",
+      flags: "Flags to review",
+      misses: "Forecast misses",
+      moves: "Likely division moves",
+      newcomers: "First-timers",
+      forecastFinished: "forecast {predicted} · finished {finished}",
+      newPlayer: "new player",
+      newRole: "new role"
+    },
+    standings: {
+      title: "Standings",
+      sortedBy: "{count} teams · sorted by {mode}",
+      sortStandings: "Standings",
+      sortPredicted: "By predicted",
+      sortShift: "By shift",
+      record: "record",
+      confidence: "confidence",
+      predicted: "Predicted {place}",
+      predictedRange: "Predicted {mean} (p10–p90 {p10}–{p90})",
+      manual: "manual",
+      colRole: "Role",
+      colBattleTag: "Battle tag",
+      colCurrent: "Current",
+      colForecast: "Forecast",
+      colMove2: "Move 2",
+      colMove1: "Move 1",
+      colSignal: "Signal",
+      colImpact: "Impact",
+      colVsLocal: "vs similar",
+      colConfidence: "Confidence",
+      colManual: "Manual",
+      colFlags: "Flags",
+      editManualShift: "Edit manual shift"
+    },
+    forecast: {
+      up: "Moving up",
+      down: "Moving down",
+      hold: "Holding",
+      by: "by ~{magnitude} {unit}",
+      confidence: "Confidence: {label}",
+      confidenceWithPct: "Confidence: {label} ({pct}%)",
+      divisionUnit: "div"
+    },
+    confidence: {
+      high: "High",
+      medium: "Medium",
+      low: "Low"
+    },
+    organizer: {
+      title: "Organizer tools",
+      subtitle: "recalculate · train · manual edits"
+    },
+    deepDive: {
+      title: "Deep dive",
+      subtitle: "forecast horizon · standings odds · match quality"
+    },
+    page: {
+      chooseParams: "Choose parameters",
+      chooseParamsDesc: "Select a tournament and an algorithm to view analytics.",
+      unavailable: "Analytics unavailable",
+      unavailableDesc: "Failed to load analytics for the selected parameters.",
+      noTeams: "No teams",
+      noTeamsDesc: "No teams found for the selected tournament."
+    },
+    horizon: {
+      title: "Predicted vs actual horizon",
+      subtitle: "Open ring is predicted. Filled dot is actual placement.",
+      predicted: "Predicted",
+      actual: "Actual",
+      predictedTip: "Predicted: {place}",
+      actualTip: "Actual: {place}",
+      deltaAvg: "Delta avg"
+    },
+    distribution: {
+      title: "Predicted standings distribution",
+      subtitle: "Monte Carlo simulation (5000 iter) over the calibrated pairwise win-probability model.",
+      team: "Team",
+      mean: "Mean (p10–p90)",
+      top1: "P(top 1)",
+      top3: "P(top 3)",
+      top8: "P(top 8)",
+      distribution: "Distribution",
+      unavailable: "Standings v2 not available. Run the trainer first.",
+      noData: "No predictions yet for this tournament."
+    },
+    matchQuality: {
+      title: "Match quality & anomalies",
+      subtitle: "Post-hoc per-encounter scoring (how close, how expected, how even) plus anomaly flags.",
+      encounter: "Encounter #{id}",
+      comp: "close",
+      pred: "expected",
+      skill: "even",
+      unavailable: "Match Quality not available. Run the inference pipeline first.",
+      noData: "No match-quality rows yet.",
+      confirm: "Confirm — true positive",
+      dismiss: "Dismiss — false positive"
+    },
+    glossary: {
+      confidence: {
+        label: "Confidence",
+        plain: "How sure the model is about this forecast, based on how much history and match data it had."
+      },
+      shift: {
+        label: "Division adjustment",
+        plain: "Suggested change to a player's division for the next tournament (＋ moves up, − moves down)."
+      },
+      impact: {
+        label: "Impact",
+        plain: "How much better or worse the player did than expected for the match-up — 0–100 within their role."
+      },
+      vs_local: {
+        label: "vs similar players",
+        plain: "Performance compared to players of the same role and nearby division (0 = average, ＋ above, − below)."
+      },
+      points: {
+        label: "Move signal",
+        plain: "The raw signal driving the division forecast — the larger it is, the stronger the up/down push."
+      },
+      recent_moves: {
+        label: "Recent moves",
+        plain: "Division changes in the player's last two tournaments."
+      },
+      forecast_place: {
+        label: "Forecast place",
+        plain: "Where the model expects the team to finish."
+      },
+      likely_range: {
+        label: "Likely finish",
+        plain: "Where the team lands in 80% of simulated tournaments (10th–90th percentile)."
+      },
+      prob_top: {
+        label: "Chance for top finish",
+        plain: "Share of simulated tournaments where the team finished in the top N."
+      },
+      competitiveness: {
+        label: "How close",
+        plain: "How back-and-forth the match was — 100 is a nail-biter, 0 is a blowout."
+      },
+      predictability: {
+        label: "How expected",
+        plain: "How well the result matched the pre-match forecast — 100 means it went as expected."
+      },
+      skill_balance: {
+        label: "How even",
+        plain: "How evenly matched the two teams' ratings were — 100 is a perfectly even match-up."
+      },
+      match_quality: {
+        label: "Match quality",
+        plain: "Overall watchability: a blend of how close, how expected and how even the match was."
+      },
+      forecast_miss: {
+        label: "Forecast miss",
+        plain: "How far the forecast landed from the real finish, in places."
+      },
+      evidence: {
+        label: "Evidence",
+        plain: "Weighted amount of history behind the forecast — more evidence means more confidence."
+      },
+      newcomer: {
+        label: "Newcomer",
+        plain: "Playing their first tournament, or their first time in this role."
+      },
+      why_score: {
+        label: "Why this score",
+        plain: "The player stats that pushed the impact score up or down the most."
+      },
+      smurf: {
+        label: "Possible smurf",
+        plain: "Performing far above their division — may be an under-ranked account."
+      },
+      throw: {
+        label: "Possible throw",
+        plain: "A sharp drop in performance partway through a series."
+      },
+      troll: {
+        label: "Possible griefing",
+        plain: "Repeatedly underperforming their own nearby-division baseline."
+      },
+      sandbag: {
+        label: "Possible sandbag",
+        plain: "A sudden one-tournament collapse versus the player's own track record."
+      }
+    }
   }
 };

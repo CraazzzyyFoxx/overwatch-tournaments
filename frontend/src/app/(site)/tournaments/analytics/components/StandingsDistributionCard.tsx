@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "@/i18n/LanguageContext";
 
 interface StandingsDistributionCardProps {
   tournamentId: number;
@@ -58,6 +59,7 @@ export default function StandingsDistributionCard({
   algorithmId,
   teams,
 }: StandingsDistributionCardProps) {
+  const { t } = useTranslation();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["analytics-standings-distribution", tournamentId, algorithmId],
     queryFn: () => analyticsService.getStandingsDistribution(tournamentId, algorithmId),
@@ -66,8 +68,8 @@ export default function StandingsDistributionCard({
 
   const teamNamesById = React.useMemo(() => {
     const map: Record<number, string> = {};
-    teams.forEach((t) => {
-      map[t.id] = t.name;
+    teams.forEach((team) => {
+      map[team.id] = team.name;
     });
     return map;
   }, [teams]);
@@ -80,9 +82,9 @@ export default function StandingsDistributionCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Predicted standings distribution</CardTitle>
+        <CardTitle className="text-base">{t("analytics.distribution.title")}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Monte Carlo simulation (5000 iter) over the calibrated pairwise win-probability model.
+          {t("analytics.distribution.subtitle")}
         </p>
       </CardHeader>
       <CardContent>
@@ -95,24 +97,24 @@ export default function StandingsDistributionCard({
         )}
         {isError && (
           <p className="text-sm text-muted-foreground">
-            Standings v2 not available. Run the trainer first.
+            {t("analytics.distribution.unavailable")}
           </p>
         )}
         {data && data.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No predictions yet for this tournament.
+            {t("analytics.distribution.noData")}
           </p>
         )}
         {rows.length > 0 && (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Team</TableHead>
-                <TableHead className="text-center">Mean (p10–p90)</TableHead>
-                <TableHead className="text-center">P(top 1)</TableHead>
-                <TableHead className="text-center">P(top 3)</TableHead>
-                <TableHead className="text-center">P(top 8)</TableHead>
-                <TableHead className="text-center">Distribution</TableHead>
+                <TableHead>{t("analytics.distribution.team")}</TableHead>
+                <TableHead className="text-center">{t("analytics.distribution.mean")}</TableHead>
+                <TableHead className="text-center">{t("analytics.distribution.top1")}</TableHead>
+                <TableHead className="text-center">{t("analytics.distribution.top3")}</TableHead>
+                <TableHead className="text-center">{t("analytics.distribution.top8")}</TableHead>
+                <TableHead className="text-center">{t("analytics.distribution.distribution")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

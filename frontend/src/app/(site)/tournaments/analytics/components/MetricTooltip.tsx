@@ -10,7 +10,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ANALYTICS_GLOSSARY, GlossaryTerm } from "../analytics-glossary";
+import { useTranslation } from "@/i18n/LanguageContext";
+import { GlossaryTerm } from "../analytics-glossary";
 
 interface MetricTooltipProps {
   term: GlossaryTerm;
@@ -39,7 +40,9 @@ export default function MetricTooltip({
   showIcon,
   focusable = true,
 }: MetricTooltipProps) {
-  const entry = ANALYTICS_GLOSSARY[term];
+  const { t } = useTranslation();
+  const label = t(`analytics.glossary.${term}.label`);
+  const plain = t(`analytics.glossary.${term}.plain`);
   const isPlainLabel = children == null;
   const withIcon = showIcon ?? isPlainLabel;
 
@@ -49,7 +52,7 @@ export default function MetricTooltip({
         <TooltipTrigger asChild>
           <span
             {...(focusable ? { tabIndex: 0 } : {})}
-            aria-label={`${entry.label}: ${entry.plain}`}
+            aria-label={`${label}: ${plain}`}
             className={cn(
               "inline-flex items-center gap-1 align-middle",
               isPlainLabel &&
@@ -57,7 +60,7 @@ export default function MetricTooltip({
               className,
             )}
           >
-            {children ?? entry.label}
+            {children ?? label}
             {withIcon ? (
               <Info className="h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden="true" />
             ) : null}
@@ -67,9 +70,9 @@ export default function MetricTooltip({
           side="top"
           className="max-w-[260px] border border-border bg-popover text-popover-foreground"
         >
-          <span className="block text-xs font-semibold">{entry.label}</span>
+          <span className="block text-xs font-semibold">{label}</span>
           <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-            {entry.plain}
+            {plain}
           </span>
         </TooltipContent>
       </Tooltip>

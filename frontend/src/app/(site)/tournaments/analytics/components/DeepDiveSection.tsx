@@ -11,6 +11,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import AnalyticsHorizon from "@/app/(site)/tournaments/analytics/components/AnalyticsHorizon";
 import StandingsDistributionCard from "@/app/(site)/tournaments/analytics/components/StandingsDistributionCard";
 import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/MatchQualityCard";
@@ -27,6 +28,7 @@ interface DeepDiveSectionProps {
  * Kept one click away so the read view stays a clean briefing.
  */
 export default function DeepDiveSection({ tournamentId, teams }: DeepDiveSectionProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -35,10 +37,10 @@ export default function DeepDiveSection({ tournamentId, teams }: DeepDiveSection
         <CollapsibleTrigger className="flex w-full items-center gap-2 px-5 py-3 text-left transition-colors hover:bg-white/[0.02]">
           <FlaskConical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span className="font-display text-[15px] font-bold uppercase tracking-[0.04em] text-foreground">
-            Deep dive
+            {t("analytics.deepDive.title")}
           </span>
           <span className="hidden text-xs text-muted-foreground sm:inline">
-            forecast horizon · standings odds · match quality
+            {t("analytics.deepDive.subtitle")}
           </span>
           <ChevronDown
             className={cn(

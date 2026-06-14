@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  buildVerdictClauses,
+  buildVerdict,
   canShowAnalyticsAdminToolbar,
   confidenceWord,
   getAnalyticsRefreshKeys,
   getPreferredAnalyticsAlgorithmId,
-  pluralize,
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 
 const baseSummary = {
@@ -62,21 +61,25 @@ describe("analytics helpers", () => {
     expect(confidenceWord(1.4).label).toBe("High");
   });
 
-  it("pluralizes counts", () => {
-    expect(pluralize(1, "team", "teams")).toBe("1 team");
-    expect(pluralize(3, "team", "teams")).toBe("3 teams");
-    expect(pluralize(0, "flag", "flags")).toBe("0 flags");
-  });
+  it("builds a verdict as i18n keys + params with supporting clauses", () => {
+    const verdict = buildVerdict(baseSummary, 7);
 
-  it("builds a plain-language verdict with supporting clauses", () => {
-    const verdict = buildVerdictClauses(baseSummary, 7);
-
-    expect(verdict.headline).toBe("12 teams · 60 players");
-    expect(verdict.clauses).toContain("7 likely division changes");
-    expect(verdict.clauses).toContain("2 flags to review");
-    expect(verdict.clauses).toContain("3 teams the forecast missed badly");
-    expect(verdict.clauses).toContain("5 newcomers");
-    expect(verdict.clauses.at(-1)).toBe("forecast off by ~1.3 places on average");
+    expect(verdict.headlineParams).toEqual({ teams: 12, players: 60 });
+    const keys = verdict.clauses.map((clause) => clause.key);
+    expect(keys).toContain("analytics.verdict.moves");
+    expect(keys).toContain("analytics.verdict.flags");
+    expect(keys).toContain("analytics.verdict.misses");
+    expect(keys).toContain("analytics.verdict.newcomers");
+    // forecast-accuracy clause is always last
+    expect(verdict.clauses.at(-1)).toEqual({
+      key: "analytics.verdict.forecast",
+      params: { delta: "1.3" },
+    });
+    // the flags clause is toned as a warning
+    expect(verdict.clauses.find((c) => c.key === "analytics.verdict.flags")?.tone).toBe("warn");
+    expect(verdict.clauses.find((c) => c.key === "analytics.verdict.moves")?.params).toEqual({
+      count: 7,
+    });
   });
 
   it("omits optional clauses when everything is calm", () => {
@@ -89,9 +92,11 @@ describe("analytics helpers", () => {
       avg_placement_delta: 0.4,
     };
 
-    const verdict = buildVerdictClauses(calm, 0);
+    const verdict = buildVerdict(calm, 0);
 
-    expect(verdict.clauses).toEqual(["forecast off by ~0.4 places on average"]);
+    expect(verdict.clauses).toEqual([
+      { key: "analytics.verdict.forecast", params: { delta: "0.4" } },
+    ]);
   });
 
   it("returns the analytics queries that must be invalidated after recalculate", () => {

@@ -1,7 +1,10 @@
+"use client";
+
 import { TeamAnalytics } from "@/types/analytics.types";
 import { formatAnalyticsNumber } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
+import { useTranslation } from "@/i18n/LanguageContext";
 import styles from "./AnalyticsRedesign.module.css";
 
 interface AnalyticsHorizonProps {
@@ -9,6 +12,7 @@ interface AnalyticsHorizonProps {
 }
 
 const AnalyticsHorizon = ({ teams }: AnalyticsHorizonProps) => {
+  const { t } = useTranslation();
   const teamsWithPlacement = teams.filter((team) => team.placement != null);
   const positionValues = teamsWithPlacement.flatMap((team) => [
     team.placement ?? 1,
@@ -29,8 +33,8 @@ const AnalyticsHorizon = ({ teams }: AnalyticsHorizonProps) => {
     <Card className="overflow-hidden">
       <div className={styles.horizon}>
         <div>
-          <div className={styles.sectionTitle}>Predicted vs actual horizon</div>
-          <div className={styles.sectionSub}>Open ring is predicted. Filled dot is actual placement.</div>
+          <div className={styles.sectionTitle}>{t("analytics.horizon.title")}</div>
+          <div className={styles.sectionSub}>{t("analytics.horizon.subtitle")}</div>
         </div>
         <div className={styles.horizonGrid}>
           {teamsWithPlacement.map((team) => {
@@ -57,12 +61,12 @@ const AnalyticsHorizon = ({ teams }: AnalyticsHorizonProps) => {
                   <span
                     className={cn(styles.horizonDot, styles.horizonPredicted)}
                     style={{ left: `${predictedPct}%` }}
-                    title={`Predicted: ${predicted}`}
+                    title={t("analytics.horizon.predictedTip", { place: predicted })}
                   />
                   <span
                     className={cn(styles.horizonDot, styles.horizonActual)}
                     style={{ left: `${actualPct}%` }}
-                    title={`Actual: ${actual}`}
+                    title={t("analytics.horizon.actualTip", { place: actual })}
                   />
                   <span
                     className={styles.horizonName}
@@ -80,14 +84,15 @@ const AnalyticsHorizon = ({ teams }: AnalyticsHorizonProps) => {
         <div className={styles.legend}>
           <span className={styles.legendSwatch}>
             <span className={cn(styles.swatch, styles.swatchOutline)} />
-            Predicted
+            {t("analytics.horizon.predicted")}
           </span>
           <span className={styles.legendSwatch}>
             <span className={cn(styles.swatch, styles.swatchActual)} />
-            Actual
+            {t("analytics.horizon.actual")}
           </span>
           <span className="ml-auto">
-            Delta avg <strong className="text-foreground">{formatAnalyticsNumber(avgDelta, 1)}</strong>
+            {t("analytics.horizon.deltaAvg")}{" "}
+            <strong className="text-foreground">{formatAnalyticsNumber(avgDelta, 1)}</strong>
           </span>
         </div>
       </div>

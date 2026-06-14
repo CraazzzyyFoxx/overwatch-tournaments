@@ -17,6 +17,7 @@ import {
   sortAnalyticsAlgorithms
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTranslation } from "@/i18n/LanguageContext";
 import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -26,6 +27,7 @@ const AnalyticsPage = () => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
+  const { t } = useTranslation();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
   const parseId = useCallback((value: string | null) => {
@@ -216,15 +218,15 @@ const AnalyticsPage = () => {
       ) : tournamentId == null || algorithmId == null ? (
         <Card>
           <CardHeader>
-            <CardTitle>Choose parameters</CardTitle>
-            <CardDescription>Select a tournament and an algorithm to view analytics.</CardDescription>
+            <CardTitle>{t("analytics.page.chooseParams")}</CardTitle>
+            <CardDescription>{t("analytics.page.chooseParamsDesc")}</CardDescription>
           </CardHeader>
         </Card>
       ) : isErrorAnalytics ? (
         <Card>
           <CardHeader>
-            <CardTitle>Analytics unavailable</CardTitle>
-            <CardDescription>Failed to load analytics for the selected parameters.</CardDescription>
+            <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
+            <CardDescription>{t("analytics.page.unavailableDesc")}</CardDescription>
           </CardHeader>
         </Card>
       ) : loadingAnalytics || !analytics ? (
@@ -232,8 +234,8 @@ const AnalyticsPage = () => {
       ) : isEmptyTeams ? (
         <Card>
           <CardHeader>
-            <CardTitle>No teams</CardTitle>
-            <CardDescription>No teams found for the selected tournament.</CardDescription>
+            <CardTitle>{t("analytics.page.noTeams")}</CardTitle>
+            <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
           </CardHeader>
         </Card>
       ) : (

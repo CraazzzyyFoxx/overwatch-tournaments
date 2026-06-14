@@ -86,13 +86,16 @@ export function confidenceWord(confidence: number): { label: string; tone: Confi
   return { label: "Low", tone: "low" };
 }
 
-export function pluralize(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+export interface VerdictClause {
+  /** i18n key under the `analytics.verdict` namespace. */
+  key: string;
+  params: Record<string, string | number>;
+  tone?: "warn";
 }
 
 export interface AnalyticsVerdict {
-  headline: string;
-  clauses: string[];
+  headlineParams: { teams: number; players: number };
+  clauses: VerdictClause[];
 }
 
 type VerdictSummary = Pick<
@@ -106,41 +109,45 @@ type VerdictSummary = Pick<
 >;
 
 /**
- * Turn the raw summary counters into a one-glance briefing sentence: a headline
+ * Turn the raw summary counters into a one-glance briefing: a headline
  * (teams/players) plus only the supporting clauses that actually apply, ending
- * with a calm forecast-accuracy note. Optional clauses are omitted when zero so
- * a quiet tournament reads as quiet.
+ * with a calm forecast-accuracy note. Returns i18n keys + params (not rendered
+ * text) so the component translates them; optional clauses are omitted when
+ * zero so a quiet tournament reads as quiet.
  */
-export function buildVerdictClauses(
+export function buildVerdict(
   summary: VerdictSummary,
   predictedMoves: number,
 ): AnalyticsVerdict {
-  const headline = `${pluralize(summary.total_teams, "team", "teams")} · ${pluralize(
-    summary.total_players,
-    "player",
-    "players",
-  )}`;
-
-  const clauses: string[] = [];
+  const clauses: VerdictClause[] = [];
   if (predictedMoves > 0) {
-    clauses.push(pluralize(predictedMoves, "likely division change", "likely division changes"));
+    clauses.push({ key: "analytics.verdict.moves", params: { count: predictedMoves } });
   }
   if (summary.anomaly_count > 0) {
-    clauses.push(`${pluralize(summary.anomaly_count, "flag", "flags")} to review`);
+    clauses.push({
+      key: "analytics.verdict.flags",
+      params: { count: summary.anomaly_count },
+      tone: "warn",
+    });
   }
   if (summary.divergent_team_count > 0) {
-    clauses.push(
-      `${pluralize(summary.divergent_team_count, "team", "teams")} the forecast missed badly`,
-    );
+    clauses.push({
+      key: "analytics.verdict.misses",
+      params: { count: summary.divergent_team_count },
+    });
   }
   if (summary.newcomer_count > 0) {
-    clauses.push(pluralize(summary.newcomer_count, "newcomer", "newcomers"));
+    clauses.push({ key: "analytics.verdict.newcomers", params: { count: summary.newcomer_count } });
   }
-  clauses.push(
-    `forecast off by ~${(summary.avg_placement_delta ?? 0).toFixed(1)} places on average`,
-  );
+  clauses.push({
+    key: "analytics.verdict.forecast",
+    params: { delta: (summary.avg_placement_delta ?? 0).toFixed(1) },
+  });
 
-  return { headline, clauses };
+  return {
+    headlineParams: { teams: summary.total_teams, players: summary.total_players },
+    clauses,
+  };
 }
 
 export function formatConfidencePercent(confidence: number): string {

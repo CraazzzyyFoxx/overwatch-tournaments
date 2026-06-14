@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { buildVerdictClauses } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import { useTranslation } from "@/i18n/LanguageContext";
+import { buildVerdict } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 
 interface AnalyticsBriefingProps {
   tournaments: Tournament[];
@@ -54,7 +55,8 @@ export default function AnalyticsBriefing({
   onTournamentChange,
   onAlgorithmChange,
 }: AnalyticsBriefingProps) {
-  const verdict = summary ? buildVerdictClauses(summary, predictedMoves) : null;
+  const { t } = useTranslation();
+  const verdict = summary ? buildVerdict(summary, predictedMoves) : null;
 
   return (
     <Card className="overflow-hidden border-border/60">
@@ -62,28 +64,29 @@ export default function AnalyticsBriefing({
         {/* Verdict — the one-glance answer */}
         <div className="min-w-0">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
-            Tournament analytics
+            {t("analytics.briefing.eyebrow")}
             {activeAlgorithm ? (
-              <span className="text-muted-foreground/40"> · ranked by {activeAlgorithm.name}</span>
+              <span className="text-muted-foreground/40">
+                {" · "}
+                {t("analytics.briefing.rankedBy", { algorithm: activeAlgorithm.name })}
+              </span>
             ) : null}
           </p>
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground md:text-3xl">
-            {activeTournament?.name ?? "Tournament analytics"}
+            {activeTournament?.name ?? t("analytics.briefing.titleFallback")}
           </h1>
 
           {verdict ? (
             <div className="mt-3 max-w-xl">
-              <p className="text-base font-semibold text-foreground">{verdict.headline}</p>
+              <p className="text-base font-semibold text-foreground">
+                {t("analytics.verdict.headline", verdict.headlineParams)}
+              </p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                 {verdict.clauses.map((clause, index) => (
                   <React.Fragment key={index}>
                     {index > 0 ? <span className="text-muted-foreground/40"> · </span> : null}
-                    <span
-                      className={
-                        clause.includes("flag") ? "text-amber-300" : undefined
-                      }
-                    >
-                      {clause}
+                    <span className={clause.tone === "warn" ? "text-amber-300" : undefined}>
+                      {t(clause.key, clause.params)}
                     </span>
                   </React.Fragment>
                 ))}
@@ -91,7 +94,7 @@ export default function AnalyticsBriefing({
             </div>
           ) : (
             <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-              Pick a tournament and an algorithm to see the briefing.
+              {t("analytics.briefing.pickPrompt")}
             </p>
           )}
         </div>
@@ -100,21 +103,21 @@ export default function AnalyticsBriefing({
         <div className="flex flex-col gap-3">
           <div>
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/50">
-              Tournament
+              {t("analytics.briefing.tournament")}
             </div>
             <Select
               value={tournamentId == null ? "" : tournamentId.toString()}
               onValueChange={onTournamentChange}
               disabled={loadingTournaments || isErrorTournaments}
             >
-              <SelectTrigger aria-label="Tournament" className="h-11">
+              <SelectTrigger aria-label={t("analytics.briefing.tournament")} className="h-11">
                 <SelectValue
                   placeholder={
                     loadingTournaments
-                      ? "Loading tournaments..."
+                      ? t("analytics.briefing.loadingTournaments")
                       : isErrorTournaments
-                        ? "Failed to load tournaments"
-                        : "Select a tournament"
+                        ? t("analytics.briefing.errorTournaments")
+                        : t("analytics.briefing.selectTournament")
                   }
                 />
               </SelectTrigger>
@@ -132,21 +135,21 @@ export default function AnalyticsBriefing({
 
           <div>
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/50">
-              Algorithm
+              {t("analytics.briefing.algorithm")}
             </div>
             <Select
               value={algorithmId == null ? "" : algorithmId.toString()}
               onValueChange={onAlgorithmChange}
               disabled={loadingAlgorithms || isErrorAlgorithms}
             >
-              <SelectTrigger aria-label="Algorithm" className="h-11">
+              <SelectTrigger aria-label={t("analytics.briefing.algorithm")} className="h-11">
                 <SelectValue
                   placeholder={
                     loadingAlgorithms
-                      ? "Loading algorithms..."
+                      ? t("analytics.briefing.loadingAlgorithms")
                       : isErrorAlgorithms
-                        ? "Failed to load algorithms"
-                        : "Select an algorithm"
+                        ? t("analytics.briefing.errorAlgorithms")
+                        : t("analytics.briefing.selectAlgorithm")
                   }
                 />
               </SelectTrigger>

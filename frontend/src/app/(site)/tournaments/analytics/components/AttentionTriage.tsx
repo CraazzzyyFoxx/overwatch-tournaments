@@ -1,15 +1,16 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, CheckCircle2, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Minus, Sparkles, Target } from "lucide-react";
 
 import { PlayerAnalytics, TeamAnalytics } from "@/types/analytics.types";
+import type { DivisionGridVersion } from "@/types/workspace.types";
 import { Card } from "@/components/ui/card";
+import DivisionIcon from "@/components/DivisionIcon";
 import { cn } from "@/lib/utils";
-import { formatAnalyticsNumber } from "@/app/(site)/tournaments/analytics/analytics.helpers";
-import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
+import { useTranslation } from "@/i18n/LanguageContext";
+import { isAnomalyGlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
-import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
 
 interface AttentionTriageProps {
   teams: TeamAnalytics[];
@@ -17,16 +18,62 @@ interface AttentionTriageProps {
 
 const DIVERGENCE_THRESHOLD = 4;
 const GROUP_LIMIT = 6;
-const ANOMALY_TERMS = new Set<GlossaryTerm>(["smurf", "throw", "troll", "sandbag"]);
 
-type PlayerWithTeam = PlayerAnalytics & { teamId: number; teamName: string };
+type PlayerWithTeam = PlayerAnalytics & {
+  teamId: number;
+  teamName: string;
+  grid?: DivisionGridVersion | null;
+};
 
 /** Jump to the team's row in the standings board below. */
 function TeamLink({ id, children }: { id: number; children: React.ReactNode }) {
   return (
-    <a href={`#${id}`} className="truncate font-medium hover:text-foreground transition-colors">
+    <a href={`#${id}`} className="truncate font-medium transition-colors hover:text-foreground">
       {children}
     </a>
+  );
+}
+
+/** Classic DivisionGrid current → predicted move. */
+function DivisionMoveMini({
+  from,
+  to,
+  direction,
+  grid,
+}: {
+  from: number | null;
+  to: number | null;
+  direction: PlayerAnalytics["predicted_direction"];
+  grid?: DivisionGridVersion | null;
+}) {
+  const Arrow = direction === "promote" ? ArrowUp : direction === "demote" ? ArrowDown : Minus;
+  const arrowCls =
+    direction === "promote"
+      ? "text-emerald-400"
+      : direction === "demote"
+        ? "text-rose-400"
+        : "text-muted-foreground";
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      {from != null ? (
+        <DivisionIcon division={from} tournamentGrid={grid} width={22} height={22} />
+      ) : (
+        <span className="text-muted-foreground">–</span>
+      )}
+      <Arrow className={cn("h-3.5 w-3.5", arrowCls)} aria-hidden="true" />
+      {to != null ? (
+        <DivisionIcon
+          division={to}
+          tournamentGrid={grid}
+          width={22}
+          height={22}
+          className={cn("inline-block", direction === "flat" && "opacity-45")}
+        />
+      ) : (
+        <span className="text-muted-foreground">–</span>
+      )}
+    </span>
   );
 }
 
@@ -58,16 +105,31 @@ function GroupCard({
 }
 
 export default function AttentionTriage({ teams }: AttentionTriageProps) {
+  const { t } = useTranslation();
+
   const players: PlayerWithTeam[] = teams.flatMap((team) =>
-    team.players.map((player) => ({ ...player, teamId: team.id, teamName: team.name })),
+    team.players.map((player) => ({
+      ...player,
+      teamId: team.id,
+      teamName: team.name,
+      grid: team.tournament?.division_grid_version ?? null,
+    })),
   );
+  const playerById = new Map<number, PlayerWithTeam>(players.map((player) => [player.id, player]));
 
   const flags = teams.flatMap((team) =>
-    team.anomalies.map((anomaly) => ({ ...anomaly, teamId: team.id, teamName: team.name })),
+    team.anomalies.map((anomaly) => ({
+      ...anomaly,
+      teamId: team.id,
+      player: playerById.get(anomaly.player_id),
+    })),
   );
 
   const forecastMisses = [...teams]
-    .filter((team) => team.placement_delta != null && Math.abs(team.placement_delta) >= DIVERGENCE_THRESHOLD)
+    .filter(
+      (team) =>
+        team.placement_delta != null && Math.abs(team.placement_delta) >= DIVERGENCE_THRESHOLD,
+    )
     .sort((a, b) => Math.abs(b.placement_delta ?? 0) - Math.abs(a.placement_delta ?? 0))
     .slice(0, GROUP_LIMIT);
 
@@ -81,27 +143,30 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
     .slice(0, GROUP_LIMIT);
 
   const nothing =
-    flags.length === 0 && forecastMisses.length === 0 && bigMoves.length === 0 && newcomers.length === 0;
+    flags.length === 0 &&
+    forecastMisses.length === 0 &&
+    bigMoves.length === 0 &&
+    newcomers.length === 0;
 
   return (
     <Card className="overflow-hidden border-border/60">
       <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3">
         <AlertTriangle className="h-4 w-4 text-amber-400" aria-hidden="true" />
         <h2 className="font-display text-[15px] font-bold uppercase tracking-[0.04em] text-foreground">
-          Needs attention
+          {t("analytics.triage.title")}
         </h2>
       </div>
 
       {nothing ? (
         <div className="flex items-center gap-2 px-5 py-6 text-sm text-muted-foreground">
           <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-          All clear — no flags, surprises or first-timers to look at.
+          {t("analytics.triage.allClear")}
         </div>
       ) : (
         <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
           {flags.length > 0 ? (
             <GroupCard
-              title="Flags to review"
+              title={t("analytics.triage.flags")}
               icon={<AlertTriangle className="h-3.5 w-3.5" />}
               tone="bg-amber-500/15 text-amber-300"
               count={flags.length}
@@ -111,12 +176,14 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
                   key={`${flag.player_id}-${flag.kind}-${index}`}
                   className="flex items-center justify-between gap-2"
                 >
-                  {ANOMALY_TERMS.has(flag.kind as GlossaryTerm) ? (
-                    <MetricTooltip term={flag.kind as GlossaryTerm} className="text-foreground" />
+                  {isAnomalyGlossaryTerm(flag.kind) ? (
+                    <MetricTooltip term={flag.kind} className="text-amber-200" />
                   ) : (
-                    <span className="capitalize text-foreground">{flag.kind}</span>
+                    <span className="capitalize text-amber-200">{flag.kind}</span>
                   )}
-                  <TeamLink id={flag.teamId}>{flag.teamName}</TeamLink>
+                  <TeamLink id={flag.player?.teamId ?? flag.teamId}>
+                    {flag.player?.name ?? `#${flag.player_id}`}
+                  </TeamLink>
                 </div>
               ))}
             </GroupCard>
@@ -124,7 +191,7 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
 
           {forecastMisses.length > 0 ? (
             <GroupCard
-              title={<MetricTooltip term="forecast_miss">Forecast misses</MetricTooltip>}
+              title={<MetricTooltip term="forecast_miss">{t("analytics.triage.misses")}</MetricTooltip>}
               icon={<Target className="h-3.5 w-3.5" />}
               tone="bg-rose-500/15 text-rose-300"
               count={forecastMisses.length}
@@ -133,7 +200,10 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
                 <div key={team.id} className="flex items-center justify-between gap-2">
                   <TeamLink id={team.id}>{team.name}</TeamLink>
                   <span className="shrink-0 tabular-nums">
-                    forecast {team.predicted_place ?? "–"} · finished {team.placement ?? "–"}
+                    {t("analytics.triage.forecastFinished", {
+                      predicted: team.predicted_place ?? "–",
+                      finished: team.placement ?? "–",
+                    })}
                   </span>
                 </div>
               ))}
@@ -142,7 +212,7 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
 
           {bigMoves.length > 0 ? (
             <GroupCard
-              title="Likely division moves"
+              title={t("analytics.triage.moves")}
               icon={<Sparkles className="h-3.5 w-3.5" />}
               tone="bg-sky-500/15 text-sky-300"
               count={bigMoves.length}
@@ -150,10 +220,11 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
               {bigMoves.map((player) => (
                 <div key={`move-${player.id}`} className="flex items-center justify-between gap-2">
                   <TeamLink id={player.teamId}>{player.name}</TeamLink>
-                  <ForecastChip
+                  <DivisionMoveMini
+                    from={player.division}
+                    to={player.predicted_division ?? player.division}
                     direction={player.predicted_direction}
-                    magnitude={Math.abs(player.predicted_delta)}
-                    confidence={player.confidence}
+                    grid={player.grid}
                   />
                 </div>
               ))}
@@ -162,7 +233,7 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
 
           {newcomers.length > 0 ? (
             <GroupCard
-              title={<MetricTooltip term="newcomer">First-timers</MetricTooltip>}
+              title={<MetricTooltip term="newcomer">{t("analytics.triage.newcomers")}</MetricTooltip>}
               icon={<Sparkles className="h-3.5 w-3.5" />}
               tone="bg-emerald-500/15 text-emerald-300"
               count={newcomers.length}
@@ -171,7 +242,9 @@ export default function AttentionTriage({ teams }: AttentionTriageProps) {
                 <div key={`new-${player.id}`} className="flex items-center justify-between gap-2">
                   <TeamLink id={player.teamId}>{player.name}</TeamLink>
                   <span className="shrink-0 text-xs">
-                    {player.is_newcomer ? "new player" : "new role"}
+                    {player.is_newcomer
+                      ? t("analytics.triage.newPlayer")
+                      : t("analytics.triage.newRole")}
                   </span>
                 </div>
               ))}

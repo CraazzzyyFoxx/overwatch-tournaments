@@ -10,6 +10,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/LanguageContext";
 import MLAdminToolbar from "@/app/(site)/tournaments/analytics/components/MLAdminToolbar";
 
 interface OrganizerToolsProps {
@@ -23,6 +24,7 @@ interface OrganizerToolsProps {
  * admin controls. Only rendered for users with `analytics.update`.
  */
 export default function OrganizerTools({ tournamentId, workspaceId }: OrganizerToolsProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -31,10 +33,10 @@ export default function OrganizerTools({ tournamentId, workspaceId }: OrganizerT
         <CollapsibleTrigger className="flex w-full items-center gap-2 px-5 py-3 text-left hover:bg-white/[0.02] transition-colors">
           <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span className="font-display text-[15px] font-bold uppercase tracking-[0.04em] text-foreground">
-            Organizer tools
+            {t("analytics.organizer.title")}
           </span>
           <span className="hidden text-xs text-muted-foreground sm:inline">
-            recalculate · train · manual edits
+            {t("analytics.organizer.subtitle")}
           </span>
           <ChevronDown
             className={cn(

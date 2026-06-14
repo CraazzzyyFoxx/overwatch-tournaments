@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTranslation } from "@/i18n/LanguageContext";
 import { cn } from "@/lib/utils";
 
 interface MatchQualityCardProps {
@@ -19,10 +20,14 @@ function FeedbackButtons({
   current,
   pending,
   onVerdict,
+  confirmLabel,
+  dismissLabel,
 }: {
   current?: AnomalyVerdict;
   pending: boolean;
   onVerdict: (verdict: AnomalyVerdict) => void;
+  confirmLabel: string;
+  dismissLabel: string;
 }) {
   return (
     <span className="inline-flex items-center gap-0.5">
@@ -30,8 +35,8 @@ function FeedbackButtons({
         type="button"
         disabled={pending}
         onClick={() => onVerdict("confirmed")}
-        title="Confirm — true positive"
-        aria-label="Confirm anomaly"
+        title={confirmLabel}
+        aria-label={confirmLabel}
         className={cn(
           "rounded p-0.5 transition-colors disabled:opacity-50",
           current === "confirmed"
@@ -45,8 +50,8 @@ function FeedbackButtons({
         type="button"
         disabled={pending}
         onClick={() => onVerdict("dismissed")}
-        title="Dismiss — false positive"
-        aria-label="Dismiss anomaly"
+        title={dismissLabel}
+        aria-label={dismissLabel}
         className={cn(
           "rounded p-0.5 transition-colors disabled:opacity-50",
           current === "dismissed"
@@ -88,6 +93,7 @@ function anomalyTone(kind: AnomalyKind): string {
  */
 export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps) {
   const { hasPermission } = usePermissions();
+  const { t } = useTranslation();
   const canReview = hasPermission("analytics.update");
   const queryClient = useQueryClient();
 
@@ -132,10 +138,9 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Match quality & anomalies</CardTitle>
+        <CardTitle className="text-base">{t("analytics.matchQuality.title")}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Post-hoc per-encounter scoring (competitiveness, predictability, skill balance) plus
-          IsolationForest / changepoint anomaly flags.
+          {t("analytics.matchQuality.subtitle")}
         </p>
       </CardHeader>
       <CardContent>
@@ -148,36 +153,36 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
         )}
         {isError && (
           <p className="text-sm text-muted-foreground">
-            Match Quality not available. Run the inference pipeline first.
+            {t("analytics.matchQuality.unavailable")}
           </p>
         )}
         {rows.length === 0 && !isLoading && !isError && (
-          <p className="text-sm text-muted-foreground">No match-quality rows yet.</p>
+          <p className="text-sm text-muted-foreground">{t("analytics.matchQuality.noData")}</p>
         )}
         {rows.length > 0 && (
           <ul className="divide-y divide-border/60">
             {rows.map((row) => (
               <li key={row.encounter_id} className="py-2 grid grid-cols-12 gap-3 items-center text-sm">
                 <span className="col-span-2 font-medium tabular-nums">
-                  Encounter #{row.encounter_id}
+                  {t("analytics.matchQuality.encounter", { id: row.encounter_id })}
                 </span>
                 <span
                   className={cn(
                     "col-span-1 text-center rounded-md px-2 py-0.5 font-semibold",
                     scoreColor(row.quality_score),
                   )}
-                  title="Quality score 0-100"
+                  title={t("analytics.glossary.match_quality.plain")}
                 >
                   {row.quality_score.toFixed(0)}
                 </span>
                 <span className="col-span-2 text-center text-xs text-muted-foreground">
-                  comp <strong>{row.competitiveness.toFixed(0)}</strong>
+                  {t("analytics.matchQuality.comp")} <strong>{row.competitiveness.toFixed(0)}</strong>
                 </span>
                 <span className="col-span-2 text-center text-xs text-muted-foreground">
-                  pred <strong>{row.predictability.toFixed(0)}</strong>
+                  {t("analytics.matchQuality.pred")} <strong>{row.predictability.toFixed(0)}</strong>
                 </span>
                 <span className="col-span-2 text-center text-xs text-muted-foreground">
-                  skill <strong>{row.skill_balance.toFixed(0)}</strong>
+                  {t("analytics.matchQuality.skill")} <strong>{row.skill_balance.toFixed(0)}</strong>
                 </span>
                 <span className="col-span-3 flex gap-1.5 flex-wrap justify-end items-center">
                   {(row.anomaly_flags ?? []).map((flag, i) => (
@@ -196,6 +201,8 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
                         <FeedbackButtons
                           current={verdictByKey.get(`${flag.player_id}-${flag.kind}`)}
                           pending={feedbackMutation.isPending}
+                          confirmLabel={t("analytics.matchQuality.confirm")}
+                          dismissLabel={t("analytics.matchQuality.dismiss")}
                           onVerdict={(verdict) =>
                             feedbackMutation.mutate({
                               playerId: flag.player_id,
