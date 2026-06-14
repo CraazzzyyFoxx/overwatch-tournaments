@@ -5,6 +5,11 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+export interface LookupItem {
+  id: number;
+  name: string;
+}
+
 export enum SortDirection {
   asc = "asc",
   desc = "desc"

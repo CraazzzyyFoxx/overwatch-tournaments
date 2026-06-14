@@ -1,0 +1,66 @@
+[project]
+name = "tournament-service"
+version = "0.1.0"
+description = "Tournament domain API and worker service"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.14.0",
+    "apscheduler>=3.10.4",
+    "asyncpg>=0.30.0",
+    "cashews>=7.4.0",
+    "fastapi[standard]>=0.127.0",
+    "faststream[rabbit]>=0.6.7",
+    "loguru>=0.7.3",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
+    "opentelemetry-sdk>=1.27.0",
+    "prometheus-fastapi-instrumentator>=7.0",
+    "psycopg[binary]>=3.2.3",
+    "pydantic-settings>=2.7.1",
+    "pydantic[email]>=2.10.5",
+    "redis>=5.2.1",
+    "sentry-sdk>=2.20.0",
+    "setuptools>=75.8.0",
+    "sqlalchemy>=2.0.37",
+    "sqlalchemy-utils>=0.41.2",
+    "tenacity>=9.0.0",
+    "uvicorn>=0.34.0",
+    "uvloop; platform_system == 'Linux'",
+    "shared",
+    "aiobotocore>=3.0.0",
+    "httpx[socks]>=0.28.1",
+]
+
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv", "alembic"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+exclude = ["alembic"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+]
+ignore = [
+    "E501",
+    "B008",
+    "W191",
+    "B904",
+    "F403",
+]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true

@@ -126,6 +126,14 @@ hero_translation = {
     "Freya": "Freja",
     "Вендетта": "Vendetta",
     "У Ян": "Wuyang",
+    "Ань Жань": "Anran",
+    "Мидзуки": "Mizuki",
+    "Домина": "Domina",
+    "Амре": "Emre",
+    "Реактивная киса": "Jetpack Cat",
+    "Эмре": "Emre",
+    "Реактивная Киса": "Jetpack Cat",
+    "Сьерра": "Sierra",
 }
 
 

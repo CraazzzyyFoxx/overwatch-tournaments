@@ -2,7 +2,9 @@
 Generic OAuth schemas for multiple providers
 """
 
+from datetime import datetime
 from enum import Enum
+
 from pydantic import BaseModel, Field
 
 __all__ = (
@@ -11,6 +13,8 @@ __all__ = (
     "OAuthURL",
     "OAuthCallbackRequest",
     "OAuthUserInfo",
+    "OAuthConnectionRead",
+    "OAuthConnectionAdminRead",
     "PlayerLinkRequest",
     "PlayerLinkResponse",
     "LinkedPlayer",
@@ -62,6 +66,32 @@ class OAuthUserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OAuthConnectionRead(BaseModel):
+    """OAuth connection info (safe fields only, no tokens)."""
+
+    id: int
+    provider: OAuthProvider
+    provider_user_id: str
+    email: str | None = None
+    username: str
+    display_name: str | None = None
+    avatar_url: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class OAuthConnectionAdminRead(OAuthConnectionRead):
+    """OAuth connection with owner info for admin views."""
+
+    auth_user_id: int
+    auth_user_email: str | None = None
+    auth_user_username: str | None = None
+    token_expires_at: datetime | None = None
 
 
 class PlayerLinkRequest(BaseModel):

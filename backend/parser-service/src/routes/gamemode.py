@@ -6,7 +6,7 @@ from src.services.gamemode import flows as gamemode_flows
 router = APIRouter(
     prefix="/gamemodes",
     tags=[enums.RouteTag.GAMEMODE],
-    dependencies=[Depends(auth.require_role("admin"))],
+    dependencies=[Depends(auth.require_permission("gamemode", "sync"))],
 )
 
 

@@ -5,10 +5,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from loguru import logger
 
 from src import schemas
 from src.core.config import settings
 from src.services import auth_service
+from src.services.session_cache import invalidate_rbac
 
 router = APIRouter(prefix="/service", tags=["Service Auth"])
 security = HTTPBearer()
@@ -75,3 +77,39 @@ async def validate_service_token(
         aud=str(payload.get("aud")) if payload.get("aud") is not None else None,
         exp=payload.get("exp"),
     )
+
+
+def _verify_service_token(token: HTTPAuthorizationCredentials) -> dict:
+    """Decode and verify a service token, raising 401 on failure."""
+    payload = auth_service.AuthService.decode_token(token.credentials)
+
+    if payload.get("type") != "service":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if payload.get("iss") != settings.SERVICE_TOKEN_ISSUER or payload.get("aud") != settings.SERVICE_TOKEN_AUDIENCE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return payload
+
+
+@router.post("/invalidate-session/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def invalidate_user_session(
+    user_id: int,
+    token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+) -> None:
+    """
+    Invalidate the RBAC cache for a specific user.
+    Called by other services when they need to force-refresh a user's permissions.
+    Requires a valid service token.
+    """
+    _verify_service_token(token)
+    await invalidate_rbac(user_id)
+    logger.info(f"Session invalidated for user {user_id} via internal API")

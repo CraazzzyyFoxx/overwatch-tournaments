@@ -1,5 +1,6 @@
 services:
   postgres:
+    profiles: ["db"]
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -14,6 +15,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   redis:
     image: redis/redis-stack:latest
@@ -28,6 +37,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   rabbitmq:
     image: rabbitmq:3.13-management
@@ -46,6 +63,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
 
   backend:
     image: registry.craazzzyyfoxx.me/aqt-backend:dev
@@ -53,7 +78,7 @@ services:
       context: ./backend
       args:
         APP_PATH: app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --loop uvloop --reload --reload-dir /app/app-service --reload-dir /app/shared
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --loop uvloop --reload --reload-delay 5 --reload-dir /app/app-service --reload-dir /app/shared
     ports:
       - "8000:8000"
     env_file:
@@ -62,12 +87,16 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      ss-local:
         condition: service_healthy
     develop:
       watch:
@@ -83,11 +112,19 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   auth:
     image: registry.craazzzyyfoxx.me/aqt-auth:dev
@@ -95,7 +132,7 @@ services:
       context: ./backend
       args:
         APP_PATH: auth
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --loop uvloop --reload --reload-dir /app/auth-service --reload-dir /app/shared
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --loop uvloop --reload --reload-delay 5 --reload-dir /app/auth-service --reload-dir /app/shared
     ports:
       - "8001:8001"
     env_file:
@@ -104,14 +141,18 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
       - 'SERVICE_CLIENTS=${SERVICE_CLIENTS:-{"discord-service":"dev-discord-service-secret"}}'
       - 'SERVICE_SCOPES=${SERVICE_SCOPES:-{"discord-service":["parser:logs"]}}'
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      ss-local:
         condition: service_healthy
     develop:
       watch:
@@ -124,11 +165,19 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/auth/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
@@ -136,7 +185,7 @@ services:
       context: ./backend
       args:
         APP_PATH: parser
-    command: uvicorn main:app --host 0.0.0.0 --port 8002 --loop uvloop --reload --reload-dir /app/parser-service --reload-dir /app/shared
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --loop uvloop --reload --reload-delay 5 --reload-dir /app/parser-service --reload-dir /app/shared
     ports:
       - "8002:8002"
     env_file:
@@ -145,14 +194,18 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
       auth:
+        condition: service_healthy
+      ss-local:
         condition: service_healthy
     develop:
       watch:
@@ -165,11 +218,123 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/api/parser/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  tournament:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:dev
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --loop uvloop --reload --reload-delay 5 --reload-dir /app/tournament-service --reload-dir /app/shared
+    ports:
+      - "8004:8004"
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ./backend/pyproject.toml
+          action: rebuild
+    volumes:
+      - ./backend/tournament-service:/app/tournament-service
+      - ./backend/shared:/app/shared
+      - ./logs/tournament:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  realtime:
+    image: registry.craazzzyyfoxx.me/aqt-realtime:dev
+    build:
+      context: ./backend
+      args:
+        APP_PATH: realtime
+    command: uvicorn main:app --host 0.0.0.0 --port 8005 --loop uvloop --reload --reload-delay 5 --reload-dir /app/realtime-service --reload-dir /app/shared
+    ports:
+      - "8005:8005"
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/realtime.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ./backend/pyproject.toml
+          action: rebuild
+    volumes:
+      - ./backend/realtime-service:/app/realtime-service
+      - ./backend/shared:/app/shared
+      - ./logs/realtime:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   balancer:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
@@ -177,7 +342,7 @@ services:
       context: ./backend
       args:
         APP_PATH: balancer
-    command: uvicorn main:app --host 0.0.0.0 --port 8003 --loop uvloop --reload --reload-dir /app/balancer-service --reload-dir /app/shared
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --loop uvloop --reload --reload-delay 5 --reload-dir /app/balancer-service --reload-dir /app/shared
     ports:
       - "8003:8003"
     env_file:
@@ -186,14 +351,18 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
       backend:
+        condition: service_healthy
+      ss-local:
         condition: service_healthy
     volumes:
       - ./backend/balancer-service:/app/balancer-service
@@ -202,11 +371,101 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  parser-worker:
+    image: registry.craazzzyyfoxx.me/aqt-parser:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: parser
+    command: faststream run serve:app --reload --reload-dir /app/parser-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/parser.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9100
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      parser:
+        condition: service_healthy
+    volumes:
+      - ./backend/parser-service:/app/parser-service
+      - ./backend/shared:/app/shared
+      - ./logs/parser-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  tournament-worker:
+    image: registry.craazzzyyfoxx.me/aqt-tournament:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: tournament
+    command: faststream run serve:app --reload --reload-dir /app/tournament-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/tournament.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9103
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      tournament:
+        condition: service_healthy
+    volumes:
+      - ./backend/tournament-service:/app/tournament-service
+      - ./backend/shared:/app/shared
+      - ./logs/tournament-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
 
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
@@ -222,6 +481,13 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9100
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
     depends_on:
       redis:
         condition: service_healthy
@@ -235,6 +501,112 @@ services:
       - ./logs/balancer-worker:/logs
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  analytics:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:dev
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: uvicorn main:app --host 0.0.0.0 --port 8006 --loop uvloop --reload --reload-delay 5 --reload-dir /app/analytics-service --reload-dir /app/shared
+    ports:
+      - "8006:8006"
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ./backend/pyproject.toml
+          action: rebuild
+    volumes:
+      - ./backend/analytics-service:/app/analytics-service
+      - ./backend/shared:/app/shared
+      - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
+      - ./logs/analytics:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health/live')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 384M
+
+  analytics-worker:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: faststream run serve:app --reload --reload-dir /app/analytics-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9106
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      analytics:
+        condition: service_healthy
+    volumes:
+      - ./backend/analytics-service:/app/analytics-service
+      - ./backend/shared:/app/shared
+      - ./backend/.cache/analytics:/cache/analytics
+      - analytics-models:/opt/anak/models
+      - ./logs/analytics-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
 
   discord:
     image: registry.craazzzyyfoxx.me/aqt-discord:dev
@@ -250,8 +622,15 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9100
       - SERVICE_CLIENT_ID=${DISCORD_SERVICE_CLIENT_ID:-discord-service}
       - SERVICE_CLIENT_SECRET=${DISCORD_SERVICE_CLIENT_SECRET:-dev-discord-service-secret}
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
     depends_on:
       redis:
         condition: service_healthy
@@ -259,12 +638,22 @@ services:
         condition: service_healthy
       parser:
         condition: service_healthy
+      ss-local:
+        condition: service_healthy
     volumes:
       - ./backend/discord-service:/app/discord-service
       - ./backend/shared:/app/shared
       - ./logs/discord:/logs
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.15'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
 
   frontend:
     image: registry.craazzzyyfoxx.me/frontend:dev
@@ -275,16 +664,19 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - WATCHPACK_POLLING=${WATCHPACK_POLLING:-true}
-      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING:-true}
-      - CHOKIDAR_INTERVAL=${CHOKIDAR_INTERVAL:-1000}
+      - DOCKER=1
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - NEXT_PUBLIC_AUTH_SERVICE_URL=${NEXT_PUBLIC_AUTH_SERVICE_URL}
       - NEXT_PUBLIC_BALANCER_API_URL=${NEXT_PUBLIC_BALANCER_API_URL}
+      - NEXT_PUBLIC_TOURNAMENT_API_URL=${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
+      - NEXT_PUBLIC_REALTIME_API_URL=${NEXT_PUBLIC_REALTIME_API_URL:-http://localhost:8005}
+      - NEXT_PUBLIC_ANALYTICS_API_URL=${NEXT_PUBLIC_ANALYTICS_API_URL:-http://localhost/api/analytics}
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
+      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://tournament:8004}
+      - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
     depends_on:
       backend:
         condition: service_healthy
@@ -292,13 +684,34 @@ services:
         condition: service_healthy
       parser:
         condition: service_healthy
+      tournament:
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
       balancer:
         condition: service_healthy
     volumes:
-      - ./frontend:/app
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
       - frontend-node-modules:/app/node_modules
-      - frontend-next:/app/.next
       - ./logs/frontend:/logs
+    tmpfs:
+      - /app/.next:size=512M
+    develop:
+      watch:
+        - path: ./frontend/package.json
+          action: rebuild
+        - path: ./frontend/bun.lock
+          action: rebuild
+        - path: ./frontend/next.config.mjs
+          action: sync
+          target: /app/next.config.mjs
+        - path: ./frontend/tailwind.config.ts
+          action: sync
+          target: /app/tailwind.config.ts
+        - path: ./frontend/tsconfig.json
+          action: sync
+          target: /app/tsconfig.json
     networks:
       - app-network
     healthcheck:
@@ -307,6 +720,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.50'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  ss-local:
+    image: teddysun/xray:latest
+    restart: unless-stopped
+    command: ["xray", "run", "-c", "/etc/xray/config.json"]
+    volumes:
+      - ./proxy/xray.json:/etc/xray/config.json:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "xray", "run", "-test", "-config", "/etc/xray/config.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
 
   kong:
     image: kong:3.7
@@ -317,12 +760,18 @@ services:
       - KONG_PROXY_LISTEN=0.0.0.0:8000
       - KONG_ADMIN_LISTEN=0.0.0.0:8001
       - KONG_STATUS_LISTEN=0.0.0.0:8100
+      - KONG_NGINX_WORKER_PROCESSES=1
       - KONG_LOG_LEVEL=${KONG_LOG_LEVEL:-notice}
+      - KONG_DNS_ORDER=LAST,A,SRV,CNAME
+      - KONG_DNS_VALID_TTL=10
+      - KONG_DNS_STALE_TTL=0
     ports:
       - "${APP_PORT}:8000"
-      - "${KONG_ADMIN_PORT:-8005}:8001"
+      - "${KONG_ADMIN_PORT:-8100}:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      - ./kong/kong.yml:/kong/kong.yml:ro
+      - ./kong/kong.dev.yml:/kong/kong.yml:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -330,9 +779,11 @@ services:
         condition: service_healthy
       parser:
         condition: service_healthy
-      balancer:
+      tournament:
         condition: service_healthy
-      frontend:
+      realtime:
+        condition: service_healthy
+      balancer:
         condition: service_healthy
     networks:
       - app-network
@@ -341,13 +792,151 @@ services:
       interval: 10s
       timeout: 10s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 256M
+
+  # --------------------------------------------------------------------------
+  # Monitoring (start with: docker compose --profile monitoring up -d)
+  # --------------------------------------------------------------------------
+
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - app-network
+
+  redis-exporter:
+    profiles: ["monitoring"]
+    image: oliver006/redis_exporter:v1.67.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis:6379"
+    ports:
+      - "9121:9121"
+    networks:
+      - app-network
+
+  rabbitmq-exporter:
+    profiles: ["monitoring"]
+    image: kbudde/rabbitmq-exporter:1.0.0-RC19
+    restart: unless-stopped
+    environment:
+      RABBIT_URL: "http://rabbitmq:15672"
+      RABBIT_USER: "${RABBITMQ_DEFAULT_USER:-guest}"
+      RABBIT_PASSWORD: "${RABBITMQ_DEFAULT_PASS:-guest}"
+      RABBIT_CAPABILITIES: "bert,no_sort"
+      PUBLISH_PORT: "9419"
+      OUTPUT_FORMAT: "TTY"
+      SKIP_QUEUES: "^$"
+      INCLUDE_QUEUES: ".*"
+    ports:
+      - "9419:9419"
+    networks:
+      - app-network
+
+  loki:
+    profiles: ["monitoring"]
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - app-network
+
+  tempo:
+    profiles: ["monitoring"]
+    image: grafana/tempo:2.7.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - app-network
+
+  otel-collector:
+    profiles: ["monitoring"]
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector/config.yml"]
+    volumes:
+      - ./monitoring/otel/otel-collector.yml:/etc/otel-collector/config.yml:ro
+    depends_on:
+      - tempo
+    networks:
+      - app-network
+
+  promtail:
+    profiles: ["monitoring"]
+    image: grafana/promtail:3.3.2
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - ./logs:/var/log/app:ro
+    networks:
+      - app-network
+    depends_on:
+      - loki
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "http://localhost:3001"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/logs.json"
+      TEMPO_URL: "${TEMPO_URL:-http://tempo:3200}"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
 
 volumes:
   postgres-data:
   redis-data:
   rabbitmq-data:
+  analytics-models:
   frontend-node-modules:
-  frontend-next:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  tempo_data:
 
 networks:
   app-network:

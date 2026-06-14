@@ -17,6 +17,7 @@ from fastapi import HTTPException, status
 from loguru import logger
 from shared.models.oauth import OAuthConnection
 from shared.models.rbac import user_roles
+from shared.models.user import UserBattleTag, UserDiscord, UserTwitch
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,10 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import models, schemas
 from src.core.config import settings
 
-if settings.proxy_ip:
-    PROXY_CONF = f"http://{settings.proxy_username}:{settings.proxy_password}@{settings.proxy_ip}:{settings.proxy_port}"
-else:
-    PROXY_CONF = None
+PROXY_CONF = settings.proxy_url
+
+
+def _normalized_non_empty(values: tuple[str | None, ...]) -> set[str]:
+    return {value.strip().casefold() for value in values if value and value.strip()}
 
 
 class OAuthProviderBase(ABC):
@@ -79,7 +81,7 @@ class DiscordOAuthProvider(OAuthProviderBase):
 
         try:
             async with httpx.AsyncClient(proxy=PROXY_CONF) as client:
-                response = await client.post(settings.DISCORD_TOKEN_URL, data=data, headers=headers, timeout=10.0)
+                response = await client.post(settings.DISCORD_TOKEN_URL, data=data, headers=headers, timeout=30.0)
 
                 if response.status_code != 200:
                     logger.warning(
@@ -110,7 +112,7 @@ class DiscordOAuthProvider(OAuthProviderBase):
 
         try:
             async with httpx.AsyncClient(proxy=PROXY_CONF) as client:
-                response = await client.get(f"{settings.DISCORD_API_URL}/users/@me", headers=headers, timeout=10.0)
+                response = await client.get(f"{settings.DISCORD_API_URL}/users/@me", headers=headers, timeout=30.0)
 
                 if response.status_code != 200:
                     logger.warning(
@@ -175,7 +177,7 @@ class TwitchOAuthProvider(OAuthProviderBase):
 
         try:
             async with httpx.AsyncClient(proxy=PROXY_CONF) as client:
-                response = await client.post(settings.TWITCH_TOKEN_URL, data=data, headers=headers, timeout=10.0)
+                response = await client.post(settings.TWITCH_TOKEN_URL, data=data, headers=headers, timeout=30.0)
                 if response.status_code != 200:
                     logger.warning("Twitch token exchange failed", status_code=response.status_code)
                     raise HTTPException(
@@ -206,7 +208,7 @@ class TwitchOAuthProvider(OAuthProviderBase):
 
         try:
             async with httpx.AsyncClient(proxy=PROXY_CONF) as client:
-                response = await client.get(f"{settings.TWITCH_API_URL}/users", headers=headers, timeout=10.0)
+                response = await client.get(f"{settings.TWITCH_API_URL}/users", headers=headers, timeout=30.0)
 
                 if response.status_code != 200:
                     logger.warning("Twitch user info request failed", status_code=response.status_code)
@@ -271,7 +273,7 @@ class BattleNetOAuthProvider(OAuthProviderBase):
             "client_id": settings.BATTLENET_CLIENT_ID,
             "redirect_uri": settings.OAUTH_REDIRECT,
             "response_type": "code",
-            "scope": "openid",
+            "scope": "openid email",
             "state": state,
         }
         return f"{self._oauth_base_url()}/authorize?{urlencode(params)}"
@@ -291,7 +293,7 @@ class BattleNetOAuthProvider(OAuthProviderBase):
                     data=data,
                     headers=headers,
                     auth=(settings.BATTLENET_CLIENT_ID, settings.BATTLENET_CLIENT_SECRET),
-                    timeout=10.0,
+                    timeout=30.0,
                 )
 
                 if response.status_code != 200:
@@ -322,7 +324,7 @@ class BattleNetOAuthProvider(OAuthProviderBase):
 
         try:
             async with httpx.AsyncClient(proxy=PROXY_CONF) as client:
-                response = await client.get(f"{self._oauth_base_url()}/userinfo", headers=headers, timeout=10.0)
+                response = await client.get(f"{self._oauth_base_url()}/userinfo", headers=headers, timeout=30.0)
 
                 if response.status_code != 200:
                     logger.warning("Battle.net user info request failed", status_code=response.status_code)
@@ -542,6 +544,240 @@ class OAuthService:
         return auth_user, token_data
 
     @classmethod
+    async def _find_existing_auth_user_by_email(
+        cls,
+        session: AsyncSession,
+        oauth_info: schemas.OAuthUserInfo,
+    ) -> models.AuthUser | None:
+        if not oauth_info.email:
+            return None
+
+        raw_data = oauth_info.raw_data or {}
+        if raw_data.get("verified") is False or raw_data.get("email_verified") is False:
+            return None
+
+        result = await session.execute(select(models.AuthUser).where(models.AuthUser.email == oauth_info.email))
+        auth_user = result.scalar_one_or_none()
+        if auth_user is not None:
+            logger.info(
+                "Matched existing auth user by OAuth email",
+                provider=oauth_info.provider.value,
+                auth_user_id=auth_user.id,
+            )
+        return auth_user
+
+    @classmethod
+    async def _find_player_by_provider_record(
+        cls,
+        session: AsyncSession,
+        oauth_info: schemas.OAuthUserInfo,
+    ) -> models.User | None:
+        """
+        Find the player (players.user) in the provider-specific table WITHOUT
+        requiring an AuthUser link. Returns None if ambiguous or not found.
+
+          - Discord   → players.discord.name  (case-insensitive)
+          - Twitch    → players.twitch.name   (case-insensitive)
+          - BattleNet → players.battle_tag.battle_tag (case-insensitive)
+        """
+        provider = oauth_info.provider
+
+        if provider == schemas.OAuthProvider.DISCORD:
+            candidates = _normalized_non_empty((oauth_info.username, oauth_info.display_name))
+            if not candidates:
+                return None
+            stmt = (
+                select(models.User)
+                .join(UserDiscord, UserDiscord.user_id == models.User.id)
+                .where(sa.func.lower(UserDiscord.name).in_(candidates))
+            )
+        elif provider == schemas.OAuthProvider.TWITCH:
+            candidates = _normalized_non_empty((oauth_info.username, oauth_info.display_name))
+            if not candidates:
+                return None
+            stmt = (
+                select(models.User)
+                .join(UserTwitch, UserTwitch.user_id == models.User.id)
+                .where(sa.func.lower(UserTwitch.name).in_(candidates))
+            )
+        elif provider == schemas.OAuthProvider.BATTLENET:
+            candidates = _normalized_non_empty((
+                oauth_info.username,
+                oauth_info.display_name,
+                (oauth_info.raw_data or {}).get("battletag"),
+                (oauth_info.raw_data or {}).get("battle_tag"),
+                (oauth_info.raw_data or {}).get("preferred_username"),
+            ))
+            logger.debug(
+                "Battle.net OAuth normalized candidates for player lookup: {}",
+                sorted(candidates),
+                provider_user_id=oauth_info.provider_user_id,
+                raw_battletag=oauth_info.raw_data.get("battletag") if oauth_info.raw_data else None,
+            )
+            if not candidates:
+                return None
+            stmt = (
+                select(models.User)
+                .join(UserBattleTag, UserBattleTag.user_id == models.User.id)
+                .where(sa.func.lower(UserBattleTag.battle_tag).in_(candidates))
+            )
+        else:
+            return None
+
+        result = await session.execute(stmt)
+        matches = list(result.scalars().unique().all())
+
+        if len(matches) == 1:
+            logger.info(
+                "Found player by provider record",
+                provider=provider.value,
+                player_id=matches[0].id,
+                provider_user_id=oauth_info.provider_user_id,
+            )
+            return matches[0]
+
+        if len(matches) > 1:
+            logger.warning(
+                "OAuth player record match is ambiguous; skipping automatic account linking",
+                provider=provider.value,
+                provider_user_id=oauth_info.provider_user_id,
+                matches=[p.id for p in matches],
+            )
+        return None
+
+    @classmethod
+    async def _find_auth_user_for_player(
+        cls,
+        session: AsyncSession,
+        player: models.User,
+    ) -> models.AuthUser | None:
+        """Return the AuthUser linked to this player via auth.user_player, or None."""
+        result = await session.execute(
+            select(models.AuthUserPlayer).where(models.AuthUserPlayer.player_id == player.id)
+        )
+        player_link = result.scalar_one_or_none()
+        if player_link is None:
+            return None
+
+        result = await session.execute(
+            select(models.AuthUser).where(models.AuthUser.id == player_link.auth_user_id)
+        )
+        auth_user = result.scalar_one_or_none()
+        if auth_user is not None:
+            logger.info(
+                "Matched existing auth user by player link",
+                auth_user_id=auth_user.id,
+                player_id=player.id,
+            )
+        return auth_user
+
+    @classmethod
+    async def _find_auth_user_via_oauth_connections(
+        cls,
+        session: AsyncSession,
+        player: models.User,
+    ) -> models.AuthUser | None:
+        """
+        Fallback lookup: scan OAuthConnections for any social accounts attached to
+        this player (Discord, Twitch, BattleTag). Used when no auth.user_player
+        record exists yet (e.g. created via legacy code path that omitted the link).
+        Returns None if none or more than one distinct AuthUser is found.
+        """
+        provider_candidates: list[tuple[str, str]] = []
+
+        discord_rows = (
+            await session.execute(select(UserDiscord).where(UserDiscord.user_id == player.id))
+        ).scalars().all()
+        for row in discord_rows:
+            provider_candidates.append(("discord", row.name.lower()))
+
+        twitch_rows = (
+            await session.execute(select(UserTwitch).where(UserTwitch.user_id == player.id))
+        ).scalars().all()
+        for row in twitch_rows:
+            provider_candidates.append(("twitch", row.name.lower()))
+
+        bt_rows = (
+            await session.execute(select(UserBattleTag).where(UserBattleTag.user_id == player.id))
+        ).scalars().all()
+        for row in bt_rows:
+            provider_candidates.append(("battlenet", row.battle_tag.lower()))
+
+        if not provider_candidates:
+            return None
+
+        auth_user_ids: set[int] = set()
+        for provider_str, username in provider_candidates:
+            conn_result = await session.execute(
+                select(OAuthConnection).where(
+                    OAuthConnection.provider == provider_str,
+                    sa.func.lower(OAuthConnection.username) == username,
+                )
+            )
+            conn = conn_result.scalar_one_or_none()
+            if conn is not None:
+                auth_user_ids.add(conn.auth_user_id)
+
+        if len(auth_user_ids) == 1:
+            auth_user_id = next(iter(auth_user_ids))
+            result = await session.execute(
+                select(models.AuthUser).where(models.AuthUser.id == auth_user_id)
+            )
+            auth_user = result.scalar_one_or_none()
+            if auth_user is not None:
+                logger.info(
+                    "Matched existing auth user via OAuth connection for player",
+                    auth_user_id=auth_user.id,
+                    player_id=player.id,
+                )
+            return auth_user
+
+        if len(auth_user_ids) > 1:
+            logger.warning(
+                "Ambiguous OAuth connection match for player; skipping automatic linking",
+                player_id=player.id,
+                auth_user_ids=sorted(auth_user_ids),
+            )
+        return None
+
+    @classmethod
+    async def _find_existing_auth_user(
+        cls,
+        session: AsyncSession,
+        oauth_info: schemas.OAuthUserInfo,
+    ) -> tuple[models.AuthUser | None, models.User | None]:
+        """
+        Returns (auth_user, matched_player).
+        - auth_user  — existing AuthUser to reuse (may be None)
+        - matched_player — player found in provider table (may be None if no match)
+
+        If matched_player is returned without auth_user, the caller should create
+        a new AuthUser and immediately link it to matched_player via AuthUserPlayer.
+        """
+        # 1. Email match (always first, provider-independent)
+        auth_user = await cls._find_existing_auth_user_by_email(session, oauth_info)
+        if auth_user is not None:
+            return auth_user, None
+
+        # 2. Provider-specific player table lookup
+        player = await cls._find_player_by_provider_record(session, oauth_info)
+        if player is None:
+            return None, None
+
+        # 3. Primary lookup: auth.user_player direct link
+        auth_user = await cls._find_auth_user_for_player(session, player)
+        if auth_user is not None:
+            return auth_user, player
+
+        # 4. Fallback: scan OAuthConnections for the player's other social accounts.
+        #    This handles legacy accounts that were created before the auth.user_player
+        #    link was automatically populated on first login.
+        auth_user = await cls._find_auth_user_via_oauth_connections(session, player)
+        # Return player regardless of whether auth_user is found, so the caller
+        # can create the AuthUserPlayer link when building a new AuthUser.
+        return auth_user, player
+
+    @classmethod
     async def find_or_create_oauth_user(
         cls, session: AsyncSession, oauth_info: schemas.OAuthUserInfo, token_data: dict[str, Any]
     ) -> models.AuthUser:
@@ -587,7 +823,39 @@ class OAuthService:
             logger.info(f"Existing {oauth_info.provider} user logged in: {oauth_info.username}")
             return auth_user
 
-        auth_user = None
+        auth_user, matched_player = await cls._find_existing_auth_user(session, oauth_info)
+
+        # If an existing auth user was found via OAuth-connection fallback,
+        # create the missing auth.user_player link so future lookups use the
+        # fast path and don't need the fallback scan again.
+        if auth_user is not None and matched_player is not None:
+            existing_link_result = await session.execute(
+                select(models.AuthUserPlayer).where(
+                    models.AuthUserPlayer.player_id == matched_player.id,
+                )
+            )
+            if existing_link_result.scalar_one_or_none() is None:
+                try:
+                    await session.execute(
+                        sa.insert(models.AuthUserPlayer).values(
+                            auth_user_id=auth_user.id,
+                            player_id=matched_player.id,
+                            is_primary=True,
+                        )
+                    )
+                    await session.flush()
+                    logger.info(
+                        "Created missing AuthUserPlayer link for existing auth user",
+                        auth_user_id=auth_user.id,
+                        player_id=matched_player.id,
+                    )
+                except IntegrityError:
+                    await session.rollback()
+                    logger.warning(
+                        "Race condition creating AuthUserPlayer link; ignoring",
+                        auth_user_id=auth_user.id,
+                        player_id=matched_player.id,
+                    )
 
         # Create new user if doesn't exist
         if not auth_user:
@@ -604,7 +872,7 @@ class OAuthService:
                 counter += 1
 
             auth_user = models.AuthUser(
-                email=oauth_info.email or f"{oauth_info.provider_user_id}@{oauth_info.provider}.oauth",
+                email=oauth_info.email or f"{oauth_info.provider_user_id}@{oauth_info.provider.value}.oauth",
                 username=username,
                 hashed_password=None,  # OAuth users don't have password
                 first_name=oauth_info.display_name,
@@ -621,6 +889,23 @@ class OAuthService:
                 if default_role is not None:
                     # Avoid ORM relationship lazy-loads with AsyncSession.
                     await session.execute(sa.insert(user_roles).values(user_id=auth_user.id, role_id=default_role.id))
+
+                # If the player record was found but had no AuthUser link yet,
+                # create the link now so future OAuth logins (via other providers)
+                # can find this AuthUser through the same player.
+                if matched_player is not None:
+                    await session.execute(
+                        sa.insert(models.AuthUserPlayer).values(
+                            auth_user_id=auth_user.id,
+                            player_id=matched_player.id,
+                            is_primary=True,
+                        )
+                    )
+                    logger.info(
+                        "Linked new auth user to existing player",
+                        auth_user_id=auth_user.id,
+                        player_id=matched_player.id,
+                    )
             except IntegrityError as exc:
                 await session.rollback()
                 raise HTTPException(

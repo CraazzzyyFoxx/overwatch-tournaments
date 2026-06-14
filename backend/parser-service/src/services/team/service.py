@@ -1,6 +1,7 @@
 import typing
 
 import sqlalchemy as sa
+from shared.domain.player_sub_roles import normalize_sub_role
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.strategy_options import _AbstractLoad
@@ -51,7 +52,7 @@ def player_entities(entities_in: list[str], child: typing.Any | None = None) -> 
 async def get(session: AsyncSession, team_id: int, entities: list[str]) -> models.Team | None:
     query = sa.select(models.Team).where(sa.and_(models.Team.id == team_id)).options(*team_entities(entities))
     result = await session.execute(query)
-    return result.scalars().first()
+    return result.unique().scalars().first()
 
 
 async def get_by_name_and_tournament(
@@ -68,7 +69,7 @@ async def get_by_name_and_tournament(
         .options(*team_entities(entities))
     )
     result = await session.execute(query)
-    return result.scalars().first()
+    return result.unique().scalars().first()
 
 
 async def get_by_tournament(
@@ -94,7 +95,7 @@ async def get_by_tournament_challonge_id(
         )
     )
     result = await session.execute(query)
-    return result.scalars().first()
+    return result.unique().scalars().first()
 
 
 async def get_by_captain_tournament(
@@ -114,7 +115,7 @@ async def get_by_captain_tournament(
         .options(*team_entities(entities))
     )
     result = await session.execute(query)
-    return result.scalars().first()
+    return result.unique().scalars().first()
 
 
 async def get_by_players_by_ids_tournament(
@@ -138,7 +139,7 @@ async def get_by_players_by_ids_tournament(
         .having(sa.func.count(models.Player.id) >= 3)
     )
     result = await session.execute(query)
-    return result.scalars().first()
+    return result.unique().scalars().first()
 
 
 async def get_players_tournament(
@@ -167,7 +168,7 @@ async def get_player_by_user_and_tournament(
         )
     )
     result = await session.execute(query)
-    return result.scalar()
+    return result.unique().scalars().first()
 
 
 async def get_player_by_team_and_user(
@@ -240,10 +241,8 @@ async def create_player(
     session: AsyncSession,
     *,
     name: str,
-    primary: bool,
-    secondary: bool,
+    sub_role: str | None = None,
     rank: int,
-    div: int,
     role: enums.HeroClass,
     user: models.User,
     tournament: models.Tournament,
@@ -255,10 +254,8 @@ async def create_player(
 ) -> models.Player:
     player = models.Player(
         name=name,
-        primary=primary,
-        secondary=secondary,
+        sub_role=normalize_sub_role(sub_role),
         rank=rank,
-        div=div,
         role=role,
         user_id=user.id,
         tournament_id=tournament.id,
@@ -278,10 +275,8 @@ def create_player_sync(
     session: Session,
     *,
     name: str,
-    primary: bool,
-    secondary: bool,
+    sub_role: str | None = None,
     rank: int,
-    div: int,
     role: enums.HeroClass,
     user: models.User,
     tournament: models.Tournament,
@@ -293,10 +288,8 @@ def create_player_sync(
 ) -> models.Player:
     player = models.Player(
         name=name,
-        primary=primary,
-        secondary=secondary,
+        sub_role=normalize_sub_role(sub_role),
         rank=rank,
-        div=div,
         role=role,
         user_id=user.id,
         tournament_id=tournament.id,
@@ -321,4 +314,4 @@ async def get_teams_by_tournament(
         .where(sa.and_(models.Team.tournament_id == tournament_id))
     )
     result = await session.execute(query)
-    return result.scalars().all()
+    return result.unique().scalars().all()

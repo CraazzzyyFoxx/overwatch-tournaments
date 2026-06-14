@@ -110,11 +110,28 @@ class PlayerLinkService:
         await PlayerLinkService._get_player(session, player_id)
         await PlayerLinkService._verify_player_ownership(session, current_user.id, player_id)
 
+        return await PlayerLinkService._link_player_to_auth_user(
+            session,
+            auth_user_id=current_user.id,
+            player_id=player_id,
+            is_primary=is_primary,
+        )
+
+    @staticmethod
+    async def _link_player_to_auth_user(
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        player_id: int,
+        is_primary: bool,
+    ) -> models.AuthUserPlayer:
+        await PlayerLinkService._get_player(session, player_id)
+
         result = await session.execute(
             select(models.AuthUserPlayer).where(models.AuthUserPlayer.player_id == player_id)
         )
         existing_global_link = result.scalar_one_or_none()
-        if existing_global_link and existing_global_link.auth_user_id != current_user.id:
+        if existing_global_link and existing_global_link.auth_user_id != auth_user_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Player is already linked to another account",
@@ -122,7 +139,7 @@ class PlayerLinkService:
 
         result = await session.execute(
             select(models.AuthUserPlayer).where(
-                models.AuthUserPlayer.auth_user_id == current_user.id,
+                models.AuthUserPlayer.auth_user_id == auth_user_id,
                 models.AuthUserPlayer.player_id == player_id,
             )
         )
@@ -131,7 +148,7 @@ class PlayerLinkService:
         if existing_user_link:
             if is_primary and not existing_user_link.is_primary:
                 result = await session.execute(
-                    select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == current_user.id)
+                    select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user_id)
                 )
                 for link in result.scalars().all():
                     link.is_primary = link.player_id == player_id
@@ -140,7 +157,7 @@ class PlayerLinkService:
 
         # First link is always primary.
         result = await session.execute(
-            select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == current_user.id)
+            select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user_id)
         )
         existing_links = result.scalars().all()
         final_is_primary = is_primary or len(existing_links) == 0
@@ -150,7 +167,7 @@ class PlayerLinkService:
                 link.is_primary = False
 
         player_link = models.AuthUserPlayer(
-            auth_user_id=current_user.id,
+            auth_user_id=auth_user_id,
             player_id=player_id,
             is_primary=final_is_primary,
         )
@@ -158,8 +175,22 @@ class PlayerLinkService:
         await session.commit()
         await session.refresh(player_link)
 
-        logger.info(f"Linked player {player_id} to auth user {current_user.id}")
+        logger.info(f"Linked player {player_id} to auth user {auth_user_id}")
         return player_link
+
+    @staticmethod
+    async def admin_link_player(
+        session: AsyncSession,
+        auth_user_id: int,
+        player_id: int,
+        is_primary: bool,
+    ) -> models.AuthUserPlayer:
+        return await PlayerLinkService._link_player_to_auth_user(
+            session,
+            auth_user_id=auth_user_id,
+            player_id=player_id,
+            is_primary=is_primary,
+        )
 
     @staticmethod
     async def unlink_player(
@@ -167,9 +198,22 @@ class PlayerLinkService:
         current_user: models.AuthUser,
         player_id: int,
     ) -> None:
+        await PlayerLinkService._unlink_player_from_auth_user(
+            session,
+            auth_user_id=current_user.id,
+            player_id=player_id,
+        )
+
+    @staticmethod
+    async def _unlink_player_from_auth_user(
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        player_id: int,
+    ) -> None:
         result = await session.execute(
             select(models.AuthUserPlayer).where(
-                models.AuthUserPlayer.auth_user_id == current_user.id,
+                models.AuthUserPlayer.auth_user_id == auth_user_id,
                 models.AuthUserPlayer.player_id == player_id,
             )
         )
@@ -186,7 +230,7 @@ class PlayerLinkService:
         if was_primary:
             result = await session.execute(
                 select(models.AuthUserPlayer)
-                .where(models.AuthUserPlayer.auth_user_id == current_user.id)
+                .where(models.AuthUserPlayer.auth_user_id == auth_user_id)
                 .order_by(models.AuthUserPlayer.created_at.asc())
             )
             next_link = result.scalars().first()
@@ -194,7 +238,19 @@ class PlayerLinkService:
                 next_link.is_primary = True
 
         await session.commit()
-        logger.info(f"Unlinked player {player_id} from auth user {current_user.id}")
+        logger.info(f"Unlinked player {player_id} from auth user {auth_user_id}")
+
+    @staticmethod
+    async def admin_unlink_player(
+        session: AsyncSession,
+        auth_user_id: int,
+        player_id: int,
+    ) -> None:
+        await PlayerLinkService._unlink_player_from_auth_user(
+            session,
+            auth_user_id=auth_user_id,
+            player_id=player_id,
+        )
 
     @staticmethod
     async def get_linked_players(session: AsyncSession, current_user: models.AuthUser) -> list[models.AuthUserPlayer]:

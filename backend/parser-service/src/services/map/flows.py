@@ -2,7 +2,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import errors, pagination
+from src.core import config, errors, pagination
 from src.services.gamemode import service as gamemode_service
 
 from . import service
@@ -20,7 +20,9 @@ async def to_pydantic(session: AsyncSession, map: models.Map, entities: list[str
 
 async def fetch_maps(gamemode: models.Gamemode) -> list[schemas.OverfastMap]:
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(f"https://overfast.craazzzyyfoxx.me/maps?gamemode={gamemode.slug}")
+        response = await client.get(
+            f"{config.settings.overfast_base_url}/maps?gamemode={gamemode.slug}"
+        )
         response.raise_for_status()
 
     return [schemas.OverfastMap.model_validate(map) for map in response.json()]
@@ -42,7 +44,10 @@ async def get_by_name_and_gamemode(session: AsyncSession, name: str, gamemode: s
 
 
 async def initial_create(session: AsyncSession) -> None:
-    gamemodes, total = await gamemode_service.get_all(session, params=pagination.PaginationParams(per_page=-1, page=1))
+    gamemodes, total = await gamemode_service.get_all(
+        session,
+        params=pagination.PaginationSortParams(per_page=-1, page=1),
+    )
     for gamemode in gamemodes:
         maps = await fetch_maps(gamemode)
         for map in maps:

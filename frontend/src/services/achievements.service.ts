@@ -1,28 +1,29 @@
 import { PaginatedResponse } from "@/types/pagination.types";
-import { customFetch } from "@/lib/custom_fetch";
+import { apiFetch } from "@/lib/api-fetch";
 import { Achievement, AchievementEarned } from "@/types/achievement.types";
 
 export default class achievementsService {
-  static async getAll(page: number, perPage: number): Promise<PaginatedResponse<Achievement>> {
-    return customFetch(`achievements`, {
+  static async getAll(page: number, perPage: number, workspaceId?: number | null): Promise<PaginatedResponse<Achievement>> {
+    return apiFetch("app",`achievements`, {
       query: {
         per_page: perPage,
         page: page,
         sort: "rarity",
         order: "asc",
-        entities: ["count"]
+        entities: ["count"],
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       }
     }).then((res) => res.json());
   }
   static async getOne(id: number): Promise<Achievement> {
-    return customFetch(`achievements/${id}`).then((res) => res.json());
+    return apiFetch("app",`achievements/${id}`).then((res) => res.json());
   }
   static async getUsers(
     id: number,
     page: number,
     perPage: number
   ): Promise<PaginatedResponse<AchievementEarned>> {
-    return customFetch(`achievements/${id}/users`, {
+    return apiFetch("app",`achievements/${id}/users`, {
       query: {
         per_page: perPage,
         page: page

@@ -51,6 +51,7 @@ class UserTwitchRead(BaseRead):
 
 class UserRead(BaseRead):
     name: str
+    avatar_url: str | None = None
     discord: list[UserDiscordRead]
     battle_tag: list[UserBattleTagRead]
     twitch: list[UserTwitchRead]

@@ -10,6 +10,60 @@ class HeroClass(StrEnum):
     support = "Support"
 
 
+class RankPlatform(StrEnum):
+    """Overwatch competitive platform as exposed by OverFast."""
+
+    pc = "pc"
+    console = "console"
+
+
+class RankRole(StrEnum):
+    """Competitive role keys as returned by OverFast (lowercase)."""
+
+    tank = "tank"
+    damage = "damage"
+    support = "support"
+
+
+class RankDivision(StrEnum):
+    """Native Overwatch 2 competitive divisions (OverFast values).
+
+    Stored as a plain string in the DB so future Blizzard additions don't
+    require a migration; this enum documents the known values and powers the
+    default rank mapping.
+    """
+
+    bronze = "bronze"
+    silver = "silver"
+    gold = "gold"
+    platinum = "platinum"
+    diamond = "diamond"
+    master = "master"
+    grandmaster = "grandmaster"
+    # OverFast labels the top division "ultimate" (in-game "Champion").
+    ultimate = "ultimate"
+
+
+class RankCollectionStatus(StrEnum):
+    """Per-battle-tag collection state for the OverFast rank poller."""
+
+    pending = "pending"
+    ok = "ok"
+    private = "private"
+    not_found = "not_found"
+    error = "error"
+    rate_limited = "rate_limited"
+    disabled = "disabled"
+
+
+class RankCollectionSource(StrEnum):
+    """What triggered a rank snapshot."""
+
+    scheduled = "scheduled"
+    registration = "registration"
+    manual = "manual"
+
+
 class LogEventType(StrEnum):
     MatchStart = "match_start"
     MatchEnd = "match_end"
@@ -110,10 +164,137 @@ def is_ascending_stat(stat: LogStatsName) -> bool:
     return LOG_STATS_DEFAULT_DIRECTION.get(stat, "desc") == "asc"
 
 
+class TournamentStatus(StrEnum):
+    REGISTRATION = "registration"
+    DRAFT = "draft"
+    CHECK_IN = "check_in"
+    LIVE = "live"
+    PLAYOFFS = "playoffs"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class DraftStatus(StrEnum):
+    SETUP = "setup"
+    READY = "ready"
+    LIVE = "live"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class DraftFormat(StrEnum):
+    SNAKE = "snake"
+    LINEAR = "linear"
+    CUSTOM = "custom"
+
+
+class DraftRoundRule(StrEnum):
+    LINEAR = "linear"
+    REVERSE = "reverse"
+    WEAKEST_FIRST = "weakest_first"
+    STRONGEST_FIRST = "strongest_first"
+    TEAM_AVG_ASC = "team_avg_asc"
+    TEAM_AVG_DESC = "team_avg_desc"
+
+
+class DraftCaptainOrder(StrEnum):
+    """How captains are seeded into draft seats (who picks first)."""
+
+    MANUAL = "manual"  # selection order
+    WEAKEST_FIRST = "weakest_first"  # lowest-rated captain picks first
+    STRONGEST_FIRST = "strongest_first"  # highest-rated captain picks first
+    RANDOM = "random"  # deterministic shuffle (settings_json seed)
+
+
+class DraftPoolSource(StrEnum):
+    BALANCER_BALANCE = "balancer_balance"
+    MANUAL = "manual"
+
+
+class DraftAutopickStrategy(StrEnum):
+    BEST_FIT = "best_fit"
+    BEST_AVAILABLE = "best_available"
+    ROLE_NEED = "role_need"
+
+
+class DraftRole(StrEnum):
+    TANK = "tank"
+    DPS = "dps"
+    SUPPORT = "support"
+
+
+class DraftPlayerStatus(StrEnum):
+    AVAILABLE = "available"
+    PICKED = "picked"
+    REMOVED = "removed"
+
+
+class DraftPickStatus(StrEnum):
+    UPCOMING = "upcoming"
+    ON_CLOCK = "on_clock"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+    AUTOPICKED = "autopicked"
+
+
+class StageType(StrEnum):
+    ROUND_ROBIN = "round_robin"
+    SINGLE_ELIMINATION = "single_elimination"
+    DOUBLE_ELIMINATION = "double_elimination"
+    SWISS = "swiss"
+
+
+class StageItemType(StrEnum):
+    GROUP = "group"
+    BRACKET_UPPER = "bracket_upper"
+    BRACKET_LOWER = "bracket_lower"
+    SINGLE_BRACKET = "single_bracket"
+
+
+class StageItemInputType(StrEnum):
+    FINAL = "final"
+    TENTATIVE = "tentative"
+    EMPTY = "empty"
+
+
+class EncounterResultStatus(StrEnum):
+    NONE = "none"
+    PENDING_CONFIRMATION = "pending_confirmation"
+    CONFIRMED = "confirmed"
+    DISPUTED = "disputed"
+
+
+class MapPoolEntryStatus(StrEnum):
+    AVAILABLE = "available"
+    PICKED = "picked"
+    BANNED = "banned"
+    PLAYED = "played"
+
+
+class MapPickSide(StrEnum):
+    HOME = "home"
+    AWAY = "away"
+    DECIDER = "decider"
+    ADMIN = "admin"
+
+
 class EncounterStatus(StrEnum):
     COMPLETED = "completed"
     PENDING = "pending"
     OPEN = "open"
+
+
+class EncounterLinkRole(StrEnum):
+    """Role of the source encounter relative to the target encounter."""
+    WINNER = "winner"
+    LOSER = "loser"
+
+
+class EncounterLinkSlot(StrEnum):
+    """Which slot in the target encounter this link fills."""
+    HOME = "home"
+    AWAY = "away"
 
 
 class MatchEvent(StrEnum):

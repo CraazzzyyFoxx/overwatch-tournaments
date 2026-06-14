@@ -1,13 +1,28 @@
 import typing
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src import schemas
+from src import models, schemas
 from src.core import config, db, enums, pagination
 from src.services.gamemode import flows as gamemode_flows
 
 router = APIRouter(prefix="/gamemodes", tags=[enums.RouteTag.GAMEMODE])
+
+
+@router.get(
+    path="/lookup",
+    response_model=list[schemas.LookupItem],
+    description="Lightweight endpoint returning only id and name for dropdowns/selectors.",
+    summary="Lookup gamemodes",
+)
+async def lookup_gamemodes(
+    session: AsyncSession = Depends(db.get_async_session),
+) -> list[schemas.LookupItem]:
+    query = sa.select(models.Gamemode.id, models.Gamemode.name).order_by(models.Gamemode.name)
+    result = await session.execute(query)
+    return [schemas.LookupItem(id=row.id, name=row.name) for row in result.all()]
 
 
 @router.get(

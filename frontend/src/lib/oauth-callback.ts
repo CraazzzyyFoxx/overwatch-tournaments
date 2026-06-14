@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
+import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import type { OAuthProviderName } from "@/types/auth.types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -60,6 +61,8 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
   }
 
   try {
+    const forwardedHeaders = getForwardedClientHeaders(request);
+
     if (oauthAction === "link") {
       const accessToken = cookieStore.get("aqt_access_token")?.value;
 
@@ -70,11 +73,11 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
         return createRedirectResponse(loginUrl);
       }
 
-      await authService.linkOAuth(provider, code, state, accessToken);
+      await authService.linkOAuth(provider, code, state, accessToken, forwardedHeaders);
       return createRedirectResponse(new URL("/account", SITE_URL));
     }
 
-    const tokens = await authService.exchangeOAuthCode(provider, code, state);
+    const tokens = await authService.exchangeOAuthCode(provider, code, state, forwardedHeaders);
     const response = createRedirectResponse(resolveSafeRedirect(postLoginRedirect));
 
     response.cookies.set("aqt_access_token", tokens.access_token, {
@@ -82,7 +85,7 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 25 * 60
+      maxAge: 13 * 60
     });
 
     response.cookies.set("aqt_refresh_token", tokens.refresh_token, {

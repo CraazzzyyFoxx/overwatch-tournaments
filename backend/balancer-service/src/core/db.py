@@ -1,23 +1,28 @@
-from collections.abc import AsyncGenerator
-
-from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
-
-# Import base classes from shared library
-from shared.core.db import Base, TimeStampIntegerMixin, TimeStampUUIDMixin
-
+from shared.core.db import Base, TimeStampIntegerMixin, TimeStampUUIDMixin, create_database
 from src.core import config
 
-
-async_engine = create_async_engine(url=config.settings.db_url_asyncpg)
-engine = create_engine(url=config.settings.db_url)
-session_maker = sessionmaker(engine, class_=Session, expire_on_commit=False)
-async_session_maker = async_sessionmaker(
-    async_engine, class_=AsyncSession, expire_on_commit=False
+__all__ = (
+    "Base",
+    "TimeStampIntegerMixin",
+    "TimeStampUUIDMixin",
+    "async_engine",
+    "async_session_maker",
+    "get_async_session",
 )
 
+_db = create_database(
+    async_url=config.config.db_url_asyncpg,
+    pool_size=config.config.db_pool_size,
+    max_overflow=config.config.db_max_overflow,
+    pool_timeout=config.config.db_pool_timeout,
+    pool_recycle=config.config.db_pool_recycle,
+    pool_pre_ping=config.config.db_pool_pre_ping,
+    pool_use_lifo=config.config.db_pool_use_lifo,
+    connect_timeout=config.config.db_connect_timeout,
+    statement_timeout=config.config.db_statement_timeout,
+    pgbouncer=config.config.db_pgbouncer,
+)
 
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_maker() as session:
-        yield session
+async_engine = _db.async_engine
+async_session_maker = _db.async_session_maker
+get_async_session = _db.get_async_session

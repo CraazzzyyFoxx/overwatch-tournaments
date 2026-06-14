@@ -1,21 +1,16 @@
-import type { Metadata } from "next";
-import React from "react";
-import { SITE_NAME } from "@/config/site";
+import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 
-export const metadata: Metadata = {
-  title: `Team Balancer | ${SITE_NAME}`,
-  description: `Balance tournament teams using genetic algorithms on ${SITE_NAME}.`,
-  metadataBase: new URL("https://aqt.craazzzyyfoxx.me"),
-  openGraph: {
-    title: `Team Balancer | ${SITE_NAME}`,
-    description: `Balance tournament teams using genetic algorithms on ${SITE_NAME}.`,
-    url: "https://aqt.craazzzyyfoxx.me/balancer",
-    type: "website",
-    siteName: SITE_NAME,
-    locale: "en_US"
-  }
+import { BalancerLayoutClient } from "@/app/balancer/BalancerLayoutClient";
+import { SIDEBAR_COOKIE_NAMES, parseSidebarOpenCookie } from "@/lib/sidebar-cookies";
+
+type BalancerLayoutProps = {
+  children: ReactNode;
 };
 
-export default function BalancerLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <>{children}</>;
+export default async function BalancerLayout({ children }: BalancerLayoutProps) {
+  const cookieStore = await cookies();
+  const defaultSidebarOpen = parseSidebarOpenCookie(cookieStore.get(SIDEBAR_COOKIE_NAMES.balancer)?.value) ?? true;
+
+  return <BalancerLayoutClient defaultSidebarOpen={defaultSidebarOpen}>{children}</BalancerLayoutClient>;
 }

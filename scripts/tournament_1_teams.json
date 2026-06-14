@@ -1,0 +1,870 @@
+{
+  "data": {
+    "teams": [
+      {
+        "uuid": "152c6741-8a7b-46d2-bb2f-2c90c95182c5",
+        "avgSr": 1100.0,
+        "name": "Ducky#21942",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "81bf3404-515d-40e5-ad2a-b4d9ed89ac45",
+            "name": "Ducky#21942",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1800
+          },
+          {
+            "uuid": "0d69b4e0-1b1a-4ce8-b0b4-549fb239ab4a",
+            "name": "ANGRYREY#2438",
+            "primary": false,
+            "secondary": true,
+            "role": "dps",
+            "rank": 600
+          },
+          {
+            "uuid": "71fb6ffa-544a-439c-8e9a-afa05fcc46a4",
+            "name": "Steud#2665",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1400
+          },
+          {
+            "uuid": "bc12ff5a-292a-497c-94e9-1ea59424010d",
+            "name": "Bratwurstfan#21785",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "21a22f8b-40e4-4419-afaa-e84aef054421",
+            "name": "Sesnau#2901",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 600
+          }
+        ]
+      },
+      {
+        "uuid": "92e8aca9-dc09-4f62-bdbd-2087c0f10def",
+        "avgSr": 1100.0,
+        "name": "CraazzzyyFox#2130",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "81a5a829-09f3-4759-a0a9-821badccce99",
+            "name": "CraazzzyyFox#2130",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1600
+          },
+          {
+            "uuid": "66e2f40f-c385-4a38-bc12-003fda516cf6",
+            "name": "BaseAndCo#2842",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 300
+          },
+          {
+            "uuid": "41c4848b-89a3-4ab0-ba14-0546d6e1455b",
+            "name": "малая#21221",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1000
+          },
+          {
+            "uuid": "75b20440-256b-4381-8033-18e0d51e8fac",
+            "name": "marmeladka#21557",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1400
+          },
+          {
+            "uuid": "4bb4ff2c-f935-45b4-83a7-81a673e508e7",
+            "name": "AnyCost#2261",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          }
+        ]
+      },
+      {
+        "uuid": "2c0c3234-e782-4187-8538-0871a08ec618",
+        "avgSr": 1100.0,
+        "name": "Wisparian#2636",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "6704b968-f3b6-439f-978a-652cba451fa2",
+            "name": "Wisparian#2636",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1800
+          },
+          {
+            "uuid": "7bc4dd80-17a3-4cc4-bbe0-ac5ada1b5ff2",
+            "name": "Зайчонок#21109",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 600
+          },
+          {
+            "uuid": "3ac28d6b-f570-4042-bfe1-7dd048cbda0d",
+            "name": "Kisylia#2201",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "1174b4a4-596b-49f5-9001-bf5fe0ced80b",
+            "name": "shavarnadze#2451",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "19034171-d506-40ee-be95-f3e0a54430b3",
+            "name": "Flank#21295",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 800
+          }
+        ]
+      },
+      {
+        "uuid": "b0fd09b4-6518-4357-8280-87a3e5c5595d",
+        "avgSr": 1100.0,
+        "name": "DemonDimon#2279",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "bed24da7-84e1-4d59-8034-41b259ac154f",
+            "name": "DemonDimon#2279",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1500
+          },
+          {
+            "uuid": "7d16cf45-31a6-4472-85f3-04b02eaeca94",
+            "name": "Sliming#21913",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 400
+          },
+          {
+            "uuid": "b925428b-a436-4b8f-8043-d118ad798973",
+            "name": "mortred#22936",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1000
+          },
+          {
+            "uuid": "9ea4c20e-d1f2-4da7-8f1e-db9d9d3f9cf9",
+            "name": "Miracle#22353",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1400
+          },
+          {
+            "uuid": "0cf1e791-d63a-4b53-9de4-a93ac7f0dcb8",
+            "name": "ХОПМЕХАНИКА#2957",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          }
+        ]
+      },
+      {
+        "uuid": "dec55c26-6030-4b1f-aa46-7213ef7ca4d8",
+        "avgSr": 1100.0,
+        "name": "Scorpion#28691",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "06025b3e-a5d7-4ca8-9a35-8826d35fcb54",
+            "name": "Scorpion#28691",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1600
+          },
+          {
+            "uuid": "ca807570-c69f-4e52-a916-e801de116dac",
+            "name": "Rowdy#21998",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 500
+          },
+          {
+            "uuid": "1be6bc9f-2a8e-4311-b184-d1468e695bf0",
+            "name": "Weeb#21299",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1500
+          },
+          {
+            "uuid": "0bbe9667-a818-4344-90f4-c54b3c17873e",
+            "name": "tsezoya#2729",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "dca707f8-4720-4d42-8a76-2135537950d4",
+            "name": "Olivich#2699",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 700
+          }
+        ]
+      },
+      {
+        "uuid": "d91426ad-b347-4fea-b9ad-993b53c29d69",
+        "avgSr": 1100.0,
+        "name": "Morsik#21687",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "eb40fab3-ff93-49a9-9b37-06af2a6f1f6e",
+            "name": "Morsik#21687",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1500
+          },
+          {
+            "uuid": "43893857-192f-4534-9921-766e974ecdcc",
+            "name": "Neyz1#2888",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 600
+          },
+          {
+            "uuid": "62aee2bf-d69c-4e26-bd63-65faeb7f5c5d",
+            "name": "kabanchik#21386",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1500
+          },
+          {
+            "uuid": "61e27c4d-5c8c-431c-93ac-9a64e46e4a05",
+            "name": "rizi#21666",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 900
+          },
+          {
+            "uuid": "92f47b1f-da12-48a5-b3d5-ed0b0f7b206d",
+            "name": "Iceberg#2419",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1000
+          }
+        ]
+      },
+      {
+        "uuid": "37b99877-9e10-436f-9010-555679ce03b8",
+        "avgSr": 1100.0,
+        "name": "vac3x#2315",
+        "totalSr": 5500,
+        "members": [
+          {
+            "uuid": "cea0929c-a04c-4d1b-b892-f6a8e21eefa3",
+            "name": "vac3x#2315",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1600
+          },
+          {
+            "uuid": "992cd60f-e7f4-41ac-b125-943274ebbd34",
+            "name": "D4NUVHA0#2718",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 500
+          },
+          {
+            "uuid": "eb3e5c28-0239-44b3-91c4-795daae1de1b",
+            "name": "RestartGG#2476",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "c40bdd24-9009-4c66-91ff-101bafbc0274",
+            "name": "Askhay#21578",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1000
+          },
+          {
+            "uuid": "2fb992c3-6c89-4caf-935c-69facad17f51",
+            "name": "Nova#28747",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1200
+          }
+        ]
+      },
+      {
+        "uuid": "862a2577-2426-476d-a231-3eab1f8d9f82",
+        "avgSr": 1120.0,
+        "name": "HauauNipah#2210",
+        "totalSr": 5600,
+        "members": [
+          {
+            "uuid": "0e451e2c-571a-4a0b-bc8c-fdceeb60e53e",
+            "name": "HauauNipah#2210",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1600
+          },
+          {
+            "uuid": "27f8ac81-b89e-4939-b5ab-91010ea7dc53",
+            "name": "spark#22120",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 200
+          },
+          {
+            "uuid": "836a2811-46ed-49b2-86d8-511a9dd6929b",
+            "name": "memeless#2769",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1300
+          },
+          {
+            "uuid": "84343f9f-973a-401b-ba39-6126bf5f1b1d",
+            "name": "MurMur#21814",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1400
+          },
+          {
+            "uuid": "180a4483-88b2-4747-ae2c-9b21b45ae793",
+            "name": "Толюша#2313",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1100
+          }
+        ]
+      },
+      {
+        "uuid": "70339d1c-a8a3-4bb8-aaaa-36acd69dcdad",
+        "avgSr": 1120.0,
+        "name": "rybr0n#2291",
+        "totalSr": 5600,
+        "members": [
+          {
+            "uuid": "2af8e5d3-07f7-43a6-a59e-9ba0f0322ff8",
+            "name": "rybr0n#2291",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1900
+          },
+          {
+            "uuid": "b21da913-e0ea-455a-af51-714bf3b8622b",
+            "name": "JamStrat#2858",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 600
+          },
+          {
+            "uuid": "4478ba98-77a1-4c25-9b5e-f5e40cac8308",
+            "name": "YALUCKY#21743",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1300
+          },
+          {
+            "uuid": "89032221-23ba-4850-9826-5e7eb0362af7",
+            "name": "Ǩõŋđëŗǃ#2507",
+            "primary": false,
+            "secondary": true,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "45d2c782-4601-4870-b7f2-30c57489a817",
+            "name": "SacredSine#2442",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 700
+          }
+        ]
+      },
+      {
+        "uuid": "e3cd3af7-94a4-4296-8adc-2093dd4420e9",
+        "avgSr": 1120.0,
+        "name": "Averet#21358",
+        "totalSr": 5600,
+        "members": [
+          {
+            "uuid": "fa64fe6b-ac9f-4395-a143-0fb580524760",
+            "name": "Averet#21358",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1800
+          },
+          {
+            "uuid": "ea07940c-377f-45e2-b5b2-3717559fa2a6",
+            "name": "TheArtem#21991",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 600
+          },
+          {
+            "uuid": "3787bb80-efcf-461b-9bcc-02200068bfcd",
+            "name": "Warrkan#1755",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1300
+          },
+          {
+            "uuid": "97bd14b8-f321-481e-a820-95554d2fbf40",
+            "name": "paradocs#11121",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1100
+          },
+          {
+            "uuid": "365d75ac-357c-402a-bc31-544b251dd7fa",
+            "name": "NeverMore#22278",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 800
+          }
+        ]
+      },
+      {
+        "uuid": "49f9cf74-266b-428a-854a-742bda4bc2b1",
+        "avgSr": 1120.0,
+        "name": "Magistr#21158",
+        "totalSr": 5600,
+        "members": [
+          {
+            "uuid": "a4baa516-00d2-4181-8a5b-bca5234c1757",
+            "name": "Magistr#21158",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 2000
+          },
+          {
+            "uuid": "c2bd0d79-64d1-46cd-8eb7-2ebc7b3dd019",
+            "name": "EnemyClan#1547",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 200
+          },
+          {
+            "uuid": "4f252e14-62e8-47c0-8bcb-4d3754df8fa3",
+            "name": "Honoka#21889",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "a6c6005b-a701-449e-80cf-a2cfe281490a",
+            "name": "Carnivorous#21671",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "0a24e4cc-6d06-4787-94ac-504d61e2e4c1",
+            "name": "ZakMeN#21114",
+            "primary": false,
+            "secondary": true,
+            "role": "dps",
+            "rank": 1000
+          }
+        ]
+      },
+      {
+        "uuid": "44ab90e2-161a-49b9-b513-1ce87048d18f",
+        "avgSr": 1130.0,
+        "name": "CryZz#21225",
+        "totalSr": 5650,
+        "members": [
+          {
+            "uuid": "2b16df24-21d2-405e-a6da-01122a163db4",
+            "name": "CryZz#21225",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1500
+          },
+          {
+            "uuid": "a176786e-2496-4b02-9ee8-74cf4e6895f8",
+            "name": "dan1k#21950",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 600
+          },
+          {
+            "uuid": "d75a6f62-2697-498c-872b-c344fbc38432",
+            "name": "Mars#23130",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "a13c9a89-227a-42a6-aee3-9be17100477b",
+            "name": "Squirrel#22483",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1000
+          },
+          {
+            "uuid": "d3abf169-16c5-4c99-99e0-09edb8e2625f",
+            "name": "Yars#21935",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1450
+          }
+        ]
+      },
+      {
+        "uuid": "e0c4abc5-cb44-4b50-aa1b-37f3752ce94a",
+        "avgSr": 1140.0,
+        "name": "ЕдкийЕж#216878",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "0e5143ea-f8a9-449e-9944-16391a008bea",
+            "name": "ЕдкийЕж#216878",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 1700
+          },
+          {
+            "uuid": "2838845e-c63a-4876-99d1-e1bffa552309",
+            "name": "tia#22266",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 700
+          },
+          {
+            "uuid": "0e7c7abb-e26e-4711-ae61-7654f70b356d",
+            "name": "Retlek0#2473",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1400
+          },
+          {
+            "uuid": "1eeef34b-1fc3-41b2-acfd-0320b19ece38",
+            "name": "Buran#22742",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "f6c14452-9ba0-4dc4-bb0d-20af133476c4",
+            "name": "Jackson#2180",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 800
+          }
+        ]
+      },
+      {
+        "uuid": "d8f83f72-f0f7-4145-b8ef-9aefb040d786",
+        "avgSr": 1140.0,
+        "name": "DOORSTUCK#21759",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "4c6a7df7-9eb7-49b6-b535-ffc68e3c3e57",
+            "name": "DOORSTUCK#21759",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1600
+          },
+          {
+            "uuid": "625628c0-4b17-4ca8-9bcc-924c325408a4",
+            "name": "Саша#25209",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 500
+          },
+          {
+            "uuid": "64e3325a-6027-4300-b7e8-1110c2ea7336",
+            "name": "Davin4#2286",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1200
+          },
+          {
+            "uuid": "fd8686a1-3221-427d-91a2-88005189f1c6",
+            "name": "Cookie22#21614",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 900
+          },
+          {
+            "uuid": "898035b2-6adf-4ffa-98a9-d0155c2f4d2f",
+            "name": "PororoPVL#2551",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1500
+          }
+        ]
+      },
+      {
+        "uuid": "726b40af-da04-47f9-8df8-0ccdf8af705d",
+        "avgSr": 1140.0,
+        "name": "Kweady#2971",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "6fa7fc05-ee0f-401a-9199-030a6ecc05c9",
+            "name": "Kweady#2971",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1800
+          },
+          {
+            "uuid": "ff1464f9-e780-480b-9cc9-8ab54c13d619",
+            "name": "ZL0YW0LK#2133",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 200
+          },
+          {
+            "uuid": "af3c14bc-ee03-4f95-a5c7-a060c96f2e22",
+            "name": "VipèreSombre#21773",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1100
+          },
+          {
+            "uuid": "39bbbdd5-68db-494d-b7b8-d364e40556b6",
+            "name": "VicExtreme#2402",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1300
+          },
+          {
+            "uuid": "56448fdd-34af-45a2-a7cc-7729f2816f8c",
+            "name": "MAKI#23885",
+            "primary": false,
+            "secondary": true,
+            "role": "dps",
+            "rank": 1300
+          }
+        ]
+      },
+      {
+        "uuid": "29173777-1d62-4410-91f2-4e1926e99bfa",
+        "avgSr": 1140.0,
+        "name": "pickmeplz#2154",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "d01d0a76-bd5c-4945-8b60-1f6db0d05d8a",
+            "name": "pickmeplz#2154",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1800
+          },
+          {
+            "uuid": "3c1a309c-fc7e-4bd5-b46b-08de83ec5991",
+            "name": "Brunsong#21698",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 600
+          },
+          {
+            "uuid": "abc63537-aaa1-48dd-bca0-481c1c8ff17b",
+            "name": "Kars#21831",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1400
+          },
+          {
+            "uuid": "76b48894-d609-453f-a4a9-86f1fb084961",
+            "name": "dasha21cm#2481",
+            "primary": true,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1100
+          },
+          {
+            "uuid": "002264e2-fa43-4bb9-879d-afac2a047b2e",
+            "name": "YourMadness#3839",
+            "primary": false,
+            "secondary": true,
+            "role": "support",
+            "rank": 800
+          }
+        ]
+      },
+      {
+        "uuid": "143c8a6a-ae09-4ea8-ac15-a932631a47ee",
+        "avgSr": 1140.0,
+        "name": "Mioto#21199",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "a4a7352c-111c-41bf-ac57-84f35fad5584",
+            "name": "Mioto#21199",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1600
+          },
+          {
+            "uuid": "32034c82-76d0-4cf5-ade5-dfca09b40dd1",
+            "name": "UgandO#2383",
+            "primary": false,
+            "secondary": true,
+            "role": "dps",
+            "rank": 500
+          },
+          {
+            "uuid": "5ca75e43-185e-4ed1-9856-4cfb6a05cd07",
+            "name": "Warcrafy#2849",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1400
+          },
+          {
+            "uuid": "c1474177-c8f0-4cd6-965d-809ef9c1aee3",
+            "name": "Melocotón#21453",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1200
+          },
+          {
+            "uuid": "49d7f753-cf1c-4fd8-b8b0-f845ad8090ba",
+            "name": "copilop#2153",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1000
+          }
+        ]
+      },
+      {
+        "uuid": "57b18b35-bd64-450d-a4bd-fc6a0b726b63",
+        "avgSr": 1140.0,
+        "name": "LookAtMyDuck#2249",
+        "totalSr": 5700,
+        "members": [
+          {
+            "uuid": "2a22f5e1-be03-4264-8478-aeef2b194783",
+            "name": "LookAtMyDuck#2249",
+            "primary": false,
+            "secondary": false,
+            "role": "tank",
+            "rank": 1700
+          },
+          {
+            "uuid": "9446470e-c93b-4bf8-a86b-fb222273d6ac",
+            "name": "Shadow#23694",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 500
+          },
+          {
+            "uuid": "4461e93b-3d21-49d4-bf69-e7224b612170",
+            "name": "ByeBye#21347",
+            "primary": false,
+            "secondary": false,
+            "role": "support",
+            "rank": 1300
+          },
+          {
+            "uuid": "2dbbeb23-9151-427d-b642-bd3e14ab75d1",
+            "name": "AGKorvin#2101",
+            "primary": false,
+            "secondary": false,
+            "role": "dps",
+            "rank": 1200
+          },
+          {
+            "uuid": "0370b554-6e2b-49c8-ac06-1e9e7f86e12c",
+            "name": "thesevenast#2234",
+            "primary": true,
+            "secondary": false,
+            "role": "support",
+            "rank": 1000
+          }
+        ]
+      }
+    ]
+  }
+}

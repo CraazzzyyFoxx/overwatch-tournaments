@@ -11,6 +11,7 @@ alerting:
         - targets: ["alertmanager:9093"]
 
 rule_files:
+  - /etc/prometheus/rules/services.yml
   - /etc/prometheus/rules/rabbitmq.yml
   - /etc/prometheus/rules/redis.yml
 
@@ -75,3 +76,59 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: balancer-service
+
+  # --------------------------------------------------------------------------
+  # Worker services
+  # --------------------------------------------------------------------------
+  - job_name: parser-worker
+    static_configs:
+      - targets: ["parser-worker:9100"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: parser-worker
+
+  - job_name: tournament-service
+    static_configs:
+      - targets: ["tournament:8004"]
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: tournament-service
+
+  - job_name: tournament-worker
+    static_configs:
+      - targets: ["tournament-worker:9103"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: tournament-worker
+
+  - job_name: balancer-worker
+    static_configs:
+      - targets: ["balancer-worker:9100"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: balancer-worker
+
+  - job_name: discord-service
+    static_configs:
+      - targets: ["discord:9100"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: discord-service
+
+  # --------------------------------------------------------------------------
+  # Observability stack internals
+  # --------------------------------------------------------------------------
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]
+    metrics_path: /metrics

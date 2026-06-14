@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { LogIn, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -24,9 +25,16 @@ import {
 import { cn } from "@/lib/utils";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
 import UserMenu from "@/components/UserMenu";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import ActiveEvents from "@/components/ActiveEvents";
+import { adminEntryPermissions } from "@/components/admin/admin-navigation";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
+import { getAuthProfileHref } from "@/lib/auth-profile-links";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 
 const tournament_components: { title: string; href: string; description: string }[] = [
   {
@@ -39,11 +47,11 @@ const tournament_components: { title: string; href: string; description: string 
     href: "/teams",
     description: "Place where all teams are listed"
   },
-  {
-    title: "OWAL",
-    href: "/owal",
-    description: "Place where all OWAL tournaments are listed"
-  },
+  // {
+  //   title: "OWAL",
+  //   href: "/owal",
+  //   description: "Place where all OWAL tournaments are listed"
+  // },
   {
     title: "Analytics",
     href: "/tournaments/analytics",
@@ -61,6 +69,11 @@ const users_components: { title: string; href: string; description: string }[] =
     title: "Compare",
     href: "/users/compare",
     description: "Page where you can compare users"
+  },
+  {
+    title: "Heroes Leaderboard",
+    href: "/users/heroes-compare",
+    description: "Per-hero performance leaderboard across all players"
   },
   {
     title: "Achievements",
@@ -82,11 +95,25 @@ const matches_components: { title: string; href: string; description: string }[]
   }
 ];
 
-const organizer_components: { title: string; href: string; description: string }[] = [
+const organization_components: {
+  title: string;
+  href: string;
+  description: string;
+  roles?: ("admin" | "organizer")[];
+  requiresAdminAccess?: boolean;
+  requiresBalancerAccess?: boolean;
+}[] = [
   {
     title: "Balancer",
     href: "/balancer",
-    description: "Tool for balancing teams by player roles and ratings"
+    description: "Tool for balancing teams by player roles and ratings",
+    requiresBalancerAccess: true,
+  },
+  {
+    title: "Admin",
+    href: "/admin",
+    description: "Workspace for tournaments, access, and operations management",
+    requiresAdminAccess: true,
   }
 ];
 
@@ -94,32 +121,95 @@ const components: Record<string, { title: string; href: string; description: str
   Tournaments: tournament_components,
   Users: users_components,
   Matches: matches_components,
-  Organizer: organizer_components
+  Organization: organization_components
 };
+
+// Redesign nav-link look (flat, teal-active) — overrides the shared
+// navigationMenuTriggerStyle() via twMerge conflict resolution.
+const navTriggerClass =
+  "h-8 rounded-lg bg-transparent px-3 text-[13px] font-medium text-[var(--aqt-fg-muted)] " +
+  "hover:bg-[hsl(0_0%_100%/0.04)] hover:text-[var(--aqt-fg)] " +
+  "focus:bg-[hsl(0_0%_100%/0.04)] focus:text-[var(--aqt-fg)] " +
+  "data-[state=open]:bg-[hsl(0_0%_100%/0.04)] data-[state=open]:text-[var(--aqt-fg)]";
+
+const navTriggerActiveClass =
+  "bg-[hsl(174_72%_46%/0.1)] text-[var(--aqt-teal)] " +
+  "hover:bg-[hsl(174_72%_46%/0.16)] hover:text-[var(--aqt-teal)] " +
+  "focus:bg-[hsl(174_72%_46%/0.16)] focus:text-[var(--aqt-teal)] " +
+  "data-[state=open]:bg-[hsl(174_72%_46%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
+
+function isNavGroupActive(
+  items: { href: string }[],
+  pathname: string
+): boolean {
+  return items.some((item) => {
+    if (item.href === "/") return pathname === "/";
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  });
+}
 
 const Header = () => {
   const { user } = useAuthProfile();
+  const pathname = usePathname() ?? "";
   const openAuthModal = useAuthModalStore((state) => state.open);
-  const { isOrganizer, isLoaded } = usePermissions();
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const { isOrganizer, isLoaded, canAccessAdminRoute } = usePermissions();
   const username = user?.username;
   const avatarUrl = user?.avatarUrl;
-  const profileHref = username ? `/users/${username}` : "/users";
+  const profileHref = getAuthProfileHref(user);
+  const canAccessAdmin =
+    isLoaded &&
+    canAccessAdminRoute({
+      permissions: adminEntryPermissions,
+      workspaceId: currentWorkspaceId,
+      workspaceAdminVisible: true,
+    });
+  const canAccessBalancer = canAccessAdmin || isOrganizer;
+  const canAccessOrganization = isLoaded && (canAccessAdmin || canAccessBalancer);
+  const handleLoginClick = () => {
+    const nextPath =
+      typeof window === "undefined" ? "/" : getCurrentPathForAuthRedirect(window.location);
+    openAuthModal(nextPath);
+  };
+
+  const getVisibleItems = (
+    items: {
+      title: string;
+      href: string;
+      description: string;
+      roles?: ("admin" | "organizer")[];
+      requiresAdminAccess?: boolean;
+      requiresBalancerAccess?: boolean;
+    }[]
+  ) =>
+    items.filter((item) => {
+      if (item.requiresAdminAccess) return canAccessAdmin;
+      if (item.requiresBalancerAccess) return canAccessBalancer;
+      if (!item.roles?.length) return true;
+      if (item.roles.includes("organizer") && isOrganizer) return true;
+      return false;
+    });
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center bg-background gap-4 border-b px-4 md:px-6">
-      <Link href={"/"}>
-        <Image src={SITE_ICON} alt={SITE_NAME} width={40} height={40} />
-      </Link>
+    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
+      <WorkspaceSwitcher />
       <NavigationMenu className="hidden md:flex">
         {Object.keys(components)
-          .filter((title) => title !== "Organizer" || (isLoaded && isOrganizer))
+          .filter((title) => title !== "Organization" || canAccessOrganization)
           .map((title) => (
             <NavigationMenuList key={title}>
               <NavigationMenuItem>
-                <NavigationMenuTrigger>{title}</NavigationMenuTrigger>
+                <NavigationMenuTrigger
+                  className={cn(
+                    navTriggerClass,
+                    isNavGroupActive(components[title], pathname) && navTriggerActiveClass
+                  )}
+                >
+                  {title}
+                </NavigationMenuTrigger>
                 <NavigationMenuContent>
-                  <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px] ">
-                    {components[title].map((component) => (
+                  <ul className="grid w-100 gap-3 p-4 md:w-125 md:grid-cols-2 lg:w-150 ">
+                    {getVisibleItems(components[title]).map((component) => (
                       <ListItem key={component.title} title={component.title} href={component.href}>
                         {component.description}
                       </ListItem>
@@ -145,7 +235,7 @@ const Header = () => {
             </Link>
             <Accordion type="single" collapsible className="w-full">
               {Object.entries(components)
-                .filter(([category]) => category !== "Organizer" || (isLoaded && isOrganizer))
+                .filter(([category]) => category !== "Organization" || canAccessOrganization)
                 .map(([category, items]) => (
                   <AccordionItem key={category} value={category}>
                     <AccordionTrigger className="text-base hover:text-foreground">
@@ -153,7 +243,7 @@ const Header = () => {
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="grid gap-4 pl-4">
-                        {items.map((item) => (
+                        {getVisibleItems(items).map((item) => (
                           <Link
                             key={item.title}
                             href={item.href}
@@ -171,16 +261,20 @@ const Header = () => {
         </SheetContent>
       </Sheet>
       <div className="flex w-full items-center md:ml-auto gap-4 lg:gap-4">
+        <ActiveEvents />
         <div className="ml-auto flex-1 sm:flex-initial">
           <UserSearch />
         </div>
         {username ? (
           <UserMenu username={username} avatarUrl={avatarUrl} profileHref={profileHref} />
         ) : (
-          <Button variant="outline" className="text-base" onClick={() => openAuthModal()}>
-            <LogIn className="h-5 w-5" />
-            <span className="hidden sm:inline">Login</span>
-          </Button>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Button variant="outline" className="text-base" onClick={handleLoginClick}>
+              <LogIn className="h-5 w-5" />
+              <span className="hidden sm:inline">Login</span>
+            </Button>
+          </div>
         )}
       </div>
     </header>

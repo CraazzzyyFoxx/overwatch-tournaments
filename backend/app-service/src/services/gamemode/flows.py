@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.repository import GamemodeRepository
+
 from src import models, schemas
 from src.core import errors, pagination
 
-from . import service
+_gamemode_repo = GamemodeRepository()
 
 
 async def to_pydantic(
@@ -46,7 +48,11 @@ async def get(
     Raises:
         errors.ApiHTTPException: If the gamemode is not found.
     """
-    gamemode = await service.get(session, gamemode_id, entities)
+    gamemode = (
+        await _gamemode_repo.get_with_maps(session, gamemode_id)
+        if "maps" in entities
+        else await _gamemode_repo.get(session, gamemode_id)
+    )
 
     if not gamemode:
         raise errors.ApiHTTPException(
@@ -75,7 +81,9 @@ async def get_all(
     Returns:
         pagination.Paginated[schemas.GamemodeRead]: A paginated list of Pydantic schemas representing the gamemodes.
     """
-    gamemodes, total = await service.get_all(session, params)
+    gamemodes, total = await _gamemode_repo.all(
+        session, params, with_maps="maps" in params.entities
+    )
     return pagination.Paginated(
         total=total,
         per_page=params.per_page,

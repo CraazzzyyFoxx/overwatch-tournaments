@@ -3,8 +3,9 @@ import json
 import pandas as pd
 
 from loguru import logger
+from shared.clients.s3 import S3Client
 
-from src.core import db
+from src.core import config, db
 from src.services.s3 import service as s3_service
 from src.services.user.service import get_by_battle_tag
 
@@ -19,8 +20,14 @@ def update_player_data(player_data: dict, player_formated_data: dict) -> dict:
 
 
 async def filter_owal_players() -> None:
-    s3_client = s3_service.S3AsyncClient(bucket_name="aqt")
-    tournaments = await s3_client.get_tournaments_teams()
+    s3 = S3Client(
+        access_key=config.settings.s3_access_key,
+        secret_key=config.settings.s3_secret_key,
+        endpoint_url=config.settings.s3_endpoint_url,
+        bucket_name=config.settings.s3_bucket_name,
+    )
+    await s3.start()
+    tournaments = await s3_service.get_tournaments_teams(s3)
 
     with open("players.json", "r", encoding="utf-8") as file:
         result_data = json.load(file)

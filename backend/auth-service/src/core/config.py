@@ -1,15 +1,14 @@
 """Configuration module for auth service."""
 
 import json
-from pathlib import Path
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from shared.core.config import BaseServiceSettings
 
 
-class Settings(BaseSettings):
-    """Application settings"""
-
+class Settings(BaseServiceSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -17,29 +16,17 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Application
-    PROJECT_NAME: str = "Authentication Service"
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
-    HOST: str = "localhost"
-    PORT: int = 8001
-
-    POSTGRES_HOST: str
-    POSTGRES_PORT: int
-    POSTGRES_DB: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
+    # Application overrides
+    project_name: str = "Authentication Service"
+    port: int = 8001
 
     # JWT Authentication
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # Service-to-service (client credentials)
-    # Example:
-    # SERVICE_CLIENTS={"discord-service":"secret","parser-service":"secret"}
-    # SERVICE_SCOPES={"discord-service":["parser:logs"],"parser-service":["..."]}
     SERVICE_CLIENTS: dict[str, str] = {}
     SERVICE_SCOPES: dict[str, list[str]] = {}
     SERVICE_ACCESS_TOKEN_EXPIRE_MINUTES: int = 5
@@ -91,43 +78,11 @@ class Settings(BaseSettings):
 
     # Shared frontend OAuth callback
     OAUTH_REDIRECT: str | None = None
-
     OAUTH_STATE_EXPIRE_MINUTES: int = 10
 
-    log_level: str = "info"
-    logs_root_path: str = f"{Path.cwd()}/logs"
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379"
 
-    # Observability
-    sentry_dsn: str | None = None
-    sentry_traces_sample_rate: float = 0.1
-    sentry_profiles_sample_rate: float = 0.1
-    otlp_endpoint: str | None = None
-    tracing_enabled: bool = False
-    json_logging: bool = True
-
-    # Proxy (optional)
-    proxy_ip: str | None = None
-    proxy_port: int | None = None
-    proxy_username: str | None = None
-    proxy_password: str | None = None
-
-    @property
-    def db_url_asyncpg(self):
-        """Get async database URL"""
-        url = (
-            f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
-            f"{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
-        return f"postgresql+asyncpg://{url}"
-
-    @property
-    def db_url(self):
-        """Get sync database URL"""
-        url = (
-            f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
-            f"{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
-        return f"postgresql+psycopg://{url}"
 
 
 settings = Settings()

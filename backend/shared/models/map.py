@@ -9,6 +9,7 @@ __all__ = ("Map",)
 
 class Map(db.TimeStampIntegerMixin):
     __tablename__ = "map"
+    __table_args__ = ({"schema": "overwatch"},)
 
     gamemode_id: Mapped[int] = mapped_column(ForeignKey(Gamemode.id))
     name: Mapped[str] = mapped_column(String(), unique=True)

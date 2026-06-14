@@ -25,7 +25,7 @@ async def get_by_slug(session: AsyncSession, slug: str) -> models.Gamemode | Non
 
 async def get_all(
     session: AsyncSession,
-    params: pagination.PaginationParams,
+    params: pagination.PaginationSortParams,
 ) -> tuple[typing.Sequence[models.Gamemode], int]:
     query = sa.select(models.Gamemode)
     query = params.apply_pagination_sort(query, models.Gamemode)

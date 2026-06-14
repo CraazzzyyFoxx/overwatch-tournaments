@@ -1,27 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect } from "react";
 import { type SettingsTab, useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Link2, User as UserIcon, X, MonitorCog, Shield } from "lucide-react";
 import AccountConnectionsSection from "./account-settings/AccountConnectionsSection";
-import { useSearchParams } from "next/navigation";
+import AccountSessionsSection from "./account-settings/AccountSessionsSection";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const TAB_CONFIG: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+const TAB_CONFIG: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: "profile", label: "My Account", icon: <UserIcon className="w-4 h-4" /> },
   { id: "preferences", label: "Preferences", icon: <MonitorCog className="w-4 h-4" /> },
   { id: "connections", label: "Connections", icon: <Link2 className="w-4 h-4" /> },
+  { id: "sessions", label: "Sessions", icon: <Shield className="w-4 h-4" /> },
 ];
 
 const AccountSettingsModal = () => {
   const { isOpen, close, activeTab, setActiveTab, open } = useAccountSettingsModalStore();
   const searchParams = useSearchParams();
-  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    setMounted(true);
     // Auto-open modal if URL has ?settings=... parameter (e.g. returning from OAuth)
     const settingsTab = searchParams.get("settings");
+    if (settingsTab === "api-keys") {
+      router.replace("/admin/access/api-keys");
+      return;
+    }
     if (settingsTab && TAB_CONFIG.some(t => t.id === settingsTab)) {
       open(settingsTab as SettingsTab);
       
@@ -30,20 +36,18 @@ const AccountSettingsModal = () => {
       url.searchParams.delete("settings");
       window.history.replaceState({}, "", url.toString());
     }
-  }, [searchParams, open]);
-
-  if (!mounted) return null;
+  }, [searchParams, open, router]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(openState) => !openState && close()}>
       {/* Hide the default close button injected by dialog primitive using [&>button]:hidden */}
-      <DialogContent 
+        <DialogContent 
         className="max-w-5xl h-[80vh] min-h-[600px] p-0 overflow-hidden border-border/40 sm:rounded-2xl liquid-glass flex flex-row [&>button]:hidden"
         style={{
           "--lg-a": "15 23 42", // deep slate
           "--lg-b": "56 189 248", // light blue
           "--lg-c": "139 92 246", // purple
-        } as React.CSSProperties}
+        } as CSSProperties}
       >
         <DialogTitle className="sr-only">Account Settings</DialogTitle>
 
@@ -122,6 +126,18 @@ const AccountSettingsModal = () => {
                     <MonitorCog className="w-12 h-12 mb-4 opacity-50" />
                     <p>App preferences coming soon</p>
                   </div>
+                </div>
+              )}
+
+              {activeTab === "sessions" && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight text-white">Sessions</h3>
+                    <p className="text-sm text-slate-400 mt-1">
+                      Review active logins, session history, and revoke access on other devices.
+                    </p>
+                  </div>
+                  <AccountSessionsSection />
                 </div>
               )}
             </div>

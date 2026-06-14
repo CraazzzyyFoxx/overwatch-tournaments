@@ -24,11 +24,29 @@ const config = {
       md: "768px",
       lg: "1024px",
       xl: "1280px",
-      "2xl": "1400px",
-      "3xl": "1620px"
+      "2xl": "1520px",
+      "3xl": "1720px"
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
+        display: ["var(--font-barlow-condensed)", "system-ui", "sans-serif"],
+      },
       colors: {
+        // Redesign (OWT) accent palette — references global --aqt-* tokens.
+        aqt: {
+          teal: "var(--aqt-teal)",
+          emerald: "var(--aqt-emerald)",
+          amber: "var(--aqt-amber)",
+          rose: "var(--aqt-rose)",
+          violet: "var(--aqt-violet)",
+          blue: "var(--aqt-blue)",
+          gold: "var(--aqt-gold)",
+          tank: "var(--aqt-tank)",
+          damage: "var(--aqt-damage)",
+          support: "var(--aqt-support)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -124,7 +142,7 @@ const config = {
         "accordion-up": "accordion-up 0.2s ease-out"
       },
       maxWidth: {
-        "screen-3xl": "1620px"
+        "screen-3xl": "1720px"
       }
     }
   },

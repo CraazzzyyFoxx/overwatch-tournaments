@@ -1,5 +1,4 @@
-from pydantic import BaseModel
-
+from pydantic import BaseModel, Field
 
 __all__ = (
     "HealthCheckResponse",
@@ -21,4 +20,4 @@ class HealthCheckResponse(BaseModel):
     status: str
     service: str
     version: str
-    dependencies: list[DependencyHealth] = []
+    dependencies: list[DependencyHealth] = Field(default_factory=list)

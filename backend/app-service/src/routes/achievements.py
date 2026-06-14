@@ -1,15 +1,12 @@
 import typing
 
-from cashews import cache
-from cashews.contrib.fastapi import cache_control_ttl
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.requests import Request
 
 from src import schemas
 from src.core import config, db, enums, errors, pagination
-
-from src.services.achievements import flows as achievements_flows
+from src.core.workspace import WorkspaceQuery
+from src.services.achievements import flows_v2 as achievements_flows
 
 router = APIRouter(prefix="/achievements", tags=[enums.RouteTag.ACHIEVEMENTS])
 
@@ -28,8 +25,9 @@ async def get_all(
     params: pagination.PaginationSortQueryParams[
         typing.Literal["id", "name", "slug", "rarity", "similarity:name", "similarity:slug"]
     ] = Depends(),
+    workspace_id: WorkspaceQuery = None,
 ):
-    return await achievements_flows.get_all(session, pagination.PaginationSortParams.from_query_params(params))
+    return await achievements_flows.get_all(session, pagination.PaginationSortParams.from_query_params(params), workspace_id=workspace_id)
 
 
 @router.get(
@@ -75,16 +73,13 @@ async def get_users_achievement(
     f"Cache TTL: {config.settings.achievements_cache_ttl / 60} minutes.",
     summary="Get user achievements",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.achievements_cache_ttl),
-    key="fastapi:{request.url.path}/{request.query_params}",
-)
 async def get_user_achievements(
-    request: Request,
     user_id: int,
     entities: list[str] = Query([]),
     tournament_id: int | None = Query(None),
     without_tournament: bool = Query(False),
+    include_locked: bool = Query(False),
+    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
     if tournament_id is not None and without_tournament:
@@ -104,4 +99,6 @@ async def get_user_achievements(
         entities,
         tournament_id=tournament_id,
         without_tournament=without_tournament,
+        workspace_id=workspace_id,
+        include_locked=include_locked,
     )

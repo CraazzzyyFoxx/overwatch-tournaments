@@ -13,6 +13,12 @@ __all__ = (
     "InternalBalancerPlayer",
     "InternalBalancerTeam",
     "InternalBalancerTeamsPayload",
+    "ChallongeTeamMapping",
+    "ChallongeTeamSyncRequest",
+    "ChallongeTeamPreviewTeam",
+    "ChallongeTeamPreviewParticipant",
+    "ChallongeTeamSyncPreview",
+    "ChallongeTeamSyncResult",
     "TeamRead",
     "PlayerRead",
     "DashaTeamMember",
@@ -21,10 +27,9 @@ __all__ = (
 
 
 class BalancerTeamMember(BaseModel):
-    uuid: UUID4
+    uuid: str | UUID4
     name: str
-    primary: bool
-    secondary: bool
+    sub_role: str | None = None
     role: typing.Literal["tank", "dps", "support"] | None
     rank: int
 
@@ -62,12 +67,13 @@ class InternalBalancerPlayer(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    uuid: UUID4
+    uuid: str | UUID4
     name: str
     rating: int
     discomfort: int | None = 0
     is_captain: bool = Field(default=False, alias="isCaptain")
     preferences: list[str] = []
+    sub_role: str | None = Field(default=None, alias="subRole")
     all_ratings: dict[str, typing.Any] | None = Field(default=None, alias="allRatings")
 
 
@@ -104,22 +110,11 @@ class InternalBalancerTeam(BaseModel):
             for player in players:
                 total_sr += player.rating
 
-                primary = False
-                secondary = False
-                if player.preferences:
-                    normalized_prefs = [p.strip().lower() for p in player.preferences]
-                    current = roster_role.strip().lower()
-                    if normalized_prefs[0] == current:
-                        primary = True
-                    elif current in normalized_prefs:
-                        secondary = True
-
                 members.append(
                     BalancerTeamMember(
                         uuid=player.uuid,
                         name=player.name,
-                        primary=primary,
-                        secondary=secondary,
+                        sub_role=player.sub_role,
                         role=mapped_role,
                         rank=player.rating,
                     )
@@ -142,10 +137,52 @@ class InternalBalancerTeamsPayload(BaseModel):
     teams: list[InternalBalancerTeam]
 
 
+class ChallongeTeamMapping(BaseModel):
+    participant_id: int = Field(gt=0)
+    group_id: int | None = None
+    team_id: int = Field(gt=0)
+
+
+class ChallongeTeamSyncRequest(BaseModel):
+    mappings: list[ChallongeTeamMapping]
+
+
+class ChallongeTeamPreviewTeam(BaseModel):
+    id: int
+    name: str
+    balancer_name: str
+
+
+class ChallongeTeamPreviewParticipant(BaseModel):
+    participant_id: int
+    challonge_id: int
+    group_id: int | None
+    group_name: str | None
+    challonge_tournament_id: int
+    name: str
+    active: bool
+    suggested_team_id: int | None
+    mapped_team_id: int | None
+
+
+class ChallongeTeamSyncPreview(BaseModel):
+    teams: list[ChallongeTeamPreviewTeam]
+    participants: list[ChallongeTeamPreviewParticipant]
+
+
+class ChallongeTeamSyncResult(BaseModel):
+    success: bool
+    count: int
+    created: int
+    updated: int
+    unchanged: int
+    skipped: int
+    errors: list[str] = Field(default_factory=list)
+
+
 class PlayerRead(BaseRead):
     name: str
-    primary: bool
-    secondary: bool
+    sub_role: str | None
     rank: int
     division: int
     role: str

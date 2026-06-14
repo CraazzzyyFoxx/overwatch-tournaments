@@ -41,7 +41,7 @@ const AchievementCard = ({
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl border border-white/[0.07] transition-colors duration-200 group hover:border-white/[0.15]">
       <Image
-        src={`/achievements/${achievement.slug}.webp`}
+        src={achievement.image_url ?? `/achievements/${achievement.slug}.webp`}
         alt={achievement.slug}
         fill={true}
         quality={100}

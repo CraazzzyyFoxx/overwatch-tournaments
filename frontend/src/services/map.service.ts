@@ -1,8 +1,12 @@
-import { customFetch } from "@/lib/custom_fetch";
-import { PaginatedResponse } from "@/types/pagination.types";
+import { apiFetch } from "@/lib/api-fetch";
+import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import { MapRead } from "@/types/map.types";
 
 export default class mapService {
+  static async lookup(): Promise<LookupItem[]> {
+    return apiFetch("app", "maps/lookup").then((res) => res.json());
+  }
+
   static async getAll({
     page = 1,
     perPage = -1,
@@ -16,7 +20,7 @@ export default class mapService {
     order?: "asc" | "desc";
     query?: string;
   } = {}): Promise<PaginatedResponse<MapRead>> {
-    return customFetch("maps", {
+    return apiFetch("app","maps", {
       query: {
         page,
         per_page: perPage,

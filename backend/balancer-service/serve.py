@@ -1,108 +1,95 @@
 import asyncio
+import json
 from typing import Any
 
 from faststream import FastStream
 from faststream.rabbit import RabbitBroker
+from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
-from src.core.config import config
-from src.core.job_store import JobStatus, get_job_store
-from src.service import balance_teams
+from redis.asyncio import Redis
 
 from shared.messaging.config import BALANCER_JOBS_QUEUE
-from shared.observability import setup_logging
+from shared.observability import (
+    setup_logging,
+    setup_sentry,
+    setup_tracing,
+    start_worker_metrics_server,
+)
 from shared.schemas.events import BalancerJobEvent
+from src.core import db
+from src.core.config import config
+from src.services.balancer.jobs import execute_balance_job
+from src.services.draft.clock import draft_clock_supervisor
 
-# Setup structured logging for this standalone FastStream worker.
-# This runs separately from main.py (FastAPI), so it must call setup_logging() itself.
 logger = setup_logging(
     service_name="balancer-worker",
     log_level=config.log_level,
-    logs_root_path=config.LOGS_ROOT_PATH,
-    json_output=config.JSON_LOGGING,
+    logs_root_path=config.logs_root_path,
+    json_output=config.json_logging,
 )
 
-broker = RabbitBroker(config.RABBITMQ_URL, logger=logger)
+broker = RabbitBroker(config.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
 
-@broker.subscriber(BALANCER_JOBS_QUEUE)
-async def process_balancer_job(body: dict[str, Any]) -> None:
+def _decode_balancer_message(message: Any) -> Any:
+    body = getattr(message, "body", None)
+
+    if isinstance(body, bytes):
+        return json.loads(body.decode("utf-8"))
+
+    if isinstance(body, bytearray):
+        return json.loads(bytes(body).decode("utf-8"))
+
+    return body
+
+
+@app.on_startup
+async def setup_worker_observability() -> None:
+    setup_sentry(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=config.sentry_traces_sample_rate,
+        profiles_sample_rate=config.sentry_profiles_sample_rate,
+        service_name="balancer-worker",
+        enable_logs=config.sentry_enable_logs,
+        logs_level=config.sentry_logs_level,
+        enable_metrics=config.sentry_enable_metrics,
+        environment=config.environment,
+        release=config.version,
+        http_proxy=config.sentry_http_proxy_url,
+        https_proxy=config.sentry_https_proxy_url,
+    )
+    setup_tracing(
+        service_name="balancer-worker",
+        otlp_endpoint=config.otlp_endpoint,
+        enabled=config.tracing_enabled,
+        sampler_name=config.otel_traces_sampler,
+        sampler_arg=config.otel_traces_sampler_arg,
+    )
+    start_worker_metrics_server(config.worker_metrics_port)
+    logger.info("Balancer worker started")
+
+
+@app.on_startup
+async def start_draft_clock() -> None:
+    # Single server-authoritative clock owner per LIVE draft (guarded by a Redis
+    # lock inside the loop, so multiple worker replicas are safe).
+    redis = Redis.from_url(config.redis_url, decode_responses=True)
+    asyncio.create_task(draft_clock_supervisor(db.async_session_maker, redis))
+    logger.info("Draft clock supervisor started")
+
+
+@broker.subscriber(BALANCER_JOBS_QUEUE, decoder=_decode_balancer_message)
+async def process_balancer_job(data: dict, msg: RabbitMessage) -> None:
     try:
-        event = BalancerJobEvent.model_validate(body)
+        event = BalancerJobEvent.model_validate(data)
     except ValidationError as exc:
         logger.error(f"Invalid balancer job payload: {exc}")
         return
 
-    job_store = get_job_store()
-
-    payload = await job_store.get_job_payload(event.job_id)
-    if payload is None:
-        logger.error(f"Job payload missing for job_id={event.job_id}")
-        return
-
-    current_meta = await job_store.get_job_meta(event.job_id)
-    if current_meta and current_meta.get("status") in {"succeeded", "failed"}:
-        logger.info(f"Skipping already completed balancer job {event.job_id}")
-        return
-
-    await job_store.mark_running(event.job_id)
-
-    event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    loop = asyncio.get_running_loop()
-
-    def progress_callback(progress_payload: dict[str, Any]) -> None:
-        loop.call_soon_threadsafe(event_queue.put_nowait, progress_payload)
-
-    async def consume_progress_events() -> None:
-        while True:
-            update = await event_queue.get()
-            if update is None:
-                break
-
-            stage = str(update.get("stage", "running"))
-            status_value = str(update.get("status", "running"))
-            if status_value == "queued":
-                status: JobStatus = "queued"
-            elif status_value == "succeeded":
-                status = "succeeded"
-            elif status_value == "failed":
-                status = "failed"
-            else:
-                status = "running"
-            message = str(update.get("message", ""))
-            level = str(update.get("level", "info"))
-            progress = update.get("progress")
-
-            await job_store.append_event(
-                event.job_id,
-                status=status,
-                stage=stage,
-                message=message,
-                level=level,
-                progress=progress,
-                update_meta=True,
-            )
-
-    consume_task = asyncio.create_task(consume_progress_events())
-
     try:
-        input_data = payload.get("data")
-        config_overrides = payload.get("config")
-
-        if not isinstance(input_data, dict):
-            raise ValueError("Job payload does not contain valid player data")
-
-        result = await asyncio.to_thread(balance_teams, input_data, config_overrides, progress_callback)
-
-        await event_queue.put(None)
-        await consume_task
-
-        await job_store.mark_succeeded(event.job_id, result)
+        await execute_balance_job(event.job_id)
         logger.success(f"Balancer job completed: {event.job_id}")
     except Exception as exc:  # pragma: no cover - defensive worker guard
         logger.exception(f"Balancer job failed ({event.job_id}): {exc}")
-
-        await event_queue.put(None)
-        await consume_task
-
-        await job_store.mark_failed(event.job_id, f"Balancer job failed: {exc}")
+        raise

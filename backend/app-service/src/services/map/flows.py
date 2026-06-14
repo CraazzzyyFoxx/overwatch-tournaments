@@ -2,6 +2,8 @@ from dataclasses import replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.repository import MapRepository
+
 from src import models, schemas
 from src.core import errors, pagination
 from src.services.hero import flows as hero_flows
@@ -9,6 +11,8 @@ from src.services.hero import service as hero_service
 from src.services.user import flows as user_flows
 
 from . import service
+
+_map_repo = MapRepository()
 
 
 async def to_pydantic(session: AsyncSession, map: models.Map, entities: list[str]) -> schemas.MapRead:
@@ -33,21 +37,12 @@ async def to_pydantic(session: AsyncSession, map: models.Map, entities: list[str
 
 
 async def get(session: AsyncSession, id: int, entities: list[str]) -> schemas.MapRead:
-    """
-    Retrieves a map by its ID and converts it to a Pydantic schema.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        id (int): The ID of the map to retrieve.
-        entities (list[str]): A list of related entities to include (e.g., ["gamemode"]).
-
-    Returns:
-        schemas.MapRead: The Pydantic schema representing the map.
-
-    Raises:
-        errors.ApiHTTPException: If the map is not found.
-    """
-    game_map = await service.get(session, id, entities)
+    """Retrieve a map by ID and convert to its Pydantic schema."""
+    with_gamemode = "gamemode" in entities
+    game_map = (
+        await _map_repo.get_with_gamemode(session, id) if with_gamemode
+        else await _map_repo.get(session, id)
+    )
     if not game_map:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -59,21 +54,10 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> schemas.Ma
 
 
 async def get_by_name(session: AsyncSession, name: str, entities: list[str]) -> schemas.MapRead:
-    """
-    Retrieves a map by its name and converts it to a Pydantic schema.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        name (str): The name of the map to retrieve.
-        entities (list[str]): A list of related entities to include (e.g., ["gamemode"]).
-
-    Returns:
-        schemas.MapRead: The Pydantic schema representing the map.
-
-    Raises:
-        errors.ApiHTTPException: If the map is not found.
-    """
-    game_map = await service.get_by_name(session, name, entities)
+    """Retrieve a map by name (404 if missing)."""
+    game_map = await _map_repo.get_by_name(
+        session, name, with_gamemode="gamemode" in entities
+    )
     if not game_map:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -87,17 +71,10 @@ async def get_by_name(session: AsyncSession, name: str, entities: list[str]) -> 
 async def get_all(
     session: AsyncSession, params: pagination.PaginationSortParams
 ) -> pagination.Paginated[schemas.MapRead]:
-    """
-    Retrieves a paginated list of maps and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        params (pagination.PaginationSortParams): Pagination and sorting parameters.
-
-    Returns:
-        pagination.Paginated[schemas.MapRead]: A paginated list of Pydantic schemas representing the maps.
-    """
-    game_maps, total = await service.get_all(session, params)
+    """Paginated maps — delegates to `MapRepository.all`."""
+    game_maps, total = await _map_repo.all(
+        session, params, with_gamemode="gamemode" in params.entities
+    )
     return pagination.Paginated(
         total=total,
         page=params.page,
@@ -107,7 +84,7 @@ async def get_all(
 
 
 async def get_top_user(
-    session: AsyncSession, id: int, params: schemas.UserMapsSearchParams
+    session: AsyncSession, id: int, params: schemas.UserMapsSearchParams, *, workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.UserMap]:
     """
     Retrieves a paginated list of top maps for a specific user, including statistics.
@@ -116,12 +93,13 @@ async def get_top_user(
         session (AsyncSession): The SQLAlchemy async session.
         id (int): The ID of the user.
         params (pagination.PaginationSortParams): Pagination and sorting parameters.
+        workspace_id (int | None): Optional workspace ID to filter by.
 
     Returns:
         pagination.Paginated[schemas.UserMap]: A paginated list of Pydantic schemas representing the user's top maps with statistics.
     """
     user = await user_flows.get(session, id, [])
-    maps, total = await service.get_top_maps(session, user.id, params)
+    maps, total = await service.get_top_maps(session, user.id, params, workspace_id=workspace_id)
     results: list[schemas.UserMap] = []
 
     for map_, count, win, loss, draw, win_rate in maps:
@@ -139,7 +117,7 @@ async def get_top_user(
 
     if "heroes" in params.entities:
         maps_ids = [result.map.id for result in results]
-        heroes_data = await hero_service.get_heroes_playtime_by_maps(session, maps_ids, user.id)
+        heroes_data = await hero_service.get_heroes_playtime_by_maps(session, maps_ids, user.id, tournament_id=params.tournament_id, workspace_id=workspace_id)
         heroes_data_per_map: dict[int, list[schemas.HeroPlaytime]] = {map_id: [] for map_id in maps_ids}
         for hero, map_id, playtime in heroes_data:
             heroes_data_per_map[map_id].append(
@@ -154,7 +132,7 @@ async def get_top_user(
 
     if "hero_stats" in params.entities:
         maps_ids = [result.map.id for result in results]
-        hero_stats_rows = await hero_service.get_user_hero_stats_by_maps(session, maps_ids, user.id, limit_per_map=5)
+        hero_stats_rows = await hero_service.get_user_hero_stats_by_maps(session, maps_ids, user.id, limit_per_map=5, tournament_id=params.tournament_id, workspace_id=workspace_id)
         hero_stats_per_map: dict[int, list[schemas.UserMapHeroStats]] = {map_id: [] for map_id in maps_ids}
         for hero, map_id, games, win, loss, draw, win_rate, playtime_seconds, playtime_share in hero_stats_rows:
             hero_stats_per_map[map_id].append(
@@ -182,7 +160,7 @@ async def get_top_user(
 
 
 async def get_top_user_summary(
-    session: AsyncSession, id: int, params: schemas.UserMapsSearchParams
+    session: AsyncSession, id: int, params: schemas.UserMapsSearchParams, *, workspace_id: int | None = None,
 ) -> schemas.UserMapsSummary:
     """Build a summary for the user's map performance.
 
@@ -202,7 +180,7 @@ async def get_top_user_summary(
         entities=safe_entities,
     )
 
-    rows, total = await service.get_top_maps(session, user.id, all_params)
+    rows, total = await service.get_top_maps(session, user.id, all_params, workspace_id=workspace_id)
 
     if not rows:
         return schemas.UserMapsSummary(

@@ -33,6 +33,7 @@ dependencies = [
     "sqlalchemy-utils>=0.41.2",
     "uvicorn>=0.34.0",
     "uvloop; platform_system == 'Linux'",
+    "shared",
 ]
 
 

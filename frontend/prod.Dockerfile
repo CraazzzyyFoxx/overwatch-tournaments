@@ -1,35 +1,32 @@
 # syntax=docker.io/docker/dockerfile:1
 
-FROM node:20-alpine AS base
-ENV NEXT_TELEMETRY_DISABLED=1
+# 1. Install dependencies with Bun (fast)
+FROM oven/bun:alpine AS deps
 
-# 1. Install dependencies only when needed
-FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i; \
-  else echo "Lockfile not found." && exit 1; \
-  fi
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
+# 2. Build with Bun
+FROM oven/bun:alpine AS builder
 
-# 2. Rebuild the source code only when needed
-FROM base AS builder
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ARG NEXT_API_URL
+ARG NEXT_TOURNAMENT_URL
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_BALANCER_API_URL
+ARG NEXT_PUBLIC_TOURNAMENT_API_URL
 ARG NEXT_PUBLIC_AUTH_SERVICE_URL
+ARG NEXT_ANALYTICS_URL
+ARG NEXT_PUBLIC_ANALYTICS_API_URL
 ARG NEXT_PUBLIC_CACHE_POLICY
 ARG NEXT_PUBLIC_SITE_NAME
 ARG NEXT_PUBLIC_SITE_URL
@@ -37,23 +34,34 @@ ARG NEXT_PUBLIC_SITE_ICON
 ARG NEXT_PUBLIC_SITE_FAVICON
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_API_URL=${NEXT_API_URL}
+ENV NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_BALANCER_API_URL=${NEXT_PUBLIC_BALANCER_API_URL}
+ENV NEXT_PUBLIC_TOURNAMENT_API_URL=${NEXT_PUBLIC_TOURNAMENT_API_URL}
 ENV NEXT_PUBLIC_AUTH_SERVICE_URL=${NEXT_PUBLIC_AUTH_SERVICE_URL}
+ENV NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL}
+ENV NEXT_PUBLIC_ANALYTICS_API_URL=${NEXT_PUBLIC_ANALYTICS_API_URL}
 ENV NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
 ENV NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_PUBLIC_SITE_ICON=${NEXT_PUBLIC_SITE_ICON}
 ENV NEXT_PUBLIC_SITE_FAVICON=${NEXT_PUBLIC_SITE_FAVICON}
 
-RUN npm run build
+RUN bun run build
 
-# 3. Production image, copy all the files and run next
-FROM base AS runner
+# 3. Production runtime with Node.js (Next.js server requires Node)
+FROM node:22-alpine AS runner
 WORKDIR /app
 
+ARG NEXT_TOURNAMENT_URL
+ARG NEXT_ANALYTICS_URL
+
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL}
+ENV NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL}
 
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nextjs -u 1001
@@ -64,7 +72,6 @@ COPY --from=builder /app/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
 
 USER nextjs
 

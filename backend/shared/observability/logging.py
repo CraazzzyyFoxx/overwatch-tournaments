@@ -4,12 +4,27 @@ Replaces duplicate logging setups across services with a single shared implement
 Uses Loguru for structured JSON logging in production and human-readable output in development.
 """
 
-import sys
 import logging
+import sys
 from pathlib import Path
+
 from loguru import logger
+from opentelemetry import trace
 
 from .correlation import get_correlation_id
+
+
+def _inject_observability_context(record: dict) -> None:
+    span = trace.get_current_span()
+    span_context = span.get_span_context()
+    is_sampled = bool(span_context.is_valid and span_context.trace_flags.sampled)
+
+    record["extra"].update(
+        correlation_id=get_correlation_id(),
+        trace_id=f"{span_context.trace_id:032x}" if span_context.is_valid else None,
+        span_id=f"{span_context.span_id:016x}" if span_context.is_valid else None,
+        trace_sampled=is_sampled,
+    )
 
 
 class InterceptHandler(logging.Handler):
@@ -110,7 +125,7 @@ def setup_logging(
     # extra["correlation_id"] here is the correct way to get it into every file log line.
     logger.configure(
         extra={"service": service_name, "correlation_id": None},
-        patcher=lambda record: record["extra"].update(correlation_id=get_correlation_id()),
+        patcher=_inject_observability_context,
     )
 
     # Intercept standard library logging

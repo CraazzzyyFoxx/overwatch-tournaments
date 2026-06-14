@@ -1,13 +1,16 @@
 import {
   EncounterWithUserStats,
+  UserCatalogResponse,
   UserCompareBaselineMode,
   UserCompareResponse,
   UserHeroCompareResponse,
   User,
   UserBestTeammate,
+  UserMatchesSummary,
   UserMapRead,
   UserMapsSummary,
   UserOverviewRow,
+  UserOverviewStats,
   UserProfile,
   MinimizedUser,
   UserRoleType,
@@ -18,31 +21,43 @@ import { PaginatedResponse, SearchPaginationParams } from "@/types/pagination.ty
 import { HeroWithUserStats } from "@/types/hero.types";
 import { AchievementRarity } from "@/types/achievement.types";
 import { LogStatsName } from "@/types/stats.types";
-import { customFetch } from "@/lib/custom_fetch";
+import { apiFetch } from "@/lib/api-fetch";
+
+// Public, workspace-scoped profile reads are cached in the Next Data Cache for
+// this long (seconds) when fetched server-side. Tagged for future on-demand
+// revalidation (`revalidateTag("user:<id>")`). Client (react-query) fetches
+// ignore the `next` option.
+const USER_TTL_SECONDS = 300;
 
 export default class userService {
   static async getAll(params: SearchPaginationParams): Promise<PaginatedResponse<User>> {
-    return customFetch("users", {
+    return apiFetch("app","users", {
       query: {
         ...params
       }
     }).then((res) => res.json());
   }
   static async getUserByName(name: string): Promise<User> {
-    return customFetch(`users/${name}`, {
+    const apiName = name.replace("#", "-");
+    return apiFetch("app", `users/${encodeURIComponent(apiName)}`, {
       query: {
         entities: ["twitch", "discord", "battle_tag"]
-      }
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: ["users"] }
     }).then((res) => res.json());
   }
   static async getUserProfile(id: number): Promise<UserProfile> {
-    return customFetch(`users/${id}/profile`).then((res) => res.json());
+    return apiFetch("app", `users/${id}/profile`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
   }
   static async getUserTournament(
     id: number,
     tournamentId: number | null
   ): Promise<UserTournamentWithStats | null> {
-    return customFetch(`users/${id}/tournaments/${tournamentId}`)
+    return apiFetch("app", `users/${id}/tournaments/${tournamentId}`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    })
       .then((res) => {
         if (res.status === 200) {
           return res.json();
@@ -54,8 +69,14 @@ export default class userService {
         return null;
       });
   }
-  static async getUserTournaments(id: number): Promise<UserTournament[]> {
-    return customFetch(`users/${id}/tournaments`).then((res) => res.json());
+  static async getUserTournaments(id: number, workspaceId?: number | null): Promise<UserTournament[]> {
+    const query = workspaceId !== undefined && workspaceId !== null ? { workspace_id: workspaceId } : undefined;
+    const skipWorkspace = workspaceId === null;
+    return apiFetch("app", `users/${id}/tournaments`, {
+      query,
+      skipWorkspace,
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
   }
   static async getUserMaps(
     id: number,
@@ -66,7 +87,8 @@ export default class userService {
       order = "desc",
       query = "",
       minCount,
-      gamemodeId
+      gamemodeId,
+      tournamentId
     }: {
       page?: number;
       perPage?: number;
@@ -75,11 +97,12 @@ export default class userService {
       query?: string;
       minCount?: number;
       gamemodeId?: number | null;
+      tournamentId?: number | null;
     } = {}
   ): Promise<PaginatedResponse<UserMapRead>> {
     const entities = ["gamemode", "hero_stats"];
 
-    return customFetch(`users/${id}/maps`, {
+    return apiFetch("app",`users/${id}/maps`, {
       query: {
         page,
         per_page: perPage,
@@ -89,6 +112,7 @@ export default class userService {
         fields: ["name"],
         min_count: minCount,
         gamemode_id: gamemodeId,
+        tournament_id: tournamentId,
         entities
       }
     }).then((res) => res.json());
@@ -99,15 +123,17 @@ export default class userService {
     {
       query = "",
       minCount,
-      gamemodeId
-    }: { query?: string; minCount?: number; gamemodeId?: number | null } = {}
+      gamemodeId,
+      tournamentId
+    }: { query?: string; minCount?: number; gamemodeId?: number | null; tournamentId?: number | null } = {}
   ): Promise<UserMapsSummary> {
-    return customFetch(`users/${id}/maps/summary`, {
+    return apiFetch("app",`users/${id}/maps/summary`, {
       query: {
         query,
         fields: ["name"],
         min_count: minCount,
         gamemode_id: gamemodeId,
+        tournament_id: tournamentId,
         entities: ["gamemode"]
       }
     }).then((res) => res.json());
@@ -117,28 +143,53 @@ export default class userService {
     page: number,
     perPage: number = 10,
     sort: string = "id",
-    order: string = "desc"
+    order: string = "desc",
+    entities: string[] = [
+      "tournament",
+      "stage",
+      "stage_item",
+      "home_team",
+      "home_team.players",
+      "away_team",
+      "away_team.players",
+      "matches.map"
+    ],
+    filters?: {
+      result?: "win" | "loss" | "draw";
+      stage?: "group" | "playoffs" | "finals";
+      mvp1?: boolean;
+      hasLogs?: boolean;
+      opponent?: string;
+    }
   ): Promise<PaginatedResponse<EncounterWithUserStats>> {
-    return customFetch(`users/${id}/encounters`, {
+    return apiFetch("app",`users/${id}/encounters`, {
       query: {
         page: page,
         per_page: perPage,
         sort: sort,
         order: order,
-        entities: ["tournament", "matches.map", "tournament_group"]
-      }
+        entities,
+        result: filters?.result,
+        stage: filters?.stage,
+        mvp1: filters?.mvp1 ? true : undefined,
+        has_logs: filters?.hasLogs ? true : undefined,
+        opponent: filters?.opponent || undefined
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
     }).then((res) => res.json());
   }
   static async getUserHeroes(
     id: number,
-    stats?: LogStatsName[]
+    stats?: LogStatsName[],
+    tournamentId?: number
   ): Promise<PaginatedResponse<HeroWithUserStats>> {
-    return customFetch(`users/${id}/heroes`, {
+    return apiFetch("app",`users/${id}/heroes`, {
       query: {
         per_page: -1,
         sort: "id",
         order: "asc",
-        stats
+        stats,
+        tournament_id: tournamentId
       }
     }).then((res) => res.json());
   }
@@ -146,31 +197,43 @@ export default class userService {
     id: number,
     {
       tournamentId,
-      withoutTournament
+      withoutTournament,
+      includeLocked
     }: {
       tournamentId?: number;
       withoutTournament?: boolean;
+      includeLocked?: boolean;
     } = {}
   ): Promise<AchievementRarity[]> {
-    return customFetch(`achievements/user/${id}`, {
+    return apiFetch("app",`achievements/user/${id}`, {
       query: {
         entities: ["tournaments", "matches"],
         tournament_id: tournamentId,
-        without_tournament: withoutTournament
+        without_tournament: withoutTournament,
+        include_locked: includeLocked
       }
     }).then((res) => res.json());
   }
-  static async getUserBestTeammates(id: number): Promise<PaginatedResponse<UserBestTeammate>> {
-    return customFetch(`users/${id}/teammates`, {
+  static async getUserBestTeammates(
+    id: number,
+    perPage: number = 5
+  ): Promise<PaginatedResponse<UserBestTeammate>> {
+    return apiFetch("app",`users/${id}/teammates`, {
       query: {
-        per_page: 5,
+        per_page: perPage,
         sort: "winrate",
         order: "desc"
-      }
+      },
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
+  }
+  static async getUserMatchesSummary(id: number): Promise<UserMatchesSummary> {
+    return apiFetch("app", `users/${id}/matches/summary`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
     }).then((res) => res.json());
   }
   static async searchUsers(query: string, signal?: AbortSignal): Promise<MinimizedUser[]> {
-    return customFetch(`users/search`, {
+    return apiFetch("app",`users/search`, {
       query: {
         query: query,
         fields: ["battle_tag"]
@@ -198,7 +261,7 @@ export default class userService {
     divMin?: number;
     divMax?: number;
   } = {}): Promise<PaginatedResponse<UserOverviewRow>> {
-    return customFetch("users/overview", {
+    return apiFetch("app","users/overview", {
       query: {
         page,
         per_page: perPage,
@@ -213,6 +276,57 @@ export default class userService {
     }).then((res) => res.json());
   }
 
+  static async getUsersOverviewStats({
+    query,
+    role,
+    divMin,
+    divMax
+  }: {
+    query?: string;
+    role?: UserRoleType;
+    divMin?: number;
+    divMax?: number;
+  } = {}): Promise<UserOverviewStats> {
+    return apiFetch("app", "users/overview/stats", {
+      query: {
+        query,
+        role,
+        div_min: divMin,
+        div_max: divMax
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getUsersCatalog({
+    query,
+    role,
+    divMin,
+    divMax,
+    letter,
+    perLetter = 12,
+    maxLetters = 27
+  }: {
+    query?: string;
+    role?: UserRoleType;
+    divMin?: number;
+    divMax?: number;
+    letter?: string;
+    perLetter?: number;
+    maxLetters?: number;
+  } = {}): Promise<UserCatalogResponse> {
+    return apiFetch("app", "users/overview/catalog", {
+      query: {
+        query,
+        role,
+        div_min: divMin,
+        div_max: divMax,
+        letter,
+        per_letter: perLetter,
+        max_letters: maxLetters
+      }
+    }).then((res) => res.json());
+  }
+
   static async getUserCompare(
     userId: number,
     {
@@ -220,22 +334,25 @@ export default class userService {
       targetUserId,
       role,
       divMin,
-      divMax
+      divMax,
+      tournamentId
     }: {
       baseline?: UserCompareBaselineMode;
       targetUserId?: number;
       role?: UserRoleType;
       divMin?: number;
       divMax?: number;
+      tournamentId?: number;
     } = {}
   ): Promise<UserCompareResponse> {
-    return customFetch(`users/${userId}/compare`, {
+    return apiFetch("app",`users/${userId}/compare`, {
       query: {
         baseline,
         target_user_id: targetUserId,
         role,
         div_min: divMin,
-        div_max: divMax
+        div_max: divMax,
+        tournament_id: tournamentId
       }
     }).then((res) => res.json());
   }
@@ -251,6 +368,7 @@ export default class userService {
       role,
       divMin,
       divMax,
+      tournamentId,
       stats
     }: {
       baseline?: UserCompareBaselineMode;
@@ -261,10 +379,11 @@ export default class userService {
       role?: UserRoleType;
       divMin?: number;
       divMax?: number;
+      tournamentId?: number;
       stats?: LogStatsName[];
     }
   ): Promise<UserHeroCompareResponse> {
-    return customFetch(`users/${userId}/compare/heroes`, {
+    return apiFetch("app",`users/${userId}/compare/heroes`, {
       query: {
         baseline,
         target_user_id: targetUserId,
@@ -274,6 +393,7 @@ export default class userService {
         role,
         div_min: divMin,
         div_max: divMax,
+        tournament_id: tournamentId,
         stats
       }
     }).then((res) => res.json());

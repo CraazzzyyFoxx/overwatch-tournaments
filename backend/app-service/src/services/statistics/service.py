@@ -35,7 +35,8 @@ encounter_query = (
 
 
 async def get_top_champions(
-    session: AsyncSession, params: pagination.PaginationSortParams
+    session: AsyncSession, params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, int]], int]:
     """
     Retrieves a paginated list of players with the most championship wins.
@@ -68,6 +69,7 @@ async def get_top_champions(
                 models.TournamentGroup.is_groups.is_(False),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_league.is_(False),
+                *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
             )
         )
         .group_by(models.User.id)
@@ -79,7 +81,8 @@ async def get_top_champions(
 
 
 async def get_top_winrate_players(
-    session: AsyncSession, params: pagination.PaginationSortParams
+    session: AsyncSession, params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, float]], int]:
     """
     Retrieves a paginated list of players with the highest win rates.
@@ -113,6 +116,7 @@ async def get_top_winrate_players(
         .where(
             models.Player.is_substitution.is_(False),
             models.Tournament.is_league.is_(False),
+            *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
         )
         .group_by(models.User.id)
         .having(sa.func.count(models.Tournament.id.distinct()) > 3)
@@ -124,7 +128,8 @@ async def get_top_winrate_players(
 
 
 async def get_top_won_players(
-    session: AsyncSession, params: pagination.PaginationSortParams
+    session: AsyncSession, params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, int]], int]:
     """
     Retrieves a paginated list of players with the most wins.
@@ -145,7 +150,10 @@ async def get_top_won_players(
         .select_from(models.Player)
         .join(models.User, models.User.id == models.Player.user_id)
         .join(encounter_query, encounter_query.c.id == models.Player.id)
-        .where(sa.and_(models.Player.is_substitution.is_(False)))
+        .where(
+            models.Player.is_substitution.is_(False),
+            *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
+        )
         .group_by(models.User.id)
         .having(sa.func.count(models.Tournament.id.distinct()) > 3)
     )

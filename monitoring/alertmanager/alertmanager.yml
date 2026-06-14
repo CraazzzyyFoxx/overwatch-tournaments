@@ -1,9 +1,6 @@
 global:
   resolve_timeout: 5m
 
-templates:
-  - /etc/alertmanager/templates/*.tmpl
-
 route:
   group_by: ["alertname", "severity"]
   group_wait: 30s

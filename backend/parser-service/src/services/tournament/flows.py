@@ -1,6 +1,7 @@
 from datetime import date
 
 from loguru import logger
+from shared.services.division_grid_access import get_workspace_division_grid_version_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -13,23 +14,39 @@ from . import service
 async def to_pydantic(
     session: AsyncSession, tournament: models.Tournament, entities: list[str]
 ) -> schemas.TournamentRead:
-    groups: list[schemas.TournamentGroupRead] = []
-    if "groups" in entities:
-        groups = [
-            schemas.TournamentGroupRead.model_validate(group, from_attributes=True) for group in tournament.groups
+    stages: list[schemas.StageRead] = []
+    if "stages" in entities:
+        stages = [
+            schemas.StageRead.model_validate(stage, from_attributes=True)
+            for stage in sorted(tournament.stages, key=lambda item: item.order)
         ]
     return schemas.TournamentRead(
         id=tournament.id,
+        workspace_id=tournament.workspace_id,
         start_date=tournament.start_date,
         end_date=tournament.end_date,
         number=tournament.number,
         is_league=tournament.is_league,
         is_finished=tournament.is_finished,
+        status=tournament.status,
         name=tournament.name,
         description=tournament.description,
         challonge_id=tournament.challonge_id,
         challonge_slug=tournament.challonge_slug,
-        groups=groups,
+        registration_opens_at=tournament.registration_opens_at,
+        registration_closes_at=tournament.registration_closes_at,
+        check_in_opens_at=tournament.check_in_opens_at,
+        check_in_closes_at=tournament.check_in_closes_at,
+        win_points=tournament.win_points,
+        draw_points=tournament.draw_points,
+        loss_points=tournament.loss_points,
+        division_grid_version_id=tournament.division_grid_version_id,
+        division_grid_version=(
+            schemas.DivisionGridVersionRead.model_validate(tournament.division_grid_version, from_attributes=True)
+            if tournament.division_grid_version is not None
+            else None
+        ),
+        stages=stages,
     )
 
 
@@ -161,11 +178,13 @@ async def create_groups(
 
 async def create_with_groups(
     session: AsyncSession,
+    workspace_id: int,
     number: int,
     is_league: bool,
     start_date: date,
     end_date: date,
     challonge_slug: str,
+    division_grid_version_id: int | None = None,
 ) -> models.Tournament:
     if await service.get_by_number(session, number, []) is not None:
         raise errors.ApiHTTPException(
@@ -174,6 +193,22 @@ async def create_with_groups(
                 errors.ApiExc(
                     code="tournament_exists",
                     msg="Tournament with this number already exists",
+                )
+            ],
+        )
+
+    resolved_division_grid_version_id = division_grid_version_id
+    if resolved_division_grid_version_id is None:
+        resolved_division_grid_version_id = await get_workspace_division_grid_version_id(
+            session, workspace_id
+        )
+    if resolved_division_grid_version_id is None:
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[
+                errors.ApiExc(
+                    code="workspace_default_division_grid_missing",
+                    msg="Workspace does not have a default division grid version",
                 )
             ],
         )
@@ -191,6 +226,7 @@ async def create_with_groups(
         )
     tournament = await service.create(
         session,
+        workspace_id=workspace_id,
         number=number,
         is_league=is_league,
         name=challonge_tournament.name,
@@ -199,6 +235,7 @@ async def create_with_groups(
         challonge_slug=challonge_tournament.url,
         start_date=start_date,
         end_date=end_date,
+        division_grid_version_id=resolved_division_grid_version_id,
     )
     tournament = await service.get(session, tournament.id, [])
     return await create_groups(session, tournament, challonge_tournament)
@@ -226,6 +263,7 @@ async def create(
 
     tournament = await service.create(
         session,
+        workspace_id=1,
         number=number,
         name=f"Турнир Сабов Anakq #{number}",
         is_league=is_league,

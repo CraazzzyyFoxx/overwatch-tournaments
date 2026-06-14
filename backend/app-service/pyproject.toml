@@ -12,6 +12,7 @@ dependencies = [
     "cachetools>=6.1.0",
     "cashews>=7.4.0",
     "fastapi[standard]>=0.115.6",
+    "faststream[rabbit]>=0.6.7",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "openpyxl>=3.1.5",
@@ -35,6 +36,7 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=7.0",
     "uvicorn>=0.34.0",
     "uvloop; platform_system == 'Linux'",
+    "shared",
 ]
 
 

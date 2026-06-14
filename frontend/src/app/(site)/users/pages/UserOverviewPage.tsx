@@ -1,0 +1,102 @@
+import React from "react";
+import { User, UserProfile } from "@/types/user.types";
+import userService from "@/services/user.service";
+import { Skeleton } from "@/components/ui/skeleton";
+import OverviewLastTournamentCard from "@/app/(site)/users/components/overview/OverviewLastTournamentCard";
+import OverviewPlacementSpark from "@/app/(site)/users/components/overview/OverviewPlacementSpark";
+import OverviewRoleSplit from "@/app/(site)/users/components/overview/OverviewRoleSplit";
+import OverviewMostPlayedHeroes from "@/app/(site)/users/components/overview/OverviewMostPlayedHeroes";
+import OverviewRecentEncounters from "@/app/(site)/users/components/overview/OverviewRecentEncounters";
+import OverviewCareerList from "@/app/(site)/users/components/overview/OverviewCareerList";
+import OverviewTeammatesSynergy from "@/app/(site)/users/components/overview/OverviewTeammatesSynergy";
+
+export interface OverviewPageProps {
+  profile: UserProfile;
+  user: User;
+  tournamentId?: number;
+}
+
+export const UserOverviewPageSkeleton = () => {
+  return (
+    <div className="aqt-player grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_320px]">
+      <div className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+          <Skeleton className="h-80 w-full rounded-xl" />
+          <Skeleton className="h-80 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-80 w-full rounded-xl" />
+      </div>
+      <div className="flex flex-col gap-3.5">
+        <Skeleton className="h-96 w-full rounded-xl" />
+        <Skeleton className="h-80 w-full rounded-xl" />
+      </div>
+    </div>
+  );
+};
+
+const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPageProps) => {
+  const resolvedTournamentId = tournamentId ?? profile.tournaments[0]?.id;
+
+  const [tournament, teammates, tournaments, encounters] = await Promise.all([
+    resolvedTournamentId
+      ? userService.getUserTournament(user.id, resolvedTournamentId)
+      : Promise.resolve(null),
+    userService.getUserBestTeammates(user.id, -1).catch(() => ({ results: [], total: 0 })),
+    userService.getUserTournaments(user.id).catch(() => []),
+    userService
+      .getUserEncounters(user.id, 1, 5, "id", "desc", [
+        "tournament",
+        "stage",
+        "stage_item",
+        "home_team",
+        "away_team",
+        "matches.map"
+      ])
+      .catch(() => ({ results: [], total: 0 }))
+  ]);
+
+  const totalSharedMaps = teammates.results.reduce((sum, tm) => sum + (tm.tournaments ?? 0), 0);
+
+  return (
+    <div className="aqt-player grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_320px] xl:items-start">
+      <div className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+          {tournament ? (
+            <OverviewLastTournamentCard tournament={tournament} tournaments={profile.tournaments} />
+          ) : null}
+          <OverviewPlacementSpark tournaments={tournaments} />
+        </div>
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.05fr_1.4fr]">
+          <OverviewRoleSplit profile={profile} />
+          <OverviewMostPlayedHeroes
+            heroes={profile.hero_statistics}
+            userSlug={user.name.replace("#", "-")}
+            totalCount={profile.hero_statistics.length}
+          />
+        </div>
+        <OverviewRecentEncounters
+          encounters={encounters.results}
+          userName={user.name}
+          tournaments={tournaments}
+        />
+      </div>
+      <aside className="flex flex-col gap-3.5 xl:sticky xl:top-[88px]">
+        <OverviewCareerList profile={profile} />
+        {teammates.results.length > 0 ? (
+          <OverviewTeammatesSynergy
+            teammates={teammates.results}
+            selfName={user.name}
+            totalCount={teammates.total ?? teammates.results.length}
+            totalMaps={totalSharedMaps}
+          />
+        ) : null}
+      </aside>
+    </div>
+  );
+};
+
+export default UserOverviewPage;

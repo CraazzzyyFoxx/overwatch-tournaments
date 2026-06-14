@@ -7,6 +7,10 @@ from .circuit_breaker import CircuitBreakerOpen
 from .http_client import ResilientHttpClient
 
 
+class AuthServiceUnavailable(Exception):
+    """Raised when the auth service is unreachable or returns a server error."""
+
+
 class AuthClient:
     """Client for interacting with the authentication service.
 
@@ -84,17 +88,18 @@ class AuthClient:
                 logger.warning(
                     f"Unexpected status code from auth service: {response.status_code}",
                 )
-                return None
+                raise AuthServiceUnavailable(
+                    f"Auth service returned {response.status_code}"
+                )
 
-        except CircuitBreakerOpen:
-            logger.warning("Auth service circuit breaker is open — rejecting token validation")
+        except (CircuitBreakerOpen, AuthServiceUnavailable):
             raise
         except httpx.TimeoutException:
             logger.warning("Auth service request timed out during token validation")
-            return None
-        except httpx.HTTPError:
+            raise AuthServiceUnavailable("Auth service request timed out")
+        except httpx.HTTPError as e:
             logger.exception("HTTP error validating token")
-            return None
+            raise AuthServiceUnavailable("HTTP error contacting auth service") from e
         except Exception:
             logger.exception("Unexpected error validating token")
             raise
@@ -118,14 +123,15 @@ class AuthClient:
             logger.warning(
                 f"Unexpected status code from auth service (service validate): {response.status_code}",
             )
-            return None
+            raise AuthServiceUnavailable(
+                f"Auth service returned {response.status_code}"
+            )
 
-        except CircuitBreakerOpen:
-            logger.warning("Auth service circuit breaker is open — rejecting service token validation")
+        except (CircuitBreakerOpen, AuthServiceUnavailable):
             raise
         except httpx.TimeoutException:
             logger.warning("Auth service request timed out during service token validation")
-            return None
-        except httpx.HTTPError:
+            raise AuthServiceUnavailable("Auth service request timed out")
+        except httpx.HTTPError as e:
             logger.exception("HTTP error validating service token")
-            return None
+            raise AuthServiceUnavailable("HTTP error contacting auth service") from e

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 import {
@@ -30,7 +30,6 @@ export interface CustomSelectProps {
 
 const CustomSelect = ({ items, placeholder, value, onSelect, className }: CustomSelectProps) => {
   const [isOpen, setIsOpen] = React.useState<boolean>(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
 
   const selectedItem: string | undefined = useMemo(() => {
     const item = items.find((item) => item.value == value);
@@ -38,9 +37,12 @@ const CustomSelect = ({ items, placeholder, value, onSelect, className }: Custom
     return item.label;
   }, [items, value]);
 
-  useEffect(() => {
+  const [prevValue, setPrevValue] = React.useState(value);
+
+  if (value !== prevValue) {
+    setPrevValue(value);
     if (isOpen) setIsOpen(false);
-  }, [value]);
+  }
 
   return (
     <div
@@ -50,9 +52,9 @@ const CustomSelect = ({ items, placeholder, value, onSelect, className }: Custom
     >
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverAnchor asChild>
-          <div ref={anchorRef}>
+          <div>
             <Input
-              value={selectedItem}
+              value={selectedItem ?? ""}
               onFocus={() => setIsOpen(true)}
               onClick={() => setIsOpen(true)}
               onChange={() => {}}
@@ -63,9 +65,9 @@ const CustomSelect = ({ items, placeholder, value, onSelect, className }: Custom
           </div>
         </PopoverAnchor>
         <PopoverContent
-          className="p-0 w-auto min-w-[var(--anchor-width)]"
+          className="p-0 w-auto"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          style={{ minWidth: `${anchorRef.current?.offsetWidth || 0}px` }}
+          style={{ minWidth: "var(--radix-popover-trigger-width)" }}
         >
           <Command className="rounded-lg border shadow-md w-full">
             <CommandList>

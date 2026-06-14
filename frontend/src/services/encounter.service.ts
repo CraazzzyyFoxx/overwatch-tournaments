@@ -1,10 +1,16 @@
-import { Encounter, MatchWithStats } from "@/types/encounter.types";
+import {
+  Encounter,
+  EncounterFilters,
+  EncounterOverview,
+  EncounterSavedView,
+  MatchWithStats
+} from "@/types/encounter.types";
 import { PaginatedResponse } from "@/types/pagination.types";
-import { customFetch } from "@/lib/custom_fetch";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default class encounterService {
   static async getEncounter(id: number): Promise<Encounter> {
-    return customFetch(`encounters/${id}`, {
+    return apiFetch("tournament", `encounters/${id}`, {
       query: {
         entities: [
           "matches",
@@ -14,13 +20,15 @@ export default class encounterService {
           "teams.placement",
           "teams.players.user",
           "tournament",
-          "tournament_group"
+          "tournament.division_grid_version",
+          "stage",
+          "stage_item"
         ]
       }
     }).then((res) => res.json());
   }
   static async getMatch(match_id: number): Promise<MatchWithStats> {
-    return customFetch(`matches/${match_id}`, {
+    return apiFetch("tournament", `matches/${match_id}`, {
       query: {
         entities: [
           "teams",
@@ -30,7 +38,8 @@ export default class encounterService {
           "map.gamemode",
           "encounter",
           "encounter.tournament",
-          "encounter.tournament_group"
+          "encounter.stage",
+          "encounter.stage_item"
         ]
       }
     }).then((res) => res.json());
@@ -38,28 +47,107 @@ export default class encounterService {
   static async getAll(
     page: number,
     query: string,
-    tournamentId: number | null = null
+    tournamentId: number | null = null,
+    perPage: number = 15,
+    sort: string | null = null,
+    order: "asc" | "desc" = "desc",
+    workspaceId?: number | null,
+    filters: EncounterFilters & { entities?: string[] } = {}
   ): Promise<PaginatedResponse<Encounter>> {
-    return customFetch(`encounters`, {
+    const { entities, ...restFilters } = filters;
+    return apiFetch("tournament", `encounters`, {
       query: {
-        per_page: 15,
+        workspace_id: workspaceId,
+        per_page: perPage,
         page: page,
         query: query,
-        sort: "id",
-        order: "desc",
-        entities: ["tournament", "tournament_group"],
+        sort: sort ?? "id",
+        order: order,
+        entities: entities ?? ["tournament", "stage", "stage_item", "home_team", "away_team"],
         fields: ["name"],
-        tournament_id: tournamentId
+        tournament_id: tournamentId,
+        ...restFilters
       }
     }).then((res) => res.json());
   }
+
+  static async getOverview(
+    query: string,
+    filters: EncounterFilters = {},
+    workspaceId?: number | null
+  ): Promise<EncounterOverview> {
+    return apiFetch("tournament", `encounters/overview`, {
+      query: {
+        workspace_id: workspaceId,
+        per_page: -1,
+        page: 1,
+        query,
+        fields: ["name"],
+        sort: filters.sort ?? "id",
+        order: "desc",
+        ...filters
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getSavedViews(workspaceId?: number | null): Promise<EncounterSavedView[]> {
+    return apiFetch("tournament", `encounters/views`, {
+      query: {
+        workspace_id: workspaceId
+      }
+    }).then((res) => res.json());
+  }
+
+  static async saveView(
+    name: string,
+    filters: EncounterFilters & { query?: string },
+    workspaceId?: number | null
+  ): Promise<EncounterSavedView> {
+    return apiFetch("tournament", `encounters/views`, {
+      method: "POST",
+      query: {
+        workspace_id: workspaceId
+      },
+      body: {
+        name,
+        filters
+      }
+    }).then((res) => res.json());
+  }
+
+  static async deleteView(id: number, workspaceId?: number | null): Promise<void> {
+    await apiFetch("tournament", `encounters/views/${id}`, {
+      method: "DELETE",
+      query: {
+        workspace_id: workspaceId
+      }
+    });
+  }
+
+  static async getCount(
+    tournamentId: number | null = null,
+    workspaceId?: number | null
+  ): Promise<number> {
+    return apiFetch("tournament", `encounters`, {
+      query: {
+        workspace_id: workspaceId,
+        per_page: 1,
+        page: 1,
+        only_count: true,
+        tournament_id: tournamentId
+      }
+    })
+      .then((res) => res.json())
+      .then((response: PaginatedResponse<Encounter>) => response.total);
+  }
+
   static async getAllMatches(
     page: number,
     perPage: number,
     query: string,
     tournamentId: number | null = null
   ): Promise<PaginatedResponse<MatchWithStats>> {
-    return customFetch(`matches`, {
+    return apiFetch("tournament", `matches`, {
       query: {
         per_page: perPage,
         page: page,
@@ -72,7 +160,8 @@ export default class encounterService {
           "map.gamemode",
           "encounter",
           "encounter.tournament",
-          "encounter.tournament_group"
+          "encounter.stage",
+          "encounter.stage_item"
         ],
         tournament_id: tournamentId
       }

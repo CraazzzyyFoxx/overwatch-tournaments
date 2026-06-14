@@ -15,6 +15,7 @@ dependencies = [
     "fastapi[standard]>=0.124.4",
     "faststream[rabbit]>=0.6.4",
     "httpx>=0.28.1",
+    "socksio>=1.0.0",
     "loguru>=0.7.3",
     "openpyxl>=3.1.5",
     "openskill>=6.1.3",
@@ -38,8 +39,10 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
     "opentelemetry-exporter-otlp>=1.27.0",
     "prometheus-fastapi-instrumentator>=7.0",
+    "tenacity>=9.0.0",
     "uvicorn>=0.34.0",
     "uvloop; platform_system == 'Linux'",
+    "shared",
 ]
 
 

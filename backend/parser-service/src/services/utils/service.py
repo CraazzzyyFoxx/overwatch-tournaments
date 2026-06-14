@@ -139,8 +139,7 @@ async def transform_dasha_teams_to_normal(
                     schemas.BalancerTeamMember(
                         uuid=uuid4(),
                         name=player.name,
-                        primary=False,
-                        secondary=False,
+                        sub_role=None,
                         role=player.role,
                         rank=player.price,
                     )

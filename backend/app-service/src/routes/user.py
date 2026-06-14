@@ -1,14 +1,15 @@
 import typing
 
-from cashews import cache
-from cashews.contrib.fastapi import cache_control_ttl
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.requests import Request
 
 from src import schemas
 from src.core import config, db, enums, pagination
-from src.services.encounter import flows as encounter_flows
+from src.core.workspace import (
+    WorkspaceContextDep,
+    WorkspaceQuery,
+    get_division_grid,
+)
 from src.services.map import flows as map_flows
 from src.services.user import flows as user_flows
 
@@ -51,10 +52,55 @@ async def search_by_name(
     summary="Get users overview",
 )
 async def get_overview(
+    ws: WorkspaceContextDep,
     params: schemas.UserOverviewQueryParams = Depends(),
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    return await user_flows.get_overview(session, schemas.UserOverviewParams.from_query_params(params))
+    return await user_flows.get_overview(
+        session,
+        schemas.UserOverviewParams.from_query_params(params),
+        workspace_id=ws.id,
+        grid=ws.grid,
+        normalizer=ws.normalizer,
+    )
+
+
+@router.get(
+    path="/overview/stats",
+    response_model=schemas.UserOverviewStats,
+    description="Aggregated KPI numbers (total players, players with logs, "
+    "average tournaments/player, active in last 30 days, role counts) for the users hero header. "
+    "Respects the same role/division/search filters as the main overview list.",
+    summary="Get users overview KPI stats",
+)
+async def get_overview_stats(
+    ws: WorkspaceContextDep,
+    params: schemas.UserOverviewStatsQueryParams = Depends(),
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_overview_stats(session, params, grid=ws.grid)
+
+
+@router.get(
+    path="/overview/catalog",
+    response_model=schemas.UserCatalogResponse,
+    description="Alphabetised catalog of users for the catalog view. Groups players "
+    "by the first letter of their name (A-Z, plus '#' for non-alpha). "
+    "Optional `letter` returns a single bucket; `per_letter` caps the number of "
+    "cards per letter. Same role/division/query filters as the overview list.",
+    summary="Get users alphabetical catalog",
+)
+async def get_overview_catalog(
+    ws: WorkspaceContextDep,
+    params: schemas.UserCatalogQueryParams = Depends(),
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_catalog(
+        session,
+        schemas.UserCatalogParams.from_query_params(params),
+        grid=ws.grid,
+        normalizer=ws.normalizer,
+    )
 
 
 @router.get(
@@ -68,7 +114,8 @@ async def get_compare(
     params: schemas.UserCompareQueryParams = Depends(),
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    return await user_flows.get_compare(session, id, schemas.UserCompareParams.from_query_params(params))
+    grid = await get_division_grid(session, None)
+    return await user_flows.get_compare(session, id, schemas.UserCompareParams.from_query_params(params), grid=grid)
 
 
 @router.get(
@@ -82,7 +129,8 @@ async def get_hero_compare(
     params: schemas.UserHeroCompareQueryParams = Depends(),
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    return await user_flows.get_hero_compare(session, id, schemas.UserHeroCompareParams.from_query_params(params))
+    grid = await get_division_grid(session, None)
+    return await user_flows.get_hero_compare(session, id, schemas.UserHeroCompareParams.from_query_params(params), grid=grid)
 
 
 @router.get(
@@ -114,13 +162,12 @@ async def get_by_name(
     description=f"Retrieve the profile information of a user by ID. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user profile",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}",
-)
-async def get_profile(request: Request, id: int, session=Depends(db.get_async_session)):
-    profile = await user_flows.get_profile(session, id)
-    return profile
+async def get_profile(
+    id: int,
+    ws: WorkspaceContextDep,
+    session=Depends(db.get_async_session),
+):
+    return await user_flows.get_profile(session, id, workspace_id=ws.id, grid=ws.grid)
 
 
 @router.get(
@@ -129,13 +176,12 @@ async def get_profile(request: Request, id: int, session=Depends(db.get_async_se
     description=f"Retrieve the list of tournaments associated with a user by ID. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user tournaments",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}",
-)
-async def get_tournaments(request: Request, id: int, session: AsyncSession = Depends(db.get_async_session)):
-    tournaments = await user_flows.get_tournaments(session, id)
-    return tournaments
+async def get_tournaments(
+    id: int,
+    ws: WorkspaceContextDep,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_tournaments(session, id, workspace_id=ws.id, grid=ws.grid)
 
 
 @router.get(
@@ -144,17 +190,13 @@ async def get_tournaments(request: Request, id: int, session: AsyncSession = Dep
     description=f"Retrieve detailed statistics for a specific tournament associated with a user. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user tournament details",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}",
-)
 async def get_tournament(
-    request: Request,
     id: int,
     tournament_id: int,
     session: AsyncSession = Depends(db.get_async_session),
 ):
-    tournament = await user_flows.get_tournament_with_stats(session, id, tournament_id)
+    grid = await get_division_grid(session, None, tournament_id)
+    tournament = await user_flows.get_tournament_with_stats(session, id, tournament_id, grid=grid)
     return tournament
 
 
@@ -167,12 +209,7 @@ async def get_tournament(
     f"**Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user maps",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}/{request.query_params}",
-)
 async def get_maps(
-    request: Request,
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
     params: schemas.UserMapsSearchQueryParams[
@@ -188,8 +225,9 @@ async def get_maps(
             "name",
         ]
     ] = Depends(),
+    workspace_id: WorkspaceQuery = None,
 ):
-    maps = await map_flows.get_top_user(session, id, schemas.UserMapsSearchParams.from_query_params(params))
+    maps = await map_flows.get_top_user(session, id, schemas.UserMapsSearchParams.from_query_params(params), workspace_id=workspace_id)
     return maps
 
 
@@ -202,12 +240,7 @@ async def get_maps(
     f"**Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user maps summary",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}/{request.query_params}",
-)
 async def get_maps_summary(
-    request: Request,
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
     params: schemas.UserMapsSearchQueryParams[
@@ -223,8 +256,9 @@ async def get_maps_summary(
             "name",
         ]
     ] = Depends(),
+    workspace_id: WorkspaceQuery = None,
 ):
-    summary = await map_flows.get_top_user_summary(session, id, schemas.UserMapsSearchParams.from_query_params(params))
+    summary = await map_flows.get_top_user_summary(session, id, schemas.UserMapsSearchParams.from_query_params(params), workspace_id=workspace_id)
     return summary
 
 
@@ -234,22 +268,47 @@ async def get_maps_summary(
     description=f"Retrieve the encounters data for a user by ID, with pagination. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user encounters",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}/{request.query_params}",
-)
 async def get_encounters(
-    request: Request,
     id: int,
     session: AsyncSession = Depends(db.get_async_session),
     params: pagination.PaginationSortQueryParams[
         typing.Literal["id", "name", "home_team_id", "away_team_id", "closeness", "round"]
     ] = Depends(),
+    result: typing.Literal["win", "loss", "draw"] | None = Query(None),
+    stage: typing.Literal["group", "playoffs", "finals"] | None = Query(None),
+    mvp1: bool = Query(False),
+    has_logs: bool | None = Query(None),
+    opponent: str | None = Query(None),
+    workspace_id: WorkspaceQuery = None,
 ):
-    encounters = await encounter_flows.get_encounters_by_user(
-        session, id, pagination.PaginationSortParams.from_query_params(params)
+    encounters = await user_flows.get_encounters_by_user(
+        session,
+        id,
+        pagination.PaginationSortParams.from_query_params(params),
+        workspace_id=workspace_id,
+        result=result,
+        stage=stage,
+        mvp1=mvp1,
+        has_logs=has_logs,
+        opponent=opponent,
     )
     return encounters
+
+
+@router.get(
+    path="/{id}/matches/summary",
+    response_model=schemas.UserMatchesSummary,
+    description="Most-fought opponents + per-stage win/loss record for a user, "
+    "aggregated over ALL of their encounters (for the Matches-tab sidebars). "
+    f"**Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
+    summary="Get user matches summary",
+)
+async def get_matches_summary(
+    id: int,
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+):
+    return await user_flows.get_matches_summary(session, id, workspace_id=workspace_id)
 
 
 @router.get(
@@ -259,15 +318,12 @@ async def get_encounters(
     f"**Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user heroes",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}:{request.query_params}",
-)
 async def get_heroes(
-    request: Request,
     id: int,
     params: pagination.PaginationQueryParams = Depends(),
     stats: list[enums.LogStatsName] = Query([]),
+    tournament_id: int | None = Query(default=None, ge=1),
+    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
     heroes = await user_flows.get_heroes(
@@ -275,6 +331,8 @@ async def get_heroes(
         id,
         pagination.PaginationParams.from_query_params(params),
         stats,
+        tournament_id=tournament_id,
+        workspace_id=workspace_id,
     )
     return heroes
 
@@ -285,17 +343,13 @@ async def get_heroes(
     description=f"Retrieve the list of teammates associated with a user by ID. **Cache TTL: {config.settings.users_cache_ttl / 60} minutes.**",
     summary="Get user best teammates",
 )
-@cache(
-    ttl=cache_control_ttl(default=config.settings.users_cache_ttl),
-    key="fastapi:{request.url.path}/{request.query_params}",
-)
 async def get_teammates(
-    request: Request,
     id: int,
     params: pagination.PaginationSortQueryParams[typing.Literal["id", "name", "winrate", "tournaments"]] = Depends(),
+    workspace_id: WorkspaceQuery = None,
     session: AsyncSession = Depends(db.get_async_session),
 ):
     teammates = await user_flows.get_best_teammates(
-        session, id, pagination.PaginationSortParams.from_query_params(params)
+        session, id, pagination.PaginationSortParams.from_query_params(params), workspace_id=workspace_id
     )
     return teammates

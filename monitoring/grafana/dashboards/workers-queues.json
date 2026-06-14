@@ -1,0 +1,50 @@
+{
+  "title": "Workers & Queues",
+  "uid": "workers-queues",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "tags": ["workers", "queues", "rabbitmq"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Processed Messages / sec",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (job, queue, status) (rate(worker_messages_processed_total[5m]))", "legendFormat": "{{ job }} / {{ queue }} / {{ status }}" }]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Worker p95 Duration",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (job, queue, handler, le) (rate(worker_processing_duration_seconds_bucket[5m])))", "legendFormat": "{{ job }} / {{ queue }} / {{ handler }}" }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Queue Backlog",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "rabbitmq_queue_messages{queue!~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" },
+        { "expr": "rabbitmq_queue_messages{queue=~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Inflight / Retries / Publish Failures",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (job, queue) (worker_inflight_messages)", "legendFormat": "inflight {{ job }} / {{ queue }}" },
+        { "expr": "sum by (job, queue) (rate(worker_retries_total[5m]))", "legendFormat": "retries {{ job }} / {{ queue }}" },
+        { "expr": "sum by (queue) (increase(worker_publish_failures_total[5m]))", "legendFormat": "publish_failures {{ queue }}" }
+      ]
+    }
+  ]
+}

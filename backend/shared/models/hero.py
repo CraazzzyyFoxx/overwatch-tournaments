@@ -8,6 +8,7 @@ __all__ = ("Hero",)
 
 class Hero(db.TimeStampIntegerMixin):
     __tablename__ = "hero"
+    __table_args__ = ({"schema": "overwatch"},)
 
     slug: Mapped[str] = mapped_column(String(), unique=True)
     name: Mapped[str] = mapped_column(String(), unique=True)

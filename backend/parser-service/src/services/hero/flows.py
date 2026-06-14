@@ -2,14 +2,16 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import enums, errors
+from src.core import config, enums, errors
 
 from . import service
 
 
 async def fetch_heroes(role: str) -> list[schemas.OverfastHero]:
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(f"https://overfast.craazzzyyfoxx.me/heroes?role={role}&locale=en-us")
+        response = await client.get(
+            f"{config.settings.overfast_base_url}/heroes?role={role}&locale=en-us"
+        )
         response.raise_for_status()
 
     return [schemas.OverfastHero.model_validate(gamemode) for gamemode in response.json()]

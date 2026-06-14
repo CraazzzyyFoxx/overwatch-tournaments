@@ -11,6 +11,7 @@ node_modules/
 .env
 backend/env/*.env
 !backend/env/*.env.example
+backend/.cache/
 
 .coverage
 .coverage*
@@ -23,3 +24,14 @@ monitoring/secrets/*
 .kombai/
 .ruff_cache/
 .claude/
+proxy/shadowsocks.json
+!proxy/shadowsocks.json.example
+proxy/xray.json
+!proxy/xray.json.example
+
+*.egg-info/
+
+target/
+debug/
+.playwright-mcp/
+frontend-redesign/

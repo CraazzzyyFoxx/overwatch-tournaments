@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Integer
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -14,6 +14,7 @@ __all__ = (
 
 class Match(db.TimeStampIntegerMixin):
     __tablename__ = "match"
+    __table_args__ = ({"schema": "matches"},)
 
     home_team_id: Mapped[int] = mapped_column(
         ForeignKey(Team.id, ondelete="CASCADE"), index=True
@@ -25,12 +26,13 @@ class Match(db.TimeStampIntegerMixin):
     away_score: Mapped[int] = mapped_column(Integer())
     time: Mapped[float] = mapped_column(Float())
     log_name: Mapped[str] = mapped_column()
+    code: Mapped[str | None] = mapped_column(nullable=True)
 
     encounter_id: Mapped[int] = mapped_column(
         ForeignKey(Encounter.id, ondelete="CASCADE"), index=True
     )
     map_id: Mapped[int] = mapped_column(
-        ForeignKey("map.id", ondelete="CASCADE"), index=True
+        ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True
     )
 
     home_team: Mapped["Team"] = relationship(foreign_keys=[home_team_id])
@@ -40,7 +42,27 @@ class Match(db.TimeStampIntegerMixin):
 
 
 class MatchStatistics(db.TimeStampIntegerMixin):
-    __tablename__ = "match_statistics"
+    __tablename__ = "statistics"
+
+    __table_args__ = (
+        Index("ix_match_statistics_user_round_name", "user_id", "round", "name"),
+        Index("ix_match_statistics_match_user_round", "match_id", "user_id", "round"),
+        Index("ix_match_statistics_match_name_round", "match_id", "name", "round"),
+        Index(
+            "ix_match_statistics_user_name_r0",
+            "user_id",
+            "name",
+            postgresql_where=text("round = 0 AND hero_id IS NULL"),
+        ),
+        Index(
+            "ix_match_statistics_user_hero_r0",
+            "user_id",
+            "hero_id",
+            "name",
+            postgresql_where=text("round = 0 AND hero_id IS NOT NULL"),
+        ),
+        {"schema": "matches"},
+    )
 
     match_id: Mapped[int] = mapped_column(
         ForeignKey(Match.id, ondelete="CASCADE"), index=True
@@ -63,9 +85,12 @@ class MatchStatistics(db.TimeStampIntegerMixin):
 
 
 class MatchKillFeed(db.TimeStampIntegerMixin):
-    __tablename__ = "match_kill_feed"
+    __tablename__ = "kill_feed"
+    __table_args__ = ({"schema": "matches"},)
 
-    match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"))
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey(Match.id, ondelete="CASCADE"), index=True
+    )
     time: Mapped[float] = mapped_column(Float())
     round: Mapped[int] = mapped_column(Integer())
     fight: Mapped[int] = mapped_column(Integer())
@@ -73,7 +98,7 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
         Enum(enums.AbilityEvent), nullable=True
     )
     killer_id: Mapped[int] = mapped_column(
-        ForeignKey(User.id, ondelete="CASCADE")
+        ForeignKey(User.id, ondelete="CASCADE"), index=True
     )
     killer_hero_id: Mapped[int] = mapped_column(
         ForeignKey(Hero.id, ondelete="CASCADE")
@@ -82,7 +107,7 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
         ForeignKey(Team.id, ondelete="CASCADE")
     )
     victim_id: Mapped[int] = mapped_column(
-        ForeignKey(User.id, ondelete="CASCADE")
+        ForeignKey(User.id, ondelete="CASCADE"), index=True
     )
     victim_team_id: Mapped[int] = mapped_column(
         ForeignKey(Team.id, ondelete="CASCADE")
@@ -96,13 +121,20 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
 
 
 class MatchEvent(db.TimeStampIntegerMixin):
-    __tablename__ = "match_assists"
+    __tablename__ = "assists"
+    __table_args__ = ({"schema": "matches"},)
 
-    match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"))
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey(Match.id, ondelete="CASCADE"), index=True
+    )
     time: Mapped[float] = mapped_column(Float())
     round: Mapped[int] = mapped_column(Integer())
-    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
-    user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"))
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey(Team.id, ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey(User.id, ondelete="CASCADE"), index=True
+    )
     hero_id: Mapped[int | None] = mapped_column(
         ForeignKey(Hero.id, ondelete="CASCADE"), nullable=True
     )
@@ -116,4 +148,3 @@ class MatchEvent(db.TimeStampIntegerMixin):
         ForeignKey(Hero.id, ondelete="CASCADE"), nullable=True
     )
     name: Mapped[enums.MatchEvent] = mapped_column(Enum(enums.MatchEvent))
-

@@ -2,8 +2,14 @@
 Models for auth service - imported from shared library
 """
 # Import auth models from shared
-from shared.models.auth_user import AuthUser, RefreshToken, AuthUserPlayer
+from shared.models.api_key import ApiKey
+from shared.models.auth_user import AuthUser, AuthUserPlayer, RefreshToken
+from shared.models.rbac import Permission, Role
 from shared.models.user import User
-from shared.models.rbac import Role, Permission
+from shared.models.workspace import Workspace, WorkspaceMember
 
-__all__ = ["AuthUser", "RefreshToken", "AuthUserPlayer", "User", "Role", "Permission"]
+__all__ = [
+    "AuthUser", "RefreshToken", "AuthUserPlayer", "ApiKey",
+    "User", "Role", "Permission",
+    "Workspace", "WorkspaceMember",
+]

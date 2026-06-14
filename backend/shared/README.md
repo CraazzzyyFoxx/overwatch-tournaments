@@ -1,16 +1,18 @@
 # Shared Library
 
-Эта библиотека содержит общие модели базы данных и основные компоненты для использования в приложениях `app` и `parser`.
+This library holds the common database models and core components used by every backend service
+(`app-service`, `auth-service`, `parser-service`, `tournament-service`, `analytics-service`, and the
+rest). It is the **single source of truth** for the ORM layer.
 
-## Структура
+## Structure
 
 ```
 shared/
 ├── __init__.py
 ├── core/
 │   ├── __init__.py
-│   ├── db.py      # Базовые классы для работы с БД (Base, TimeStampIntegerMixin, TimeStampUUIDMixin)
-│   └── enums.py   # Общие перечисления (HeroClass, LogEventType, LogStatsName, EncounterStatus, MatchEvent, AbilityEvent)
+│   ├── db.py      # Database base classes (Base, TimeStampIntegerMixin, TimeStampUUIDMixin)
+│   └── enums.py   # Common enums (HeroClass, LogEventType, LogStatsName, EncounterStatus, MatchEvent, AbilityEvent)
 └── models/
     ├── __init__.py
     ├── achievement.py
@@ -26,51 +28,38 @@ shared/
     └── user.py
 ```
 
-## Использование
+## Usage
 
-### В приложении app
-
-Модели автоматически импортируются через `app/src/models/__init__.py`:
+Services re-export the shared models and core helpers through their own `src/models` and `src/core`
+packages, so application code imports them locally:
 
 ```python
 from src import models
 
-# Использование моделей
+# Use the shared models
 user = models.User(name="example")
 tournament = models.Tournament(name="Tournament #1")
 ```
 
-Базовые классы и перечисления импортируются через `app/src/core`:
+Base classes and enums are exposed through each service's `src.core`:
 
 ```python
 from src.core import db, enums
 
-# db.Base, db.TimeStampIntegerMixin уже импортированы из shared
-# enums.HeroClass, enums.LogEventType и другие уже импортированы из shared
+# db.Base, db.TimeStampIntegerMixin are imported from shared
+# enums.HeroClass, enums.LogEventType, etc. are imported from shared
 ```
 
-### В приложении parser
+## Important
 
-Аналогично app, модели автоматически импортируются через `parser/src/models/__init__.py`:
+- **Do not edit** the per-service `src/models/` files directly — they are proxies for `shared/models/`.
+- All database model changes must be made in `shared/models/`.
+- Shared enums belong in `shared/core/enums.py`.
+- Service-specific enums (for example, `RouteTag`) stay in that service's own `src/core/enums.py`.
 
-```python
-from src import models
+## Benefits
 
-# Использование моделей
-match = models.Match(...)
-encounter = models.Encounter(...)
-```
-
-## Важно
-
-- **НЕ изменяйте** файлы в `app/src/models/` и `parser/src/models/` напрямую - они являются прокси для `shared/models/`
-- Все изменения моделей БД должны вноситься в `shared/models/`
-- Общие перечисления должны находиться в `shared/core/enums.py`
-- Специфичные для приложения перечисления (например, `RouteTag`) остаются в соответствующих `app/src/core/enums.py` или `parser/src/core/enums.py`
-
-## Преимущества
-
-1. **Единственный источник истины** - модели определены в одном месте
-2. **Консистентность** - app и parser используют одни и те же определения моделей
-3. **Упрощение поддержки** - изменения в моделях вносятся только в shared
-4. **Переиспользование кода** - общая логика доступна обоим приложениям
+1. **Single source of truth** — models are defined in one place.
+2. **Consistency** — every service uses identical model definitions.
+3. **Easier maintenance** — model changes are made only in `shared`.
+4. **Code reuse** — common logic is available to all services.

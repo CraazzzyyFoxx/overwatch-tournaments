@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -8,13 +9,17 @@ __all__ = (
     "UserLogin",
     "Token",
     "TokenPayload",
+    "SessionRead",
     "RefreshTokenRequest",
     "PasswordSetRequest",
     "ServiceTokenRequest",
     "ServiceToken",
     "ServiceTokenPayload",
+    "TokenApiKeyInfo",
+    "AuthLinkedPlayer",
     "AuthUser",
     "UserUpdate",
+    "WorkspaceMembership",
 )
 
 
@@ -70,6 +75,41 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class SessionRead(BaseModel):
+    """Logical auth session visible to the current user."""
+
+    session_id: str
+    is_current: bool = False
+    status: str
+    login_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None = None
+    user_agent: str | None = None
+    ip_address: str | None = None
+
+
+class WorkspaceMembership(BaseModel):
+    """Schema for workspace membership info"""
+
+    workspace_id: int
+    slug: str
+    role: str
+    rbac_roles: list[str] = Field(default_factory=list)
+    rbac_permissions: list[dict[str, str]] = Field(default_factory=list)
+
+
+class TokenApiKeyInfo(BaseModel):
+    """API key metadata returned by token validation for downstream services."""
+
+    id: int
+    public_id: str
+    workspace_id: int
+    scopes: list[str] = Field(default_factory=list)
+    limits: dict = Field(default_factory=dict)
+    config_policy: dict = Field(default_factory=dict)
+
+
 class TokenPayload(BaseModel):
     """Schema for JWT token payload"""
 
@@ -79,6 +119,9 @@ class TokenPayload(BaseModel):
     is_superuser: bool = False
     roles: list[str] = Field(default_factory=list)  # List of role names
     permissions: list[dict[str, str]] = Field(default_factory=list)  # List of {resource, action} dicts
+    workspaces: list[WorkspaceMembership] = Field(default_factory=list)
+    credential_type: Literal["access_token", "api_key"] = "access_token"
+    api_key: TokenApiKeyInfo | None = None
     exp: int | None = None
 
 
@@ -117,6 +160,25 @@ class PasswordSetRequest(BaseModel):
         return v
 
 
+class AuthUserWorkspace(BaseModel):
+    """Workspace RBAC info for authenticated user response."""
+
+    workspace_id: int
+    slug: str
+    role: str
+    rbac_roles: list[str] = Field(default_factory=list)
+    rbac_permissions: list[str] = Field(default_factory=list)
+
+
+class AuthLinkedPlayer(BaseModel):
+    """Analytics player linked to the authenticated user."""
+
+    player_id: int
+    player_name: str
+    is_primary: bool
+    linked_at: str
+
+
 class AuthUser(BaseModel):
     """Schema for authenticated user response"""
 
@@ -131,6 +193,8 @@ class AuthUser(BaseModel):
     is_verified: bool
     roles: list[str] = Field(default_factory=list)  # List of role names
     permissions: list[str] = Field(default_factory=list)  # List of "resource.action" strings
+    workspaces: list[AuthUserWorkspace] = Field(default_factory=list)
+    linked_players: list[AuthLinkedPlayer] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None = None
 

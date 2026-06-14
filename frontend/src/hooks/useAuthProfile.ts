@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
 export function useAuthProfile() {
@@ -8,10 +7,6 @@ export function useAuthProfile() {
   const user = useAuthProfileStore((s) => s.user);
   const error = useAuthProfileStore((s) => s.error);
   const fetchMe = useAuthProfileStore((s) => s.fetchMe);
-
-  useEffect(() => {
-    void fetchMe();
-  }, [fetchMe]);
 
   return {
     status,

@@ -34,6 +34,7 @@ export interface PaginationControlledProps {
   pageSize: number;
   page: number;
   onSetPage: (page: number) => void;
+  onSetPageSize?: (pageSize: number) => void;
 }
 
 /**
@@ -69,7 +70,7 @@ export function PaginationWithLinks({
       newSearchParams.set(key, String(newPage));
       return `${pathname}?${newSearchParams.toString()}`;
     },
-    [searchParams, pathname]
+    [searchParams, pathname, pageSearchParam]
   );
 
   const navToPageSize = useCallback(
@@ -79,7 +80,7 @@ export function PaginationWithLinks({
       newSearchParams.set(key, String(newPageSize));
       router.push(`${pathname}?${newSearchParams.toString()}`);
     },
-    [searchParams, pathname]
+    [searchParams, pathname, pageSizeSelectOptions?.pageSizeSearchParam, router]
   );
 
   const renderPageNumbers = () => {
@@ -187,7 +188,8 @@ export function PaginationControlled({
   pageSize,
   totalCount,
   page,
-  onSetPage
+  onSetPage,
+  onSetPageSize
 }: PaginationControlledProps) {
   const totalPageCount = Math.ceil(totalCount / pageSize);
 
@@ -285,15 +287,15 @@ export function PaginationControlled({
 
   return (
     <div className="flex flex-col md:flex-row items-center gap-3 w-full">
-      {/*{pageSizeSelectOptions && (*/}
-      {/*  <div className="flex flex-col gap-4 flex-1">*/}
-      {/*    <SelectRowsPerPage*/}
-      {/*      options={pageSizeSelectOptions.pageSizeOptions}*/}
-      {/*      setPageSize={navToPageSize}*/}
-      {/*      pageSize={pageSize}*/}
-      {/*    />*/}
-      {/*  </div>*/}
-      {/*)}*/}
+      {pageSizeSelectOptions && onSetPageSize ? (
+        <div className="flex flex-col gap-4 flex-1">
+          <SelectRowsPerPage
+            options={pageSizeSelectOptions.pageSizeOptions}
+            setPageSize={onSetPageSize}
+            pageSize={pageSize}
+          />
+        </div>
+      ) : null}
       <Pagination className={cn({ "md:justify-end": pageSizeSelectOptions })}>
         <PaginationContent className="max-sm:gap-0">
           <PaginationItem>

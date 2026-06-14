@@ -1,52 +1,123 @@
-import { PaginatedResponse } from "@/types/pagination.types";
-import { OwalStack, OwalStandings, Standings, Tournament } from "@/types/tournament.types";
-import { customFetch } from "@/lib/custom_fetch";
+import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
+import { OwalStack, OwalStandings, Stage, Standings, Tournament } from "@/types/tournament.types";
+import { apiFetch } from "@/lib/api-fetch";
 import { PlayerAnalytics, TournamentAnalytics } from "@/types/analytics.types";
+import { normalizePaginatedResponse } from "@/lib/normalize-paginated-response";
+
+type GetStandingsOptions = {
+  workspaceId?: number | null;
+  includeMatchesHistory?: boolean;
+  includeTeamGroup?: boolean;
+};
 
 export default class tournamentService {
-  static async getAll(isLeague: boolean | null = null): Promise<PaginatedResponse<Tournament>> {
-    return customFetch(`tournaments`, {
+  static async lookup(
+    workspaceId?: number | null,
+    isLeague?: boolean | null
+  ): Promise<LookupItem[]> {
+    return apiFetch("tournament", "tournaments/lookup", {
+      query: {
+        workspace_id: workspaceId,
+        is_league: isLeague
+      }
+    }).then((res) => res.json());
+  }
+
+  static async getAll(
+    isLeague: boolean | null = null,
+    workspaceId?: number | null
+  ): Promise<PaginatedResponse<Tournament>> {
+    return apiFetch("tournament", `tournaments`, {
       query: {
         is_league: isLeague,
+        workspace_id: workspaceId,
         page: 1,
         per_page: -1,
         sort: "id",
         order: "desc",
-        entities: ["groups", "participants_count"]
+        entities: ["stages", "participants_count"]
       }
-    }).then((response) => response.json());
+    })
+      .then((response) => response.json())
+      .then((response: PaginatedResponse<Tournament>) => normalizePaginatedResponse(response));
   }
-  static async getOwalSeasons(): Promise<string[]> {
-    return customFetch(`tournaments/league/seasons`).then((response) => response.json());
-  }
-
-  static async getOwalStandings(season?: string): Promise<OwalStandings> {
-    return customFetch(`tournaments/league/results`, {
-      query: {
-        season
-      }
+  static async getOwalSeasons(workspaceId?: number | null): Promise<string[]> {
+    return apiFetch("tournament", `tournaments/league/seasons`, {
+      query: { workspace_id: workspaceId }
     }).then((response) => response.json());
   }
 
-  static async getOwalStacks(season?: string): Promise<OwalStack[]> {
-    return customFetch(`tournaments/league/stacks`, {
+  static async getOwalStandings(
+    season?: string,
+    workspaceId?: number | null
+  ): Promise<OwalStandings> {
+    return apiFetch("tournament", `tournaments/league/results`, {
       query: {
-        season
+        season,
+        workspace_id: workspaceId
       }
     }).then((response) => response.json());
   }
+
+  static async getOwalStacks(season?: string, workspaceId?: number | null): Promise<OwalStack[]> {
+    return apiFetch("tournament", `tournaments/league/stacks`, {
+      query: {
+        season,
+        workspace_id: workspaceId
+      }
+    }).then((response) => response.json());
+  }
+  static async getActive(): Promise<PaginatedResponse<Tournament>> {
+    return apiFetch("tournament", `tournaments`, {
+      skipWorkspace: true,
+      query: {
+        page: 1,
+        per_page: -1,
+        sort: "id",
+        order: "desc",
+        entities: ["registrations_count"]
+      }
+    })
+      .then((response) => response.json())
+      .then((response: PaginatedResponse<Tournament>) => normalizePaginatedResponse(response));
+  }
+
   static async get(id: number): Promise<Tournament> {
-    return customFetch(`tournaments/${id}`, {
+    return apiFetch("tournament", `tournaments/${id}`, {
       query: {
-        entities: ["participants_count", "groups"]
+        entities: ["participants_count", "registrations_count"]
       }
     }).then((response) => response.json());
   }
-  static async getStandings(id: number): Promise<Standings[]> {
-    return customFetch(`tournaments/${id}/standings`, {
+  static async getStandings(
+    id: number,
+    workspaceIdOrOptions?: number | null | GetStandingsOptions
+  ): Promise<Standings[]> {
+    const options =
+      typeof workspaceIdOrOptions === "object" && workspaceIdOrOptions !== null
+        ? workspaceIdOrOptions
+        : { workspaceId: workspaceIdOrOptions };
+    const includeMatchesHistory = options.includeMatchesHistory ?? true;
+    const includeTeamGroup = options.includeTeamGroup ?? true;
+    const entities = ["stage", "stage_item", "team"];
+
+    if (includeMatchesHistory) {
+      entities.push("matches_history");
+    }
+
+    if (includeTeamGroup) {
+      entities.push("team.group");
+    }
+
+    return apiFetch("tournament", `tournaments/${id}/standings`, {
       query: {
-        entities: ["group", "team", "matches_history", "team.group"]
+        workspace_id: options.workspaceId,
+        entities
       }
     }).then((response) => response.json());
+  }
+
+  static async getStages(id: number): Promise<Stage[]> {
+    return apiFetch("tournament", `tournaments/${id}/stages`).then((response) => response.json());
   }
 }

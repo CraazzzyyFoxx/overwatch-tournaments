@@ -13,6 +13,7 @@ __all__ = ("Gamemode",)
 
 class Gamemode(db.TimeStampIntegerMixin):
     __tablename__ = "gamemode"
+    __table_args__ = ({"schema": "overwatch"},)
 
     slug: Mapped[str] = mapped_column(String(), unique=True)
     name: Mapped[str] = mapped_column(String(), unique=True)

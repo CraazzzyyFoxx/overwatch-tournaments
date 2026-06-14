@@ -1,21 +1,13 @@
 import React from "react";
-import Image from "next/image";
 
-export interface PlayerDivisionIconProps {
-  division: number;
-  width?: number;
-  height?: number;
-}
+import DivisionIcon, { DivisionIconProps } from "@/components/DivisionIcon";
 
-const PlayerDivisionIcon = (data: PlayerDivisionIconProps) => {
+export type PlayerDivisionIconProps = DivisionIconProps;
+
+const PlayerDivisionIcon = ({ division, width, height, className, tournamentGrid }: PlayerDivisionIconProps) => {
   return (
     <div className="flex justify-center">
-      <Image
-        src={`/divisions/${data.division}.png`}
-        alt="Division"
-        width={data.width || 36}
-        height={data.height || 36}
-      />
+      <DivisionIcon division={division} width={width} height={height} className={className} tournamentGrid={tournamentGrid} />
     </div>
   );
 };

@@ -1,38 +1,45 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-import sentry_sdk
+from cashews import cache
 from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
-from src.core.config import config
-from src.core.job_store import close_job_store
-from src.middlewares.exception import ExceptionMiddleware
-from src.views import router, task_router
+from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from shared.clients import AuthClient
+from shared.core.middleware import ExceptionMiddleware, RequestSizeLimitMiddleware
+from shared.core.scalar import register_scalar_docs
 from shared.observability import (
     CorrelationIdMiddleware,
     TimeMiddleware,
+    check_rabbitmq,
+    check_redis,
     instrument_fastapi,
+    make_health_response,
     setup_logging,
+    setup_sentry,
     setup_tracing,
 )
 from shared.schemas import HealthCheckResponse
+from src.core.config import config
+from src.core.job_store import close_job_store
+from src.core.security.api_key_limiter import close_api_key_limiter
+from src.routes.admin import router as organizer_router
+from src.routes.balancer import router, task_router
 
 # Setup structured logging
 logger = setup_logging(
     service_name="balancer-service",
     log_level=config.log_level,
-    logs_root_path=config.LOGS_ROOT_PATH,
-    json_output=config.JSON_LOGGING,
+    logs_root_path=config.logs_root_path,
+    json_output=config.json_logging,
 )
 
 # Create module-level singleton for auth client
 auth_client = AuthClient(
-    base_url=config.AUTH_SERVICE_URL,
-    timeout=config.AUTH_SERVICE_TIMEOUT,
+    base_url=config.auth_service_url,
+    timeout=config.auth_service_timeout,
 )
 
 
@@ -40,80 +47,108 @@ auth_client = AuthClient(
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Initialize Sentry
-    if config.SENTRY_DSN:
-        sentry_sdk.init(
-            dsn=config.SENTRY_DSN,
-            traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
-            profiles_sample_rate=config.SENTRY_PROFILES_SAMPLE_RATE,
-            environment=config.ENVIRONMENT,
-            release=config.VERSION,
-        )
-        logger.info(f"✅ Sentry initialized (sampling={config.SENTRY_TRACES_SAMPLE_RATE})")
+    setup_sentry(
+        dsn=config.sentry_dsn,
+        traces_sample_rate=config.sentry_traces_sample_rate,
+        profiles_sample_rate=config.sentry_profiles_sample_rate,
+        service_name="balancer-service",
+        enable_logs=config.sentry_enable_logs,
+        logs_level=config.sentry_logs_level,
+        enable_metrics=config.sentry_enable_metrics,
+        environment=config.environment,
+        release=config.version,
+        http_proxy=config.sentry_http_proxy_url,
+        https_proxy=config.sentry_https_proxy_url,
+    )
 
     # Setup OpenTelemetry tracing
     setup_tracing(
         service_name="balancer-service",
-        otlp_endpoint=config.OTLP_ENDPOINT,
-        enabled=config.TRACING_ENABLED,
+        otlp_endpoint=config.otlp_endpoint,
+        enabled=config.tracing_enabled,
+        sampler_name=config.otel_traces_sampler,
+        sampler_arg=config.otel_traces_sampler_arg,
     )
 
     await auth_client.start()  # Start connection pool
-    logger.info(f"Starting {config.PROJECT_NAME} - Balancer Service...")
-    logger.info(f"Environment: {config.ENVIRONMENT}")
-    logger.info(f"Port: {config.PORT}")
+    logger.info(f"Starting {config.project_name} - Balancer Service...")
+    logger.info(f"Environment: {config.environment}")
+    logger.info(f"Port: {config.port}")
 
     yield
 
     await auth_client.close()  # Close connection pool
     await close_job_store()
+    await close_api_key_limiter()
     logger.info("Shutting down Balancer Service...")
 
 
 app = FastAPI(
-    title=config.PROJECT_NAME,
-    description=config.DESCRIPTION,
-    default_response_class=ORJSONResponse,
-    version=config.VERSION,
+    title=config.project_name,
+    description=config.description,
+    version=config.version,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
     root_path="/api/balancer",
+    default_response_class=JSONResponse,
 )
+register_scalar_docs(app)
 
 # Store auth_client on app state for dependency injection
 app.state.auth_client = auth_client
-
-# Instrument FastAPI for OpenTelemetry tracing
-instrument_fastapi(app)
 
 # Expose Prometheus /metrics endpoint
 Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
-    allow_credentials=config.CORS_ALLOW_CREDENTIALS,
-    allow_methods=config.CORS_ALLOW_METHODS,
-    allow_headers=config.CORS_ALLOW_HEADERS,
+    allow_origins=config.cors_origins,
+    allow_credentials=config.cors_allow_credentials,
+    allow_methods=config.cors_allow_methods,
+    allow_headers=config.cors_allow_headers,
 )
 
 # Observability middleware
-app.add_middleware(ExceptionMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware, max_content_length=10 * 1024 * 1024)  # 10MB limit
+app.add_middleware(ExceptionMiddleware, is_development=config.environment == "development")
 app.add_middleware(TimeMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 
+# Instrument FastAPI after custom middleware registration so request logs are emitted
+# while the server span is still active.
+instrument_fastapi(app)
+
+cache.setup(f"{config.redis_url}/4", prefix="backend:")
+
 app.include_router(router)
 app.include_router(task_router)
+app.include_router(organizer_router)
 
 
+@app.get("/health/live")
+async def live_health_check() -> HealthCheckResponse:
+    return make_health_response(
+        service="balancer-service",
+        version=config.version,
+        dependencies=[],
+        status="ok",
+        timestamp=int(datetime.now(UTC).timestamp()),
+    )
+
+
+@app.get("/health/ready")
 @app.get("/health")
 async def health_check() -> HealthCheckResponse:
-    """Health check endpoint"""
-    return HealthCheckResponse(
-        status="ok",
+    deps = [
+        await check_redis(config.redis_url),
+        await check_rabbitmq(config.rabbitmq_url),
+    ]
+    return make_health_response(
         service="balancer-service",
+        version=config.version,
+        dependencies=deps,
         timestamp=int(datetime.now(UTC).timestamp()),
-        version=config.VERSION,
     )
 
 
@@ -123,7 +158,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=config.PORT,
+        port=config.port,
         log_config=None,
         access_log=False,
         # reload=config.ENVIRONMENT == "development"

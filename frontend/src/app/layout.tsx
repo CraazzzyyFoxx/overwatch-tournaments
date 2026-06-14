@@ -1,20 +1,36 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import React from "react";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap"
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains-mono",
+  display: "swap"
+});
+
+const barlowCondensed = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-barlow-condensed",
+  display: "swap"
+});
 import { Providers } from "@/app/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import Header from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import { Separator } from "@/components/ui/separator";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { cn } from "@/lib/utils";
 import AuthModal from "@/components/AuthModal";
 import AccountSettingsModal from "@/components/AccountSettingsModal";
 import LoginModalTrigger from "@/components/LoginModalTrigger";
+import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: SITE_NAME,
@@ -40,7 +56,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={cn(inter.className, "dark")}>
+      <body
+        className={cn(
+          inter.className,
+          inter.variable,
+          jetbrainsMono.variable,
+          barlowCondensed.variable,
+          "dark"
+        )}
+      >
         <GoogleAnalytics gaId="G-6TYE0K6SQM" />
         <Providers>
           <Suspense fallback={null}>
@@ -50,17 +74,8 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <AccountSettingsModal />
           </Suspense>
-
-          <div className="w-full max-w-screen-3xl mt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
-            <Header />
-            <div className="flex w-full flex-col min-h-[95%]">
-              <main className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8 ">
-                {children}
-              </main>
-            </div>
-            <Separator className="mt-8" />
-            <Footer />
-          </div>
+          <Toaster />
+          {children}
         </Providers>
       </body>
     </html>

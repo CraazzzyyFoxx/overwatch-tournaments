@@ -1,0 +1,40 @@
+{
+  "title": "Tracing",
+  "uid": "tracing-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["tracing", "tempo", "logs"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Trace Drilldown",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "Use the logs panel below and click the derived `TraceID` field to open the full trace in Tempo. The panel only shows sampled traces, because unsampled spans still have a `trace_id` in logs but do not exist in Tempo."
+      }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Logs With Trace Context",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 16 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{job=\"app_services\", trace_sampled=\"true\"} |~ \"\\\"trace_id\\\"\\\\s*:\\\\s*\\\"[a-f0-9]+\\\"\"",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
+    }
+  ]
+}

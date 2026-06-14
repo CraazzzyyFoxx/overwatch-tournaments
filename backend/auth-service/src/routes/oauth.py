@@ -77,23 +77,27 @@ async def oauth_callback(
         if not auth_user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
-        # Get user roles and permissions (async-safe)
-        roles, permissions = await auth_service.AuthService.get_user_roles_and_permissions_db(session, auth_user.id)
+        session_id, session_started_at = auth_service.AuthService.create_session_metadata()
 
-        # Create JWT tokens with RBAC data
         access_token = auth_service.AuthService.create_access_token(
             data={
                 "sub": str(auth_user.id),
                 "email": auth_user.email,
                 "username": auth_user.username,
                 "is_superuser": auth_user.is_superuser,
-                "roles": roles,
-                "permissions": permissions,
+                "sid": str(session_id),
             }
         )
 
         refresh_token = auth_service.AuthService.create_refresh_token()
-        await auth_service.AuthService.create_refresh_token_db(session, auth_user.id, refresh_token, request)
+        await auth_service.AuthService.create_refresh_token_db(
+            session,
+            auth_user.id,
+            refresh_token,
+            request,
+            session_id=session_id,
+            session_started_at=session_started_at,
+        )
 
         logger.success(f"User logged in via {provider}: {auth_user.username}")
 

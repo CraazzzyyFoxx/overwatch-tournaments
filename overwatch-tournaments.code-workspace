@@ -25,6 +25,15 @@
             "path": "backend/balancer-service"
         },
         {
+            "path": "backend/tournament-service"
+        },
+        {
+            "path": "backend/realtime-service"
+        },
+        {
+            "path": "backend/analytics-service"
+        }
+        {
             "path": "frontend"
         },
         {

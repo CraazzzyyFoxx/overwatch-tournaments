@@ -26,16 +26,28 @@ scrape_configs:
       # Parse the JSON log lines emitted by Loguru with serialize=True
       - json:
           expressions:
-            level: level
-            service: extra.service
-            message: text
-            correlation_id: extra.correlation_id
+            level: record.level.name
+            service: record.extra.service
+            status: record.extra.status
+            queue: record.extra.queue
+            handler: record.extra.handler
+            trace_id: record.extra.trace_id
+            span_id: record.extra.span_id
+            trace_sampled: record.extra.trace_sampled
+            message_id: record.extra.message_id
+            job_id: record.extra.job_id
+            message: record.message
+            correlation_id: record.extra.correlation_id
             timestamp: record.time.timestamp
 
       # Promote parsed fields to Loki labels
       - labels:
           level:
           service:
+          status:
+          queue:
+          handler:
+          trace_sampled:
 
       # Use the log record's own timestamp (epoch float) as the Loki timestamp
       - timestamp:

@@ -25,7 +25,7 @@ async def get_by_name(session: AsyncSession, name: str) -> models.Hero | None:
 
 async def get_all(
     session: AsyncSession,
-    params: pagination.PaginationParams,
+    params: pagination.PaginationSortParams,
 ) -> tuple[typing.Sequence[models.Hero], int]:
     query = sa.select(models.Hero)
     query = params.apply_pagination_sort(query, models.Hero)

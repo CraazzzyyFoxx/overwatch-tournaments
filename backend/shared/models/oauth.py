@@ -22,9 +22,10 @@ class OAuthConnection(db.TimeStampIntegerMixin):
     __table_args__ = (
         UniqueConstraint("provider", "provider_user_id", name="uq_provider_user"),
         UniqueConstraint("auth_user_id", "provider", name="uq_user_provider"),
+        {"schema": "auth"},
     )
 
-    auth_user_id: Mapped[int] = mapped_column(ForeignKey("auth_user.id", ondelete="CASCADE"), nullable=False)
+    auth_user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False)
 
     # Provider information
     provider: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # 'discord', 'google', 'github', etc.

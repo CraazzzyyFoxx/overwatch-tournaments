@@ -1,0 +1,96 @@
+groups:
+  - name: services-recording
+    interval: 30s
+    rules:
+      - record: service:http_requests:rate5m
+        expr: sum by (job, instance) (rate(http_requests_total[5m]))
+
+      - record: service:http_requests_5xx:rate5m
+        expr: sum by (job, instance) (rate(http_requests_total{status_code=~"5.."}[5m]))
+
+      - record: service:http_error_ratio_5m
+        expr: service:http_requests_5xx:rate5m / clamp_min(service:http_requests:rate5m, 0.001)
+
+      - record: service:http_latency_p95_5m
+        expr: histogram_quantile(0.95, sum by (job, instance, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: worker:messages_processed:rate5m
+        expr: sum by (job, instance, queue, handler, status) (rate(worker_messages_processed_total[5m]))
+
+      - record: worker:failure_ratio_5m
+        expr: |
+          sum by (job, instance, queue, handler) (rate(worker_messages_processed_total{status="error"}[5m]))
+          /
+          clamp_min(sum by (job, instance, queue, handler) (rate(worker_messages_processed_total[5m])), 0.001)
+
+      - record: worker:processing_p95_5m
+        expr: histogram_quantile(0.95, sum by (job, instance, queue, handler, le) (rate(worker_processing_duration_seconds_bucket[5m])))
+
+      - record: rabbitmq:queue_depth
+        expr: sum by (queue) (rabbitmq_queue_messages{queue!~".*\\.dlq"})
+
+      - record: rabbitmq:queue_depth_growth_5m
+        expr: increase(rabbitmq_queue_messages{queue!~".*\\.dlq"}[5m])
+
+      - record: redis:keyspace_hit_ratio_5m
+        expr: |
+          sum(rate(redis_keyspace_hits_total[5m]))
+          /
+          clamp_min(sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_misses_total[5m])), 0.001)
+
+  - name: services-alerts
+    interval: 30s
+    rules:
+      - alert: FastAPI5xxRateHigh
+        expr: service:http_error_ratio_5m{job=~"app-service|auth-service|parser-service|balancer-service"} > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP 5xx ratio is elevated for {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has a 5xx ratio above 5% for 5 minutes."
+
+      - alert: FastAPILatencyP95High
+        expr: service:http_latency_p95_5m{job=~"app-service|auth-service|parser-service|balancer-service"} > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency is high for {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has p95 latency above 1.5s for 10 minutes."
+
+      - alert: WorkerFailureRateHigh
+        expr: worker:failure_ratio_5m > 0.2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker failure ratio is high for {{ $labels.queue }}"
+          description: "Worker {{ $labels.job }} / {{ $labels.handler }} on queue {{ $labels.queue }} has error ratio above 20%."
+
+      - alert: WorkerPublishFailures
+        expr: increase(worker_publish_failures_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message publish failures detected for {{ $labels.queue }}"
+          description: "At least one publish attempt failed on queue {{ $labels.queue }} in the last 5 minutes."
+
+      - alert: RabbitMQQueueLagGrowing
+        expr: rabbitmq:queue_depth > 100 and rabbitmq:queue_depth_growth_5m > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} backlog is growing"
+          description: "RabbitMQ queue {{ $labels.queue }} has more than 100 pending messages and backlog is still increasing."
+
+      - alert: RedisHitRatioLow
+        expr: redis:keyspace_hit_ratio_5m < 0.5 and sum(rate(redis_commands_processed_total[5m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis cache hit ratio is low"
+          description: "Redis keyspace hit ratio stayed below 50% for 10 minutes while command throughput remained non-trivial."

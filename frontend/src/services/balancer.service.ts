@@ -1,118 +1,194 @@
 import {
   BalanceJobCreateResponse,
   BalanceJobEvent,
+  BalanceJobResult,
   BalanceJobStatusResponse,
-  BalanceResponse,
   BalancerConfig,
-  BalancerConfigResponse
+  BalancerConfigResponse,
+  BalancerConfigField,
+  SUPPORTED_BALANCER_ALGORITHMS,
+  SUPPORTED_BALANCER_CONFIG_KEYS
 } from "@/types/balancer.types";
-import { fetchWithAuth } from "@/lib/fetch-with-auth";
+import { apiFetch } from "@/lib/api-fetch";
+import { getTokenFromCookies } from "@/lib/auth-tokens";
 
-const BALANCER_API_PREFIX = (
+const BALANCER_STREAM_PREFIX = (
   process.env.NEXT_PUBLIC_BALANCER_API_URL || "http://localhost/api/balancer"
 ).replace(/\/$/, "");
 
-async function parseErrorMessage(response: Response): Promise<string> {
-  try {
-    const error = await response.json();
-    return error?.detail || error?.message || "Request failed";
-  } catch {
-    return "Request failed";
+const SUPPORTED_CONFIG_FIELD_TYPES = new Set<string>([
+  "boolean",
+  "float",
+  "integer",
+  "role_mask",
+  "select",
+  "slider"
+]);
+
+type RawBalancerConfigField = Omit<BalancerConfigField, "key"> & {
+  key: string;
+};
+
+type RawBalancerConfigResponse = Omit<BalancerConfigResponse, "defaults" | "presets" | "fields"> & {
+  defaults: Record<string, unknown>;
+  presets: Record<string, Record<string, unknown>>;
+  fields: RawBalancerConfigField[];
+};
+
+const SUPPORTED_BALANCER_ALGORITHM_SET = new Set<string>(SUPPORTED_BALANCER_ALGORITHMS);
+const SUPPORTED_BALANCER_CONFIG_KEY_SET = new Set<string>(SUPPORTED_BALANCER_CONFIG_KEYS);
+
+function normalizeAlgorithm(
+  value: unknown
+): BalancerConfig["algorithm"] | undefined {
+  if (typeof value !== "string") {
+    return undefined;
   }
+
+  return SUPPORTED_BALANCER_ALGORITHM_SET.has(value)
+    ? (value as BalancerConfig["algorithm"])
+    : undefined;
 }
 
-function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+function sanitizeConfigForFrontend(
+  config: BalancerConfig | Record<string, unknown> | null | undefined
+): BalancerConfig {
+  if (!config || typeof config !== "object") {
+    return {};
+  }
 
-  return fetchWithAuth(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+  const entries = Object.entries(config).flatMap(([key, value]) => {
+    if (!SUPPORTED_BALANCER_CONFIG_KEY_SET.has(key) || value === undefined || value === null) {
+      return [];
+    }
+
+    if (key === "algorithm") {
+      const algorithm = normalizeAlgorithm(value);
+      return algorithm ? [[key, algorithm]] : [];
+    }
+
+    return [[key, value]];
+  });
+
+  return Object.fromEntries(entries) as BalancerConfig;
+}
+
+function normalizeConfigField(
+  field: RawBalancerConfigField,
+  defaults: BalancerConfig
+): BalancerConfigField | null {
+  if (
+    !SUPPORTED_BALANCER_CONFIG_KEY_SET.has(field.key) ||
+    !SUPPORTED_CONFIG_FIELD_TYPES.has(field.type as string)
+  ) {
+    return null;
+  }
+
+  const options =
+    field.key === "algorithm"
+      ? (field.options ?? []).filter((option) => SUPPORTED_BALANCER_ALGORITHM_SET.has(option))
+      : field.options;
+
+  return {
+    ...field,
+    key: field.key as BalancerConfigField["key"],
+    options,
+    default: defaults[field.key as keyof BalancerConfig] ?? field.default
+  };
+}
+
+function normalizeConfigResponse(payload: RawBalancerConfigResponse): BalancerConfigResponse {
+  const defaults = sanitizeConfigForFrontend(payload.defaults);
+  const presets = Object.fromEntries(
+    Object.entries(payload.presets).flatMap(([presetName, presetConfig]) => {
+      const algorithm = normalizeAlgorithm(presetConfig.algorithm);
+      if (presetConfig.algorithm !== undefined && !algorithm) {
+        return [];
+      }
+
+      return [[presetName, sanitizeConfigForFrontend(presetConfig)]];
+    })
+  );
+
+  return {
+    ...payload,
+    defaults,
+    presets,
+    fields: payload.fields
+      .map((field) => normalizeConfigField(field, defaults))
+      .filter((field): field is BalancerConfigField => field !== null)
+  };
 }
 
 export default class balancerService {
   static async getConfig(): Promise<BalancerConfigResponse> {
-    let response: Response;
     try {
-      response = await fetchWithTimeout(`${BALANCER_API_PREFIX}/config`, { method: "GET" }, 10_000);
+      const response = await apiFetch("balancer", "config", { timeout: 10_000 });
+      const payload = (await response.json()) as RawBalancerConfigResponse;
+      return normalizeConfigResponse(payload);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new Error("Failed to load balancer config: request timed out");
       }
       throw error;
     }
-
-    if (!response.ok) {
-      throw new Error(await parseErrorMessage(response));
-    }
-
-    return response.json();
   }
 
-  static async createBalanceJob(file: File, config?: BalancerConfig): Promise<BalanceJobCreateResponse> {
+  static async createBalanceJob(
+    file: File,
+    config?: BalancerConfig,
+    tournamentId?: number | null
+  ): Promise<BalanceJobCreateResponse> {
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("player_data_file", file);
 
     if (config && Object.keys(config).length > 0) {
-      formData.append("config", JSON.stringify(config));
+      formData.append("config_overrides", JSON.stringify(config));
     }
 
-    let response: Response;
+    // Enables realtime job-status fan-out to everyone with this tournament's
+    // balancer page open (the topic is tournament-scoped).
+    if (tournamentId != null) {
+      formData.append("tournament_id", String(tournamentId));
+    }
+
     try {
-      response = await fetchWithTimeout(`${BALANCER_API_PREFIX}/jobs`, { method: "POST", body: formData }, 20_000);
+      const response = await apiFetch("balancer", "jobs", { method: "POST", body: formData, timeout: 20_000 });
+      return response.json();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new Error("Failed to create balancer job: request timed out");
       }
       throw error;
     }
-
-    if (!response.ok) {
-      throw new Error(await parseErrorMessage(response));
-    }
-
-    return response.json();
   }
 
   static async getBalanceJobStatus(jobId: string): Promise<BalanceJobStatusResponse> {
-    const response = await fetchWithTimeout(
-      `${BALANCER_API_PREFIX}/jobs/${jobId}`,
-      {
-        method: "GET"
-      },
-      10_000
-    );
-
-    if (!response.ok) {
-      throw new Error(await parseErrorMessage(response));
-    }
-
+    const response = await apiFetch("balancer", `jobs/${jobId}`, { timeout: 10_000 });
     return response.json();
   }
 
-  static async getBalanceJobResult(jobId: string): Promise<BalanceResponse> {
-    const response = await fetchWithTimeout(
-      `${BALANCER_API_PREFIX}/jobs/${jobId}/result`,
-      {
-        method: "GET"
-      },
-      20_000
-    );
-
-    if (!response.ok) {
-      throw new Error(await parseErrorMessage(response));
-    }
-
+  static async getBalanceJobResult(jobId: string): Promise<BalanceJobResult> {
+    const response = await apiFetch("balancer", `jobs/${jobId}/result`, { timeout: 20_000 });
     return response.json();
   }
 
-  static streamBalanceJob(
+  static async streamBalanceJob(
     jobId: string,
     handlers: {
       onEvent: (event: BalanceJobEvent) => void;
       onError?: (message: string) => void;
       onOpen?: () => void;
     }
-  ): () => void {
-    const source = new EventSource(`${BALANCER_API_PREFIX}/jobs/${jobId}/stream`, {
+  ): Promise<() => void> {
+    const token = await getTokenFromCookies("aqt_access_token");
+    const url = new URL(`${BALANCER_STREAM_PREFIX}/jobs/${jobId}/stream`, window.location.origin);
+
+    if (token) {
+      url.searchParams.set("token", token);
+    }
+
+    const source = new EventSource(url.toString(), {
       withCredentials: true
     });
     let isClosed = false;

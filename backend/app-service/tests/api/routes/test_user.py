@@ -232,8 +232,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
             models.Player(
                 id=ids["subject_cohort_player"],
                 name="compare-division-subject",
-                primary=True,
-                secondary=False,
+                sub_role="hitscan",
                 rank=3000,
                 div=division,
                 role=role,
@@ -244,8 +243,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
             models.Player(
                 id=ids["subject_other_player"],
                 name="compare-division-subject",
-                primary=True,
-                secondary=False,
+                sub_role="hitscan",
                 rank=3000,
                 div=other_division,
                 role=role,
@@ -256,8 +254,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
             models.Player(
                 id=ids["baseline_cohort_player"],
                 name="compare-division-baseline",
-                primary=True,
-                secondary=False,
+                sub_role="hitscan",
                 rank=3000,
                 div=division,
                 role=role,

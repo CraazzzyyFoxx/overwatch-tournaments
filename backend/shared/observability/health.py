@@ -1,16 +1,15 @@
-"""Enhanced health checks for service dependencies.
+"""Enhanced health checks for service dependencies."""
 
-Provides functions to check the health of PostgreSQL, Redis, and RabbitMQ
-with latency measurements for observability.
-"""
+from __future__ import annotations
 
 import time
+
 import httpx
 import redis.asyncio as aioredis
-from sqlalchemy import text
 from loguru import logger
+from sqlalchemy import text
 
-from shared.schemas.healthcheck import DependencyHealth
+from shared.schemas.healthcheck import DependencyHealth, HealthCheckResponse
 
 
 async def check_postgres(session_maker) -> DependencyHealth:
@@ -157,3 +156,30 @@ async def check_rabbitmq(broker_url: str | None) -> DependencyHealth:
             latency_ms=round(latency_ms, 2),
             details=str(e),
         )
+
+
+def aggregate_status(dependencies: list[DependencyHealth]) -> str:
+    """Reduce dependency statuses to a service-level readiness state."""
+    if any(d.status == "down" for d in dependencies):
+        return "degraded"
+    if any(d.status == "degraded" for d in dependencies):
+        return "degraded"
+    return "ok"
+
+
+def make_health_response(
+    *,
+    service: str,
+    version: str,
+    dependencies: list[DependencyHealth] | None = None,
+    status: str | None = None,
+    timestamp: int | None = None,
+) -> HealthCheckResponse:
+    deps = dependencies or []
+    return HealthCheckResponse(
+        status=status or aggregate_status(deps),
+        service=service,
+        timestamp=timestamp or int(time.time()),
+        version=version,
+        dependencies=deps,
+    )

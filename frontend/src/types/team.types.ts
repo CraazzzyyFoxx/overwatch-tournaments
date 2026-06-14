@@ -8,8 +8,7 @@ export interface Player {
   created_at: Date;
   updated_at: Date | null;
   name: string;
-  primary: boolean;
-  secondary: boolean;
+  sub_role: string | null;
   rank: number;
   division: number;
   role: string;
@@ -19,7 +18,8 @@ export interface Player {
   is_newcomer: boolean;
   is_newcomer_role: boolean;
   is_substitution: boolean;
-  relative_player: number;
+  related_player_id: number | null;
+  relative_player?: number | null;
 
   user: User;
 }
@@ -31,6 +31,7 @@ export interface Team {
   name: string;
   avg_sr: number;
   total_sr: number;
+  captain_id: number;
   tournament_id: number;
   players: Player[];
   tournament: Tournament | null;

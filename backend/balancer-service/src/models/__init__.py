@@ -8,5 +8,10 @@ from shared.models.map import *
 from shared.models.match import *
 from shared.models.standings import *
 from shared.models.team import *
+from shared.models.workspace import *
+from shared.models.division_grid import *
 from shared.models.tournament import *
+from shared.models.auth_user import *
 from shared.models.user import *
+from shared.models.balancer import *
+from shared.models.draft import *

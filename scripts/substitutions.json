@@ -1,0 +1,35 @@
+[
+  {
+    "tournament_id": 1,
+    "team_id": 20,
+    "user_id": 42,
+    "name": "mortred#22936",
+    "role": "dps",
+    "rank": 1000,
+    "primary": true,
+    "secondary": false,
+    "related_player_id": 100
+  },
+  {
+    "tournament_id": 1,
+    "team_id": 34,
+    "user_id": 25,
+    "name": "Wisparian#2636",
+    "role": "support",
+    "rank": 1800,
+    "primary": true,
+    "secondary": false,
+    "related_player_id": 168
+  },
+  {
+    "tournament_id": 1,
+    "team_id": 27,
+    "user_id": 31,
+    "name": "TheArtem#21991",
+    "role": "dps",
+    "rank": 600,
+    "primary": false,
+    "secondary": false,
+    "related_player_id": 134
+  }
+]

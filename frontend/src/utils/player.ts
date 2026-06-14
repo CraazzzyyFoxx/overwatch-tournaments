@@ -1,57 +1,107 @@
 import { Player } from "@/types/team.types";
 import { User, UserProfile } from "@/types/user.types";
 
-export const getPlayerType = (player: Player) => {
-  let type = "ㅤ";
-  if (player.role == "Damage" && player.primary) {
-    type = "Hitscan";
-  }
-  if (player.role == "Damage" && player.secondary) {
-    type = "Projectile";
-  }
-  if (player.role == "Support" && player.primary) {
-    type = "Main Heal";
-  }
-  if (player.role == "Support" && player.secondary) {
-    type = "Light Heal";
-  }
-  return type;
+/** Minimal shape required for `sortTeamPlayers` / TournamentTeamTable rendering. */
+export interface TeamRosterPlayer {
+  id: number;
+  name: string;
+  role: string | null;
+  sub_role: string | null;
+  rank: number;
+  division: number;
+  is_substitution: boolean;
+  is_newcomer: boolean;
+  is_newcomer_role: boolean;
+  related_player_id: number | null;
+  relative_player?: number | null;
+}
+
+type PlayerRoleInfo = {
+  role: string | null;
+  sub_role?: string | null;
 };
 
-export const sortTeamPlayers = (players: Player[]) => {
-  const formatedPlayers = players.map((player) => {
-    let priority = 1;
-    if (player.role === "Damage") {
-      priority = 2;
-    }
-    if (player.role === "Support") {
-      priority = 3;
-    }
-    return { ...player, priority };
-  });
+const SUB_ROLE_LABELS: Record<string, string> = {
+  hitscan: "Hitscan",
+  projectile: "Projectile",
+  main_heal: "Main Heal",
+  light_heal: "Light Heal"
+};
 
-  return formatedPlayers.sort((a, b) => {
-    // Sort by priority (role order: Tank > Damage > Support)
-    if (a.priority !== b.priority) {
-      return a.priority - b.priority;
-    }
+export const formatSubRoleLabel = (subRole: string | null | undefined) => {
+  if (!subRole) {
+    return null;
+  }
 
-    // Ensure substitutions are sorted below the player they replace
-    if (a.relative_player || b.relative_player) {
-      if (a.relative_player !== b.relative_player) {
-        return a.relative_player - b.relative_player;
+  return (
+    SUB_ROLE_LABELS[subRole] ??
+    subRole
+      .split(/[_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  );
+};
+
+export const getPlayerType = (player: PlayerRoleInfo) => {
+  const subRoleLabel = formatSubRoleLabel(player.sub_role);
+  if (subRoleLabel) {
+    return subRoleLabel;
+  }
+  return "ㅤ";
+};
+
+export const sortTeamPlayers = <P extends TeamRosterPlayer>(players: P[]): P[] => {
+  const getRolePriority = (role: string | null) => {
+    if (role === "Tank") return 1;
+    if (role === "Damage") return 2;
+    if (role === "Support") return 3;
+    return 4;
+  };
+
+  const playerById = new Map(players.map((p) => [p.id, p]));
+
+  // Build substitution graph: parent -> children (who replaced them)
+  const children = new Map<number, P[]>();
+  const roots: P[] = [];
+
+  for (const player of players) {
+    const relatedPlayerId = player.related_player_id ?? player.relative_player ?? null;
+    if (player.is_substitution && relatedPlayerId !== null && playerById.has(relatedPlayerId)) {
+      const list = children.get(relatedPlayerId) ?? [];
+      list.push(player);
+      children.set(relatedPlayerId, list);
+    } else {
+      roots.push(player);
+    }
+  }
+
+  // Sort children at each node by rank descending
+  for (const list of children.values()) {
+    list.sort((a, b) => b.rank - a.rank);
+  }
+
+  // DFS: flatten each substitution chain (player, then their replacements)
+  const flatten = (player: P): P[] => {
+    const result = [player];
+    const subs = children.get(player.id);
+    if (subs) {
+      for (const sub of subs) {
+        result.push(...flatten(sub));
       }
-      return Number(a.is_substitution) - Number(b.is_substitution);
     }
+    return result;
+  };
 
-    // Sort by rank within the same role (excluding substitutions)
-    if (!a.is_substitution && !b.is_substitution) {
-      return b.rank - a.rank;
-    }
-
-    // Keep substitutions relative to their main players
-    return 0;
+  // Sort roots by role priority, then by rank within same role
+  roots.sort((a, b) => {
+    const rp = getRolePriority(a.role) - getRolePriority(b.role);
+    if (rp !== 0) return rp;
+    return b.rank - a.rank;
   });
+
+  // Flatten: each root followed by its substitution chain
+  return roots.flatMap(flatten);
 };
 
 export const getPlayerImage = (profile: UserProfile, user: User) => {
@@ -72,3 +122,39 @@ export const getPlayerSlug = (battleTag: string | null | undefined) => {
   }
   return battleTag.replace("#", "-");
 };
+
+/** Reverse of getPlayerSlug: converts a URL slug back to the stored player name.
+ *  "CraazzzyyFox-2130" → "CraazzzyyFox#2130"
+ *  Names without a numeric suffix are returned unchanged.
+ */
+export const decodePlayerSlug = (slug: string): string => {
+  let decodedSlug = slug;
+
+  try {
+    decodedSlug = decodeURIComponent(slug);
+  } catch {
+    decodedSlug = slug;
+  }
+
+  return decodedSlug.replace(/-(\d+)$/, "#$1");
+};
+
+const LOCAL_HERO_SLUGS = new Set([
+  "ana", "ashe", "baptiste", "bastion", "brigitte", "cassidy", "doomfist", "dva",
+  "genji", "hanzo", "hazard", "illari", "junker-queen", "junkrat", "juno", "kiriko",
+  "lifeweaver", "lucio", "mauga", "mei", "mercy", "moira", "orisa", "pharah",
+  "reaper", "reinhardt", "roadhog", "sigma", "sojourn", "soldier-76", "sombra",
+  "symmetra", "torbjorn", "tracer", "venture", "widowmaker", "winston", "wrecking-ball",
+  "zarya", "zenyatta"
+]);
+
+export const getHeroIconUrl = (slug: string, imagePath?: string | null): string => {
+  if (imagePath) {
+    return imagePath;
+  }
+  if (LOCAL_HERO_SLUGS.has(slug)) {
+    return `/avatar/${slug}.jpg`;
+  }
+  return `/avatar/0.png`;
+};
+

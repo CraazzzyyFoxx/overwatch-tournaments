@@ -1,46 +1,37 @@
-from collections.abc import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import create_engine
+from shared.core.db import Base, DateTime, TimeStampIntegerMixin, TimeStampUUIDMixin, create_database
 
 from src.core.config import settings
 
-# Import shared base classes
-from shared.core.db import Base, TimeStampIntegerMixin, TimeStampUUIDMixin, DateTime
-
-__all__ = [
+__all__ = (
     "Base",
-    "TimeStampIntegerMixin", 
-    "TimeStampUUIDMixin",
     "DateTime",
-    "get_async_session",
+    "TimeStampIntegerMixin",
+    "TimeStampUUIDMixin",
+    "async_engine",
     "async_session_maker",
-    "session_maker",
+    "get_async_session",
     "init_db",
-]
+)
 
-# Create database engines
-async_engine = create_async_engine(url=settings.db_url_asyncpg, pool_size=10, max_overflow=20)
-engine = create_engine(url=settings.db_url)
+_db = create_database(
+    async_url=settings.db_url_asyncpg,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_timeout=settings.db_pool_timeout,
+    pool_recycle=settings.db_pool_recycle,
+    pool_pre_ping=settings.db_pool_pre_ping,
+    pool_use_lifo=settings.db_pool_use_lifo,
+    connect_timeout=settings.db_connect_timeout,
+    statement_timeout=settings.db_statement_timeout,
+    pgbouncer=settings.db_pgbouncer,
+)
 
-# Create session makers
-session_maker = sessionmaker(engine, class_=Session, expire_on_commit=False)
-async_session_maker = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+async_engine = _db.async_engine
+async_session_maker = _db.async_session_maker
+get_async_session = _db.get_async_session
 
 
 async def init_db() -> None:
-    """
-    Initialize database connection
-    Note: Tables are created by alembic migrations in the main app
-    This service just connects to the existing shared database
-    """
+    """Test database connection on startup."""
     async with async_engine.begin() as conn:
-        # Just test the connection
         await conn.run_sync(lambda _: None)
-
-
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session"""
-    async with async_session_maker() as session:
-        yield session

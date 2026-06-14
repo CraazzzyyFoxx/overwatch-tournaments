@@ -1,8 +1,5 @@
 import type { AuthUser, LinkedPlayer, OAuthProviderAvailability, OAuthProviderName, TokenPair } from "@/types/auth.types";
-import { fetchWithAuth } from "@/lib/fetch-with-auth";
-
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+import { apiFetch } from "@/lib/api-fetch";
 
 type OAuthUrlResponse = {
   provider: string;
@@ -10,63 +7,49 @@ type OAuthUrlResponse = {
   state: string;
 };
 
-async function authFetch(
-  path: string,
-  init?: Parameters<typeof fetch>[1]
-): Promise<Response> {
-  const url = `${AUTH_SERVICE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
-  return fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    }
-  });
-}
-
-async function authFetchWithAuth(
-  path: string,
-  init?: Parameters<typeof fetch>[1]
-): Promise<Response> {
-  const url = `${AUTH_SERVICE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
-  return fetchWithAuth(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    }
-  });
-}
+type ForwardedAuthHeaders = Record<string, string>;
 
 export const authService = {
   async getOAuthUrl(provider: OAuthProviderName): Promise<OAuthUrlResponse> {
-    const res = await authFetch(`/oauth/${provider}/url`, { method: "GET" });
+    const res = await apiFetch("auth", `/oauth/${provider}/url`, { throwOnError: false });
     if (!res.ok) throw new Error(`Failed to get ${provider} OAuth URL`);
     return res.json();
   },
 
   async getAvailableOAuthProviders(): Promise<OAuthProviderAvailability[]> {
-    const res = await authFetch("/providers", { method: "GET" });
+    const res = await apiFetch("auth", "/providers", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to load available OAuth providers");
     return res.json();
   },
 
-  async exchangeOAuthCode(provider: OAuthProviderName, code: string, state: string): Promise<TokenPair> {
-    const qs = new URLSearchParams({ code, state });
-    const res = await authFetch(`/oauth/${provider}/callback?${qs.toString()}`, {
-      method: "GET"
+  async exchangeOAuthCode(
+    provider: OAuthProviderName,
+    code: string,
+    state: string,
+    headers?: ForwardedAuthHeaders,
+  ): Promise<TokenPair> {
+    const res = await apiFetch("auth", `/oauth/${provider}/callback`, {
+      query: { code, state },
+      headers,
+      throwOnError: false
     });
     if (!res.ok) throw new Error(`Failed to complete ${provider} OAuth`);
     return res.json();
   },
 
-  async linkOAuth(provider: OAuthProviderName, code: string, state: string, accessToken: string): Promise<void> {
-    const res = await authFetch(`/oauth/${provider}/link`, {
+  async linkOAuth(
+    provider: OAuthProviderName,
+    code: string,
+    state: string,
+    accessToken: string,
+    headers?: ForwardedAuthHeaders,
+  ): Promise<void> {
+    const res = await apiFetch("auth", `/oauth/${provider}/link`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ code, state })
+      token: accessToken,
+      headers,
+      body: { code, state },
+      throwOnError: false
     });
 
     if (!res.ok) {
@@ -76,19 +59,18 @@ export const authService = {
 
   async me(accessToken?: string): Promise<AuthUser> {
     const res = accessToken
-      ? await authFetch("/me", {
-          method: "GET",
-          headers: { Authorization: `Bearer ${accessToken}` }
-        })
-      : await authFetchWithAuth("/me", { method: "GET" });
+      ? await apiFetch("auth", "/me", { token: accessToken, throwOnError: false })
+      : await apiFetch("auth", "/me", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to fetch current user");
     return res.json();
   },
 
-  async refresh(refreshToken: string): Promise<TokenPair> {
-    const res = await authFetch("/refresh", {
+  async refresh(refreshToken: string, headers?: ForwardedAuthHeaders): Promise<TokenPair> {
+    const res = await apiFetch("auth", "/refresh", {
       method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken })
+      headers,
+      body: { refresh_token: refreshToken },
+      throwOnError: false
     });
     if (!res.ok) throw new Error("Failed to refresh token");
     return res.json();
@@ -96,23 +78,22 @@ export const authService = {
 
   async getLinkedPlayers(accessToken?: string): Promise<LinkedPlayer[]> {
     const res = accessToken
-      ? await authFetch("/player/linked", {
-          method: "GET",
-          headers: { Authorization: `Bearer ${accessToken}` }
-        })
-      : await authFetchWithAuth("/player/linked", { method: "GET" });
+      ? await apiFetch("auth", "/player/linked", { token: accessToken, throwOnError: false })
+      : await apiFetch("auth", "/player/linked", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to fetch linked players");
     return res.json();
   },
 
-  async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+  async logout(accessToken?: string, refreshToken?: string, headers?: ForwardedAuthHeaders): Promise<void> {
     const res = accessToken
-      ? await authFetch("/logout", {
+      ? await apiFetch("auth", "/logout", {
           method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: refreshToken ? JSON.stringify({ refresh_token: refreshToken }) : undefined
+          token: accessToken,
+          headers,
+          body: refreshToken ? { refresh_token: refreshToken } : undefined,
+          throwOnError: false
         })
-      : await authFetchWithAuth("/logout", { method: "POST" });
+      : await apiFetch("auth", "/logout", { method: "POST", headers, throwOnError: false });
 
     // /logout returns 204
     if (!res.ok && res.status !== 204) {

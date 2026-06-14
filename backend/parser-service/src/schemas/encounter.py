@@ -1,7 +1,8 @@
 from src.schemas.base import BaseRead, Score
 from src.schemas.map import MapRead
+from src.schemas.stage import StageItemRead, StageRead
 from src.schemas.team import TeamRead
-from src.schemas.tournament import TournamentGroupRead, TournamentRead
+from src.schemas.tournament import TournamentRead
 
 __all__ = ("EncounterRead", "MatchRead")
 
@@ -13,12 +14,18 @@ class EncounterRead(BaseRead):
     score: Score
     round: int
     tournament_id: int
-    tournament_group_id: int | None
+    stage_id: int | None = None
+    stage_item_id: int | None = None
     challonge_id: int | None
+    status: str
     closeness: float | None
     has_logs: bool
+    result_status: str = "none"
+    submitted_by_id: int | None = None
+    confirmed_by_id: int | None = None
 
-    tournament_group: TournamentGroupRead | None
+    stage: StageRead | None
+    stage_item: StageItemRead | None
     tournament: TournamentRead | None
     home_team: TeamRead | None
     away_team: TeamRead | None
@@ -34,6 +41,7 @@ class MatchRead(BaseRead):
 
     encounter_id: int
     map_id: int
+    code: str | None = None
 
     home_team: TeamRead | None
     away_team: TeamRead | None

@@ -8,10 +8,11 @@ __all__ = ("TournamentDiscordChannel",)
 
 class TournamentDiscordChannel(db.TimeStampIntegerMixin):
     """Configuration for Discord log collection channels per tournament"""
-    __tablename__ = "tournament_discord_channel"
+    __tablename__ = "discord_channel"
+    __table_args__ = ({"schema": "log_processing"},)
 
     tournament_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.id", ondelete="CASCADE"),
+        ForeignKey("tournament.tournament.id", ondelete="CASCADE"),
         nullable=False,
         unique=True
     )

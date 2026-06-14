@@ -1,0 +1,38 @@
+[project]
+name = "shared"
+version = "0.1.0"
+description = "Shared ORM models, schemas, clients, and utilities used across anak-tournaments services"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "sqlalchemy>=2.0.37",
+    "sqlalchemy-utils>=0.41.2",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.3",
+    "pydantic[email]>=2.10.5",
+    "pydantic-settings>=2.7.1",
+    "loguru>=0.7.3",
+    "orjson>=3.10.14",
+    "httpx>=0.28.1",
+    "redis>=5.2.1",
+    "cashews>=7.4.0",
+    "tenacity>=9.0.0",
+    "faststream[rabbit]>=0.6.4",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "scalar-fastapi>=1.8.2",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Treat this directory as the `shared` package itself.
+# The parent folder is the project root; the package name is taken from `[project].name`.
+packages = ["shared"]
+package-dir = {"shared" = "."}
+
+[tool.setuptools.package-data]
+shared = ["**/*.py"]
+

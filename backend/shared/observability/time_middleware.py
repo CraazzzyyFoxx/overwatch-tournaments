@@ -5,10 +5,11 @@ Measures request processing time and adds X-Process-Time header to responses.
 """
 
 import time
+
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from loguru import logger
 
 
 class TimeMiddleware(BaseHTTPMiddleware):
@@ -46,8 +47,9 @@ class TimeMiddleware(BaseHTTPMiddleware):
         logger.bind(
             method=request.method,
             path=request.url.path,
+            status=response.status_code,
             status_code=response.status_code,
-            process_time_ms=process_time_ms,
+            duration_ms=process_time_ms,
         ).info("HTTP request processed")
 
         return response

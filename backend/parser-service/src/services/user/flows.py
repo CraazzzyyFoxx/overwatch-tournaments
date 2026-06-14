@@ -1,17 +1,61 @@
 import csv
 import re
+from datetime import UTC, datetime
 
 from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import errors, config
+from src.core import config, errors
 
 from . import service
 
-
 battle_tag_validator = re.compile(config.settings.battle_tag_regex, re.UNICODE)
+
+
+async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
+    battle_tags: list[schemas.UserBattleTagRead] = []
+    twitch: list[schemas.UserTwitchRead] = []
+    discord: list[schemas.UserDiscordRead] = []
+
+    unresolved = datetime(1, 1, 1, tzinfo=UTC)
+    if "battle_tag" in entities:
+        battle_tags = [
+            schemas.UserBattleTagRead.model_validate(tag, from_attributes=True)
+            for tag in user.battle_tag
+        ]
+    if "twitch" in entities:
+        twitch = [
+            schemas.UserTwitchRead.model_validate(twitch_identity, from_attributes=True)
+            for twitch_identity in sorted(
+                user.twitch,
+                key=lambda identity: unresolved
+                if identity.updated_at is None
+                else identity.updated_at,
+                reverse=True,
+            )
+        ]
+    if "discord" in entities:
+        discord = [
+            schemas.UserDiscordRead.model_validate(discord_identity, from_attributes=True)
+            for discord_identity in sorted(
+                user.discord,
+                key=lambda identity: unresolved
+                if identity.updated_at is None
+                else identity.updated_at,
+                reverse=True,
+            )
+        ]
+
+    return schemas.UserRead(
+        id=user.id,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        battle_tag=battle_tags,
+        twitch=twitch,
+        discord=discord,
+    )
 
 
 async def get(session: AsyncSession, user_id: int, entities: list[str]) -> models.User:
@@ -105,12 +149,14 @@ async def create(session: AsyncSession, data_in: schemas.UserCSV) -> models.User
 
         if data_in.twitch:
             if data_in.twitch not in twitch_names.keys():
-                await service.create_twitch(session, user, twitch=data_in.twitch)
+                if not await service.get_twitch(session, data_in.twitch):
+                    await service.create_twitch(session, user, twitch=data_in.twitch)
             else:
                 await service.update_twitch(session, twitch_names[data_in.twitch], name=data_in.twitch)
         if data_in.discord:
             if data_in.discord not in discord_names.keys():
-                await service.create_discord(session, user, discord=data_in.discord)
+                if not await service.get_discord(session, data_in.discord):
+                    await service.create_discord(session, user, discord=data_in.discord)
             else:
                 await service.update_discord(session, discord_names[data_in.discord], name=data_in.discord)
 

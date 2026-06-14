@@ -6,7 +6,7 @@ from src.services.map import flows as map_flows
 router = APIRouter(
     prefix="/maps",
     tags=[enums.RouteTag.MAP],
-    dependencies=[Depends(auth.require_role("admin"))],
+    dependencies=[Depends(auth.require_permission("map", "sync"))],
 )
 
 

@@ -36,20 +36,16 @@ export async function refreshAccessToken(): Promise<string | undefined> {
   // In SSR we rely on middleware to keep tokens fresh.
   if (typeof window === "undefined") return undefined;
 
-  const refreshToken = await getTokenFromCookies("aqt_refresh_token");
-  if (!refreshToken) return undefined;
-
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
-        const res = await fetch("/api/auth/refresh", {
+        const res = await fetch("/auth/refresh", {
           method: "POST",
+          cache: "no-store",
           credentials: "include",
           headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json"
+            Accept: "application/json"
           },
-          body: JSON.stringify({ refresh_token: refreshToken })
         });
 
         if (!res.ok) return undefined;

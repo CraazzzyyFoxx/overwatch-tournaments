@@ -6,7 +6,7 @@ from src.services.hero import flows as hero_flows
 router = APIRouter(
     prefix="/heroes",
     tags=[enums.RouteTag.HERO],
-    dependencies=[Depends(auth.require_role("admin"))],
+    dependencies=[Depends(auth.require_permission("hero", "sync"))],
 )
 
 

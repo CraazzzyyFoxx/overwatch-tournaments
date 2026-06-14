@@ -67,6 +67,18 @@ class ResilientHttpClient:
         self.default_headers = headers or {}
         self._client: httpx.AsyncClient | None = None
 
+    async def __aenter__(self) -> "ResilientHttpClient":
+        await self.start()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        await self.close()
+
     async def start(self) -> None:
         """Initialize the HTTP client with connection pooling.
 

@@ -1,0 +1,695 @@
+export const ru = {
+  common: {
+    draft: "Драфт",
+    back: "Назад",
+    cancel: "Отмена",
+    next: "Далее",
+    submit: "Отправить",
+    loading: "Загрузка...",
+    error: "Ошибка",
+    registered: "зарегистрировано",
+    players: "игроков",
+    inTeams: "в командах",
+    rostered: "В составах",
+    done: "завершено",
+    format: "Формат",
+    stages: "Этапы",
+    teams: "Команды",
+    participants: "Участники",
+    matches: "Матчи",
+    heroes: "Герои",
+    standings: "Таблица",
+    bracket: "Сетка",
+    rolesList: "Роли",
+    ranks: "Ранги",
+    bracketInstructions: "Перетаскивайте мышкой для перемещения по сетке / Нажмите Esc для выхода",
+    bracketFullscreen: "Во весь экран",
+    bracketExitFullscreen: "Выйти из полноэкранного режима (Esc)",
+    profile: "Профиль",
+    accountSettings: "Настройки аккаунта",
+    logout: "Выход",
+    language: "Язык",
+    noTeams: "Нет команд для отображения.",
+    noParticipants: "Участники не найдены.",
+    noStandings: "Таблица результатов пока недоступна.",
+    noMatches: "Матчи не найдены для этапа {stage}",
+    noStages: "Для этого турнира не настроены этапы",
+    noBracketMatches: "Для выбранного этапа матчи сетки не найдены",
+    noHeroData: "Нет данных о героях.",
+    playtimeLabel: "% игр. времени",
+    teamsCount: "{count} команд",
+    roundRobin: "круговая система",
+    swiss: "швейцарская система",
+    byPlaytime: "По игровому времени",
+    byPlacement: "По занятому месту",
+    byAvgSr: "По среднему SR",
+    byName: "По названию",
+    all: "Все",
+    group: "Группа",
+    groups: "Группы",
+    playoff: "Плей-офф",
+    playoffStandings: "Таблица плей-офф",
+    topAdvance: "ТОП {count} ПРОХОДЯТ",
+    buchholz: "Бухгольц",
+    headToHead: "Личные встречи",
+    scoreDiff: "Разница карт",
+    tiebreakers: "Тай-брейки",
+    tiebreakerMetrics: {
+      points: "Очки",
+      match_wins: "Победы в матчах",
+      head_to_head: "Личные встречи",
+      median_buchholz: "Медианный Бухгольц",
+      buchholz: "Бухгольц",
+      score_differential: "Разница карт",
+      manual_override: "Ручное переопределение"
+    },
+    combined: "Комбинированная",
+    groupStage: "Групповой этап",
+    confirmCheckIn: "Подтвердить чек-ин?",
+    checkInDesc: "Вы будете отмечены как участник турнира, готовый к игре. Подтверждайте только в том случае, если вы действительно готовы играть.",
+    withdrawReg: "Отозвать регистрацию?",
+    withdrawDesc: "Ваша заявка будет помечена как отозванная, и вы не сможете зарегистрироваться на этот турнир снова.",
+    confirmWithdraw: "Подтвердить отзыв",
+    checkingIn: "Выполняется чек-ин...",
+    withdrawing: "Отзыв регистрации...",
+    checkIn: "Чек-ин",
+    withdraw: "Отозвать регистрацию",
+    yourRegistration: "Ваша регистрация",
+    pendingReview: "На рассмотрении",
+    approved: "Одобрено",
+    rejected: "Отклонено",
+    withdrawn: "Отозвано",
+    banned: "Забанен",
+    incomplete: "Неполная",
+    searchParticipants: "Поиск участников...",
+    columns: "Колонки",
+    reset: "Сбросить",
+    more: "еще",
+    smurfBattleTags: "Смурф BattleTags",
+    smurfDesc: "Все зарегистрированные смурф BattleTags этого участника.",
+    history: "История",
+    status: "Статус",
+    balancer: "Балансировщик",
+    admission: "Допуск",
+    admissionStatus: {
+      admitted: "Допущен",
+      notAdmitted: "Не допущен",
+      pendingCheckIn: "Допущен (Ожидает чек-ин)"
+    },
+    yes: "Да",
+    no: "Нет",
+    noAccess: "Нет доступа",
+    notCaptain: "Вы не являетесь капитаном этой команды",
+    roleVerificationFailed: "Не удалось проверить роль",
+    tournamentNotFound: "Турнир не найден.",
+    tournaments: "Турниры",
+    league: "Лига",
+    formatLabel: {
+      groupsPlayoff: "Группы → Плей-офф",
+      playoffBracket: "Сетка плей-офф",
+      groupStage: "Групповой этап"
+    },
+    statusBadge: {
+      draft: "Черновик",
+      registration: "Регистрация",
+      check_in: "Чек-ин",
+      live: "В эфире",
+      playoffs: "Плей-офф",
+      completed: "Завершен",
+      archived: "Архивирован"
+    },
+    roles: {
+      tank: "Танк",
+      dps: "Урон",
+      support: "Поддержка",
+      flex: "Flex"
+    },
+    subroles: {
+      hitscan: "Хитскан",
+      projectile: "Проджектайл",
+      main_heal: "Мейн Саппорт",
+      light_heal: "Флекс Саппорт",
+      main_tank: "Мейн Танк",
+      off_tank: "Офф Танк",
+      flanker: "Фланкер",
+      flex_dps: "Флекс ДД",
+      flex_support: "Флекс Саппорт"
+    },
+    subrolesShort: {
+      hitscan: "ХС",
+      projectile: "ПРОДЖ",
+      main_heal: "МС",
+      light_heal: "ФС",
+      main_tank: "МТ",
+      off_tank: "ОТ",
+      flanker: "ФЛК",
+      flex_dps: "ФД",
+      flex_support: "ФС"
+    }
+  },
+  registration: {
+    wizard: {
+      title: "Регистрация",
+      titleFor: "Регистрация на {name}",
+      step1Desc: "Шаг 1 - Подтвердите игровые аккаунты.",
+      step2Desc: "Шаг 2 - Выберите предпочитаемую роль.",
+      step3Desc: "Шаг 3 - Дополнительная информация для организаторов.",
+      steps: {
+        accounts: "Аккаунты",
+        roles: "Роли",
+        details: "Детали"
+      },
+      validation: {
+        battleTagRequired: "Требуется BattleTag.",
+        smurfTagsRequired: "Добавьте хотя бы один смурф-аккаунт.",
+        discordRequired: "Требуется Discord.",
+        twitchRequired: "Требуется Twitch.",
+        primaryRoleRequired: "Выберите основную роль или включите Flex перед продолжением.",
+        fallbackRoleRequired: "Для этого турнира требуется хотя бы одна запасная роль.",
+        topHeroesRequired: "Выберите хотя бы одного топ-героя перед продолжением.",
+        notesRequired: "Обязательное поле.",
+        fieldRequired: "Заполните обязательное поле: {label}.",
+        invalidFormat: "Неверный формат: {label}."
+      }
+    },
+    accounts: {
+      title: "Ваши аккаунты",
+      desc: "Мы автоматически заполнили ваши привязанные аккаунты. Измените их при необходимости.",
+      battleTag: "BattleTag",
+      smurfs: "Смурф-аккаунты",
+      discord: "Discord",
+      twitch: "Twitch",
+      addSmurfPlaceholder: "Добавить смурф BattleTag",
+      addSmurfButton: "Добавить"
+    },
+    roles: {
+      title: "Выберите свою роль",
+      desc: "Сначала укажите вашу основную роль. Затем выберите запасные роли, на которые мы сможем вас поставить, если во время балансировки команд возникнет их нехватка.",
+      primary: {
+        title: "Основная роль",
+        desc: "Это роль, на которую вы будете назначены по умолчанию."
+      },
+      secondary: {
+        title: "Запасные роли",
+        required: "Обязательно",
+        optional: "Опционально",
+        clearAll: "Очистить все",
+        selectAll: "Выбрать все",
+        descEmptyPrimary: "Сначала выберите основную роль, чтобы увидеть доступные варианты запасных ролей.",
+        descFlex: "Flex уже охватывает все роли, поэтому запасные роли не требуются.",
+        descFallback: "Это запасные роли. Если в команде не будет хватать игроков на одну из них, мы можем распределить вас туда.",
+        emptyStateFlex: "Flex уже охватывает все роли, поэтому запасные роли не нужны для этой регистрации.",
+        emptyStateChoosePrimary: "Сначала выберите основную роль. После этого мы покажем две запасные роли, на которые вас также можно будет назначить."
+      },
+      flex: {
+        title: "Flex (Любая роль)",
+        desc: "Все роли с равным приоритетом"
+      },
+      specialization: "Специализация",
+      roleSpecialization: "Специализация {role}",
+      any: "Любой",
+      topHeroes: {
+        title: "Топ героев",
+        desc: "Выберите до {max} героев на каждую роль, на которых играете лучше всего.",
+        anyRole: "Любая роль",
+        count: "{count}/{max}"
+      }
+    },
+    details: {
+      title: "Дополнительные детали",
+      descWithFields: "Почти готово! Заполните дополнительную информацию.",
+      descNoFields: "Дополнительные поля не требуются. Вы готовы отправить заявку!",
+      streamPov: "Трансляция POV",
+      streamPovLabel: "Я буду стримить свой POV",
+      notes: "Примечания",
+      notesPlaceholder: "Все, что вы хотите сообщить организаторам"
+    },
+    button: {
+      closed: "Регистрация закрыта",
+      loginToRegister: "Войти для регистрации",
+      register: "Зарегистрироваться"
+    },
+    myCard: {
+      title: "Ваша заявка",
+      status: "Статус заявки",
+      checkInStatus: "Чек-ин",
+      checkedIn: "Пройден",
+      checkInRequired: "Требуется чек-ин",
+      checkInNotStarted: "Ожидание чек-ина",
+      checkInClosed: "Закрыт",
+      primaryRole: "Основная роль",
+      secondaryRoles: "Запасные роли",
+      noSecondaryRoles: "Запасные роли отсутствуют",
+      accounts: "Привязанные аккаунты",
+      details: "Детали регистрации",
+      streamPovActive: "Будет транслировать POV",
+      streamPovInactive: "Не будет транслировать POV",
+      noNotes: "Примечания отсутствуют",
+      checkInSuccess: "Вы подтвердили участие на турнире!",
+      pendingCheckInDesc: "Заявка одобрена. Чек-ин начнется позже.",
+      pendingReviewDesc: "Заявка находится в статусе рассмотрения организаторами турнира.",
+      showDetails: "Подробнее",
+      hideDetails: "Скрыть"
+    }
+  },
+  draft: {
+    loading: "Загрузка драфта…",
+    notYourPick: "Дождитесь своей очереди для пика",
+    round: "Раунд",
+    pick: "Пик",
+    onTheClock: "На часах",
+    state: {
+      setup: "Настройка",
+      ready: "Готов",
+      live: "В эфире",
+      paused: "Пауза",
+      completed: "Завершён",
+      cancelled: "Отменён"
+    },
+    empty: {
+      title: "Драфта пока нет",
+      body: "Драфт ещё не настроен для этого турнира."
+    },
+    roster: { empty: "Пусто" },
+    pool: { title: "Доступные игроки", empty: "Нет доступных игроков" },
+    actions: { confirm: "Подтвердить пик" },
+    admin: {
+      start: "Начать драфт",
+      pause: "Пауза",
+      resume: "Продолжить",
+      rollback: "Откатить последний пик",
+      cancel: "Отменить драфт",
+      export: "Экспорт в команды"
+    },
+    bottomPanel: {
+      readyToPick: "Готов к выбору",
+      yourTurn: "Ваша очередь выбирать",
+      selectPlayer: "Выберите игрока",
+      selectPrompt: "Выберите игрока из списка ниже, чтобы подготовить пик",
+      waitingTurn: "Ожидание очереди",
+      yourTurnIn: "Ваша очередь через {count} пика(ов)",
+      yourTurnInSingular: "Ваша очередь через {count} пик",
+      yourTurnInPlural: "Ваша очередь через {count} пиков",
+      allPicksDone: "Все ваши пики завершены",
+      liveDraft: "Идет драфт",
+      currentlyPicking: "Сейчас выбирает",
+      draftPaused: "Драфт на паузе",
+      draftCompleted: "Драфт завершен",
+      draftCancelled: "Драфт отменен",
+      waitingStart: "Ожидание начала"
+    },
+    presence: {
+      title: "Капитаны • {online} из {total} в сети",
+      watching: "{count} смотрят",
+      offline: "офлайн"
+    }
+  },
+  matchEdit: {
+    title: "Редактировать матч",
+    pendingConfirmation: "Ожидает подтверждения",
+    disputed: "Спор",
+    matchScore: "Счет матча",
+    manualEntry: "Ручной ввод результата",
+    resultPresets: "Быстрый выбор",
+    status: "Статус",
+    matchCloseness: "Близость матча",
+    closenessHint: "Редактируется только общий результат. Карты появятся после обработки логов.",
+    cancel: "Отмена",
+    save: "Сохранить",
+    confirming: "Подтверждение...",
+    confirmResult: "Подтвердить результат",
+    saving: "Сохранение...",
+    negativeScoreError: "Счет матча не может быть отрицательным",
+    matchUpdated: "Матч обновлен",
+    resultConfirmed: "Результат подтверждён",
+    saveError: "Ошибка",
+    saveErrorMessage: "Не удалось сохранить",
+    confirmErrorMessage: "Не удалось подтвердить",
+    presetDescriptions: {
+      "Home sweep": "Сухая победа хозяев",
+      "Home close win": "Плотная победа хозяев",
+      "Draw": "Ничья",
+      "Away close win": "Плотная победа гостей",
+      "Away sweep": "Сухая победа гостей"
+    }
+  },
+  matchReport: {
+    title: "Репорт матча",
+    quickResult: "Быстрый результат",
+    matchQuality: "Качество матча",
+    howClose: "Насколько близкой была серия",
+    submit: "Отправить",
+    submitting: "Отправка...",
+    submittedForConfirmation: "Результат отправлен на подтверждение",
+    submitErrorMessage: "Не удалось отправить",
+    qualityDescriptions: {
+      1: "В одни ворота",
+      2: "Почти в одну калитку",
+      3: "Слабое сопротивление",
+      4: "Обычный матч",
+      5: "Равная игра",
+      6: "Небольшой перевес",
+      7: "Хорошая борьба",
+      8: "Очень плотно",
+      9: "Жара",
+      10: "До последнего вздоха"
+    },
+    qualityLegend: {
+      oneSided: "1 - односторонний матч",
+      toTheEnd: "10 - до последнего"
+    }
+  },
+  rankAutofill: {
+    title: "Autofill рангов",
+    subtitle: "Настройте цепочку источников и точечно выберите игроков для обновления.",
+    backToRegistrations: "К регистрациям",
+    chainTitle: "Цепочка источников",
+    chainDescription:
+      "Перетащите для порядка приоритета, отключите ненужные источники и при необходимости ограничьте давность (турниры для истории/аналитики, дни для OW).",
+    toggleChainAria: "Свернуть/развернуть цепочку источников",
+    overwrite: "Перезаписывать существующие",
+    overwriteAria: "Перезаписывать существующие ранги",
+    addToBalancer: "Перемещать в balancer",
+    addToBalancerAria: "Перемещать подходящих в balancer",
+    allowPartial: "Частично (заполнять найденные роли, даже если не все найдены)",
+    allowPartialAria: "Частичное применение",
+    previewUpdating: "Обновление превью…",
+    previewTitle: "Превью",
+    previewDescription: "Приоритетный fallback по ролям. Только главный BattleTag.",
+    searchPlaceholder: "Поиск игроков…",
+    mismatchOnly: "Только расхождения",
+    mismatchOnlyAria: "Показывать только игроков, у которых текущий ранг отличается от предложенного",
+    badgeMismatch: "расхождение",
+    noMatches: "Нет игроков по фильтрам.",
+    previewNotLoaded: "Превью не загружено.",
+    previewErrorTitle: "Не удалось загрузить превью",
+    previewErrorGeneric: "Ошибка запроса",
+    selectedCount: "Выбрано игроков: {count}",
+    apply: "Применить к {count}",
+    noTournamentTitle: "Выберите турнир",
+    noTournamentDescription: "Выберите турнир в сайдбаре, прежде чем настраивать autofill рангов.",
+    successTitle: "Ранги проставлены",
+    successDescription: "{applied} игрок(ов), {roles} ранг(ов) обновлено. Пропущено: {skipped}.",
+    successBalancerSuffix: " {count} → balancer.",
+    errorTitle: "Не удалось проставить ранги",
+    stats: {
+      players: "Игроки",
+      update: "Обновить",
+      ranks: "Ранги",
+      toBalancer: "→ Balancer",
+      unverified: "Не подтв.",
+      skipped: "Пропуск"
+    },
+    sections: {
+      assign: "К назначению",
+      skipped: "Пропущены",
+      alreadySet: "Уже заданы"
+    },
+    selectAllAria: "Выбрать всех",
+    selectAria: "Выбрать {name}",
+    dragAria: "Перетащить этап",
+    enableAria: "Включить {label}",
+    windowAria: "Окно для {label}",
+    noRanksToUpdate: "Нет рангов к обновлению.",
+    noneSkipped: "Никто не пропущен.",
+    noUnchanged: "Нет неизменённых регистраций.",
+    skippedFallback: "Пропущен",
+    unchangedFallback: "Изменения не нужны.",
+    badgePartial: "частично",
+    badgeUnverified: "не подтверждён",
+    pillUnverified: "не подтверждён",
+    pillMissing: "нет",
+    source: {
+      ow: {
+        label: "Overwatch rank",
+        description: "Недельный композит снапшотов OW по главному BattleTag."
+      },
+      division_history: {
+        label: "История balancer",
+        description: "Последний ранг из прошлых balancer-регистраций."
+      },
+      analytics: {
+        label: "Аналитика",
+        description: "Последний ранг из участия в прошлых турнирах."
+      }
+    },
+    window: {
+      daysSuffix: "дн.",
+      tournamentsSuffix: "турн.",
+      daysPlaceholder: "7",
+      tournamentsPlaceholder: "все"
+    }
+  },
+  analytics: {
+    briefing: {
+      eyebrow: "Аналитика турнира",
+      rankedBy: "алгоритм: {algorithm}",
+      titleFallback: "Аналитика турнира",
+      pickPrompt: "Выберите турнир и алгоритм, чтобы увидеть сводку.",
+      tournament: "Турнир",
+      algorithm: "Алгоритм",
+      selectTournament: "Выберите турнир",
+      selectAlgorithm: "Выберите алгоритм",
+      loadingTournaments: "Загрузка турниров...",
+      loadingAlgorithms: "Загрузка алгоритмов...",
+      errorTournaments: "Не удалось загрузить турниры",
+      errorAlgorithms: "Не удалось загрузить алгоритмы"
+    },
+    verdict: {
+      headline: "Команд: {teams} · Игроков: {players}",
+      moves: "Вероятных смен дивизиона: {count}",
+      flags: "Флагов на разбор: {count}",
+      misses: "Команд с сильным промахом прогноза: {count}",
+      newcomers: "Новичков: {count}",
+      forecast: "прогноз мимо в среднем на ~{delta} мест"
+    },
+    triage: {
+      title: "Требует внимания",
+      allClear: "Всё спокойно — нет флагов, сюрпризов и новичков для разбора.",
+      flags: "Флаги на разбор",
+      misses: "Промахи прогноза",
+      moves: "Вероятные смены дивизиона",
+      newcomers: "Новички",
+      forecastFinished: "прогноз {predicted} · итог {finished}",
+      newPlayer: "новый игрок",
+      newRole: "новая роль"
+    },
+    standings: {
+      title: "Таблица",
+      sortedBy: "Команд: {count} · сортировка: {mode}",
+      sortStandings: "По местам",
+      sortPredicted: "По прогнозу",
+      sortShift: "По сдвигу",
+      record: "счёт",
+      confidence: "уверенность",
+      predicted: "Прогноз {place}",
+      predictedRange: "Прогноз {mean} (p10–p90 {p10}–{p90})",
+      manual: "вручную",
+      colRole: "Роль",
+      colBattleTag: "Battle tag",
+      colCurrent: "Текущий",
+      colForecast: "Прогноз",
+      colMove2: "Сдвиг 2",
+      colMove1: "Сдвиг 1",
+      colSignal: "Сигнал",
+      colImpact: "Импакт",
+      colVsLocal: "к похожим",
+      colConfidence: "Уверенность",
+      colManual: "Вручную",
+      colFlags: "Флаги",
+      editManualShift: "Изменить ручной сдвиг"
+    },
+    forecast: {
+      up: "Вверх",
+      down: "Вниз",
+      hold: "Без изменений",
+      by: "на ~{magnitude} {unit}",
+      confidence: "Уверенность: {label}",
+      confidenceWithPct: "Уверенность: {label} ({pct}%)",
+      divisionUnit: "див"
+    },
+    confidence: {
+      high: "Высокая",
+      medium: "Средняя",
+      low: "Низкая"
+    },
+    organizer: {
+      title: "Инструменты организатора",
+      subtitle: "пересчёт · обучение · ручные правки"
+    },
+    deepDive: {
+      title: "Подробнее",
+      subtitle: "горизонт прогноза · шансы в таблице · качество матчей"
+    },
+    page: {
+      chooseParams: "Выберите параметры",
+      chooseParamsDesc: "Выберите турнир и алгоритм, чтобы открыть аналитику.",
+      unavailable: "Аналитика недоступна",
+      unavailableDesc: "Не удалось загрузить аналитику для выбранных параметров.",
+      noTeams: "Нет команд",
+      noTeamsDesc: "Для выбранного турнира команды не найдены."
+    },
+    horizon: {
+      title: "Горизонт: прогноз vs факт",
+      subtitle: "Пустое кольцо — прогноз. Закрашенная точка — фактическое место.",
+      predicted: "Прогноз",
+      actual: "Факт",
+      predictedTip: "Прогноз: {place}",
+      actualTip: "Факт: {place}",
+      deltaAvg: "Средн. Δ"
+    },
+    distribution: {
+      title: "Распределение прогноза мест",
+      subtitle: "Симуляция Монте-Карло (5000 итераций) поверх калиброванной попарной модели вероятности побед.",
+      team: "Команда",
+      mean: "Среднее (p10–p90)",
+      top1: "P(топ 1)",
+      top3: "P(топ 3)",
+      top8: "P(топ 8)",
+      distribution: "Распределение",
+      unavailable: "Standings v2 недоступен. Сначала обучите модель.",
+      noData: "Для этого турнира прогнозов пока нет."
+    },
+    matchQuality: {
+      title: "Качество матчей и аномалии",
+      subtitle: "Пост-оценка по энкаунтерам (насколько близко, ожидаемо, ровно) плюс флаги аномалий.",
+      encounter: "Энкаунтер #{id}",
+      comp: "близко",
+      pred: "ожидаемо",
+      skill: "ровно",
+      unavailable: "Качество матчей недоступно. Сначала запустите инференс.",
+      noData: "Строк качества матчей пока нет.",
+      confirm: "Подтвердить — это правда",
+      dismiss: "Отклонить — ложный флаг"
+    },
+    anomalyLegend: {
+      trigger: "Что значат флаги",
+      title: "Флаги аномалий",
+      note: "Флаги — это подсказки к разбору, а не вердикты."
+    },
+    explanation: {
+      trigger: "Почему такая оценка?",
+      title: "Что повлияло на оценку",
+      subtitle: "Статы, которые подняли или опустили её относительно средней по этой роли.",
+      raised: "подняла",
+      lowered: "опустила",
+      loading: "Загрузка…",
+      unavailable: "Объяснение пока недоступно."
+    },
+    features: {
+      final_blows_p10: "Добивания / 10 мин",
+      hero_damage_p10: "Урон по героям / 10 мин",
+      all_damage_p10: "Весь урон / 10 мин",
+      damage_blocked_p10: "Заблокированный урон / 10 мин",
+      damage_taken_p10: "Полученный урон / 10 мин",
+      objective_kills_p10: "Убийства на точке / 10 мин",
+      solo_kills_p10: "Соло-убийства / 10 мин",
+      eliminations_p10: "Убийства / 10 мин",
+      deaths_p10: "Смерти / 10 мин",
+      healing_p10: "Лечение / 10 мин",
+      self_healing_p10: "Самолечение / 10 мин",
+      defensive_assists_p10: "Защитные ассисты / 10 мин",
+      offensive_assists_p10: "Атакующие ассисты / 10 мин",
+      weapon_accuracy: "Точность оружия",
+      critical_hit_accuracy: "Точность по криту",
+      ult_economy: "Экономика ультимейта",
+      mu_gap: "Разрыв в силе с соперником",
+      opp_avg_mu: "Сила соперника",
+      team_avg_mu: "Сила своей команды",
+      rank: "SR при регистрации",
+      won: "Победа на карте",
+      score_delta: "Разница счёта",
+      is_home: "Игра дома",
+      is_newcomer: "Новичок",
+      home_score: "Счёт дома",
+      away_score: "Счёт в гостях"
+    },
+    glossary: {
+      confidence: {
+        label: "Уверенность",
+        plain: "Насколько модель уверена в прогнозе — зависит от объёма истории и данных матчей."
+      },
+      shift: {
+        label: "Коррекция дивизиона",
+        plain: "Предлагаемое изменение дивизиона игрока на следующий турнир (＋ вверх, − вниз)."
+      },
+      impact: {
+        label: "Импакт",
+        plain: "Насколько игрок сыграл лучше/хуже ожидаемого для матчапа — 0–100 в рамках его роли."
+      },
+      vs_local: {
+        label: "к похожим игрокам",
+        plain: "Игра относительно игроков той же роли и близкого дивизиона (0 = средне, ＋ выше, − ниже)."
+      },
+      points: {
+        label: "Сигнал сдвига",
+        plain: "Сырой сигнал прогноза дивизиона — чем больше, тем сильнее толчок вверх/вниз."
+      },
+      recent_moves: {
+        label: "Недавние сдвиги",
+        plain: "Изменения дивизиона за два последних турнира игрока."
+      },
+      forecast_place: {
+        label: "Прогноз места",
+        plain: "Где модель ожидает финиш команды."
+      },
+      likely_range: {
+        label: "Вероятный финиш",
+        plain: "Где команда оказывается в 80% симуляций турнира (10–90-й перцентиль)."
+      },
+      prob_top: {
+        label: "Шанс на топ",
+        plain: "Доля симуляций, где команда финишировала в топ-N."
+      },
+      competitiveness: {
+        label: "Насколько близко",
+        plain: "Насколько матч был качельным — 100 это триллер, 0 разгром."
+      },
+      predictability: {
+        label: "Насколько ожидаемо",
+        plain: "Насколько результат совпал с пред-матчевым прогнозом — 100 значит как ожидалось."
+      },
+      skill_balance: {
+        label: "Насколько ровно",
+        plain: "Насколько равны рейтинги команд — 100 это идеально ровный матчап."
+      },
+      match_quality: {
+        label: "Качество матча",
+        plain: "Зрелищность: смесь того, насколько близко, ожидаемо и ровно прошёл матч."
+      },
+      forecast_miss: {
+        label: "Промах прогноза",
+        plain: "Насколько прогноз разошёлся с реальным финишем, в местах."
+      },
+      evidence: {
+        label: "Свидетельства",
+        plain: "Взвешенный объём истории за прогнозом — больше данных, выше уверенность."
+      },
+      newcomer: {
+        label: "Новичок",
+        plain: "Играет первый турнир или впервые в этой роли."
+      },
+      why_score: {
+        label: "Почему такой счёт",
+        plain: "Статы игрока, сильнее всего двинувшие импакт вверх или вниз."
+      },
+      smurf: {
+        label: "Возможный смурф",
+        plain: "Играет заметно сильнее своего дивизиона — возможно, сильный игрок на аккаунте с заниженным рангом."
+      },
+      throw: {
+        label: "Возможный слив",
+        plain: "Похоже, перестал стараться по ходу серии — игра резко просела относительно его обычного уровня."
+      },
+      troll: {
+        label: "Возможный griefing",
+        plain: "Регулярно играет ниже собственного уровня и тянет команду вниз."
+      },
+      sandbag: {
+        label: "Возможный сэндбэг",
+        plain: "Один неожиданно слабый турнир, выбивающийся из обычных результатов игрока."
+      },
+      reasonsLabel: "Почему отмечено"
+    }
+  }
+};

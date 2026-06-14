@@ -2,13 +2,14 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import schemas
+from src.core import config
 
 from . import service
 
 
 async def fetch_gamemodes() -> list[schemas.OverfastGamemode]:
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get("https://overfast.craazzzyyfoxx.me/gamemodes")
+        response = await client.get(f"{config.settings.overfast_base_url}/gamemodes")
         response.raise_for_status()
 
     return [schemas.OverfastGamemode.model_validate(gamemode) for gamemode in response.json()]

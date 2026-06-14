@@ -12,10 +12,11 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import Image from "next/image";
-import { LogOut, Settings, UserIcon } from "lucide-react";
+import { Globe, LogOut, Settings, UserIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
+import { useTranslation } from "@/i18n/LanguageContext";
 
 type UserMenuProps = {
   username: string;
@@ -29,6 +30,7 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
   const { push } = useRouter();
   const clearAuth = useAuthProfileStore((s) => s.clear);
   const openSettings = useAccountSettingsModalStore((s) => s.open);
+  const { locale, setLocale, t } = useTranslation();
 
   const handleLogout = () => {
     // Clear auth store before redirecting
@@ -40,7 +42,7 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Avatar className="h-8 w-8 aspect-square">
+        <Avatar className="h-8 w-8 aspect-square cursor-pointer">
           <AvatarImage src={avatarUrl ?? undefined} />
           <AvatarFallback>
             <Image src="/discord-white.svg" alt="Discord" width={16} height={16} />
@@ -63,25 +65,37 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
         <DropdownMenuSeparator />
         <DropdownMenuGroup className="p-1 space-y-1">
           <DropdownMenuItem 
-            onClick={() => openSettings("profile")}
-            className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Account settings</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
             onClick={() => push(profileHref)}
             className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
           >
             <UserIcon className="mr-2 h-4 w-4" />
-            <span>Profile</span>
+            <span>{t("common.profile")}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => openSettings("profile")}
+            className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            <span>{t("common.accountSettings")}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => setLocale(locale === "en" ? "ru" : "en")}
+            className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
+          >
+            <Globe className="mr-2 h-4 w-4" />
+            <div className="flex flex-1 items-center justify-between">
+              <span>{t("common.language")}</span>
+              <span className="uppercase text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/70 font-semibold">
+                {locale}
+              </span>
+            </div>
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={handleLogout}
             className="cursor-pointer focus:bg-red-500/20 focus:text-red-400 text-red-500 transition-colors rounded-md"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            <span>Logout</span>
+            <span>{t("common.logout")}</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

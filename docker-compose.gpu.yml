@@ -1,0 +1,34 @@
+# Optional override for local machines with an NVIDIA GPU.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile workers up -d --build analytics analytics-worker
+#
+# Requirements on Windows:
+#   - Docker Desktop running Linux containers with the WSL2 backend
+#   - NVIDIA Windows driver with WSL2 CUDA support
+#   - `docker run --rm --gpus all nvidia/cuda:12.9.0-base-ubuntu22.04 nvidia-smi` works
+
+x-analytics-gpu-env: &analytics-gpu-env
+  ML_TRAIN_DEVICE: ${ML_TRAIN_DEVICE:-auto}
+  ML_GPU_FALLBACK: ${ML_GPU_FALLBACK:-true}
+  NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+  NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+
+x-nvidia-gpu-device: &nvidia-gpu-device
+  driver: nvidia
+  count: all
+  capabilities: [gpu]
+
+services:
+  analytics-worker:
+    image: registry.craazzzyyfoxx.me/aqt-analytics-worker-gpu:dev
+    build:
+      context: ./backend
+      dockerfile: analytics-worker.gpu.Dockerfile
+    environment:
+      <<: *analytics-gpu-env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - *nvidia-gpu-device

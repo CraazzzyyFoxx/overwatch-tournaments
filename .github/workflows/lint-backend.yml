@@ -53,11 +53,32 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           version: "0.4.15"
           enable-cache: true
       - run: uv run bash scripts/lint.sh
+        working-directory: backend
+
+  lint-tournament-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.4.15"
+          enable-cache: true
+      - name: Ruff check tournament-service
+        run: uv run ruff check tournament-service/main.py tournament-service/serve.py tournament-service/src tournament-service/tests
+        working-directory: backend
+      - name: Ruff format check tournament-service
+        run: uv run ruff format --check tournament-service/main.py tournament-service/serve.py tournament-service/src tournament-service/tests
         working-directory: backend

@@ -44,7 +44,7 @@ async def get_by_name_and_gamemode(session: AsyncSession, name: str, gamemode: s
 
 async def get_all(
     session: AsyncSession,
-    params: pagination.PaginationParams,
+    params: pagination.PaginationSortParams,
 ) -> tuple[typing.Sequence[models.Map], int]:
     query = sa.select(models.Map)
     query = params.apply_pagination_sort(query, models.Map)
