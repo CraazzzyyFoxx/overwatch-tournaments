@@ -53,4 +53,12 @@ export default class statisticsService {
       query: { ...base.query, sort: "value", order: "desc" },
     }).then((res) => res.json());
   }
+
+  static async getTopWonMapsPlayers(opts?: StatsOpts): Promise<PaginatedResponse<PlayerStatistics>> {
+    const base = buildWorkspaceOpts(opts);
+    return apiFetch("app", "statistics/won-maps", {
+      ...base,
+      query: { ...base.query, sort: "value", order: "desc" },
+    }).then((res) => res.json());
+  }
 }
