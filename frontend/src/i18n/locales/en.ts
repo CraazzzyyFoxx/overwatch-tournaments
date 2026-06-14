@@ -673,20 +673,21 @@ export const en = {
       },
       smurf: {
         label: "Possible smurf",
-        plain: "Performing far above their division — may be an under-ranked account."
+        plain: "Playing well above their division — could be a strong player on an under-ranked account."
       },
       throw: {
         label: "Possible throw",
-        plain: "A sharp drop in performance partway through a series."
+        plain: "Looks like they stopped trying mid-series — play dropped sharply below their own usual level."
       },
       troll: {
         label: "Possible griefing",
-        plain: "Repeatedly underperforming their own nearby-division baseline."
+        plain: "Repeatedly playing below their own level, dragging their team down."
       },
       sandbag: {
         label: "Possible sandbag",
-        plain: "A sudden one-tournament collapse versus the player's own track record."
-      }
+        plain: "One unexpectedly weak tournament that stands out against the player's own track record."
+      },
+      reasonsLabel: "Why flagged"
     }
   }
 };

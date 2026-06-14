@@ -14,6 +14,7 @@ import {
   formatAnalyticsNumber,
   formatConfidencePercent
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/AnomalyTooltip";
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
@@ -56,11 +57,22 @@ const AnomalyChip = ({ anomaly, label }: { anomaly?: AnalyticsAnomaly; label?: s
   const kind = label ?? anomaly?.kind ?? "manual";
   const hue = anomaly ? (anomalyHue[anomaly.kind] ?? "199 90% 60%") : "38 92% 60%";
 
-  return (
-    <span className={styles.chip} title={anomaly?.reasons?.join("\n")}>
+  const chip = (
+    <span className={styles.chip}>
       <span className={styles.chipDot} style={{ background: `hsl(${hue})` }} />
       {kind}
     </span>
+  );
+
+  // Anomaly chips get a decoded tooltip; the manual-shift chip stays plain.
+  if (!anomaly) {
+    return chip;
+  }
+
+  return (
+    <AnomalyTooltip kind={anomaly.kind} reasons={anomaly.reasons} focusable={false}>
+      {chip}
+    </AnomalyTooltip>
   );
 };
 

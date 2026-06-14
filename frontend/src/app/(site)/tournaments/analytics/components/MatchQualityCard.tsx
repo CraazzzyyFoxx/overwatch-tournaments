@@ -12,8 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { cn } from "@/lib/utils";
-import { isAnomalyGlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import AnomalyLegend from "@/app/(site)/tournaments/analytics/components/AnomalyLegend";
+import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/AnomalyTooltip";
 
 interface MatchQualityCardProps {
   tournamentId: number;
@@ -220,20 +220,14 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
                       key={`${flag.player_id}-${flag.kind}-${i}`}
                       className="inline-flex items-center gap-1"
                     >
-                      <Badge
-                        variant="outline"
-                        className={cn("text-[10px] uppercase", anomalyTone(flag.kind))}
-                        title={[
-                          isAnomalyGlossaryTerm(flag.kind)
-                            ? `${t(`analytics.glossary.${flag.kind}.label`)} — ${t(`analytics.glossary.${flag.kind}.plain`)}`
-                            : null,
-                          ...flag.reasons,
-                        ]
-                          .filter(Boolean)
-                          .join("\n")}
-                      >
-                        {flag.kind} · #{flag.player_id}
-                      </Badge>
+                      <AnomalyTooltip kind={flag.kind} reasons={flag.reasons}>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px] uppercase", anomalyTone(flag.kind))}
+                        >
+                          {flag.kind} · #{flag.player_id}
+                        </Badge>
+                      </AnomalyTooltip>
                       {canReview ? (
                         <FeedbackButtons
                           current={verdictByKey.get(`${flag.player_id}-${flag.kind}`)}
