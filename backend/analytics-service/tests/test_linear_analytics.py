@@ -141,6 +141,36 @@ class LinearAnalyticsTests(TestCase):
     def test_default_weights_sum_to_one(self) -> None:
         self.assertAlmostEqual(1.0, sum(linear.RAW_SIGNAL_WEIGHTS.values()), places=6)
 
+    def test_shift_scale_scales_stable_shift_linearly(self) -> None:
+        # A small signal stays well below the clamps, so doubling the scale
+        # doubles the stable shift.
+        signals = [self.signal(perf_merit=0.2)]
+        base = linear.score_history(signals, shift_scale=1.0)
+        doubled = linear.score_history(signals, shift_scale=2.0)
+
+        self.assertAlmostEqual(2.0 * base.stable_shift, doubled.stable_shift, places=6)
+
+
+class SuggestShiftScaleTests(TestCase):
+    def test_matches_percentile_spread(self) -> None:
+        # Unit Linear |shift| P90 = 0.2, merit |shift| P90 = 0.6 ⇒ scale 3.0.
+        unit = [0.2] * 50
+        merit = [0.6] * 50
+
+        scale = linear.suggest_shift_scale(unit, merit)
+
+        self.assertAlmostEqual(3.0, scale, places=6)
+
+    def test_falls_back_on_too_few_samples(self) -> None:
+        scale = linear.suggest_shift_scale([0.2, 0.1], [0.6, 0.3], fallback=6.25)
+
+        self.assertEqual(6.25, scale)
+
+    def test_falls_back_on_degenerate_linear_spread(self) -> None:
+        scale = linear.suggest_shift_scale([0.0] * 40, [0.5] * 40, fallback=6.25)
+
+        self.assertEqual(6.25, scale)
+
 
 class FitRawSignalWeightsTests(TestCase):
     def test_recovers_known_weights_on_clean_data(self) -> None:

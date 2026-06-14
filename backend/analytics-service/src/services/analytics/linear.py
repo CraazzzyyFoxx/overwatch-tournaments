@@ -114,11 +114,44 @@ def fit_raw_signal_weights(
     return {name: float(w) for name, w in zip(names, weights, strict=True)}
 
 
+def suggest_shift_scale(
+    unit_shifts: Sequence[float],
+    merit_targets: Sequence[float],
+    *,
+    percentile: float = 90.0,
+    min_samples: int = 30,
+    fallback: float = STABLE_SHIFT_SCALE,
+) -> float:
+    """Suggest a ``shift_scale`` that aligns Linear's spread with the v2 merit spread.
+
+    ``unit_shifts`` are Linear ``stable_shift`` values computed at ``shift_scale=1``
+    per player; ``merit_targets`` the v2 merit shift (in divisions) for the same
+    players. Returns the scale that matches the ``percentile``-th percentile of
+    ``|scale · unit_shift|`` to that of ``|merit_target|`` so the displayed Linear
+    and the v2 merit land in the same division units. Falls back to the default on
+    too little data or a degenerate (~0) Linear spread. Offline calibration helper.
+    """
+    import numpy as np
+
+    u = np.abs(np.asarray(unit_shifts, dtype=float))
+    m = np.abs(np.asarray(merit_targets, dtype=float))
+    u = u[np.isfinite(u)]
+    m = m[np.isfinite(m)]
+    if len(u) < min_samples or len(m) < min_samples:
+        return float(fallback)
+    p_unit = float(np.percentile(u, percentile))
+    p_merit = float(np.percentile(m, percentile))
+    if p_unit <= 1e-9:
+        return float(fallback)
+    return p_merit / p_unit
+
+
 def score_history(
     signals: Sequence[TournamentSignal],
     *,
     openskill_shift: float | None = None,
     weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS,
+    shift_scale: float = STABLE_SHIFT_SCALE,
 ) -> LinearAnalyticsMetrics:
     if not signals:
         return LinearAnalyticsMetrics(
@@ -144,7 +177,7 @@ def score_history(
         weight * raw for weight, raw in zip(evidence_weights, raws, strict=True)
     )
     stable_shift = clamp(
-        STABLE_SHIFT_SCALE * weighted_raw / (STABLE_SHRINKAGE_PRIOR + effective_evidence),
+        shift_scale * weighted_raw / (STABLE_SHRINKAGE_PRIOR + effective_evidence),
         -STABLE_SHIFT_CLAMP,
         STABLE_SHIFT_CLAMP,
     )

@@ -43,6 +43,12 @@ class AppConfig(BaseServiceSettings):
     # when training Shift v2 — retrain to take effect.
     shift_merit_scale: float = 0.5
 
+    # Linear shift signal scale (the v1 "Linear" algorithm and the v2 baseline).
+    # Maps the EMA-weighted per-tournament merit signal to division units. Tune
+    # via the `fit-weights` CLI to align Linear's spread with the v2 merit scale
+    # above; applied at read time (recompute v1 shifts to refresh stored rows).
+    linear_shift_scale: float = 6.25
+
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5
 
