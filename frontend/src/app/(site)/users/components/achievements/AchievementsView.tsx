@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useTransition } from "react";
-import { Award, Crown, Gem, Sparkles } from "lucide-react";
+import { Award, Crown, Flame, Gem, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
 
   const grouped = useMemo(() => {
     const buckets: Record<Rarity, AchievementRarity[]> = {
+      mythic: [],
       legendary: [],
       epic: [],
       rare: [],
@@ -81,6 +82,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
 
   const counts = useMemo(() => {
     return {
+      mythic: grouped.mythic.length,
       legendary: grouped.legendary.length,
       epic: grouped.epic.length,
       rare: grouped.rare.length,
@@ -93,6 +95,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
   const unlockedCounts = useMemo(() => {
     const f = (list: AchievementRarity[]) => list.filter((a) => a.count > 0).length;
     return {
+      mythic: f(grouped.mythic),
       legendary: f(grouped.legendary),
       epic: f(grouped.epic),
       rare: f(grouped.rare),
@@ -243,7 +246,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
             <div className="aqt-card-head">
               <div className="aqt-card-title">
                 <span className="aqt-card-title-ic">
-                  {r === "legendary" ? <Crown size={15} /> : r === "epic" ? <Gem size={15} /> : r === "rare" ? <Sparkles size={15} /> : <Award size={15} />}
+                  {r === "mythic" ? <Flame size={15} /> : r === "legendary" ? <Crown size={15} /> : r === "epic" ? <Gem size={15} /> : r === "rare" ? <Sparkles size={15} /> : <Award size={15} />}
                 </span>
                 <span>{RARITY_TITLES[r]}</span>
               </div>

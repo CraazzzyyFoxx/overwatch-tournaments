@@ -930,6 +930,9 @@ body, html {
   width: 3px;
   border-radius: 2px;
 }
+.aqt-ach-rank .aqt-tier.mythic::before {
+  background: linear-gradient(180deg, hsl(45 100% 62%), hsl(28 95% 52%));
+}
 .aqt-ach-rank .aqt-tier.legendary::before {
   background: linear-gradient(180deg, hsl(0 80% 60%), hsl(340 75% 55%));
 }
@@ -1016,6 +1019,9 @@ body, html {
   position: relative;
   overflow: hidden;
 }
+.aqt-ach-card.mythic .aqt-ic-circle {
+  background: linear-gradient(135deg, hsl(45 100% 64%), hsl(28 95% 52%));
+}
 .aqt-ach-card.legendary .aqt-ic-circle {
   background: linear-gradient(135deg, hsl(0 80% 62%), hsl(340 75% 55%));
 }
@@ -1051,6 +1057,9 @@ body, html {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.aqt-ach-card.mythic .aqt-rarity {
+  color: hsl(40 95% 66%);
 }
 .aqt-ach-card.legendary .aqt-rarity {
   color: hsl(0 80% 72%);
