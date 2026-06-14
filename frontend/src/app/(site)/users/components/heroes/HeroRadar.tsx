@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LogStatsName } from "@/types/stats.types";
+import { getHumanizedStats } from "@/utils/stats";
 
 export const RADAR_STATS: LogStatsName[] = [
   LogStatsName.HeroDamageDealt,
@@ -54,7 +55,7 @@ const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
           <polygon
             key={r}
             className="aqt-radar-grid"
-            points={radarPolygon([1, 1, 1, 1, 1].map(() => r / 100), 100)}
+            points={radarPolygon(radarData.map(() => r / 100), 100)}
           />
         ))}
         {radarData.map((_, i) => {
@@ -74,7 +75,7 @@ const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
               textAnchor={p.x < -2 ? "end" : p.x > 2 ? "start" : "middle"}
               dominantBaseline="middle"
             >
-              {RADAR_LABELS[d.stat] ?? d.stat}
+              {RADAR_LABELS[d.stat] ?? getHumanizedStats(d.stat)}
             </text>
           );
         })}

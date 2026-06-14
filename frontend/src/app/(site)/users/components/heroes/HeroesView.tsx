@@ -22,7 +22,7 @@ import {
   getOverall,
   isRevertedStat
 } from "@/app/(site)/users/components/heroes/utils";
-import HeroRadar, { RADAR_STATS } from "@/app/(site)/users/components/heroes/HeroRadar";
+import HeroRadar, { RADAR_STATS, type RadarPoint } from "@/app/(site)/users/components/heroes/HeroRadar";
 import HeroSpotlight, {
   QUICK_CANDIDATES,
   QUICK_LABELS
@@ -62,6 +62,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
   const [insightsMode, setInsightsMode] = useState<"highlights" | "all">("highlights");
   const [statSort, setStatSort] = useState<StatSortKey>("delta");
   const [statSearch, setStatSearch] = useState("");
+  const [radarStats, setRadarStats] = useState<LogStatsName[]>(RADAR_STATS);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -71,26 +72,49 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
 
   const selected = useMemo(() => enriched.find((i) => i.hero.hero.id === selectedId) ?? enriched[0], [enriched, selectedId]);
 
-  // Build radar data for selected hero (you vs global)
+  // Build radar data for the selected hero (you vs global) over the chosen
+  // axes. Stats the hero has no data for are dropped (no phantom 0-axis).
   const radarData = useMemo(() => {
     if (!selected) return null;
-    const points = RADAR_STATS.map((statName) => {
-      const stat = selected.hero.stats.find((s) => s.name === statName);
-      if (!stat || !Number.isFinite(stat.avg_10) || !Number.isFinite(stat.avg_10_all)) {
-        return { stat: statName, you: 0, global: 0 };
-      }
-      // Normalize: scale relative to max(you, global)
-      const max = Math.max(stat.avg_10, stat.avg_10_all, 1);
-      let you = stat.avg_10 / max;
-      let global = stat.avg_10_all / max;
-      if (isRevertedStat(statName)) {
-        you = 1 - you;
-        global = 1 - global;
-      }
-      return { stat: statName, you, global };
-    });
-    return points;
+    const points = radarStats
+      .map((statName) => {
+        const stat = selected.hero.stats.find((s) => s.name === statName);
+        if (!stat || !Number.isFinite(stat.avg_10) || !Number.isFinite(stat.avg_10_all) || stat.avg_10_all <= 0) {
+          return null;
+        }
+        // Normalize: scale relative to max(you, global)
+        const max = Math.max(stat.avg_10, stat.avg_10_all, 1);
+        let you = stat.avg_10 / max;
+        let global = stat.avg_10_all / max;
+        if (isRevertedStat(statName)) {
+          you = 1 - you;
+          global = 1 - global;
+        }
+        return { stat: statName, you, global };
+      })
+      .filter((p): p is RadarPoint => p !== null);
+    return points.length >= 3 ? points : null;
+  }, [selected, radarStats]);
+
+  // Stats that can be plotted on the radar for the selected hero (have data).
+  const radarCandidates = useMemo(() => {
+    if (!selected) return [] as LogStatsName[];
+    return selected.hero.stats
+      .filter((s) => s.name !== LogStatsName.HeroTimePlayed)
+      .filter((s) => Number.isFinite(s.avg_10) && Number.isFinite(s.avg_10_all) && s.avg_10_all > 0)
+      .map((s) => s.name);
   }, [selected]);
+
+  const toggleRadarStat = (name: LogStatsName) => {
+    setRadarStats((prev) => {
+      if (prev.includes(name)) {
+        // Keep at least 3 axes so the radar stays a polygon.
+        return prev.length <= 3 ? prev : prev.filter((s) => s !== name);
+      }
+      // Cap at 8 axes to keep the chart legible.
+      return prev.length >= 8 ? prev : [...prev, name];
+    });
+  };
 
   // Insights rows
   const insightsRows = useMemo(() => {
@@ -378,7 +402,30 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           >
             {insightsMode === "highlights" ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
-              <HeroRadar radarData={radarData} />
+              <div className="flex flex-col gap-2.5">
+                <HeroRadar radarData={radarData} />
+                {radarCandidates.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                      Radar axes · pick 3–8
+                    </span>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {radarCandidates.map((name) => (
+                        <span
+                          key={name}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleRadarStat(name)}
+                          className={cn("aqt-filter-chip", radarStats.includes(name) && "active")}
+                          title={getHumanizedStats(name)}
+                        >
+                          {getHumanizedStats(name)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {insightsRows.map((row) => (
                   <div
