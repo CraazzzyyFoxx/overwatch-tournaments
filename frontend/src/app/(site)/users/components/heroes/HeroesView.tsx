@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Activity, Swords } from "lucide-react";
+import { Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeroWithUserStats } from "@/types/hero.types";
 import type { UserMapRead } from "@/types/user.types";
@@ -10,6 +10,7 @@ import { getHumanizedStats } from "@/utils/stats";
 import {
   CardSurface,
   heroVariantFromRole,
+  normalizeRole,
   type AqtRoleKey
 } from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
@@ -31,6 +32,7 @@ import HeroStatsTable, {
   type StatSortKey
 } from "@/app/(site)/users/components/heroes/HeroStatsTable";
 import MapsForHero from "@/app/(site)/users/components/heroes/MapsForHero";
+import HeroOverviewTable, { type HeroOverviewRow } from "@/app/(site)/users/components/heroes/HeroOverviewTable";
 
 interface Props {
   heroes: HeroWithUserStats[];
@@ -58,19 +60,53 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
   }));
 
   const [selectedId, setSelectedId] = useState<number>(enriched[0]?.hero.hero.id ?? 0);
-  const [search, setSearch] = useState("");
   const [insightsMode, setInsightsMode] = useState<"highlights" | "all">("highlights");
   const [statSort, setStatSort] = useState<StatSortKey>("delta");
   const [statSearch, setStatSearch] = useState("");
   const [radarStats, setRadarStats] = useState<LogStatsName[]>(RADAR_STATS);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return enriched;
-    return enriched.filter((i) => i.hero.hero.name.toLowerCase().includes(q));
-  }, [enriched, search]);
-
   const selected = useMemo(() => enriched.find((i) => i.hero.hero.id === selectedId) ?? enriched[0], [enriched, selectedId]);
+
+  // Cross-hero overview rows (one per tracked hero) for the leaderboard table.
+  const overviewRows = useMemo<HeroOverviewRow[]>(() => {
+    const avg = (stats: HeroWithUserStats["stats"], name: LogStatsName) => {
+      const v = stats.find((s) => s.name === name)?.avg_10;
+      return v != null && Number.isFinite(v) ? v : null;
+    };
+    return enriched.map((it) => {
+      const stats = it.hero.stats;
+      const wr = avg(stats, LogStatsName.Winrate);
+      let positive = 0;
+      let total = 0;
+      for (const s of stats) {
+        if (s.name === LogStatsName.HeroTimePlayed) continue;
+        if (!Number.isFinite(s.avg_10) || !Number.isFinite(s.avg_10_all) || s.avg_10_all <= 0) continue;
+        total++;
+        if (isRevertedStat(s.name) ? s.avg_10 < s.avg_10_all : s.avg_10 > s.avg_10_all) positive++;
+      }
+      return {
+        id: it.hero.hero.id,
+        hero: it.hero.hero,
+        role: it.hero.hero.type ?? it.hero.hero.role,
+        playtime: it.playtime,
+        share: it.share,
+        winratePct: wr == null ? null : wr <= 1 ? wr * 100 : wr,
+        kda: avg(stats, LogStatsName.KDA),
+        dmg10: avg(stats, LogStatsName.HeroDamageDealt),
+        impact: total > 0 ? positive / total : 0
+      };
+    });
+  }, [enriched]);
+
+  // Role split for the summary strip (tank / damage / support counts).
+  const roleSplit = useMemo(() => {
+    const acc = { tank: 0, damage: 0, support: 0 };
+    for (const it of enriched) {
+      const r = normalizeRole(it.hero.hero.type ?? it.hero.hero.role);
+      if (r) acc[r] += 1;
+    }
+    return acc;
+  }, [enriched]);
 
   // Build radar data for the selected hero (you vs global) over the chosen
   // axes. Stats the hero has no data for are dropped (no phantom 0-axis).
@@ -245,129 +281,39 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
     <div className="aqt-player flex flex-col gap-3.5">
       {filterSlot ? <div className="flex justify-end">{filterSlot}</div> : null}
 
-      {/* Top KPI row */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <CardSurface>
-          <div className="flex items-center gap-3.5">
-            <div className="relative h-[74px] w-[74px]">
-              <svg viewBox="0 0 100 100" className="h-full w-full">
-                <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(0 0% 100% / 0.05)" strokeWidth="8" />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="42"
-                  fill="none"
-                  stroke="var(--aqt-teal)"
-                  strokeWidth="8"
-                  strokeDasharray="264"
-                  strokeDashoffset={264 - Math.min(264, 264 * (items.length / 35))}
-                  strokeLinecap="round"
-                  transform="rotate(-90 50 50)"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Hero pool</div>
-              <div className="aqt-display text-[26px] font-bold leading-[1.1]">
-                {items.length}{" "}
-                <span className="aqt-mono text-[14px] text-[color:var(--aqt-fg-muted)]">heroes</span>
-              </div>
-              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">Across roles</div>
-            </div>
+      {/* Summary strip (one compact row; no duplicate "Hero pool") */}
+      <div className="aqt-card-surface flex flex-wrap items-center gap-x-8 gap-y-3 px-[18px] py-3.5">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Hero pool</div>
+          <div className="aqt-display text-[22px] font-bold leading-[1.1]">
+            {items.length} <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">heroes</span>
           </div>
-        </CardSurface>
-
-        <CardSurface>
-          <div className="flex items-center gap-3.5">
-            <div className="aqt-display text-[46px] font-bold leading-none" style={{ color: "var(--aqt-amber)" }}>
-              {Math.floor(totalSeconds / 3600)}
-              <span className="aqt-mono text-[16px] text-[color:var(--aqt-fg-muted)]">h</span>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Total playtime</div>
-              <div className="aqt-mono text-[14px]">{formatSeconds(totalSeconds)}</div>
-              <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{items.length} heroes</div>
-            </div>
+          <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+            {roleSplit.tank}T · {roleSplit.damage}D · {roleSplit.support}S
           </div>
-        </CardSurface>
-
-        <CardSurface>
-          <div className="flex items-center gap-3.5">
-            {mostEffective ? (
-              <HeroImage hero={mostEffective.hero.hero} size="lg" />
-            ) : (
-              <span className="aqt-hero-av lg damage">—</span>
-            )}
+        </div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Total playtime</div>
+          <div className="aqt-display text-[22px] font-bold leading-[1.1]" style={{ color: "var(--aqt-amber)" }}>
+            {Math.floor(totalSeconds / 3600)}
+            <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">h</span>
+          </div>
+          <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{formatSeconds(totalSeconds)}</div>
+        </div>
+        {mostEffective ? (
+          <div className="flex items-center gap-2.5">
+            <HeroImage hero={mostEffective.hero.hero} size="md" />
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Most effective</div>
-              <div className="aqt-display text-[22px] font-bold leading-[1.1]">
-                {mostEffective?.hero.hero.name ?? "—"}
-              </div>
-              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">
-                {mostEffective ? formatSeconds(mostEffective.playtime) : "—"}
-              </div>
+              <div className="aqt-display text-[18px] font-bold leading-[1.1]">{mostEffective.hero.hero.name}</div>
+              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">{formatSeconds(mostEffective.playtime)}</div>
             </div>
           </div>
-        </CardSurface>
+        ) : null}
       </div>
 
-      {/* Main layout: list + detail */}
-      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[340px_1fr]">
-        <CardSurface
-          flush
-          title="Hero pool"
-          icon={<Swords size={15} />}
-          subtitle="tracked > 60s"
-          headerClassName="flex-col items-stretch gap-2.5"
-        >
-          <div className="border-b border-[color:var(--aqt-border)] px-3.5 py-2.5">
-            <div className="relative">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <input
-                placeholder="Search heroes…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[13.5px] text-[color:var(--aqt-fg)] outline-none"
-              />
-            </div>
-          </div>
-          <div className="max-h-[680px] overflow-y-auto">
-            {filtered.map((item) => {
-              const isActive = item.hero.hero.id === selected?.hero.hero.id;
-              return (
-                <div
-                  key={item.hero.hero.id}
-                  className={cn(
-                    "grid cursor-pointer grid-cols-[32px_1fr_auto] items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-3.5 py-2.5 transition-colors hover:bg-[hsl(0_0%_100%/0.025)]",
-                    isActive && "border-l-2 border-l-[color:var(--aqt-teal)] bg-[hsl(174_72%_46%/0.08)] pl-3"
-                  )}
-                  onClick={() => setSelectedId(item.hero.hero.id)}
-                >
-                  <HeroImage hero={item.hero.hero} size="md" />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="truncate text-[14px] font-semibold">{item.hero.hero.name}</div>
-                    <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
-                      <span className="capitalize">{item.hero.hero.type ?? item.hero.hero.role}</span>
-                      <span>· {(item.share * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-1 h-1 w-full overflow-hidden rounded-sm bg-[hsl(0_0%_100%/0.04)]">
-                      <div className="h-full rounded-sm bg-[color:var(--aqt-teal)]" style={{ width: `${item.share * 100}%` }} />
-                    </div>
-                  </div>
-                  <span className="aqt-mono text-right text-[12px] text-[color:var(--aqt-fg-muted)]">
-                    {formatSeconds(item.playtime)}
-                  </span>
-                </div>
-              );
-            })}
-            {filtered.length === 0 ? (
-              <div className="p-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">No heroes match search</div>
-            ) : null}
-          </div>
-        </CardSurface>
+      {/* Cross-hero overview — answers "which hero carries me" at a glance */}
+      <HeroOverviewTable rows={overviewRows} selectedId={selected.hero.hero.id} onSelect={setSelectedId} />
 
         <div className="flex flex-col gap-3.5">
           {/* Spotlight */}
@@ -463,7 +409,6 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           {/* Maps the selected hero was played on */}
           <MapsForHero heroName={selected.hero.hero.name} heroMaps={heroMaps} />
         </div>
-      </div>
     </div>
   );
 };
