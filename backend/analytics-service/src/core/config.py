@@ -37,6 +37,12 @@ class AppConfig(BaseServiceSettings):
     # collapsing toward the median rank. Applied at inference (no retrain).
     standings_prob_sharpening: float = 1.5
 
+    # Shift v2 merit calibration: divisions of suggested shift per 1 std-dev of
+    # context-adjusted individual over/under-performance (Performance v2
+    # local_zscore). Default +2σ ≈ +1 division. Used as the supervised target
+    # when training Shift v2 — retrain to take effect.
+    shift_merit_scale: float = 0.5
+
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5
 

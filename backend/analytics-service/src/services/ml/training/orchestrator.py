@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
+
 from .. import FEATURE_VERSION
 from ..features.aggregations import build_match_features_with_strength
 from ..features.shift_features import build_shift_feature_frame
@@ -59,7 +61,6 @@ MATCH_QUALITY_MODEL_KIND = "match_quality"
 MATCH_QUALITY_MODEL_VERSION = "1.0.0"
 
 ROLES = ("tank", "damage", "support")
-SHIFT_LABEL_COLUMNS = ("next_tournament_div", "current_div", "os_shift")
 
 
 @dataclass
@@ -85,10 +86,19 @@ class StandingsTrainingOutcome:
 
 
 def _count_labelled_shift_rows(df: pd.DataFrame) -> int:
-    """Return the number of shift rows that can supervise the residual model."""
-    if df.empty or any(column not in df.columns for column in SHIFT_LABEL_COLUMNS):
+    """Return the number of shift rows that can supervise the residual model.
+
+    The merit target needs a Performance v2 row (``has_perf_v2``), not a future
+    division label — see ``shift_v2.build_merit_target``.
+    """
+    if df.empty:
         return 0
-    return int(df.dropna(subset=list(SHIFT_LABEL_COLUMNS)).shape[0])
+    if "has_perf_v2" in df.columns:
+        return int(df["has_perf_v2"].fillna(False).astype(bool).sum())
+    if "performance_v2_local_zscore" in df.columns:
+        z = pd.to_numeric(df["performance_v2_local_zscore"], errors="coerce")
+        return int((z.notna() & (z != 0.0)).sum())
+    return 0
 
 
 def _prepare_shift_training_frames(
@@ -97,9 +107,9 @@ def _prepare_shift_training_frames(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Avoid spending the only labelled shift rows on validation.
 
-    Shift residual labels need both a previous and next tournament, so shallow
-    histories often make the latest pre-cutoff tournament the only supervised
-    one. Validation is optional; training data is not.
+    Merit labels need a Performance v2 row; on shallow/partly-unprocessed
+    histories the latest pre-cutoff tournament can be the only supervised one.
+    Validation is optional; training data is not.
     """
     if _count_labelled_shift_rows(train_df) > 0:
         return train_df, val_df
@@ -412,7 +422,9 @@ async def train_shift_v2_for_cutoff(
 
     try:
         result: ShiftTrainingResult = train_shift_v2(
-            train_df, val_df=val_df if not val_df.empty else None
+            train_df,
+            val_df=val_df if not val_df.empty else None,
+            merit_scale=settings.shift_merit_scale,
         )
     except ValueError as exc:
         logger.warning("Shift v2 training skipped: %s", exc)

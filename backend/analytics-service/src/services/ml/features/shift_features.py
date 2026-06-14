@@ -296,6 +296,14 @@ async def build_shift_feature_frame(
                 on=["player_id", "tournament_id"],
                 how="left",
             )
+        # Flag rows that actually carry a Performance v2 row BEFORE the fillna
+        # below masks missing perf as 0.0 — the merit target trains only on these
+        # (treating "no perf data" as "average performance" would poison it).
+        merged["has_perf_v2"] = (
+            merged["performance_v2_local_zscore"].notna()
+            if "performance_v2_local_zscore" in merged.columns
+            else pd.Series(False, index=merged.index)
+        )
         merged["confidence_v1"] = 0.0  # filled if/when v1 shift rows are joined
         for column in (
             "performance_v2_raw",

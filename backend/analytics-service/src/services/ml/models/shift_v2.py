@@ -33,6 +33,7 @@ from .base import MLModel, align_features
 __all__ = (
     "ShiftModelV2",
     "ShiftTrainingResult",
+    "build_merit_target",
     "build_residual_target",
     "train_shift_v2",
 )
@@ -70,6 +71,10 @@ SHIFT_FEATURE_ORDER: tuple[str, ...] = (
 SHIFT_RANGE: float = 3.0
 NEWCOMER_SHIFT_RANGE: float = 1.5
 
+# Merit calibration: divisions of suggested shift per 1 std-dev of context-adjusted
+# individual over/under-performance. Default +2σ ≈ +1 division. Tunable from config.
+MERIT_SHIFT_SCALE: float = 0.5
+
 
 def _baseline_shift(df: pd.DataFrame) -> pd.Series:
     """Return the conservative baseline used before applying ML residuals."""
@@ -89,17 +94,45 @@ def _linear_confidence(df: pd.DataFrame) -> pd.Series:
     return pd.to_numeric(df["linear_confidence"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
 
 
-def build_residual_target(df: pd.DataFrame) -> pd.Series:
-    """Return ``realised_shift - baseline_shift`` for rows with future div labels.
+def build_merit_target(df: pd.DataFrame, *, merit_scale: float = MERIT_SHIFT_SCALE) -> pd.Series:
+    """Context-adjusted individual merit shift, in division units.
 
-    ``realised_shift`` follows the legacy sign convention:
-    ``current_div - next_tournament_div``. Rows lacking the label are dropped
-    by the caller before training.
+    Built from Performance v2 ``local_zscore`` — the player's contribution to
+    winning ABOVE what their team's and opponents' strength predicted (the v2
+    target is ``won − baseline_win_prob`` fit over ``team/opp mu``), z-scored
+    against the same-role + nearby-division cohort. So team strength enters as
+    *context*, not as the signal: carrying a weak roster scores high, coasting on
+    a stacked one scores ~0. Positive z (overperformed for the division) →
+    positive shift (move up to a lower division number).
+
+    Unlike the old ``current_div − next_tournament_div`` target, this is *dense*
+    (every player who played has a perf row), so the residual learner no longer
+    regresses toward the sparse "nobody actually moves" base rate and flattens
+    confident signals to nil.
     """
     if df.empty:
         return pd.Series(dtype=float)
-    realised = (df["current_div"] - df["next_tournament_div"]).astype(float)
-    return (realised - _baseline_shift(df)).rename("residual_target")
+    z = pd.to_numeric(
+        df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    return (merit_scale * z).clip(-SHIFT_RANGE, SHIFT_RANGE).rename("merit_target")
+
+
+def build_residual_target(df: pd.DataFrame, *, merit_scale: float = MERIT_SHIFT_SCALE) -> pd.Series:
+    """Return ``merit_target − baseline_shift`` for the residual learner.
+
+    The supervised signal is the context-adjusted individual *merit* (see
+    :func:`build_merit_target`), NOT the realised next-tournament division move:
+    we recommend what a player's individual performance *deserves*, not whether an
+    admin will actually move them (almost always "no" → collapse). Rows without a
+    Performance v2 row (no merit label) are dropped by the caller via
+    ``has_perf_v2``.
+    """
+    if df.empty:
+        return pd.Series(dtype=float)
+    merit = build_merit_target(df, merit_scale=merit_scale)
+    return (merit - _baseline_shift(df)).rename("residual_target")
 
 
 @dataclass
@@ -221,29 +254,40 @@ def _params(
     return params
 
 
+def _has_perf_v2(df: pd.DataFrame) -> pd.Series:
+    """Boolean mask of rows that carry a real Performance v2 merit label."""
+    if "has_perf_v2" in df.columns:
+        return df["has_perf_v2"].fillna(False).astype(bool)
+    # Fallback for frames built before the flag existed: treat a present (and
+    # non-zero, i.e. not the fillna sentinel) local_zscore as a real row.
+    if "performance_v2_local_zscore" in df.columns:
+        z = pd.to_numeric(df["performance_v2_local_zscore"], errors="coerce")
+        return z.notna() & (z != 0.0)
+    return pd.Series(False, index=df.index)
+
+
 def _train_shift_v2_with_device(
     df: pd.DataFrame,
     *,
     val_df: pd.DataFrame | None = None,
     device: MLTrainDevice,
+    merit_scale: float = MERIT_SHIFT_SCALE,
 ) -> ShiftTrainingResult:
-    """Train the residual booster. ``df`` must contain a
-    ``next_tournament_div`` column for supervised rows."""
+    """Train the residual booster against the context-adjusted merit target.
+
+    ``df`` must carry Performance v2 merit inputs (``has_perf_v2`` /
+    ``performance_v2_local_zscore``); rows without a perf row are skipped."""
     if df.empty:
         raise ValueError("training DataFrame is empty")
 
-    labelled = df.dropna(subset=["next_tournament_div", "current_div", "os_shift"]).copy()
+    labelled = df[_has_perf_v2(df)].copy()
     if labelled.empty:
-        non_null_counts = {
-            column: int(df[column].notna().sum()) if column in df.columns else 0
-            for column in ("next_tournament_div", "current_div", "os_shift")
-        }
         raise ValueError(
             "no labelled rows for shift v2 training "
-            f"(non-null counts: {non_null_counts})"
+            f"(rows with Performance v2: {int(_has_perf_v2(df).sum())})"
         )
 
-    target = build_residual_target(labelled)
+    target = build_residual_target(labelled, merit_scale=merit_scale)
     X = align_features(labelled, SHIFT_FEATURE_ORDER)
 
     booster = lgb.LGBMRegressor(**_params(objective="regression_l1", device=device))
@@ -251,9 +295,9 @@ def _train_shift_v2_with_device(
     val_X: pd.DataFrame | None = None
     val_target: pd.Series | None = None
     if val_df is not None and not val_df.empty:
-        val = val_df.dropna(subset=["next_tournament_div", "current_div", "os_shift"])
+        val = val_df[_has_perf_v2(val_df)]
         if not val.empty:
-            val_target = build_residual_target(val)
+            val_target = build_residual_target(val, merit_scale=merit_scale)
             val_X = align_features(val, SHIFT_FEATURE_ORDER)
             fit_kwargs["eval_set"] = [(val_X, val_target)]
             fit_kwargs["callbacks"] = [lgb.early_stopping(stopping_rounds=20, verbose=False)]
@@ -308,12 +352,19 @@ def _train_shift_v2_with_device(
     )
 
 
-def train_shift_v2(df: pd.DataFrame, *, val_df: pd.DataFrame | None = None) -> ShiftTrainingResult:
+def train_shift_v2(
+    df: pd.DataFrame,
+    *,
+    val_df: pd.DataFrame | None = None,
+    merit_scale: float = MERIT_SHIFT_SCALE,
+) -> ShiftTrainingResult:
     """Train Shift v2 with optional LightGBM GPU fallback."""
     last_exc: Exception | None = None
     for device in lightgbm_devices():
         try:
-            result = _train_shift_v2_with_device(df, val_df=val_df, device=device)
+            result = _train_shift_v2_with_device(
+                df, val_df=val_df, device=device, merit_scale=merit_scale
+            )
             logger.info("Shift v2 trained device=%s", device)
             return result
         except Exception as exc:

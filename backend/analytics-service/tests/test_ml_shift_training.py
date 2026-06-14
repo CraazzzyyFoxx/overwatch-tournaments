@@ -91,48 +91,59 @@ class ShiftTrainingDiagnosticsTests(TestCase):
         self.assertIn("performance_v2_local_zscore", shift_v2.SHIFT_FEATURE_ORDER)
         self.assertIn("performance_v2_local_percentile", shift_v2.SHIFT_FEATURE_ORDER)
 
-    def test_empty_label_error_reports_missing_columns(self) -> None:
+    def test_empty_label_error_when_no_performance_rows(self) -> None:
+        # No Performance v2 merit label anywhere → nothing to supervise.
         frame = pd.DataFrame(
             {
-                "next_tournament_div": [None],
                 "current_div": [4.0],
-                "os_shift": [None],
+                "os_shift": [0.5],
             }
         )
 
         with self.assertRaisesRegex(
-            ValueError,
-            r"non-null counts: \{'next_tournament_div': 0, 'current_div': 1, 'os_shift': 0\}",
+            ValueError, r"rows with Performance v2: 0"
         ):
             shift_v2.train_shift_v2(frame)
 
-    def test_residual_target_uses_current_to_next_division_move(self) -> None:
+    def test_merit_target_scales_context_adjusted_overperformance(self) -> None:
+        # Merit comes from Performance v2 local_zscore (context-adjusted), not the
+        # realised next-tournament move. +2σ ≈ +1 division at the default scale.
+        frame = pd.DataFrame({"performance_v2_local_zscore": [2.0, 0.0, -1.0]})
+
+        target = shift_v2.build_merit_target(frame, merit_scale=0.5)
+
+        self.assertAlmostEqual(1.0, float(target.iloc[0]))  # overperformer → up
+        self.assertAlmostEqual(0.0, float(target.iloc[1]))  # average → no move
+        self.assertAlmostEqual(-0.5, float(target.iloc[2]))  # underperformer → down
+
+    def test_merit_target_is_dense_independent_of_realised_move(self) -> None:
+        # Even when the player did NOT change division (the old target would be 0),
+        # a strong individual performance still yields a positive merit signal.
         frame = pd.DataFrame(
             {
-                "prior_div": [12.0],
                 "current_div": [10.0],
-                "next_tournament_div": [8.0],
-                "os_shift": [1.25],
+                "next_tournament_div": [10.0],  # no realised move
+                "performance_v2_local_zscore": [2.0],
             }
         )
 
-        target = shift_v2.build_residual_target(frame)
+        target = shift_v2.build_merit_target(frame, merit_scale=0.5)
 
-        self.assertAlmostEqual(0.75, float(target.iloc[0]))
+        self.assertGreater(float(target.iloc[0]), 0.5)
 
-    def test_residual_target_prefers_linear_stable_baseline_when_available(self) -> None:
+    def test_residual_target_is_merit_minus_baseline(self) -> None:
         frame = pd.DataFrame(
             {
-                "current_div": [10.0],
-                "next_tournament_div": [8.0],
+                "performance_v2_local_zscore": [2.0],
                 "os_shift": [-1.0],
-                "linear_stable_shift": [1.5],
+                "linear_stable_shift": [0.4],
             }
         )
 
-        target = shift_v2.build_residual_target(frame)
+        # merit = 0.5 * 2.0 = 1.0; baseline = linear_stable_shift = 0.4.
+        target = shift_v2.build_residual_target(frame, merit_scale=0.5)
 
-        self.assertAlmostEqual(0.5, float(target.iloc[0]))
+        self.assertAlmostEqual(0.6, float(target.iloc[0]))
 
     def test_prediction_anchors_to_linear_stable_baseline(self) -> None:
         model = shift_v2.ShiftModelV2(
@@ -156,19 +167,20 @@ class ShiftTrainingDiagnosticsTests(TestCase):
         self.assertLess(float(prediction["confidence"].iloc[0]), 1.0)
 
     def test_validation_rows_are_reused_when_they_are_the_only_labelled_rows(self) -> None:
+        # "Labelled" now means a Performance v2 merit row (has_perf_v2). The train
+        # frame has none; the validation frame is the only supervised one.
         train_df = pd.DataFrame(
             {
                 "tournament_id": [62],
-                "next_tournament_div": [6.0],
-                "current_div": [None],
+                "has_perf_v2": [False],
                 "os_shift": [0.2],
             }
         )
         val_df = pd.DataFrame(
             {
                 "tournament_id": [63],
-                "next_tournament_div": [5.0],
-                "current_div": [6.0],
+                "has_perf_v2": [True],
+                "performance_v2_local_zscore": [1.1],
                 "os_shift": [0.3],
             }
         )
