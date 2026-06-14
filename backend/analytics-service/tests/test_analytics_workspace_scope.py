@@ -147,3 +147,49 @@ class LookbackWindowTests(IsolatedAsyncioTestCase):
         start = await service.lookback_start_tournament_id(session, 73, 10)
 
         self.assertEqual(73, start)
+
+
+class DivisionLocalResidualTests(IsolatedAsyncioTestCase):
+    """The fallback merit signal must normalise by division, not by the whole
+    (tournament, role) cohort (which mixes divisions and penalises low ones)."""
+
+    @staticmethod
+    def _two_division_frame() -> pd.DataFrame:
+        # Same role, one tournament, two well-separated divisions. Low-division
+        # players post objectively lower performance_points than high-division
+        # ones — a plain cohort z-score would always score the low div negative.
+        rows = []
+        pid = 1
+        for i in range(80):
+            rows.append({"tournament_id": 1, "player_id": pid, "role": "tank",
+                         "div": 2, "performance_points": 100.0 + (i % 10)})
+            pid += 1
+        for i in range(80):
+            rows.append({"tournament_id": 1, "player_id": pid, "role": "tank",
+                         "div": 8, "performance_points": 200.0 + (i % 10)})
+            pid += 1
+        return pd.DataFrame(rows)
+
+    async def test_low_division_player_less_penalised_than_naive_zscore(self) -> None:
+        df = self._two_division_frame()
+        resid = analytics_flows._division_local_residual(df)
+
+        # A top-of-low-division player (div 2, perf 109).
+        top_low = df.index[(df["div"] == 2) & (df["performance_points"] == 109.0)][0]
+
+        # Naive whole-(tournament, role) z-score the old fallback used.
+        vals = df["performance_points"].astype(float)
+        naive_z = (109.0 - float(vals.mean())) / float(vals.std(ddof=0))
+
+        self.assertGreater(resid.loc[top_low], naive_z)  # less low-division penalty
+        # Within the division, stronger play scores higher than weaker.
+        bottom_low = df.index[(df["div"] == 2) & (df["performance_points"] == 100.0)][0]
+        self.assertGreater(resid.loc[top_low], resid.loc[bottom_low])
+
+    async def test_players_without_logs_are_neutral(self) -> None:
+        df = self._two_division_frame()
+        df.loc[df.index[0], "performance_points"] = None
+
+        resid = analytics_flows._division_local_residual(df)
+
+        self.assertEqual(0.0, resid.loc[df.index[0]])
