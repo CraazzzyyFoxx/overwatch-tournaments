@@ -1,16 +1,63 @@
 "use client";
 
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, X } from "lucide-react";
 import analyticsService from "@/services/analytics.service";
-import { AnomalyKind, MatchQuality } from "@/types/analytics.types";
+import { AnomalyKind, AnomalyVerdict, MatchQuality } from "@/types/analytics.types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 
 interface MatchQualityCardProps {
   tournamentId: number;
+}
+
+function FeedbackButtons({
+  current,
+  pending,
+  onVerdict,
+}: {
+  current?: AnomalyVerdict;
+  pending: boolean;
+  onVerdict: (verdict: AnomalyVerdict) => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => onVerdict("confirmed")}
+        title="Confirm — true positive"
+        aria-label="Confirm anomaly"
+        className={cn(
+          "rounded p-0.5 transition-colors disabled:opacity-50",
+          current === "confirmed"
+            ? "text-emerald-400"
+            : "text-muted-foreground hover:text-emerald-300",
+        )}
+      >
+        <Check className="h-3 w-3" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => onVerdict("dismissed")}
+        title="Dismiss — false positive"
+        aria-label="Dismiss anomaly"
+        className={cn(
+          "rounded p-0.5 transition-colors disabled:opacity-50",
+          current === "dismissed"
+            ? "text-red-400"
+            : "text-muted-foreground hover:text-red-300",
+        )}
+      >
+        <X className="h-3 w-3" aria-hidden="true" />
+      </button>
+    </span>
+  );
 }
 
 function scoreColor(score: number): string {
@@ -40,10 +87,41 @@ function anomalyTone(kind: AnomalyKind): string {
  * section; expand to reveal flag reasons inline.
  */
 export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps) {
+  const { hasPermission } = usePermissions();
+  const canReview = hasPermission("analytics.update");
+  const queryClient = useQueryClient();
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["analytics-match-quality", tournamentId],
     queryFn: () => analyticsService.getMatchQuality(tournamentId),
     staleTime: 60_000,
+  });
+
+  // Reviewer verdicts (only fetched for users who can act on them).
+  const { data: feedback } = useQuery({
+    queryKey: ["analytics-anomaly-feedback", tournamentId],
+    queryFn: () => analyticsService.getAnomalyFeedback(tournamentId),
+    enabled: canReview,
+    staleTime: 60_000,
+  });
+
+  const verdictByKey = React.useMemo(
+    () => new Map((feedback ?? []).map((f) => [`${f.player_id}-${f.kind}`, f.verdict])),
+    [feedback],
+  );
+
+  const feedbackMutation = useMutation({
+    mutationFn: (input: { playerId: number; kind: string; verdict: AnomalyVerdict }) =>
+      analyticsService.submitAnomalyFeedback({
+        tournament_id: tournamentId,
+        player_id: input.playerId,
+        kind: input.kind,
+        verdict: input.verdict,
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ["analytics-anomaly-feedback", tournamentId],
+      }),
   });
 
   const rows: MatchQuality[] = React.useMemo(() => {
@@ -101,16 +179,33 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
                 <span className="col-span-2 text-center text-xs text-muted-foreground">
                   skill <strong>{row.skill_balance.toFixed(0)}</strong>
                 </span>
-                <span className="col-span-3 flex gap-1 flex-wrap justify-end">
+                <span className="col-span-3 flex gap-1.5 flex-wrap justify-end items-center">
                   {(row.anomaly_flags ?? []).map((flag, i) => (
-                    <Badge
+                    <span
                       key={`${flag.player_id}-${flag.kind}-${i}`}
-                      variant="outline"
-                      className={cn("text-[10px] uppercase", anomalyTone(flag.kind))}
-                      title={flag.reasons.join("\n")}
+                      className="inline-flex items-center gap-1"
                     >
-                      {flag.kind} · #{flag.player_id}
-                    </Badge>
+                      <Badge
+                        variant="outline"
+                        className={cn("text-[10px] uppercase", anomalyTone(flag.kind))}
+                        title={flag.reasons.join("\n")}
+                      >
+                        {flag.kind} · #{flag.player_id}
+                      </Badge>
+                      {canReview ? (
+                        <FeedbackButtons
+                          current={verdictByKey.get(`${flag.player_id}-${flag.kind}`)}
+                          pending={feedbackMutation.isPending}
+                          onVerdict={(verdict) =>
+                            feedbackMutation.mutate({
+                              playerId: flag.player_id,
+                              kind: flag.kind,
+                              verdict,
+                            })
+                          }
+                        />
+                      ) : null}
+                    </span>
                   ))}
                 </span>
               </li>

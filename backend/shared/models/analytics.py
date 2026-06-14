@@ -18,6 +18,7 @@ __all__ = (
     "AnalyticsBalanceSnapshot",
     "AnalyticsExplanation",
     "AnalyticsJob",
+    "AnalyticsAnomalyFeedback",
     "AnalyticsMatchQuality",
     "AnalyticsPlayerAnomaly",
     "AnalyticsPerformance",
@@ -420,6 +421,45 @@ class AnalyticsPlayerAnomaly(db.TimeStampIntegerMixin):
     tournament: Mapped[Tournament] = relationship()
     player: Mapped[Player] = relationship()
     source_encounter: Mapped[Encounter | None] = relationship()
+
+
+class AnalyticsAnomalyFeedback(db.TimeStampIntegerMixin):
+    """Reviewer verdict on a player anomaly.
+
+    Anomaly detectors emit *signals*, not verdicts. Storing an admin's
+    confirm/dismiss decision turns those signals into labels, which
+    :func:`tune_threshold` uses to pick detector cut-offs by precision/recall
+    instead of hand-set magic numbers. One verdict per
+    ``(tournament, player, kind)`` — the latest decision wins (upsert).
+    """
+
+    __tablename__ = "anomaly_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id",
+            "player_id",
+            "kind",
+            name="uq_analytics_anomaly_feedback",
+        ),
+        {"schema": "analytics"},
+    )
+
+    tournament_id: Mapped[int] = mapped_column(
+        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
+    )
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey(Player.id, ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    # "confirmed" (true positive) | "dismissed" (false positive)
+    verdict: Mapped[str] = mapped_column(String(16), nullable=False)
+    reviewer_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tournament: Mapped[Tournament] = relationship()
+    player: Mapped[Player] = relationship()
 
 
 class AnalyticsExplanation(db.TimeStampIntegerMixin):

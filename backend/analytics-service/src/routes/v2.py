@@ -163,6 +163,24 @@ class PlayerAnomalyRow(BaseModel):
     source_encounter_id: int | None = None
 
 
+class AnomalyFeedbackRow(BaseModel):
+    id: int
+    tournament_id: int
+    player_id: int
+    kind: str
+    verdict: str
+    reviewer_user_id: int | None = None
+    note: str | None = None
+
+
+class AnomalyFeedbackBody(BaseModel):
+    tournament_id: int
+    player_id: int
+    kind: str
+    verdict: typing.Literal["confirmed", "dismissed"]
+    note: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -240,6 +258,79 @@ async def list_player_anomalies(
         query = query.where(models.AnalyticsPlayerAnomaly.kind == kind)
     result = await session.execute(query)
     return result.scalars().all()
+
+
+@router.get("/player-anomalies/feedback", response_model=list[AnomalyFeedbackRow])
+async def list_anomaly_feedback(
+    tournament_id: int = Query(...),
+    _user=Depends(auth.require_permission("analytics", "read")),
+    session: AsyncSession = Depends(db.get_async_session),
+) -> typing.Sequence[models.AnalyticsAnomalyFeedback]:
+    """Reviewer verdicts for a tournament so the UI can show confirm/dismiss state."""
+    result = await session.scalars(
+        sa.select(models.AnalyticsAnomalyFeedback).where(
+            models.AnalyticsAnomalyFeedback.tournament_id == tournament_id
+        )
+    )
+    return result.all()
+
+
+@router.post(
+    "/player-anomalies/feedback",
+    response_model=AnomalyFeedbackRow,
+    status_code=200,
+)
+async def submit_anomaly_feedback(
+    body: AnomalyFeedbackBody,
+    user: models.AuthUser = Depends(auth.require_permission("analytics", "update")),
+    session: AsyncSession = Depends(db.get_async_session),
+) -> AnomalyFeedbackRow:
+    """Record a reviewer verdict on an anomaly (upsert per tournament/player/kind).
+
+    These confirmed/dismissed labels are what
+    :func:`src.services.ml.models.anomaly_tuning.tune_threshold` uses to set
+    detector cut-offs by precision/recall.
+    """
+    existing = await session.scalar(
+        sa.select(models.AnalyticsAnomalyFeedback).where(
+            models.AnalyticsAnomalyFeedback.tournament_id == body.tournament_id,
+            models.AnalyticsAnomalyFeedback.player_id == body.player_id,
+            models.AnalyticsAnomalyFeedback.kind == body.kind,
+        )
+    )
+    reviewer_id = int(user.id) if getattr(user, "id", None) is not None else None
+    if existing is not None:
+        existing.verdict = body.verdict
+        existing.note = body.note
+        existing.reviewer_user_id = reviewer_id
+        row = existing
+    else:
+        row = models.AnalyticsAnomalyFeedback(
+            tournament_id=body.tournament_id,
+            player_id=body.player_id,
+            kind=body.kind,
+            verdict=body.verdict,
+            reviewer_user_id=reviewer_id,
+            note=body.note,
+        )
+        session.add(row)
+
+    await session.flush()
+    await session.refresh(row)
+    # Build the response before commit so serialisation never triggers a lazy
+    # (out-of-greenlet) load on an expired attribute — see the MissingGreenlet
+    # lesson around server-side onupdate timestamps.
+    response = AnomalyFeedbackRow(
+        id=int(row.id),
+        tournament_id=row.tournament_id,
+        player_id=row.player_id,
+        kind=row.kind,
+        verdict=row.verdict,
+        reviewer_user_id=row.reviewer_user_id,
+        note=row.note,
+    )
+    await session.commit()
+    return response
 
 
 @router.get(

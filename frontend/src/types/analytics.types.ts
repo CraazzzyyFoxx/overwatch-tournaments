@@ -155,6 +155,26 @@ export interface PlayerAnomaly {
   source_encounter_id: number | null;
 }
 
+export type AnomalyVerdict = "confirmed" | "dismissed";
+
+export interface AnomalyFeedback {
+  id: number;
+  tournament_id: number;
+  player_id: number;
+  kind: string;
+  verdict: AnomalyVerdict;
+  reviewer_user_id: number | null;
+  note: string | null;
+}
+
+export interface AnomalyFeedbackInput {
+  tournament_id: number;
+  player_id: number;
+  kind: string;
+  verdict: AnomalyVerdict;
+  note?: string;
+}
+
 export interface ExplanationContribution {
   feature: string;
   shap: number;

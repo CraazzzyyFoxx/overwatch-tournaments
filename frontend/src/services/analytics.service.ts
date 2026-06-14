@@ -5,6 +5,8 @@ import {
   AnalyticsJob,
   AnalyticsJobCreate,
   AnalyticsRecalculateResponse,
+  AnomalyFeedback,
+  AnomalyFeedbackInput,
   Explanation,
   JobAcceptedResponse,
   MatchQuality,
@@ -125,6 +127,23 @@ export default class analyticsService {
         player_id: playerId,
         kind,
       },
+    }).then((response) => response.json());
+  }
+
+  static async getAnomalyFeedback(
+    tournamentId: number,
+  ): Promise<AnomalyFeedback[]> {
+    return apiFetch("analytics", "v2/player-anomalies/feedback", {
+      query: { tournament_id: tournamentId },
+    }).then((response) => response.json());
+  }
+
+  static async submitAnomalyFeedback(
+    body: AnomalyFeedbackInput,
+  ): Promise<AnomalyFeedback> {
+    return apiFetch("analytics", "v2/player-anomalies/feedback", {
+      method: "POST",
+      body,
     }).then((response) => response.json());
   }
 
