@@ -4,6 +4,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import analyticsService from "@/services/analytics.service";
+import encounterService from "@/services/encounter.service";
 import { AnomalyKind, AnomalyVerdict, MatchQuality } from "@/types/analytics.types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,6 +133,26 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
       }),
   });
 
+  // Encounter names so each row reads "Team A vs Team B" instead of a raw id.
+  const { data: encounters } = useQuery({
+    queryKey: ["encounters", "by-tournament", tournamentId],
+    queryFn: () => encounterService.getAll(1, "", tournamentId, -1),
+    staleTime: 60_000,
+  });
+
+  const encounterLabelById = React.useMemo(() => {
+    const map = new Map<number, string>();
+    (encounters?.results ?? []).forEach((encounter) => {
+      const teams =
+        encounter.home_team?.name && encounter.away_team?.name
+          ? `${encounter.home_team.name} vs ${encounter.away_team.name}`
+          : null;
+      const label = encounter.name?.trim() || teams;
+      if (label) map.set(encounter.id, label);
+    });
+    return map;
+  }, [encounters]);
+
   const rows: MatchQuality[] = React.useMemo(() => {
     if (!data) return [];
     return [...data].sort((a, b) => a.encounter_id - b.encounter_id);
@@ -168,8 +189,12 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
           <ul className="divide-y divide-border/60">
             {rows.map((row) => (
               <li key={row.encounter_id} className="py-2 grid grid-cols-12 gap-3 items-center text-sm">
-                <span className="col-span-2 font-medium tabular-nums">
-                  {t("analytics.matchQuality.encounter", { id: row.encounter_id })}
+                <span
+                  className="col-span-2 truncate font-medium"
+                  title={encounterLabelById.get(row.encounter_id)}
+                >
+                  {encounterLabelById.get(row.encounter_id) ??
+                    t("analytics.matchQuality.encounter", { id: row.encounter_id })}
                 </span>
                 <span
                   className={cn(
