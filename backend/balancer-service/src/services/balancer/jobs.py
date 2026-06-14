@@ -10,6 +10,13 @@ from typing import Any
 from fastapi import HTTPException, Request, status
 from loguru import logger
 
+from shared.observability import metrics
+from shared.services.balancer_realtime import (
+    BALANCER_JOB_FAILED,
+    BALANCER_JOB_QUEUED,
+    BALANCER_JOB_RUNNING,
+    BALANCER_JOB_SUCCEEDED,
+)
 from src.core.job_store import get_job_store
 from src.core.metrics import (
     BALANCER_JOB_QUEUE_WAIT_SECONDS,
@@ -27,13 +34,6 @@ from src.core.security.workspace_access import WorkspaceAccessPolicy
 from src.schemas.balancer import BalanceJobResult, CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
 from src.services.balancer.config.public_contract import normalize_balance_job_result_payload
-from shared.services.balancer_realtime import (
-    BALANCER_JOB_FAILED,
-    BALANCER_JOB_QUEUED,
-    BALANCER_JOB_RUNNING,
-    BALANCER_JOB_SUCCEEDED,
-)
-
 from src.services.balancer.progress import (
     TERMINAL_STATUSES,
     ProgressEventThrottler,
@@ -433,6 +433,13 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
         )
         total_seconds = time.perf_counter() - total_started_at
         BALANCER_JOB_TOTAL_SECONDS.labels(algorithm=algorithm, status="succeeded").observe(total_seconds)
+        # Business metric correlated with traces (Prometheus keeps the operational
+        # latency histograms above); distribution of solved job sizes.
+        metrics.distribution(
+            "balancer.job.size",
+            player_count,
+            attributes={"algorithm": algorithm, "team_count": team_count},
+        )
         logger.bind(
             job_id=job_id,
             algorithm=algorithm,

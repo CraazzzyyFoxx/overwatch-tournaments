@@ -1,3 +1,5 @@
+import time
+
 from faststream import FastStream
 from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
@@ -8,6 +10,7 @@ from shared.messaging.config import (
     ANALYTICS_TRAIN_QUEUE,
 )
 from shared.observability import (
+    metrics,
     observe_message_processing,
     setup_logging,
     setup_sentry,
@@ -155,6 +158,7 @@ async def consume_infer_request(data: dict, msg: RabbitMessage) -> None:
             model_kinds=event.model_kinds,
             workspace_id=event.workspace_id,
         ).info("Running v2 ML inference job")
+        started_at = time.perf_counter()
         async with db.async_session_maker() as session:
             summary = await run_for_tournament(
                 session,
@@ -162,6 +166,12 @@ async def consume_infer_request(data: dict, msg: RabbitMessage) -> None:
                 workspace_id=event.workspace_id,
                 model_kinds=event.model_kinds,
             )
+        metrics.distribution(
+            "analytics.inference.duration",
+            (time.perf_counter() - started_at) * 1000,
+            unit="millisecond",
+            attributes={"tournament_id": event.tournament_id},
+        )
         logger.bind(summary=summary).info("v2 ML inference job complete")
 
 

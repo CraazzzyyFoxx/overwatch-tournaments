@@ -14,6 +14,7 @@ from shared.messaging.config import (
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
 )
 from shared.observability import (
+    metrics,
     observe_message_processing,
     publish_message,
     setup_logging,
@@ -113,12 +114,14 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
                 )
         except Exception:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "failed", logger=log)
+            metrics.count("parser.match_log.processed", 1, attributes={"status": "failed"})
             log.exception(
                 f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}"
             )
             raise
         else:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "done", logger=log)
+            metrics.count("parser.match_log.processed", 1, attributes={"status": "done"})
 
         # Best-effort achievement evaluation (failure here retries the message).
         async with db.async_session_maker() as session:
