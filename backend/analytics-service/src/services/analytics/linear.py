@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from math import copysign
 from statistics import fmean
-from typing import Mapping, Sequence
 
 LOW_EVIDENCE_SHIFT_CAP = 1.5
 STABLE_SHIFT_SCALE = 6.25
@@ -11,14 +10,16 @@ STABLE_SHRINKAGE_PRIOR = 1.5
 STABLE_SHIFT_CLAMP = 3.0
 TREND_SHIFT_CLAMP = 3.5
 
-# Relative weights of the three raw signal components. These were hand-picked
-# historically; ``fit_raw_signal_weights`` can refit them against realised
-# division moves so they stop being unvalidated magic numbers. Kept summing to
-# 1 so ``STABLE_SHIFT_SCALE`` keeps the same meaning regardless of the split.
+# The shift signal is the player's CONTEXT-ADJUSTED INDIVIDUAL merit: their
+# Performance v2 local z-score — contribution to winning ABOVE what their team's
+# and opponents' strength predicted. Team OUTCOME (placement, win/loss) is
+# deliberately excluded: on draft/balancer rosters it reflects luck of the draw,
+# not the player. Team strength still matters, but enters as *context* baked into
+# ``perf_merit`` (via the Performance v2 mu baseline), not as a component here.
+# ``fit_raw_signal_weights`` recalibrates these when more individual components
+# are added; kept summing to 1 so ``STABLE_SHIFT_SCALE`` keeps its meaning.
 RAW_SIGNAL_WEIGHTS: Mapping[str, float] = {
-    "map_diff": 0.50,
-    "placement_score": 0.35,
-    "log_residual": 0.15,
+    "perf_merit": 1.0,
 }
 
 
@@ -28,9 +29,10 @@ def clamp(value: float, lower: float, upper: float) -> float:
 
 @dataclass(frozen=True)
 class TournamentSignal:
-    map_diff: float
-    placement_score: float
-    log_residual: float
+    # Context-adjusted individual merit (Performance v2 local z-score, clipped),
+    # with a fallback to the context-blind log residual when Performance v2 has
+    # not been materialised for the tournament.
+    perf_merit: float
     recency_decay: float
     coverage_weight: float
     newcomer_weight: float
@@ -57,11 +59,7 @@ def _weight(signal: TournamentSignal) -> float:
 def _raw_signal(
     signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS
 ) -> float:
-    return (
-        weights["map_diff"] * signal.map_diff
-        + weights["placement_score"] * signal.placement_score
-        + weights["log_residual"] * signal.log_residual
-    )
+    return weights.get("perf_merit", 1.0) * signal.perf_merit
 
 
 def _ema(values: Sequence[float], period: int) -> float:
@@ -74,15 +72,6 @@ def _ema(values: Sequence[float], period: int) -> float:
     return result
 
 
-def _has_signal_disagreement(signal: TournamentSignal) -> bool:
-    non_zero = [
-        int(copysign(1, value))
-        for value in (signal.map_diff, signal.placement_score, signal.log_residual)
-        if abs(value) > 1e-9
-    ]
-    return len(set(non_zero)) > 1
-
-
 def _apply_low_evidence_cap(value: float, *, sample_tournaments: int, effective_evidence: float) -> float:
     if sample_tournaments <= 1 or effective_evidence < 1.0:
         return clamp(value, -LOW_EVIDENCE_SHIFT_CAP, LOW_EVIDENCE_SHIFT_CAP)
@@ -93,24 +82,27 @@ def fit_raw_signal_weights(
     components: Sequence[Sequence[float]],
     realised: Sequence[float],
     *,
+    component_names: Sequence[str] = tuple(RAW_SIGNAL_WEIGHTS),
     min_samples: int = 30,
 ) -> dict[str, float]:
     """Refit the raw-signal weights against realised division moves.
 
-    ``components`` is an ``(n, 3)`` matrix of ``(map_diff, placement_score,
-    log_residual)`` and ``realised`` the per-row realised stable shift. Uses
-    non-negative least squares and normalises the coefficients to sum to 1 so
-    the fitted weights drop into :data:`RAW_SIGNAL_WEIGHTS` without rescaling
-    ``STABLE_SHIFT_SCALE``. Falls back to the current defaults when there is too
-    little data or the fit is degenerate. Offline helper — callers persist the
-    result to config rather than hardcoding new literals.
+    ``components`` is an ``(n, k)`` matrix whose columns align with
+    ``component_names`` (defaults to :data:`RAW_SIGNAL_WEIGHTS`'s keys) and
+    ``realised`` the per-row realised stable shift. Uses non-negative least
+    squares and normalises the coefficients to sum to 1 so the fitted weights
+    drop into :data:`RAW_SIGNAL_WEIGHTS` without rescaling ``STABLE_SHIFT_SCALE``.
+    Falls back to the current defaults when there is too little data or the fit
+    is degenerate. Offline helper — callers persist the result to config rather
+    than hardcoding new literals.
     """
     import numpy as np
     from scipy.optimize import nnls
 
+    names = tuple(component_names)
     matrix = np.asarray(components, dtype=float)
     target = np.asarray(realised, dtype=float)
-    if matrix.ndim != 2 or matrix.shape[1] != 3 or len(target) < min_samples:
+    if matrix.ndim != 2 or matrix.shape[1] != len(names) or len(target) < min_samples:
         return dict(RAW_SIGNAL_WEIGHTS)
 
     coef, _ = nnls(matrix, target)
@@ -119,11 +111,7 @@ def fit_raw_signal_weights(
         return dict(RAW_SIGNAL_WEIGHTS)
 
     weights = coef / total
-    return {
-        "map_diff": float(weights[0]),
-        "placement_score": float(weights[1]),
-        "log_residual": float(weights[2]),
-    }
+    return {name: float(w) for name, w in zip(names, weights, strict=True)}
 
 
 def score_history(
@@ -195,8 +183,6 @@ def score_history(
         0.0,
         1.0,
     )
-    if _has_signal_disagreement(signals[-1]):
-        confidence *= 0.8
 
     return LinearAnalyticsMetrics(
         stable_shift=stable_shift,

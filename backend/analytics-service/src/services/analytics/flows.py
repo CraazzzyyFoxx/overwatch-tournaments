@@ -189,6 +189,14 @@ async def get_data_frame(
             )
         )
 
+    # Context-adjusted individual merit: Performance v2 local z-score (clipped to
+    # the same ±1 band as ``log_residual`` so the existing STABLE_SHIFT_SCALE
+    # stays meaningful). Where Performance v2 has not been materialised for a
+    # player, fall back to the context-blind ``log_residual``.
+    perf_merit = await service.get_performance_merit(session)
+    merit = pd.to_numeric(df["player_id"].map(perf_merit), errors="coerce").clip(-1.0, 1.0)
+    df["perf_merit"] = merit.where(merit.notna(), df["log_residual"])
+
     return df
 
 
@@ -279,9 +287,9 @@ def compute_linear_metrics(df: pd.DataFrame) -> pd.DataFrame:
                 history = group_rows[history_position]
                 signals.append(
                     TournamentSignal(
-                        map_diff=float(history["map_diff"]),
-                        placement_score=float(history["placement_score"]),
-                        log_residual=float(history["log_residual"]),
+                        perf_merit=float(
+                            history.get("perf_merit", history.get("log_residual", 0.0))
+                        ),
                         recency_decay=float(0.85 ** (position - history_position)),
                         coverage_weight=float(0.7 + 0.3 * history["log_available"]),
                         newcomer_weight=0.75

@@ -29,9 +29,7 @@ class LinearAnalyticsTests(TestCase):
     def signal(
         self,
         *,
-        map_diff: float,
-        placement_score: float,
-        log_residual: float,
+        perf_merit: float,
         recency_decay: float = 1.0,
         coverage_weight: float = 1.0,
         newcomer_weight: float = 1.0,
@@ -39,9 +37,7 @@ class LinearAnalyticsTests(TestCase):
         log_available: float = 1.0,
     ):
         return linear.TournamentSignal(
-            map_diff=map_diff,
-            placement_score=placement_score,
-            log_residual=log_residual,
+            perf_merit=perf_merit,
             recency_decay=recency_decay,
             coverage_weight=coverage_weight,
             newcomer_weight=newcomer_weight,
@@ -50,28 +46,17 @@ class LinearAnalyticsTests(TestCase):
         )
 
     def test_first_tournament_shift_is_hard_capped(self) -> None:
-        metrics = linear.score_history(
-            [
-                self.signal(
-                    map_diff=1.0,
-                    placement_score=1.0,
-                    log_residual=1.0,
-                    match_count=3,
-                )
-            ]
-        )
+        metrics = linear.score_history([self.signal(perf_merit=1.0, match_count=3)])
 
         self.assertEqual(1, metrics.sample_tournaments)
         self.assertLessEqual(abs(metrics.stable_shift), 1.5)
         self.assertAlmostEqual(metrics.stable_shift, metrics.trend_shift, places=6)
 
-    def test_first_place_can_produce_meaningful_shift(self) -> None:
+    def test_strong_individual_perf_produces_meaningful_shift(self) -> None:
         metrics = linear.score_history(
             [
                 self.signal(
-                    map_diff=1 / 3,
-                    placement_score=1.0,
-                    log_residual=0.0,
+                    perf_merit=1.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     match_count=3,
@@ -85,8 +70,8 @@ class LinearAnalyticsTests(TestCase):
     def test_trend_requires_three_tournaments(self) -> None:
         short_history = linear.score_history(
             [
-                self.signal(map_diff=0.4, placement_score=0.2, log_residual=0.0),
-                self.signal(map_diff=0.6, placement_score=0.1, log_residual=0.0, recency_decay=0.85),
+                self.signal(perf_merit=0.3),
+                self.signal(perf_merit=0.4, recency_decay=0.85),
             ]
         )
 
@@ -95,25 +80,14 @@ class LinearAnalyticsTests(TestCase):
     def test_newcomer_weight_damps_shift_and_evidence(self) -> None:
         veteran = linear.score_history(
             [
-                self.signal(map_diff=0.8, placement_score=0.5, log_residual=0.2),
-                self.signal(map_diff=0.7, placement_score=0.4, log_residual=0.1, recency_decay=0.85),
+                self.signal(perf_merit=0.6),
+                self.signal(perf_merit=0.5, recency_decay=0.85),
             ]
         )
         newcomer = linear.score_history(
             [
-                self.signal(
-                    map_diff=0.8,
-                    placement_score=0.5,
-                    log_residual=0.2,
-                    newcomer_weight=0.75,
-                ),
-                self.signal(
-                    map_diff=0.7,
-                    placement_score=0.4,
-                    log_residual=0.1,
-                    recency_decay=0.85,
-                    newcomer_weight=0.75,
-                ),
+                self.signal(perf_merit=0.6, newcomer_weight=0.75),
+                self.signal(perf_merit=0.5, recency_decay=0.85, newcomer_weight=0.75),
             ]
         )
 
@@ -124,17 +98,13 @@ class LinearAnalyticsTests(TestCase):
         metrics = linear.score_history(
             [
                 self.signal(
-                    map_diff=0.2,
-                    placement_score=0.0,
-                    log_residual=0.0,
+                    perf_merit=0.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     match_count=2,
                 ),
                 self.signal(
-                    map_diff=-0.1,
-                    placement_score=0.0,
-                    log_residual=0.0,
+                    perf_merit=0.0,
                     coverage_weight=0.7,
                     log_available=0.0,
                     recency_decay=0.85,
@@ -150,42 +120,23 @@ class LinearAnalyticsTests(TestCase):
     def test_hybrid_stays_close_to_stable_when_match_sample_is_low(self) -> None:
         metrics = linear.score_history(
             [
-                self.signal(map_diff=0.3, placement_score=0.2, log_residual=0.0, match_count=1),
-                self.signal(map_diff=0.4, placement_score=0.2, log_residual=0.1, match_count=1, recency_decay=0.85),
+                self.signal(perf_merit=0.2, match_count=1),
+                self.signal(perf_merit=0.3, match_count=1, recency_decay=0.85),
             ],
             openskill_shift=1.8,
         )
 
         self.assertLess(abs(metrics.hybrid_shift - metrics.stable_shift), 0.1)
 
-    def test_last_tournament_signal_disagreement_reduces_confidence(self) -> None:
-        aligned = linear.score_history(
-            [
-                self.signal(map_diff=0.4, placement_score=0.4, log_residual=0.3),
-                self.signal(map_diff=0.5, placement_score=0.3, log_residual=0.2, recency_decay=0.85),
-            ]
-        )
-        conflicting = linear.score_history(
-            [
-                self.signal(map_diff=0.4, placement_score=0.4, log_residual=0.3),
-                self.signal(map_diff=0.5, placement_score=-0.3, log_residual=0.2, recency_decay=0.85),
-            ]
-        )
-
-        self.assertLess(conflicting.confidence, aligned.confidence)
-
     def test_custom_weights_change_stable_shift(self) -> None:
-        signals = [self.signal(map_diff=1.0, placement_score=0.0, log_residual=0.0)]
+        signals = [self.signal(perf_merit=1.0)]
 
         default = linear.score_history(signals)
-        # All weight on log_residual (which is 0 here) ⇒ raw signal collapses.
-        log_only = linear.score_history(
-            signals,
-            weights={"map_diff": 0.0, "placement_score": 0.0, "log_residual": 1.0},
-        )
+        # Zero weight on the only signal ⇒ the raw signal collapses to 0.
+        zeroed = linear.score_history(signals, weights={"perf_merit": 0.0})
 
         self.assertGreater(abs(default.stable_shift), 0.0)
-        self.assertAlmostEqual(0.0, log_only.stable_shift, places=6)
+        self.assertAlmostEqual(0.0, zeroed.stable_shift, places=6)
 
     def test_default_weights_sum_to_one(self) -> None:
         self.assertAlmostEqual(1.0, sum(linear.RAW_SIGNAL_WEIGHTS.values()), places=6)
@@ -196,18 +147,19 @@ class FitRawSignalWeightsTests(TestCase):
         import numpy as np
 
         rng = np.random.default_rng(0)
-        components = rng.uniform(-1.0, 1.0, size=(400, 3))
-        # realised = 0.6*map_diff + 0.3*placement + 0.1*log_residual (sums to 1).
-        realised = components @ np.array([0.6, 0.3, 0.1])
+        components = rng.uniform(-1.0, 1.0, size=(400, 2))
+        # realised = 0.7*a + 0.3*b (sums to 1) over an arbitrary component set.
+        realised = components @ np.array([0.7, 0.3])
 
-        weights = linear.fit_raw_signal_weights(components, realised)
+        weights = linear.fit_raw_signal_weights(
+            components, realised, component_names=("a", "b")
+        )
 
-        self.assertAlmostEqual(0.6, weights["map_diff"], places=2)
-        self.assertAlmostEqual(0.3, weights["placement_score"], places=2)
-        self.assertAlmostEqual(0.1, weights["log_residual"], places=2)
+        self.assertAlmostEqual(0.7, weights["a"], places=2)
+        self.assertAlmostEqual(0.3, weights["b"], places=2)
         self.assertAlmostEqual(1.0, sum(weights.values()), places=6)
 
     def test_falls_back_to_defaults_on_too_few_samples(self) -> None:
-        weights = linear.fit_raw_signal_weights([[1.0, 0.0, 0.0]], [0.5])
+        weights = linear.fit_raw_signal_weights([[1.0]], [0.5])
 
         self.assertEqual(dict(linear.RAW_SIGNAL_WEIGHTS), weights)
