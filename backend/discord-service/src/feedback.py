@@ -21,7 +21,9 @@ class AttachmentFeedbackResult:
 
 @dataclass(frozen=True, slots=True)
 class MessageFeedbackSummary:
-    reactions: tuple[str, ...]
+    # ``None`` means "leave the message's reactions untouched"; an empty/filled
+    # tuple means "reconcile the bot's reactions to exactly these".
+    reactions: tuple[str, ...] | None
     reply_text: str | None
 
 
@@ -60,6 +62,15 @@ def build_message_feedback(
     *,
     wait_for_result: bool,
 ) -> MessageFeedbackSummary:
+    # История пере-сканируется при старте бота / добавлении канала. Сообщение,
+    # где все вложения уже обработаны ранее, трогать не нужно — иначе рестарт
+    # повторно навешивает реакции (и перетирает снятые вручную). На живых
+    # сообщениях по-прежнему подтверждаем ✅.
+    if not wait_for_result and results and all(
+        result.state is AttachmentFeedbackState.ALREADY_PROCESSED for result in results
+    ):
+        return MessageFeedbackSummary(reactions=None, reply_text=None)
+
     has_uploaded = any(result.state in _UPLOAD_ACCEPTED_STATES for result in results)
     has_problem = any(result.state in _PROBLEM_STATES for result in results)
 

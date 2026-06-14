@@ -52,6 +52,58 @@ def test_build_message_feedback_skips_reply_for_already_processed_logs() -> None
     assert summary.reply_text is None
 
 
+def test_build_message_feedback_is_noop_for_already_processed_history_rescan() -> None:
+    summary = build_message_feedback(
+        [
+            AttachmentFeedbackResult(
+                filename="match-1.log",
+                state=AttachmentFeedbackState.ALREADY_PROCESSED,
+            ),
+            AttachmentFeedbackResult(
+                filename="match-2.log",
+                state=AttachmentFeedbackState.ALREADY_PROCESSED,
+            ),
+        ],
+        wait_for_result=False,
+    )
+
+    assert summary.reactions is None
+    assert summary.reply_text is None
+
+
+def test_build_message_feedback_reacts_on_history_rescan_when_mixed() -> None:
+    summary = build_message_feedback(
+        [
+            AttachmentFeedbackResult(
+                filename="match-1.log",
+                state=AttachmentFeedbackState.ALREADY_PROCESSED,
+            ),
+            AttachmentFeedbackResult(
+                filename="match-2.log",
+                state=AttachmentFeedbackState.UPLOAD_FAILED,
+                error_message="boom",
+            ),
+        ],
+        wait_for_result=False,
+    )
+
+    assert summary.reactions == ("✅", "⚠️")
+
+
+def test_build_message_feedback_reacts_on_history_rescan_for_new_queued_log() -> None:
+    summary = build_message_feedback(
+        [
+            AttachmentFeedbackResult(
+                filename="match-1.log",
+                state=AttachmentFeedbackState.UPLOADED_QUEUED,
+            ),
+        ],
+        wait_for_result=False,
+    )
+
+    assert summary.reactions == ("✅",)
+
+
 def test_build_message_feedback_skips_reply_for_single_live_result() -> None:
     summary = build_message_feedback(
         [

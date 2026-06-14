@@ -363,12 +363,13 @@ async def process_message(message: discord.Message, tournament_id: int, wait_for
 
         # Update reactions based on results
         summary = build_message_feedback(results, wait_for_result=wait_for_result)
-        try:
-            await _apply_message_reactions(message, summary.reactions)
-        except discord.Forbidden:
-            logger.warning("⚠️ Bot doesn't have permission to add reactions")
-        except discord.HTTPException as e:
-            logger.warning(f"⚠️ Failed to add reaction: {e}")
+        if summary.reactions is not None:
+            try:
+                await _apply_message_reactions(message, summary.reactions)
+            except discord.Forbidden:
+                logger.warning("⚠️ Bot doesn't have permission to add reactions")
+            except discord.HTTPException as e:
+                logger.warning(f"⚠️ Failed to add reaction: {e}")
 
         if summary.reply_text is not None:
             try:
