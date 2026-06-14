@@ -62,7 +62,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
         <Link
           href={`/tournaments/${enc.tournament_id}`}
           onClick={(e) => e.stopPropagation()}
-          className="aqt-mono inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-[10.5px] font-bold"
+          className="aqt-mono inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-[11.5px] font-bold"
           style={{
             background: "hsl(174 72% 46% / 0.08)",
             borderColor: "hsl(174 72% 46% / 0.25)",
@@ -106,7 +106,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           <span className="aqt-mono text-[color:var(--aqt-fg-faint)]">—</span>
         )}
       </td>
-      <td className="aqt-mono px-3.5 py-3 text-[11px] text-[color:var(--aqt-fg-dim)]">
+      <td className="aqt-mono px-3.5 py-3 text-[12px] text-[color:var(--aqt-fg-dim)]">
         {enc.closeness != null ? `${(enc.closeness * 100).toFixed(0)}%` : "—"}
       </td>
       <td className="px-3.5 py-3" onClick={(e) => e.stopPropagation()}>

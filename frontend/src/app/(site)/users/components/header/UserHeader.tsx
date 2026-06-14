@@ -94,7 +94,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
       />
 
       <div className="relative z-[1] flex items-center justify-between gap-3 px-9 pt-5">
-        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+        <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
           <span className="mx-1">·</span>
           <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
@@ -140,7 +140,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             ) : null}
           </h1>
           {primaryRole ? (
-            <div className="aqt-mono flex flex-wrap items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-muted)]">
+            <div className="aqt-mono flex flex-wrap items-center gap-1.5 text-[12px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-muted)]">
               <span className="inline-flex h-4 w-4 items-center justify-center">
                 <PlayerRoleIcon role={primaryRole.role} size={14} color={roleSwatchColor} />
               </span>
@@ -153,7 +153,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             {user.battle_tag.map((bt) => (
               <span
                 key={bt.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
                 style={{
                   background: "hsl(210 80% 60% / 0.06)",
                   borderColor: "hsl(210 80% 60% / 0.25)",
@@ -167,7 +167,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             {user.twitch.map((tw) => (
               <span
                 key={tw.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
                 style={{
                   background: "hsl(270 70% 62% / 0.06)",
                   borderColor: "hsl(270 70% 62% / 0.25)",
@@ -181,7 +181,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             {user.discord.map((dc) => (
               <span
                 key={dc.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium"
+                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
                 style={{
                   background: "hsl(220 70% 60% / 0.06)",
                   borderColor: "hsl(220 70% 60% / 0.25)",
@@ -219,13 +219,13 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
           />
 
           <div className="col-span-full mt-2 flex flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
               Form · last {formStreak.length}
             </span>
             {formStreak.length > 0 ? (
               <FormStreak results={formStreak} />
             ) : (
-              <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">No recent matches</span>
+              <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">No recent matches</span>
             )}
           </div>
         </div>
@@ -246,7 +246,7 @@ interface PfStatProps {
 
 const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => (
   <div className="flex flex-col gap-1">
-    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
+    <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
     <span className="aqt-display aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
       {value}
       {unit ? <em className="ml-0.5 not-italic text-[color:var(--aqt-teal)]">{unit}</em> : null}
@@ -256,14 +256,14 @@ const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) =>
     </span>
     {delta ? (
       <span
-        className="aqt-mono inline-flex items-center gap-0.5 text-[11px] font-bold"
+        className="aqt-mono inline-flex items-center gap-0.5 text-[12px] font-bold"
         style={{ color: delta.good ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
         title="Last tournament vs career"
       >
         {delta.good ? "↑" : "↓"} {Math.abs(delta.value).toFixed(1)}
       </span>
     ) : null}
-    {sub ? <span className="text-[11px] text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
+    {sub ? <span className="text-[12px] text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
   </div>
 );
 

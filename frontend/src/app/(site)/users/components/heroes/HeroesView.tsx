@@ -243,12 +243,12 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
               </svg>
             </div>
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Hero pool</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Hero pool</div>
               <div className="aqt-display text-[26px] font-bold leading-[1.1]">
                 {items.length}{" "}
-                <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">heroes</span>
+                <span className="aqt-mono text-[14px] text-[color:var(--aqt-fg-muted)]">heroes</span>
               </div>
-              <div className="aqt-mono text-[11px] text-[color:var(--aqt-emerald)]">Across roles</div>
+              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">Across roles</div>
             </div>
           </div>
         </CardSurface>
@@ -260,9 +260,9 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
               <span className="aqt-mono text-[16px] text-[color:var(--aqt-fg-muted)]">h</span>
             </div>
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Total playtime</div>
-              <div className="aqt-mono text-[13px]">{formatSeconds(totalSeconds)}</div>
-              <div className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">{items.length} heroes</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Total playtime</div>
+              <div className="aqt-mono text-[14px]">{formatSeconds(totalSeconds)}</div>
+              <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{items.length} heroes</div>
             </div>
           </div>
         </CardSurface>
@@ -275,11 +275,11 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
               <span className="aqt-hero-av lg damage">—</span>
             )}
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Most effective</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Most effective</div>
               <div className="aqt-display text-[22px] font-bold leading-[1.1]">
                 {mostEffective?.hero.hero.name ?? "—"}
               </div>
-              <div className="aqt-mono text-[11px] text-[color:var(--aqt-emerald)]">
+              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">
                 {mostEffective ? formatSeconds(mostEffective.playtime) : "—"}
               </div>
             </div>
@@ -306,7 +306,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 placeholder="Search heroes…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[12.5px] text-[color:var(--aqt-fg)] outline-none"
+                className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[13.5px] text-[color:var(--aqt-fg)] outline-none"
               />
             </div>
           </div>
@@ -324,8 +324,8 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 >
                   <HeroImage hero={item.hero.hero} size="md" />
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="truncate text-[13px] font-semibold">{item.hero.hero.name}</div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-[color:var(--aqt-fg-dim)]">
+                    <div className="truncate text-[14px] font-semibold">{item.hero.hero.name}</div>
+                    <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
                       <span className="capitalize">{item.hero.hero.type ?? item.hero.hero.role}</span>
                       <span>· {(item.share * 100).toFixed(0)}%</span>
                     </div>
@@ -333,14 +333,14 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                       <div className="h-full rounded-sm bg-[color:var(--aqt-teal)]" style={{ width: `${item.share * 100}%` }} />
                     </div>
                   </div>
-                  <span className="aqt-mono text-right text-[11px] text-[color:var(--aqt-fg-muted)]">
+                  <span className="aqt-mono text-right text-[12px] text-[color:var(--aqt-fg-muted)]">
                     {formatSeconds(item.playtime)}
                   </span>
                 </div>
               );
             })}
             {filtered.length === 0 ? (
-              <div className="p-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">No heroes match search</div>
+              <div className="p-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">No heroes match search</div>
             ) : null}
           </div>
         </CardSurface>
@@ -385,10 +385,10 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                     key={row.name}
                     className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5"
                   >
-                    <span className="text-[11px] text-[color:var(--aqt-fg-muted)]">{row.label}</span>
-                    <span className="aqt-mono text-[13px] font-semibold text-[color:var(--aqt-fg)]">{row.value}</span>
+                    <span className="text-[12px] text-[color:var(--aqt-fg-muted)]">{row.label}</span>
+                    <span className="aqt-mono text-[14px] font-semibold text-[color:var(--aqt-fg)]">{row.value}</span>
                     <span
-                      className="aqt-mono text-[10.5px] font-bold"
+                      className="aqt-mono text-[11.5px] font-bold"
                       style={{ color: row.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
                     >
                       {formatDelta(row.delta)}
@@ -396,7 +396,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                   </div>
                 ))}
                 {insightsRows.length === 0 ? (
-                  <div className="col-span-2 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
+                  <div className="col-span-2 py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
                     Not enough data for comparisons
                   </div>
                 ) : null}

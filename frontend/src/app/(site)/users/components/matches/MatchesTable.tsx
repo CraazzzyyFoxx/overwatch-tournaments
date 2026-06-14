@@ -140,13 +140,13 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
       <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[1fr_320px]">
         <CardSurface flush>
           <div className="overflow-x-auto">
-            <table className="aqt-tnum w-full border-collapse text-[13px]">
+            <table className="aqt-tnum w-full border-collapse text-[14px]">
               <thead>
                 <tr>
                   {["Tournament", "Stage", "Match", "Score", "Heroes", "MVP", "Close.", "Logs"].map((h) => (
                     <th
                       key={h}
-                      className="aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
+                      className="aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
                     >
                       {h}
                     </th>
@@ -168,7 +168,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId }: Props) =
             </table>
           </div>
           <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
-            <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+            <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-dim)]">
               Showing {(page - 1) * perPage + 1}–{(page - 1) * perPage + encounters.length} of {total}
             </span>
             <div className="flex gap-1">
@@ -205,7 +205,7 @@ const PageBtn = ({ active, disabled, onClick, children }: PageBtnProps) => (
     onClick={onClick}
     disabled={disabled}
     className={cn(
-      "aqt-mono inline-flex h-8 min-w-[32px] items-center justify-center rounded-[6px] border px-2 text-[12px] transition-colors",
+      "aqt-mono inline-flex h-8 min-w-[32px] items-center justify-center rounded-[6px] border px-2 text-[13px] transition-colors",
       active ? "border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.12)] text-[color:var(--aqt-teal)]" : "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]",
       disabled && "cursor-not-allowed opacity-40"
     )}

@@ -55,7 +55,7 @@ const StatBlock = ({
   highlight?: "good" | "bad";
 }) => (
   <div>
-    <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{label}</div>
+    <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{label}</div>
     <div
       className="aqt-display aqt-tnum text-[22px] font-bold leading-[1.1]"
       style={{ color: highlight === "good" ? "var(--aqt-emerald)" : highlight === "bad" ? "var(--aqt-rose)" : "var(--aqt-fg)" }}
@@ -63,7 +63,7 @@ const StatBlock = ({
       {value}
     </div>
     {rank !== undefined && total !== undefined ? (
-      <div className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-dim)]">
+      <div className="aqt-mono text-[11.5px] text-[color:var(--aqt-fg-dim)]">
         #{rank} / {total}
       </div>
     ) : null}
@@ -97,13 +97,13 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
       action={
         tournaments.length > 0 ? (
           <Select value={String(tournament.id)} onValueChange={onSelectTournament}>
-            <SelectTrigger className="h-7 w-44 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[11.5px]">
+            <SelectTrigger className="h-7 w-44 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[12.5px]">
               <SelectValue placeholder="Select tournament" />
             </SelectTrigger>
             <SelectContent className="liquid-glass-panel max-h-[min(var(--radix-select-content-available-height),20rem)]">
               <SelectGroup>
                 {tournaments.map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)} className="text-[12px]">
+                  <SelectItem key={t.id} value={String(t.id)} className="text-[13px]">
                     {t.name}
                   </SelectItem>
                 ))}
@@ -124,7 +124,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
               <PlayerRoleIcon role={tournament.role} size={18} color={roleColor(tournament.role)} />
               {tournament.role}
             </div>
-            <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-muted)]">
+            <div className="aqt-mono mt-1 text-[13px] text-[color:var(--aqt-fg-muted)]">
               Placed <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
                 {tournament.group_placement ?? tournament.playoff_placement ?? "—"}
               </span>
@@ -140,7 +140,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
               <span style={{ color: "var(--aqt-rose)" }}>{mapsLost}</span>
               <span className="text-[18px] text-[color:var(--aqt-fg-faint)]"> L</span>
             </div>
-            <div className="aqt-mono mt-1 text-[11px] text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} map winrate</div>
+            <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} map winrate</div>
           </div>
         </div>
         {tournament.stats ? (

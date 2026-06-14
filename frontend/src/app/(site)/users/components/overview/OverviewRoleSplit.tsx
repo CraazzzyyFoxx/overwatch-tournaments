@@ -106,16 +106,16 @@ const OverviewRoleSplit = ({ profile }: Props) => {
               />
               <div>
                 <div
-                  className="aqt-display flex items-center gap-1.5 text-[15px] font-bold uppercase leading-none tracking-[0.04em]"
+                  className="aqt-display flex items-center gap-1.5 text-[16px] font-bold uppercase leading-none tracking-[0.04em]"
                   style={{ color: ROLE_COLOR[b.key] }}
                 >
                   <PlayerRoleIcon role={ROLE_LABELS[b.key]} size={14} color={ROLE_COLOR[b.key]} />
                   {ROLE_LABELS[b.key]}
                   {primary && b.key === primary.key ? (
-                    <span className="ml-1 text-[10px] font-semibold tracking-[0.1em] text-[color:var(--aqt-fg-muted)]"> · Main</span>
+                    <span className="ml-1 text-[11px] font-semibold tracking-[0.1em] text-[color:var(--aqt-fg-muted)]"> · Main</span>
                   ) : null}
                 </div>
-                <div className="aqt-mono mt-1 text-[11px] text-[color:var(--aqt-fg-muted)]">
+                <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-muted)]">
                   {b.won}W · {b.lost}L · {b.maps} maps
                 </div>
               </div>
@@ -132,7 +132,7 @@ const OverviewRoleSplit = ({ profile }: Props) => {
                 >
                   {formatPercent(b.winrate)}
                 </div>
-                <div className="aqt-mono mt-0.5 text-[10.5px] text-[color:var(--aqt-fg-dim)]">
+                <div className="aqt-mono mt-0.5 text-[11.5px] text-[color:var(--aqt-fg-dim)]">
                   {formatPercent(b.share)} of pool
                 </div>
               </div>

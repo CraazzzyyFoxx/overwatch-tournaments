@@ -50,7 +50,7 @@ const OverviewMostPlayedHeroes = ({ heroes, userSlug, totalCount, limit = 9 }: P
                 style={{ width: `${widthPct}%`, background: heroBarBackground(hp.hero.color) }}
                 title={`${hp.hero.name} · ${formatShare(hp.playtime)}`}
               />
-              <span className="aqt-mono text-right text-[11px] text-[color:var(--aqt-fg-muted)]">
+              <span className="aqt-mono text-right text-[12px] text-[color:var(--aqt-fg-muted)]">
                 {formatShare(hp.playtime)}
               </span>
             </div>

@@ -117,7 +117,7 @@ const MapsFilters = ({
         type="button"
         onClick={onOrderToggle}
         title={order === "asc" ? "Ascending" : "Descending"}
-        className="aqt-mono inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
+        className="aqt-mono inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[14px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
       >
         {order === "asc" ? "↑" : "↓"}
       </button>
@@ -127,7 +127,7 @@ const MapsFilters = ({
           placeholder="Search maps…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[13px] outline-none"
+          className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[14px] outline-none"
         />
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]">
           <circle cx="11" cy="11" r="7" />

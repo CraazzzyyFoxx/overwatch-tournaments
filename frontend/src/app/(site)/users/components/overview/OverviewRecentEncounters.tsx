@@ -71,16 +71,16 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
             href={`/encounters/${enc.id}`}
             className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
           >
-            <span className="aqt-mono min-w-[42px] text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
+            <span className="aqt-mono min-w-[42px] text-[11px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
               {tournamentLabel}{stageShort ? `·${stageShort.charAt(0)}` : ""}
             </span>
             <div className="flex flex-col gap-0.5 leading-tight">
-              <div className="text-[13px] font-semibold text-[color:var(--aqt-fg)]">
+              <div className="text-[14px] font-semibold text-[color:var(--aqt-fg)]">
                 {isUserHome ? <em className="not-italic" style={{ color: "var(--aqt-teal)" }}>{home}</em> : home}
                 {" vs "}
                 {!isUserHome ? <em className="not-italic" style={{ color: "var(--aqt-teal)" }}>{away}</em> : away}
               </div>
-              <div className="text-[11px] text-[color:var(--aqt-fg-dim)]">{subText}</div>
+              <div className="text-[12px] text-[color:var(--aqt-fg-dim)]">{subText}</div>
             </div>
             <span className="inline-flex gap-[3px]">
               {pips.map((p, i) => (

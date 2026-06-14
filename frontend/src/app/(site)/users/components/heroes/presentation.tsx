@@ -87,7 +87,7 @@ export const KpiCard = ({
         <div className="truncate text-xl font-bold leading-none tabular-nums" title={value}>
           {value}
         </div>
-        {subtitle ? <div className="mt-1 truncate text-[11px] text-muted-foreground">{subtitle}</div> : null}
+        {subtitle ? <div className="mt-1 truncate text-[12px] text-muted-foreground">{subtitle}</div> : null}
       </CardContent>
     </Card>
   );
@@ -143,13 +143,13 @@ export const HeroListItem = ({
               className="h-1.5 bg-muted/40 [&>div]:bg-foreground/70"
               aria-label="Playtime share"
             />
-            <div className="w-10 shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">
+            <div className="w-10 shrink-0 text-right text-[12px] text-muted-foreground tabular-nums">
               {formatPercent(share, 0)}
             </div>
           </div>
           {role ? (
             <div className="mt-2">
-              <Badge variant="outline" className="text-[11px]">
+              <Badge variant="outline" className="text-[12px]">
                 {role}
               </Badge>
             </div>

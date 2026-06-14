@@ -184,14 +184,14 @@ const MapsView = ({ userId }: Props) => {
                 <div className="aqt-l">{b.mode}</div>
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="aqt-display text-[30px] font-bold leading-none">{wr.toFixed(0)}%</div>
-                  <div className="aqt-mono text-[14px] text-[color:var(--aqt-fg-muted)]">
+                  <div className="aqt-mono text-[15px] text-[color:var(--aqt-fg-muted)]">
                     {b.win}-{b.loss}
                   </div>
                 </div>
                 <div className="aqt-bar">
                   <div className="aqt-fill" style={{ width: `${wr}%` }} />
                 </div>
-                <div className="aqt-mono flex items-center justify-between text-[11px] text-[color:var(--aqt-fg-dim)]">
+                <div className="aqt-mono flex items-center justify-between text-[12px] text-[color:var(--aqt-fg-dim)]">
                   <span>{b.maps.size} maps</span>
                   <span>{b.games} games</span>
                 </div>
@@ -225,7 +225,7 @@ const MapsView = ({ userId }: Props) => {
 
       {/* Map rows */}
       <CardSurface flush>
-        <div className="grid grid-cols-[64px_1fr_1fr_minmax(0,1.2fr)_60px_50px] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-[18px] py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+        <div className="grid grid-cols-[64px_1fr_1fr_minmax(0,1.2fr)_60px_50px] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-[18px] py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           <div />
           <div>Map</div>
           <div>Winrate</div>
@@ -245,7 +245,7 @@ const MapsView = ({ userId }: Props) => {
         {/* Pagination footer */}
         {perPage !== -1 && totalCount > 0 ? (
           <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
-            <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+            <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-dim)]">
               Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, totalCount)} of {totalCount}
             </span>
             <div className="flex gap-1">

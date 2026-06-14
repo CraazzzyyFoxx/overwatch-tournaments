@@ -57,7 +57,7 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
             </button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
-            <div className="aqt-player aqt-profile-scale flex max-h-[80vh] flex-col">
+            <div className="aqt-player flex max-h-[80vh] flex-col">
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
                 <DialogTitle className="text-[color:var(--aqt-fg)]">Best teammates</DialogTitle>
                 <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
@@ -142,7 +142,7 @@ const NetworkView = ({
           >
             {meInitials}
           </div>
-          <span className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--aqt-amber)" }}>
+          <span className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--aqt-amber)" }}>
             You
           </span>
         </div>
@@ -173,10 +173,10 @@ const NetworkView = ({
                 {heroInitials(nm)}
               </div>
               <div className="leading-tight">
-                <div className="max-w-[88px] truncate text-[11.5px] font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]">
+                <div className="max-w-[88px] truncate text-[12.5px] font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]">
                   {nm}
                 </div>
-                <div className="aqt-mono text-[9.5px] text-[color:var(--aqt-fg-dim)]">
+                <div className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-dim)]">
                   ×{tm.tournaments} · {(tm.winrate * 100).toFixed(0)}%
                 </div>
               </div>
@@ -184,7 +184,7 @@ const NetworkView = ({
           );
         })}
       </div>
-      <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[11px] text-[color:var(--aqt-fg-dim)]">
+      <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
         <span>Edges sized by appearances</span>
         <span>
           {totalCount} unique · {totalMaps} maps
@@ -236,12 +236,12 @@ const AllTeammatesTable = ({
             placeholder="Search teammates…"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[13px] text-[color:var(--aqt-fg)] outline-none"
+            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[14px] text-[color:var(--aqt-fg)] outline-none"
           />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <table className="aqt-tnum w-full border-collapse text-[12.5px]">
+        <table className="aqt-tnum w-full border-collapse text-[13.5px]">
           <thead className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
             <tr>
               {["Player", "×played", "Maps", "WR", "KDA", "MVP"].map((h, i) => (
@@ -259,7 +259,7 @@ const AllTeammatesTable = ({
                   <td className="px-3 py-2">
                     <Link href={`/users/${playerSlug(tm.user.name)}`} className="inline-flex items-center gap-1.5 hover:text-[color:var(--aqt-teal)]">
                       <span className="font-semibold text-[color:var(--aqt-fg)]">{tmName}</span>
-                      {tmTag ? <span className="aqt-mono text-[10px] text-[color:var(--aqt-fg-faint)]">#{tmTag}</span> : null}
+                      {tmTag ? <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-faint)]">#{tmTag}</span> : null}
                     </Link>
                   </td>
                   <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
@@ -283,7 +283,7 @@ const AllTeammatesTable = ({
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
+                <td colSpan={6} className="px-3 py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
                   No teammates match search
                 </td>
               </tr>
@@ -293,7 +293,7 @@ const AllTeammatesTable = ({
       </div>
       {filtered.length > perPage ? (
         <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] px-5 py-2.5">
-          <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+          <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
             {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
           </span>
           <div className="flex items-center gap-1">
@@ -301,18 +301,18 @@ const AllTeammatesTable = ({
               type="button"
               disabled={safePage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[14px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               ‹
             </button>
-            <span className="aqt-mono px-1.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
+            <span className="aqt-mono px-1.5 text-[13px] text-[color:var(--aqt-fg-muted)]">
               {safePage} / {pages}
             </span>
             <button
               type="button"
               disabled={safePage >= pages}
               onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="aqt-mono inline-flex h-7 min-w-[28px] items-center justify-center rounded-[6px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[14px] text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               ›
             </button>
@@ -324,7 +324,7 @@ const AllTeammatesTable = ({
 };
 
 const cnHeader = (left: boolean) =>
-  `aqt-mono border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)] ${
+  `aqt-mono border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)] ${
     left ? "text-left" : "text-right"
   }`;
 

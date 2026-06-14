@@ -37,7 +37,7 @@ const LeagueGroup = ({
         }}
       >
         <span
-          className="aqt-mono rounded-[5px] border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+          className="aqt-mono rounded-[5px] border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em]"
           style={{
             background: "hsl(258 60% 62% / 0.1)",
             borderColor: "hsl(258 60% 62% / 0.25)",
@@ -47,7 +47,7 @@ const LeagueGroup = ({
           League
         </span>
         <span className="flex-1 truncate text-[17px] font-semibold text-[color:var(--aqt-fg)]">{name}</span>
-        <span className="aqt-mono text-[12.5px] text-[color:var(--aqt-fg-dim)]">
+        <span className="aqt-mono text-[13.5px] text-[color:var(--aqt-fg-dim)]">
           {entries.length} divisions
           {bestPlacement !== Infinity ? ` · best #${bestPlacement}` : ""}
         </span>

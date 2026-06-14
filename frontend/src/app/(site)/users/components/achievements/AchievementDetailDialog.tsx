@@ -29,12 +29,12 @@ const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
   return (
     <Link
       href={`/encounters/${match.encounter_id}`}
-      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-2 text-[12.5px] transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
+      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-2 text-[13.5px] transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
     >
       <span className="truncate">
         {home} <span className="aqt-mono opacity-80">{match.score.home}–{match.score.away}</span> {away}
       </span>
-      {date ? <span className="aqt-mono shrink-0 text-[11px] text-[color:var(--aqt-fg-muted)]">{date}</span> : null}
+      {date ? <span className="aqt-mono shrink-0 text-[12px] text-[color:var(--aqt-fg-muted)]">{date}</span> : null}
     </Link>
   );
 };
@@ -61,7 +61,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
       }}
     >
       <DialogContent className="max-w-lg border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
-        <div className="aqt-player aqt-profile-scale flex max-h-[80vh] flex-col">
+        <div className="aqt-player flex max-h-[80vh] flex-col">
           {ach ? (
             <>
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
@@ -73,7 +73,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                   </div>
                   <div className="flex min-w-0 flex-col gap-1">
                     <DialogTitle className="text-[16px] text-[color:var(--aqt-fg)]">{ach.name}</DialogTitle>
-                    <div className="flex items-center gap-2 text-[11px] text-[color:var(--aqt-fg-muted)]">
+                    <div className="flex items-center gap-2 text-[12px] text-[color:var(--aqt-fg-muted)]">
                       {rarity ? <span className="capitalize">◆ {rarity}</span> : null}
                       <span className="aqt-mono">{(ach.rarity * 100).toFixed(2)}%</span>
                       {ach.count > 0 ? <span className="aqt-mono">· earned ×{ach.count}</span> : null}
@@ -83,19 +83,19 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
               </DialogHeader>
 
               <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
-                <DialogDescription className="text-[13px] leading-snug text-[color:var(--aqt-fg-dim)]">
+                <DialogDescription className="text-[14px] leading-snug text-[color:var(--aqt-fg-dim)]">
                   {description || "Achievement details."}
                 </DialogDescription>
 
                 {locked ? (
-                  <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-3 text-center text-[12.5px] text-[color:var(--aqt-fg-muted)]">
+                  <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-3 text-center text-[13.5px] text-[color:var(--aqt-fg-muted)]">
                     You haven&apos;t earned this achievement yet.
                   </div>
                 ) : (
                   <>
                     {ach.tournaments.length > 0 ? (
                       <section className="flex flex-col gap-1.5">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                           Earned in
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
@@ -111,7 +111,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
 
                     {ach.matches.length > 0 ? (
                       <section className="flex flex-col gap-1.5">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                           Matches
                         </h3>
                         <div className="flex flex-col gap-1">
@@ -123,7 +123,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                     ) : null}
 
                     {ach.tournaments.length === 0 && ach.matches.length === 0 ? (
-                      <div className="text-center text-[12.5px] text-[color:var(--aqt-fg-muted)]">
+                      <div className="text-center text-[13.5px] text-[color:var(--aqt-fg-muted)]">
                         Earned {ach.count}× — no tournament or match details recorded.
                       </div>
                     ) : null}

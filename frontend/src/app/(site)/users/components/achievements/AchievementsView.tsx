@@ -195,7 +195,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         <span className="aqt-filter-divider" />
         {uniqueTournaments.length > 0 && (
           <Select value={selectedTournamentValue} onValueChange={onTournamentChange}>
-            <SelectTrigger className="h-8 w-48 border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
+            <SelectTrigger className="h-8 w-48 border-white/[0.07] bg-white/[0.02] text-[14px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
               <SelectValue placeholder="All tournaments" />
             </SelectTrigger>
             <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
@@ -212,7 +212,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         <Select value={sort} onValueChange={(v) => setSort(v as "rarity" | "name" | "count")}>
           <SelectTrigger
             title="Sort achievements"
-            className="aqt-mono h-8 w-[150px] shadow-none border-white/[0.07] bg-white/[0.02] text-[12px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
+            className="aqt-mono h-8 w-[150px] shadow-none border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
           >
             <SelectValue />
           </SelectTrigger>
@@ -227,7 +227,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
             placeholder="Search achievements…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[13px] outline-none"
+            className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[14px] outline-none"
           />
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]">
             <circle cx="11" cy="11" r="7" />
@@ -284,13 +284,13 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                           )}
                         </div>
                         <div className="flex min-w-0 flex-col gap-0.5">
-                          <div className="text-[13.5px] font-semibold leading-tight">{ach.name}</div>
-                          <div className="text-[11px] leading-snug text-[color:var(--aqt-fg-dim)]">
+                          <div className="text-[14.5px] font-semibold leading-tight">{ach.name}</div>
+                          <div className="text-[12px] leading-snug text-[color:var(--aqt-fg-dim)]">
                             {ach.description_ru || ach.description_en}
                           </div>
                         </div>
                       </div>
-                      <div className="mt-auto flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-2 text-[10.5px] text-[color:var(--aqt-fg-muted)]">
+                      <div className="mt-auto flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-2 text-[11.5px] text-[color:var(--aqt-fg-muted)]">
                         {locked ? (
                           <span className="aqt-rarity">Locked</span>
                         ) : (

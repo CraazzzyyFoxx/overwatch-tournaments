@@ -58,7 +58,7 @@ const UserLiquidGlassProvider = ({ children }: UserLiquidGlassProviderProps) => 
     <LiquidGlassContext.Provider value={value}>
       <div
         ref={rootRef}
-        className="liquid-glass aqt-profile-scale relative"
+        className="liquid-glass relative"
         style={
           {
             "--lg-a": DEFAULT_AURA.a,

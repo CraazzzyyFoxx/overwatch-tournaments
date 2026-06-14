@@ -55,7 +55,7 @@ const ExpandedUserRow = ({ user }: { user: UserOverviewRow }) => {
                     <span className="text-xs text-muted-foreground">No metrics</span>
                   ) : (
                     heroRow.metrics.map((metric) => (
-                      <Badge key={`${heroRow.hero.id}-${metric.name}`} variant="outline" className="text-[11px]">
+                      <Badge key={`${heroRow.hero.id}-${metric.name}`} variant="outline" className="text-[12px]">
                         {HERO_METRIC_LABELS[metric.name] ?? metric.name}: {metric.avg_10.toFixed(2)}
                       </Badge>
                     ))

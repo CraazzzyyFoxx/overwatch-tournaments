@@ -105,7 +105,7 @@ const TournamentItem = ({
               {t.name}
             </Link>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-[color:var(--aqt-fg-dim)]">
+          <div className="flex flex-wrap items-center gap-2 text-[14px] text-[color:var(--aqt-fg-dim)]">
             <StagePill kind={stageKindForTournament(t)}>
               {t.placement === 1 ? "Grand finals" : t.placement <= 3 ? "Playoffs reached" : "Groups"}
             </StagePill>
@@ -116,7 +116,7 @@ const TournamentItem = ({
           </div>
         </div>
 
-        <div className="aqt-mono inline-flex items-center gap-2 text-[13px] text-[color:var(--aqt-fg-muted)]">
+        <div className="aqt-mono inline-flex items-center gap-2 text-[14px] text-[color:var(--aqt-fg-muted)]">
           <DivisionIcon division={t.division} tournamentGrid={t.division_grid_version} width={28} height={28} />
           <span className="aqt-display aqt-tnum text-[23px] font-bold text-[color:var(--aqt-fg)]">
             {t.placement || "—"}
@@ -141,7 +141,7 @@ const TournamentItem = ({
             {/* Stats */}
             <div className="flex flex-col gap-3 rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
               <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                   Matches
                 </span>
                 <span className="aqt-display text-[26px] font-bold leading-none">{t.won + t.lost + t.draw}</span>
@@ -173,7 +173,7 @@ const TournamentItem = ({
 
             {/* Roster (full) */}
             <div className="rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
-              <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+              <div className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
                 Roster
               </div>
               <TournamentTeamTable players={t.players ?? []} tournamentGrid={t.division_grid_version} />

@@ -37,11 +37,11 @@ export interface SpotlightHero {
 
 const QuickStat = ({ label, value, delta }: { label: string; value: string; delta: number | null }) => (
   <div className="flex flex-col items-end gap-0.5">
-    <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
+    <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
     <span className="aqt-display text-[28px] font-bold leading-none">{value}</span>
     {delta != null ? (
       <span
-        className="aqt-mono text-[10.5px] font-bold"
+        className="aqt-mono text-[11.5px] font-bold"
         style={{ color: delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
       >
         {formatDelta(delta)}
@@ -84,16 +84,16 @@ const HeroSpotlight = ({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className="aqt-mono inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em]"
+          className="aqt-mono inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[12px] uppercase tracking-[0.06em]"
           style={{ background: `var(--aqt-${heroVariant})`, color: "hsl(220 30% 8%)" }}
         >
           {selected.hero.hero.type ?? selected.hero.hero.role}
         </span>
-        <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-muted)]">
+        <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">
           {formatSeconds(selected.playtime, { withSeconds: false })} played
         </span>
         <span
-          className="aqt-mono inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.06)] px-2 py-0.5 text-[11px]"
+          className="aqt-mono inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.06)] px-2 py-0.5 text-[12px]"
         >
           ▎ {(selected.share * 100).toFixed(0)}% pool share
         </span>

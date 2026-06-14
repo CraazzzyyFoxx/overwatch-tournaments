@@ -41,7 +41,7 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
           </div>
         ))}
         {opponentStats.length === 0 ? (
-          <div className="p-4 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">No data</div>
+          <div className="p-4 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">No data</div>
         ) : null}
       </CardSurface>
 
@@ -57,7 +57,7 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
               </span>
               <span className="aqt-pct">{stats.w}-{stats.l}</span>
               <span
-                className="aqt-mono text-[11px] font-bold"
+                className="aqt-mono text-[12px] font-bold"
                 style={{
                   color: winrate > 55 ? "var(--aqt-emerald)" : winrate < 45 ? "var(--aqt-rose)" : "var(--aqt-amber)"
                 }}

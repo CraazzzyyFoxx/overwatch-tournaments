@@ -34,7 +34,7 @@ const OverviewPlacementSpark = ({ tournaments, limit = 12 }: Props) => {
       subtitle={`last ${recent.length} events · lower = better`}
     >
       <PlacementSpark data={points} max={fieldMax} />
-      <div className="mt-2.5 flex justify-between border-t border-[color:var(--aqt-border)] pt-2.5 text-[11px] text-[color:var(--aqt-fg-muted)]">
+      <div className="mt-2.5 flex justify-between border-t border-[color:var(--aqt-border)] pt-2.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
         <span>
           Best <span className="aqt-mono font-semibold" style={{ color: "var(--aqt-amber)" }}>#{best}</span>
         </span>

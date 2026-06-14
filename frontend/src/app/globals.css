@@ -246,15 +246,6 @@ body, html {
   color: var(--aqt-fg);
 }
 
-/* Uniformly enlarges the whole user-profile page. The redesign components use
-   hard-coded `text-[Npx]` sizes (absolute px, so a base font-size wouldn't
-   cascade), so we scale the single outermost profile wrapper instead. `zoom`
-   reflows content to the same box width — no horizontal overflow. Applied once
-   on the root wrapper, never on the per-section .aqt-player, to avoid compounding. */
-.aqt-profile-scale {
-  zoom: 1.08;
-}
-
 .aqt-mono {
   font-family: var(--aqt-mono);
   font-variant-numeric: tabular-nums;

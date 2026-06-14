@@ -80,7 +80,7 @@ const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
         })}
       </svg>
     ) : null}
-    <div className="flex gap-3.5 pt-1.5 text-[11px] text-[color:var(--aqt-fg-muted)]">
+    <div className="flex gap-3.5 pt-1.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--aqt-teal)" }} />
         You
