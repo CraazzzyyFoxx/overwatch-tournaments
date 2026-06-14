@@ -981,9 +981,11 @@ body, html {
 }
 .aqt-ach-card {
   position: relative;
-  border: 1px solid var(--aqt-border);
+  /* Elevated above the enclosing .aqt-card-surface (which is var(--aqt-card));
+     a lighter fill + brighter border keeps the nested card readable. */
+  border: 1px solid var(--aqt-border-2);
   border-radius: 11px;
-  background: var(--aqt-card);
+  background: hsl(215 20% 12%);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -993,7 +995,8 @@ body, html {
 }
 .aqt-ach-card:hover {
   transform: translateY(-2px);
-  border-color: var(--aqt-border-2);
+  border-color: var(--aqt-border-3);
+  background: hsl(215 20% 14%);
 }
 .aqt-ach-card.locked {
   opacity: 0.5;

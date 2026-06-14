@@ -3,7 +3,6 @@
 import React, { useMemo, useState, useTransition } from "react";
 import { Award, Crown, Gem, Sparkles } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AchievementRarity } from "@/types/achievement.types";
@@ -15,6 +14,14 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import {
+  classifyRarity,
+  RARITY_ORDER,
+  RARITY_RANGE,
+  RARITY_TITLES,
+  type Rarity
+} from "@/app/(site)/users/components/achievements/rarity";
+import { AchievementDetailDialog } from "@/app/(site)/users/components/achievements/AchievementDetailDialog";
 
 const TOURNAMENT_QUERY_KEY = "achievementTournamentId";
 
@@ -23,34 +30,6 @@ interface Props {
   tournaments?: UserTournamentSummary[];
   selectedTournamentValue?: string;
 }
-
-type Rarity = "legendary" | "epic" | "rare" | "uncommon" | "common";
-
-const classifyRarity = (rarityPercent: number): Rarity => {
-  if (rarityPercent < 5) return "legendary";
-  if (rarityPercent < 15) return "epic";
-  if (rarityPercent < 30) return "rare";
-  if (rarityPercent < 50) return "uncommon";
-  return "common";
-};
-
-const RARITY_ORDER: Rarity[] = ["legendary", "epic", "rare", "uncommon", "common"];
-
-const RARITY_TITLES: Record<Rarity, string> = {
-  legendary: "Legendary · < 5% of all players",
-  epic: "Epic · 5-15%",
-  rare: "Rare · 15-30%",
-  uncommon: "Uncommon · 30-50%",
-  common: "Common · > 50%"
-};
-
-const RARITY_RANGE: Record<Rarity, string> = {
-  legendary: "< 5% earn",
-  epic: "5-15%",
-  rare: "15-30%",
-  uncommon: "30-50%",
-  common: "> 50%"
-};
 
 const AchievementsView = ({ achievements, tournaments = [], selectedTournamentValue = "all" }: Props) => {
   const router = useRouter();
@@ -62,6 +41,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
   const [lockFilter, setLockFilter] = useState<"all" | "unlocked" | "locked">("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"rarity" | "name" | "count">("rarity");
+  const [selected, setSelected] = useState<AchievementRarity | null>(null);
 
   const uniqueTournaments = useMemo(() => {
     const seen = new Set<number>();
@@ -276,10 +256,11 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                   const initial = (ach.name ?? "?").slice(0, 1).toUpperCase();
                   const locked = ach.count === 0;
                   return (
-                    <Link
+                    <button
                       key={ach.id}
-                      href={`/achievements/${ach.id}`}
-                      className={cn("aqt-ach-card", r, locked && "locked")}
+                      type="button"
+                      onClick={() => setSelected(ach)}
+                      className={cn("aqt-ach-card w-full text-left", r, locked && "locked")}
                       style={locked ? { opacity: 0.6, filter: "grayscale(0.5)" } : undefined}
                     >
                       {ach.count > 0 ? (
@@ -314,7 +295,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                         )}
                         <span className="aqt-mono">{(ach.rarity * 100).toFixed(2)}%</span>
                       </div>
-                    </Link>
+                    </button>
                   );
                 })}
               </div>
@@ -330,6 +311,8 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           </div>
         </div>
       ) : null}
+
+      <AchievementDetailDialog achievement={selected} onClose={() => setSelected(null)} />
     </div>
   );
 };
