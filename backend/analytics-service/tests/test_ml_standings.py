@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import TestCase
 
 import numpy as np
+import pandas as pd
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -34,6 +35,52 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 standings_v2 = importlib.import_module("src.services.ml.models.standings_v2")
+runner = importlib.import_module("src.services.ml.inference.runner")
+
+
+class BuildMatchupsTests(TestCase):
+    """``_build_matchups`` must survive bracket placeholder encounters.
+
+    Semis/finals/byes are stored as ``Encounter`` rows with NULL team ids long
+    before the feeding matches finish. pandas reads those NULLs as NaN in a
+    float64 column; the old ``.astype(int)`` blew up with
+    ``IntCastingNaNError``. Such rows can't form a matchup and must be dropped.
+    """
+
+    def test_drops_encounters_with_unassigned_teams(self) -> None:
+        feature_frame = pd.DataFrame(
+            {
+                "home_team_id": [2080.0, float("nan"), 2099.0],
+                "away_team_id": [2074.0, 2078.0, float("nan")],
+            }
+        )
+        p_home = np.array([0.6, 0.5, 0.7])
+
+        matchups = runner._build_matchups(feature_frame, p_home)
+
+        self.assertEqual(1, len(matchups))
+        self.assertEqual([2080], matchups["home_team_id"].tolist())
+        self.assertEqual([2074], matchups["away_team_id"].tolist())
+        # p_home stayed aligned to the surviving row (not the dropped ones).
+        self.assertAlmostEqual(0.6, float(matchups["p_home_wins"].iloc[0]))
+        self.assertTrue(str(matchups["home_team_id"].dtype).startswith("int"))
+
+    def test_all_teams_known_keeps_every_row_in_order(self) -> None:
+        feature_frame = pd.DataFrame(
+            {"home_team_id": [1.0, 2.0], "away_team_id": [3.0, 4.0]}
+        )
+
+        matchups = runner._build_matchups(feature_frame, np.array([0.4, 0.8]))
+
+        self.assertEqual(2, len(matchups))
+        self.assertEqual([0.4, 0.8], matchups["p_home_wins"].tolist())
+
+    def test_empty_frame_yields_empty_matchups(self) -> None:
+        empty = pd.DataFrame({"home_team_id": [], "away_team_id": []})
+
+        matchups = runner._build_matchups(empty, np.zeros(0, dtype=float))
+
+        self.assertTrue(matchups.empty)
 
 
 class _ScriptedRng:

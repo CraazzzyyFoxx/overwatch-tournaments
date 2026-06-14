@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from unittest import TestCase
 
+import numpy as np
 import pandas as pd
 
 backend_root = Path(__file__).resolve().parents[2]
@@ -57,6 +58,27 @@ class SkillBalanceTests(TestCase):
 
     def test_missing_mu_is_neutral(self) -> None:
         self.assertEqual(50.0, mq._skill_balance(None, 2000.0))
+
+    def test_nan_mu_is_neutral(self) -> None:
+        # A pandas/numpy NaN is NOT ``None`` — teams with no mu snapshot (or
+        # bracket placeholder encounters with no teams) arrive as NaN. The
+        # guard must treat them as missing, else NaN leaks into the JSON
+        # response and 500s the read endpoint (allow_nan=False).
+        self.assertEqual(50.0, mq._skill_balance(float("nan"), 2000.0))
+        self.assertEqual(50.0, mq._skill_balance(2000.0, float("nan")))
+
+
+class PredictabilityTests(TestCase):
+    def test_missing_inputs_are_neutral(self) -> None:
+        self.assertEqual(50.0, mq._predictability(None, 0.5))
+        self.assertEqual(50.0, mq._predictability(1.0, None))
+
+    def test_nan_inputs_are_neutral(self) -> None:
+        self.assertEqual(50.0, mq._predictability(float("nan"), 0.5))
+        self.assertEqual(50.0, mq._predictability(1.0, float("nan")))
+
+    def test_perfect_call_scores_full(self) -> None:
+        self.assertAlmostEqual(100.0, mq._predictability(1.0, 1.0))
 
 
 class ComputeMatchQualityTests(TestCase):
@@ -105,3 +127,30 @@ class ComputeMatchQualityTests(TestCase):
     def test_empty_encounters_returns_empty(self) -> None:
         result = mq.compute_match_quality(pd.DataFrame(), pd.DataFrame())
         self.assertTrue(result.empty)
+
+    def test_missing_mu_never_emits_nan(self) -> None:
+        # Reproduces the production 500: an encounter whose teams have no mu
+        # snapshot (NaN mu) — bracket placeholder / forfeit rows — must yield
+        # finite, JSON-safe scores, never NaN.
+        encounters = pd.DataFrame(
+            {
+                "encounter_id": [1, 2],
+                "home_avg_mu": [2000.0, float("nan")],
+                "away_avg_mu": [float("nan"), float("nan")],
+                "home_won": [1.0, float("nan")],
+                "p_home_wins": [0.7, 0.5],
+            }
+        )
+        scores = pd.DataFrame({"encounter_id": [1], "home_score": [3], "away_score": [2]})
+
+        result = mq.compute_match_quality(encounters, scores)
+
+        numeric = ["competitiveness", "predictability", "skill_balance", "quality_score"]
+        self.assertTrue(
+            bool(np.isfinite(result[numeric].to_numpy(dtype=float)).all()),
+            msg=f"non-finite leaked: {result[numeric].to_dict('records')}",
+        )
+        # Row 2 has no mu and an unknown outcome ⇒ neutral skill/predictability.
+        row2 = result.set_index("encounter_id").loc[2]
+        self.assertEqual(50.0, row2["skill_balance"])
+        self.assertEqual(50.0, row2["predictability"])

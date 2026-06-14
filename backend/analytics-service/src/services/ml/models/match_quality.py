@@ -91,8 +91,19 @@ def _competitiveness(scores: list[tuple[int, int]]) -> float:
     return float(np.clip(entropy + lead_score + final_score, 0.0, 100.0))
 
 
+def _is_missing(value: float | None) -> bool:
+    """True for ``None`` *or* a non-finite (NaN/inf) value.
+
+    A pandas/numpy ``NaN`` is **not** ``None`` and slips past a bare
+    ``is None`` check. Left unguarded it flows into ``np.clip`` (which never
+    sanitises NaN) and leaks a NaN sub-score, which 500s the read endpoint —
+    Starlette serialises responses with ``json.dumps(..., allow_nan=False)``.
+    """
+    return value is None or not math.isfinite(float(value))
+
+
 def _predictability(home_won: float | None, p_home: float | None) -> float:
-    if home_won is None or p_home is None:
+    if _is_missing(home_won) or _is_missing(p_home):
         return 50.0  # neutral when missing
     return float(np.clip(1 - abs(home_won - p_home), 0.0, 1.0)) * 100.0
 
@@ -100,7 +111,7 @@ def _predictability(home_won: float | None, p_home: float | None) -> float:
 def _skill_balance(
     home_mu: float | None, away_mu: float | None, sigma_pool: float = DEFAULT_SIGMA_POOL
 ) -> float:
-    if home_mu is None or away_mu is None or sigma_pool <= 0:
+    if _is_missing(home_mu) or _is_missing(away_mu) or sigma_pool <= 0:
         return 50.0
     diff = abs(home_mu - away_mu)
     return float(np.clip(1 - diff / sigma_pool, 0.0, 1.0)) * 100.0
@@ -203,4 +214,18 @@ def compute_match_quality(
                 "quality_score": float(np.clip(weighted, 0.0, 100.0)),
             }
         )
-    return pd.DataFrame(out)
+    result = pd.DataFrame(out)
+    # Defence in depth: never emit a non-finite sub-score. The component
+    # helpers already return neutral values when inputs are missing, but a
+    # single NaN here 500s the read endpoint (Starlette uses allow_nan=False),
+    # so we scrub inf→NaN→neutral as a last line before persistence.
+    neutral = {
+        "competitiveness": 0.0,
+        "predictability": 50.0,
+        "skill_balance": 50.0,
+        "quality_score": 30.0,
+    }
+    result[list(neutral)] = (
+        result[list(neutral)].replace([np.inf, -np.inf], np.nan).fillna(neutral)
+    )
+    return result

@@ -347,6 +347,29 @@ async def run_shift_for_tournament(
     return len(insert_rows)
 
 
+def _build_matchups(feature_frame: pd.DataFrame, p_home) -> pd.DataFrame:
+    """Pair ``(home_team_id, away_team_id, p_home_wins)`` for the simulation.
+
+    Bracket placeholder encounters (TBD semis/finals, byes) exist as
+    ``Encounter`` rows with NULL team ids before their feeding matches finish.
+    pandas reads those NULLs as NaN, turning the id column into ``float64``;
+    casting it with ``.astype(int)`` then raises ``IntCastingNaNError``. Such
+    rows can't form a real matchup anyway, so they are dropped here — *after*
+    aligning ``p_home`` positionally so the surviving probabilities stay tied
+    to their rows.
+    """
+    paired = feature_frame.assign(p_home_wins=p_home).dropna(
+        subset=["home_team_id", "away_team_id"]
+    )
+    return pd.DataFrame(
+        {
+            "home_team_id": paired["home_team_id"].astype(int).to_numpy(),
+            "away_team_id": paired["away_team_id"].astype(int).to_numpy(),
+            "p_home_wins": paired["p_home_wins"].to_numpy(),
+        }
+    )
+
+
 async def run_standings_for_tournament(
     session: AsyncSession,
     tournament_id: int,
@@ -388,13 +411,13 @@ async def run_standings_for_tournament(
         return 0
 
     p_home = model.predict_proba(feature_frame)
-    matchups = pd.DataFrame(
-        {
-            "home_team_id": feature_frame["home_team_id"].astype(int),
-            "away_team_id": feature_frame["away_team_id"].astype(int),
-            "p_home_wins": p_home,
-        }
-    )
+    matchups = _build_matchups(feature_frame, p_home)
+    if matchups.empty:
+        logger.info(
+            "No fully-assigned matchups for tournament_id=%d; nothing to simulate",
+            tournament_id,
+        )
+        return 0
     teams = sorted(
         {int(t) for t in matchups["home_team_id"].tolist() + matchups["away_team_id"].tolist()}
     )
