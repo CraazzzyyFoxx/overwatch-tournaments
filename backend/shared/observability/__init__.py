@@ -8,6 +8,7 @@ This module provides:
 - Shared time middleware
 """
 
+from . import metrics
 from .correlation import (
     CORRELATION_ID_HEADER,
     REQUEST_ID_HEADER,
@@ -34,6 +35,7 @@ __all__ = [
     "setup_logging",
     "get_logger",
     "setup_sentry",
+    "metrics",
     "CORRELATION_ID_HEADER",
     "REQUEST_ID_HEADER",
     "CorrelationIdMiddleware",

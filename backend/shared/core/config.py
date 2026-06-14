@@ -92,6 +92,9 @@ class BaseServiceSettings(BaseSettings):
     sentry_profiles_sample_rate: float = 0.1
     sentry_http_proxy: str | None = None
     sentry_https_proxy: str | None = None
+    sentry_enable_logs: bool = True
+    sentry_logs_level: str = "INFO"
+    sentry_enable_metrics: bool = True
     otlp_endpoint: str | None = None
     tracing_enabled: bool = False
     otel_traces_sampler: str = "parentbased_traceidratio"
