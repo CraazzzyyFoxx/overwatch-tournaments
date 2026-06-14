@@ -75,8 +75,9 @@ async def _snapshot_pre_encounter_team_mu_uncached(
 
     Algorithm:
 
-    1. Build the analytics DataFrame for tournaments ``[tournament_id - look_back,
-       tournament_id]`` (same range as the v1 OpenSkill flow).
+    1. Build the analytics DataFrame for the ``look_back`` most recent tournaments
+       up to and including ``tournament_id`` (chronological window, same range as
+       the v1 OpenSkill flow).
     2. Initialise per-player ratings via :func:`prepare_openskill_data`.
     3. Replay every match in chronological order; **before** each encounter, snapshot
        the team-average mu of its home and away rosters.
@@ -85,8 +86,8 @@ async def _snapshot_pre_encounter_team_mu_uncached(
     ``min_mu``, ``std_mu`` (NaN-safe).
     """
     # ``get_data_frame`` loads every analytics-eligible tournament row in one
-    # query — there is no range parameter; ``look_back`` is applied via
-    # ``service.get_matches`` below.
+    # query — there is no range parameter; ``look_back`` is applied via the
+    # chronological window resolved by ``lookback_start_tournament_id`` below.
     df = await get_data_frame(
         session,
         workspace_id=workspace_id,
@@ -97,9 +98,16 @@ async def _snapshot_pre_encounter_team_mu_uncached(
             columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"]
         )
 
+    start_tid = await v1_service.lookback_start_tournament_id(
+        session,
+        tournament_id,
+        look_back,
+        workspace_id=workspace_id,
+        workspace_ids=workspace_ids,
+    )
     matches = await v1_service.get_matches(
         session,
-        tournament_id - look_back,
+        start_tid,
         tournament_id,
         workspace_id=workspace_id,
         workspace_ids=workspace_ids,

@@ -12,7 +12,7 @@ import pandas as pd
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "parser-service"))
+sys.path.insert(0, str(backend_root / "analytics-service"))
 
 os.environ.setdefault("PROJECT_URL", "http://localhost")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -48,8 +48,10 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
             frame = await analytics_flows.get_data_frame(session, workspace_id=5)
 
         self.assertTrue(frame.empty)
-        get_analytics.assert_awaited_once_with(session, workspace_id=5)
-        get_tournament_version_ids.assert_awaited_once_with(session, workspace_id=5)
+        get_analytics.assert_awaited_once_with(session, workspace_id=5, workspace_ids=None)
+        get_tournament_version_ids.assert_awaited_once_with(
+            session, workspace_id=5, workspace_ids=None
+        )
 
     async def test_compute_openskill_shift_map_passes_workspace_scope_to_match_history(self) -> None:
         session = SimpleNamespace()
@@ -70,12 +72,17 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
         with (
             patch.object(
                 analytics_flows.service,
+                "lookback_start_tournament_id",
+                AsyncMock(return_value=3),
+            ) as lookback_start,
+            patch.object(
+                analytics_flows.service,
                 "get_matches",
                 AsyncMock(return_value=[]),
             ) as get_matches,
             patch.object(
-                analytics_flows.team_service,
-                "get_by_tournament",
+                analytics_flows.service,
+                "get_teams_with_players",
                 AsyncMock(return_value=[team]),
             ),
             patch.object(
@@ -98,4 +105,45 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
 
         self.assertEqual({}, shift_map)
         self.assertFalse(has_history)
-        get_matches.assert_awaited_once_with(session, -3, 7, workspace_id=5)
+        # The OpenSkill window is resolved chronologically (not tid-10) and the
+        # workspace scope is threaded into both the lookup and the match query.
+        lookback_start.assert_awaited_once_with(
+            session,
+            7,
+            analytics_flows.OPENSKILL_LOOKBACK,
+            workspace_id=5,
+            workspace_ids=None,
+        )
+        get_matches.assert_awaited_once_with(
+            session, 3, 7, workspace_id=5, workspace_ids=None
+        )
+
+
+class LookbackWindowTests(IsolatedAsyncioTestCase):
+    """Unit tests for the chronological OpenSkill lookback window helper."""
+
+    @staticmethod
+    def _session_returning(ids: list[int]) -> SimpleNamespace:
+        # ``lookback_start_tournament_id`` awaits ``session.scalars(...)`` and
+        # then reads ``.all()`` off the result.
+        scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: ids))
+        return SimpleNamespace(scalars=scalars)
+
+    async def test_returns_min_of_recent_ids_not_numeric_offset(self) -> None:
+        service = importlib.import_module("src.services.analytics.service")
+        # 10 most-recent tournaments up to #73, but ids are sparse: the oldest
+        # in the window is #28, far from the naive 73 - 10 = 63.
+        session = self._session_returning([73, 70, 64, 61, 55, 50, 44, 40, 33, 28])
+
+        start = await service.lookback_start_tournament_id(session, 73, 10)
+
+        self.assertEqual(28, start)
+        self.assertNotEqual(63, start)  # would be the buggy tid - look_back
+
+    async def test_falls_back_to_end_when_no_rows(self) -> None:
+        service = importlib.import_module("src.services.analytics.service")
+        session = self._session_returning([])
+
+        start = await service.lookback_start_tournament_id(session, 73, 10)
+
+        self.assertEqual(73, start)

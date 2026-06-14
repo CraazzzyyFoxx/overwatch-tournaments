@@ -236,6 +236,35 @@ async def get_matches(
     return result.unique().all()  # type: ignore
 
 
+async def lookback_start_tournament_id(
+    session: AsyncSession,
+    end_tournament_id: int,
+    look_back: int,
+    workspace_id: int | None = None,
+    workspace_ids: typing.Sequence[int] | None = None,
+) -> int:
+    """Chronological start id for an OpenSkill lookback window.
+
+    Returns the smallest tournament id among the ``look_back`` most recent
+    tournaments with ``id <= end_tournament_id`` (within scope). Replaces the
+    old ``end_tournament_id - look_back`` arithmetic: tournament ids are sparse
+    (cancelled events, cross-workspace gaps), so a numeric offset silently
+    shrank — or emptied — the history window and biased the OpenSkill ratings.
+    Falls back to ``end_tournament_id`` when no rows match.
+    """
+    rows = await session.scalars(
+        sa.select(models.Tournament.id)
+        .where(
+            models.Tournament.id <= end_tournament_id,
+            *workspace_scope_filter(workspace_id, workspace_ids),
+        )
+        .order_by(models.Tournament.id.desc())
+        .limit(max(int(look_back), 1))
+    )
+    ids = [int(i) for i in rows.all()]
+    return min(ids) if ids else int(end_tournament_id)
+
+
 async def get_algorithm(session: AsyncSession, name: str) -> models.AnalyticsAlgorithm:
     query = sa.select(models.AnalyticsAlgorithm).where(models.AnalyticsAlgorithm.name == name)
     result = await session.execute(query)

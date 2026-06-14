@@ -18,6 +18,9 @@ from .linear import TournamentSignal, score_history
 COEF_NOVICE_FIRST = 1 / 0.15
 COEF_NOVICE_SECOND = 1 / 0.11
 COEF_REGULAR = 1 / 0.065
+# Number of most-recent tournaments (chronological, not numeric id offset) that
+# seed the OpenSkill replay window. See service.lookback_start_tournament_id.
+OPENSKILL_LOOKBACK = 10
 LINEAR = "Linear"
 POINTS = "Points"
 OPEN_SKILL = "Open Skill"
@@ -381,9 +384,16 @@ async def compute_openskill_shift_map(
     workspace_id: int | None = None,
     workspace_ids: typing.Sequence[int] | None = None,
 ) -> tuple[dict[int, float], bool]:
+    start_tid = await service.lookback_start_tournament_id(
+        session,
+        tournament_id,
+        OPENSKILL_LOOKBACK,
+        workspace_id=workspace_id,
+        workspace_ids=workspace_ids,
+    )
     matches = await service.get_matches(
         session,
-        tournament_id - 10,
+        start_tid,
         tournament_id,
         workspace_id=workspace_id,
         workspace_ids=workspace_ids,
@@ -554,9 +564,12 @@ async def get_predictions_openskill(
         session,
         workspace_id=workspace_id,
     )
+    start_tid = await service.lookback_start_tournament_id(
+        session, tournament_id, OPENSKILL_LOOKBACK, workspace_id=workspace_id
+    )
     matches = await service.get_matches(
         session,
-        tournament_id - 10,
+        start_tid,
         tournament_id,
         workspace_id=workspace_id,
     )
