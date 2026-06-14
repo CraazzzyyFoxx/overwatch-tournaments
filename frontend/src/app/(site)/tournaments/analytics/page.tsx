@@ -5,14 +5,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import AnalyticsHero from "@/app/(site)/tournaments/analytics/components/AnalyticsHero";
-import AnalyticsKpiStrip from "@/app/(site)/tournaments/analytics/components/AnalyticsKpiStrip";
+import AnalyticsBriefing from "@/app/(site)/tournaments/analytics/components/AnalyticsBriefing";
+import OrganizerTools from "@/app/(site)/tournaments/analytics/components/OrganizerTools";
+import AttentionTriage from "@/app/(site)/tournaments/analytics/components/AttentionTriage";
 import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
-import AnalyticsHorizon from "@/app/(site)/tournaments/analytics/components/AnalyticsHorizon";
-import AnalyticsInsights from "@/app/(site)/tournaments/analytics/components/AnalyticsInsights";
-import StandingsDistributionCard from "@/app/(site)/tournaments/analytics/components/StandingsDistributionCard";
-import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/MatchQualityCard";
-import MLAdminToolbar from "@/app/(site)/tournaments/analytics/components/MLAdminToolbar";
+import DeepDiveSection from "@/app/(site)/tournaments/analytics/components/DeepDiveSection";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
   canShowAnalyticsAdminToolbar,
@@ -116,6 +113,17 @@ const AnalyticsPage = () => {
     [standingsRows]
   );
 
+  // Players the model expects to change division — drives the briefing verdict.
+  const predictedMoves = useMemo(
+    () =>
+      (analytics?.teams ?? []).reduce(
+        (total, team) =>
+          total + team.players.filter((player) => player.predicted_direction !== "flat").length,
+        0
+      ),
+    [analytics?.teams]
+  );
+
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
     return tournamentsData?.results?.find((tournament) => tournament.id === tournamentId) ?? null;
@@ -182,7 +190,7 @@ const AnalyticsPage = () => {
   const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
   return (
     <div className={styles.surface}>
-      <AnalyticsHero
+      <AnalyticsBriefing
         tournaments={tournamentsData?.results ?? []}
         algorithms={availableAlgorithms}
         tournamentId={tournamentId}
@@ -190,18 +198,18 @@ const AnalyticsPage = () => {
         activeTournament={activeTournament}
         activeAlgorithm={activeAlgorithm}
         summary={analytics?.summary}
+        predictedMoves={predictedMoves}
         loadingTournaments={loadingTournaments}
         loadingAlgorithms={loadingAlgorithms}
         isErrorTournaments={isErrorTournaments}
         isErrorAlgorithms={isErrorAlgorithms}
-        adminControls={
-          canRecalculateAnalytics && tournamentId != null ? (
-            <MLAdminToolbar tournamentId={tournamentId} workspaceId={currentWorkspaceId} />
-          ) : null
-        }
         onTournamentChange={pushTournamentId}
         onAlgorithmChange={pushAlgorithm}
       />
+
+      {canRecalculateAnalytics && tournamentId != null ? (
+        <OrganizerTools tournamentId={tournamentId} workspaceId={currentWorkspaceId} />
+      ) : null}
 
       {!isFiltersReady ? (
         <AnalyticsContentSkeleton />
@@ -230,22 +238,13 @@ const AnalyticsPage = () => {
         </Card>
       ) : (
         <>
-          <AnalyticsKpiStrip summary={analytics.summary} teams={analytics.teams} />
+          <AttentionTriage teams={analytics.teams} />
           <AnalyticsStandings
             teams={analytics.teams}
             performanceByPlayer={performanceByPlayer}
             distributionByTeam={distributionByTeam}
           />
-          <div className={styles.split}>
-            <AnalyticsHorizon teams={analytics.teams} />
-            <AnalyticsInsights teams={analytics.teams} />
-          </div>
-          {tournamentId != null ? (
-            <div className={styles.split}>
-              <StandingsDistributionCard tournamentId={tournamentId} teams={analytics.teams} />
-              <MatchQualityCard tournamentId={tournamentId} />
-            </div>
-          ) : null}
+          <DeepDiveSection tournamentId={tournamentId} teams={analytics.teams} />
         </>
       )}
     </div>
@@ -254,16 +253,16 @@ const AnalyticsPage = () => {
 
 const AnalyticsContentSkeleton = () => (
   <>
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <Skeleton key={index} className="h-28 rounded-lg" />
+    {/* Needs-attention triage */}
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <Skeleton key={index} className="h-24 rounded-lg" />
       ))}
     </div>
+    {/* Standings board */}
     <Skeleton className="h-[520px] rounded-lg" />
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-      <Skeleton className="h-[360px] rounded-lg" />
-      <Skeleton className="h-[360px] rounded-lg" />
-    </div>
+    {/* Deep dive (collapsed) */}
+    <Skeleton className="h-12 rounded-lg" />
   </>
 );
 

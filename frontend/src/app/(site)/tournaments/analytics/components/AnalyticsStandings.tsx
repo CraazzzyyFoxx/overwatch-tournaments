@@ -9,8 +9,14 @@ import {
   TeamAnalytics
 } from "@/types/analytics.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { formatAnalyticsNumber, formatConfidencePercent } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import {
+  confidenceWord,
+  formatAnalyticsNumber,
+  formatConfidencePercent
+} from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
+import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
+import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
 import { sortTeamPlayers } from "@/utils/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -38,11 +44,6 @@ interface AnalyticsStandingsProps {
   distributionByTeam?: Map<number, StandingsDistribution>;
 }
 
-interface ShiftDomain {
-  min: number;
-  max: number;
-}
-
 const anomalyHue: Record<string, string> = {
   smurf: "350 84% 65%",
   troll: "38 92% 60%",
@@ -59,70 +60,6 @@ const AnomalyChip = ({ anomaly, label }: { anomaly?: AnalyticsAnomaly; label?: s
       <span className={styles.chipDot} style={{ background: `hsl(${hue})` }} />
       {kind}
     </span>
-  );
-};
-
-const ConfidenceDonut = ({ value }: { value: number }) => {
-  const clamped = Math.max(0, Math.min(1, value));
-  const radius = 15;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - clamped * circumference;
-  const hue = clamped >= 0.8 ? "146 60% 58%" : clamped >= 0.6 ? "38 92% 60%" : "2 75% 62%";
-
-  return (
-    <div className={styles.donut}>
-      <svg viewBox="0 0 38 38" aria-hidden="true">
-        <circle cx="19" cy="19" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
-        <circle
-          cx="19"
-          cy="19"
-          r={radius}
-          fill="none"
-          stroke={`hsl(${hue})`}
-          strokeWidth="3"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-        />
-      </svg>
-      <span className={styles.donutValue}>{Math.round(clamped * 100)}</span>
-    </div>
-  );
-};
-
-const getShiftPosition = (value: number, domain: ShiftDomain) => {
-  const span = domain.max - domain.min;
-  if (span <= 0) return 50;
-  return Math.max(0, Math.min(100, (value - domain.min) / span * 100));
-};
-
-const ShiftBar = ({ value, domain }: { value: number; domain: ShiftDomain }) => {
-  const zero = getShiftPosition(0, domain);
-  const position = getShiftPosition(value, domain);
-  const left = Math.min(zero, position);
-  const width = Math.abs(position - zero);
-  const isPositive = value >= 0;
-
-  return (
-    <div>
-      <div className={styles.shiftBar}>
-        <span className={styles.shiftAxis} style={{ left: `${zero}%` }} />
-        <span
-          className={cn(
-            styles.shiftFill,
-            isPositive ? styles.shiftPositive : styles.shiftNegative
-          )}
-          style={{
-            left: `${left}%`,
-            width: `${width}%`
-          }}
-        />
-      </div>
-      <div className={styles.shiftLabel}>
-        {value > 0 ? "+" : ""}
-        {formatAnalyticsNumber(value, 1)}
-      </div>
-    </div>
   );
 };
 
@@ -262,14 +199,28 @@ const TeamDetail = ({
               <th>Role</th>
               <th>Battle tag</th>
               <th className={styles.center}>Current</th>
-              <th className={styles.center}>Predicted move</th>
-              <th className={styles.center}>Move 2</th>
-              <th className={styles.center}>Move 1</th>
-              <th className={styles.center}>Points</th>
-              <th className={styles.center}>Impact</th>
-              <th className={styles.center}>Vs local</th>
-              <th className={styles.center}>Confidence</th>
-              <th className={styles.center}>Manual</th>
+              <th className={styles.center}>Forecast</th>
+              <th className={styles.center}>
+                <MetricTooltip term="recent_moves" showIcon>Move 2</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="recent_moves" showIcon>Move 1</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="points" showIcon>Signal</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="impact" showIcon>Impact</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="vs_local" showIcon>vs similar</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="confidence" showIcon>Confidence</MetricTooltip>
+              </th>
+              <th className={styles.center}>
+                <MetricTooltip term="shift" showIcon>Manual</MetricTooltip>
+              </th>
               <th>Flags</th>
             </tr>
           </thead>
@@ -411,22 +362,29 @@ const RoleLane = ({ team }: { team: TeamAnalytics }) => {
   );
 };
 
+const CONFIDENCE_TONE_CLASS: Record<"high" | "medium" | "low", string> = {
+  high: "text-emerald-300",
+  medium: "text-amber-300",
+  low: "text-muted-foreground"
+};
+
 const TeamRow = ({
   team,
   open,
   onToggle,
-  shiftDomain,
   performanceByPlayer,
   distribution
 }: {
   team: TeamAnalytics;
   open: boolean;
   onToggle: () => void;
-  shiftDomain: ShiftDomain;
   performanceByPlayer: Map<number, PerformanceV2>;
   distribution?: StandingsDistribution;
 }) => {
   const groupName = team.group?.name ?? "-";
+  const conf = confidenceWord(team.avg_confidence);
+  const shiftDirection =
+    team.total_shift > 0 ? "promote" : team.total_shift < 0 ? "demote" : "flat";
   const groupClass = groupName === "A"
     ? styles.groupA
     : groupName === "B"
@@ -497,17 +455,27 @@ const TeamRow = ({
           <div className="text-[11px] text-muted-foreground">record</div>
         </div>
         <div className={styles.confidence}>
-          <ConfidenceDonut value={team.avg_confidence} />
           <div className={styles.confidenceText}>
-            confidence
+            <MetricTooltip term="confidence" focusable={false}>
+              <span className="text-muted-foreground">confidence</span>
+            </MetricTooltip>
             <br />
-            <span className="font-semibold text-foreground">
-              {formatConfidencePercent(team.avg_confidence)}
+            <span
+              className={cn("font-semibold", CONFIDENCE_TONE_CLASS[conf.tone])}
+              title={formatConfidencePercent(team.avg_confidence)}
+            >
+              {conf.label}
             </span>
           </div>
         </div>
         <div className={styles.shiftCell}>
-          <ShiftBar value={team.total_shift} domain={shiftDomain} />
+          <ForecastChip
+            direction={shiftDirection}
+            magnitude={Math.abs(team.total_shift)}
+            unit="div"
+            focusable={false}
+            rawTooltip={`Balancer ${formatAnalyticsNumber(team.balancer_shift, 1)} · manual ${formatAnalyticsNumber(team.manual_shift, 1)}`}
+          />
         </div>
         <div className={styles.chips}>
           {team.anomalies.slice(0, 2).map((anomaly, index) => (
@@ -554,13 +522,6 @@ const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: 
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
   const visibleTeams = useMemo(() => sortedTeams(teams, mode), [teams, mode]);
-  const shiftDomain = useMemo<ShiftDomain>(() => {
-    const values = teams.map((team) => team.total_shift).filter(Number.isFinite);
-    return {
-      min: Math.min(0, ...values),
-      max: Math.max(0, ...values)
-    };
-  }, [teams]);
 
   return (
     <Card className="overflow-hidden">
@@ -600,7 +561,6 @@ const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: 
             team={team}
             open={expandedId === team.id}
             onToggle={() => setExpandedId((current) => current === team.id ? null : team.id)}
-            shiftDomain={shiftDomain}
             performanceByPlayer={performanceByPlayer}
             distribution={distributionByTeam?.get(team.id)}
           />

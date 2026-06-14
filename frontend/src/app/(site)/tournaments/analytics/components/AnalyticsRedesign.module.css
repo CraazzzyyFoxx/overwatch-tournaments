@@ -4,6 +4,42 @@
   gap: 24px;
 }
 
+/* Briefing-style entrance: top-down sections fade/slide in with a light
+   stagger so the page reads as a sequence, not a wall. Disabled for users who
+   prefer reduced motion. */
+.surface > * {
+  animation: aqtSectionIn 0.32s ease both;
+}
+.surface > *:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.surface > *:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.surface > *:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.surface > *:nth-child(n + 5) {
+  animation-delay: 0.16s;
+}
+
+@keyframes aqtSectionIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface > * {
+    animation: none;
+  }
+}
+
 .heroGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);

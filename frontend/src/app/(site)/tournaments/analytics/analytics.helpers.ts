@@ -1,4 +1,8 @@
-import { AlgorithmAnalytics, PlayerAnalytics } from "@/types/analytics.types";
+import {
+  AlgorithmAnalytics,
+  PlayerAnalytics,
+  TournamentAnalyticsSummary,
+} from "@/types/analytics.types";
 
 const RECOMMENDED_ALGORITHM_ORDER = [
   "Linear",
@@ -67,6 +71,76 @@ export function getAnalyticsRefreshKeys(
 
 export function clampConfidence(confidence: number): number {
   return Math.max(0, Math.min(1, confidence));
+}
+
+export type ConfidenceTone = "high" | "medium" | "low";
+
+/**
+ * Plain-language confidence so the read view never shows a bare 0–1 number.
+ * Thresholds match {@link getConfidenceBadgeClass}.
+ */
+export function confidenceWord(confidence: number): { label: string; tone: ConfidenceTone } {
+  const clamped = clampConfidence(confidence);
+  if (clamped >= 0.75) return { label: "High", tone: "high" };
+  if (clamped >= 0.45) return { label: "Medium", tone: "medium" };
+  return { label: "Low", tone: "low" };
+}
+
+export function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export interface AnalyticsVerdict {
+  headline: string;
+  clauses: string[];
+}
+
+type VerdictSummary = Pick<
+  TournamentAnalyticsSummary,
+  | "total_teams"
+  | "total_players"
+  | "anomaly_count"
+  | "divergent_team_count"
+  | "newcomer_count"
+  | "avg_placement_delta"
+>;
+
+/**
+ * Turn the raw summary counters into a one-glance briefing sentence: a headline
+ * (teams/players) plus only the supporting clauses that actually apply, ending
+ * with a calm forecast-accuracy note. Optional clauses are omitted when zero so
+ * a quiet tournament reads as quiet.
+ */
+export function buildVerdictClauses(
+  summary: VerdictSummary,
+  predictedMoves: number,
+): AnalyticsVerdict {
+  const headline = `${pluralize(summary.total_teams, "team", "teams")} · ${pluralize(
+    summary.total_players,
+    "player",
+    "players",
+  )}`;
+
+  const clauses: string[] = [];
+  if (predictedMoves > 0) {
+    clauses.push(pluralize(predictedMoves, "likely division change", "likely division changes"));
+  }
+  if (summary.anomaly_count > 0) {
+    clauses.push(`${pluralize(summary.anomaly_count, "flag", "flags")} to review`);
+  }
+  if (summary.divergent_team_count > 0) {
+    clauses.push(
+      `${pluralize(summary.divergent_team_count, "team", "teams")} the forecast missed badly`,
+    );
+  }
+  if (summary.newcomer_count > 0) {
+    clauses.push(pluralize(summary.newcomer_count, "newcomer", "newcomers"));
+  }
+  clauses.push(
+    `forecast off by ~${(summary.avg_placement_delta ?? 0).toFixed(1)} places on average`,
+  );
+
+  return { headline, clauses };
 }
 
 export function formatConfidencePercent(confidence: number): string {

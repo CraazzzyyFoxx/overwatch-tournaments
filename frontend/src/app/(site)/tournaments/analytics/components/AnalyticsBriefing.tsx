@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+"use client";
+
+import React from "react";
+
 import { AlgorithmAnalytics, TournamentAnalyticsSummary } from "@/types/analytics.types";
 import type { Tournament } from "@/types/tournament.types";
 import {
@@ -7,12 +10,12 @@ import {
   SelectGroup,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import styles from "./AnalyticsRedesign.module.css";
+import { buildVerdictClauses } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 
-interface AnalyticsHeroProps {
+interface AnalyticsBriefingProps {
   tournaments: Tournament[];
   algorithms: AlgorithmAnalytics[];
   tournamentId: number | null;
@@ -20,16 +23,22 @@ interface AnalyticsHeroProps {
   activeTournament: Tournament | null;
   activeAlgorithm: AlgorithmAnalytics | null;
   summary?: TournamentAnalyticsSummary;
+  predictedMoves: number;
   loadingTournaments: boolean;
   loadingAlgorithms: boolean;
   isErrorTournaments: boolean;
   isErrorAlgorithms: boolean;
-  adminControls?: ReactNode;
   onTournamentChange: (value: string) => void;
   onAlgorithmChange: (value: string) => void;
 }
 
-const AnalyticsHero = ({
+/**
+ * Briefing header: instead of a wall of equal KPI cards, it leads with one
+ * plain-language verdict sentence built from the summary, then the
+ * tournament / algorithm pickers. Admin actions live in OrganizerTools, not
+ * here, so the default read view stays clean.
+ */
+export default function AnalyticsBriefing({
   tournaments,
   algorithms,
   tournamentId,
@@ -37,48 +46,62 @@ const AnalyticsHero = ({
   activeTournament,
   activeAlgorithm,
   summary,
+  predictedMoves,
   loadingTournaments,
   loadingAlgorithms,
   isErrorTournaments,
   isErrorAlgorithms,
-  adminControls,
   onTournamentChange,
-  onAlgorithmChange
-}: AnalyticsHeroProps) => {
-  const totalTeams = summary?.total_teams ?? activeTournament?.participants_count ?? 0;
-  const totalPlayers = summary?.total_players ?? 0;
-  const status = activeTournament?.status ? activeTournament.status.replace(/_/g, " ") : "select context";
+  onAlgorithmChange,
+}: AnalyticsBriefingProps) {
+  const verdict = summary ? buildVerdictClauses(summary, predictedMoves) : null;
 
   return (
-    <Card className="overflow-hidden">
-      <div className={styles.heroGrid}>
-        <div className={styles.heroTitle}>
-          <div className={styles.eyebrow}>
-            Analytics
-            {activeTournament ? ` / Tournament #${activeTournament.id}` : ""}
-          </div>
-          <h1 className={styles.heroHeading}>
-            {activeTournament?.name ?? "Tournament analytics"}
-          </h1>
-          <p className={styles.heroSub}>
-            {totalTeams} teams
-            {totalPlayers ? ` / ${totalPlayers} players` : ""}
+    <Card className="overflow-hidden border-border/60">
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.85fr)]">
+        {/* Verdict — the one-glance answer */}
+        <div className="min-w-0">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
+            Tournament analytics
             {activeAlgorithm ? (
-              <>
-                {" "}
-                / ranked by <span className="font-semibold text-foreground">{activeAlgorithm.name}</span>
-              </>
+              <span className="text-muted-foreground/40"> · ranked by {activeAlgorithm.name}</span>
             ) : null}
           </p>
-          <div className={styles.statusPill}>
-            <span className={styles.statusDot} />
-            <span className="capitalize">{status}</span>
-          </div>
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground md:text-3xl">
+            {activeTournament?.name ?? "Tournament analytics"}
+          </h1>
+
+          {verdict ? (
+            <div className="mt-3 max-w-xl">
+              <p className="text-base font-semibold text-foreground">{verdict.headline}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {verdict.clauses.map((clause, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 ? <span className="text-muted-foreground/40"> · </span> : null}
+                    <span
+                      className={
+                        clause.includes("flag") ? "text-amber-300" : undefined
+                      }
+                    >
+                      {clause}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 max-w-xl text-sm text-muted-foreground">
+              Pick a tournament and an algorithm to see the briefing.
+            </p>
+          )}
         </div>
 
-        <div className={styles.filters}>
-          <div className={styles.field}>
-            <div className={styles.label}>Tournament</div>
+        {/* Pickers */}
+        <div className="flex flex-col gap-3">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/50">
+              Tournament
+            </div>
             <Select
               value={tournamentId == null ? "" : tournamentId.toString()}
               onValueChange={onTournamentChange}
@@ -107,8 +130,10 @@ const AnalyticsHero = ({
             </Select>
           </div>
 
-          <div className={styles.field}>
-            <div className={styles.label}>Algorithm</div>
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/50">
+              Algorithm
+            </div>
             <Select
               value={algorithmId == null ? "" : algorithmId.toString()}
               onValueChange={onAlgorithmChange}
@@ -136,12 +161,8 @@ const AnalyticsHero = ({
               </SelectContent>
             </Select>
           </div>
-
-          {adminControls ? <div className={styles.actions}>{adminControls}</div> : null}
         </div>
       </div>
     </Card>
   );
-};
-
-export default AnalyticsHero;
+}
