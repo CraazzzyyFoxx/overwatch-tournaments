@@ -32,7 +32,7 @@ import HeroStatsTable, {
   type StatSortKey
 } from "@/app/(site)/users/components/heroes/HeroStatsTable";
 import MapsForHero from "@/app/(site)/users/components/heroes/MapsForHero";
-import HeroOverviewTable, { type HeroOverviewRow } from "@/app/(site)/users/components/heroes/HeroOverviewTable";
+import HeroRail, { type HeroRow } from "@/app/(site)/users/components/heroes/HeroRail";
 import HeroBestGames from "@/app/(site)/users/components/heroes/HeroBestGames";
 
 interface Props {
@@ -69,7 +69,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
   const selected = useMemo(() => enriched.find((i) => i.hero.hero.id === selectedId) ?? enriched[0], [enriched, selectedId]);
 
   // Cross-hero overview rows (one per tracked hero) for the leaderboard table.
-  const overviewRows = useMemo<HeroOverviewRow[]>(() => {
+  const overviewRows = useMemo<HeroRow[]>(() => {
     const avg = (stats: HeroWithUserStats["stats"], name: LogStatsName) => {
       const v = stats.find((s) => s.name === name)?.avg_10;
       return v != null && Number.isFinite(v) ? v : null;
@@ -313,10 +313,12 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
         ) : null}
       </div>
 
-      {/* Cross-hero overview — answers "which hero carries me" at a glance */}
-      <HeroOverviewTable rows={overviewRows} selectedId={selected.hero.hero.id} onSelect={setSelectedId} />
+      {/* Sticky hero rail (cross-hero compare) + detail, side by side so
+          switching heroes never requires a long scroll up/down. */}
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[340px_1fr] xl:items-start">
+        <HeroRail rows={overviewRows} selectedId={selected.hero.hero.id} onSelect={setSelectedId} />
 
-        <div className="flex flex-col gap-3.5">
+        <div className="flex min-w-0 flex-col gap-3.5">
           {/* Spotlight */}
           <HeroSpotlight selected={selected} heroVariant={heroVariant} quickStats={quickStats} />
 
@@ -413,6 +415,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           {/* Maps the selected hero was played on (best → worst) */}
           <MapsForHero heroName={selected.hero.hero.name} heroMaps={heroMaps} />
         </div>
+      </div>
     </div>
   );
 };
