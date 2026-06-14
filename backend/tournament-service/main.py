@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from cashews import cache
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -28,6 +27,7 @@ from shared.schemas import HealthCheckResponse
 from starlette.requests import Request
 
 from src.core import config, db
+from src.core.caching import configure_cache
 from src.routes import router
 from src.services.tournament.recalculation_events import task_router as tournament_recalculation_task_router
 
@@ -109,8 +109,7 @@ app.add_middleware(CorrelationIdMiddleware)
 
 instrument_fastapi(app)
 
-cache.setup(config.settings.api_cache_url, prefix="fastapi:")
-cache.setup(config.settings.backend_cache_url, prefix="backend:")
+configure_cache()
 
 
 @app.get("/health/live")

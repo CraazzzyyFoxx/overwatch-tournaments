@@ -73,3 +73,27 @@ class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
         self.assertTrue(callable(worker.sync_registration_google_sheet_feeds))
         self.assertTrue(callable(worker.consume_bracket_job))
         self.assertTrue(callable(worker.consume_standings_job))
+
+    async def test_worker_entrypoint_configures_cache(self) -> None:
+        # Regression: the cashews cache is a process-global singleton. The API
+        # (main) configures it, but the worker (serve) runs in its own process
+        # where it was left unconfigured. After-commit cache invalidation then
+        # raised cashews NotConfiguredError on every bracket/standings job.
+        # The worker entrypoint must configure the cache like the API does.
+        from cashews import cache
+
+        recorded_prefixes: list[str | None] = []
+        real_setup = cache.setup
+
+        def _record_setup(*args: object, **kwargs: object) -> None:
+            recorded_prefixes.append(kwargs.get("prefix"))  # type: ignore[arg-type]
+
+        cache.setup = _record_setup  # type: ignore[assignment]
+        try:
+            worker = importlib.import_module("serve")
+            importlib.reload(worker)
+        finally:
+            cache.setup = real_setup  # type: ignore[assignment]
+
+        self.assertIn("fastapi:", recorded_prefixes)
+        self.assertIn("backend:", recorded_prefixes)

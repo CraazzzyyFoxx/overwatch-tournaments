@@ -21,6 +21,7 @@ from shared.observability import (
 from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
+from src.core.caching import configure_cache
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
@@ -36,6 +37,10 @@ logger = setup_logging(
 broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
+
+# The cashews cache is a process-global singleton; the worker must configure it
+# (like the API does) or after-commit cache invalidation raises NotConfiguredError.
+configure_cache()
 
 
 async def drain_outbox() -> None:
