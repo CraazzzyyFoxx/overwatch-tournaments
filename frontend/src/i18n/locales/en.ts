@@ -565,6 +565,16 @@ export const en = {
       title: "Anomaly flags",
       note: "Flags are review hints, not verdicts."
     },
+    anomalyReason: {
+      top_impact: "Among the strongest performers in their role",
+      low_rank: "Registered at a low rank for results this strong",
+      cohort_overperformance: "Outplayed others of the same role and division",
+      strong_cohort_outlier: "Far above peers of the same role and division",
+      single_tournament_underperformance: "Played well below their level this tournament",
+      sustained_underperformance: "Consistently below their level across recent tournaments",
+      sharp_recent_drop: "A sharp drop from their usual results",
+      mid_series_drop: "Results dropped sharply mid-series"
+    },
     explanation: {
       trigger: "Why this score?",
       title: "What drove this score",

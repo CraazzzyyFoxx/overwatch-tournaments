@@ -120,9 +120,9 @@ class PlayerAnomalyTests(TestCase):
 
         smurf = next(f for f in flags if f["player_id"] == 4)
         self.assertEqual("smurf", smurf["kind"])
-        self.assertTrue(any("strong cohort overperformance" in r for r in smurf["reasons"]))
+        self.assertIn("strong_cohort_outlier", smurf["reasons"])
         # The low-rank gate is NOT claimed as a reason here.
-        self.assertFalse(any(r.startswith("rank=") for r in smurf["reasons"]))
+        self.assertNotIn("low_rank", smurf["reasons"])
 
     def test_smurf_strong_outlier_threshold_is_respected(self) -> None:
         # local_zscore below strong_local_z_threshold and not a classic smurf → no flag.

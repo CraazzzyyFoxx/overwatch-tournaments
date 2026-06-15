@@ -50,7 +50,24 @@ export default function AnomalyTooltip({
   const isKnown = isAnomalyGlossaryTerm(kind);
   const label = isKnown ? t(`analytics.glossary.${kind}.label`) : capitalize(kind);
   const plain = isKnown ? t(`analytics.glossary.${kind}.plain`) : null;
-  const cleanReasons = (reasons ?? []).filter((reason) => reason && reason.trim().length > 0);
+
+  // Backend emits reason CODES (e.g. "top_impact"); localise them. Legacy raw
+  // dev-strings (e.g. "impact_score=82.3 >= p80", "deterministic review rule")
+  // from not-yet-recomputed data are hidden rather than shown verbatim.
+  const displayReasons = (reasons ?? [])
+    .map((code): string | null => {
+      const trimmed = (code ?? "").trim();
+      if (!trimmed) return null;
+      const key = `analytics.anomalyReason.${trimmed}`;
+      const localised = t(key);
+      if (localised !== key) return localised;
+      // Unknown / legacy: drop anything that looks like a raw metric expression.
+      if (/[=<>]|\brule\b|\banomaly\b|\bmethod\b|changepoint|rolling|\bp\d/i.test(trimmed)) {
+        return null;
+      }
+      return trimmed;
+    })
+    .filter((r): r is string => r !== null);
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -74,13 +91,13 @@ export default function AnomalyTooltip({
               {plain}
             </span>
           ) : null}
-          {cleanReasons.length > 0 ? (
+          {displayReasons.length > 0 ? (
             <div className="mt-1.5 border-t border-border/60 pt-1.5">
               <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
                 {t("analytics.glossary.reasonsLabel")}
               </span>
               <ul className="mt-0.5 space-y-0.5">
-                {cleanReasons.map((reason, index) => (
+                {displayReasons.map((reason, index) => (
                   <li
                     key={`${reason}-${index}`}
                     className="text-xs leading-relaxed text-muted-foreground"

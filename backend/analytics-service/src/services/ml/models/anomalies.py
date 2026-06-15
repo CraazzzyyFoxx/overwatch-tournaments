@@ -126,25 +126,18 @@ def detect_smurfs(
                         1.0,
                     )
                 )
-                reasons: list[str] = []
+                # Human-meaningful reason CODES (frontend localises them); the
+                # numeric detail lives in ``evidence``. Internal method labels
+                # (IsolationForest / review rule) are intentionally not surfaced.
+                reasons = []
                 if impact_suspicious:
-                    reasons.append(f"impact_score={impact:.1f} >= p{impact_threshold:.0f}")
+                    reasons.append("top_impact")
                 if rank_suspicious:
-                    reasons.append(f"rank={rank:.0f} <= p{rank_threshold:.0f}")
-                if local_z >= local_z_threshold:
-                    reasons.append(f"local_zscore={local_z:.2f} >= {local_z_threshold}")
-                elif local_pct >= local_percentile_threshold:
-                    reasons.append(
-                        f"local_percentile={local_pct:.1f} >= {local_percentile_threshold}"
-                    )
+                    reasons.append("low_rank")
+                if local_z >= local_z_threshold or local_pct >= local_percentile_threshold:
+                    reasons.append("cohort_overperformance")
                 if strong_local and not classic_smurf:
-                    reasons.append(
-                        f"strong cohort overperformance local_zscore={local_z:.2f} "
-                        f">= {strong_local_z_threshold} (any rank)"
-                    )
-                reasons.append(
-                    "IsolationForest anomaly" if is_anom else "deterministic review rule"
-                )
+                    reasons.append("strong_cohort_outlier")
                 out.append(
                     {
                         "player_id": int(row["player_id"]),
@@ -207,10 +200,7 @@ def detect_trolls(
                             "kind": "troll",
                             "score": float(-current),
                             "confidence": float(np.clip(abs(current) / 4.0, 0.0, 0.55)),
-                            "reasons": [
-                                f"single-tournament local_zscore={current:.2f} <= {single_tournament_z_threshold}",
-                                f"impact_score={impact:.1f} <= {single_tournament_impact_threshold}",
-                            ],
+                            "reasons": ["single_tournament_underperformance"],
                             "evidence": {
                                 "current_local_zscore": current,
                                 "impact_score": impact,
@@ -228,9 +218,7 @@ def detect_trolls(
                         "kind": "troll",
                         "score": float(-recent_mean),
                         "confidence": float(np.clip(abs(recent_mean) / 3.0, 0.0, 1.0)),
-                        "reasons": [
-                            f"local rolling{len(recent)} mean z={recent_mean:.2f} <= {z_threshold}"
-                        ],
+                        "reasons": ["sustained_underperformance"],
                         "evidence": {
                             "recent_local_zscores": [float(v) for v in recent],
                             "window": len(recent),
@@ -264,9 +252,7 @@ def detect_trolls(
                         "kind": "troll",
                         "score": float(-z),
                         "confidence": float(np.clip(abs(z) / 3.0, 0.0, 1.0)),
-                        "reasons": [
-                            f"rolling{len(recent)} mean={recent_mean:.3f} z={z:.2f} <= {z_threshold}"
-                        ],
+                        "reasons": ["sustained_underperformance"],
                         "evidence": {
                             "recent_raw_values": [float(v) for v in recent],
                             "window": len(recent),
@@ -296,7 +282,7 @@ def detect_trolls(
                     "kind": "troll",
                     "score": float(-z),
                     "confidence": float(np.clip(abs(z) / 3.0, 0.0, 1.0)),
-                    "reasons": [f"rolling{window} z-score={z:.2f} <= {z_threshold}"],
+                    "reasons": ["sustained_underperformance"],
                     "evidence": {"window": window, "zscore": float(z)},
                 }
             )
@@ -339,11 +325,7 @@ def detect_sandbags(
                     "kind": "sandbag",
                     "score": float(drop),
                     "confidence": float(np.clip((drop / 3.0) * confidence_base, 0.0, 1.0)),
-                    "reasons": [
-                        f"current local_zscore={current:.2f} <= {min_current_z}",
-                        f"drop from prior mean={drop:.2f} >= {min_drop_z}",
-                        f"prior mean={prior_mean:.2f} >= {prior_mean_floor}",
-                    ],
+                    "reasons": ["sharp_recent_drop"],
                     "evidence": {
                         "prior_local_zscores": prior,
                         "prior_mean": prior_mean,
@@ -424,12 +406,7 @@ def detect_throws(
                     "kind": "throw",
                     "score": float(pre_mean - post_mean),
                     "confidence": float(np.clip((pre_mean - post_mean) / 3.0, 0.0, 1.0)),
-                    "reasons": [
-                        f"changepoint at round {cp}",
-                        f"pre-mean={pre_mean:.2f}, post-mean={post_mean:.2f}",
-                        f"late negative fraction={post_negative_fraction:.2f}",
-                        f"method={detection_method}",
-                    ],
+                    "reasons": ["mid_series_drop"],
                     "encounter_id": int(encounter_id),
                     "evidence": {
                         "changepoint_round": int(cp),
