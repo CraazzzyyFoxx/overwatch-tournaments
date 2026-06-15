@@ -54,6 +54,11 @@ class AppConfig(BaseServiceSettings):
     shift_indiv_scale: float = 0.5
     shift_indiv_clamp: float = 1.5
 
+    # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
+    # this flags the player as a strong cohort outlier regardless of rank (in
+    # addition to the classic low-rank smurf rule).
+    smurf_strong_local_z: float = 1.5
+
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5
 

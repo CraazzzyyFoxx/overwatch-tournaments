@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.core.config import settings
 
 from ..features.extractors import extract_round_residuals
 from ..features.player_profile import load_player_signal_profile
@@ -68,7 +69,9 @@ async def run_player_anomalies_for_tournament(
     )
     flags: list[dict[str, typing.Any]] = []
     if not profile.empty:
-        flags.extend(detect_smurfs(profile))
+        flags.extend(
+            detect_smurfs(profile, strong_local_z_threshold=settings.smurf_strong_local_z)
+        )
         flags.extend(detect_trolls(profile))
         flags.extend(detect_sandbags(profile))
 

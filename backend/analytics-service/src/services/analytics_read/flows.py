@@ -198,15 +198,12 @@ def _predict_player_division(
     points: float,
     manual_shift: int | None,
 ) -> tuple[int | None, schemas.PredictedDirection, int]:
-    delta = 0
-    if points >= 1.5:
-        delta = -2
-    elif points >= 1:
-        delta = -1
-    elif points <= -1.5:
-        delta = 2
-    elif points <= -1:
-        delta = 1
+    # Division move = the shift signal rounded to the nearest division, so the
+    # DivisionGrid display stays consistent with the displayed shift value.
+    # Positive points = promote (lower division number) → negative delta. Bounded
+    # to ±3 to match the shift clamp. (The old fixed ±1/±1.5 thresholds hid any
+    # signal in (-1, 1): the number was non-zero but the grid showed "flat".)
+    delta = max(-3, min(3, -round(float(points))))
 
     if manual_shift:
         delta = -1 if manual_shift > 0 else 1
