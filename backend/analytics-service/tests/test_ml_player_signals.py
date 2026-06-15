@@ -99,6 +99,49 @@ class PlayerAnomalyTests(TestCase):
 
         self.assertEqual([], flags)
 
+    def test_smurf_flags_strong_cohort_outlier_regardless_of_rank(self) -> None:
+        # Player 4 has the HIGHEST rank (fails the low-rank gate) but is far above
+        # their role+division cohort (local_zscore 1.8) — must still be surfaced.
+        frame = pd.DataFrame(
+            {
+                "player_id": [1, 2, 3, 4],
+                "role": ["Damage"] * 4,
+                "rank": [1100, 1200, 1000, 1300],
+                "impact_score": [55.0, 50.0, 60.0, 65.0],
+                "local_zscore": [0.0, -0.1, 0.2, 1.8],
+                "local_percentile": [50.0, 45.0, 55.0, 92.0],
+                "kd": [1.0, 1.1, 1.0, 1.6],
+                "weapon_accuracy": [30.0, 31.0, 28.0, 39.0],
+                "final_blows_p10": [4.0, 4.5, 4.2, 6.0],
+            }
+        )
+
+        flags = anomalies.detect_smurfs(frame)
+
+        smurf = next(f for f in flags if f["player_id"] == 4)
+        self.assertEqual("smurf", smurf["kind"])
+        self.assertTrue(any("strong cohort overperformance" in r for r in smurf["reasons"]))
+        # The low-rank gate is NOT claimed as a reason here.
+        self.assertFalse(any(r.startswith("rank=") for r in smurf["reasons"]))
+
+    def test_smurf_strong_outlier_threshold_is_respected(self) -> None:
+        # local_zscore below strong_local_z_threshold and not a classic smurf → no flag.
+        frame = pd.DataFrame(
+            {
+                "player_id": [1, 2, 3, 4],
+                "role": ["Damage"] * 4,
+                "rank": [1100, 1200, 1000, 1300],
+                "impact_score": [55.0, 50.0, 60.0, 65.0],
+                "local_zscore": [0.0, -0.1, 0.2, 1.3],
+                "local_percentile": [50.0, 45.0, 55.0, 88.0],
+                "kd": [1.0, 1.1, 1.0, 1.6],
+                "weapon_accuracy": [30.0, 31.0, 28.0, 39.0],
+                "final_blows_p10": [4.0, 4.5, 4.2, 6.0],
+            }
+        )
+
+        self.assertEqual([], anomalies.detect_smurfs(frame))
+
     def test_troll_prefers_local_history(self) -> None:
         frame = pd.DataFrame(
             {

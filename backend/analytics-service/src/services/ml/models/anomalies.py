@@ -59,16 +59,20 @@ def detect_smurfs(
     rank_threshold: float = 35.0,
     local_z_threshold: float = 0.9,
     local_percentile_threshold: float = 80.0,
+    strong_local_z_threshold: float = 1.5,
     min_role_size: int = 3,
 ) -> list[dict[str, typing.Any]]:
-    """Flag likely smurfs from global impact plus local overperformance.
+    """Flag likely smurfs / strong cohort outliers.
 
-    A player is flagged when they are:
-    - anomalous under IsolationForest for their role, or the role pool is too
-      small and a deterministic review rule fires,
-    - high-impact within the role,
-    - low-rank relative to the role pool,
-    - and clearly outperforming their own local division band.
+    A player is flagged when EITHER:
+    - the classic under-ranked smurf rule fires — high-impact within the role,
+      low-rank relative to the role pool, AND clearly outperforming their own
+      local division band; OR
+    - they are a **strong cohort outlier** regardless of rank — their
+      division-normalised ``local_zscore`` is at/above ``strong_local_z_threshold``
+      (someone playing far above their role+division peers should be surfaced even
+      if they are not low-rank, since cross-division ``impact_score`` and the rank
+      gate otherwise hide mid/high-rank overperformers).
     """
     if df.empty or not all(c in df.columns for c in _SMURF_FEATURES):
         return []
@@ -107,7 +111,9 @@ def detect_smurfs(
                 local_z >= local_z_threshold
                 or local_pct >= local_percentile_threshold
             )
-            deterministic_review = impact_suspicious and rank_suspicious and local_suspicious
+            strong_local = local_z >= strong_local_z_threshold
+            classic_smurf = impact_suspicious and rank_suspicious and local_suspicious
+            deterministic_review = classic_smurf or strong_local
             if deterministic_review:
                 confidence = float(
                     np.clip(
@@ -120,26 +126,32 @@ def detect_smurfs(
                         1.0,
                     )
                 )
+                reasons: list[str] = []
+                if impact_suspicious:
+                    reasons.append(f"impact_score={impact:.1f} >= p{impact_threshold:.0f}")
+                if rank_suspicious:
+                    reasons.append(f"rank={rank:.0f} <= p{rank_threshold:.0f}")
+                if local_z >= local_z_threshold:
+                    reasons.append(f"local_zscore={local_z:.2f} >= {local_z_threshold}")
+                elif local_pct >= local_percentile_threshold:
+                    reasons.append(
+                        f"local_percentile={local_pct:.1f} >= {local_percentile_threshold}"
+                    )
+                if strong_local and not classic_smurf:
+                    reasons.append(
+                        f"strong cohort overperformance local_zscore={local_z:.2f} "
+                        f">= {strong_local_z_threshold} (any rank)"
+                    )
+                reasons.append(
+                    "IsolationForest anomaly" if is_anom else "deterministic review rule"
+                )
                 out.append(
                     {
                         "player_id": int(row["player_id"]),
                         "kind": "smurf",
                         "score": float(max(score, confidence)),
                         "confidence": confidence,
-                        "reasons": [
-                            f"impact_score={impact:.1f} >= p{impact_threshold:.0f}",
-                            f"rank={rank:.0f} <= p{rank_threshold:.0f}",
-                            (
-                                f"local_zscore={local_z:.2f} >= {local_z_threshold}"
-                                if local_z >= local_z_threshold
-                                else f"local_percentile={local_pct:.1f} >= {local_percentile_threshold}"
-                            ),
-                            (
-                                "IsolationForest anomaly"
-                                if is_anom
-                                else "deterministic review rule"
-                            ),
-                        ],
+                        "reasons": reasons,
                         "evidence": {
                             "impact_score": impact,
                             "rank": rank,
