@@ -115,6 +115,8 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
+      gateway:
+        condition: service_started
     networks:
       - app-network
     healthcheck:

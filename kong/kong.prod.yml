@@ -2,8 +2,13 @@ _format_version: "3.0"
 _transform: true
 
 services:
+  # /api/auth now flows through the Go gateway: READY endpoints (login, refresh,
+  # logout, sessions, me, set-password, validate, oauth/*, service/*) are served
+  # by gateway -> identity-svc; everything not yet ported (rbac, api-keys,
+  # player, me/avatar) is proxied by the gateway back to auth-service.
+  # Revert url to http://auth:8001 to bypass the gateway entirely.
   - name: auth
-    url: http://auth:8001
+    url: http://gateway:8080
     routes:
       - name: auth-api
         paths:
