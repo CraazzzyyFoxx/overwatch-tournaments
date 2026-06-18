@@ -148,6 +148,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -190,6 +192,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -234,6 +238,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -280,6 +286,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -326,6 +334,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -370,6 +380,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9100
     depends_on:
       redis:
@@ -446,6 +458,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -492,6 +506,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -540,6 +556,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9100
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -583,6 +601,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9103
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -626,6 +646,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9100
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -671,6 +693,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9106
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -764,18 +788,17 @@ services:
     restart: always
 
   # ==========================================================================
-  # Gateway architecture (Phase 1) — OPT-IN, behind the `gateway-go` profile.
-  # Kong stays the authoritative entry point. Bring this stack up only to test
-  # the new edge alongside Kong:
-  #   docker compose -f docker-compose.production.yml --profile gateway-go up -d
-  #   traefik (TLS) -> nginx (plain-HTTP entry) -> gateway -> RPC -> identity-svc
-  # At full cutover (later), point services at the gateway in common.env:
-  #   AUTH_SERVICE_URL=http://gateway:8080/api/auth
+  # Gateway architecture (Phase 1) — part of the DEFAULT stack.
+  # The gateway is primary for everything READY: the backend services validate
+  # tokens through it (AUTH_SERVICE_URL=http://gateway:8080/api/auth is set on
+  # each consumer below) -> RPC -> identity-svc, and the gateway serves
+  # /api/auth/* + proxies the rest. Kong stays the EXTERNAL edge for the
+  # frontend/clients until the frontend repoint; then nginx (behind Traefik)
+  # takes over the edge.   traefik (TLS) -> nginx -> gateway -> RPC -> identity
   # ==========================================================================
 
   identity:
     image: registry.craazzzyyfoxx.me/aqt-identity:latest
-    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
@@ -798,6 +821,8 @@ services:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
       - WORKER_METRICS_PORT=9107
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -822,7 +847,6 @@ services:
 
   gateway:
     image: registry.craazzzyyfoxx.me/aqt-gateway:latest
-    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
@@ -848,6 +872,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      identity:
+        condition: service_healthy
     networks:
       - app-network
     # No healthcheck: the distroless image has no shell/wget. nginx depends on
@@ -856,7 +882,6 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
-    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
