@@ -763,6 +763,124 @@ services:
       start_period: 60s
     restart: always
 
+  # ==========================================================================
+  # Gateway architecture (Phase 1) — runs ALONGSIDE Kong/auth for prod testing.
+  # traefik (TLS) -> nginx (plain-HTTP app entry) -> gateway (REST proxy + WS
+  # hub + local JWT) -> RPC -> identity-svc.
+  # To route the existing services through the gateway, set in prod common.env:
+  #   AUTH_SERVICE_URL=http://gateway:8080/api/auth
+  # ==========================================================================
+
+  identity:
+    image: registry.craazzzyyfoxx.me/aqt-identity:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+    build:
+      context: ./backend
+      args:
+        APP_PATH: identity
+    command: faststream run serve:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/auth.env
+      - ./backend/env/identity.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      - WORKER_METRICS_PORT=9107
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    volumes:
+      - ./logs/identity:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
+  gateway:
+    image: registry.craazzzyyfoxx.me/aqt-gateway:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/auth.env
+      - ./backend/env/gateway.env
+    environment:
+      # In prod the frontend is a compose service (dev default points at the host).
+      - UPSTREAM_FRONTEND=http://frontend:3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    # No healthcheck: the distroless image has no shell/wget. nginx depends on
+    # it with condition: service_started.
+    restart: always
+
+  nginx:
+    image: nginx:1.27-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    # Plain-HTTP app entry: TLS is terminated by Traefik in front of nginx, so
+    # no certs/443 here. Behind Traefik, route traefik -> nginx:80 over the app
+    # network (add Traefik router/service labels per your setup); the published
+    # port below is only for direct testing.
+    ports:
+      - "${GATEWAY_EDGE_PORT:-8090}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: always
+
 volumes:
   redis-data:
   rabbitmq-data:

@@ -875,17 +875,16 @@ services:
           cpus: '0.10'
           memory: 64M
 
-  # nginx: TLS-terminating edge in front of the gateway (gateway keeps routing
-  # REST + WS). Single upstream -> gateway:8080. Start with the gateway profile.
+  # nginx: plain-HTTP app entry in front of the gateway (gateway keeps routing
+  # REST + WS). Single upstream -> gateway:8080. TLS is terminated upstream
+  # (Traefik in prod), not here. Start with the gateway profile.
   nginx:
     image: nginx:1.27-alpine
     profiles: ["gateway-go"]
     ports:
       - "${EDGE_HTTP_PORT:-8090}:80"
-      # - "443:443"   # prod TLS (mount certs + uncomment the 443 block in nginx.conf)
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       gateway:
         condition: service_started
