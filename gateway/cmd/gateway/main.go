@@ -24,11 +24,13 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/workspace"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ws"
 )
@@ -70,6 +72,10 @@ func run(logger *slog.Logger) error {
 	rpcClient := rpc.New(cfg.RabbitMQURL, logger)
 	defer func() { _ = rpcClient.Close() }()
 	identityHandler := identity.NewHandler(rpcClient, logger)
+	// Tournament-service routes served via typed RPC through the shared edge
+	// dispatcher. Public reads need no identity (resolver added when auth'd
+	// routes land). Specific patterns win over the /api/v1 reverse proxy.
+	tournamentEdge := edge.New(rpcClient, logger, nil)
 
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
 	hub := ws.NewHub()
@@ -126,6 +132,8 @@ func run(logger *slog.Logger) error {
 	// to identity-svc's in-process ASGI app over RPC — no proxy to auth-service.
 	// Typed routes above are more specific and win; this subtree catches the rest.
 	mux.HandleFunc("/api/auth/", identityHandler.Tunnel)
+	// tournament-service: typed RPC reads (the rest of /api/v1 still proxies).
+	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

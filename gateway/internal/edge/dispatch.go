@@ -74,10 +74,13 @@ func (d *Dispatcher) Handler(spec RouteSpec) http.HandlerFunc {
 			data[p] = r.PathValue(p)
 		}
 		if len(spec.Query) > 0 {
+			values := r.URL.Query()
 			q := map[string]any{}
 			for _, k := range spec.Query {
-				if v := r.URL.Query().Get(k); v != "" {
-					q[k] = v
+				// Forward all values as a list so repeated params (e.g. ?entities=a&entities=b)
+				// survive; the service side reads scalar-or-list uniformly.
+				if vs, ok := values[k]; ok && len(vs) > 0 {
+					q[k] = vs
 				}
 			}
 			if len(q) > 0 {

@@ -133,6 +133,27 @@ func TestDispatch_RPCUnavailable(t *testing.T) {
 	}
 }
 
+func TestDispatch_QueryForwardedAsList(t *testing.T) {
+	m := &mockCaller{reply: []byte(`{"ok":true,"data":[]}`)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/tournaments/{id}", Queue: "q", IDParam: "id", Query: []string{"entities", "workspace_id"}, Auth: AuthNone}
+	w := serve(d, spec, "GET", "/api/v1/tournaments/5?entities=stages&entities=teams&workspace_id=7", "")
+	if w.Code != 200 {
+		t.Fatalf("code=%d", w.Code)
+	}
+	var sent map[string]any
+	_ = json.Unmarshal(m.lastBody, &sent)
+	q, _ := sent["query"].(map[string]any)
+	ents, _ := q["entities"].([]any)
+	if len(ents) != 2 || ents[0] != "stages" || ents[1] != "teams" {
+		t.Fatalf("entities=%v", q["entities"])
+	}
+	ws, _ := q["workspace_id"].([]any)
+	if len(ws) != 1 || ws[0] != "7" {
+		t.Fatalf("workspace_id=%v", q["workspace_id"])
+	}
+}
+
 func TestDispatch_NoContent(t *testing.T) {
 	m := &mockCaller{reply: []byte(`{"ok":true,"data":null}`)}
 	d := newTestDispatcher(m, nil)
