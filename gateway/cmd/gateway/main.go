@@ -122,6 +122,10 @@ func run(logger *slog.Logger) error {
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
 	mux.HandleFunc("DELETE /api/auth/api-keys/{id}", identityHandler.RevokeApiKey)
+	// Everything else under /api/auth/ (rbac, player, me/avatar, ...) is tunneled
+	// to identity-svc's in-process ASGI app over RPC — no proxy to auth-service.
+	// Typed routes above are more specific and win; this subtree catches the rest.
+	mux.HandleFunc("/api/auth/", identityHandler.Tunnel)
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

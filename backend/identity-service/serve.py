@@ -7,10 +7,12 @@ Milestone 1A ships `rpc.identity.validate_token`; 1B+ add login/refresh/oauth/et
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
+import httpx
 from faststream import FastStream
 from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
@@ -31,6 +33,11 @@ from src.core.redis import close_redis, init_redis
 from src.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from src.services import api_key_service, auth_flows, oauth_flows, service_flows
 from src.services.token_validation import validate_token
+from src.tunnel import s3_client, tunnel_app
+
+# Hop-by-hop request headers stripped before dispatching into the in-process
+# ASGI app: httpx recomputes Content-Length/Host from the forwarded body.
+_TUNNEL_DROP_REQUEST_HEADERS = {"host", "content-length", "connection", "transfer-encoding"}
 
 
 def _validation_detail(exc: ValidationError) -> str:
@@ -76,6 +83,10 @@ logger = setup_logging(
 broker = RabbitBroker(settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
+# In-process ASGI transport for the generic HTTP-over-RPC tunnel (rbac/player/
+# me-avatar and any other not-yet-typed /api/auth/* endpoint). No network socket.
+_asgi_transport = httpx.ASGITransport(app=tunnel_app, raise_app_exceptions=False)
+
 
 @app.on_startup
 async def setup_worker() -> None:
@@ -102,11 +113,13 @@ async def setup_worker() -> None:
     if settings.worker_metrics_port:
         start_worker_metrics_server(settings.worker_metrics_port)
     await init_redis()
+    await s3_client.start()
     logger.info("identity-svc started")
 
 
 @app.on_shutdown
 async def teardown_worker() -> None:
+    await s3_client.close()
     await close_redis()
 
 
@@ -460,3 +473,45 @@ async def rpc_revoke_api_key(data: dict, msg: RabbitMessage) -> dict:
         await api_key_service.revoke_api_key(session, user=user, api_key_id=api_key_id)
 
     return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.http")
+async def rpc_http(data: dict, msg: RabbitMessage) -> dict:
+    """Generic HTTP-over-RPC tunnel.
+
+    Runs a request through the in-process ASGI app so the gateway can serve the
+    not-yet-typed /api/auth/* endpoints (rbac, player, me/avatar) without
+    per-endpoint porting. The reply is the RAW HTTP response (status/headers/
+    base64 body), NOT the {ok,data,error} envelope.
+    """
+    data = data or {}
+    method = str(data.get("method") or "GET")
+    path = str(data.get("path") or "/")
+    if not path.startswith("/"):
+        path = "/" + path
+    query = data.get("query") or ""
+    url = f"{path}?{query}" if query else path
+    raw_headers = data.get("headers") or {}
+    headers = {
+        k: v
+        for k, v in raw_headers.items()
+        if isinstance(k, str) and k.lower() not in _TUNNEL_DROP_REQUEST_HEADERS
+    }
+    body = base64.b64decode(data["body"]) if data.get("body") else b""
+    try:
+        async with httpx.AsyncClient(
+            transport=_asgi_transport, base_url="http://identity.internal", timeout=30.0
+        ) as client:
+            resp = await client.request(method, url, headers=headers, content=body)
+    except Exception:  # pragma: no cover - defensive worker guard
+        logger.exception("http tunnel dispatch failed: %s %s", method, path)
+        return {
+            "status": 502,
+            "headers": [["content-type", "application/json"]],
+            "body": base64.b64encode(b'{"detail":"identity tunnel error"}').decode("ascii"),
+        }
+    return {
+        "status": resp.status_code,
+        "headers": [[k, v] for k, v in resp.headers.multi_items()],
+        "body": base64.b64encode(resp.content).decode("ascii"),
+    }
