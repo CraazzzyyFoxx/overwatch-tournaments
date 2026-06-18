@@ -118,6 +118,10 @@ func run(logger *slog.Logger) error {
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", identityHandler.OAuthCallbackPost)
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
+	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
+	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
+	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
+	mux.HandleFunc("DELETE /api/auth/api-keys/{id}", identityHandler.RevokeApiKey)
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

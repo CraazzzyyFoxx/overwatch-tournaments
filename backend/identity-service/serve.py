@@ -29,7 +29,7 @@ from src.core import db
 from src.core.config import settings
 from src.core.redis import close_redis, init_redis
 from src.schemas.rpc import rpc_error, rpc_ok, status_to_code
-from src.services import auth_flows, oauth_flows, service_flows
+from src.services import api_key_service, auth_flows, oauth_flows, service_flows
 from src.services.token_validation import validate_token
 
 
@@ -399,5 +399,64 @@ async def rpc_oauth_unlink(data: dict, msg: RabbitMessage) -> dict:
         if not provider:
             raise HTTPException(status_code=400, detail="provider is required")
         await oauth_flows.unlink(session, user, provider)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.list_api_keys")
+async def rpc_list_api_keys(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        try:
+            workspace_id = int(data.get("workspace_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="workspace_id is required")
+        keys = await api_key_service.list_api_keys(session, user=user, workspace_id=workspace_id)
+        return [k.model_dump(mode="json") for k in keys]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.create_api_key")
+async def rpc_create_api_key(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        payload = schemas.ApiKeyCreate.model_validate(data)
+        result = await api_key_service.create_api_key(session, user=user, payload=payload)
+        return result.model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.update_api_key")
+async def rpc_update_api_key(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        try:
+            api_key_id = int(data.get("api_key_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="api_key_id is required")
+        payload = schemas.ApiKeyUpdate.model_validate(data)
+        result = await api_key_service.update_api_key(
+            session, user=user, api_key_id=api_key_id, payload=payload
+        )
+        return result.model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.revoke_api_key")
+async def rpc_revoke_api_key(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        try:
+            api_key_id = int(data.get("api_key_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="api_key_id is required")
+        await api_key_service.revoke_api_key(session, user=user, api_key_id=api_key_id)
 
     return await _with_active_user(data.get("access_token"), op)

@@ -41,6 +41,11 @@ const (
 	queueOAuthConnections = "rpc.identity.oauth_connections"
 	queueOAuthUnlink      = "rpc.identity.oauth_unlink"
 
+	queueListApiKeys  = "rpc.identity.list_api_keys"
+	queueCreateApiKey = "rpc.identity.create_api_key"
+	queueUpdateApiKey = "rpc.identity.update_api_key"
+	queueRevokeApiKey = "rpc.identity.revoke_api_key"
+
 	rpcTimeout = 5 * time.Second
 )
 
@@ -263,6 +268,58 @@ func (h *Handler) OAuthUnlink(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(map[string]any{"access_token": token, "provider": r.PathValue("provider")})
 	h.callIdentity(w, r, queueOAuthUnlink, body, http.StatusNoContent)
+}
+
+// --- API keys (workspace-scoped, authenticated) ---
+
+// ListApiKeys mirrors GET /api-keys?workspace_id=.
+func (h *Handler) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body, _ := json.Marshal(map[string]any{"access_token": token, "workspace_id": r.URL.Query().Get("workspace_id")})
+	h.callIdentity(w, r, queueListApiKeys, body, http.StatusOK)
+}
+
+// CreateApiKey mirrors POST /api-keys -> 201.
+func (h *Handler) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body, ok := mergeBody(w, r, map[string]any{"access_token": token})
+	if !ok {
+		return
+	}
+	h.callIdentity(w, r, queueCreateApiKey, body, http.StatusCreated)
+}
+
+// UpdateApiKey mirrors PATCH /api-keys/{id}.
+func (h *Handler) UpdateApiKey(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body, ok := mergeBody(w, r, map[string]any{"access_token": token, "api_key_id": r.PathValue("id")})
+	if !ok {
+		return
+	}
+	h.callIdentity(w, r, queueUpdateApiKey, body, http.StatusOK)
+}
+
+// RevokeApiKey mirrors DELETE /api-keys/{id} -> 204.
+func (h *Handler) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body, _ := json.Marshal(map[string]any{"access_token": token, "api_key_id": r.PathValue("id")})
+	h.callIdentity(w, r, queueRevokeApiKey, body, http.StatusNoContent)
 }
 
 // authedNoBody handles a bearer-authenticated endpoint with no request body,
