@@ -803,12 +803,11 @@ services:
 
   # --------------------------------------------------------------------------
   # identity-svc (headless FastStream) — Phase 1: identity RPC over RabbitMQ.
-  # Headless worker (no HTTP), called by the gateway. Runs with the new-arch
-  # stack. Start with: docker compose --profile gateway-go up -d --build identity
+  # Headless worker (no HTTP), called by the gateway. Part of the default dev
+  # stack so a plain `docker compose up -d --build` brings everything up.
   # --------------------------------------------------------------------------
   identity:
     image: registry.craazzzyyfoxx.me/aqt-identity:dev
-    profiles: ["gateway-go"]
     build:
       context: ./backend
       args:
@@ -843,13 +842,12 @@ services:
 
   # --------------------------------------------------------------------------
   # Gateway (Go) — Phase 0: REST reverse-proxy + WebSocket hub + local JWT.
-  # Replaces Kong + realtime-service. Runs alongside them behind its own
-  # profile until cut over. Start with:
-  #   docker compose --profile gateway-go up -d --build gateway
+  # Part of the default dev stack, on its OWN ports (gateway :8080, nginx :8090)
+  # alongside the existing services/frontend — no profile, no path changes.
+  # Test the gateway at :8080 / :8090; the rest of the app is untouched.
   # --------------------------------------------------------------------------
   gateway:
     image: registry.craazzzyyfoxx.me/aqt-gateway:dev
-    profiles: ["gateway-go"]
     build:
       context: ./gateway
       dockerfile: Dockerfile
@@ -864,6 +862,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - app-network
     deploy:
@@ -877,10 +877,9 @@ services:
 
   # nginx: plain-HTTP app entry in front of the gateway (gateway keeps routing
   # REST + WS). Single upstream -> gateway:8080. TLS is terminated upstream
-  # (Traefik in prod), not here. Start with the gateway profile.
+  # (Traefik in prod), not here. Part of the default dev stack.
   nginx:
     image: nginx:1.27-alpine
-    profiles: ["gateway-go"]
     ports:
       - "${EDGE_HTTP_PORT:-8090}:80"
     volumes:
