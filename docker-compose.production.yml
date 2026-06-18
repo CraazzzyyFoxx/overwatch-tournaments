@@ -764,15 +764,18 @@ services:
     restart: always
 
   # ==========================================================================
-  # Gateway architecture (Phase 1) — runs ALONGSIDE Kong/auth for prod testing.
-  # traefik (TLS) -> nginx (plain-HTTP app entry) -> gateway (REST proxy + WS
-  # hub + local JWT) -> RPC -> identity-svc.
-  # To route the existing services through the gateway, set in prod common.env:
+  # Gateway architecture (Phase 1) — OPT-IN, behind the `gateway-go` profile.
+  # Kong stays the authoritative entry point. Bring this stack up only to test
+  # the new edge alongside Kong:
+  #   docker compose -f docker-compose.production.yml --profile gateway-go up -d
+  #   traefik (TLS) -> nginx (plain-HTTP entry) -> gateway -> RPC -> identity-svc
+  # At full cutover (later), point services at the gateway in common.env:
   #   AUTH_SERVICE_URL=http://gateway:8080/api/auth
   # ==========================================================================
 
   identity:
     image: registry.craazzzyyfoxx.me/aqt-identity:latest
+    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
@@ -819,6 +822,7 @@ services:
 
   gateway:
     image: registry.craazzzyyfoxx.me/aqt-gateway:latest
+    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
@@ -852,6 +856,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
+    profiles: ["gateway-go"]
     deploy:
       resources:
         limits:
