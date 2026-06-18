@@ -26,6 +26,7 @@ COPY pyproject.toml uv.lock /app/
 # Copy all workspace member pyproject.toml files (required for workspace resolution)
 COPY app-service/pyproject.toml /app/app-service/pyproject.toml
 COPY auth-service/pyproject.toml /app/auth-service/pyproject.toml
+COPY identity-service/pyproject.toml /app/identity-service/pyproject.toml
 COPY parser-service/pyproject.toml /app/parser-service/pyproject.toml
 COPY realtime-service/pyproject.toml /app/realtime-service/pyproject.toml
 COPY tournament-service/pyproject.toml /app/tournament-service/pyproject.toml

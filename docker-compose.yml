@@ -802,6 +802,105 @@ services:
           memory: 256M
 
   # --------------------------------------------------------------------------
+  # identity-svc (headless FastStream) — Phase 1: identity RPC over RabbitMQ.
+  # Headless worker (no HTTP), called by the gateway. Runs with the new-arch
+  # stack. Start with: docker compose --profile gateway-go up -d --build identity
+  # --------------------------------------------------------------------------
+  identity:
+    image: registry.craazzzyyfoxx.me/aqt-identity:dev
+    profiles: ["gateway-go"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: identity
+    command: faststream run serve:app --reload --reload-dir /app/identity-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/auth.env
+      - ./backend/env/identity.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/identity-service:/app/identity-service
+      - ./backend/shared:/app/shared
+      - ./logs/identity:/logs
+    networks:
+      - app-network
+    # Headless worker: no HTTP server, so the image's HTTP healthcheck does not apply.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+  # --------------------------------------------------------------------------
+  # Gateway (Go) — Phase 0: REST reverse-proxy + WebSocket hub + local JWT.
+  # Replaces Kong + realtime-service. Runs alongside them behind its own
+  # profile until cut over. Start with:
+  #   docker compose --profile gateway-go up -d --build gateway
+  # --------------------------------------------------------------------------
+  gateway:
+    image: registry.craazzzyyfoxx.me/aqt-gateway:dev
+    profiles: ["gateway-go"]
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_HOST_PORT:-8080}:8080"
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/auth.env
+      - ./backend/env/gateway.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+
+  # nginx: TLS-terminating edge in front of the gateway (gateway keeps routing
+  # REST + WS). Single upstream -> gateway:8080. Start with the gateway profile.
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["gateway-go"]
+    ports:
+      - "${EDGE_HTTP_PORT:-8090}:80"
+      # - "443:443"   # prod TLS (mount certs + uncomment the 443 block in nginx.conf)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # --------------------------------------------------------------------------
   # Monitoring (start with: docker compose --profile monitoring up -d)
   # --------------------------------------------------------------------------
 

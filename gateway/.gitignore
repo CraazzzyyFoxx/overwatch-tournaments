@@ -1,0 +1,8 @@
+# Build output
+/out/
+gateway
+gateway.exe
+
+# Go workspace
+go.work
+go.work.sum
