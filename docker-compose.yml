@@ -126,59 +126,6 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  auth:
-    image: registry.craazzzyyfoxx.me/aqt-auth:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: auth
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --loop uvloop --reload --reload-delay 5 --reload-dir /app/auth-service --reload-dir /app/shared
-    ports:
-      - "8001:8001"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/auth.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-      - 'SERVICE_CLIENTS=${SERVICE_CLIENTS:-{"discord-service":"dev-discord-service-secret"}}'
-      - 'SERVICE_SCOPES=${SERVICE_SCOPES:-{"discord-service":["parser:logs"]}}'
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    develop:
-      watch:
-        - path: ./backend/pyproject.toml
-          action: rebuild
-    volumes:
-      - ./backend/auth-service:/app/auth-service
-      - ./backend/shared:/app/shared
-      - ./logs/auth:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
     build:
@@ -202,8 +149,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -256,8 +201,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      auth:
-        condition: service_healthy
       ss-local:
         condition: service_healthy
     develop:
@@ -306,8 +249,6 @@ services:
       - OTEL_TRACES_SAMPLER_ARG=1.0
     depends_on:
       redis:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -534,8 +475,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      auth:
-        condition: service_healthy
       ss-local:
         condition: service_healthy
     develop:
@@ -680,8 +619,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      auth:
-        condition: service_healthy
       parser:
         condition: service_healthy
       tournament:
@@ -774,8 +711,6 @@ services:
       - ./kong/kong.dev.yml:/kong/kong.yml:ro
     depends_on:
       backend:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       parser:
         condition: service_healthy

@@ -48,8 +48,9 @@ class BaseServiceSettings(BaseSettings):
     postgres_host: str
     postgres_port: str | int
 
-    # Auth Service
-    auth_service_url: str = "http://auth:8001"
+    # Auth/identity: services validate tokens through the gateway, which routes
+    # to the headless identity-svc over RPC. (auth-service is decommissioned.)
+    auth_service_url: str = "http://gateway:8080/api/auth"
     auth_service_timeout: float = 5.0
     auth_service_max_retries: int = 2
 

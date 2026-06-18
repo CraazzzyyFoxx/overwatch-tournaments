@@ -101,8 +101,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      auth:
-        condition: service_healthy
       parser:
         condition: service_healthy
       tournament:
@@ -171,52 +169,6 @@ services:
       start_period: 40s
     restart: always
 
-  auth:
-    image: registry.craazzzyyfoxx.me/aqt-auth:latest
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-    build:
-      context: ./backend
-      args:
-        APP_PATH: auth
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --workers ${WORKERS_AUTH:-2}
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/auth.env
-    environment:
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.1
-      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
-      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    volumes:
-      - ./logs/auth:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
-
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:latest
     deploy:
@@ -250,8 +202,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -299,8 +249,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      auth:
-        condition: service_healthy
       ss-local:
         condition: service_healthy
     networks:
@@ -344,8 +292,6 @@ services:
       - ./logs/realtime:/logs
     depends_on:
       redis:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -516,8 +462,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -762,8 +706,6 @@ services:
       - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://tournament:8004}
     depends_on:
       backend:
-        condition: service_healthy
-      auth:
         condition: service_healthy
       parser:
         condition: service_healthy

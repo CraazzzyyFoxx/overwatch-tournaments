@@ -29,7 +29,6 @@ type Config struct {
 // Upstreams are the base URLs of the existing services the gateway proxies to.
 // Defaults match the docker-compose service names / ports (see kong/kong.dev.yml).
 type Upstreams struct {
-	Auth       string
 	Parser     string
 	Balancer   string
 	Tournament string
@@ -61,7 +60,6 @@ func Load() (*Config, error) {
 		WSIdleTimeout: time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
 		WSReplayLimit: getenvInt("WS_REPLAY_LIMIT", 500),
 		Upstreams: Upstreams{
-			Auth:       getenv("UPSTREAM_AUTH", "http://auth:8001"),
 			Parser:     getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Balancer:   getenv("UPSTREAM_BALANCER", "http://balancer:8003"),
 			Tournament: getenv("UPSTREAM_TOURNAMENT", "http://tournament:8004"),

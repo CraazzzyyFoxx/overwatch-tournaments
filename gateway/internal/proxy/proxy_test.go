@@ -31,7 +31,6 @@ func TestProxy_LongestPrefixRouting(t *testing.T) {
 		App:        app.URL,
 		Tournament: tournament.URL,
 		Frontend:   frontend.URL,
-		Auth:       unused,
 		Parser:     unused,
 		Balancer:   unused,
 		Analytics:  unused,

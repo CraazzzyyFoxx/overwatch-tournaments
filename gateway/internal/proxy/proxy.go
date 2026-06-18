@@ -30,7 +30,8 @@ func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
 		{"/api/v1/core", up.App},
 		{"/api/v1", up.Tournament},
-		{"/api/auth", up.Auth},
+		// /api/auth/* is served by the gateway's identity face (typed RPC + the
+		// HTTP-over-RPC tunnel into identity-svc) — never proxied to auth-service.
 		{"/api/parser", up.Parser},
 		{"/api/balancer", up.Balancer},
 		{"/api/analytics", up.Analytics},
