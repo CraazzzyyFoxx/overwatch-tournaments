@@ -1,8 +1,8 @@
-# Build output
+# Build output (anchored to the module root so it does NOT match cmd/gateway/)
 /out/
-gateway
-gateway.exe
+/gateway
+/gateway.exe
 
 # Go workspace
-go.work
-go.work.sum
+/go.work
+/go.work.sum
