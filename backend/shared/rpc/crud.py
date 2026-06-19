@@ -57,6 +57,21 @@ def _validation_detail(exc: ValidationError) -> str:
     return f"{loc}: {msg}" if loc else msg
 
 
+def _detail_message(exc: HTTPException) -> str:
+    """Flatten an HTTPException detail into a clean string.
+
+    ``ApiHTTPException`` normalizes ``detail`` to a ``list[{msg, code}]``; the
+    gateway emits ``{"detail": "<string>"}`` either way, so join the ``msg``
+    fields instead of leaking a Python list repr (the per-item ``code`` is
+    dropped). Plain string details pass through unchanged.
+    """
+    detail = exc.detail
+    if isinstance(detail, list):
+        msgs = [str(d.get("msg")) for d in detail if isinstance(d, dict) and d.get("msg")]
+        return "; ".join(msgs) if msgs else "error"
+    return str(detail)
+
+
 @dataclass(frozen=True)
 class EntityConfig:
     """Declarative description of one CRUD entity.
@@ -230,7 +245,7 @@ class CrudDispatcher:
         except ValidationError as exc:
             return rpc_error("unprocessable", _validation_detail(exc))
         except HTTPException as exc:
-            return rpc_error(status_to_code(exc.status_code), str(exc.detail))
+            return rpc_error(status_to_code(exc.status_code), _detail_message(exc))
         except Exception:  # pragma: no cover - defensive worker guard
             logger.exception("crud rpc failed")
             return rpc_error("internal", "internal error")

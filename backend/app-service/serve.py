@@ -20,7 +20,17 @@ from shared.observability import (
 
 from src.core import config
 from src.core.caching import configure_cache
-from src.rpc import _clients
+from src.rpc import (
+    _clients,
+    achievements,
+    gamemodes,
+    heroes,
+    maps,
+    reads_generic,
+    statistics,
+    users,
+    workspaces,
+)
 from src.services import tournament_events
 
 logger = setup_logging(
@@ -41,8 +51,14 @@ configure_cache()
 # Cache-invalidation consumer (single owner of TOURNAMENT_CHANGED_APP_QUEUE).
 tournament_events.register(broker, logger)
 
-# rpc.app.* subscribers (registered in later phases):
-#   Phase 1 — reads_generic (rpc.app.read.{get,list}) + bespoke read modules
+# Phase 1 — public reads.
+# hero/map/gamemode/achievement get+list via the shared CRUD read engine:
+reads_generic.register(broker, logger)
+# bespoke reads (aggregations, lookups, users/*, workspace public reads):
+for _mod in (users, heroes, maps, gamemodes, achievements, statistics, workspaces):
+    _mod.register(broker, logger)
+
+# rpc.app.* subscribers (later phases):
 #   Phase 2 — workspace writes + members
 #   Phase 3 — binary base64 handlers
 

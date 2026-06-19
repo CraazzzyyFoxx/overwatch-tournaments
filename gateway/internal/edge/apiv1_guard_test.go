@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
 )
@@ -44,6 +45,11 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	d.Register(mux, tournament.PublicWriteRoutes)
 	mux.Handle("/api/v1/division-grids/", d.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", d.Subtree(tournament.StageSubtreeRoutes))
+	// app-service public reads (typed RPC) + achievements get subtree. Registering
+	// these must NOT panic — /users/{name} vs /users/{id}/... and the achievements
+	// /{id}/users vs /user/{user_id} ambiguity are the cases that would conflict.
+	d.Register(mux, app.ReadRoutes)
+	mux.Handle("/api/v1/core/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
 	mux.Handle("/api/v1/core/", marker("core"))
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Route", "guard")
@@ -66,7 +72,8 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 	}{
 		{"unknown top-level api path", "GET", "/api/v1/does-not-exist", ""},
 		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope", ""},
-		{"app-service carve-out still proxies", "GET", "/api/v1/core/workspaces", "core"},
+		{"unmigrated app path still proxies", "GET", "/api/v1/core/matches/1/log", "core"},
+		{"unmigrated app write still proxies", "POST", "/api/v1/core/assets/achievements/x", "core"},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -88,6 +95,59 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 			}
 			if route != c.wantRoute {
 				t.Fatalf("%s %s: routed to %q, want %q", c.method, c.path, route, c.wantRoute)
+			}
+		})
+	}
+}
+
+// TestApiV1Core_MigratedReadsHitDispatcher asserts the migrated app-service read
+// patterns win over the /api/v1/core proxy (ServeMux specificity) and reach the
+// typed dispatcher rather than the "core" proxy / frontend / guard. With the stub
+// RPC caller the dispatcher returns 504, so a migrated path yields an empty
+// X-Route (typed handler) — never "core"/"frontend"/"guard".
+func TestApiV1Core_MigratedReadsHitDispatcher(t *testing.T) {
+	mux := buildGuardedMux(t)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	paths := []string{
+		"/api/v1/core/heroes",
+		"/api/v1/core/heroes/5",
+		"/api/v1/core/heroes/lookup",
+		"/api/v1/core/heroes/5/leaderboard",
+		"/api/v1/core/heroes/statistics/playtime",
+		"/api/v1/core/maps",
+		"/api/v1/core/maps/5",
+		"/api/v1/core/maps/lookup",
+		"/api/v1/core/gamemodes/5",
+		"/api/v1/core/achievements",
+		"/api/v1/core/achievements/5",
+		"/api/v1/core/achievements/5/users",
+		"/api/v1/core/achievements/user/7",
+		"/api/v1/core/users",
+		"/api/v1/core/users/search",
+		"/api/v1/core/users/overview",
+		"/api/v1/core/users/overview/stats",
+		"/api/v1/core/users/5/profile",
+		"/api/v1/core/users/5/tournaments/9",
+		"/api/v1/core/users/5/maps/summary",
+		"/api/v1/core/users/someblizzname",
+		"/api/v1/core/statistics/dashboard",
+		"/api/v1/core/statistics/won-maps",
+		"/api/v1/core/workspaces",
+		"/api/v1/core/workspaces/5",
+	}
+	for _, p := range paths {
+		t.Run(p, func(t *testing.T) {
+			resp, err := http.Get(srv.URL + p)
+			if err != nil {
+				t.Fatalf("GET %s: %v", p, err)
+			}
+			defer resp.Body.Close()
+			switch resp.Header.Get("X-Route") {
+			case "core", "frontend", "guard":
+				t.Fatalf("GET %s: routed to %q, want the typed app dispatcher (not proxied)",
+					p, resp.Header.Get("X-Route"))
 			}
 		})
 	}

@@ -22,6 +22,7 @@ import (
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/acl"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/analytics"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
@@ -151,6 +152,13 @@ func run(logger *slog.Logger) error {
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
+	// app-service: typed RPC public reads (the rest of /api/v1/core still proxies).
+	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
+	// Specific patterns win over the /api/v1/core proxy below.
+	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	appEdge.Register(mux, app.ReadRoutes)
+	// achievements get surface: ambiguous (/{id}/users vs /user/{user_id}) -> subtree.
+	mux.Handle("/api/v1/core/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
 	// Guard the /api/v1 namespace: anything not matched by a typed route above
 	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched
