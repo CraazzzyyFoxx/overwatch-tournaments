@@ -23,6 +23,7 @@ from shared.schemas.events import TournamentComputationJobEvent
 from src.core import config, db
 from src.core.caching import configure_cache
 from src.rpc import reads as rpc_reads
+from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
@@ -45,6 +46,8 @@ configure_cache()
 
 # Typed read RPC methods served by the gateway (rpc.tournament.*).
 rpc_reads.register(broker, logger)
+# Generic admin CRUD (rpc.tournament.admin.*) via the shared engine.
+admin_registry.register(broker)
 
 
 async def drain_outbox() -> None:

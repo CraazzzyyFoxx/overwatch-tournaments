@@ -134,8 +134,10 @@ func run(logger *slog.Logger) error {
 	// to identity-svc's in-process ASGI app over RPC — no proxy to auth-service.
 	// Typed routes above are more specific and win; this subtree catches the rest.
 	mux.HandleFunc("/api/auth/", identityHandler.Tunnel)
-	// tournament-service: typed RPC reads (the rest of /api/v1 still proxies).
+	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
+	// /api/v1 still proxies). Specific patterns win over the proxy.
 	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
+	tournamentEdge.Register(mux, tournament.AdminCrudRoutes)
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

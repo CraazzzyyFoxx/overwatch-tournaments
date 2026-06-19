@@ -116,7 +116,7 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         return CrudDispatcher({"team": cfg}, _session_factory)
 
     async def test_update_via_hook_ok(self) -> None:
-        async def svc_update(session: Any, obj_id: int, payload: _UpdateSchema) -> _Dummy:
+        async def svc_update(session: Any, obj_id: int, payload: _UpdateSchema, data: Any) -> _Dummy:
             obj = _Dummy()
             obj.id = obj_id  # type: ignore[attr-defined]
             obj.name = payload.name  # type: ignore[attr-defined]
@@ -127,7 +127,7 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(res, {"ok": True, "data": {"id": 5, "name": "X"}})
 
     async def test_member_allowed_action_runs(self) -> None:
-        async def svc_update(session: Any, obj_id: int, payload: _UpdateSchema) -> _Dummy:
+        async def svc_update(session: Any, obj_id: int, payload: _UpdateSchema, data: Any) -> _Dummy:
             obj = _Dummy()
             obj.id = obj_id  # type: ignore[attr-defined]
             obj.name = "ok"  # type: ignore[attr-defined]
@@ -138,7 +138,7 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertTrue(res["ok"])  # MEMBER has team.update in ws 7
 
     async def test_delete_permission_denied(self) -> None:
-        async def svc_delete(session: Any, obj_id: int) -> None:
+        async def svc_delete(session: Any, obj_id: int, data: Any) -> None:
             raise AssertionError("hook must not run when permission is denied")
 
         dispatcher = self._dispatcher(_team_cfg(service_delete=svc_delete))
@@ -147,7 +147,7 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(res["error"]["code"], "forbidden")
 
     async def test_delete_via_hook_ok_returns_null(self) -> None:
-        async def svc_delete(session: Any, obj_id: int) -> None:
+        async def svc_delete(session: Any, obj_id: int, data: Any) -> None:
             return None
 
         dispatcher = self._dispatcher(_team_cfg(service_delete=svc_delete))
@@ -155,7 +155,7 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(res, {"ok": True, "data": None})
 
     async def test_create_validation_error(self) -> None:
-        async def svc_create(session: Any, payload: _CreateSchema) -> _Dummy:
+        async def svc_create(session: Any, payload: _CreateSchema, data: Any) -> _Dummy:
             raise AssertionError("hook must not run on invalid payload")
 
         dispatcher = self._dispatcher(_team_cfg(service_create=svc_create))

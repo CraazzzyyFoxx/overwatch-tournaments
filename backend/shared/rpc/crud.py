@@ -76,10 +76,12 @@ class EntityConfig:
     resolve_ws_from_id: WsFromId | None = None       # get / update / delete (id from data["id"])
     resolve_ws_for_create: WsFromData | None = None  # create (workspace from payload/path)
     resolve_ws_for_list: WsFromData | None = None    # list (workspace from query/path)
-    service_create: Callable[[AsyncSession, BaseModel], Awaitable[Any]] | None = None
-    service_get: Callable[[AsyncSession, int], Awaitable[Any]] | None = None
-    service_update: Callable[[AsyncSession, int, BaseModel], Awaitable[Any]] | None = None
-    service_delete: Callable[[AsyncSession, int], Awaitable[None]] | None = None
+    # Hooks receive the full request ``data`` dict (3rd/4th arg) so adapters can
+    # read path params (e.g. a create nested under /stages/tournament/{id}).
+    service_create: Callable[[AsyncSession, BaseModel, dict], Awaitable[Any]] | None = None
+    service_get: Callable[[AsyncSession, int, dict], Awaitable[Any]] | None = None
+    service_update: Callable[[AsyncSession, int, BaseModel, dict], Awaitable[Any]] | None = None
+    service_delete: Callable[[AsyncSession, int, dict], Awaitable[None]] | None = None
     list_fn: Callable[[AsyncSession, dict[str, Any]], Awaitable[Any]] | None = None
     not_found_detail: str = "Not found"
     actions: frozenset[str] = frozenset({"create", "get", "update", "delete"})
@@ -138,7 +140,7 @@ class CrudDispatcher:
             ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["create"])
             payload = cfg.create_schema.model_validate(data.get("payload") or {})
             if cfg.service_create is not None:
-                obj = await cfg.service_create(session, payload)
+                obj = await cfg.service_create(session, payload, data)
             else:
                 obj = cfg.model(**payload.model_dump(exclude_unset=True))
                 await cfg.repo.create(session, obj)
@@ -152,7 +154,7 @@ class CrudDispatcher:
         async with self._session_factory() as session:
             ws_id = await self._ws_from_id(cfg, session, obj_id)
             ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["get"])
-            obj = await cfg.service_get(session, obj_id) if cfg.service_get else await cfg.repo.get(session, obj_id)
+            obj = await cfg.service_get(session, obj_id, data) if cfg.service_get else await cfg.repo.get(session, obj_id)
             if obj is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=cfg.not_found_detail)
             return rpc_ok(await cfg.serializer(session, obj))
@@ -168,7 +170,7 @@ class CrudDispatcher:
             ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["update"])
             payload = cfg.update_schema.model_validate(data.get("payload") or {})
             if cfg.service_update is not None:
-                obj = await cfg.service_update(session, obj_id, payload)
+                obj = await cfg.service_update(session, obj_id, payload, data)
             else:
                 obj = await cfg.repo.get(session, obj_id)
                 if obj is None:
@@ -185,7 +187,7 @@ class CrudDispatcher:
             ws_id = await self._ws_from_id(cfg, session, obj_id)
             ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["delete"])
             if cfg.service_delete is not None:
-                await cfg.service_delete(session, obj_id)
+                await cfg.service_delete(session, obj_id, data)
             else:
                 obj = await cfg.repo.get(session, obj_id)
                 if obj is None:
