@@ -23,17 +23,15 @@ func echoServer(t *testing.T, name string) (*httptest.Server, *string) {
 
 func TestProxy_LongestPrefixRouting(t *testing.T) {
 	app, appPath := echoServer(t, "app")
-	tournament, tournamentPath := echoServer(t, "tournament")
 	frontend, frontendPath := echoServer(t, "frontend")
 
 	const unused = "http://127.0.0.1:1"
 	p, err := New(config.Upstreams{
-		App:        app.URL,
-		Tournament: tournament.URL,
-		Frontend:   frontend.URL,
-		Parser:     unused,
-		Balancer:   unused,
-		Analytics:  unused,
+		App:       app.URL,
+		Frontend:  frontend.URL,
+		Parser:    unused,
+		Balancer:  unused,
+		Analytics: unused,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -48,7 +46,9 @@ func TestProxy_LongestPrefixRouting(t *testing.T) {
 		seen     *string
 	}{
 		{"/api/v1/core/users/1", "app", "/api/v1/core/users/1", appPath},
-		{"/api/v1/tournaments/5", "tournament", "/api/v1/tournaments/5", tournamentPath},
+		// /api/v1/* (non-core) is no longer proxied (served by gateway RPC routes);
+		// in the bare proxy it falls through to the frontend catch-all.
+		{"/api/v1/tournaments/5", "frontend", "/api/v1/tournaments/5", frontendPath},
 		{"/api/account/me", "frontend", "/api/account/me", frontendPath},
 		{"/tournaments/5", "frontend", "/tournaments/5", frontendPath},
 	}
@@ -87,7 +87,7 @@ func TestMatchPrefix(t *testing.T) {
 }
 
 func TestNew_InvalidUpstream(t *testing.T) {
-	_, err := New(config.Upstreams{App: "://bad", Tournament: "x", Frontend: "y"})
+	_, err := New(config.Upstreams{App: "://bad", Frontend: "y"})
 	if err == nil {
 		t.Fatal("expected error for invalid upstream url")
 	}

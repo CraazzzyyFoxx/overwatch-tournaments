@@ -38,7 +38,7 @@ services:
         preserve_host: true
 
   - name: tournament
-    url: http://tournament:8004
+    url: http://gateway:8080
     routes:
       - name: tournament-v1-api
         # tournament-service owns the shared /api/v1 namespace. app-service is

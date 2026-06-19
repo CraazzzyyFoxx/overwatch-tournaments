@@ -29,9 +29,8 @@ type Proxy struct {
 func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
 		{"/api/v1/core", up.App},
-		{"/api/v1", up.Tournament},
-		// /api/auth/* is served by the gateway's identity face (typed RPC + the
-		// HTTP-over-RPC tunnel into identity-svc) — never proxied to auth-service.
+		// /api/v1/* (tournament) is served by the gateway's typed RPC routes into
+		// tournament-worker — never proxied. /api/auth/* likewise via identity-svc.
 		{"/api/parser", up.Parser},
 		{"/api/balancer", up.Balancer},
 		{"/api/analytics", up.Analytics},

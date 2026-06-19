@@ -177,57 +177,6 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  tournament:
-    image: registry.craazzzyyfoxx.me/aqt-tournament:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: tournament
-    command: uvicorn main:app --host 0.0.0.0 --port 8004 --loop uvloop --reload --reload-delay 5 --reload-dir /app/tournament-service --reload-dir /app/shared
-    ports:
-      - "8004:8004"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/tournament.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    develop:
-      watch:
-        - path: ./backend/pyproject.toml
-          action: rebuild
-    volumes:
-      - ./backend/tournament-service:/app/tournament-service
-      - ./backend/shared:/app/shared
-      - ./logs/tournament:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-
   realtime:
     image: registry.craazzzyyfoxx.me/aqt-realtime:dev
     build:
@@ -369,7 +318,6 @@ services:
 
   tournament-worker:
     image: registry.craazzzyyfoxx.me/aqt-tournament:dev
-    profiles: ["workers"]
     build:
       context: ./backend
       args:
@@ -390,8 +338,6 @@ services:
       - WATCHFILES_POLL_DELAY_MS=5000
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      tournament:
         condition: service_healthy
     volumes:
       - ./backend/tournament-service:/app/tournament-service
@@ -614,14 +560,12 @@ services:
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
-      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://tournament:8004}
+      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080}
       - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
     depends_on:
       backend:
         condition: service_healthy
       parser:
-        condition: service_healthy
-      tournament:
         condition: service_healthy
       realtime:
         condition: service_healthy
@@ -713,8 +657,6 @@ services:
       backend:
         condition: service_healthy
       parser:
-        condition: service_healthy
-      tournament:
         condition: service_healthy
       realtime:
         condition: service_healthy

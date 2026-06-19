@@ -103,8 +103,6 @@ services:
         condition: service_healthy
       parser:
         condition: service_healthy
-      tournament:
-        condition: service_healthy
       realtime:
         condition: service_healthy
       analytics:
@@ -209,52 +207,6 @@ services:
       - app-network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
-
-  tournament:
-    image: registry.craazzzyyfoxx.me/aqt-tournament:latest
-    deploy:
-      resources:
-        limits:
-          cpus: '1.00'
-          memory: 768M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    build:
-      context: ./backend
-      args:
-        APP_PATH: tournament
-    command: uvicorn main:app --host 0.0.0.0 --port 8004 --workers ${WORKERS_TOURNAMENT:-2} --loop uvloop
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/tournament.env
-    environment:
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.1
-      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
-      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./logs/tournament:/logs
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/live')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -555,8 +507,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      tournament:
-        condition: service_healthy
     volumes:
       - ./logs/tournament-worker:/logs
     networks:
@@ -678,7 +628,7 @@ services:
       dockerfile: prod.Dockerfile
       args:
         NEXT_API_URL: ${NEXT_API_URL}
-        NEXT_TOURNAMENT_URL: ${NEXT_TOURNAMENT_URL:-http://tournament:8004}
+        NEXT_TOURNAMENT_URL: ${NEXT_TOURNAMENT_URL:-http://gateway:8080}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_BALANCER_API_URL: ${NEXT_PUBLIC_BALANCER_API_URL}
         NEXT_PUBLIC_TOURNAMENT_API_URL: ${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
@@ -703,13 +653,11 @@ services:
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
-      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://tournament:8004}
+      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080}
     depends_on:
       backend:
         condition: service_healthy
       parser:
-        condition: service_healthy
-      tournament:
         condition: service_healthy
       realtime:
         condition: service_healthy
