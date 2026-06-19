@@ -22,17 +22,9 @@ var AdminCrudRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/players", Queue: "rpc.tournament.admin.create", Entity: "player", Action: "create", Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "PATCH", Pattern: "/api/v1/admin/players/{player_id}", Queue: "rpc.tournament.admin.update", Entity: "player", Action: "update", IDParam: "player_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/admin/players/{player_id}", Queue: "rpc.tournament.admin.delete", Entity: "player", Action: "delete", IDParam: "player_id", Auth: edge.AuthRequired, Success: 204},
-	// stage
-	{Method: "GET", Pattern: "/api/v1/admin/stages/tournament/{tournament_id}", Queue: "rpc.tournament.admin.list", Entity: "stage", Action: "list", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/admin/stages/tournament/{tournament_id}", Queue: "rpc.tournament.admin.create", Entity: "stage", Action: "create", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
-	{Method: "GET", Pattern: "/api/v1/admin/stages/{stage_id}", Queue: "rpc.tournament.admin.get", Entity: "stage", Action: "get", IDParam: "stage_id", Auth: edge.AuthRequired},
-	{Method: "PATCH", Pattern: "/api/v1/admin/stages/{stage_id}", Queue: "rpc.tournament.admin.update", Entity: "stage", Action: "update", IDParam: "stage_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "DELETE", Pattern: "/api/v1/admin/stages/{stage_id}", Queue: "rpc.tournament.admin.delete", Entity: "stage", Action: "delete", IDParam: "stage_id", Auth: edge.AuthRequired, Success: 204},
-	// NOTE: stage_item / stage_item_input creates (POST /stages/{stage_id}/items and
-	// POST /stages/items/{id}/inputs) are intentionally NOT registered here — their
-	// patterns are ambiguous against POST /stages/tournament/{tournament_id} under the
-	// stdlib ServeMux. Their registry configs exist; they're routed in Phase 3 via a
-	// dedicated /admin/stages subtree dispatcher. Until then they proxy to the HTTP service.
+	// NOTE: all /admin/stages/* routing (stage CRUD + stage_item/input + workflows) is in
+	// StageSubtreeRoutes (stage_admin_routes.go), served via edge.Subtree — their patterns
+	// are ambiguous under stdlib ServeMux.
 	// encounter
 	{Method: "POST", Pattern: "/api/v1/admin/encounters", Queue: "rpc.tournament.admin.create", Entity: "encounter", Action: "create", Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "PATCH", Pattern: "/api/v1/admin/encounters/{encounter_id}", Queue: "rpc.tournament.admin.update", Entity: "encounter", Action: "update", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},

@@ -141,8 +141,9 @@ func run(logger *slog.Logger) error {
 	tournamentEdge.Register(mux, tournament.AdminMiscRoutes)
 	tournamentEdge.Register(mux, tournament.RegistrationAdminRoutes)
 	tournamentEdge.Register(mux, tournament.IntegrationsRoutes)
-	// division-grids: ambiguous patterns under ServeMux -> ordered subtree matcher.
+	// division-grids + admin/stages: ambiguous patterns under ServeMux -> subtree matcher.
 	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
+	mux.Handle("/api/v1/admin/stages/", tournamentEdge.Subtree(tournament.StageSubtreeRoutes))
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

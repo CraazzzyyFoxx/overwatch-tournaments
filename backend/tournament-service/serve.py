@@ -22,7 +22,7 @@ from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
 from src.core.caching import configure_cache
-from src.rpc import admin_misc, integrations, reads as rpc_reads, registration_admin
+from src.rpc import admin_misc, integrations, reads as rpc_reads, registration_admin, stage_admin
 from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
@@ -52,6 +52,7 @@ admin_registry.register(broker)
 admin_misc.register(broker, logger)
 registration_admin.register(broker, logger)
 integrations.register(broker, logger)
+stage_admin.register(broker, logger)
 
 
 async def drain_outbox() -> None:
