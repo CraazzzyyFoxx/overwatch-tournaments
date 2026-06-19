@@ -24,6 +24,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/analytics"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
@@ -168,6 +169,15 @@ func run(logger *slog.Logger) error {
 	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetUpload)
 	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetDelete)
 	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", appBinary.MatchLog)
+	// balancer-service: typed RPC public config + admin balance/config (the rest
+	// of /api/balancer — jobs, draft — still proxies to balancer-service until
+	// decommission). Specific patterns win over the /api/balancer proxy below.
+	balancerEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	balancerEdge.Register(mux, balancer.PublicRoutes)
+	balancerEdge.Register(mux, balancer.AdminRoutes)
+	// teams-import multipart upload (multipart -> base64 RPC).
+	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
+	mux.HandleFunc("POST /api/balancer/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
 	// Guard the /api/v1 namespace: anything not matched by a typed route above
 	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched

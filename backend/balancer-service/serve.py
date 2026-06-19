@@ -17,7 +17,11 @@ from shared.observability import (
 )
 from shared.schemas.events import BalancerJobEvent
 from src.core import db
+from src.core.caching import configure_cache
 from src.core.config import config
+from src.rpc import admin as rpc_admin
+from src.rpc import binary as rpc_binary
+from src.rpc import config as rpc_config
 from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_supervisor
 
@@ -30,6 +34,17 @@ logger = setup_logging(
 
 broker = RabbitBroker(config.rabbitmq_url, logger=logger)
 app = FastStream(broker)
+
+# The cashews singleton is process-global with no default backend; the HTTP app
+# (main.py) configures it at import, the worker must do so before any RPC read
+# path hits the cache (see lesson: cashews-worker-not-configured).
+configure_cache()
+
+# Typed-RPC subscribers replacing the HTTP balancer-service behind the Go gateway.
+# Phase 1 — public config read + admin balance/config writes + teams import.
+rpc_config.register(broker, logger)
+rpc_admin.register(broker, logger)
+rpc_binary.register(broker, logger)
 
 
 def _decode_balancer_message(message: Any) -> Any:

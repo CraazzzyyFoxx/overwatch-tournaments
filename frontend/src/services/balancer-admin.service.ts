@@ -36,6 +36,14 @@ import {
   WorkspaceBalancerConfigUpsert
 } from "@/types/balancer-admin.types";
 
+// Endpoints whose response model is `X | None` return HTTP 200 with a `null`
+// body from FastAPI, but the Go gateway omits the body for null data. Parse
+// defensively so an empty body reads as `null` instead of throwing on `.json()`.
+async function readJsonOrNull<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  return text ? (JSON.parse(text) as T) : null;
+}
+
 export default class balancerAdminService {
   static async getTournamentSheet(tournamentId: number): Promise<AdminGoogleSheetFeed | null> {
     const response = await apiFetch("tournament", `admin/balancer/tournaments/${tournamentId}/sheet`);
@@ -215,7 +223,7 @@ export default class balancerAdminService {
       "balancer",
       `balancer/tournaments/${tournamentId}/config`
     );
-    return response.json();
+    return readJsonOrNull<BalancerTournamentConfig>(response);
   }
 
   static async upsertTournamentConfig(
@@ -261,7 +269,7 @@ export default class balancerAdminService {
       "balancer",
       `balancer/tournaments/${tournamentId}/balance`
     );
-    return response.json();
+    return readJsonOrNull<SavedBalance>(response);
   }
 
   static async saveBalance(tournamentId: number, data: BalanceSaveInput): Promise<SavedBalance> {

@@ -26,7 +26,10 @@ services:
         preserve_host: true
 
   - name: balancer
-    url: http://balancer:8003
+    # Repointed to the Go gateway: it serves the typed RPC balancer routes
+    # (config + admin balance/config + teams-import) and reverse-proxies the rest
+    # of /api/balancer (jobs, draft) back to balancer-service until decommission.
+    url: http://gateway:8080
     connect_timeout: 5000
     read_timeout: 120000
     write_timeout: 120000
