@@ -32,6 +32,15 @@ var AdminRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/balancer/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
 }
 
+// JobRoutes are the authenticated public job API reads (status poll + result)
+// from src/routes/balancer.py. job_id is a uuid hex string (not int). Job
+// creation is a multipart upload handled separately (binary.go); the SSE stream
+// is not migrated (dead code — progress flows over the WS topic).
+var JobRoutes = []edge.RouteSpec{
+	{Method: "GET", Pattern: "/api/balancer/jobs/{job_id}", Queue: "rpc.balancer.jobs.status", IDParam: "job_id", Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/balancer/jobs/{job_id}/result", Queue: "rpc.balancer.jobs.result", IDParam: "job_id", Auth: edge.AuthRequired},
+}
+
 // DraftReadRoutes are the public draft spectating reads (no auth), from
 // src/routes/admin/draft.py.
 var DraftReadRoutes = []edge.RouteSpec{

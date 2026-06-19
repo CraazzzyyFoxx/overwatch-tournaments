@@ -149,6 +149,17 @@ def _detail_message(exc: HTTPException) -> str:
     return str(detail)
 
 
+def _map_error(logger: Any, label: str, exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, MissingIdentityError):
+        return rpc_error("unauthorized", str(exc) or "Not authenticated")
+    if isinstance(exc, HTTPException):
+        return rpc_error(status_to_code(exc.status_code), _detail_message(exc))
+    if isinstance(exc, ValidationError):
+        return rpc_error("unprocessable", str(exc))
+    logger.exception("balancer rpc failed: %s", label)
+    return rpc_error("internal", "internal error")
+
+
 async def envelope(
     logger: Any,
     label: str,
@@ -161,12 +172,23 @@ async def envelope(
     try:
         async with session_factory() as session:
             return rpc_ok(dump(await op(session), exclude_none))
-    except MissingIdentityError as exc:
-        return rpc_error("unauthorized", str(exc) or "Not authenticated")
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), _detail_message(exc))
-    except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("balancer rpc failed: %s", label)
-        return rpc_error("internal", "internal error")
+    except Exception as exc:  # noqa: BLE001 — mapped to the envelope below
+        return _map_error(logger, label, exc)
+
+
+async def call(
+    logger: Any,
+    label: str,
+    op: Callable[[], Awaitable[Any]],
+    *,
+    exclude_none: bool = False,
+) -> dict[str, Any]:
+    """Run a session-less ``op`` and wrap the result/exception in the envelope.
+
+    For handlers that don't touch the DB (the job API uses the Redis-backed job
+    store + broker, not a SQLAlchemy session).
+    """
+    try:
+        return rpc_ok(dump(await op(), exclude_none))
+    except Exception as exc:  # noqa: BLE001 — mapped to the envelope below
+        return _map_error(logger, label, exc)

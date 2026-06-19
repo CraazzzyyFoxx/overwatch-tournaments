@@ -177,9 +177,11 @@ func run(logger *slog.Logger) error {
 	balancerEdge.Register(mux, balancer.AdminRoutes)
 	balancerEdge.Register(mux, balancer.DraftReadRoutes)
 	balancerEdge.Register(mux, balancer.DraftRoutes)
-	// teams-import multipart upload (multipart -> base64 RPC).
+	balancerEdge.Register(mux, balancer.JobRoutes)
+	// Multipart uploads (multipart -> base64 RPC): teams-import + job-create.
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
 	mux.HandleFunc("POST /api/balancer/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
+	mux.HandleFunc("POST /api/balancer/jobs", balancerBinary.JobCreate)
 	// Guard the /api/v1 namespace: anything not matched by a typed route above
 	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched

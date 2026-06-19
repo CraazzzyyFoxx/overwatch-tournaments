@@ -64,6 +64,54 @@ func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.balancer.admin.teams_import", data, http.StatusOK)
 }
 
+// JobCreate: POST /api/balancer/jobs. Multipart: file part "player_data_file"
+// (a JSON file) + optional form fields "config_overrides" and "tournament_id";
+// query "workspace_id" is forwarded. Returns 202 (queued).
+func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
+	data, ok := b.identityInto(w, r, map[string]any{})
+	if !ok {
+		return
+	}
+	attachQuery(data, r) // forward workspace_id (and any other query param)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+	f, hdr, err := r.FormFile("player_data_file")
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, "player_data_file is required")
+		return
+	}
+	defer func() { _ = f.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+	if err != nil {
+		writeDetail(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+	data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
+	data["content_type"] = hdr.Header.Get("Content-Type")
+	data["filename"] = hdr.Filename
+	if cfg := r.FormValue("config_overrides"); cfg != "" {
+		data["config_overrides"] = cfg
+	}
+	if tid := r.FormValue("tournament_id"); tid != "" {
+		data["tournament_id"] = tid
+	}
+	b.relayJSON(w, r, "rpc.balancer.jobs.create", data, http.StatusAccepted)
+}
+
+func attachQuery(data map[string]any, r *http.Request) {
+	q := map[string]any{}
+	for k, vs := range r.URL.Query() {
+		if len(vs) > 0 {
+			q[k] = vs
+		}
+	}
+	if len(q) > 0 {
+		data["query"] = q
+	}
+}
+
 // identityInto resolves the bearer identity (required) and injects it into data.
 func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[string]any) (map[string]any, bool) {
 	if b.identity == nil {
