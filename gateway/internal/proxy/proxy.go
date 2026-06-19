@@ -24,13 +24,12 @@ type Proxy struct {
 	routes []route
 }
 
-// New builds the proxy from the configured upstreams. Route order mirrors
-// kong: /api/v1/core (app) is more specific than /api/v1 (tournament) and wins.
+// New builds the proxy from the configured upstreams.
 func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
-		{"/api/v1/core", up.App},
-		// /api/v1/* (tournament) is served by the gateway's typed RPC routes into
-		// tournament-worker — never proxied. /api/auth/* likewise via identity-svc.
+		// /api/v1/* (tournament) and /api/v1/core/* (app-service) are served by the
+		// gateway's typed RPC routes into the workers — never proxied. /api/auth/*
+		// likewise via identity-svc.
 		{"/api/parser", up.Parser},
 		{"/api/balancer", up.Balancer},
 		{"/api/analytics", up.Analytics},

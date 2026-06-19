@@ -72,65 +72,9 @@ services:
           cpus: '0.05'
           memory: 128M
 
-  backend:
-    image: registry.craazzzyyfoxx.me/aqt-backend:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --loop uvloop --reload --reload-delay 5 --reload-dir /app/app-service --reload-dir /app/shared
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/app.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    develop:
-      watch:
-        - path: ./backend/pyproject.toml
-          action: rebuild
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./backend/app-service:/app/app-service
-      - ./backend/shared:/app/shared
-      - ./logs/backend:/logs
-      - ./backend/htmlcov:/app/htmlcov
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-
-  # Headless RPC worker that replaces the HTTP `backend` behind the gateway.
-  # Serves rpc.app.* (reads/writes/binary) + owns the tournament_changed
-  # cache-invalidation consumer. During migration it runs alongside `backend`
-  # (HTTP) for byte-parity; after cutover `backend` is removed and this serves
-  # all of /api/v1/core via the gateway.
+  # Headless RPC worker for app-service: serves ALL of /api/v1/core (rpc.app.*
+  # reads/writes/binary) behind the gateway + owns the tournament_changed
+  # cache-invalidation consumer. Replaces the former HTTP `backend` service.
   app-worker:
     image: registry.craazzzyyfoxx.me/aqt-backend:dev
     build:
@@ -296,8 +240,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      backend:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -654,8 +596,6 @@ services:
       - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
       - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
     depends_on:
-      backend:
-        condition: service_healthy
       parser:
         condition: service_healthy
       realtime:
@@ -745,8 +685,6 @@ services:
     volumes:
       - ./kong/kong.dev.yml:/kong/kong.yml:ro
     depends_on:
-      backend:
-        condition: service_healthy
       parser:
         condition: service_healthy
       realtime:

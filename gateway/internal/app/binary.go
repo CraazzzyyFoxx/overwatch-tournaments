@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	binaryRPCTimeout = 30 * time.Second
+	// Matches the edge dispatcher's RPC ceiling (old Kong edge allowance).
+	binaryRPCTimeout = 120 * time.Second
 	maxUpload        = 12 << 20 // 12 MiB upload cap before base64 into the RPC body
 )
 

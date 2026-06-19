@@ -173,9 +173,8 @@ func run(logger *slog.Logger) error {
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched
 	// /api/v1 path to the frontend creates an infinite gateway<->frontend proxy
 	// loop (hang + resource exhaustion that crash-loops the frontend). Return 404
-	// instead. /api/v1/core/* is a more specific pattern and still proxies to
-	// app-service.
-	mux.Handle("/api/v1/core/", rev)
+	// instead. app-service (/api/v1/core/*) is now fully served by the typed app
+	// routes above; unmatched /api/v1/core/* falls here too (404, no proxy).
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)

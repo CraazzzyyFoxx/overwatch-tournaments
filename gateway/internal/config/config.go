@@ -32,7 +32,6 @@ type Upstreams struct {
 	Parser    string
 	Balancer  string
 	Analytics string
-	App       string
 	Frontend  string
 }
 
@@ -62,7 +61,6 @@ func Load() (*Config, error) {
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Balancer:  getenv("UPSTREAM_BALANCER", "http://balancer:8003"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),
-			App:       getenv("UPSTREAM_APP", "http://backend:8000"),
 			Frontend:  getenv("UPSTREAM_FRONTEND", "http://frontend:3000"),
 		},
 	}, nil

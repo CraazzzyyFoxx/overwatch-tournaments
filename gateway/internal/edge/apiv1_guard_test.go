@@ -60,7 +60,8 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", bin.AssetUpload)
 	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", bin.AssetDelete)
 	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", bin.MatchLog)
-	mux.Handle("/api/v1/core/", marker("core"))
+	// app-service is decommissioned: no /api/v1/core proxy. Unmatched /api/v1/core/*
+	// falls to the /api/v1/ guard (404), never the "/" frontend catch-all.
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Route", "guard")
 		w.WriteHeader(http.StatusNotFound)
@@ -82,7 +83,7 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 	}{
 		{"unknown top-level api path", "GET", "/api/v1/does-not-exist", ""},
 		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope", ""},
-		{"unknown app path still proxies", "GET", "/api/v1/core/nonexistent-xyz", "core"},
+		{"unknown app path hits guard (decommissioned)", "GET", "/api/v1/core/nonexistent-xyz", ""},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {

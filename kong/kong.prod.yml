@@ -41,9 +41,9 @@ services:
     url: http://gateway:8080
     routes:
       - name: tournament-v1-api
-        # tournament-service owns the shared /api/v1 namespace. app-service is
-        # carved out under the more-specific /api/v1/core prefix (backend route
-        # below wins by longest-prefix match).
+        # The gateway owns the whole /api/v1 namespace (tournament-worker for
+        # /api/v1/*, app-worker for /api/v1/core/*) via typed RPC. No separate
+        # app-service route — /api/v1/core flows here -> gateway:8080.
         paths:
           - /api/v1
         strip_path: false
@@ -67,16 +67,9 @@ services:
         strip_path: true
         preserve_host: true
 
-  - name: backend
-    url: http://backend:8000
-    routes:
-      - name: backend-api
-        # app-service mounts under /api/v1/core (root_path). More specific than
-        # tournament-service's /api/v1, so it wins for these paths.
-        paths:
-          - /api/v1/core
-        strip_path: false
-        preserve_host: true
+  # app-service decommissioned: /api/v1/core/* is served by the gateway's typed
+  # RPC routes (app-worker), reached via the `tournament` /api/v1 route above
+  # (-> gateway:8080). No separate backend service/route.
 
   - name: frontend
     url: http://frontend:3000

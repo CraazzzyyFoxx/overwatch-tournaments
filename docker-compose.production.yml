@@ -99,8 +99,6 @@ services:
     volumes:
       - ./kong/kong.prod.yml:/kong/kong.yml:ro
     depends_on:
-      backend:
-        condition: service_healthy
       parser:
         condition: service_healthy
       realtime:
@@ -121,51 +119,8 @@ services:
       timeout: 10s
       retries: 10
 
-  backend:
-    image: "registry.craazzzyyfoxx.me/aqt-backend:latest"
-    deploy:
-      resources:
-        limits:
-          cpus: '1.00'
-          memory: 768M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    build:
-      context: ./backend
-      args:
-        APP_PATH: app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS_BACKEND:-2} --loop uvloop
-    volumes:
-      - ./logs/backend:/logs
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/app.env
-    environment:
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.1
-      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
-      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
+  # app-service is headless: served by app-worker (rpc.app.*) behind the gateway.
+  # The former HTTP `backend` service was decommissioned.
 
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:latest
@@ -366,8 +321,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      backend:
         condition: service_healthy
       ss-local:
         condition: service_healthy
@@ -751,8 +704,6 @@ services:
       - NEXT_API_URL=${NEXT_API_URL}
       - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
     depends_on:
-      backend:
-        condition: service_healthy
       parser:
         condition: service_healthy
       realtime:
