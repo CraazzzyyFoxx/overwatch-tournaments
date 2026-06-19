@@ -604,7 +604,7 @@ services:
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
-      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080}
+      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
       - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
     depends_on:
       backend:

@@ -676,7 +676,7 @@ services:
       dockerfile: prod.Dockerfile
       args:
         NEXT_API_URL: ${NEXT_API_URL}
-        NEXT_TOURNAMENT_URL: ${NEXT_TOURNAMENT_URL:-http://gateway:8080}
+        NEXT_TOURNAMENT_URL: ${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_BALANCER_API_URL: ${NEXT_PUBLIC_BALANCER_API_URL}
         NEXT_PUBLIC_TOURNAMENT_API_URL: ${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
@@ -701,7 +701,7 @@ services:
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_API_URL=${NEXT_API_URL}
-      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080}
+      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
     depends_on:
       backend:
         condition: service_healthy
