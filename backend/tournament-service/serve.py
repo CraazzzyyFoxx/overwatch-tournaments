@@ -22,7 +22,7 @@ from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
 from src.core.caching import configure_cache
-from src.rpc import reads as rpc_reads
+from src.rpc import admin_misc, integrations, reads as rpc_reads, registration_admin
 from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
@@ -48,6 +48,10 @@ configure_cache()
 rpc_reads.register(broker, logger)
 # Generic admin CRUD (rpc.tournament.admin.*) via the shared engine.
 admin_registry.register(broker)
+# Bespoke admin + integrations + division-grid typed RPC.
+admin_misc.register(broker, logger)
+registration_admin.register(broker, logger)
+integrations.register(broker, logger)
 
 
 async def drain_outbox() -> None:

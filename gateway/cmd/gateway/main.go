@@ -138,6 +138,11 @@ func run(logger *slog.Logger) error {
 	// /api/v1 still proxies). Specific patterns win over the proxy.
 	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
 	tournamentEdge.Register(mux, tournament.AdminCrudRoutes)
+	tournamentEdge.Register(mux, tournament.AdminMiscRoutes)
+	tournamentEdge.Register(mux, tournament.RegistrationAdminRoutes)
+	tournamentEdge.Register(mux, tournament.IntegrationsRoutes)
+	// division-grids: ambiguous patterns under ServeMux -> ordered subtree matcher.
+	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.
