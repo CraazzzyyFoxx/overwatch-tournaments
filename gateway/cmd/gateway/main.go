@@ -141,6 +141,7 @@ func run(logger *slog.Logger) error {
 	tournamentEdge.Register(mux, tournament.AdminMiscRoutes)
 	tournamentEdge.Register(mux, tournament.RegistrationAdminRoutes)
 	tournamentEdge.Register(mux, tournament.IntegrationsRoutes)
+	tournamentEdge.Register(mux, tournament.PublicWriteRoutes)
 	// division-grids + admin/stages: ambiguous patterns under ServeMux -> subtree matcher.
 	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", tournamentEdge.Subtree(tournament.StageSubtreeRoutes))
