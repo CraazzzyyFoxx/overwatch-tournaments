@@ -73,14 +73,24 @@ func (d *Dispatcher) Handler(spec RouteSpec) http.HandlerFunc {
 		for _, p := range spec.Path {
 			data[p] = r.PathValue(p)
 		}
-		if len(spec.Query) > 0 {
+		if spec.AllQuery || len(spec.Query) > 0 {
 			values := r.URL.Query()
 			q := map[string]any{}
-			for _, k := range spec.Query {
-				// Forward all values as a list so repeated params (e.g. ?entities=a&entities=b)
-				// survive; the service side reads scalar-or-list uniformly.
-				if vs, ok := values[k]; ok && len(vs) > 0 {
-					q[k] = vs
+			if spec.AllQuery {
+				// Forward every query param (pagination/filter routes reconstruct the
+				// route's query-params model on the service side).
+				for k, vs := range values {
+					if len(vs) > 0 {
+						q[k] = vs
+					}
+				}
+			} else {
+				for _, k := range spec.Query {
+					// Forward all values as a list so repeated params (e.g. ?entities=a&entities=b)
+					// survive; the service side reads scalar-or-list uniformly.
+					if vs, ok := values[k]; ok && len(vs) > 0 {
+						q[k] = vs
+					}
 				}
 			}
 			if len(q) > 0 {

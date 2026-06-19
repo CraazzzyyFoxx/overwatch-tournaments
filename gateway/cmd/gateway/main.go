@@ -27,6 +27,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
@@ -73,9 +74,10 @@ func run(logger *slog.Logger) error {
 	defer func() { _ = rpcClient.Close() }()
 	identityHandler := identity.NewHandler(rpcClient, logger)
 	// Tournament-service routes served via typed RPC through the shared edge
-	// dispatcher. Public reads need no identity (resolver added when auth'd
-	// routes land). Specific patterns win over the /api/v1 reverse proxy.
-	tournamentEdge := edge.New(rpcClient, logger, nil)
+	// dispatcher. The resolver validates JWTs via identity-svc and injects the
+	// RBAC identity for auth'd routes. Specific patterns win over the /api/v1 proxy.
+	resolver := principal.New(rpcClient)
+	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
 
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
 	hub := ws.NewHub()
