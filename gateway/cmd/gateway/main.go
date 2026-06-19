@@ -151,6 +151,19 @@ func run(logger *slog.Logger) error {
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
+	// Guard the /api/v1 namespace: anything not matched by a typed route above
+	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
+	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched
+	// /api/v1 path to the frontend creates an infinite gateway<->frontend proxy
+	// loop (hang + resource exhaustion that crash-loops the frontend). Return 404
+	// instead. /api/v1/core/* is a more specific pattern and still proxies to
+	// app-service.
+	mux.Handle("/api/v1/core/", rev)
+	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
+	})
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

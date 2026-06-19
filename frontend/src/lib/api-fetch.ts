@@ -4,6 +4,11 @@ import { retryWithRefreshOnUnauthorized } from "./auth-request";
 import { parseApiError } from "./api-error";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
+// Default timeout (ms) for server-side (SSR) fetches. A hung or looping upstream
+// must not block a render indefinitely or pile up requests that exhaust the Node
+// process; client fetches stay untimed unless a caller passes options.timeout.
+const DEFAULT_SERVER_TIMEOUT_MS = 15_000;
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type ServiceName = "app" | "parser" | "balancer" | "tournament" | "auth" | "analytics";
@@ -246,15 +251,19 @@ export async function apiFetch(
     headers["Content-Type"] = "application/json";
   }
 
-  // Timeout
+  // Timeout. Honor an explicit options.timeout; otherwise apply a default on the
+  // server so a hung/slow/looping upstream can't block SSR indefinitely (and pile
+  // up requests that exhaust the Node process). Client fetches keep prior behavior.
   let abortController: AbortController | undefined;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let signal = options.signal;
 
-  if (options.timeout && !signal) {
+  const effectiveTimeout =
+    options.timeout ?? (typeof window === "undefined" ? DEFAULT_SERVER_TIMEOUT_MS : undefined);
+  if (effectiveTimeout && !signal) {
     abortController = new AbortController();
     signal = abortController.signal;
-    timeoutId = setTimeout(() => abortController!.abort(), options.timeout);
+    timeoutId = setTimeout(() => abortController!.abort(), effectiveTimeout);
   }
 
   // Request runner (for auth retry)
