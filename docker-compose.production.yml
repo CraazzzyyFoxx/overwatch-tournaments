@@ -613,6 +613,54 @@ services:
       start_period: 40s
     restart: always
 
+  # Headless RPC face for analytics reads/mutations/job-control (rpc.analytics.*),
+  # consumed by the gateway's analytics edge routes. The heavy ML work stays in
+  # analytics-worker; this is the light request/reply service (serve_rpc:app).
+  analytics-svc:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: faststream run serve_rpc:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
+      - WORKER_METRICS_PORT=9108
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./logs/analytics-svc:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
   frontend:
     image: registry.craazzzyyfoxx.me/frontend:latest
     deploy:
