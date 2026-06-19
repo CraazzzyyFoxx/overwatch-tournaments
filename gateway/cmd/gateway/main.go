@@ -157,6 +157,7 @@ func run(logger *slog.Logger) error {
 	// Specific patterns win over the /api/v1/core proxy below.
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	appEdge.Register(mux, app.ReadRoutes)
+	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	// achievements get surface: ambiguous (/{id}/users vs /user/{user_id}) -> subtree.
 	mux.Handle("/api/v1/core/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
 	// Guard the /api/v1 namespace: anything not matched by a typed route above

@@ -23,6 +23,7 @@ from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
     achievements,
+    admin_crud,
     gamemodes,
     heroes,
     maps,
@@ -54,12 +55,14 @@ tournament_events.register(broker, logger)
 # Phase 1 — public reads.
 # hero/map/gamemode/achievement get+list via the shared CRUD read engine:
 reads_generic.register(broker, logger)
-# bespoke reads (aggregations, lookups, users/*, workspace public reads):
+# bespoke reads (aggregations, lookups, users/*) + workspace reads/writes/members:
 for _mod in (users, heroes, maps, gamemodes, achievements, statistics, workspaces):
     _mod.register(broker, logger)
 
+# Phase 2 — workspace update/delete via the shared CRUD engine.
+admin_crud.register(broker, logger)
+
 # rpc.app.* subscribers (later phases):
-#   Phase 2 — workspace writes + members
 #   Phase 3 — binary base64 handlers
 
 

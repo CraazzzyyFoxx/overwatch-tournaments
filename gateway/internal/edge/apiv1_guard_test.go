@@ -49,6 +49,7 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	// these must NOT panic — /users/{name} vs /users/{id}/... and the achievements
 	// /{id}/users vs /user/{user_id} ambiguity are the cases that would conflict.
 	d.Register(mux, app.ReadRoutes)
+	d.Register(mux, app.WorkspaceWriteRoutes)
 	mux.Handle("/api/v1/core/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
 	mux.Handle("/api/v1/core/", marker("core"))
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
