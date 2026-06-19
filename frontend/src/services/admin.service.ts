@@ -420,7 +420,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<User>> {
-    const response = await apiFetch("parser", "admin/users", {
+    const response = await apiFetch("app", "admin/users", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -433,7 +433,7 @@ class AdminService {
   }
 
   async createUser(data: UserCreateInput): Promise<User> {
-    const response = await apiFetch("parser", "admin/users", {
+    const response = await apiFetch("app", "admin/users", {
       method: "POST",
       body: data
     });
@@ -441,7 +441,7 @@ class AdminService {
   }
 
   async updateUser(id: number, data: UserUpdateInput): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${id}`, {
+    const response = await apiFetch("app", `admin/users/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -449,13 +449,13 @@ class AdminService {
   }
 
   async deleteUser(id: number): Promise<void> {
-    await apiFetch("parser", `admin/users/${id}`, {
+    await apiFetch("app", `admin/users/${id}`, {
       method: "DELETE"
     });
   }
 
   async previewUserMerge(data: UserMergePreviewRequest): Promise<UserMergePreviewResponse> {
-    const response = await apiFetch("parser", "admin/users/merge/preview", {
+    const response = await apiFetch("app", "admin/users/merge/preview", {
       method: "POST",
       body: data
     });
@@ -463,7 +463,7 @@ class AdminService {
   }
 
   async executeUserMerge(data: UserMergeExecuteRequest): Promise<UserMergeExecuteResponse> {
-    const response = await apiFetch("parser", "admin/users/merge/execute", {
+    const response = await apiFetch("app", "admin/users/merge/execute", {
       method: "POST",
       body: data
     });
@@ -496,7 +496,7 @@ class AdminService {
     if (params.delimiter) query.delimiter = params.delimiter;
     if (params.sheet_url) query.sheet_url = params.sheet_url;
 
-    const response = await apiFetch("parser", "user/create/csv", {
+    const response = await apiFetch("app", "user/create/csv", {
       method: "POST",
       body: formData,
       query
@@ -506,7 +506,7 @@ class AdminService {
 
   // User Identity Management
   async addDiscordIdentity(userId: number, data: DiscordIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/discord`, {
+    const response = await apiFetch("app", `admin/users/${userId}/discord`, {
       method: "POST",
       body: data
     });
@@ -518,7 +518,7 @@ class AdminService {
     identityId: number,
     data: DiscordIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/discord/${identityId}`, {
+    const response = await apiFetch("app", `admin/users/${userId}/discord/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -526,13 +526,13 @@ class AdminService {
   }
 
   async deleteDiscordIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("parser", `admin/users/${userId}/discord/${identityId}`, {
+    await apiFetch("app", `admin/users/${userId}/discord/${identityId}`, {
       method: "DELETE"
     });
   }
 
   async addBattleTagIdentity(userId: number, data: BattleTagIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/battle-tag`, {
+    const response = await apiFetch("app", `admin/users/${userId}/battle-tag`, {
       method: "POST",
       body: data
     });
@@ -544,7 +544,7 @@ class AdminService {
     identityId: number,
     data: BattleTagIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/battle-tag/${identityId}`, {
+    const response = await apiFetch("app", `admin/users/${userId}/battle-tag/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -552,13 +552,13 @@ class AdminService {
   }
 
   async deleteBattleTagIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("parser", `admin/users/${userId}/battle-tag/${identityId}`, {
+    await apiFetch("app", `admin/users/${userId}/battle-tag/${identityId}`, {
       method: "DELETE"
     });
   }
 
   async addTwitchIdentity(userId: number, data: TwitchIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/twitch`, {
+    const response = await apiFetch("app", `admin/users/${userId}/twitch`, {
       method: "POST",
       body: data
     });
@@ -570,7 +570,7 @@ class AdminService {
     identityId: number,
     data: TwitchIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/twitch/${identityId}`, {
+    const response = await apiFetch("app", `admin/users/${userId}/twitch/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -578,7 +578,7 @@ class AdminService {
   }
 
   async deleteTwitchIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("parser", `admin/users/${userId}/twitch/${identityId}`, {
+    await apiFetch("app", `admin/users/${userId}/twitch/${identityId}`, {
       method: "DELETE"
     });
   }
@@ -587,7 +587,7 @@ class AdminService {
   async uploadUserAvatar(userId: number, file: File): Promise<User> {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await apiFetch("parser", `admin/users/${userId}/avatar`, {
+    const response = await apiFetch("app", `admin/users/${userId}/avatar`, {
       method: "POST",
       body: formData
     });
@@ -595,7 +595,7 @@ class AdminService {
   }
 
   async deleteUserAvatar(userId: number): Promise<User> {
-    const response = await apiFetch("parser", `admin/users/${userId}/avatar`, {
+    const response = await apiFetch("app", `admin/users/${userId}/avatar`, {
       method: "DELETE"
     });
     return response.json();
@@ -613,7 +613,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<Hero>> {
-    const response = await apiFetch("parser", "admin/heroes", {
+    const response = await apiFetch("app", "admin/heroes", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -627,7 +627,7 @@ class AdminService {
   }
 
   async createHero(data: HeroCreateInput): Promise<Hero> {
-    const response = await apiFetch("parser", "admin/heroes", {
+    const response = await apiFetch("app", "admin/heroes", {
       method: "POST",
       body: data
     });
@@ -635,7 +635,7 @@ class AdminService {
   }
 
   async updateHero(id: number, data: HeroUpdateInput): Promise<Hero> {
-    const response = await apiFetch("parser", `admin/heroes/${id}`, {
+    const response = await apiFetch("app", `admin/heroes/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -643,7 +643,7 @@ class AdminService {
   }
 
   async deleteHero(id: number): Promise<void> {
-    await apiFetch("parser", `admin/heroes/${id}`, {
+    await apiFetch("app", `admin/heroes/${id}`, {
       method: "DELETE"
     });
   }
@@ -666,7 +666,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<Gamemode>> {
-    const response = await apiFetch("parser", "admin/gamemodes", {
+    const response = await apiFetch("app", "admin/gamemodes", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -679,7 +679,7 @@ class AdminService {
   }
 
   async createGamemode(data: GamemodeCreateInput): Promise<Gamemode> {
-    const response = await apiFetch("parser", "admin/gamemodes", {
+    const response = await apiFetch("app", "admin/gamemodes", {
       method: "POST",
       body: data
     });
@@ -687,7 +687,7 @@ class AdminService {
   }
 
   async updateGamemode(id: number, data: GamemodeUpdateInput): Promise<Gamemode> {
-    const response = await apiFetch("parser", `admin/gamemodes/${id}`, {
+    const response = await apiFetch("app", `admin/gamemodes/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -695,7 +695,7 @@ class AdminService {
   }
 
   async deleteGamemode(id: number): Promise<void> {
-    await apiFetch("parser", `admin/gamemodes/${id}`, {
+    await apiFetch("app", `admin/gamemodes/${id}`, {
       method: "DELETE"
     });
   }
@@ -719,7 +719,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<MapRead>> {
-    const response = await apiFetch("parser", "admin/maps", {
+    const response = await apiFetch("app", "admin/maps", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -733,7 +733,7 @@ class AdminService {
   }
 
   async createMap(data: MapCreateInput): Promise<MapRead> {
-    const response = await apiFetch("parser", "admin/maps", {
+    const response = await apiFetch("app", "admin/maps", {
       method: "POST",
       body: data
     });
@@ -741,7 +741,7 @@ class AdminService {
   }
 
   async updateMap(id: number, data: MapUpdateInput): Promise<MapRead> {
-    const response = await apiFetch("parser", `admin/maps/${id}`, {
+    const response = await apiFetch("app", `admin/maps/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -749,7 +749,7 @@ class AdminService {
   }
 
   async deleteMap(id: number): Promise<void> {
-    await apiFetch("parser", `admin/maps/${id}`, {
+    await apiFetch("app", `admin/maps/${id}`, {
       method: "DELETE"
     });
   }
@@ -1110,12 +1110,13 @@ class AdminService {
 
   async getLogHistory(
     tournamentId?: number,
-    params?: { encounterId?: number; limit?: number; offset?: number }
+    params?: { encounterId?: number; workspaceId?: number | null; limit?: number; offset?: number }
   ): Promise<LogHistoryResponse> {
     const response = await apiFetch("parser", "admin/logs/history", {
       query: {
         ...(tournamentId != null && { tournament_id: tournamentId }),
         ...(params?.encounterId != null && { encounter_id: params.encounterId }),
+        ...(params?.workspaceId != null && { workspace_id: params.workspaceId }),
         limit: params?.limit ?? 50,
         offset: params?.offset ?? 0
       }

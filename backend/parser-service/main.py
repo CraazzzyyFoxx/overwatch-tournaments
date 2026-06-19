@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from cashews import cache
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -29,6 +28,7 @@ from starlette.requests import Request
 
 from src import routes
 from src.core import config, db
+from src.core.caching import configure_cache
 from src.services.challonge.sync import close_redis as close_challonge_redis
 from src.services.overwatch_rank import scheduler as rank_scheduler
 from src.services.overwatch_rank.tasks import close_redis as close_rank_redis
@@ -147,7 +147,7 @@ app.add_middleware(CorrelationIdMiddleware)
 # while the server span is still active.
 instrument_fastapi(app)
 
-cache.setup(f"{config.settings.redis_url}/4", prefix="backend:")
+configure_cache()
 
 app.include_router(routes.router)
 app.include_router(recalculation_task_router)

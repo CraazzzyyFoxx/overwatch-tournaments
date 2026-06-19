@@ -54,6 +54,28 @@ class ProcessMatchLogEvent(BaseEvent):
     filename: str = Field(..., description="Match log filename to process")
 
 
+class UploadMatchLogEvent(BaseEvent):
+    """Event carrying a raw match-log file to be stored + queued for processing.
+
+    Published by: discord-service (bot upload, replacing the former direct
+    ``POST http://parser:8002/logs/{id}/upload`` HTTP call).
+    Consumed by: parser-service worker, which stores the log to S3, upserts the
+    LogProcessingRecord, then publishes a ``ProcessMatchLogEvent``.
+
+    The file bytes ride in ``content_b64`` (base64). Keep logs reasonably sized:
+    the message must fit RabbitMQ's frame/size limits.
+    """
+
+    event_type: str = Field(default="upload_match_log", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID")
+    filename: str = Field(..., description="Match log filename")
+    content_b64: str = Field(..., description="Base64-encoded raw log file bytes")
+    content_type: str | None = Field(default=None, description="Original Content-Type, if known")
+    uploader_discord_name: str | None = Field(
+        default=None, description="Discord username of the uploader, resolved to a Player on ingest"
+    )
+
+
 class MatchLogProcessedEvent(BaseEvent):
     """Result of processing a single match log, sent back to the uploader.
 

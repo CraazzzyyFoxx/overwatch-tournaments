@@ -120,6 +120,49 @@ func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+// UserAvatarUpload: POST /api/v1/core/admin/users/{id}/avatar (user.update in worker).
+// Relocated from parser; multipart "file" -> base64 RPC body.
+func (b *Binary) UserAvatarUpload(w http.ResponseWriter, r *http.Request) {
+	id, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("id")})
+	if !ok {
+		return
+	}
+	if !b.attachFile(w, r, id) {
+		return
+	}
+	b.relayJSON(w, r, "rpc.app.users.avatar_upload", id, http.StatusOK)
+}
+
+// UsersCsvImport: POST /api/v1/core/user/create/csv (admin role in worker).
+// Relocated from parser. Row indices + delimiter + flags + an optional Google
+// Sheets URL arrive as query params; an optional CSV file rides in the multipart
+// "data" field (base64 into the RPC body). The worker handles file-vs-sheet.
+func (b *Binary) UsersCsvImport(w http.ResponseWriter, r *http.Request) {
+	data, ok := b.identityInto(w, r, map[string]any{})
+	if !ok {
+		return
+	}
+	attachQuery(data, r)
+	if err := r.ParseMultipartForm(maxUpload); err == nil && r.MultipartForm != nil {
+		if files := r.MultipartForm.File["data"]; len(files) > 0 {
+			f, err := files[0].Open()
+			if err != nil {
+				writeDetail(w, http.StatusBadRequest, "failed to read file")
+				return
+			}
+			raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+			_ = f.Close()
+			if err != nil {
+				writeDetail(w, http.StatusBadRequest, "failed to read file")
+				return
+			}
+			data["content_b64"] = base64.StdEncoding.EncodeToString(raw)
+			data["filename"] = files[0].Filename
+		}
+	}
+	b.relayJSON(w, r, "rpc.app.users.csv_import", data, http.StatusOK)
+}
+
 // identityInto resolves the bearer identity (required) and injects it into data.
 // Returns ok=false (and writes 401) when no valid identity is present.
 func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[string]any) (map[string]any, bool) {

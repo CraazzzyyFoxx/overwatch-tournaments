@@ -49,6 +49,27 @@ PROCESS_MATCH_LOG_DLQ = RabbitQueue(
 )
 
 # ============================================================================
+# Upload Match Log Queue (discord bot -> parser worker)
+# ============================================================================
+# Carries the raw log bytes (base64) so the bot no longer calls parser over HTTP.
+# The worker stores the file + record, then publishes a ProcessMatchLogEvent.
+
+UPLOAD_MATCH_LOG_QUEUE = RabbitQueue(
+    "upload_match_log",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "upload_match_log.dlq",
+        "x-message-ttl": 300000,  # 5 minutes
+    },
+)
+
+UPLOAD_MATCH_LOG_DLQ = RabbitQueue(
+    "upload_match_log.dlq",
+    durable=True,
+)
+
+# ============================================================================
 # Match Log Result (parser worker -> discord)
 # ============================================================================
 # Fanout so every discord-service replica receives every result; the replica

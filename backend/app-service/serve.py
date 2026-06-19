@@ -28,9 +28,11 @@ from src.rpc import (
     gamemodes,
     heroes,
     maps,
+    metadata_admin,
     reads_generic,
     statistics,
     users,
+    users_admin,
     workspaces,
 )
 from src.services import tournament_events
@@ -62,6 +64,12 @@ for _mod in (users, heroes, maps, gamemodes, achievements, statistics, workspace
 
 # Phase 2 — workspace update/delete via the shared CRUD engine.
 admin_crud.register(broker, logger)
+
+# Game-metadata admin CRUD (hero/map/gamemode), relocated from parser-service.
+metadata_admin.register(broker, logger)
+
+# User + identity admin CRUD, profile merge, avatar, CSV import (from parser-service).
+users_admin.register(broker, logger)
 
 # Phase 3 — binary/multipart endpoints (icons, assets, match-log) over base64.
 binary.register(broker, logger)

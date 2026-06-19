@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
+import adminService from "@/services/admin.service";
 import type { LogProcessingRecord, QueueDepth } from "@/types/admin.types";
 
 export type LogStreamState = {
@@ -19,94 +22,67 @@ const INITIAL_STATE: LogStreamState = {
   lastUpdated: null,
 };
 
+// Queue depths have no realtime push signal (they're a RabbitMQ management
+// snapshot), so they're refreshed on a light interval; recent-log changes arrive
+// in real time over the workspace WS topic.
+const QUEUE_POLL_MS = 5000;
+const RECENT_LOG_LIMIT = 20;
+
 /**
- * Connects to the SSE log stream endpoint and returns live queue depths
- * and recent log processing records.
+ * Live queue depths + recent log-processing records for the admin monitor.
  *
- * The token is read from the `aqt_access_token` cookie so the EventSource
- * can authenticate (EventSource does not support custom headers).
+ * Replaces the former SSE endpoint: recent logs refresh in real time via the
+ * `workspace:{id}:logs` realtime topic (parser emits a thin `logs.updated`
+ * signal on each processing completion), and queue depths refresh on a short
+ * interval. Both are read through the gateway-served RPC endpoints
+ * (`admin/logs/history`, `admin/logs/queue-status`).
  */
 export function useLogStream(enabled = true, workspaceId: number | null = null): LogStreamState {
   const [state, setState] = useState<LogStreamState>(INITIAL_STATE);
-  const esRef = useRef<EventSource | null>(null);
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    let cancelled = false;
-
-    async function connect() {
-      // Get access token from cookie (client-side only)
-      let token: string | undefined;
-      try {
-        const Cookies = (await import("js-cookie")).default;
-        token = Cookies.get("aqt_access_token");
-      } catch {
-        // js-cookie not available
-      }
-
-      if (cancelled) return;
-
-      if (!token) {
-        setState((s) => ({ ...s, error: "Not authenticated", connected: false }));
-        return;
-      }
-
-      let url = `/api/parser/admin/logs/stream?token=${encodeURIComponent(token)}`;
-      if (workspaceId !== null) {
-        url += `&workspace_id=${workspaceId}`;
-      }
-      const es = new EventSource(url);
-      esRef.current = es;
-
-      es.onopen = () => {
-        if (!cancelled) {
-          setState((s) => ({ ...s, connected: true, error: null }));
-        }
-      };
-
-      es.addEventListener("update", (event) => {
-        if (cancelled) return;
-        try {
-          const data = JSON.parse(event.data);
-          setState({
-            connected: true,
-            error: null,
-            queues: data.queues ?? [],
-            recentLogs: data.recent_logs ?? [],
-            lastUpdated: new Date(),
-          });
-        } catch {
-          // ignore malformed event
-        }
+  const refetch = useCallback(async () => {
+    try {
+      const [queues, history] = await Promise.all([
+        adminService.getQueueStatus(),
+        adminService.getLogHistory(undefined, { workspaceId, limit: RECENT_LOG_LIMIT }),
+      ]);
+      setState({
+        connected: true,
+        error: null,
+        queues,
+        recentLogs: history.items,
+        lastUpdated: new Date(),
       });
-
-      es.addEventListener("error", (event) => {
-        if (cancelled) return;
-        try {
-          const data = JSON.parse((event as MessageEvent).data ?? "{}");
-          setState((s) => ({ ...s, error: data.error ?? "Stream error" }));
-        } catch {
-          // ignore
-        }
-      });
-
-      es.onerror = () => {
-        if (!cancelled) {
-          setState((s) => ({ ...s, connected: false, error: "Connection lost, reconnecting…" }));
-        }
-      };
+    } catch (err) {
+      setState((s) => ({
+        ...s,
+        connected: false,
+        error: err instanceof Error ? err.message : "Failed to load log status",
+      }));
     }
+  }, [workspaceId]);
 
-    void connect();
-
+  // Initial fetch + queue-depth polling.
+  useEffect(() => {
+    if (!enabled) {
+      setState(INITIAL_STATE);
+      return;
+    }
+    let cancelled = false;
+    const tick = () => {
+      if (!cancelled) void refetch();
+    };
+    tick();
+    const id = setInterval(tick, QUEUE_POLL_MS);
     return () => {
       cancelled = true;
-      esRef.current?.close();
-      esRef.current = null;
-      setState(INITIAL_STATE);
+      clearInterval(id);
     };
-  }, [enabled, workspaceId]);
+  }, [enabled, refetch]);
+
+  // Real-time: refetch immediately when parser signals a log state change.
+  const topic = enabled && workspaceId != null ? `workspace:${workspaceId}:logs` : null;
+  useRealtimeTopic(topic, () => void refetch(), [refetch]);
 
   return state;
 }

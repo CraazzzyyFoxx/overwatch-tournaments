@@ -30,6 +30,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
@@ -153,12 +154,25 @@ func run(logger *slog.Logger) error {
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
+	// parser-service: typed RPC for parser-unique domains (the rest of /api/parser
+	// still proxies). Specific patterns win over the /api/parser proxy below.
+	parserEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	parserEdge.Register(mux, parser.Routes)
+	// Multipart match-log upload (files[] -> base64 RPC body) the JSON dispatcher
+	// can't handle.
+	parserBinary := parser.NewBinary(rpcClient, resolver.Resolve, logger)
+	mux.HandleFunc("POST /api/parser/admin/logs/upload", parserBinary.AdminLogsUpload)
+	// Achievement rule/library/override admin: ambiguous patterns under ServeMux
+	// (rules/export vs rules/{rule_id}) -> ordered subtree matcher.
+	mux.Handle("/api/parser/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
 	// app-service: typed RPC public reads (the rest of /api/v1/core still proxies).
 	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
 	// Specific patterns win over the /api/v1/core proxy below.
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	appEdge.Register(mux, app.ReadRoutes)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
+	appEdge.Register(mux, app.MetadataAdminRoutes)
+	appEdge.Register(mux, app.UsersAdminRoutes)
 	// achievements get surface: ambiguous (/{id}/users vs /user/{user_id}) -> subtree.
 	mux.Handle("/api/v1/core/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
 	// Binary/multipart endpoints the JSON dispatcher can't handle: icon + asset
@@ -169,6 +183,9 @@ func run(logger *slog.Logger) error {
 	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetUpload)
 	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetDelete)
 	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", appBinary.MatchLog)
+	// User avatar upload + CSV/Sheets user import (relocated from parser-service).
+	mux.HandleFunc("POST /api/v1/core/admin/users/{id}/avatar", appBinary.UserAvatarUpload)
+	mux.HandleFunc("POST /api/v1/core/user/create/csv", appBinary.UsersCsvImport)
 	// balancer-service: typed RPC public config + admin balance/config (the rest
 	// of /api/balancer — jobs, draft — still proxies to balancer-service until
 	// decommission). Specific patterns win over the /api/balancer proxy below.

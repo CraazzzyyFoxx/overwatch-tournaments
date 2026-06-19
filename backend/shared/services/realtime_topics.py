@@ -5,6 +5,7 @@ __all__ = (
     "balancer",
     "bracket",
     "draft",
+    "logs",
     "map_veto",
     "realtime_channel",
     "workspace_notifications",
@@ -40,6 +41,16 @@ def balancer(tournament_id: int) -> str:
     membership (see the gateway topic ACL, gateway/internal/acl).
     """
     return f"tournament:{int(tournament_id)}:balancer"
+
+
+def logs(workspace_id: int) -> str:
+    """Topic for live match-log processing updates within a workspace.
+
+    Carries a thin ``logs.updated`` signal (no record data); the admin log
+    monitor refetches ``/admin/logs/history`` on receipt. Gated by workspace
+    membership via the existing ``workspace:*:*`` ACL rule.
+    """
+    return f"workspace:{int(workspace_id)}:logs"
 
 
 def workspace_notifications(workspace_id: int) -> str:

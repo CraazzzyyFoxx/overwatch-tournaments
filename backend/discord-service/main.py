@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -11,7 +12,7 @@ from pydantic import ValidationError
 from shared.messaging.config import (
     DISCORD_COMMANDS_QUEUE,
     MATCH_LOG_RESULT_EXCHANGE,
-    PROCESS_MATCH_LOG_QUEUE,
+    UPLOAD_MATCH_LOG_QUEUE,
 )
 from shared.models import Tournament, TournamentDiscordChannel
 from shared.models.log_processing import LogProcessingRecord, LogProcessingStatus
@@ -22,7 +23,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
-from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent, ProcessMatchLogEvent
+from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent, UploadMatchLogEvent
 from sqlalchemy import select
 
 from src.core.config import settings
@@ -234,44 +235,32 @@ async def process_attachment(
             response = await http_client.get(attachment.url)
             response.raise_for_status()
 
-        async with await get_httpx_client(destination="internal") as http_client:
-            # Upload to parser service (creates S3 object + LogProcessingRecord)
-            files = {"file": (attachment.filename, response.content, attachment.content_type)}
-            data = {}
-            if uploader_discord_name:
-                data["discord_username"] = uploader_discord_name
-
-            upload_response = await http_client.post(f"logs/{tournament_id}/upload", files=files, data=data)
-
-            if upload_response.status_code != 200:
-                error_message = f"{upload_response.status_code} - {upload_response.text}"
-                logger.error(
-                    f"❌ Upload failed for {attachment.filename}: "
-                    f"{error_message}"
-                )
-                return AttachmentFeedbackResult(
-                    filename=attachment.filename,
-                    state=AttachmentFeedbackState.UPLOAD_FAILED,
-                    error_message=error_message,
-                )
-
-        # Publish processing event to queue (worker picks it up asynchronously)
-        if rabbit_broker is not None:
-            event = ProcessMatchLogEvent(tournament_id=tournament_id, filename=attachment.filename)
-            await publish_message(
-                rabbit_broker,
-                event.model_dump(),
-                PROCESS_MATCH_LOG_QUEUE,
-                logger=logger.bind(tournament_id=tournament_id, filename=attachment.filename),
-            )
-            logger.success(f"✅ {attachment.filename} uploaded and queued for processing")
-        else:
-            logger.warning(f"⚠️ RabbitMQ not available, skipping queue publish for {attachment.filename}")
+        # Hand the log to parser over RabbitMQ (base64); the worker stores it to S3,
+        # upserts the LogProcessingRecord, and queues processing. Replaces the former
+        # direct HTTP upload (POST /logs/{id}/upload) so the bot no longer calls
+        # parser over HTTP.
+        if rabbit_broker is None:
+            logger.warning(f"⚠️ RabbitMQ not available, cannot upload {attachment.filename}")
             return AttachmentFeedbackResult(
                 filename=attachment.filename,
                 state=AttachmentFeedbackState.UPLOAD_FAILED,
                 error_message="RabbitMQ unavailable",
             )
+
+        event = UploadMatchLogEvent(
+            tournament_id=tournament_id,
+            filename=attachment.filename,
+            content_b64=base64.b64encode(response.content).decode("ascii"),
+            content_type=attachment.content_type,
+            uploader_discord_name=uploader_discord_name,
+        )
+        await publish_message(
+            rabbit_broker,
+            event.model_dump(),
+            UPLOAD_MATCH_LOG_QUEUE,
+            logger=logger.bind(tournament_id=tournament_id, filename=attachment.filename),
+        )
+        logger.success(f"✅ {attachment.filename} uploaded and queued for processing")
 
         if wait_for_result:
             processing_result = await result_waiter.wait(tournament_id, attachment.filename)
