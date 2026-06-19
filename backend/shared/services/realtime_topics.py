@@ -37,7 +37,7 @@ def balancer(tournament_id: int) -> str:
     Carries data-edit signals (``balancer.*_changed``), job-status events
     (``balancer_job.*``), and ephemeral presence (``balancer.presence``).
     Unlike the public draft/bracket topics, access is gated by workspace
-    membership (see the realtime-service topic ACL).
+    membership (see the gateway topic ACL, gateway/internal/acl).
     """
     return f"tournament:{int(tournament_id)}:balancer"
 

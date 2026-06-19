@@ -101,8 +101,6 @@ services:
     depends_on:
       parser:
         condition: service_healthy
-      realtime:
-        condition: service_healthy
       analytics:
         condition: service_healthy
       balancer:
@@ -168,49 +166,11 @@ services:
       start_period: 40s
     restart: always
 
-  realtime:
-    image: registry.craazzzyyfoxx.me/aqt-realtime:latest
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-    build:
-      context: ./backend
-      args:
-        APP_PATH: realtime
-    command: uvicorn main:app --host 0.0.0.0 --port 8005 --workers ${WORKERS_REALTIME:-2} --loop uvloop
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/realtime.env
-    environment:
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.1
-      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
-      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./logs/realtime:/logs
-    depends_on:
-      redis:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
+  # realtime-service decommissioned: WebSockets are now served by the Go gateway
+  # (gateway/internal/ws), consuming the same `realtime:*` Redis channels and
+  # replaying from `realtime.workspace_event`. External `/api/realtime/*` flows
+  # through Kong -> gateway:8080 (see kong/kong.prod.yml). Service code kept under
+  # backend/realtime-service/ as reference (not deployed).
 
   discord:
     image: registry.craazzzyyfoxx.me/aqt-discord:latest
@@ -705,8 +665,6 @@ services:
       - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
     depends_on:
       parser:
-        condition: service_healthy
-      realtime:
         condition: service_healthy
       balancer:
         condition: service_healthy

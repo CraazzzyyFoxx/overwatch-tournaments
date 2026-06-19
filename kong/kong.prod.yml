@@ -58,8 +58,11 @@ services:
         strip_path: false
         preserve_host: true
 
+  # WebSockets are served by the Go gateway (realtime-service decommissioned).
+  # strip_path drops `/api/realtime`, so the gateway receives `/ws` (which it serves
+  # alongside `/api/realtime/ws`). Same gateway:8080 target as auth/tournament above.
   - name: realtime
-    url: http://realtime:8005
+    url: http://gateway:8080
     routes:
       - name: realtime-api
         paths:

@@ -1,6 +1,6 @@
 """Helpers to publish analytics-job lifecycle events to the realtime topic.
 
-The worker calls these as each stage transitions; the realtime-service
+The worker calls these as each stage transitions; the gateway
 consumes the Redis channel and fans the envelope out to subscribed
 WebSocket clients.
 """

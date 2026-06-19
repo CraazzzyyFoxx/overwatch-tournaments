@@ -21,9 +21,9 @@ registration through bracket generation, results, and realtime updates.
 
 ## Realtime & messaging
 
-- Tournament realtime events are published to `realtime.workspace_event` for `realtime-service` fan-out.
+- Tournament realtime events are published to `realtime.workspace_event` for gateway WebSocket fan-out.
 - A RabbitMQ `tournament_changed` consumer handles cache invalidation.
-- Redis realtime publish enables multi-replica WebSocket broadcast through `realtime-service`.
+- Redis realtime publish enables multi-replica WebSocket broadcast through the gateway.
 - A transactional outbox publishes captain/admin tournament changes, recalculations, encounter
   completion, registration approvals/rejections, and tournament state changes; the outbox sweeper runs in
   `serve.py`.

@@ -68,7 +68,7 @@ async def start_worker() -> None:
     if config.settings.worker_metrics_port is not None:
         start_worker_metrics_server(config.settings.worker_metrics_port)
     # Redis is used to publish analytics_job realtime envelopes for the
-    # realtime-service WS fan-out. Missing/broken Redis degrades to "no
+    # gateway WS fan-out. Missing/broken Redis degrades to "no
     # progress events", not an outright failure.
     try:
         redis_client = Redis.from_url(str(config.settings.redis_url))

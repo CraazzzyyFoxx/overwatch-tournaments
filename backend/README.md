@@ -14,7 +14,7 @@ workspace rooted at this directory.
 | [`parser-service`](./parser-service/README.md) | 8002 | Match-log parsing & scheduled processing |
 | [`balancer-service`](./balancer-service/README.md) | 8003 | Genetic-algorithm team balancing |
 | [`tournament-service`](./tournament-service/README.md) | 8004 | Tournament domain API + workers |
-| [`realtime-service`](./realtime-service/README.md) | 8005 | WebSocket gateway with Redis pub/sub |
+| [`realtime-service`](./realtime-service/README.md) | — | Decommissioned: WebSockets served by the Go `gateway/` (code kept for reference) |
 | [`analytics-service`](./analytics-service/README.md) | 8006 | OpenSkill / ML analytics |
 | [`discord-service`](./discord-service/README.md) | — | Discord bot integration |
 | [`twitch-service`](./twitch-service/README.md) | — | Twitch integration (inactive) |
