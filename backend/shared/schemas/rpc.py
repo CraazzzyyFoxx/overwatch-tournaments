@@ -10,10 +10,22 @@ from __future__ import annotations
 from typing import Any
 
 # Error codes -> HTTP status are mapped on the gateway side:
-#   unauthorized->401, forbidden->403, bad_request->400,
-#   not_found->404, conflict->409, gone->410, unprocessable->422, internal->500
+#   unauthorized->401, forbidden->403, bad_request->400, not_found->404,
+#   conflict->409, gone->410, unprocessable->422, payload_too_large->413,
+#   rate_limited->429, internal->500
 ERROR_CODES = frozenset(
-    {"unauthorized", "forbidden", "bad_request", "not_found", "conflict", "gone", "unprocessable", "internal"}
+    {
+        "unauthorized",
+        "forbidden",
+        "bad_request",
+        "not_found",
+        "conflict",
+        "gone",
+        "unprocessable",
+        "payload_too_large",
+        "rate_limited",
+        "internal",
+    }
 )
 
 
@@ -34,5 +46,7 @@ def status_to_code(http_status: int) -> str:
         404: "not_found",
         409: "conflict",
         410: "gone",
+        413: "payload_too_large",
         422: "unprocessable",
+        429: "rate_limited",
     }.get(http_status, "internal")

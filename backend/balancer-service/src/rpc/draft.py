@@ -34,7 +34,6 @@ from src.core.auth import (
 from src.core.config import config
 from src.rpc import _common as c
 from src.schemas.draft import (
-    DraftBoardSnapshot,
     DraftPickAutopickRequest,
     DraftPickOverrideRequest,
     DraftPickSelectRequest,
@@ -67,6 +66,14 @@ def _redis(logger: Any) -> Redis | None:
             logger.warning("Draft realtime Redis unavailable; events persist but are not broadcast")
             return None
     return _redis_client
+
+
+async def close() -> None:
+    """Close the worker-lifetime realtime Redis client (called on worker shutdown)."""
+    global _redis_client
+    if _redis_client is not None:
+        await _redis_client.aclose()
+        _redis_client = None
 
 
 async def _load_session(session: AsyncSession, session_id: int) -> DraftSession:

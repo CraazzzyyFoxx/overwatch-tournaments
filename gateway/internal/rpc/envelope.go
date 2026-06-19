@@ -36,6 +36,10 @@ func StatusForCode(code string) int {
 		return 410
 	case "unprocessable":
 		return 422
+	case "payload_too_large":
+		return 413
+	case "rate_limited":
+		return 429
 	default:
 		return 500
 	}

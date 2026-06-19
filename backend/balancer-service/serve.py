@@ -101,6 +101,12 @@ async def start_draft_clock() -> None:
     logger.info("Draft clock supervisor started")
 
 
+@app.on_shutdown
+async def close_rpc_clients() -> None:
+    # Gracefully close the draft realtime Redis client (worker-lifetime singleton).
+    await rpc_draft.close()
+
+
 @broker.subscriber(BALANCER_JOBS_QUEUE, decoder=_decode_balancer_message)
 async def process_balancer_job(data: dict, msg: RabbitMessage) -> None:
     try:
