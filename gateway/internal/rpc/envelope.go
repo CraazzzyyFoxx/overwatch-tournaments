@@ -32,6 +32,8 @@ func StatusForCode(code string) int {
 		return 404
 	case "conflict":
 		return 409
+	case "gone":
+		return 410
 	case "unprocessable":
 		return 422
 	default:

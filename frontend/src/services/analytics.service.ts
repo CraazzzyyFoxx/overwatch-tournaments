@@ -4,7 +4,6 @@ import {
   AlgorithmAnalytics,
   AnalyticsJob,
   AnalyticsJobCreate,
-  AnalyticsRecalculateResponse,
   AnomalyFeedback,
   AnomalyFeedbackInput,
   Explanation,
@@ -72,11 +71,13 @@ export default class analyticsService {
     }).then((response) => response.json());
   }
 
+  // Now enqueues an async compute job (202) instead of computing synchronously;
+  // the returned AnalyticsJob can be tracked via the job-status endpoints/realtime.
   static async recalculateAnalytics(
     tournamentId: number,
     algorithmIds?: number[],
     workspaceId?: number | null,
-  ): Promise<AnalyticsRecalculateResponse> {
+  ): Promise<AnalyticsJob> {
     return apiFetch("analytics", "analytics/recalculate", {
       query: { workspace_id: workspaceId },
       method: "POST",

@@ -11,9 +11,9 @@ from typing import Any
 
 # Error codes -> HTTP status are mapped on the gateway side:
 #   unauthorized->401, forbidden->403, bad_request->400,
-#   not_found->404, conflict->409, unprocessable->422, internal->500
+#   not_found->404, conflict->409, gone->410, unprocessable->422, internal->500
 ERROR_CODES = frozenset(
-    {"unauthorized", "forbidden", "bad_request", "not_found", "conflict", "unprocessable", "internal"}
+    {"unauthorized", "forbidden", "bad_request", "not_found", "conflict", "gone", "unprocessable", "internal"}
 )
 
 
@@ -33,5 +33,6 @@ def status_to_code(http_status: int) -> str:
         403: "forbidden",
         404: "not_found",
         409: "conflict",
+        410: "gone",
         422: "unprocessable",
     }.get(http_status, "internal")

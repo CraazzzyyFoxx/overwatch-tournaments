@@ -21,6 +21,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/acl"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/analytics"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
@@ -145,6 +146,11 @@ func run(logger *slog.Logger) error {
 	// division-grids + admin/stages: ambiguous patterns under ServeMux -> subtree matcher.
 	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", tournamentEdge.Subtree(tournament.StageSubtreeRoutes))
+	// analytics-service: typed RPC reads + job-control (the rest of /api/analytics
+	// still proxies). Specific patterns win over the proxy.
+	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
+	analyticsEdge.Register(mux, analytics.ReadRoutes)
+	analyticsEdge.Register(mux, analytics.WriteRoutes)
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.

@@ -493,6 +493,50 @@ services:
           cpus: '1.0'
           memory: 1G
 
+  # Lightweight headless RPC service: hosts every rpc.analytics.* subscriber
+  # (reads + job-control) for the gateway. The heavy ML compute stays in
+  # analytics-worker; this process must NOT own the ANALYTICS_* job queues.
+  analytics-svc:
+    image: registry.craazzzyyfoxx.me/aqt-analytics:dev
+    profiles: ["workers"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: analytics
+    command: faststream run serve_rpc:app --reload --reload-dir /app/analytics-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/analytics.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9107
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./backend/analytics-service:/app/analytics-service
+      - ./backend/shared:/app/shared
+      - ./logs/analytics-svc:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
   discord:
     image: registry.craazzzyyfoxx.me/aqt-discord:dev
     profiles: ["workers"]
