@@ -51,6 +51,15 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	d.Register(mux, app.ReadRoutes)
 	d.Register(mux, app.WorkspaceWriteRoutes)
 	mux.Handle("/api/v1/core/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
+	// Binary/multipart handlers (registering them must not conflict with the
+	// workspace member routes or the get-by-id routes).
+	bin := app.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux.HandleFunc("POST /api/v1/core/workspaces/{id}/icon", bin.IconUpload)
+	mux.HandleFunc("DELETE /api/v1/core/workspaces/{id}/icon", bin.IconDelete)
+	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", bin.AssetUpload)
+	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", bin.AssetDelete)
+	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", bin.MatchLog)
 	mux.Handle("/api/v1/core/", marker("core"))
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Route", "guard")
@@ -73,8 +82,7 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 	}{
 		{"unknown top-level api path", "GET", "/api/v1/does-not-exist", ""},
 		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope", ""},
-		{"unmigrated app path still proxies", "GET", "/api/v1/core/matches/1/log", "core"},
-		{"unmigrated app write still proxies", "POST", "/api/v1/core/assets/achievements/x", "core"},
+		{"unknown app path still proxies", "GET", "/api/v1/core/nonexistent-xyz", "core"},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -137,6 +145,7 @@ func TestApiV1Core_MigratedReadsHitDispatcher(t *testing.T) {
 		"/api/v1/core/statistics/won-maps",
 		"/api/v1/core/workspaces",
 		"/api/v1/core/workspaces/5",
+		"/api/v1/core/matches/9/log",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {

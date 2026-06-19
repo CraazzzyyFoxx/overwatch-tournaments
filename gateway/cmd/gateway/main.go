@@ -160,6 +160,14 @@ func run(logger *slog.Logger) error {
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	// achievements get surface: ambiguous (/{id}/users vs /user/{user_id}) -> subtree.
 	mux.Handle("/api/v1/core/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
+	// Binary/multipart endpoints the JSON dispatcher can't handle: icon + asset
+	// uploads (multipart -> base64 RPC) and the match-log download (base64 -> bytes).
+	appBinary := app.NewBinary(rpcClient, resolver.Resolve, logger)
+	mux.HandleFunc("POST /api/v1/core/workspaces/{id}/icon", appBinary.IconUpload)
+	mux.HandleFunc("DELETE /api/v1/core/workspaces/{id}/icon", appBinary.IconDelete)
+	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetUpload)
+	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetDelete)
+	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", appBinary.MatchLog)
 	// Guard the /api/v1 namespace: anything not matched by a typed route above
 	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched

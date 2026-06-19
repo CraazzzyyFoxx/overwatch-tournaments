@@ -24,6 +24,7 @@ from src.rpc import (
     _clients,
     achievements,
     admin_crud,
+    binary,
     gamemodes,
     heroes,
     maps,
@@ -62,8 +63,8 @@ for _mod in (users, heroes, maps, gamemodes, achievements, statistics, workspace
 # Phase 2 — workspace update/delete via the shared CRUD engine.
 admin_crud.register(broker, logger)
 
-# rpc.app.* subscribers (later phases):
-#   Phase 3 — binary base64 handlers
+# Phase 3 — binary/multipart endpoints (icons, assets, match-log) over base64.
+binary.register(broker, logger)
 
 
 @app.on_startup
