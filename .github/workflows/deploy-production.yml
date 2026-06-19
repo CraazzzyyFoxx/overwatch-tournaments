@@ -51,4 +51,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - run: docker compose -f docker-compose.production.yml --project-name aqt build
-      - run: docker compose -f docker-compose.production.yml --project-name aqt up -d
+      # --remove-orphans drops the retired Kong container so nginx can bind APP_PORT.
+      - run: docker compose -f docker-compose.production.yml --project-name aqt up -d --remove-orphans

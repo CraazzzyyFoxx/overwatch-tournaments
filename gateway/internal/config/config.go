@@ -27,7 +27,7 @@ type Config struct {
 }
 
 // Upstreams are the base URLs of the existing services the gateway proxies to.
-// Defaults match the docker-compose service names / ports (see kong/kong.dev.yml).
+// Defaults match the docker-compose service names / ports.
 type Upstreams struct {
 	Parser    string
 	Balancer  string

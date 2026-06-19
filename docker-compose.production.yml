@@ -68,55 +68,6 @@ services:
       timeout: 5s
       retries: 5
 
-  kong:
-    image: kong:3.7
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 256M
-    restart: always
-    environment:
-      - KONG_DATABASE=off
-      - KONG_MEM_CACHE_SIZE=64m
-      - KONG_NGINX_WORKER_PROCESSES=2
-      - KONG_DECLARATIVE_CONFIG=/kong/kong.yml
-      - KONG_PROXY_LISTEN=0.0.0.0:8000
-      - KONG_ADMIN_LISTEN=off
-      - KONG_ADMIN_GUI_LISTEN=off
-      - KONG_STATUS_LISTEN=0.0.0.0:8100
-      - KONG_DNS_ORDER=LAST,A,SRV,CNAME
-      - KONG_DNS_VALID_TTL=10
-      - KONG_DNS_STALE_TTL=0
-      - KONG_DNS_NOT_FOUND_TTL=1
-      - KONG_DNS_ERROR_TTL=1
-      - KONG_LOG_LEVEL=${KONG_LOG_LEVEL:-notice}
-    ports:
-      - "${APP_PORT}:8000"
-    volumes:
-      - ./kong/kong.prod.yml:/kong/kong.yml:ro
-    depends_on:
-      parser:
-        condition: service_healthy
-      analytics:
-        condition: service_healthy
-      balancer:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-
   # app-service is headless: served by app-worker (rpc.app.*) behind the gateway.
   # The former HTTP `backend` service was decommissioned.
 
@@ -169,7 +120,7 @@ services:
   # realtime-service decommissioned: WebSockets are now served by the Go gateway
   # (gateway/internal/ws), consuming the same `realtime:*` Redis channels and
   # replaying from `realtime.workspace_event`. External `/api/realtime/*` flows
-  # through Kong -> gateway:8080 (see kong/kong.prod.yml). Service code kept under
+  # through nginx -> gateway:8080. Service code kept under
   # backend/realtime-service/ as reference (not deployed).
 
   discord:
@@ -685,13 +636,13 @@ services:
     restart: always
 
   # ==========================================================================
-  # Gateway architecture (Phase 1) — part of the DEFAULT stack.
-  # The gateway is primary for everything READY: the backend services validate
-  # tokens through it (AUTH_SERVICE_URL=http://gateway:8080/api/auth is set on
-  # each consumer below) -> RPC -> identity-svc, and the gateway serves
-  # /api/auth/* + proxies the rest. Kong stays the EXTERNAL edge for the
-  # frontend/clients until the frontend repoint; then nginx (behind Traefik)
-  # takes over the edge.   traefik (TLS) -> nginx -> gateway -> RPC -> identity
+  # Gateway architecture — part of the DEFAULT stack.
+  # The gateway is the single entry point: backend services validate tokens
+  # through it (AUTH_SERVICE_URL=http://gateway:8080/api/auth is set on each
+  # consumer below) -> RPC -> identity-svc, and the gateway serves /api/auth/*,
+  # /api/v1 (typed RPC) + reverse-proxies the rest (parser/analytics/balancer/
+  # frontend). nginx is the external edge (Kong removed).
+  #   traefik (TLS) -> nginx -> gateway -> RPC -> identity
   # ==========================================================================
 
   identity:
@@ -787,12 +738,12 @@ services:
         reservations:
           cpus: '0.05'
           memory: 32M
-    # Plain-HTTP app entry: TLS is terminated by Traefik in front of nginx, so
-    # no certs/443 here. Behind Traefik, route traefik -> nginx:80 over the app
-    # network (add Traefik router/service labels per your setup); the published
-    # port below is only for direct testing.
+    # Plain-HTTP app entry (sole external edge, replaces Kong): TLS is terminated
+    # by Traefik in front of nginx, so no certs/443 here. nginx publishes the
+    # host port Traefik already targets (APP_PORT, was Kong's), so no Traefik
+    # config change is needed for the cutover.
     ports:
-      - "${GATEWAY_EDGE_PORT:-8090}:80"
+      - "${APP_PORT}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:

@@ -47,7 +47,7 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 		idleTimeout: idleTimeout,
 		log:         log,
 		// Origin is not enforced (matching the previous realtime-service, which
-		// runs behind the gateway/Kong). Tighten with OriginPatterns if the
+		// runs behind nginx -> the gateway). Tighten with OriginPatterns if the
 		// gateway is ever exposed directly to untrusted browsers.
 		accept: &websocket.AcceptOptions{InsecureSkipVerify: true},
 	}

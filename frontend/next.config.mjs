@@ -13,7 +13,7 @@ const nextConfig = {
         /\/$/,
         "",
       );
-    // Single-prefix routing (mirrors Kong):
+    // Single-prefix routing (mirrors the gateway):
     //   /api/v1/core/*  -> app-service     (most specific, must come first)
     //   /api/v1/*       -> tournament-service (owns the rest of the namespace)
     return [

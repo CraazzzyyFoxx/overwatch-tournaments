@@ -1,6 +1,6 @@
-// Package proxy reverse-proxies REST traffic to the existing services,
-// replicating the longest-prefix routing of kong/kong.dev.yml. Paths are
-// preserved (kong strip_path: false), and the original Host is forwarded.
+// Package proxy reverse-proxies REST traffic to the existing services using
+// longest-prefix path routing. Paths are preserved (no stripping), and the
+// original Host is forwarded.
 package proxy
 
 import (
@@ -62,7 +62,7 @@ func newReverseProxy(target string) (*httputil.ReverseProxy, error) {
 		return nil, fmt.Errorf("invalid upstream url %q", target)
 	}
 	// NewSingleHostReverseProxy preserves the request path (target has no path)
-	// and leaves req.Host untouched, matching kong's preserve_host: true.
+	// and leaves req.Host untouched, forwarding the original Host header.
 	return httputil.NewSingleHostReverseProxy(u), nil
 }
 

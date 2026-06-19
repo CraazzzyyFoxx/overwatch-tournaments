@@ -104,7 +104,7 @@ func run(logger *slog.Logger) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
 	// The gateway owns the WebSocket endpoint. Serve both the dev path (/ws) and
-	// the Kong-style path (/api/realtime/ws) so the frontend connects unchanged.
+	// the external path (/api/realtime/ws) so the frontend connects unchanged.
 	mux.Handle("/ws", wsHandler)
 	mux.Handle("/api/realtime/ws", wsHandler)
 	// Identity HTTP face (RPC into identity-svc). Additive: these specific

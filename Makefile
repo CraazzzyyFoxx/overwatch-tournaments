@@ -13,8 +13,8 @@ MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 help:
 	@echo "Available commands:"
 	@echo "  make dev-build      - Build dev images"
-	@echo "  make dev-up         - Start core dev stack (no workers, no gateway)"
-	@echo "  make dev-up-full    - Start dev stack with workers and Kong gateway"
+	@echo "  make dev-up         - Start core dev stack (no workers)"
+	@echo "  make dev-up-full    - Start dev stack with workers"
 	@echo "  make dev-down       - Stop dev stack"
 	@echo "  make dev-logs       - Follow dev logs"
 	@echo "  make dev-ps         - Show dev services"
@@ -42,7 +42,7 @@ dev-up:
 	$(COMPOSE) up -d --wait
 
 dev-up-full:
-	$(COMPOSE) --profile workers --profile gateway up -d --wait
+	$(COMPOSE) --profile workers up -d --wait
 
 dev-down:
 	$(COMPOSE) down --remove-orphans

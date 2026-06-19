@@ -54,10 +54,10 @@ bind-mounting your own file into the container:
 docker compose up -d --wait
 ```
 
-- Enable the Kong gateway and workers when needed:
+- Enable background workers when needed:
 
 ```bash
-docker compose --profile gateway --profile workers up -d --wait
+docker compose --profile workers up -d --wait
 ```
 
 Production image builds use explicit Docker build args/env values and no longer copy `.env` into image layers.

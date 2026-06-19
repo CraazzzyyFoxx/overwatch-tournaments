@@ -171,7 +171,7 @@ services:
   # realtime-service decommissioned: WebSockets are now served by the Go gateway
   # (gateway/internal/ws), which consumes the same `realtime:*` Redis channels and
   # replays from `realtime.workspace_event`. The frontend connects to the gateway
-  # (NEXT_PUBLIC_REALTIME_API_URL below / Kong `/api/realtime` -> gateway:8080).
+  # (NEXT_PUBLIC_REALTIME_API_URL below / nginx `/api/realtime` -> gateway:8080).
   # Service code kept under backend/realtime-service/ as reference (not deployed).
 
   balancer:
@@ -618,48 +618,6 @@ services:
           cpus: '0.05'
           memory: 32M
 
-  kong:
-    image: kong:3.7
-    profiles: ["gateway"]
-    environment:
-      - KONG_DATABASE=off
-      - KONG_DECLARATIVE_CONFIG=/kong/kong.yml
-      - KONG_PROXY_LISTEN=0.0.0.0:8000
-      - KONG_ADMIN_LISTEN=0.0.0.0:8001
-      - KONG_STATUS_LISTEN=0.0.0.0:8100
-      - KONG_NGINX_WORKER_PROCESSES=1
-      - KONG_LOG_LEVEL=${KONG_LOG_LEVEL:-notice}
-      - KONG_DNS_ORDER=LAST,A,SRV,CNAME
-      - KONG_DNS_VALID_TTL=10
-      - KONG_DNS_STALE_TTL=0
-    ports:
-      - "${APP_PORT}:8000"
-      - "${KONG_ADMIN_PORT:-8100}:8001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./kong/kong.dev.yml:/kong/kong.yml:ro
-    depends_on:
-      parser:
-        condition: service_healthy
-      balancer:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 256M
-
   # --------------------------------------------------------------------------
   # identity-svc (headless FastStream) — Phase 1: identity RPC over RabbitMQ.
   # Headless worker (no HTTP), called by the gateway. Part of the default dev
@@ -700,10 +658,9 @@ services:
           memory: 128M
 
   # --------------------------------------------------------------------------
-  # Gateway (Go) — Phase 0: REST reverse-proxy + WebSocket hub + local JWT.
-  # Part of the default dev stack, on its OWN ports (gateway :8080, nginx :8090)
-  # alongside the existing services/frontend — no profile, no path changes.
-  # Test the gateway at :8080 / :8090; the rest of the app is untouched.
+  # Gateway (Go) — REST reverse-proxy + WebSocket hub + local JWT.
+  # Sole entry point (Kong removed): nginx (APP_PORT) -> gateway:8080 -> RPC.
+  # The gateway is also published on :8080 for direct testing.
   # --------------------------------------------------------------------------
   gateway:
     image: registry.craazzzyyfoxx.me/aqt-gateway:dev
@@ -736,11 +693,12 @@ services:
 
   # nginx: plain-HTTP app entry in front of the gateway (gateway keeps routing
   # REST + WS). Single upstream -> gateway:8080. TLS is terminated upstream
-  # (Traefik in prod), not here. Part of the default dev stack.
+  # (Traefik in prod), not here. Sole external edge (Kong removed). Binds
+  # APP_PORT so the frontend dev env (http://localhost/api/...) works unchanged.
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "${EDGE_HTTP_PORT:-8090}:80"
+      - "${APP_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:

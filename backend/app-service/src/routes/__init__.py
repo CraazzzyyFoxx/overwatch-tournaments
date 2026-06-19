@@ -11,8 +11,8 @@ from src.routes.user import router as user_router
 from src.routes.workspace import router as workspace_router
 
 # Tournament-flow routes (tournament, encounter, match, team, registration,
-# division_grid) moved to tournament-service. Kong routes /api/v1/* paths for
-# those resources directly to tournament-service. See P3-A spec:
+# division_grid) moved to tournament-service. The gateway routes /api/v1/* paths
+# for those resources to tournament-service. See P3-A spec:
 # backend/docs/architecture/specs/2026-05-24-p3a-tournament-flow-extraction-design.md
 router = APIRouter()
 router.include_router(workspace_router)
