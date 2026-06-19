@@ -10,10 +10,19 @@ import type {
 
 // All draft endpoints live on balancer-service under /api/balancer/draft/...
 // Reads are public (spectating); writes use apiFetch's automatic bearer token.
+
+// The `X | None` board read returns HTTP 200 with a `null` body from FastAPI,
+// but the Go gateway omits the body for null data. Parse defensively so an empty
+// body reads as `null` instead of throwing on `.json()`.
+async function readJsonOrNull<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  return text ? (JSON.parse(text) as T) : null;
+}
+
 export default class draftService {
   static async getTournamentBoard(tournamentId: number): Promise<DraftBoard | null> {
     const res = await apiFetch("balancer", `draft/tournaments/${tournamentId}/draft`);
-    return res.json();
+    return readJsonOrNull<DraftBoard>(res);
   }
 
   static async getSessionBoard(sessionId: number): Promise<DraftBoard> {

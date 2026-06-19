@@ -22,6 +22,7 @@ from src.core.config import config
 from src.rpc import admin as rpc_admin
 from src.rpc import binary as rpc_binary
 from src.rpc import config as rpc_config
+from src.rpc import draft as rpc_draft
 from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_supervisor
 
@@ -45,6 +46,8 @@ configure_cache()
 rpc_config.register(broker, logger)
 rpc_admin.register(broker, logger)
 rpc_binary.register(broker, logger)
+# Phase 2 — live draft (public reads + lifecycle + pick actions).
+rpc_draft.register(broker, logger)
 
 
 def _decode_balancer_message(message: Any) -> Any:

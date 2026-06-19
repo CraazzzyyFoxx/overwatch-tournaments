@@ -40,7 +40,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.teams_import")
     async def _teams_import(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)

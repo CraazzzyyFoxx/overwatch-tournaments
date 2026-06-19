@@ -57,7 +57,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.tournament_config_get")
     async def _tournament_config_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
@@ -70,7 +70,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.tournament_config_upsert")
     async def _tournament_config_upsert(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
@@ -91,7 +91,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.balance_get")
     async def _balance_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
@@ -104,7 +104,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.balance_save")
     async def _balance_save(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
@@ -119,7 +119,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.balance_export")
     async def _balance_export(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             balance_id = c.require_id(data)
             ws_id = await _get_balance_workspace_id(session, balance_id)
@@ -139,7 +139,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.workspace_config_get")
     async def _workspace_config_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             workspace_id = c.require_id(data)
             c.require_workspace_permission(data, user, workspace_id, "workspace", "read")
@@ -151,7 +151,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.admin.workspace_config_upsert")
     async def _workspace_config_upsert(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.actor(data)
+            user = c.active_actor(data)
             c.require_admin_panel(user)
             workspace_id = c.require_id(data)
             c.require_workspace_permission(data, user, workspace_id, "workspace", "admin")

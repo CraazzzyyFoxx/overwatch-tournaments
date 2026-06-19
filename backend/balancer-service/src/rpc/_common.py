@@ -76,6 +76,23 @@ def require_workspace_permission(data: dict[str, Any], user: AuthUser, workspace
     ensure_workspace_permission(user, workspace_id, resource, action)
 
 
+def require_active(user: AuthUser) -> None:
+    """Mirror ``get_current_active_user``: reject inactive users with 403."""
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+
+
+def active_actor(data: dict[str, Any]) -> AuthUser:
+    """Rehydrate identity and enforce the active check.
+
+    Every authenticated balancer/draft endpoint resolves through
+    ``get_current_active_user``, so handlers use this instead of bare ``actor``.
+    """
+    user = actor(data)
+    require_active(user)
+    return user
+
+
 def require_admin_panel(user: AuthUser) -> None:
     """Mirror the admin balancer router-level ``require_admin_panel_access()`` gate.
 

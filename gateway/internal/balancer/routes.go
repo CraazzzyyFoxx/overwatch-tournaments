@@ -31,3 +31,34 @@ var AdminRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/balancer/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
 }
+
+// DraftReadRoutes are the public draft spectating reads (no auth), from
+// src/routes/admin/draft.py.
+var DraftReadRoutes = []edge.RouteSpec{
+	{Method: "GET", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/draft", Queue: "rpc.balancer.draft.tournament_board", IDParam: "tournament_id", Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/balancer/draft/sessions/{session_id}", Queue: "rpc.balancer.draft.session_get", IDParam: "session_id", Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/balancer/draft/sessions/{session_id}/board", Queue: "rpc.balancer.draft.session_board", IDParam: "session_id", Auth: edge.AuthNone},
+}
+
+// DraftRoutes are the authenticated draft endpoints: suggestions (draft-session
+// read), admin lifecycle (keyed by tournament_id for the permission, session_id
+// for the action), and pick actions (keyed by pick_id). Permissions + captain
+// identity for /select are enforced in the worker. The path segments
+// (tournaments/sessions/picks) are distinct, so no subtree matcher is needed.
+var DraftRoutes = []edge.RouteSpec{
+	{Method: "GET", Pattern: "/api/balancer/draft/sessions/{session_id}/suggestions", Queue: "rpc.balancer.draft.suggestions", IDParam: "session_id", Auth: edge.AuthRequired},
+	// lifecycle
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions", Queue: "rpc.balancer.draft.session_create", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/seed", Queue: "rpc.balancer.draft.seed", IDParam: "session_id", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}", Queue: "rpc.balancer.draft.session_patch", IDParam: "session_id", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/start", Queue: "rpc.balancer.draft.start", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/pause", Queue: "rpc.balancer.draft.pause", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/resume", Queue: "rpc.balancer.draft.resume", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/cancel", Queue: "rpc.balancer.draft.cancel", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/rollback", Queue: "rpc.balancer.draft.rollback", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}/export", Queue: "rpc.balancer.draft.export", IDParam: "session_id", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	// pick actions
+	{Method: "POST", Pattern: "/api/balancer/draft/picks/{pick_id}/select", Queue: "rpc.balancer.draft.pick_select", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/picks/{pick_id}/autopick", Queue: "rpc.balancer.draft.pick_autopick", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/draft/picks/{pick_id}/override", Queue: "rpc.balancer.draft.pick_override", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
+}

@@ -175,6 +175,8 @@ func run(logger *slog.Logger) error {
 	balancerEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	balancerEdge.Register(mux, balancer.PublicRoutes)
 	balancerEdge.Register(mux, balancer.AdminRoutes)
+	balancerEdge.Register(mux, balancer.DraftReadRoutes)
+	balancerEdge.Register(mux, balancer.DraftRoutes)
 	// teams-import multipart upload (multipart -> base64 RPC).
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
 	mux.HandleFunc("POST /api/balancer/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
