@@ -5,6 +5,7 @@ __all__ = (
     "balancer",
     "bracket",
     "draft",
+    "map_veto",
     "realtime_channel",
     "workspace_notifications",
 )
@@ -18,6 +19,16 @@ def bracket(tournament_id: int) -> str:
 
 def draft(tournament_id: int) -> str:
     return f"tournament:{int(tournament_id)}:draft"
+
+
+def map_veto(encounter_id: int) -> str:
+    """Public topic for live map-veto/pick updates on a single encounter.
+
+    Carries a thin ``map_veto.updated`` signal (no per-viewer state); clients
+    refetch the map-pool state on receipt. Public-subscribable, like the
+    bracket/draft spectator topics.
+    """
+    return f"encounter:{int(encounter_id)}:map-veto"
 
 
 def balancer(tournament_id: int) -> str:

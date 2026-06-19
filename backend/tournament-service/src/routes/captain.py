@@ -1,14 +1,13 @@
 """Public routes for captain result submission and map veto."""
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
-from pydantic import BaseModel, Field, ValidationError
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core import auth, db
 from src.services.encounter import captain as captain_service
 from src.services.encounter import map_veto as map_veto_service
-from src.services.encounter.map_veto_ws import manager as map_veto_ws_manager
 
 router = APIRouter(
     prefix="/encounters",
@@ -39,41 +38,26 @@ class CaptainMatchReport(BaseModel):
     closeness: int = Field(ge=1, le=10)
 
 
-async def _resolve_websocket_viewer(
-    websocket: WebSocket,
+async def resolve_optional_viewer_side(
     session: AsyncSession,
+    auth_user: models.AuthUser | None,
     encounter: models.Encounter,
-) -> tuple[models.AuthUser | None, str | None]:
-    auth_user = await auth.get_websocket_user_optional(websocket, session)
-    if auth_user is None:
-        return None, None
+) -> str | None:
+    """Resolve a viewer's captain side for read-only annotation, or ``None``.
 
+    Mirrors the old WebSocket viewer resolution: an authenticated captain gets
+    their side ('home'/'away'); anonymous or non-captain viewers get ``None``
+    (and see the pool serialized identically — ``viewer_side`` is presentation
+    only). A 403 means "not a captain" and resolves to ``None``.
+    """
+    if auth_user is None:
+        return None
     try:
-        viewer_side = await captain_service.resolve_captain_side(session, auth_user, encounter)
+        return await captain_service.resolve_captain_side(session, auth_user, encounter)
     except HTTPException as exc:
         if exc.status_code == status.HTTP_403_FORBIDDEN:
-            return auth_user, None
+            return None
         raise
-
-    return auth_user, viewer_side
-
-
-async def _broadcast_map_pool_state(encounter_id: int) -> None:
-    sockets = list(map_veto_ws_manager.get_connections(encounter_id))
-    if not sockets:
-        return
-
-    async with db.async_session_maker() as session:
-        state_by_socket: dict[WebSocket, dict] = {}
-        for socket in sockets:
-            viewer_side = getattr(socket.state, "map_veto_viewer_side", None)
-            state_by_socket[socket] = await map_veto_service.get_map_pool_state(
-                session,
-                encounter_id,
-                viewer_side=viewer_side,
-            )
-
-    await map_veto_ws_manager.broadcast_state(encounter_id, state_by_socket)
 
 
 # ── Captain identity check ───────────────────────────────────────────────
@@ -193,6 +177,28 @@ async def get_map_pool(
     return [map_veto_service.serialize_map_pool_entry(entry) for entry in pool]
 
 
+@router.get("/{encounter_id}/map-pool/state")
+async def get_map_pool_state(
+    encounter_id: int,
+    session: AsyncSession = Depends(db.get_async_session),
+    user: models.AuthUser | None = Depends(auth.get_current_user_optional),
+):
+    """Get the full map-pool veto state for an encounter (optional auth).
+
+    Replaces the previous map-pool WebSocket. The realtime hub now carries only a
+    thin ``map_veto.updated`` signal on ``encounter:{id}:map-veto``; clients call
+    this endpoint to (re)fetch the state. An authenticated captain sees their side
+    annotated; everyone else gets the same pool with ``viewer_side=None``.
+    """
+    encounter = await captain_service._load_encounter(session, encounter_id)
+    viewer_side = await resolve_optional_viewer_side(session, user, encounter)
+    return await map_veto_service.get_map_pool_state(
+        session,
+        encounter_id,
+        viewer_side=viewer_side,
+    )
+
+
 @router.post("/{encounter_id}/map-pool/veto")
 async def perform_veto(
     encounter_id: int,
@@ -217,97 +223,3 @@ async def perform_veto(
         "status": entry.status,
         "picked_by": entry.picked_by,
     }
-
-
-@router.websocket("/{encounter_id}/map-pool/ws")
-async def map_pool_socket(
-    websocket: WebSocket,
-    encounter_id: int,
-) -> None:
-    await map_veto_ws_manager.connect(encounter_id, websocket)
-
-    try:
-        try:
-            async with db.async_session_maker() as session:
-                encounter = await captain_service._load_encounter(session, encounter_id)
-                auth_user, viewer_side = await _resolve_websocket_viewer(websocket, session, encounter)
-                websocket.state.map_veto_user_id = auth_user.id if auth_user is not None else None
-                websocket.state.map_veto_viewer_side = viewer_side
-                state = await map_veto_service.get_map_pool_state(
-                    session,
-                    encounter_id,
-                    viewer_side=viewer_side,
-                )
-        except HTTPException as exc:
-            await map_veto_ws_manager.send_error(
-                websocket,
-                code="map_pool_unavailable",
-                message=str(exc.detail),
-            )
-            await websocket.close(code=1008)
-            return
-
-        await map_veto_ws_manager.send_state(websocket, state)
-
-        while True:
-            payload = await websocket.receive_json()
-            message_type = payload.get("type")
-            if message_type != "veto.action":
-                await map_veto_ws_manager.send_error(
-                    websocket,
-                    code="unsupported_message",
-                    message="Unsupported websocket message type",
-                )
-                continue
-
-            if (
-                getattr(websocket.state, "map_veto_user_id", None) is None
-                or getattr(websocket.state, "map_veto_viewer_side", None) is None
-            ):
-                await map_veto_ws_manager.send_error(
-                    websocket,
-                    code="forbidden",
-                    message="Only captains can perform veto actions",
-                )
-                continue
-
-            try:
-                action = VetoAction.model_validate(payload)
-            except ValidationError:
-                await map_veto_ws_manager.send_error(
-                    websocket,
-                    code="invalid_payload",
-                    message="Invalid veto action payload",
-                )
-                continue
-
-            try:
-                async with db.async_session_maker() as session:
-                    await map_veto_service.perform_veto_action(
-                        session,
-                        encounter_id,
-                        websocket.state.map_veto_viewer_side,
-                        action.map_id,
-                        action.action,
-                    )
-            except HTTPException as exc:
-                await map_veto_ws_manager.send_error(
-                    websocket,
-                    code="veto_action_failed",
-                    message=str(exc.detail),
-                )
-
-                async with db.async_session_maker() as session:
-                    current_state = await map_veto_service.get_map_pool_state(
-                        session,
-                        encounter_id,
-                        viewer_side=getattr(websocket.state, "map_veto_viewer_side", None),
-                    )
-                await map_veto_ws_manager.send_state(websocket, current_state)
-                continue
-
-            await _broadcast_map_pool_state(encounter_id)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        map_veto_ws_manager.disconnect(encounter_id, websocket)

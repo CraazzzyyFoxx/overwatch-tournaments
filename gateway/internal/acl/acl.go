@@ -70,6 +70,7 @@ func New(resolver WorkspaceResolver, members MembershipChecker) *Registry {
 	r := &Registry{resolver: resolver, members: members}
 	r.register("tournament:*:bracket", allowPublic)      // public spectating
 	r.register("tournament:*:draft", allowPublic)        // public spectating
+	r.register("encounter:*:map-veto", allowPublic)      // public spectating (map veto)
 	r.register("tournament:*:balancer", r.allowBalancer) // admin tool: workspace member
 	r.register("workspace:*:*", r.allowWorkspaceMember)  // workspace member
 	return r

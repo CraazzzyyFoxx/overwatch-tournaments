@@ -29,6 +29,10 @@ from starlette.requests import Request
 from src.core import config, db
 from src.core.caching import configure_cache
 from src.routes import router
+
+# Import for side effects: registers the SQLAlchemy after-commit listeners that
+# publish encounter map-veto realtime signals (encounter:{id}:map-veto).
+from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.tournament.recalculation_events import task_router as tournament_recalculation_task_router
 
 logger = setup_logging(

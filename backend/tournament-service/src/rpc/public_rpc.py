@@ -44,6 +44,7 @@ from sqlalchemy.orm import selectinload
 
 from src import models, schemas
 from src.core import db
+from src.routes import captain as captain_routes
 from src.routes.captain import (
     CaptainMatchReport,
     DisputeRequest,
@@ -76,6 +77,17 @@ from src.services.registration.validation import validate_registration_input
 
 def _identity(data: dict[str, Any]) -> models.AuthUser:
     """Rehydrate the gateway-injected identity into a transient AuthUser."""
+    return rehydrate_user(data.get("identity"))
+
+
+def _optional_identity(data: dict[str, Any]) -> models.AuthUser | None:
+    """Rehydrate identity for AuthOptional routes; None when anonymous.
+
+    The gateway injects ``identity`` only when a valid token is present on an
+    AuthOptional route, so the absence of the key means the caller is anonymous.
+    """
+    if not data.get("identity"):
+        return None
     return rehydrate_user(data.get("identity"))
 
 
@@ -257,6 +269,23 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             pool = await map_veto_service.get_map_pool(session, encounter_id)
             return [map_veto_service.serialize_map_pool_entry(entry) for entry in pool]
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.captain_map_pool_state")
+    async def _captain_map_pool_state(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            # Optional auth: a captain sees their side annotated, anyone else gets
+            # viewer_side=None (the pool serializes identically either way).
+            encounter_id = _require_id(data)
+            user = _optional_identity(data)
+            encounter = await captain_service._load_encounter(session, encounter_id)
+            viewer_side = await captain_routes.resolve_optional_viewer_side(session, user, encounter)
+            return await map_veto_service.get_map_pool_state(
+                session,
+                encounter_id,
+                viewer_side=viewer_side,
+            )
 
         return await _run(logger, op)
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import captainService from "@/services/captain.service";
 import mapService from "@/services/map.service";
 import type {
@@ -20,10 +21,6 @@ const STATUS_COLORS: Record<MapPoolEntryStatus, string> = {
   played: "bg-blue-500 text-white",
 };
 
-type SocketMessage =
-  | { type: "veto.state"; data: EncounterMapPoolState }
-  | { type: "veto.error"; error: { code: string; message: string } };
-
 interface MapVetoProps {
   encounterId: number;
 }
@@ -39,19 +36,34 @@ export function MapVeto({ encounterId }: MapVetoProps) {
   const [mapNames, setMapNames] = useState<Record<number, string>>({});
   const [vetoState, setVetoState] = useState<EncounterMapPoolState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
     mapId: number;
     action: MapVetoAction;
   } | null>(null);
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shouldReconnectRef = useRef(true);
-  const availabilityRef = useRef<"unknown" | "available" | "unavailable">(
-    "unknown",
-  );
+  // Fetch the current map-pool state. The realtime hub only delivers a thin
+  // "changed" signal; the authoritative pool is always pulled from this endpoint.
+  const refetchState = useCallback(async () => {
+    try {
+      const state = await captainService.getMapPoolState(encounterId);
+      if (state === null) {
+        setIsUnavailable(true);
+        setVetoState(null);
+        setError(null);
+      } else {
+        setIsUnavailable(false);
+        setVetoState(state);
+        setError(null);
+      }
+    } catch {
+      setError("Failed to load map veto");
+    } finally {
+      setIsLoading(false);
+      setPendingAction(null);
+    }
+  }, [encounterId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,92 +83,22 @@ export function MapVeto({ encounterId }: MapVetoProps) {
     };
   }, []);
 
+  // Initial load (and reload when the encounter changes).
   useEffect(() => {
-    shouldReconnectRef.current = true;
-    availabilityRef.current = "unknown";
-    let cancelled = false;
+    setIsLoading(true);
+    setIsUnavailable(false);
+    void refetchState();
+  }, [encounterId, refetchState]);
 
-    const connect = () => {
-      setIsConnecting(true);
-      setIsUnavailable(false);
-      void captainService
-        .buildMapVetoWebSocketUrl(encounterId)
-        .then((url) => {
-          if (cancelled || !shouldReconnectRef.current) {
-            return;
-          }
-
-          const socket = new WebSocket(url);
-          socketRef.current = socket;
-
-          socket.onopen = () => {
-            setIsConnecting(false);
-          };
-
-          socket.onmessage = (event) => {
-            const message = JSON.parse(event.data) as SocketMessage;
-
-            if (message.type === "veto.state") {
-              availabilityRef.current = "available";
-              setIsUnavailable(false);
-              setVetoState(message.data);
-              setPendingAction(null);
-              setError(null);
-              return;
-            }
-
-            if (message.error.code === "map_pool_unavailable") {
-              availabilityRef.current = "unavailable";
-              shouldReconnectRef.current = false;
-              setIsUnavailable(true);
-              setVetoState(null);
-              setError(null);
-              return;
-            }
-
-            setPendingAction(null);
-            setError(message.error.message);
-          };
-
-          socket.onerror = () => {
-            setIsConnecting(false);
-          };
-
-          socket.onclose = () => {
-            if (socketRef.current === socket) {
-              socketRef.current = null;
-            }
-            setIsConnecting(false);
-            setPendingAction(null);
-
-            if (
-              !shouldReconnectRef.current ||
-              availabilityRef.current === "unavailable"
-            ) {
-              return;
-            }
-
-            reconnectTimerRef.current = setTimeout(connect, 2000);
-          };
-        })
-        .catch(() => {
-          setIsConnecting(false);
-          setError("Failed to initialize map veto connection");
-        });
-    };
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      shouldReconnectRef.current = false;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      socketRef.current?.close();
-      socketRef.current = null;
-    };
-  }, [encounterId]);
+  // Live updates: any captain's committed veto publishes a signal on this topic;
+  // every viewer refetches to converge on the new pool.
+  useRealtimeTopic(
+    `encounter:${encounterId}:map-veto`,
+    () => {
+      void refetchState();
+    },
+    [refetchState],
+  );
 
   const availableMaps = useMemo(
     () =>
@@ -179,25 +121,24 @@ export function MapVeto({ encounterId }: MapVetoProps) {
 
   const stepLabel = vetoState ? getStepLabel(vetoState) : null;
 
-  const performAction = (mapId: number, action: MapVetoAction) => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setError("Map veto connection is not ready");
-      return;
-    }
-
+  const performAction = async (mapId: number, action: MapVetoAction) => {
     if (!vetoState?.allowed_actions.includes(action)) {
       return;
     }
 
     setPendingAction({ mapId, action });
     setError(null);
-    socketRef.current.send(
-      JSON.stringify({
-        type: "veto.action",
-        map_id: mapId,
-        action,
-      }),
-    );
+    try {
+      await captainService.performVeto(encounterId, { map_id: mapId, action });
+      // Optimistic refetch for the acting captain; other viewers converge via the
+      // realtime "map_veto.updated" signal that this commit publishes.
+      await refetchState();
+    } catch {
+      setError("Veto action failed");
+      setPendingAction(null);
+      // Resync to the server's authoritative state after a rejected action.
+      await refetchState();
+    }
   };
 
   if (!vetoState) {
@@ -205,7 +146,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
       return null;
     }
 
-    if (!isConnecting && !error) {
+    if (!isLoading && !error) {
       return null;
     }
 
@@ -216,7 +157,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">
-            {error ?? "Connecting map veto..."}
+            {error ?? "Loading map veto..."}
           </div>
         </CardContent>
       </Card>
@@ -263,9 +204,9 @@ export function MapVeto({ encounterId }: MapVetoProps) {
                       ? "destructive"
                       : "outline"
                   }
-                  disabled={pendingAction !== null || isConnecting}
+                  disabled={pendingAction !== null || isLoading}
                   onClick={() =>
-                    performAction(entry.map_id, vetoState.allowed_actions[0])
+                    void performAction(entry.map_id, vetoState.allowed_actions[0])
                   }
                 >
                   {pendingAction?.mapId === entry.map_id

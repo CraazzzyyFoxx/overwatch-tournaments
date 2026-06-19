@@ -24,6 +24,7 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/confirm-result", Queue: "rpc.tournament.captain_confirm_result", IDParam: "encounter_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/dispute-result", Queue: "rpc.tournament.captain_dispute_result", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool", Queue: "rpc.tournament.captain_map_pool", IDParam: "encounter_id", Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/state", Queue: "rpc.tournament.captain_map_pool_state", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/veto", Queue: "rpc.tournament.captain_veto", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 
 	// encounter.py — saved-view writes (the GET /views read is already migrated).

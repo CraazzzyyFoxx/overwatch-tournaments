@@ -27,6 +27,10 @@ from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
+
+# Import for side effects: registers the SQLAlchemy after-commit listeners that
+# publish encounter map-veto realtime signals (encounter:{id}:map-veto).
+from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.registration import admin as registration_service
 
 logger = setup_logging(
