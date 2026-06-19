@@ -1,0 +1,84 @@
+"""Headless RPC worker for app-service (app-svc).
+
+Hosts every ``rpc.app.*`` subscriber (public reads via the shared CRUD read
+engine + bespoke reads, workspace writes, binary base64 endpoints) plus the
+``tournament_changed`` cache-invalidation consumer. Replaces the HTTP
+app-service (compose ``backend``) behind the Go gateway.
+
+Run with: ``faststream run serve:app``.
+"""
+
+from cashews import cache
+from faststream import FastStream
+from faststream.rabbit import RabbitBroker
+from shared.observability import (
+    setup_logging,
+    setup_sentry,
+    setup_tracing,
+    start_worker_metrics_server,
+)
+
+from src.core import config
+from src.core.caching import configure_cache
+from src.rpc import _clients
+from src.services import tournament_events
+
+logger = setup_logging(
+    service_name="app-svc",
+    log_level=config.settings.log_level,
+    logs_root_path=config.settings.logs_root_path,
+    json_output=config.settings.json_logging,
+)
+
+broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+app = FastStream(broker)
+
+# The cashews singleton is process-global and has no default backend. The
+# @cache-decorated flows AND the tournament_changed invalidation consumer both
+# raise NotConfiguredError without this — call it before any subscriber runs.
+configure_cache()
+
+# Cache-invalidation consumer (single owner of TOURNAMENT_CHANGED_APP_QUEUE).
+tournament_events.register(broker, logger)
+
+# rpc.app.* subscribers (registered in later phases):
+#   Phase 1 — reads_generic (rpc.app.read.{get,list}) + bespoke read modules
+#   Phase 2 — workspace writes + members
+#   Phase 3 — binary base64 handlers
+
+
+@app.on_startup
+async def start_worker() -> None:
+    await broker.connect()
+    await _clients.s3_client.start()
+    setup_sentry(
+        dsn=config.settings.sentry_dsn,
+        traces_sample_rate=config.settings.sentry_traces_sample_rate,
+        profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
+        service_name="app-svc",
+        enable_logs=config.settings.sentry_enable_logs,
+        logs_level=config.settings.sentry_logs_level,
+        enable_metrics=config.settings.sentry_enable_metrics,
+        environment=config.settings.environment,
+        release=config.settings.version,
+        http_proxy=config.settings.sentry_http_proxy_url,
+        https_proxy=config.settings.sentry_https_proxy_url,
+    )
+    setup_tracing(
+        service_name="app-svc",
+        otlp_endpoint=config.settings.otlp_endpoint,
+        enabled=config.settings.tracing_enabled,
+        sampler_name=config.settings.otel_traces_sampler,
+        sampler_arg=config.settings.otel_traces_sampler_arg,
+    )
+    if config.settings.worker_metrics_port is not None:
+        start_worker_metrics_server(config.settings.worker_metrics_port)
+    # Drop stale cache on (re)deploy, mirroring the HTTP service lifespan.
+    await cache.delete_match("fastapi:*")
+    await cache.delete_match("backend:*")
+    logger.info("App RPC service (app-svc) started")
+
+
+@app.on_shutdown
+async def stop_worker() -> None:
+    await _clients.s3_client.close()

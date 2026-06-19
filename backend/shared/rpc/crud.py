@@ -65,12 +65,18 @@ class EntityConfig:
     side-effects + commit). When a hook is absent the engine runs a generic
     ``BaseRepository`` path and owns the commit. NEVER both — that is the
     commit-ownership rule.
+
+    ``public_read=True`` marks an entity whose ``get``/``list`` are public: the
+    engine skips identity rehydration + workspace permission for those actions
+    (global reference data with no owning workspace, e.g. heroes/maps). Writes
+    are never public — ``create``/``update``/``delete`` always authenticate.
     """
 
     entity: str
     model: type[Base]
     permission_resource: str
     serializer: Serializer
+    public_read: bool = False
     create_schema: type[BaseModel] | None = None
     update_schema: type[BaseModel] | None = None
     resolve_ws_from_id: WsFromId | None = None       # get / update / delete (id from data["id"])
@@ -149,11 +155,12 @@ class CrudDispatcher:
 
     async def _get(self, data: dict[str, Any]) -> dict[str, Any]:
         cfg = self._config(data, "get")
-        user = rehydrate_user(data.get("identity"))
         obj_id = self._require_id(data)
         async with self._session_factory() as session:
-            ws_id = await self._ws_from_id(cfg, session, obj_id)
-            ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["get"])
+            if not cfg.public_read:
+                user = rehydrate_user(data.get("identity"))
+                ws_id = await self._ws_from_id(cfg, session, obj_id)
+                ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["get"])
             obj = await cfg.service_get(session, obj_id, data) if cfg.service_get else await cfg.repo.get(session, obj_id)
             if obj is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=cfg.not_found_detail)
@@ -198,13 +205,14 @@ class CrudDispatcher:
 
     async def _list(self, data: dict[str, Any]) -> dict[str, Any]:
         cfg = self._config(data, "list")
-        user = rehydrate_user(data.get("identity"))
         if cfg.list_fn is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="list not supported")
         async with self._session_factory() as session:
-            if cfg.resolve_ws_for_list is not None:
-                ws_id = await cfg.resolve_ws_for_list(session, data)
-                ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["list"])
+            if not cfg.public_read:
+                user = rehydrate_user(data.get("identity"))
+                if cfg.resolve_ws_for_list is not None:
+                    ws_id = await cfg.resolve_ws_for_list(session, data)
+                    ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["list"])
             return rpc_ok(await cfg.list_fn(session, data))
 
     @staticmethod

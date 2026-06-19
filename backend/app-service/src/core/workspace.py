@@ -69,11 +69,18 @@ class WorkspaceContext:
     normalizer: DivisionGridNormalizer | None = None
 
 
-async def get_workspace_context(
-    workspace_id: WorkspaceQuery = None,
-    session: AsyncSession = Depends(db.get_async_session),
+async def resolve_workspace_context(
+    session: AsyncSession,
+    workspace_id: int | None,
+    *,
+    tournament_id: int | None = None,
 ) -> WorkspaceContext:
-    grid = await get_effective_division_grid(session, workspace_id, tournament_id=None)
+    """Build a `WorkspaceContext` from a plain `workspace_id` (no FastAPI DI).
+
+    Single source of truth shared by the FastAPI dependency (`get_workspace_context`)
+    and the typed-RPC read handlers, so the two paths cannot drift.
+    """
+    grid = await get_effective_division_grid(session, workspace_id, tournament_id=tournament_id)
     normalizer: DivisionGridNormalizer | None = None
     if workspace_id is not None:
         try:
@@ -85,6 +92,13 @@ async def get_workspace_context(
         except DivisionGridNormalizationError:
             normalizer = None
     return WorkspaceContext(id=workspace_id, grid=grid, normalizer=normalizer)
+
+
+async def get_workspace_context(
+    workspace_id: WorkspaceQuery = None,
+    session: AsyncSession = Depends(db.get_async_session),
+) -> WorkspaceContext:
+    return await resolve_workspace_context(session, workspace_id)
 
 
 WorkspaceContextDep = typing.Annotated[WorkspaceContext, Depends(get_workspace_context)]

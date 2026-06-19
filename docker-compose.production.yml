@@ -519,6 +519,54 @@ services:
       start_period: 40s
     restart: always
 
+  # Headless RPC worker replacing the HTTP `backend` behind the gateway.
+  app-worker:
+    image: registry.craazzzyyfoxx.me/aqt-backend:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    build:
+      context: ./backend
+      args:
+        APP_PATH: app
+    command: faststream run serve:app
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/app.env
+    environment:
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+      # Validate tokens via the gateway -> identity-svc (overrides common.env).
+      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
+      - WORKER_METRICS_PORT=9109
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    volumes:
+      - ./logs/app-worker:/logs
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: always
+
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:latest
     deploy:

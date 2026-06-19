@@ -177,3 +177,71 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         dispatcher = self._dispatcher(_team_cfg())
         res = await dispatcher.do_update({"entity": "team", "identity": SUPERUSER, "payload": {"name": "X"}})
         self.assertEqual(res["error"]["code"], "unprocessable")
+
+
+def _hero_cfg(**overrides: Any) -> EntityConfig:
+    """Public read-only entity (global reference data, no owning workspace)."""
+
+    async def svc_get(session: Any, obj_id: int, data: dict[str, Any]) -> _Dummy:
+        obj = _Dummy()
+        obj.id = obj_id  # type: ignore[attr-defined]
+        obj.name = "hero"  # type: ignore[attr-defined]
+        return obj
+
+    async def list_fn(session: Any, data: dict[str, Any]) -> dict[str, Any]:
+        return {"results": [{"id": 1, "name": "hero"}], "total": 1}
+
+    base: dict[str, Any] = dict(
+        entity="hero",
+        model=_Dummy,
+        permission_resource="hero",
+        serializer=_serialize,
+        public_read=True,
+        service_get=svc_get,
+        list_fn=list_fn,
+        actions=frozenset({"get", "list"}),
+    )
+    base.update(overrides)
+    return EntityConfig(**base)
+
+
+class PublicReadTests(IsolatedAsyncioTestCase):
+    """public_read entities skip identity + workspace permission on get/list."""
+
+    def _dispatcher(self, cfg: EntityConfig) -> CrudDispatcher:
+        return CrudDispatcher({cfg.entity: cfg}, _session_factory)
+
+    async def test_public_get_without_identity_ok(self) -> None:
+        dispatcher = self._dispatcher(_hero_cfg())
+        res = await dispatcher.do_get({"entity": "hero", "id": 9})  # no identity
+        self.assertEqual(res, {"ok": True, "data": {"id": 9, "name": "hero"}})
+
+    async def test_public_list_without_identity_ok(self) -> None:
+        dispatcher = self._dispatcher(_hero_cfg())
+        res = await dispatcher.do_list({"entity": "hero"})  # no identity
+        self.assertEqual(res, {"ok": True, "data": {"results": [{"id": 1, "name": "hero"}], "total": 1}})
+
+    async def test_public_get_not_found(self) -> None:
+        async def svc_get(session: Any, obj_id: int, data: dict[str, Any]) -> None:
+            return None
+
+        dispatcher = self._dispatcher(_hero_cfg(service_get=svc_get))
+        res = await dispatcher.do_get({"entity": "hero", "id": 9})
+        self.assertEqual(res["error"]["code"], "not_found")
+
+    async def test_public_get_still_requires_id(self) -> None:
+        dispatcher = self._dispatcher(_hero_cfg())
+        res = await dispatcher.do_get({"entity": "hero"})  # no id
+        self.assertEqual(res["error"]["code"], "unprocessable")
+
+    async def test_non_public_get_without_identity_forbidden(self) -> None:
+        # Regression guard: default public_read=False keeps the auth gate.
+        async def svc_get(session: Any, obj_id: int, data: dict[str, Any]) -> _Dummy:
+            raise AssertionError("hook must not run when identity is missing")
+
+        dispatcher = CrudDispatcher(
+            {"team": _team_cfg(service_get=svc_get, actions=frozenset({"get"}))},
+            _session_factory,
+        )
+        res = await dispatcher.do_get({"entity": "team", "id": 5})  # no identity
+        self.assertEqual(res["error"]["code"], "forbidden")

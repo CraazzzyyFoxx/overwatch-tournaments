@@ -31,7 +31,6 @@ from starlette.requests import Request
 from src.core import config, db
 from src.core.caching import configure_cache
 from src.routes import router
-from src.services.tournament_events import task_router as tournament_recalculation_task_router
 
 # Setup structured logging (replaces old logging setup)
 logger = setup_logging(
@@ -119,7 +118,8 @@ app.state.s3 = s3_client
 Instrumentator().instrument(app).expose(app)
 
 app.include_router(router)
-app.include_router(tournament_recalculation_task_router)
+# tournament_changed cache-invalidation consumer now lives in the headless
+# app-worker (serve.py); the HTTP service no longer owns that queue.
 # app.add_middleware(CacheDeleteMiddleware)
 # app.add_middleware(CacheEtagMiddleware)
 # app.add_middleware(CacheRequestControlMiddleware)

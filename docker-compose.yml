@@ -126,6 +126,53 @@ services:
           cpus: '0.10'
           memory: 128M
 
+  # Headless RPC worker that replaces the HTTP `backend` behind the gateway.
+  # Serves rpc.app.* (reads/writes/binary) + owns the tournament_changed
+  # cache-invalidation consumer. During migration it runs alongside `backend`
+  # (HTTP) for byte-parity; after cutover `backend` is removed and this serves
+  # all of /api/v1/core via the gateway.
+  app-worker:
+    image: registry.craazzzyyfoxx.me/aqt-backend:dev
+    build:
+      context: ./backend
+      args:
+        APP_PATH: app
+    command: faststream run serve:app --reload --reload-dir /app/app-service --reload-dir /app/shared
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/app.env
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=always_on
+      - OTEL_TRACES_SAMPLER_ARG=1.0
+      - WORKER_METRICS_PORT=9109
+      - WATCHFILES_FORCE_POLLING=true
+      - WATCHFILES_POLL_DELAY_MS=5000
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ss-local:
+        condition: service_healthy
+    volumes:
+      - ./backend/app-service:/app/app-service
+      - ./backend/shared:/app/shared
+      - ./logs/app-worker:/logs
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
   parser:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
     build:
