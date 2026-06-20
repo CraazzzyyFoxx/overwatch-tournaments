@@ -140,6 +140,9 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/service/token", identityHandler.ServiceToken)
 	mux.HandleFunc("POST /api/auth/service/validate", identityHandler.ValidateService)
 	mux.HandleFunc("POST /api/auth/service/invalidate-session/{user_id}", identityHandler.InvalidateSession)
+	// Top-level alias the frontend uses (use-oauth-providers / auth.service); the
+	// original API exposed both this and the /oauth/providers path.
+	mux.HandleFunc("GET /api/auth/providers", identityHandler.OAuthProviders)
 	mux.HandleFunc("GET /api/auth/oauth/providers", identityHandler.OAuthProviders)
 	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
