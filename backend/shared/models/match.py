@@ -61,6 +61,15 @@ class MatchStatistics(db.TimeStampIntegerMixin):
             "name",
             postgresql_where=text("round = 0 AND hero_id IS NOT NULL"),
         ),
+        Index(
+            "ix_match_statistics_playtime_r0",
+            "match_id",
+            "user_id",
+            "hero_id",
+            # Enum(LogStatsName) persists the member NAME (HeroTimePlayed), not
+            # its .value (hero_time_played); this raw predicate bypasses the type.
+            postgresql_where=text("round = 0 AND name = 'HeroTimePlayed'"),
+        ),
         {"schema": "matches"},
     )
 

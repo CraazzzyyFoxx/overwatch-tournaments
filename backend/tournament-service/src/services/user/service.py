@@ -140,36 +140,54 @@ def _build_eligible_hero_stats_cte(
     tournament_id: int | None = None,
     workspace_id: int | None = None,
 ) -> sa.CTE:
-    hero_playtime_stat = sa.alias(models.MatchStatistics)
+    # (match, user, hero) combos that actually played the hero (HeroTimePlayed
+    # > 60s). Expressed as a DISTINCT semi-join CTE rather than a correlated
+    # EXISTS so the planner joins it once (backed by ix_match_statistics_playtime_r0)
+    # instead of re-probing matches.statistics per candidate row. DISTINCT keeps
+    # the join a true semi-join: even if a (match, user, hero) ever had duplicate
+    # playtime rows, the eligible set is not fanned out.
+    qualified_combos = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.hero_id.label("hero_id"),
+        )
+        .where(
+            models.MatchStatistics.round == 0,
+            models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+            models.MatchStatistics.value > 60,
+        )
+        .distinct()
+        .cte(f"{cte_name}_qualified")
+    )
 
     where_conditions: list[typing.Any] = [
         models.MatchStatistics.round == 0,
         models.MatchStatistics.hero_id.isnot(None),
-        sa.exists(
-            sa.select(1)
-            .select_from(hero_playtime_stat)
-            .where(
-                hero_playtime_stat.c.match_id == models.MatchStatistics.match_id,
-                hero_playtime_stat.c.user_id == models.MatchStatistics.user_id,
-                hero_playtime_stat.c.hero_id == models.MatchStatistics.hero_id,
-                hero_playtime_stat.c.name == enums.LogStatsName.HeroTimePlayed,
-                hero_playtime_stat.c.round == 0,
-                hero_playtime_stat.c.value > 60,
-            )
-        ),
     ]
     if user_id is not None:
         where_conditions.append(models.MatchStatistics.user_id == user_id)
     if stats:
         where_conditions.append(models.MatchStatistics.name.in_(stats))
 
-    base_select = sa.select(
-        models.MatchStatistics.match_id.label("match_id"),
-        models.MatchStatistics.user_id.label("user_id"),
-        models.MatchStatistics.hero_id.label("hero_id"),
-        models.MatchStatistics.name.label("name"),
-        models.MatchStatistics.value.label("value"),
-    ).where(*where_conditions)
+    base_select = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.hero_id.label("hero_id"),
+            models.MatchStatistics.name.label("name"),
+            models.MatchStatistics.value.label("value"),
+        )
+        .join(
+            qualified_combos,
+            sa.and_(
+                qualified_combos.c.match_id == models.MatchStatistics.match_id,
+                qualified_combos.c.user_id == models.MatchStatistics.user_id,
+                qualified_combos.c.hero_id == models.MatchStatistics.hero_id,
+            ),
+        )
+        .where(*where_conditions)
+    )
 
     if tournament_id is not None or workspace_id is not None:
         base_select = base_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id).join(
