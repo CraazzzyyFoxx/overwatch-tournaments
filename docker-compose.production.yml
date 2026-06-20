@@ -157,51 +157,11 @@ services:
 #      start_period: 40s
 #    restart: always
 
-  balancer:
-    image: registry.craazzzyyfoxx.me/aqt-balancer:latest
-    deploy:
-      resources:
-        limits:
-          cpus: '0.75'
-          memory: 512M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
-    build:
-      context: ./backend
-      args:
-        APP_PATH: balancer
-    command: uvicorn main:app --host 0.0.0.0 --port 8003 --workers ${WORKERS_BALANCER:-2} --loop uvloop
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/balancer.env
-    environment:
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
-      - OTEL_TRACES_SAMPLER_ARG=0.1
-      # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
-      - AUTH_SERVICE_URL=http://gateway:8080/api/auth
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    volumes:
-      - ./logs/balancer:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: always
+  # balancer-service HTTP decommissioned: /api/balancer is served by the headless
+  # balancer-worker (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
+  # The worker also consumes the balancer job queue + runs the draft clock + Rust
+  # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
+  # tournament:{id}:balancer WS topic).
 
   # analytics-service HTTP decommissioned: /api/analytics is served by the headless
   # analytics-svc (rpc.analytics.* reads + job-control) behind the gateway; heavy ML
@@ -378,8 +338,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      balancer:
-        condition: service_healthy
     volumes:
       - ./logs/balancer-worker:/logs
     networks:
@@ -514,8 +472,8 @@ services:
       # server-side (SSR + route handlers + middleware) fetches need a base.
       - NEXT_INTERNAL_API_URL=${NEXT_INTERNAL_API_URL:-http://gateway:8080}
     depends_on:
-      balancer:
-        condition: service_healthy
+      gateway:
+        condition: service_started
     volumes:
       - ./logs/frontend:/logs
       # Optional: override the browser favicon at runtime
