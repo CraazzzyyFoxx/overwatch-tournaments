@@ -13,7 +13,7 @@ dependencies = [
      "cachetools>=6.2.3",
      "cashews>=7.4.0",
      "discord-py>=2.6.4",
-     "faststream[rabbit]>=0.6.7",
+     "faststream[rabbit,cli]>=0.6.7",
      "httpx>=0.28.1",
      "loguru>=0.7.3",
      "maturin>=1.8.2; platform_system == 'Linux'",
