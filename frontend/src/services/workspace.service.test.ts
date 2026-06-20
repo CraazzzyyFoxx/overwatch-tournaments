@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-// Capture (service, path) passed to apiFetch so we can assert that
-// division-grid endpoints are routed to the service that actually serves
-// them. /division-grids/** lives only in tournament-service (clientBase
-// /api/v1); routing through "app" prepends /api/v1/core and 404s.
-const calls: Array<{ service: string; path: string }> = [];
+// Capture the path passed to apiFetch. Division-grid endpoints live under the
+// unified /api/v1 namespace (tournament-worker); this guards that the service
+// builds the correct gateway path.
+const calls: Array<{ path: string }> = [];
 
 mock.module("@/lib/api-fetch", () => ({
-  apiFetch: (service: string, path: string) => {
-    calls.push({ service, path });
+  apiFetch: (path: string) => {
+    calls.push({ path });
     return Promise.resolve({ json: async () => [] });
   },
 }));
@@ -20,21 +19,17 @@ describe("workspaceService division-grid routing", () => {
     calls.length = 0;
   });
 
-  it("routes marketplace workspaces through tournament-service, not app/core", async () => {
+  it("builds the marketplace-workspaces path under /api/v1", async () => {
     await workspaceService.getDivisionGridMarketplaceWorkspaces(6);
 
-    expect(calls[0]).toEqual({
-      service: "tournament",
-      path: "division-grids/by-workspace/6/marketplace/workspaces",
-    });
+    expect(calls[0].path).toBe(
+      "/api/v1/division-grids/by-workspace/6/marketplace/workspaces",
+    );
   });
 
-  it("routes the mapping GET through tournament-service (matching its PUT sibling)", async () => {
+  it("builds the mapping GET path under /api/v1 (matching its PUT sibling)", async () => {
     await workspaceService.getDivisionGridMapping(10, 20);
 
-    expect(calls[0]).toEqual({
-      service: "tournament",
-      path: "division-grids/mappings/10/20",
-    });
+    expect(calls[0].path).toBe("/api/v1/division-grids/mappings/10/20");
   });
 });

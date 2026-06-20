@@ -117,62 +117,17 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  parser:
-    image: registry.craazzzyyfoxx.me/aqt-parser:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: parser
-    command: uvicorn main:app --host 0.0.0.0 --port 8002 --loop uvloop --reload --reload-delay 5 --reload-dir /app/parser-service --reload-dir /app/shared
-    ports:
-      - "8002:8002"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/parser.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    develop:
-      watch:
-        - path: ./backend/pyproject.toml
-          action: rebuild
-    volumes:
-      - ./backend/parser-service:/app/parser-service
-      - ./backend/shared:/app/shared
-      - ./logs/parser:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
+  # parser-service HTTP decommissioned: parser is now a headless FastStream worker
+  # (parser-worker below), serving its unique domains (match-log, OverFast rank,
+  # achievement engine + rules admin, metadata sync, settings, discord-channel,
+  # bootstrap importers) as typed RPC behind the gateway. The bot uploads logs
+  # over RabbitMQ; the SSE log monitor moved to the gateway WS hub.
 
   # realtime-service decommissioned: WebSockets are now served by the Go gateway
   # (gateway/internal/ws), which consumes the same `realtime:*` Redis channels and
-  # replays from `realtime.workspace_event`. The frontend connects to the gateway
-  # (NEXT_PUBLIC_REALTIME_API_URL below / nginx `/api/realtime` -> gateway:8080).
-  # Service code kept under backend/realtime-service/ as reference (not deployed).
+  # replays from `realtime.workspace_event`. The frontend connects same-origin to
+  # `/api/realtime/ws` (nginx -> gateway:8080). Service code kept under
+  # backend/realtime-service/ as reference (not deployed).
 
   balancer:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
@@ -223,7 +178,6 @@ services:
 
   parser-worker:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
-    profiles: ["workers"]
     build:
       context: ./backend
       args:
@@ -243,9 +197,11 @@ services:
       - WATCHFILES_FORCE_POLLING=true
       - WATCHFILES_POLL_DELAY_MS=5000
     depends_on:
+      redis:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      parser:
+      ss-local:
         condition: service_healthy
     volumes:
       - ./backend/parser-service:/app/parser-service
@@ -343,58 +299,9 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  analytics:
-    image: registry.craazzzyyfoxx.me/aqt-analytics:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: analytics
-    command: uvicorn main:app --host 0.0.0.0 --port 8006 --loop uvloop --reload --reload-delay 5 --reload-dir /app/analytics-service --reload-dir /app/shared
-    ports:
-      - "8006:8006"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/analytics.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    develop:
-      watch:
-        - path: ./backend/pyproject.toml
-          action: rebuild
-    volumes:
-      - ./backend/analytics-service:/app/analytics-service
-      - ./backend/shared:/app/shared
-      - ./backend/.cache/analytics:/cache/analytics
-      - analytics-models:/opt/anak/models
-      - ./logs/analytics:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 384M
+  # analytics-service HTTP decommissioned: /api/analytics is served by the
+  # lightweight headless analytics-svc (rpc.analytics.* reads + job-control) behind
+  # the gateway; heavy ML compute stays in analytics-worker (job queues).
 
   analytics-worker:
     image: registry.craazzzyyfoxx.me/aqt-analytics:dev
@@ -418,9 +325,9 @@ services:
       - WATCHFILES_FORCE_POLLING=true
       - WATCHFILES_POLL_DELAY_MS=5000
     depends_on:
-      rabbitmq:
+      redis:
         condition: service_healthy
-      analytics:
+      rabbitmq:
         condition: service_healthy
     volumes:
       - ./backend/analytics-service:/app/analytics-service
@@ -444,7 +351,6 @@ services:
   # analytics-worker; this process must NOT own the ANALYTICS_* job queues.
   analytics-svc:
     image: registry.craazzzyyfoxx.me/aqt-analytics:dev
-    profiles: ["workers"]
     build:
       context: ./backend
       args:
@@ -511,8 +417,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      parser:
-        condition: service_healthy
       ss-local:
         condition: service_healthy
     volumes:
@@ -541,20 +445,13 @@ services:
       - NODE_ENV=development
       - DOCKER=1
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - NEXT_PUBLIC_AUTH_SERVICE_URL=${NEXT_PUBLIC_AUTH_SERVICE_URL}
-      - NEXT_PUBLIC_BALANCER_API_URL=${NEXT_PUBLIC_BALANCER_API_URL}
-      - NEXT_PUBLIC_TOURNAMENT_API_URL=${NEXT_PUBLIC_TOURNAMENT_API_URL:-}
-      - NEXT_PUBLIC_REALTIME_API_URL=${NEXT_PUBLIC_REALTIME_API_URL:-http://localhost:8080}
-      - NEXT_PUBLIC_ANALYTICS_API_URL=${NEXT_PUBLIC_ANALYTICS_API_URL:-http://localhost/api/analytics}
       - NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
-      - NEXT_API_URL=${NEXT_API_URL}
-      - NEXT_TOURNAMENT_URL=${NEXT_TOURNAMENT_URL:-http://gateway:8080/api/v1}
-      - NEXT_ANALYTICS_URL=${NEXT_ANALYTICS_URL:-http://analytics:8006}
+      # Single gateway origin: the browser uses relative same-origin paths
+      # (/api/v1, /api/balancer, /api/analytics, /api/auth, /api/realtime/ws).
+      # Only server-side (SSR + route handlers + middleware) fetches need a base.
+      - NEXT_INTERNAL_API_URL=${NEXT_INTERNAL_API_URL:-http://gateway:8080}
     depends_on:
-      parser:
-        condition: service_healthy
       balancer:
         condition: service_healthy
     volumes:

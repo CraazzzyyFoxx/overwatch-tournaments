@@ -12,9 +12,8 @@ import {
 import { apiFetch } from "@/lib/api-fetch";
 import { getTokenFromCookies } from "@/lib/auth-tokens";
 
-const BALANCER_STREAM_PREFIX = (
-  process.env.NEXT_PUBLIC_BALANCER_API_URL || "http://localhost/api/balancer"
-).replace(/\/$/, "");
+// Same-origin gateway path; the EventSource resolves it against window.location.
+const BALANCER_STREAM_PREFIX = "/api/balancer";
 
 const SUPPORTED_CONFIG_FIELD_TYPES = new Set<string>([
   "boolean",
@@ -123,7 +122,7 @@ function normalizeConfigResponse(payload: RawBalancerConfigResponse): BalancerCo
 export default class balancerService {
   static async getConfig(): Promise<BalancerConfigResponse> {
     try {
-      const response = await apiFetch("balancer", "config", { timeout: 10_000 });
+      const response = await apiFetch("/api/balancer/config", { timeout: 10_000 });
       const payload = (await response.json()) as RawBalancerConfigResponse;
       return normalizeConfigResponse(payload);
     } catch (error) {
@@ -153,7 +152,7 @@ export default class balancerService {
     }
 
     try {
-      const response = await apiFetch("balancer", "jobs", { method: "POST", body: formData, timeout: 20_000 });
+      const response = await apiFetch("/api/balancer/jobs", { method: "POST", body: formData, timeout: 20_000 });
       return response.json();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -164,12 +163,12 @@ export default class balancerService {
   }
 
   static async getBalanceJobStatus(jobId: string): Promise<BalanceJobStatusResponse> {
-    const response = await apiFetch("balancer", `jobs/${jobId}`, { timeout: 10_000 });
+    const response = await apiFetch(`/api/balancer/jobs/${jobId}`, { timeout: 10_000 });
     return response.json();
   }
 
   static async getBalanceJobResult(jobId: string): Promise<BalanceJobResult> {
-    const response = await apiFetch("balancer", `jobs/${jobId}/result`, { timeout: 20_000 });
+    const response = await apiFetch(`/api/balancer/jobs/${jobId}/result`, { timeout: 20_000 });
     return response.json();
   }
 

@@ -20,7 +20,7 @@ class CaptainService {
     encounterId: number,
     data: ResultSubmissionInput
   ): Promise<{ id: number; result_status: string; home_score: number; away_score: number }> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/submit-result`, {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/submit-result`, {
       method: "POST",
       body: data,
     });
@@ -37,9 +37,7 @@ class CaptainService {
     away_score: number;
     closeness: number | null;
   }> {
-    const response = await apiFetch(
-      "tournament",
-      `encounters/${encounterId}/submit-match-report`,
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/submit-match-report`,
       { method: "POST", body: data }
     );
     return response.json();
@@ -48,7 +46,7 @@ class CaptainService {
   async confirmResult(
     encounterId: number
   ): Promise<{ id: number; result_status: string; status: string }> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/confirm-result`, {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/confirm-result`, {
       method: "POST",
     });
     return response.json();
@@ -58,7 +56,7 @@ class CaptainService {
     encounterId: number,
     data?: DisputeInput
   ): Promise<{ id: number; result_status: string }> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/dispute-result`, {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/dispute-result`, {
       method: "POST",
       body: data ?? {},
     });
@@ -68,12 +66,12 @@ class CaptainService {
   async getMyRole(
     encounterId: number
   ): Promise<{ side: "home" | "away" | null }> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/my-role`);
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/my-role`);
     return response.json();
   }
 
   async getMapPool(encounterId: number): Promise<EncounterMapPoolEntry[]> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/map-pool`);
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/map-pool`);
     return response.json();
   }
 
@@ -85,9 +83,7 @@ class CaptainService {
   async getMapPoolState(
     encounterId: number,
   ): Promise<EncounterMapPoolState | null> {
-    const response = await apiFetch(
-      "tournament",
-      `encounters/${encounterId}/map-pool/state`,
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/map-pool/state`,
       { throwOnError: false },
     );
     if (!response.ok) {
@@ -100,7 +96,7 @@ class CaptainService {
     encounterId: number,
     data: VetoActionInput
   ): Promise<{ id: number; map_id: number; status: string; picked_by: string | null }> {
-    const response = await apiFetch("tournament", `encounters/${encounterId}/map-pool/veto`, {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/map-pool/veto`, {
       method: "POST",
       body: data,
     });

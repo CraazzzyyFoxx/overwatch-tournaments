@@ -21,7 +21,7 @@ interface MatchLogIndicatorProps {
 }
 
 /** Direct, browser-navigable download URL for a match's parsed log. */
-export const matchLogDownloadUrl = (matchId: number) => `/api/v1/core/matches/${matchId}/log`;
+export const matchLogDownloadUrl = (matchId: number) => `/api/v1/matches/${matchId}/log`;
 
 const BASE = "inline-flex h-7 w-7 items-center justify-center rounded-[7px] border transition-colors";
 const HAS = "border-emerald-500/30 bg-emerald-500/10 text-emerald-500";

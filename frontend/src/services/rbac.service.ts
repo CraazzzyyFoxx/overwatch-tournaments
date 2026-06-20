@@ -27,7 +27,7 @@ function normalizeAuthAdminUserDetail(user: AuthAdminUserDetail): AuthAdminUserD
 }
 
 async function rbacFetch<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
-  const response = await apiFetch("auth", path, {
+  const response = await apiFetch(`/api/auth${path}`, {
     method: init?.method,
     body: init?.body,
   });

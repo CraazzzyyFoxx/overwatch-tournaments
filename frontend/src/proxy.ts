@@ -1,7 +1,7 @@
+import { authServiceBase } from "@/lib/api-routes";
 import { NextRequest, NextResponse } from "next/server";
 
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+const AUTH_SERVICE_URL = authServiceBase();
 
 function decodeJwtPayload(token: string): any | undefined {
   const parts = token.split(".");

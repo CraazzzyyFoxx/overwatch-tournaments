@@ -36,7 +36,7 @@ func NewBinary(caller edge.RPCCaller, identity edge.IdentityResolver, log *slog.
 	return &Binary{rpc: caller, identity: identity, log: log}
 }
 
-// IconUpload: POST /api/v1/core/workspaces/{id}/icon (workspace.update in worker).
+// IconUpload: POST /api/v1/workspaces/{id}/icon (workspace.update in worker).
 func (b *Binary) IconUpload(w http.ResponseWriter, r *http.Request) {
 	id, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("id")})
 	if !ok {
@@ -48,7 +48,7 @@ func (b *Binary) IconUpload(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.app.workspaces.icon_upload", id, http.StatusOK)
 }
 
-// IconDelete: DELETE /api/v1/core/workspaces/{id}/icon (workspace.update in worker).
+// IconDelete: DELETE /api/v1/workspaces/{id}/icon (workspace.update in worker).
 func (b *Binary) IconDelete(w http.ResponseWriter, r *http.Request) {
 	id, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("id")})
 	if !ok {
@@ -57,7 +57,7 @@ func (b *Binary) IconDelete(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.app.workspaces.icon_delete", id, http.StatusOK)
 }
 
-// AssetUpload: POST /api/v1/core/assets/{asset_type}/{slug} (superuser in worker).
+// AssetUpload: POST /api/v1/assets/{asset_type}/{slug} (superuser in worker).
 func (b *Binary) AssetUpload(w http.ResponseWriter, r *http.Request) {
 	data, ok := b.identityInto(w, r, map[string]any{
 		"asset_type": r.PathValue("asset_type"),
@@ -73,7 +73,7 @@ func (b *Binary) AssetUpload(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.app.assets.upload", data, http.StatusOK)
 }
 
-// AssetDelete: DELETE /api/v1/core/assets/{asset_type}/{slug} (superuser in worker).
+// AssetDelete: DELETE /api/v1/assets/{asset_type}/{slug} (superuser in worker).
 func (b *Binary) AssetDelete(w http.ResponseWriter, r *http.Request) {
 	data, ok := b.identityInto(w, r, map[string]any{
 		"asset_type": r.PathValue("asset_type"),
@@ -86,7 +86,7 @@ func (b *Binary) AssetDelete(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.app.assets.delete", data, http.StatusOK)
 }
 
-// MatchLog: GET /api/v1/core/matches/{match_id}/log (public). Returns the raw log
+// MatchLog: GET /api/v1/matches/{match_id}/log (public). Returns the raw log
 // bytes decoded from the worker's base64 payload.
 func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{"id": r.PathValue("match_id")}
@@ -120,7 +120,7 @@ func (b *Binary) MatchLog(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// UserAvatarUpload: POST /api/v1/core/admin/users/{id}/avatar (user.update in worker).
+// UserAvatarUpload: POST /api/v1/admin/users/{id}/avatar (user.update in worker).
 // Relocated from parser; multipart "file" -> base64 RPC body.
 func (b *Binary) UserAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	id, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("id")})
@@ -133,7 +133,7 @@ func (b *Binary) UserAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.app.users.avatar_upload", id, http.StatusOK)
 }
 
-// UsersCsvImport: POST /api/v1/core/user/create/csv (admin role in worker).
+// UsersCsvImport: POST /api/v1/user/create/csv (admin role in worker).
 // Relocated from parser. Row indices + delimiter + flags + an optional Google
 // Sheets URL arrive as query params; an optional CSV file rides in the multipart
 // "data" field (base64 into the RPC body). The worker handles file-vs-sheet.

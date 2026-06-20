@@ -4,10 +4,10 @@
 // reverse proxy by ServeMux specificity, so endpoints cut over to RPC
 // incrementally (the rest still proxies to balancer-service until decommission).
 //
-// Paths keep the external /api/balancer/* scheme verbatim (Kong strip_path:false
-// + FastAPI root_path="/api/balancer" + admin router prefix /balancer), which
-// yields the doubled /api/balancer/balancer/* for the admin routes. The frontend
-// is unchanged.
+// External paths use the clean /api/balancer/* scheme. The worker's RPC queues
+// are path-independent, so the legacy doubled /api/balancer/balancer/* (FastAPI
+// root_path + admin router prefix) is gone. Un-migrated balancer endpoints still
+// proxy to balancer-service on their original paths.
 package balancer
 
 import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
@@ -23,13 +23,13 @@ var PublicRoutes = []edge.RouteSpec{
 // injects the resolved identity (AuthRequired). The teams-import multipart upload
 // is handled separately (binary.go).
 var AdminRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/balancer/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/balancer/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/balancer/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/balancer/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_save", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/balancer/balancer/balances/{balance_id}/export", Queue: "rpc.balancer.admin.balance_export", IDParam: "balance_id", Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/balancer/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/balancer/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/balancer/tournaments/{tournament_id}/config", Queue: "rpc.balancer.admin.tournament_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.admin.balance_save", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/balances/{balance_id}/export", Queue: "rpc.balancer.admin.balance_export", IDParam: "balance_id", Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
 }
 
 // JobRoutes are the authenticated public job API reads (status poll + result)

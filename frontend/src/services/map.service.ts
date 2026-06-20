@@ -4,7 +4,7 @@ import { MapRead } from "@/types/map.types";
 
 export default class mapService {
   static async lookup(): Promise<LookupItem[]> {
-    return apiFetch("app", "maps/lookup").then((res) => res.json());
+    return apiFetch("/api/v1/maps/lookup").then((res) => res.json());
   }
 
   static async getAll({
@@ -20,7 +20,7 @@ export default class mapService {
     order?: "asc" | "desc";
     query?: string;
   } = {}): Promise<PaginatedResponse<MapRead>> {
-    return apiFetch("app","maps", {
+    return apiFetch("/api/v1/maps", {
       query: {
         page,
         per_page: perPage,

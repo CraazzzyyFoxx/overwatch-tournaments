@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/api-fetch";
 
 export default class encounterService {
   static async getEncounter(id: number): Promise<Encounter> {
-    return apiFetch("tournament", `encounters/${id}`, {
+    return apiFetch(`/api/v1/encounters/${id}`, {
       query: {
         entities: [
           "matches",
@@ -28,7 +28,7 @@ export default class encounterService {
     }).then((res) => res.json());
   }
   static async getMatch(match_id: number): Promise<MatchWithStats> {
-    return apiFetch("tournament", `matches/${match_id}`, {
+    return apiFetch(`/api/v1/matches/${match_id}`, {
       query: {
         entities: [
           "teams",
@@ -55,7 +55,7 @@ export default class encounterService {
     filters: EncounterFilters & { entities?: string[] } = {}
   ): Promise<PaginatedResponse<Encounter>> {
     const { entities, ...restFilters } = filters;
-    return apiFetch("tournament", `encounters`, {
+    return apiFetch(`/api/v1/encounters`, {
       query: {
         workspace_id: workspaceId,
         per_page: perPage,
@@ -76,7 +76,7 @@ export default class encounterService {
     filters: EncounterFilters = {},
     workspaceId?: number | null
   ): Promise<EncounterOverview> {
-    return apiFetch("tournament", `encounters/overview`, {
+    return apiFetch(`/api/v1/encounters/overview`, {
       query: {
         workspace_id: workspaceId,
         per_page: -1,
@@ -91,7 +91,7 @@ export default class encounterService {
   }
 
   static async getSavedViews(workspaceId?: number | null): Promise<EncounterSavedView[]> {
-    return apiFetch("tournament", `encounters/views`, {
+    return apiFetch(`/api/v1/encounters/views`, {
       query: {
         workspace_id: workspaceId
       }
@@ -103,7 +103,7 @@ export default class encounterService {
     filters: EncounterFilters & { query?: string },
     workspaceId?: number | null
   ): Promise<EncounterSavedView> {
-    return apiFetch("tournament", `encounters/views`, {
+    return apiFetch(`/api/v1/encounters/views`, {
       method: "POST",
       query: {
         workspace_id: workspaceId
@@ -116,7 +116,7 @@ export default class encounterService {
   }
 
   static async deleteView(id: number, workspaceId?: number | null): Promise<void> {
-    await apiFetch("tournament", `encounters/views/${id}`, {
+    await apiFetch(`/api/v1/encounters/views/${id}`, {
       method: "DELETE",
       query: {
         workspace_id: workspaceId
@@ -128,7 +128,7 @@ export default class encounterService {
     tournamentId: number | null = null,
     workspaceId?: number | null
   ): Promise<number> {
-    return apiFetch("tournament", `encounters`, {
+    return apiFetch(`/api/v1/encounters`, {
       query: {
         workspace_id: workspaceId,
         per_page: 1,
@@ -147,7 +147,7 @@ export default class encounterService {
     query: string,
     tournamentId: number | null = null
   ): Promise<PaginatedResponse<MatchWithStats>> {
-    return apiFetch("tournament", `matches`, {
+    return apiFetch(`/api/v1/matches`, {
       query: {
         per_page: perPage,
         page: page,

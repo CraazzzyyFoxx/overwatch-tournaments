@@ -37,7 +37,7 @@ func NewBinary(caller edge.RPCCaller, identity edge.IdentityResolver, log *slog.
 	return &Binary{rpc: caller, identity: identity, log: log}
 }
 
-// AdminLogsUpload: POST /api/parser/admin/logs/upload. Reads the multipart form
+// AdminLogsUpload: POST /api/v1/admin/logs/upload. Reads the multipart form
 // (tournament_id, optional encounter_id, one or more files[]) and base64-encodes
 // each file into the RPC body for rpc.parser.logs.upload.
 func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +86,57 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 	body["files"] = encoded
 
 	b.relayJSON(w, r, "rpc.parser.logs.upload", body, http.StatusOK)
+}
+
+// TeamsBalancerUpload: POST /api/v1/teams/create/balancer. Multipart "file"
+// (a balancer JSON export) -> base64; tournament_id arrives as a form field and
+// payload_format as a query param.
+func (b *Binary) TeamsBalancerUpload(w http.ResponseWriter, r *http.Request) {
+	if b.identity == nil {
+		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	id, ok := b.identity(r)
+	if !ok {
+		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+	body := map[string]any{"identity": id}
+	if v := r.FormValue("tournament_id"); v != "" {
+		body["tournament_id"] = v
+	}
+	if q := r.URL.Query(); len(q) > 0 {
+		qm := map[string]any{}
+		for k, vs := range q {
+			if len(vs) > 0 {
+				qm[k] = vs
+			}
+		}
+		if len(qm) > 0 {
+			body["query"] = qm
+		}
+	}
+	if r.MultipartForm != nil {
+		if files := r.MultipartForm.File["file"]; len(files) > 0 {
+			f, err := files[0].Open()
+			if err != nil {
+				writeDetail(w, http.StatusBadRequest, "failed to read file")
+				return
+			}
+			raw, err := io.ReadAll(io.LimitReader(f, maxUpload))
+			_ = f.Close()
+			if err != nil {
+				writeDetail(w, http.StatusBadRequest, "failed to read file")
+				return
+			}
+			body["content_b64"] = base64.StdEncoding.EncodeToString(raw)
+		}
+	}
+	b.relayJSON(w, r, "rpc.parser.teams.create_balancer", body, http.StatusOK)
 }
 
 // relayJSON calls the RPC and relays the success envelope data as a JSON response.

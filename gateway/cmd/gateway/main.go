@@ -154,38 +154,43 @@ func run(logger *slog.Logger) error {
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
-	// parser-service: typed RPC for parser-unique domains (the rest of /api/parser
-	// still proxies). Specific patterns win over the /api/parser proxy below.
+	// parser-service domains folded into /api/v1 (match-log, OverFast rank,
+	// achievement engine + rules admin, metadata sync, settings, discord-channel,
+	// bootstrap importers), served as typed RPC. Un-migrated parser paths still
+	// proxy to parser-service on their original /api/parser/* addresses.
 	parserEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	parserEdge.Register(mux, parser.Routes)
 	// Multipart match-log upload (files[] -> base64 RPC body) the JSON dispatcher
 	// can't handle.
 	parserBinary := parser.NewBinary(rpcClient, resolver.Resolve, logger)
-	mux.HandleFunc("POST /api/parser/admin/logs/upload", parserBinary.AdminLogsUpload)
+	mux.HandleFunc("POST /api/v1/admin/logs/upload", parserBinary.AdminLogsUpload)
+	mux.HandleFunc("POST /api/v1/teams/create/balancer", parserBinary.TeamsBalancerUpload)
 	// Achievement rule/library/override admin: ambiguous patterns under ServeMux
-	// (rules/export vs rules/{rule_id}) -> ordered subtree matcher.
-	mux.Handle("/api/parser/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
-	// app-service: typed RPC public reads (the rest of /api/v1/core still proxies).
+	// (rules/export vs rules/{rule_id}) -> ordered subtree matcher. Mounted at the
+	// shared /api/v1/admin/ws/ prefix; tournament's balancer-statuses routes there
+	// are more specific and win, so the two coexist.
+	mux.Handle("/api/v1/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
+	// app-service: typed RPC public reads (the rest of /api/v1 still proxies).
 	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
-	// Specific patterns win over the /api/v1/core proxy below.
+	// Specific patterns win over the /api/v1 proxy below.
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	appEdge.Register(mux, app.ReadRoutes)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	appEdge.Register(mux, app.MetadataAdminRoutes)
 	appEdge.Register(mux, app.UsersAdminRoutes)
 	// achievements get surface: ambiguous (/{id}/users vs /user/{user_id}) -> subtree.
-	mux.Handle("/api/v1/core/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
+	mux.Handle("/api/v1/achievements/", appEdge.Subtree(app.AchievementsSubtreeRoutes))
 	// Binary/multipart endpoints the JSON dispatcher can't handle: icon + asset
 	// uploads (multipart -> base64 RPC) and the match-log download (base64 -> bytes).
 	appBinary := app.NewBinary(rpcClient, resolver.Resolve, logger)
-	mux.HandleFunc("POST /api/v1/core/workspaces/{id}/icon", appBinary.IconUpload)
-	mux.HandleFunc("DELETE /api/v1/core/workspaces/{id}/icon", appBinary.IconDelete)
-	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetUpload)
-	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", appBinary.AssetDelete)
-	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", appBinary.MatchLog)
+	mux.HandleFunc("POST /api/v1/workspaces/{id}/icon", appBinary.IconUpload)
+	mux.HandleFunc("DELETE /api/v1/workspaces/{id}/icon", appBinary.IconDelete)
+	mux.HandleFunc("POST /api/v1/assets/{asset_type}/{slug}", appBinary.AssetUpload)
+	mux.HandleFunc("DELETE /api/v1/assets/{asset_type}/{slug}", appBinary.AssetDelete)
+	mux.HandleFunc("GET /api/v1/matches/{match_id}/log", appBinary.MatchLog)
 	// User avatar upload + CSV/Sheets user import (relocated from parser-service).
-	mux.HandleFunc("POST /api/v1/core/admin/users/{id}/avatar", appBinary.UserAvatarUpload)
-	mux.HandleFunc("POST /api/v1/core/user/create/csv", appBinary.UsersCsvImport)
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/avatar", appBinary.UserAvatarUpload)
+	mux.HandleFunc("POST /api/v1/user/create/csv", appBinary.UsersCsvImport)
 	// balancer-service: typed RPC public config + admin balance/config (the rest
 	// of /api/balancer — jobs, draft — still proxies to balancer-service until
 	// decommission). Specific patterns win over the /api/balancer proxy below.
@@ -197,16 +202,25 @@ func run(logger *slog.Logger) error {
 	balancerEdge.Register(mux, balancer.JobRoutes)
 	// Multipart uploads (multipart -> base64 RPC): teams-import + job-create.
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
-	mux.HandleFunc("POST /api/balancer/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
+	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
 	mux.HandleFunc("POST /api/balancer/jobs", balancerBinary.JobCreate)
 	// Guard the /api/v1 namespace: anything not matched by a typed route above
 	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
 	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched
 	// /api/v1 path to the frontend creates an infinite gateway<->frontend proxy
 	// loop (hang + resource exhaustion that crash-loops the frontend). Return 404
-	// instead. app-service (/api/v1/core/*) is now fully served by the typed app
-	// routes above; unmatched /api/v1/core/* falls here too (404, no proxy).
+	// instead. app-service (/api/v1/*) is now fully served by the typed app
+	// routes above; unmatched /api/v1/* falls here too (404, no proxy).
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
+	})
+	// /api/analytics is fully served by the typed analytics routes above (RPC into
+	// analytics-svc); the HTTP analytics-service is decommissioned and no longer
+	// proxied. Guard unmatched /api/analytics/* with 404 (same gateway<->frontend
+	// loop hazard as /api/v1, since next.config rewrites /api/analytics -> gateway).
+	mux.HandleFunc("/api/analytics/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))

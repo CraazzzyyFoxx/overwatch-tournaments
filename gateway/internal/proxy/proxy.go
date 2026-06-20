@@ -27,12 +27,14 @@ type Proxy struct {
 // New builds the proxy from the configured upstreams.
 func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
-		// /api/v1/* (tournament) and /api/v1/core/* (app-service) are served by the
-		// gateway's typed RPC routes into the workers — never proxied. /api/auth/*
-		// likewise via identity-svc.
-		{"/api/parser", up.Parser},
+		// /api/v1/* (tournament + app + parser) is served by the gateway's typed
+		// RPC routes into the workers — never proxied; the /api/v1/ 404 guard in
+		// main.go catches unmatched paths. /api/auth/* likewise via identity-svc.
+		// parser + analytics HTTP are decommissioned (parser folded into /api/v1;
+		// /api/analytics is fully served by typed RPC into analytics-svc), so neither
+		// is proxied. The /api/balancer fallback below serves only un-migrated
+		// (non-typed) balancer endpoints on their legacy paths.
 		{"/api/balancer", up.Balancer},
-		{"/api/analytics", up.Analytics},
 		{"/api/account", up.Frontend},
 		{"/", up.Frontend},
 	}

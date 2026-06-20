@@ -4,7 +4,7 @@ import { Achievement, AchievementEarned } from "@/types/achievement.types";
 
 export default class achievementsService {
   static async getAll(page: number, perPage: number, workspaceId?: number | null): Promise<PaginatedResponse<Achievement>> {
-    return apiFetch("app",`achievements`, {
+    return apiFetch(`/api/v1/achievements`, {
       query: {
         per_page: perPage,
         page: page,
@@ -16,14 +16,14 @@ export default class achievementsService {
     }).then((res) => res.json());
   }
   static async getOne(id: number): Promise<Achievement> {
-    return apiFetch("app",`achievements/${id}`).then((res) => res.json());
+    return apiFetch(`/api/v1/achievements/${id}`).then((res) => res.json());
   }
   static async getUsers(
     id: number,
     page: number,
     perPage: number
   ): Promise<PaginatedResponse<AchievementEarned>> {
-    return apiFetch("app",`achievements/${id}/users`, {
+    return apiFetch(`/api/v1/achievements/${id}/users`, {
       query: {
         per_page: perPage,
         page: page

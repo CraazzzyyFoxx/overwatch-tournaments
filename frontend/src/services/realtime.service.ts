@@ -20,7 +20,7 @@ const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
 export function buildRealtimeWebSocketUrl(
-  realtimeBase = process.env.NEXT_PUBLIC_REALTIME_API_URL,
+  realtimeBase: string | undefined = undefined,
   origin = typeof window !== "undefined" ? window.location.origin : "http://localhost"
 ): string {
   if (realtimeBase) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
 )
 
@@ -30,9 +31,11 @@ func marker(name string) http.HandlerFunc {
 
 // buildGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1 wiring. Building
 // it must NOT panic — a ServeMux pattern conflict would crash the gateway at
-// startup. /api/v1/core/* proxies to app-service; any OTHER unmatched /api/v1/*
-// must hit the /api/v1/ guard (404), never the "/" frontend catch-all (which
-// rewrites /api/v1/* back to the gateway -> infinite proxy loop).
+// startup. app + tournament + parser now share the unified /api/v1/* namespace
+// (the old /api/v1/core and /api/parser prefixes are gone), so this guards the
+// merged surface. Any unmatched /api/v1/* must hit the /api/v1/ guard (404),
+// never the "/" frontend catch-all (which rewrites /api/v1/* back to the gateway
+// -> infinite proxy loop).
 func buildGuardedMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	d := edge.New(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -45,23 +48,39 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	d.Register(mux, tournament.PublicWriteRoutes)
 	mux.Handle("/api/v1/division-grids/", d.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", d.Subtree(tournament.StageSubtreeRoutes))
-	// app-service public reads (typed RPC) + achievements get subtree. Registering
-	// these must NOT panic — /users/{name} vs /users/{id}/... and the achievements
-	// /{id}/users vs /user/{user_id} ambiguity are the cases that would conflict.
+	// app-service typed routes (reads + workspace/metadata/users admin) + the
+	// achievements get subtree. Registering these must NOT panic — /users/{name}
+	// vs /users/{id}/... and the achievements /{id}/users vs /user/{user_id}
+	// ambiguity are the cases that would conflict.
 	d.Register(mux, app.ReadRoutes)
 	d.Register(mux, app.WorkspaceWriteRoutes)
-	mux.Handle("/api/v1/core/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
+	d.Register(mux, app.MetadataAdminRoutes)
+	d.Register(mux, app.UsersAdminRoutes)
+	mux.Handle("/api/v1/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
+	// parser domains folded into /api/v1. The achievement-rule admin subtree mounts
+	// at the shared /api/v1/admin/ws/ prefix; tournament's balancer-statuses routes
+	// there are more specific and win, so registering both must not panic. The
+	// discord-channel routes share /api/v1/admin/tournaments/{id}/... with the
+	// tournament admin routes (distinct leaves).
+	d.Register(mux, parser.Routes)
+	mux.Handle("/api/v1/admin/ws/", d.Subtree(parser.AchievementAdminRoutes))
 	// Binary/multipart handlers (registering them must not conflict with the
 	// workspace member routes or the get-by-id routes).
 	bin := app.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
-	mux.HandleFunc("POST /api/v1/core/workspaces/{id}/icon", bin.IconUpload)
-	mux.HandleFunc("DELETE /api/v1/core/workspaces/{id}/icon", bin.IconDelete)
-	mux.HandleFunc("POST /api/v1/core/assets/{asset_type}/{slug}", bin.AssetUpload)
-	mux.HandleFunc("DELETE /api/v1/core/assets/{asset_type}/{slug}", bin.AssetDelete)
-	mux.HandleFunc("GET /api/v1/core/matches/{match_id}/log", bin.MatchLog)
-	// app-service is decommissioned: no /api/v1/core proxy. Unmatched /api/v1/core/*
-	// falls to the /api/v1/ guard (404), never the "/" frontend catch-all.
+	mux.HandleFunc("POST /api/v1/workspaces/{id}/icon", bin.IconUpload)
+	mux.HandleFunc("DELETE /api/v1/workspaces/{id}/icon", bin.IconDelete)
+	mux.HandleFunc("POST /api/v1/assets/{asset_type}/{slug}", bin.AssetUpload)
+	mux.HandleFunc("DELETE /api/v1/assets/{asset_type}/{slug}", bin.AssetDelete)
+	mux.HandleFunc("GET /api/v1/matches/{match_id}/log", bin.MatchLog)
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/avatar", bin.UserAvatarUpload)
+	mux.HandleFunc("POST /api/v1/user/create/csv", bin.UsersCsvImport)
+	pbin := parser.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux.HandleFunc("POST /api/v1/admin/logs/upload", pbin.AdminLogsUpload)
+	mux.HandleFunc("POST /api/v1/teams/create/balancer", pbin.TeamsBalancerUpload)
+	// Unmatched /api/v1/* falls to the /api/v1/ guard (404), never the "/" frontend
+	// catch-all.
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Route", "guard")
 		w.WriteHeader(http.StatusNotFound)
@@ -83,7 +102,7 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 	}{
 		{"unknown top-level api path", "GET", "/api/v1/does-not-exist", ""},
 		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope", ""},
-		{"unknown app path hits guard (decommissioned)", "GET", "/api/v1/core/nonexistent-xyz", ""},
+		{"unknown deep api path hits guard", "GET", "/api/v1/nonexistent-xyz", ""},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -110,43 +129,48 @@ func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
 	}
 }
 
-// TestApiV1Core_MigratedReadsHitDispatcher asserts the migrated app-service read
-// patterns win over the /api/v1/core proxy (ServeMux specificity) and reach the
-// typed dispatcher rather than the "core" proxy / frontend / guard. With the stub
-// RPC caller the dispatcher returns 504, so a migrated path yields an empty
-// X-Route (typed handler) — never "core"/"frontend"/"guard".
-func TestApiV1Core_MigratedReadsHitDispatcher(t *testing.T) {
+// TestApiV1_MigratedReadsHitDispatcher asserts the migrated app + parser read
+// patterns win over the /api/v1/ guard (ServeMux specificity) and reach the typed
+// dispatcher. With the stub RPC caller the dispatcher returns 504 (or 401 for
+// auth'd routes), so a migrated path yields an empty X-Route (typed handler) —
+// never "frontend"/"guard".
+func TestApiV1_MigratedReadsHitDispatcher(t *testing.T) {
 	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	paths := []string{
-		"/api/v1/core/heroes",
-		"/api/v1/core/heroes/5",
-		"/api/v1/core/heroes/lookup",
-		"/api/v1/core/heroes/5/leaderboard",
-		"/api/v1/core/heroes/statistics/playtime",
-		"/api/v1/core/maps",
-		"/api/v1/core/maps/5",
-		"/api/v1/core/maps/lookup",
-		"/api/v1/core/gamemodes/5",
-		"/api/v1/core/achievements",
-		"/api/v1/core/achievements/5",
-		"/api/v1/core/achievements/5/users",
-		"/api/v1/core/achievements/user/7",
-		"/api/v1/core/users",
-		"/api/v1/core/users/search",
-		"/api/v1/core/users/overview",
-		"/api/v1/core/users/overview/stats",
-		"/api/v1/core/users/5/profile",
-		"/api/v1/core/users/5/tournaments/9",
-		"/api/v1/core/users/5/maps/summary",
-		"/api/v1/core/users/someblizzname",
-		"/api/v1/core/statistics/dashboard",
-		"/api/v1/core/statistics/won-maps",
-		"/api/v1/core/workspaces",
-		"/api/v1/core/workspaces/5",
-		"/api/v1/core/matches/9/log",
+		// app-service (was /api/v1/core)
+		"/api/v1/heroes",
+		"/api/v1/heroes/5",
+		"/api/v1/heroes/lookup",
+		"/api/v1/heroes/5/leaderboard",
+		"/api/v1/heroes/statistics/playtime",
+		"/api/v1/maps",
+		"/api/v1/maps/5",
+		"/api/v1/maps/lookup",
+		"/api/v1/gamemodes/5",
+		"/api/v1/achievements",
+		"/api/v1/achievements/5",
+		"/api/v1/achievements/5/users",
+		"/api/v1/achievements/user/7",
+		"/api/v1/users",
+		"/api/v1/users/search",
+		"/api/v1/users/overview",
+		"/api/v1/users/overview/stats",
+		"/api/v1/users/5/profile",
+		"/api/v1/users/5/tournaments/9",
+		"/api/v1/users/5/maps/summary",
+		"/api/v1/users/someblizzname",
+		"/api/v1/statistics/dashboard",
+		"/api/v1/statistics/won-maps",
+		"/api/v1/workspaces",
+		"/api/v1/workspaces/5",
+		"/api/v1/matches/9/log",
+		// parser-service (was /api/parser), folded into /api/v1
+		"/api/v1/users/5/rank-history",
+		"/api/v1/users/5/current-ranks",
+		"/api/v1/battle-tags/5/rank-history",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {
@@ -156,8 +180,8 @@ func TestApiV1Core_MigratedReadsHitDispatcher(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch resp.Header.Get("X-Route") {
-			case "core", "frontend", "guard":
-				t.Fatalf("GET %s: routed to %q, want the typed app dispatcher (not proxied)",
+			case "frontend", "guard":
+				t.Fatalf("GET %s: routed to %q, want the typed dispatcher (not proxied)",
 					p, resp.Header.Get("X-Route"))
 			}
 		})

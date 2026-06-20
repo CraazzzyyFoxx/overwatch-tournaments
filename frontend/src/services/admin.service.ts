@@ -95,7 +95,7 @@ import {
 
 class AdminService {
   private async getTournamentJob(jobId: number): Promise<TournamentComputationJob> {
-    const response = await apiFetch("tournament", `admin/tournament-jobs/${jobId}`);
+    const response = await apiFetch(`/api/v1/admin/tournament-jobs/${jobId}`);
     return response.json();
   }
 
@@ -131,7 +131,7 @@ class AdminService {
   // ─── Tournament CRUD ───────────────────────────────────────────────────────
 
   async createTournament(data: TournamentCreateInput): Promise<Tournament> {
-    const response = await apiFetch("tournament", "admin/tournaments", {
+    const response = await apiFetch("/api/v1/admin/tournaments", {
       method: "POST",
       body: data
     });
@@ -139,12 +139,12 @@ class AdminService {
   }
 
   async getTournament(id: number): Promise<Tournament> {
-    const response = await apiFetch("tournament", `admin/tournaments/${id}`);
+    const response = await apiFetch(`/api/v1/admin/tournaments/${id}`);
     return response.json();
   }
 
   async updateTournament(id: number, data: TournamentUpdateInput): Promise<Tournament> {
-    const response = await apiFetch("tournament", `admin/tournaments/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -152,7 +152,7 @@ class AdminService {
   }
 
   async deleteTournament(id: number): Promise<void> {
-    await apiFetch("tournament", `admin/tournaments/${id}`, {
+    await apiFetch(`/api/v1/admin/tournaments/${id}`, {
       method: "DELETE"
     });
   }
@@ -166,7 +166,7 @@ class AdminService {
     end_date: string;
     division_grid_version_id?: number | null;
   }): Promise<Tournament> {
-    const response = await apiFetch("parser", "tournament/create/with_groups", {
+    const response = await apiFetch("/api/v1/tournament/create/with_groups", {
       method: "POST",
       query: params
     });
@@ -174,7 +174,7 @@ class AdminService {
   }
 
   async toggleTournamentFinished(tournamentId: number): Promise<Tournament> {
-    const response = await apiFetch("tournament", `admin/tournaments/${tournamentId}/finish`, {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/finish`, {
       method: "POST"
     });
     return response.json();
@@ -183,7 +183,7 @@ class AdminService {
   // ─── Team CRUD ─────────────────────────────────────────────────────────────
 
   async createTeam(data: TeamCreateInput): Promise<Team> {
-    const response = await apiFetch("tournament", "admin/teams", {
+    const response = await apiFetch("/api/v1/admin/teams", {
       method: "POST",
       body: data
     });
@@ -191,12 +191,12 @@ class AdminService {
   }
 
   async getTeam(id: number): Promise<Team> {
-    const response = await apiFetch("tournament", `admin/teams/${id}`);
+    const response = await apiFetch(`/api/v1/admin/teams/${id}`);
     return response.json();
   }
 
   async updateTeam(id: number, data: TeamUpdateInput): Promise<Team> {
-    const response = await apiFetch("tournament", `admin/teams/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/teams/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -204,13 +204,13 @@ class AdminService {
   }
 
   async deleteTeam(id: number): Promise<void> {
-    await apiFetch("tournament", `admin/teams/${id}`, {
+    await apiFetch(`/api/v1/admin/teams/${id}`, {
       method: "DELETE"
     });
   }
 
   async addPlayerToTeam(teamId: number, data: PlayerCreateInput): Promise<Player> {
-    const response = await apiFetch("tournament", `admin/teams/${teamId}/players`, {
+    const response = await apiFetch(`/api/v1/admin/teams/${teamId}/players`, {
       method: "POST",
       body: data
     });
@@ -218,7 +218,7 @@ class AdminService {
   }
 
   async removePlayerFromTeam(teamId: number, playerId: number): Promise<void> {
-    await apiFetch("tournament", `admin/teams/${teamId}/players/${playerId}`, {
+    await apiFetch(`/api/v1/admin/teams/${teamId}/players/${playerId}`, {
       method: "DELETE"
     });
   }
@@ -231,7 +231,7 @@ class AdminService {
     formData.append("file", file);
     formData.append("tournament_id", tournamentId.toString());
 
-    const response = await apiFetch("parser", "teams/create/balancer", {
+    const response = await apiFetch("/api/v1/teams/create/balancer", {
       method: "POST",
       body: formData
     });
@@ -239,7 +239,7 @@ class AdminService {
   }
 
   async getChallongeTeamSyncPreview(tournamentId: number): Promise<ChallongeTeamSyncPreview> {
-    const response = await apiFetch("parser", "teams/challonge/preview", {
+    const response = await apiFetch("/api/v1/teams/challonge/preview", {
       query: { tournament_id: tournamentId }
     });
     return response.json();
@@ -249,7 +249,7 @@ class AdminService {
     tournamentId: number,
     data: ChallongeTeamSyncRequest
   ): Promise<ChallongeTeamSyncResult> {
-    const response = await apiFetch("parser", "teams/create/challonge", {
+    const response = await apiFetch("/api/v1/teams/create/challonge", {
       method: "POST",
       query: { tournament_id: tournamentId },
       body: data
@@ -260,7 +260,7 @@ class AdminService {
   // ─── Player CRUD ───────────────────────────────────────────────────────────
 
   async createPlayer(data: PlayerCreateInput): Promise<Player> {
-    const response = await apiFetch("parser", "admin/players", {
+    const response = await apiFetch("/api/v1/admin/players", {
       method: "POST",
       body: data
     });
@@ -268,7 +268,7 @@ class AdminService {
   }
 
   async updatePlayer(id: number, data: PlayerUpdateInput): Promise<Player> {
-    const response = await apiFetch("parser", `admin/players/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/players/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -276,7 +276,7 @@ class AdminService {
   }
 
   async deletePlayer(id: number): Promise<void> {
-    await apiFetch("parser", `admin/players/${id}`, {
+    await apiFetch(`/api/v1/admin/players/${id}`, {
       method: "DELETE"
     });
   }
@@ -286,14 +286,14 @@ class AdminService {
     role?: string;
     include_inactive?: boolean;
   }): Promise<PlayerSubRole[]> {
-    const response = await apiFetch("tournament", "admin/player-sub-roles", {
+    const response = await apiFetch("/api/v1/admin/player-sub-roles", {
       query: params
     });
     return response.json();
   }
 
   async createPlayerSubRole(data: PlayerSubRoleCreateInput): Promise<PlayerSubRole> {
-    const response = await apiFetch("tournament", "admin/player-sub-roles", {
+    const response = await apiFetch("/api/v1/admin/player-sub-roles", {
       method: "POST",
       body: data
     });
@@ -301,7 +301,7 @@ class AdminService {
   }
 
   async updatePlayerSubRole(id: number, data: PlayerSubRoleUpdateInput): Promise<PlayerSubRole> {
-    const response = await apiFetch("tournament", `admin/player-sub-roles/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/player-sub-roles/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -309,7 +309,7 @@ class AdminService {
   }
 
   async deletePlayerSubRole(id: number): Promise<void> {
-    await apiFetch("tournament", `admin/player-sub-roles/${id}`, {
+    await apiFetch(`/api/v1/admin/player-sub-roles/${id}`, {
       method: "DELETE"
     });
   }
@@ -317,7 +317,7 @@ class AdminService {
   // ─── Encounter CRUD ────────────────────────────────────────────────────────
 
   async createEncounter(data: EncounterCreateInput): Promise<Encounter> {
-    const response = await apiFetch("tournament", "admin/encounters", {
+    const response = await apiFetch("/api/v1/admin/encounters", {
       method: "POST",
       body: data
     });
@@ -325,7 +325,7 @@ class AdminService {
   }
 
   async updateEncounter(id: number, data: EncounterUpdateInput): Promise<Encounter> {
-    const response = await apiFetch("tournament", `admin/encounters/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/encounters/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -333,7 +333,7 @@ class AdminService {
   }
 
   async deleteEncounter(id: number): Promise<void> {
-    await apiFetch("tournament", `admin/encounters/${id}`, {
+    await apiFetch(`/api/v1/admin/encounters/${id}`, {
       method: "DELETE"
     });
   }
@@ -341,7 +341,7 @@ class AdminService {
   async confirmEncounterResult(
     id: number
   ): Promise<{ id: number; result_status: string; status: string }> {
-    const response = await apiFetch("tournament", `admin/encounters/${id}/confirm-result`, {
+    const response = await apiFetch(`/api/v1/admin/encounters/${id}/confirm-result`, {
       method: "POST"
     });
     return response.json();
@@ -362,7 +362,7 @@ class AdminService {
     time: number;
     log_name: string;
   }> {
-    const response = await apiFetch("tournament", `admin/encounters/matches/${matchId}`, {
+    const response = await apiFetch(`/api/v1/admin/encounters/matches/${matchId}`, {
       method: "PATCH",
       body: data
     });
@@ -370,7 +370,7 @@ class AdminService {
   }
 
   async syncEncountersFromChallonge(tournamentId: number): Promise<BulkOperationResult> {
-    const response = await apiFetch("parser", "encounter/challonge", {
+    const response = await apiFetch("/api/v1/encounter/challonge", {
       method: "POST",
       query: { tournament_id: tournamentId }
     });
@@ -380,7 +380,7 @@ class AdminService {
   // ─── Standing Management ───────────────────────────────────────────────────
 
   async updateStanding(id: number, data: StandingUpdateInput): Promise<Standings> {
-    const response = await apiFetch("tournament", `admin/standings/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/standings/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -388,7 +388,7 @@ class AdminService {
   }
 
   async deleteStanding(id: number): Promise<void> {
-    await apiFetch("tournament", `admin/standings/${id}`, {
+    await apiFetch(`/api/v1/admin/standings/${id}`, {
       method: "DELETE"
     });
   }
@@ -398,7 +398,7 @@ class AdminService {
   }
 
   async recalculateStandings(tournamentId: number): Promise<BulkOperationResult> {
-    const response = await apiFetch("tournament", `admin/standings/recalculate/${tournamentId}`, {
+    const response = await apiFetch(`/api/v1/admin/standings/recalculate/${tournamentId}`, {
       method: "POST"
     });
     const job = (await response.json()) as TournamentComputationJob;
@@ -420,7 +420,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<User>> {
-    const response = await apiFetch("app", "admin/users", {
+    const response = await apiFetch("/api/v1/admin/users", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -433,7 +433,7 @@ class AdminService {
   }
 
   async createUser(data: UserCreateInput): Promise<User> {
-    const response = await apiFetch("app", "admin/users", {
+    const response = await apiFetch("/api/v1/admin/users", {
       method: "POST",
       body: data
     });
@@ -441,7 +441,7 @@ class AdminService {
   }
 
   async updateUser(id: number, data: UserUpdateInput): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/users/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -449,13 +449,13 @@ class AdminService {
   }
 
   async deleteUser(id: number): Promise<void> {
-    await apiFetch("app", `admin/users/${id}`, {
+    await apiFetch(`/api/v1/admin/users/${id}`, {
       method: "DELETE"
     });
   }
 
   async previewUserMerge(data: UserMergePreviewRequest): Promise<UserMergePreviewResponse> {
-    const response = await apiFetch("app", "admin/users/merge/preview", {
+    const response = await apiFetch("/api/v1/admin/users/merge/preview", {
       method: "POST",
       body: data
     });
@@ -463,7 +463,7 @@ class AdminService {
   }
 
   async executeUserMerge(data: UserMergeExecuteRequest): Promise<UserMergeExecuteResponse> {
-    const response = await apiFetch("app", "admin/users/merge/execute", {
+    const response = await apiFetch("/api/v1/admin/users/merge/execute", {
       method: "POST",
       body: data
     });
@@ -496,7 +496,7 @@ class AdminService {
     if (params.delimiter) query.delimiter = params.delimiter;
     if (params.sheet_url) query.sheet_url = params.sheet_url;
 
-    const response = await apiFetch("app", "user/create/csv", {
+    const response = await apiFetch("/api/v1/user/create/csv", {
       method: "POST",
       body: formData,
       query
@@ -506,7 +506,7 @@ class AdminService {
 
   // User Identity Management
   async addDiscordIdentity(userId: number, data: DiscordIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/discord`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/discord`, {
       method: "POST",
       body: data
     });
@@ -518,7 +518,7 @@ class AdminService {
     identityId: number,
     data: DiscordIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/discord/${identityId}`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/discord/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -526,13 +526,13 @@ class AdminService {
   }
 
   async deleteDiscordIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("app", `admin/users/${userId}/discord/${identityId}`, {
+    await apiFetch(`/api/v1/admin/users/${userId}/discord/${identityId}`, {
       method: "DELETE"
     });
   }
 
   async addBattleTagIdentity(userId: number, data: BattleTagIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/battle-tag`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/battle-tag`, {
       method: "POST",
       body: data
     });
@@ -544,7 +544,7 @@ class AdminService {
     identityId: number,
     data: BattleTagIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/battle-tag/${identityId}`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/battle-tag/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -552,13 +552,13 @@ class AdminService {
   }
 
   async deleteBattleTagIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("app", `admin/users/${userId}/battle-tag/${identityId}`, {
+    await apiFetch(`/api/v1/admin/users/${userId}/battle-tag/${identityId}`, {
       method: "DELETE"
     });
   }
 
   async addTwitchIdentity(userId: number, data: TwitchIdentityCreateInput): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/twitch`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/twitch`, {
       method: "POST",
       body: data
     });
@@ -570,7 +570,7 @@ class AdminService {
     identityId: number,
     data: TwitchIdentityUpdateInput
   ): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/twitch/${identityId}`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/twitch/${identityId}`, {
       method: "PATCH",
       body: data
     });
@@ -578,7 +578,7 @@ class AdminService {
   }
 
   async deleteTwitchIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch("app", `admin/users/${userId}/twitch/${identityId}`, {
+    await apiFetch(`/api/v1/admin/users/${userId}/twitch/${identityId}`, {
       method: "DELETE"
     });
   }
@@ -587,7 +587,7 @@ class AdminService {
   async uploadUserAvatar(userId: number, file: File): Promise<User> {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await apiFetch("app", `admin/users/${userId}/avatar`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/avatar`, {
       method: "POST",
       body: formData
     });
@@ -595,7 +595,7 @@ class AdminService {
   }
 
   async deleteUserAvatar(userId: number): Promise<User> {
-    const response = await apiFetch("app", `admin/users/${userId}/avatar`, {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/avatar`, {
       method: "DELETE"
     });
     return response.json();
@@ -613,7 +613,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<Hero>> {
-    const response = await apiFetch("app", "admin/heroes", {
+    const response = await apiFetch("/api/v1/admin/heroes", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -627,7 +627,7 @@ class AdminService {
   }
 
   async createHero(data: HeroCreateInput): Promise<Hero> {
-    const response = await apiFetch("app", "admin/heroes", {
+    const response = await apiFetch("/api/v1/admin/heroes", {
       method: "POST",
       body: data
     });
@@ -635,7 +635,7 @@ class AdminService {
   }
 
   async updateHero(id: number, data: HeroUpdateInput): Promise<Hero> {
-    const response = await apiFetch("app", `admin/heroes/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/heroes/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -643,13 +643,13 @@ class AdminService {
   }
 
   async deleteHero(id: number): Promise<void> {
-    await apiFetch("app", `admin/heroes/${id}`, {
+    await apiFetch(`/api/v1/admin/heroes/${id}`, {
       method: "DELETE"
     });
   }
 
   async syncHeroes(): Promise<BulkOperationResult> {
-    const response = await apiFetch("parser", "heroes/update", {
+    const response = await apiFetch("/api/v1/heroes/update", {
       method: "POST"
     });
     return response.json();
@@ -666,7 +666,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<Gamemode>> {
-    const response = await apiFetch("app", "admin/gamemodes", {
+    const response = await apiFetch("/api/v1/admin/gamemodes", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -679,7 +679,7 @@ class AdminService {
   }
 
   async createGamemode(data: GamemodeCreateInput): Promise<Gamemode> {
-    const response = await apiFetch("app", "admin/gamemodes", {
+    const response = await apiFetch("/api/v1/admin/gamemodes", {
       method: "POST",
       body: data
     });
@@ -687,7 +687,7 @@ class AdminService {
   }
 
   async updateGamemode(id: number, data: GamemodeUpdateInput): Promise<Gamemode> {
-    const response = await apiFetch("app", `admin/gamemodes/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/gamemodes/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -695,13 +695,13 @@ class AdminService {
   }
 
   async deleteGamemode(id: number): Promise<void> {
-    await apiFetch("app", `admin/gamemodes/${id}`, {
+    await apiFetch(`/api/v1/admin/gamemodes/${id}`, {
       method: "DELETE"
     });
   }
 
   async syncGamemodes(): Promise<BulkOperationResult> {
-    const response = await apiFetch("parser", "gamemodes/update", {
+    const response = await apiFetch("/api/v1/gamemodes/update", {
       method: "POST"
     });
     return response.json();
@@ -719,7 +719,7 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<MapRead>> {
-    const response = await apiFetch("app", "admin/maps", {
+    const response = await apiFetch("/api/v1/admin/maps", {
       query: {
         ...(params.page != null && { page: params.page }),
         ...(params.per_page != null && { per_page: params.per_page }),
@@ -733,7 +733,7 @@ class AdminService {
   }
 
   async createMap(data: MapCreateInput): Promise<MapRead> {
-    const response = await apiFetch("app", "admin/maps", {
+    const response = await apiFetch("/api/v1/admin/maps", {
       method: "POST",
       body: data
     });
@@ -741,7 +741,7 @@ class AdminService {
   }
 
   async updateMap(id: number, data: MapUpdateInput): Promise<MapRead> {
-    const response = await apiFetch("app", `admin/maps/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/maps/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -749,13 +749,13 @@ class AdminService {
   }
 
   async deleteMap(id: number): Promise<void> {
-    await apiFetch("app", `admin/maps/${id}`, {
+    await apiFetch(`/api/v1/admin/maps/${id}`, {
       method: "DELETE"
     });
   }
 
   async syncMaps(): Promise<BulkOperationResult> {
-    const response = await apiFetch("parser", "maps/update", {
+    const response = await apiFetch("/api/v1/maps/update", {
       method: "POST"
     });
     return response.json();
@@ -772,19 +772,19 @@ class AdminService {
       order?: string;
     } = {}
   ): Promise<PaginatedResponse<Achievement>> {
-    const response = await apiFetch("parser", "admin/achievements", {
+    const response = await apiFetch("/api/v1/admin/achievements", {
       query: params
     });
     return response.json();
   }
 
   async getAchievementRegistry(): Promise<{ entries: AchievementRegistryEntry[] }> {
-    const response = await apiFetch("parser", "admin/achievements/registry");
+    const response = await apiFetch("/api/v1/admin/achievements/registry");
     return response.json();
   }
 
   async createAchievement(data: AchievementCreateInput): Promise<Achievement> {
-    const response = await apiFetch("parser", "admin/achievements", {
+    const response = await apiFetch("/api/v1/admin/achievements", {
       method: "POST",
       body: data
     });
@@ -792,7 +792,7 @@ class AdminService {
   }
 
   async updateAchievement(id: number, data: AchievementUpdateInput): Promise<Achievement> {
-    const response = await apiFetch("parser", `admin/achievements/${id}`, {
+    const response = await apiFetch(`/api/v1/admin/achievements/${id}`, {
       method: "PATCH",
       body: data
     });
@@ -800,7 +800,7 @@ class AdminService {
   }
 
   async deleteAchievement(id: number): Promise<void> {
-    await apiFetch("parser", `admin/achievements/${id}`, {
+    await apiFetch(`/api/v1/admin/achievements/${id}`, {
       method: "DELETE"
     });
   }
@@ -809,8 +809,10 @@ class AdminService {
     slugs?: string[],
     tournamentId?: number
   ): Promise<BulkOperationResult> {
-    const url = tournamentId ? `achievement/calculate/${tournamentId}` : "achievement/calculate";
-    const response = await apiFetch("parser", url, {
+    const url = tournamentId
+      ? `/api/v1/achievement/calculate/${tournamentId}`
+      : "/api/v1/achievement/calculate";
+    const response = await apiFetch(url, {
       method: "POST",
       body: { slugs, ensure_created: true }
     });
@@ -823,16 +825,14 @@ class AdminService {
     workspaceId: number,
     params: { category?: string; enabled?: boolean } = {}
   ): Promise<AchievementRule[]> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules`, {
       query: params
     });
     return response.json();
   }
 
   async getAchievementRule(workspaceId: number, ruleId: number): Promise<AchievementRule> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/${ruleId}`
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/${ruleId}`
     );
     return response.json();
   }
@@ -841,7 +841,7 @@ class AdminService {
     workspaceId: number,
     data: AchievementRuleCreateInput
   ): Promise<AchievementRule> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules`, {
       method: "POST",
       body: data
     });
@@ -853,9 +853,7 @@ class AdminService {
     ruleId: number,
     data: AchievementRuleUpdateInput
   ): Promise<AchievementRule> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/${ruleId}`,
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/${ruleId}`,
       { method: "PATCH", body: data }
     );
     return response.json();
@@ -884,16 +882,14 @@ class AdminService {
       first_qualified: string | null;
     }[];
   }> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/${ruleId}/users`,
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/${ruleId}/users`,
       { query: { page: params.page ?? 1, per_page: params.per_page ?? 30, ...params } }
     );
     return response.json();
   }
 
   async deleteAchievementRule(workspaceId: number, ruleId: number): Promise<void> {
-    await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/${ruleId}`, {
+    await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/${ruleId}`, {
       method: "DELETE"
     });
   }
@@ -902,9 +898,7 @@ class AdminService {
     workspaceId: number,
     conditionTree: Record<string, unknown>
   ): Promise<ConditionTreeValidateResponse> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/validate`,
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/validate`,
       { method: "POST", body: { condition_tree: conditionTree } }
     );
     return response.json();
@@ -915,9 +909,7 @@ class AdminService {
     ruleId: number,
     tournamentId?: number
   ): Promise<{ rule_slug: string; qualifying_count: number; sample: number[][] }> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/${ruleId}/test`,
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/${ruleId}/test`,
       { query: tournamentId ? { tournament_id: tournamentId } : {} }
     );
     return response.json();
@@ -927,28 +919,26 @@ class AdminService {
     workspaceId: number,
     params: { tournament_id?: number; rule_ids?: number[] } = {}
   ): Promise<EvaluationRunRead> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/rules/evaluate`,
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/evaluate`,
       { method: "POST", body: params }
     );
     return response.json();
   }
 
   async getEvaluationRuns(workspaceId: number): Promise<EvaluationRunRead[]> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/runs`);
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/runs`);
     return response.json();
   }
 
   async seedAchievementRules(workspaceId: number): Promise<SeedResultRead> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/seed`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/seed`, {
       method: "POST"
     });
     return response.json();
   }
 
   async hardResetAchievementRules(workspaceId: number): Promise<HardResetResultRead> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/reset`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/reset`, {
       method: "POST"
     });
     return response.json();
@@ -957,7 +947,7 @@ class AdminService {
   async exportAchievementRules(
     workspaceId: number
   ): Promise<{ blob: Blob; filename: string; data: AchievementRuleExportEnvelope }> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/export`);
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/export`);
     const blob = await response.blob();
     const filename =
       response.headers.get("Content-Disposition")?.match(/filename=\"?([^"]+)\"?/)?.[1] ??
@@ -974,7 +964,7 @@ class AdminService {
     workspaceId: number,
     data: AchievementRuleExportEnvelope
   ): Promise<AchievementRuleImportResult> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/rules/import`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/import`, {
       method: "POST",
       body: data
     });
@@ -984,9 +974,7 @@ class AdminService {
   async getAchievementLibraryWorkspaces(
     workspaceId: number
   ): Promise<AchievementLibraryWorkspace[]> {
-    const response = await apiFetch(
-      "parser",
-      `admin/ws/${workspaceId}/achievements/library/workspaces`
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/library/workspaces`
     );
     return response.json();
   }
@@ -995,7 +983,7 @@ class AdminService {
     workspaceId: number,
     sourceWorkspaceId: number
   ): Promise<AchievementLibraryRule[]> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/library`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/library`, {
       query: { source_workspace_id: sourceWorkspaceId }
     });
     return response.json();
@@ -1005,7 +993,7 @@ class AdminService {
     workspaceId: number,
     data: { source_workspace_id: number; slugs: string[] }
   ): Promise<AchievementRuleImportResult> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/library/import`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/library/import`, {
       method: "POST",
       body: data
     });
@@ -1013,12 +1001,12 @@ class AdminService {
   }
 
   async getConditionTypes(): Promise<ConditionTypeInfo[]> {
-    const response = await apiFetch("parser", "admin/ws/0/achievements/rules/condition-types");
+    const response = await apiFetch("/api/v1/admin/ws/0/achievements/rules/condition-types");
     return response.json();
   }
 
   async getAchievementOverrides(workspaceId: number): Promise<AchievementOverrideRead[]> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/overrides`);
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/overrides`);
     return response.json();
   }
 
@@ -1026,7 +1014,7 @@ class AdminService {
     workspaceId: number,
     data: AchievementOverrideCreateInput
   ): Promise<AchievementOverrideRead> {
-    const response = await apiFetch("parser", `admin/ws/${workspaceId}/achievements/overrides`, {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/overrides`, {
       method: "POST",
       body: data
     });
@@ -1034,7 +1022,7 @@ class AdminService {
   }
 
   async deleteAchievementOverride(workspaceId: number, overrideId: number): Promise<void> {
-    await apiFetch("parser", `admin/ws/${workspaceId}/achievements/overrides/${overrideId}`, {
+    await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/overrides/${overrideId}`, {
       method: "DELETE"
     });
   }
@@ -1049,7 +1037,7 @@ class AdminService {
     const formData = new FormData();
     formData.append("file", file);
     const query = workspaceId ? { workspace_id: workspaceId } : {};
-    const response = await apiFetch("app", `assets/achievements/${slug}`, {
+    const response = await apiFetch(`/api/v1/assets/achievements/${slug}`, {
       method: "POST",
       body: formData,
       query
@@ -1065,13 +1053,13 @@ class AdminService {
       formData.append("file", file);
       formData.append("tournament_id", tournamentId.toString());
 
-      const response = await apiFetch("parser", "logs/upload", {
+      const response = await apiFetch("/api/v1/logs/upload", {
         method: "POST",
         body: formData
       });
       return response.json();
     } else {
-      const response = await apiFetch("parser", "logs/process", {
+      const response = await apiFetch("/api/v1/logs/process", {
         method: "POST",
         body: { tournament_id: tournamentId }
       });
@@ -1082,7 +1070,7 @@ class AdminService {
   // ─── Discord Channel Sync ─────────────────────────────────────────────────
 
   async getDiscordChannel(tournamentId: number): Promise<DiscordChannelRead | null> {
-    const response = await apiFetch("parser", `admin/tournaments/${tournamentId}/discord-channel`);
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/discord-channel`);
     if (response.status === 404) return null;
     const text = await response.text();
     if (!text || text === "null") return null;
@@ -1093,7 +1081,7 @@ class AdminService {
     tournamentId: number,
     data: DiscordChannelInput
   ): Promise<DiscordChannelRead> {
-    const response = await apiFetch("parser", `admin/tournaments/${tournamentId}/discord-channel`, {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/discord-channel`, {
       method: "POST",
       body: data
     });
@@ -1101,7 +1089,7 @@ class AdminService {
   }
 
   async deleteDiscordChannel(tournamentId: number): Promise<void> {
-    await apiFetch("parser", `admin/tournaments/${tournamentId}/discord-channel`, {
+    await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/discord-channel`, {
       method: "DELETE"
     });
   }
@@ -1112,7 +1100,7 @@ class AdminService {
     tournamentId?: number,
     params?: { encounterId?: number; workspaceId?: number | null; limit?: number; offset?: number }
   ): Promise<LogHistoryResponse> {
-    const response = await apiFetch("parser", "admin/logs/history", {
+    const response = await apiFetch("/api/v1/admin/logs/history", {
       query: {
         ...(tournamentId != null && { tournament_id: tournamentId }),
         ...(params?.encounterId != null && { encounter_id: params.encounterId }),
@@ -1138,7 +1126,7 @@ class AdminService {
       formData.append("files[]", file);
     }
 
-    const response = await apiFetch("parser", "admin/logs/upload", {
+    const response = await apiFetch("/api/v1/admin/logs/upload", {
       method: "POST",
       body: formData
     });
@@ -1146,17 +1134,17 @@ class AdminService {
   }
 
   async getQueueStatus(): Promise<QueueDepth[]> {
-    const response = await apiFetch("parser", "admin/logs/queue-status");
+    const response = await apiFetch("/api/v1/admin/logs/queue-status");
     return response.json();
   }
 
   async retryLogRecord(recordId: number): Promise<LogProcessingRecord> {
-    const response = await apiFetch("parser", `admin/logs/${recordId}/retry`, { method: "POST" });
+    const response = await apiFetch(`/api/v1/admin/logs/${recordId}/retry`, { method: "POST" });
     return response.json();
   }
 
   async processAllTournamentLogs(tournamentId: number): Promise<{ message: string }> {
-    const response = await apiFetch("parser", `logs/${tournamentId}`, { method: "POST" });
+    const response = await apiFetch(`/api/v1/logs/${tournamentId}`, { method: "POST" });
     return response.json();
   }
 
@@ -1166,7 +1154,7 @@ class AdminService {
     id: number,
     data: TournamentStatusTransitionInput
   ): Promise<Tournament> {
-    const response = await apiFetch("tournament", `admin/tournaments/${id}/status`, {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${id}/status`, {
       method: "PATCH",
       body: data
     });
@@ -1176,17 +1164,17 @@ class AdminService {
   // ─── Stage Management ───────────────────────────────────────────────────────
 
   async getStages(tournamentId: number): Promise<Stage[]> {
-    const response = await apiFetch("tournament", `admin/stages/tournament/${tournamentId}`);
+    const response = await apiFetch(`/api/v1/admin/stages/tournament/${tournamentId}`);
     return response.json();
   }
 
   async getStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}`);
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}`);
     return response.json();
   }
 
   async createStage(tournamentId: number, data: StageCreateInput): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/tournament/${tournamentId}`, {
+    const response = await apiFetch(`/api/v1/admin/stages/tournament/${tournamentId}`, {
       method: "POST",
       body: data
     });
@@ -1194,7 +1182,7 @@ class AdminService {
   }
 
   async updateStage(stageId: number, data: StageUpdateInput): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}`, {
       method: "PATCH",
       body: data
     });
@@ -1202,11 +1190,11 @@ class AdminService {
   }
 
   async deleteStage(stageId: number): Promise<void> {
-    await apiFetch("tournament", `admin/stages/${stageId}`, { method: "DELETE" });
+    await apiFetch(`/api/v1/admin/stages/${stageId}`, { method: "DELETE" });
   }
 
   async mergeGroupStages(stageId: number, data: StageMergeGroupStagesInput): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/merge-group-stages`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/merge-group-stages`, {
       method: "POST",
       body: data
     });
@@ -1214,7 +1202,7 @@ class AdminService {
   }
 
   async createStageItem(stageId: number, data: StageItemCreateInput): Promise<StageItem> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/items`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/items`, {
       method: "POST",
       body: data
     });
@@ -1225,7 +1213,7 @@ class AdminService {
     stageItemId: number,
     data: { name?: string; type?: StageItemType; order?: number }
   ): Promise<StageItem> {
-    const response = await apiFetch("tournament", `admin/stages/items/${stageItemId}`, {
+    const response = await apiFetch(`/api/v1/admin/stages/items/${stageItemId}`, {
       method: "PATCH",
       body: data
     });
@@ -1236,7 +1224,7 @@ class AdminService {
     stageItemId: number,
     data: StageItemInputCreateInput
   ): Promise<StageItemInput> {
-    const response = await apiFetch("tournament", `admin/stages/items/${stageItemId}/inputs`, {
+    const response = await apiFetch(`/api/v1/admin/stages/items/${stageItemId}/inputs`, {
       method: "POST",
       body: data
     });
@@ -1247,7 +1235,7 @@ class AdminService {
     inputId: number,
     data: StageItemInputUpdateInput
   ): Promise<StageItemInput> {
-    const response = await apiFetch("tournament", `admin/stages/items/inputs/${inputId}`, {
+    const response = await apiFetch(`/api/v1/admin/stages/items/inputs/${inputId}`, {
       method: "PATCH",
       body: data
     });
@@ -1255,14 +1243,14 @@ class AdminService {
   }
 
   async activateStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/activate`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate`, {
       method: "POST"
     });
     return response.json();
   }
 
   async generateBracket(stageId: number): Promise<{ generated: number }> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/generate`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/generate`, {
       method: "POST"
     });
     const job = (await response.json()) as TournamentComputationJob;
@@ -1279,7 +1267,7 @@ class AdminService {
       mode?: "cross" | "snake";
     }
   ): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/wire-from-groups`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/wire-from-groups`, {
       method: "POST",
       body: data
     });
@@ -1291,9 +1279,7 @@ class AdminService {
     opts?: { force?: boolean }
   ): Promise<{ generated: number }> {
     const qs = opts?.force ? "?force=true" : "";
-    const response = await apiFetch(
-      "tournament",
-      `admin/stages/${stageId}/activate-and-generate${qs}`,
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate-and-generate${qs}`,
       { method: "POST" }
     );
     const job = (await response.json()) as TournamentComputationJob;
@@ -1308,7 +1294,7 @@ class AdminService {
       mode?: "snake_sr" | "by_total_sr" | "random";
     }
   ): Promise<Stage> {
-    const response = await apiFetch("tournament", `admin/stages/${stageId}/seed-teams`, {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/seed-teams`, {
       method: "POST",
       body: data
     });
@@ -1326,7 +1312,7 @@ class AdminService {
     newly_completed: number;
     tournaments_recalculated: number[];
   }> {
-    const response = await apiFetch("tournament", "admin/encounters/bulk", {
+    const response = await apiFetch("/api/v1/admin/encounters/bulk", {
       method: "PATCH",
       body: data
     });
@@ -1351,7 +1337,7 @@ class AdminService {
       }[];
     }[]
   > {
-    const response = await apiFetch("tournament", `admin/stages/tournament/${tournamentId}/progress`, {
+    const response = await apiFetch(`/api/v1/admin/stages/tournament/${tournamentId}/progress`, {
       method: "GET"
     });
     return response.json();
@@ -1360,7 +1346,7 @@ class AdminService {
   // ─── Admin Map Pool ─────────────────────────────────────────────────────────
 
   async assignMapPool(encounterId: number, mapIds: number[]): Promise<{ assigned: number }> {
-    const response = await apiFetch("tournament", `admin/encounters/${encounterId}/map-pool`, {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/map-pool`, {
       method: "POST",
       body: { map_ids: mapIds }
     });
@@ -1370,7 +1356,7 @@ class AdminService {
   // ─── Challonge Sync ─────────────────────────────────────────────────────────
 
   async challongeImport(tournamentId: number, dryRun = false): Promise<Record<string, unknown>> {
-    const response = await apiFetch("tournament", `admin/challonge/sync/import/${tournamentId}`, {
+    const response = await apiFetch(`/api/v1/admin/challonge/sync/import/${tournamentId}`, {
       method: "POST",
       query: dryRun ? { dry_run: true } : undefined
     });
@@ -1378,21 +1364,21 @@ class AdminService {
   }
 
   async challongeExport(tournamentId: number): Promise<Record<string, unknown>> {
-    const response = await apiFetch("tournament", `admin/challonge/sync/export/${tournamentId}`, {
+    const response = await apiFetch(`/api/v1/admin/challonge/sync/export/${tournamentId}`, {
       method: "POST"
     });
     return response.json();
   }
 
   async challongePushResult(encounterId: number): Promise<{ status: string }> {
-    const response = await apiFetch("tournament", `admin/challonge/sync/push-result/${encounterId}`, {
+    const response = await apiFetch(`/api/v1/admin/challonge/sync/push-result/${encounterId}`, {
       method: "POST"
     });
     return response.json();
   }
 
   async challongeSyncLog(tournamentId: number, limit = 50): Promise<ChallongeSyncLogEntry[]> {
-    const response = await apiFetch("tournament", `admin/challonge/sync/log/${tournamentId}`, {
+    const response = await apiFetch(`/api/v1/admin/challonge/sync/log/${tournamentId}`, {
       query: { limit }
     });
     return response.json();
@@ -1401,17 +1387,17 @@ class AdminService {
   // ─── Global Settings (superuser) ──────────────────────────────────────────
 
   async getSettings(): Promise<SettingRead[]> {
-    const response = await apiFetch("parser", "admin/settings", { skipWorkspace: true });
+    const response = await apiFetch("/api/v1/admin/settings", { skipWorkspace: true });
     return response.json();
   }
 
   async getSetting(key: string): Promise<SettingRead> {
-    const response = await apiFetch("parser", `admin/settings/${key}`, { skipWorkspace: true });
+    const response = await apiFetch(`/api/v1/admin/settings/${key}`, { skipWorkspace: true });
     return response.json();
   }
 
   async updateSetting(key: string, data: SettingUpsertInput): Promise<SettingRead> {
-    const response = await apiFetch("parser", `admin/settings/${key}`, {
+    const response = await apiFetch(`/api/v1/admin/settings/${key}`, {
       method: "PUT",
       body: data,
       skipWorkspace: true
@@ -1422,14 +1408,14 @@ class AdminService {
   // ─── OverFast rank collection (superuser/admin) ───────────────────────────
 
   async getRankCollectionStatus(userId: number): Promise<RankCollectionStatusRow[]> {
-    const response = await apiFetch("parser", `admin/rank/users/${userId}/collection`, {
+    const response = await apiFetch(`/api/v1/admin/rank/users/${userId}/collection`, {
       skipWorkspace: true
     });
     return response.json();
   }
 
   async triggerRankCollection(data: CollectTriggerInput): Promise<CollectTriggerResult> {
-    const response = await apiFetch("parser", "admin/rank/collect", {
+    const response = await apiFetch("/api/v1/admin/rank/collect", {
       method: "POST",
       body: data,
       skipWorkspace: true
@@ -1438,7 +1424,7 @@ class AdminService {
   }
 
   async getRankFetchLog(params: RankFetchLogQuery = {}): Promise<RankFetchLogRow[]> {
-    const response = await apiFetch("parser", "admin/rank/fetch-log", {
+    const response = await apiFetch("/api/v1/admin/rank/fetch-log", {
       query: {
         status: params.status,
         source: params.source,

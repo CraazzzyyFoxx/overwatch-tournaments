@@ -21,6 +21,6 @@ func TestRoutesRegisterWithoutConflict(t *testing.T) {
 		}
 	}
 	// Multipart handlers registered directly in main.go.
-	mux.HandleFunc("POST /api/balancer/balancer/tournaments/{tournament_id}/teams/import", dummy)
+	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", dummy)
 	mux.HandleFunc("POST /api/balancer/jobs", dummy)
 }

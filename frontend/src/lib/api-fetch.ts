@@ -3,6 +3,7 @@ import { getTokenFromCookies } from "./auth-tokens";
 import { retryWithRefreshOnUnauthorized } from "./auth-request";
 import { parseApiError } from "./api-error";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { internalApiOrigin } from "./api-routes";
 
 // Default timeout (ms) for server-side (SSR) fetches. A hung or looping upstream
 // must not block a render indefinitely or pile up requests that exhaust the Node
@@ -10,8 +11,6 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 const DEFAULT_SERVER_TIMEOUT_MS = 15_000;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-
-type ServiceName = "app" | "parser" | "balancer" | "tournament" | "auth" | "analytics";
 
 interface ApiFetchOptions {
   query?: Record<string, unknown>;
@@ -33,18 +32,18 @@ interface ApiFetchOptions {
   throwOnError?: boolean;
 }
 
-// ─── Service Configuration ──────────────────────────────────────────────────
-
-interface ServiceConfig {
-  clientBase: string;
-  serverBase: string | undefined;
-  injectWorkspace: boolean;
-  defaultCache: RequestCache;
-}
+// ─── Per-domain behaviour (keyed by path prefix) ──────────────────────────────
+//
+// The gateway is a single origin, so the path's top-level namespace IS the
+// domain. Behaviour (workspace injection + default cache) is attached per
+// domain, not per service. Callers pass the full gateway path, e.g.
+//   apiFetch("/api/v1/tournaments/5")
+//   apiFetch("/api/balancer/config")
+//   apiFetch("/api/auth/me")
 
 const cachePolicy = process.env.NEXT_PUBLIC_CACHE_POLICY;
 
-function resolveAppCache(): RequestCache {
+function resolveV1Cache(): RequestCache {
   switch (cachePolicy) {
     case "no-cache":
       return "no-cache";
@@ -55,57 +54,23 @@ function resolveAppCache(): RequestCache {
   }
 }
 
-const SERVICE_CONFIG: Record<ServiceName, ServiceConfig> = {
-  app: {
-    // app-service is carved out under /api/v1/core (tournament-service owns the
-    // bare /api/v1 namespace). serverBase env (NEXT_API_URL) must include /core.
-    clientBase: "/api/v1/core",
-    serverBase: (() => {
-      const base = process.env.NEXT_API_URL ?? process.env.NEXT_PUBLIC_API_URL;
-      if (base) {
-        const cleaned = base.replace(/\/$/, "");
-        return cleaned.endsWith("/core") ? cleaned : `${cleaned}/core`;
-      }
-      return base;
-    })(),
-    injectWorkspace: true,
-    defaultCache: resolveAppCache(),
-  },
-  parser: {
-    clientBase: "/api/parser",
-    serverBase: process.env.NEXT_PARSER_URL ?? process.env.NEXT_PUBLIC_PARSER_API_URL,
-    injectWorkspace: true,
-    defaultCache: "no-store",
-  },
-  tournament: {
-    clientBase: "/api/v1",
-    serverBase: (
-      process.env.NEXT_TOURNAMENT_URL ??
-      process.env.NEXT_PUBLIC_TOURNAMENT_API_URL ??
-      ""
-    ).replace(/\/$/, "") || undefined,
-    injectWorkspace: true,
-    defaultCache: "no-store",
-  },
-  balancer: {
-    clientBase: (process.env.NEXT_PUBLIC_BALANCER_API_URL || "http://localhost/api/balancer").replace(/\/$/, ""),
-    serverBase: (process.env.NEXT_PUBLIC_BALANCER_API_URL || "http://localhost/api/balancer").replace(/\/$/, ""),
-    injectWorkspace: true,
-    defaultCache: "no-store",
-  },
-  auth: {
-    clientBase: (process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:8001").replace(/\/$/, ""),
-    serverBase: (process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:8001").replace(/\/$/, ""),
-    injectWorkspace: false,
-    defaultCache: "no-store",
-  },
-  analytics: {
-    clientBase: "/api/analytics",
-    serverBase: process.env.NEXT_ANALYTICS_URL ?? process.env.NEXT_PUBLIC_ANALYTICS_API_URL,
-    injectWorkspace: true,
-    defaultCache: "no-store",
-  },
-};
+interface DomainBehavior {
+  injectWorkspace: boolean;
+  defaultCache: RequestCache;
+}
+
+function domainBehavior(path: string): DomainBehavior {
+  // Identity domain: no workspace scoping.
+  if (path.startsWith("/api/auth")) {
+    return { injectWorkspace: false, defaultCache: "no-store" };
+  }
+  // Main API (app + tournament + parser): workspace-scoped, cache per policy.
+  if (path.startsWith("/api/v1")) {
+    return { injectWorkspace: true, defaultCache: resolveV1Cache() };
+  }
+  // /api/balancer, /api/analytics, and any other workspace-scoped domain.
+  return { injectWorkspace: true, defaultCache: "no-store" };
+}
 
 // ─── Workspace ID (server-side, cached per request) ─────────────────────────
 
@@ -161,43 +126,38 @@ function appendParams(params: URLSearchParams, key: string, value: unknown): voi
   }
 }
 
-function isAbsoluteUrl(value: string): boolean {
-  return /^[a-z][a-z\d+\-.]*:\/\//i.test(value);
-}
-
-async function resolveBaseUrl(config: ServiceConfig): Promise<string> {
+// resolveBaseUrl returns the origin to prepend to the (relative) gateway path.
+// Client: "" (same-origin). Server: the internal gateway base, or the incoming
+// request origin as a fallback when NEXT_INTERNAL_API_URL is unset.
+async function resolveBaseUrl(): Promise<string> {
   if (typeof window !== "undefined") {
-    return config.clientBase.replace(/\/$/, "");
+    return "";
   }
 
-  const baseUrl = (config.serverBase ?? config.clientBase).replace(/\/$/, "");
-  if (isAbsoluteUrl(baseUrl)) {
-    return baseUrl;
+  const internal = internalApiOrigin();
+  if (internal) {
+    return internal;
   }
 
   const origin = await getServerRequestOrigin();
   if (!origin) {
-    throw new Error(`Cannot resolve relative API URL "${baseUrl}" on the server`);
+    throw new Error(
+      "Cannot resolve the API base URL on the server (set NEXT_INTERNAL_API_URL)",
+    );
   }
-
-  const sep = baseUrl.startsWith("/") ? "" : "/";
-  return `${origin}${sep}${baseUrl}`;
+  return origin;
 }
 
 // ─── Main Function ──────────────────────────────────────────────────────────
 
 export async function apiFetch(
-  service: ServiceName,
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<Response> {
-  if (typeof window !== "undefined") {
-    console.log("apiFetch client-side call:", path, "options:", options);
-  }
-  const config = SERVICE_CONFIG[service];
+  const behavior = domainBehavior(path);
   const throwOnError = options.throwOnError ?? true;
 
-  // Extract inline query params from path (e.g. "admin/users?page=1")
+  // Extract inline query params from path (e.g. "/api/v1/users?page=1")
   let cleanPath = path;
   const params = new URLSearchParams();
   const qIndex = path.indexOf("?");
@@ -206,10 +166,13 @@ export async function apiFetch(
     const inline = new URLSearchParams(path.slice(qIndex + 1));
     inline.forEach((v, k) => params.append(k, v));
   }
+  if (!cleanPath.startsWith("/")) {
+    cleanPath = `/${cleanPath}`;
+  }
 
   // Auto-inject workspace_id
   if (
-    config.injectWorkspace &&
+    behavior.injectWorkspace &&
     !options.skipWorkspace &&
     !options.query?.workspace_id &&
     !params.has("workspace_id")
@@ -232,13 +195,9 @@ export async function apiFetch(
   }
 
   // Build URL
-  const baseUrl = await resolveBaseUrl(config);
-
-  const sep = cleanPath.startsWith("/") ? "" : "/";
+  const baseUrl = await resolveBaseUrl();
   const qs = params.toString();
-  const url = qs
-    ? `${baseUrl}${sep}${cleanPath}?${qs}`
-    : `${baseUrl}${sep}${cleanPath}`;
+  const url = qs ? `${baseUrl}${cleanPath}?${qs}` : `${baseUrl}${cleanPath}`;
 
   // Auth token
   const initialToken = options.token ?? (await getTokenFromCookies("aqt_access_token"));
@@ -285,7 +244,7 @@ export async function apiFetch(
       init.next = options.next;
       if (options.cache) init.cache = options.cache;
     } else {
-      init.cache = options.cache ?? config.defaultCache;
+      init.cache = options.cache ?? behavior.defaultCache;
     }
     return fetch(url, init);
   };
