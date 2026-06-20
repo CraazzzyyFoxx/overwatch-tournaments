@@ -1,0 +1,39 @@
+groups:
+  - name: gateway-recording
+    interval: 30s
+    rules:
+      - record: gateway:http_requests:rate5m
+        expr: sum by (route) (rate(gateway_http_requests_total[5m]))
+
+      - record: gateway:http_requests_5xx:rate5m
+        expr: sum by (route) (rate(gateway_http_requests_total{code=~"5.."}[5m]))
+
+      - record: gateway:http_error_ratio_5m
+        expr: |
+          sum(rate(gateway_http_requests_total{code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(gateway_http_requests_total[5m])), 0.001)
+
+      - record: gateway:http_latency_p95_5m
+        expr: histogram_quantile(0.95, sum by (route, le) (rate(gateway_http_request_duration_seconds_bucket[5m])))
+
+  - name: gateway-alerts
+    interval: 30s
+    rules:
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gateway metrics endpoint is down"
+          description: "Prometheus cannot scrape gateway:9110/metrics for 2 minutes — the gateway is down or unreachable."
+
+      - alert: Gateway5xxRateHigh
+        expr: gateway:http_error_ratio_5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway 5xx ratio is elevated"
+          description: "The gateway returned a 5xx ratio above 5% for 5 minutes."

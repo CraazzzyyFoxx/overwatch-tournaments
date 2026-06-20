@@ -28,24 +28,28 @@ type Replayer interface {
 // Handler serves the WebSocket endpoint: it authenticates the connection,
 // registers it with the hub, and runs the per-connection read loop.
 type Handler struct {
-	hub         *Hub
-	auth        *auth.Authenticator
-	authz       Authorizer
-	replay      Replayer
-	idleTimeout time.Duration
-	log         *slog.Logger
-	accept      *websocket.AcceptOptions
+	hub          *Hub
+	auth         *auth.Authenticator
+	authz        Authorizer
+	replay       Replayer
+	idleTimeout  time.Duration
+	log          *slog.Logger
+	accept       *websocket.AcceptOptions
+	recordActive func(userID int64)
 }
 
-// NewHandler wires the WebSocket handler.
-func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger) *Handler {
+// NewHandler wires the WebSocket handler. recordActive may be nil; when set it
+// is called with the user ID of each authenticated connection so WS users count
+// toward the active-user metrics.
+func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, recordActive func(userID int64)) *Handler {
 	return &Handler{
-		hub:         hub,
-		auth:        a,
-		authz:       authz,
-		replay:      rep,
-		idleTimeout: idleTimeout,
-		log:         log,
+		hub:          hub,
+		auth:         a,
+		authz:        authz,
+		replay:       rep,
+		idleTimeout:  idleTimeout,
+		log:          log,
+		recordActive: recordActive,
 		// Origin is not enforced (matching the previous realtime-service, which
 		// runs behind nginx -> the gateway). Tighten with OriginPatterns if the
 		// gateway is ever exposed directly to untrusted browsers.
@@ -55,6 +59,9 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	user := h.auth.UserFromRequest(r)
+	if user != nil && h.recordActive != nil {
+		h.recordActive(user.ID)
+	}
 
 	c, err := websocket.Accept(w, r, h.accept)
 	if err != nil {

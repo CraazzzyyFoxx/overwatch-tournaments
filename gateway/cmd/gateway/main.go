@@ -32,6 +32,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/metrics"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/observability"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
@@ -93,17 +94,24 @@ func run() error {
 	resolver := principal.New(rpcClient)
 	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
 
+	// Usage metrics (Prometheus): per-route request stats + active users. The
+	// recorder buffers active-user IDs and flushes them to Redis (HyperLogLog).
+	mtr := metrics.New()
+	activeUsers := metrics.NewRecorder(rdb, logger)
+	authn := auth.New(cfg.JWTSecret)
+
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
 	hub := ws.NewHub()
 	wsStore := workspace.New(pool)
 	authz := acl.New(wsStore, wsStore)
 	wsHandler := ws.NewHandler(
 		hub,
-		auth.New(cfg.JWTSecret),
+		authn,
 		authz,
 		replay.New(pool, cfg.WSReplayLimit),
 		cfg.WSIdleTimeout,
 		logger,
+		activeUsers.Record,
 	)
 
 	rev, err := proxy.New(cfg.Upstreams)
@@ -244,6 +252,16 @@ func run() error {
 		}
 	}()
 
+	// Usage metrics: drain active-user writes to Redis, refresh gauges from the
+	// hub + HyperLogLog, and serve /metrics on a dedicated internal port.
+	go activeUsers.Run(rootCtx)
+	go mtr.Sampler(rootCtx, activeUsers, hub, time.Minute)
+	go func() {
+		if err := mtr.Serve(rootCtx, ":"+cfg.MetricsPort, logger); err != nil {
+			logger.Error("metrics server stopped", "err", err)
+		}
+	}()
+
 	// WebSocket handler with Sentry panic recovery. The read loop runs
 	// synchronously in ServeHTTP, so a panic unwinds through this deferred
 	// recover. Each connection gets its own cloned hub (the global hub's scope is
@@ -260,8 +278,10 @@ func run() error {
 	// Sentry middleware for the REST surface: per-request hub, an HTTP
 	// transaction (tracing), and panic capture. Repanic lets net/http's own
 	// per-request recovery run after Sentry has captured the panic, so the
-	// process stays up.
-	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(mux)
+	// process stays up. The metrics middleware wraps mux directly (inside Sentry)
+	// so that, after ServeHTTP, r.Pattern holds the matched route template.
+	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).
+		Handle(mtr.Middleware(mux, authn, activeUsers))
 
 	// Outer router: WS + health are served directly (bypassing tracing); every
 	// other path falls through "/" to the traced REST surface.

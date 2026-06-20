@@ -47,7 +47,7 @@ func (f fakeReplayer) EventsSince(context.Context, string, *int64, int64) ([]pro
 func newServer(t *testing.T, authz Authorizer, rep Replayer) string {
 	t.Helper()
 	h := NewHandler(NewHub(), auth.New(wsSecret), authz, rep, 30*time.Second,
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)

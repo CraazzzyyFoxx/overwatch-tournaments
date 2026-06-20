@@ -128,6 +128,20 @@ func (h *Hub) Count() int {
 	return len(h.conns)
 }
 
+// DistinctUsers returns the number of distinct authenticated users currently
+// connected. Anonymous connections are ignored.
+func (h *Hub) DistinctUsers() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	seen := make(map[int64]struct{}, len(h.conns))
+	for c := range h.conns {
+		if c.user != nil {
+			seen[c.user.ID] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
 // CloseAll closes every live connection. Used on shutdown so clients receive a
 // clean close and reconnect, rather than being left dangling (http.Server's
 // Shutdown does not wait for hijacked WebSocket connections).

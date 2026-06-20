@@ -12,6 +12,7 @@ alerting:
 
 rule_files:
   - /etc/prometheus/rules/services.yml
+  - /etc/prometheus/rules/gateway.yml
   - /etc/prometheus/rules/rabbitmq.yml
   - /etc/prometheus/rules/redis.yml
 
@@ -120,6 +121,17 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: discord-service
+
+  # --------------------------------------------------------------------------
+  # Gateway (Go edge) — usage metrics on a dedicated internal port
+  # --------------------------------------------------------------------------
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:9110"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: gateway
 
   # --------------------------------------------------------------------------
   # Observability stack internals

@@ -16,6 +16,7 @@ import (
 // Config holds all runtime settings for the gateway.
 type Config struct {
 	Port          string
+	MetricsPort   string
 	JWTSecret     string
 	RedisURL      string
 	RabbitMQURL   string
@@ -60,6 +61,7 @@ func Load() (*Config, error) {
 
 	return &Config{
 		Port:          getenv("GATEWAY_PORT", "8080"),
+		MetricsPort:   getenv("GATEWAY_METRICS_PORT", "9110"),
 		JWTSecret:     secret,
 		RedisURL:      getenv("REDIS_URL", "redis://redis:6379"),
 		RabbitMQURL:   getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672"),
