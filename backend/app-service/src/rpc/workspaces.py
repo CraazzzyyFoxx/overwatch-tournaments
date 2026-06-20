@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from redis.asyncio import Redis
 from shared.rbac import (
     assign_workspace_system_role,

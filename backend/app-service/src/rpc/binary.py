@@ -14,7 +14,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.clients.s3.upload import upload_asset, upload_avatar
 from shared.rpc.identity import ensure_workspace_permission
 

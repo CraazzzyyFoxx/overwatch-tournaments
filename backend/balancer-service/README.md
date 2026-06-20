@@ -1,10 +1,12 @@
 # Balancer Service
 
 Team balancing service that uses a genetic algorithm to produce optimal, fair team distributions for
-tournaments. Balancing runs as an asynchronous job and exposes live progress over Server-Sent Events.
+tournaments. Balancing runs as an asynchronous job; live progress is broadcast over the realtime
+WebSocket topic `tournament:{id}:balancer` (served by the Go gateway).
 
-- **Port:** 8003
-- **Entry points:** `main.py` (FastAPI HTTP server), `serve.py` (FastStream worker for async jobs)
+- **Transport:** headless FastStream worker behind the Go gateway (no HTTP server). External clients
+  call `/api/balancer/*`; the gateway translates each route to its `rpc.balancer.*` queue.
+- **Entry point:** `serve.py` (typed `rpc.balancer.*` RPC + async job queue + draft clock)
 
 ## Features
 
@@ -32,7 +34,7 @@ Create an async balancing job and return a `job_id` immediately.
 - `config` (optional): JSON string with balancing overrides
 
 ```bash
-curl -X POST "http://localhost:8003/api/balancer/jobs" \
+curl -X POST "http://localhost/api/balancer/jobs" \
   -H "Authorization: Bearer <access_token>" \
   -F "file=@players.json" \
   -F 'config={"MASK":{"Tank":1,"Damage":2,"Support":2},"POPULATION_SIZE":200,"GENERATIONS":750,"USE_CAPTAINS":true}'
@@ -111,20 +113,17 @@ The authoritative list of runtime defaults, allowed limits, and presets is retur
 
 ## Running
 
+The HTTP service is decommissioned: balancer runs as a single headless FastStream
+worker behind the Go gateway. It serves the typed `rpc.balancer.*` API (config /
+admin / draft / jobs), consumes the balancer job queue, and runs the draft clock.
+
 ```bash
-# Development (HTTP server)
-uvicorn main:app --reload --port 8003
-
-# Worker (async jobs)
+# Worker (typed RPC + async jobs + draft clock)
 faststream run serve:app
-
-# Production
-uvicorn main:app --host 0.0.0.0 --port 8003
 ```
 
-## Health Check
-
-`GET /health` — returns the service health status.
+External traffic reaches the worker as `/api/balancer/*` through the gateway, which
+translates each route to its `rpc.balancer.*` queue.
 
 ## Configuration & environment
 

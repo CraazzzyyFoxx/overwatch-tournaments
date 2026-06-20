@@ -9,17 +9,16 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-import httpx
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from pydantic import ValidationError
 
 from shared.observability import (
+    make_rabbit_broker,
     setup_logging,
     setup_sentry,
     setup_tracing,
@@ -30,14 +29,18 @@ from src import schemas
 from src.core import db
 from src.core.config import settings
 from src.core.redis import close_redis, init_redis
+from src.core.s3 import s3_client
 from src.schemas.rpc import rpc_error, rpc_ok, status_to_code
-from src.services import api_key_service, auth_flows, oauth_flows, service_flows
+from src.services import (
+    api_key_service,
+    auth_flows,
+    avatar_flows,
+    oauth_flows,
+    player_flows,
+    rbac_flows,
+    service_flows,
+)
 from src.services.token_validation import validate_token
-from src.tunnel import s3_client, tunnel_app
-
-# Hop-by-hop request headers stripped before dispatching into the in-process
-# ASGI app: httpx recomputes Content-Length/Host from the forwarded body.
-_TUNNEL_DROP_REQUEST_HEADERS = {"host", "content-length", "connection", "transfer-encoding"}
 
 
 def _validation_detail(exc: ValidationError) -> str:
@@ -80,12 +83,8 @@ logger = setup_logging(
     json_output=settings.json_logging,
 )
 
-broker = RabbitBroker(settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
-
-# In-process ASGI transport for the generic HTTP-over-RPC tunnel (rbac/player/
-# me-avatar and any other not-yet-typed /api/auth/* endpoint). No network socket.
-_asgi_transport = httpx.ASGITransport(app=tunnel_app, raise_app_exceptions=False)
 
 
 @app.on_startup
@@ -475,43 +474,380 @@ async def rpc_revoke_api_key(data: dict, msg: RabbitMessage) -> dict:
     return await _with_active_user(data.get("access_token"), op)
 
 
-@broker.subscriber("rpc.identity.http")
-async def rpc_http(data: dict, msg: RabbitMessage) -> dict:
-    """Generic HTTP-over-RPC tunnel.
+# --- RBAC admin (typed; ports src/routes/rbac.py via src/services/rbac_flows.py) ---
+#
+# Authed RPC methods resolve the active user from the gateway-injected bearer
+# access_token via _with_active_user, then rbac_flows runs the full permission
+# checks (mirroring the routes' Depends()), the service calls, the exact 403/404
+# semantics, and the RBAC cache-invalidation side effects.
 
-    Runs a request through the in-process ASGI app so the gateway can serve the
-    not-yet-typed /api/auth/* endpoints (rbac, player, me/avatar) without
-    per-endpoint porting. The reply is the RAW HTTP response (status/headers/
-    base64 body), NOT the {ok,data,error} envelope.
-    """
-    data = data or {}
-    method = str(data.get("method") or "GET")
-    path = str(data.get("path") or "/")
-    if not path.startswith("/"):
-        path = "/" + path
-    query = data.get("query") or ""
-    url = f"{path}?{query}" if query else path
-    raw_headers = data.get("headers") or {}
-    headers = {
-        k: v
-        for k, v in raw_headers.items()
-        if isinstance(k, str) and k.lower() not in _TUNNEL_DROP_REQUEST_HEADERS
-    }
-    body = base64.b64decode(data["body"]) if data.get("body") else b""
+
+def _opt_int(data: dict, key: str) -> int | None:
+    raw = data.get(key)
+    if raw is None or raw == "":
+        return None
     try:
-        async with httpx.AsyncClient(
-            transport=_asgi_transport, base_url="http://identity.internal", timeout=30.0
-        ) as client:
-            resp = await client.request(method, url, headers=headers, content=body)
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("http tunnel dispatch failed: %s %s", method, path)
-        return {
-            "status": 502,
-            "headers": [["content-type", "application/json"]],
-            "body": base64.b64encode(b'{"detail":"identity tunnel error"}').decode("ascii"),
-        }
-    return {
-        "status": resp.status_code,
-        "headers": [[k, v] for k, v in resp.headers.multi_items()],
-        "body": base64.b64encode(resp.content).decode("ascii"),
-    }
+        return int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"{key} must be an integer")
+
+
+def _opt_bool(data: dict, key: str) -> bool | None:
+    raw = data.get(key)
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        if raw.lower() in ("true", "1", "yes"):
+            return True
+        if raw.lower() in ("false", "0", "no"):
+            return False
+    raise HTTPException(status_code=422, detail=f"{key} must be a boolean")
+
+
+def _opt_str(data: dict, key: str) -> str | None:
+    raw = data.get(key)
+    if raw is None or raw == "":
+        return None
+    return str(raw)
+
+
+@broker.subscriber("rpc.identity.rbac.list_permissions")
+async def rpc_rbac_list_permissions(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        permissions = await rbac_flows.list_permissions(session, user, _opt_int(data, "workspace_id"))
+        return [schemas.PermissionRead.model_validate(p, from_attributes=True).model_dump(mode="json") for p in permissions]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.create_permission")
+async def rpc_rbac_create_permission(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        payload = schemas.PermissionCreate.model_validate(data)
+        permission = await rbac_flows.create_permission(session, user, payload)
+        return schemas.PermissionRead.model_validate(permission, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.delete_permission")
+async def rpc_rbac_delete_permission(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        permission_id = _opt_int(data, "permission_id")
+        if permission_id is None:
+            raise HTTPException(status_code=422, detail="permission_id is required")
+        await rbac_flows.delete_permission(session, user, permission_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.list_roles")
+async def rpc_rbac_list_roles(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        roles = await rbac_flows.list_roles(session, user, _opt_int(data, "workspace_id"))
+        return [schemas.RoleRead.model_validate(r, from_attributes=True).model_dump(mode="json") for r in roles]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.get_role")
+async def rpc_rbac_get_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        role_id = _opt_int(data, "role_id")
+        if role_id is None:
+            raise HTTPException(status_code=422, detail="role_id is required")
+        role = await rbac_flows.get_role(session, user, role_id)
+        return schemas.RoleWithPermissions.model_validate(role, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.create_role")
+async def rpc_rbac_create_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        payload = schemas.RoleCreate.model_validate(data)
+        role = await rbac_flows.create_role(session, user, payload)
+        return schemas.RoleRead.model_validate(role, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.update_role")
+async def rpc_rbac_update_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        role_id = _opt_int(data, "role_id")
+        if role_id is None:
+            raise HTTPException(status_code=422, detail="role_id is required")
+        payload = schemas.RoleUpdate.model_validate(data)
+        role = await rbac_flows.update_role(session, user, role_id, payload)
+        return schemas.RoleRead.model_validate(role, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.delete_role")
+async def rpc_rbac_delete_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        role_id = _opt_int(data, "role_id")
+        if role_id is None:
+            raise HTTPException(status_code=422, detail="role_id is required")
+        await rbac_flows.delete_role(session, user, role_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.list_auth_users")
+async def rpc_rbac_list_auth_users(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        users = await rbac_flows.list_auth_users(
+            session,
+            user,
+            search=_opt_str(data, "search"),
+            role_id=_opt_int(data, "role_id"),
+            is_active=_opt_bool(data, "is_active"),
+            is_superuser=_opt_bool(data, "is_superuser"),
+            workspace_id=_opt_int(data, "workspace_id"),
+        )
+        return [u.model_dump(mode="json") for u in users]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.get_auth_user")
+async def rpc_rbac_get_auth_user(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        detail = await rbac_flows.get_auth_user(session, user, user_id)
+        return detail.model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.assign_linked_player")
+async def rpc_rbac_assign_linked_player(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        payload = schemas.AuthUserPlayerLinkAssign.model_validate(data)
+        await rbac_flows.assign_linked_player_to_auth_user(session, user, user_id, payload)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.remove_linked_player")
+async def rpc_rbac_remove_linked_player(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        user_id = _opt_int(data, "user_id")
+        player_id = _opt_int(data, "player_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        if player_id is None:
+            raise HTTPException(status_code=422, detail="player_id is required")
+        await rbac_flows.remove_linked_player_from_auth_user(session, user, user_id, player_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.assign_role")
+async def rpc_rbac_assign_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        payload = schemas.UserRoleAssign.model_validate(data)
+        await rbac_flows.assign_role_to_user(session, user, payload)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.remove_role")
+async def rpc_rbac_remove_role(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        payload = schemas.UserRoleRemove.model_validate(data)
+        await rbac_flows.remove_role_from_user(session, user, payload)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.get_user_roles")
+async def rpc_rbac_get_user_roles(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        roles = await rbac_flows.get_user_roles(session, user, user_id)
+        return [schemas.RoleRead.model_validate(r, from_attributes=True).model_dump(mode="json") for r in roles]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.list_oauth_connections")
+async def rpc_rbac_list_oauth_connections(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        conns = await rbac_flows.list_oauth_connections(
+            session, user, search=_opt_str(data, "search"), provider=_opt_str(data, "provider")
+        )
+        return [c.model_dump(mode="json") for c in conns]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.list_sessions")
+async def rpc_rbac_list_sessions(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        status_filter: Literal["active", "revoked", "expired"] | None = None
+        raw_status = _opt_str(data, "status")
+        if raw_status is not None:
+            if raw_status not in ("active", "revoked", "expired"):
+                raise HTTPException(status_code=422, detail="invalid status filter")
+            status_filter = raw_status  # type: ignore[assignment]
+        summaries = await rbac_flows.list_auth_sessions(
+            session,
+            user,
+            user_id=_opt_int(data, "user_id"),
+            search=_opt_str(data, "search"),
+            status_filter=status_filter,
+        )
+        return [s.model_dump(mode="json") for s in summaries]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.delete_oauth_connection")
+async def rpc_rbac_delete_oauth_connection(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        connection_id = _opt_int(data, "connection_id")
+        if connection_id is None:
+            raise HTTPException(status_code=422, detail="connection_id is required")
+        await rbac_flows.delete_oauth_connection(session, user, connection_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+# --- Player linking (typed; ports src/routes/player.py via player_flows) ---
+
+
+@broker.subscriber("rpc.identity.player.link")
+async def rpc_player_link(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        payload = schemas.PlayerLinkRequest.model_validate(data)
+        result = await player_flows.link_player(session, user, payload)
+        return result.model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.player.unlink")
+async def rpc_player_unlink(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        player_id = _opt_int(data, "player_id")
+        if player_id is None:
+            raise HTTPException(status_code=422, detail="player_id is required")
+        await player_flows.unlink_player(session, user, player_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.player.linked")
+async def rpc_player_linked(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        players = await player_flows.get_linked_players(session, user)
+        return [p.model_dump(mode="json") for p in players]
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.player.set_primary")
+async def rpc_player_set_primary(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        player_id = _opt_int(data, "player_id")
+        if player_id is None:
+            raise HTTPException(status_code=422, detail="player_id is required")
+        return await player_flows.set_primary_player(session, user, player_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+# --- Current-user avatar (typed; ports POST/DELETE /me/avatar via avatar_flows) ---
+
+
+@broker.subscriber("rpc.identity.me.avatar_set")
+async def rpc_me_avatar_set(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        raw = data.get("content_b64")
+        if not isinstance(raw, str) or not raw:
+            raise HTTPException(status_code=422, detail="content_b64 is required")
+        try:
+            file_data = base64.b64decode(raw)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="invalid base64 content") from exc
+        content_type = data.get("content_type")
+        updated = await avatar_flows.set_avatar(
+            session,
+            user,
+            s3_client,
+            file_data,
+            content_type if isinstance(content_type, str) else "application/octet-stream",
+        )
+        return schemas.AuthUser.model_validate(updated, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.me.avatar_delete")
+async def rpc_me_avatar_delete(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> dict:
+        updated = await avatar_flows.delete_avatar(session, user, s3_client)
+        return schemas.AuthUser.model_validate(updated, from_attributes=True).model_dump(mode="json")
+
+    return await _with_active_user(data.get("access_token"), op)

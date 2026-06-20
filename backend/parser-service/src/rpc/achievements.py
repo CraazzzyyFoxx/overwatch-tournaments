@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 from shared.models.achievement import (
     AchievementEvaluationResult,
@@ -38,11 +38,6 @@ from shared.services.achievement_effective import build_effective_achievement_ro
 
 from src import models, schemas
 from src.core import db
-from src.routes.admin.achievement_rule import (
-    _get_source_workspace_or_404,
-    _get_visible_workspace_ids,
-    _get_workspace_or_404,
-)
 from src.schemas.admin.achievement_rule import (
     AchievementLibraryImportRequest,
     AchievementLibraryRuleRead,
@@ -60,6 +55,11 @@ from src.schemas.admin.achievement_rule import (
     EvaluationRunRead,
     OverrideCreate,
     OverrideRead,
+)
+from src.services.achievement.admin_reads import (
+    _get_source_workspace_or_404,
+    _get_visible_workspace_ids,
+    _get_workspace_or_404,
 )
 from src.services.achievement.engine.runner import run_evaluation
 from src.services.achievement.engine.seeder import hard_reset_workspace, seed_workspace

@@ -12,7 +12,8 @@ import json
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
 from src.core import db

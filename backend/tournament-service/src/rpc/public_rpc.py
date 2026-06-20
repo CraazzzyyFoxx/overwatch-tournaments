@@ -1,16 +1,18 @@
 """Public / captain tournament methods over typed RPC.
 
-Each handler mirrors a route in ``src/routes/{captain,registration,encounter}.py``
-exactly: it rehydrates the gateway-injected identity where the route required a
-user, validates the SAME body schema, calls the SAME service function with the
-SAME args, and serializes the SAME way the route returned.
+Each handler preserves the contract of the former HTTP route it replaced (the
+``src/routes/`` HTTP service has been decommissioned): it rehydrates the
+gateway-injected identity where a user was required, validates the SAME body
+schema, calls the SAME service function with the SAME args, and serializes the
+SAME way the route returned. The request schemas and read-model builders now
+live in ``src/schemas/{captain,registration,registration_build}.py``.
 
 Serialization parity:
-- captain routes return custom dicts -> returned verbatim.
-- registration routes do NOT use ``response_model_exclude_none`` -> plain
+- captain handlers return custom dicts -> returned verbatim.
+- registration handlers do NOT use ``response_model_exclude_none`` -> plain
   ``model_dump(mode="json")`` (keep nulls). ``RegistrationFormRead | None`` and
   ``RegistrationRead | None`` may serialize to ``None``.
-- saved-view writes (encounter.py) DO use ``response_model_exclude_none=True`` ->
+- saved-view writes DID use ``response_model_exclude_none=True`` ->
   ``model_dump(mode="json", exclude_none=True)``; the delete returns 204 -> None.
 
 Commit semantics: every write service called here commits internally
@@ -31,7 +33,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from cashews import Command, cache
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
@@ -44,14 +46,14 @@ from sqlalchemy.orm import selectinload
 
 from src import models, schemas
 from src.core import db
-from src.routes import captain as captain_routes
-from src.routes.captain import (
+from src.schemas.captain import (
     CaptainMatchReport,
     DisputeRequest,
     ResultSubmission,
     VetoAction,
+    resolve_optional_viewer_side,
 )
-from src.routes.registration import (
+from src.schemas.registration_build import (
     _build_tournament_history,
     _form_to_read,
     _reg_to_read,
@@ -280,7 +282,7 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             user = _optional_identity(data)
             encounter = await captain_service._load_encounter(session, encounter_id)
-            viewer_side = await captain_routes.resolve_optional_viewer_side(session, user, encounter)
+            viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await map_veto_service.get_map_pool_state(
                 session,
                 encounter_id,

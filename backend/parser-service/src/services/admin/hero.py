@@ -3,7 +3,8 @@
 import re
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.repository import HeroRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 

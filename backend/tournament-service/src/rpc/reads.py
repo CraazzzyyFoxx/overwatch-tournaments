@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from sqlalchemy.orm import selectinload

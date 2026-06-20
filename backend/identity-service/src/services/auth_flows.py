@@ -11,12 +11,13 @@ from __future__ import annotations
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.routes.auth import _linked_players_payload
 from src.services.auth_service import AuthService
+from src.services.auth_token_helpers import _linked_players_payload
 from src.services.session_cache import get_refresh_idem, set_refresh_idem
 from src.services.session_service import SessionService
 

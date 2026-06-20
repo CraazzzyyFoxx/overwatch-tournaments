@@ -1,6 +1,7 @@
 """Shared helpers for storing uploaded match log files."""
 
-from fastapi import HTTPException, UploadFile, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.clients.s3 import S3Client
 from shared.models.log_processing import LogProcessingRecord, LogProcessingSource
 from sqlalchemy import select
@@ -29,11 +30,6 @@ def decode_log_bytes(raw_bytes: bytes, filename: str | None) -> bytes:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File {filename or '<unnamed>'} is not valid UTF-8",
         ) from exc
-
-
-async def read_log_upload(uploaded_file: UploadFile) -> bytes:
-    raw_bytes = await uploaded_file.read()
-    return decode_log_bytes(raw_bytes, uploaded_file.filename)
 
 
 async def resolve_auth_uploader_id(session: AsyncSession, auth_user: models.AuthUser | None) -> int | None:
@@ -73,29 +69,6 @@ async def store_uploaded_log_bytes(
         session,
         tournament_id=tournament_id,
         filename=filename,
-        source=source,
-        uploader_id=uploader_id,
-        attached_encounter_id=attached_encounter_id,
-    )
-
-
-async def store_uploaded_log(
-    session: AsyncSession,
-    *,
-    s3: S3Client,
-    tournament_id: int,
-    uploaded_file: UploadFile,
-    source: LogProcessingSource,
-    uploader_id: int | None = None,
-    attached_encounter_id: int | None = None,
-) -> LogProcessingRecord:
-    raw_bytes = await uploaded_file.read()
-    return await store_uploaded_log_bytes(
-        session,
-        s3=s3,
-        tournament_id=tournament_id,
-        filename=uploaded_file.filename,
-        content=raw_bytes,
         source=source,
         uploader_id=uploader_id,
         attached_encounter_id=attached_encounter_id,

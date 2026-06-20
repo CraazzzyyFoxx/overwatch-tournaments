@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from shared.messaging.config import (
     ANALYTICS_INFER_QUEUE,
@@ -34,13 +34,12 @@ from shared.schemas.events import (
 
 from src import models
 from src.core import config, db
-from src.routes.v2 import (
+from src.schemas.v2 import (
     AnalyticsJobCreate,
     AnalyticsJobRow,
     InferRequestBody,
     JobAcceptedResponse,
     TrainRequestBody,
-    _require_actor,
 )
 from src.services.jobs import (
     JOB_KIND_COMPUTE,
@@ -55,6 +54,34 @@ from . import _common as c
 # Mirror src.services.analytics.flows.POINTS without importing that module
 # (it pulls pandas/numpy/openskill into the lightweight svc).
 _POINTS = "Points"
+
+
+async def _require_actor(
+    body: AnalyticsJobCreate,
+    workspace_id: int | None,
+    user: models.AuthUser,
+) -> None:
+    """Permission gate per ``kind`` (extracted from the decommissioned
+    ``src/routes/v2.py``):
+
+    - ``compute``  → ``analytics.update`` in the workspace
+    - ``train_ml`` → superuser
+    """
+    if body.kind == JOB_KIND_TRAIN_ML:
+        if not getattr(user, "is_superuser", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Training v2 ML models is restricted to superusers.",
+            )
+        return
+    # compute: workspace-scoped permission
+    if workspace_id is not None and not user.has_workspace_permission(
+        workspace_id, "analytics", "update"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="analytics.update permission required for this workspace.",
+        )
 
 
 def register(broker: Any, logger: Any) -> None:

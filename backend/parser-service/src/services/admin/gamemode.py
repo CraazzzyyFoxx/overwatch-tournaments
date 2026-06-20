@@ -1,7 +1,8 @@
 """Admin service layer for gamemode CRUD operations"""
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.repository import GamemodeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 

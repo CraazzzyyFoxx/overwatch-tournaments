@@ -2,40 +2,35 @@ import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Any
 from uuid import UUID, uuid4
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from loguru import logger
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.rbac import role_permissions, user_roles
 from sqlalchemy import insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from starlette.requests import Request
 
 from src import models, schemas
-from src.core import config, db
+from src.core import config
 
 __all__ = [
     "AuthService",
-    "get_current_user",
-    "get_current_active_user",
-    "get_current_superuser",
     "require_permission",
 ]
 
 settings = config.settings
-security = HTTPBearer()
 
 
 class AuthService:
     """Service for handling authentication operations"""
 
     @staticmethod
-    def get_request_client_metadata(request: Request | None) -> tuple[str | None, str | None]:
+    def get_request_client_metadata(request: Any | None) -> tuple[str | None, str | None]:
         """Extract original client metadata, preferring proxy-forwarded headers."""
         if request is None:
             return None, None
@@ -382,7 +377,7 @@ class AuthService:
         session: AsyncSession,
         user_id: int,
         token: str,
-        request: Request | None = None,
+        request: Any | None = None,
         session_id: UUID | None = None,
         session_started_at: datetime | None = None,
         commit: bool = True,
@@ -594,66 +589,14 @@ class AuthService:
         return count
 
 
-async def get_current_user(
-    token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    session: Annotated[AsyncSession, Depends(db.get_async_session)],
-) -> models.AuthUser:
-    """Get current authenticated user from JWT token"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = AuthService.decode_token(token.credentials)
-        user_id_str = payload.get("sub")
-        token_type = payload.get("type")
-        session_id = payload.get("sid")
-
-        if not user_id_str or token_type != "access":
-            raise credentials_exception
-
-        user_id = int(user_id_str)
-    except (JWTError, ValueError):
-        raise credentials_exception
-
-    result = await session.execute(AuthService._user_query_with_rbac().where(models.AuthUser.id == user_id))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        raise credentials_exception
-
-    if isinstance(session_id, str) and session_id:
-        object.__setattr__(user, "_current_session_id", session_id)
-
-    return user
-
-
-async def get_current_active_user(
-    current_user: Annotated[models.AuthUser, Depends(get_current_user)],
-) -> models.AuthUser:
-    """Get current active user"""
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-    return current_user
-
-
-async def get_current_superuser(
-    current_user: Annotated[models.AuthUser, Depends(get_current_active_user)],
-) -> models.AuthUser:
-    """Get current superuser"""
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-    return current_user
-
-
 def require_permission(resource: str, action: str):
-    """Dependency factory for requiring a specific RBAC permission."""
+    """Build a plain callable that enforces a specific RBAC permission.
 
-    async def permission_checker(
-        current_user: Annotated[models.AuthUser, Depends(get_current_active_user)],
-    ) -> models.AuthUser:
+    Returns an async checker that raises 403 unless ``current_user`` holds the
+    given ``resource.action`` permission, otherwise returns ``current_user``.
+    """
+
+    async def permission_checker(current_user) -> models.AuthUser:
         if not current_user.has_permission(resource, action):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

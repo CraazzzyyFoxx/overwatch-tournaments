@@ -11,7 +11,8 @@ from uuid import uuid4
 
 import httpx
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid

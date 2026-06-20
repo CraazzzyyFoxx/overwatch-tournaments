@@ -25,7 +25,6 @@ os.environ.setdefault("CHALLONGE_USERNAME", "test")
 os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 sync = importlib.import_module("src.services.challonge.sync")
-challonge_routes = importlib.import_module("src.routes.challonge")
 encounter_flows = importlib.import_module("src.services.encounter.flows")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
@@ -913,97 +912,3 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             },
             result,
         )
-
-
-class ChallongeRouteSmokeTests(IsolatedAsyncioTestCase):
-    async def test_import_route_passes_dry_run_to_sync_use_case(self) -> None:
-        session = SimpleNamespace()
-        expected = {
-            "job_id": "job-1",
-            "created": 0,
-            "updated": 0,
-            "skipped": 0,
-            "conflicts": 0,
-            "errors": 0,
-        }
-
-        with patch.object(
-            challonge_routes.challonge_sync,
-            "import_tournament",
-            AsyncMock(return_value=expected),
-        ) as import_tournament:
-            result = await challonge_routes.import_from_challonge(
-                7,
-                dry_run=True,
-                session=session,
-            )
-
-        self.assertEqual(expected, result)
-        import_tournament.assert_awaited_once_with(session, 7, dry_run=True)
-
-    async def test_export_route_delegates_to_sync_use_case(self) -> None:
-        session = SimpleNamespace()
-        expected = {
-            "job_id": "job-2",
-            "matches_pushed": 1,
-            "errors": 0,
-            "skipped": 0,
-        }
-
-        with patch.object(
-            challonge_routes.challonge_sync,
-            "export_tournament",
-            AsyncMock(return_value=expected),
-        ) as export_tournament:
-            result = await challonge_routes.export_to_challonge(7, session=session)
-
-        self.assertEqual(expected, result)
-        export_tournament.assert_awaited_once_with(session, 7)
-
-    async def test_log_route_returns_extended_sync_log_fields(self) -> None:
-        session = SimpleNamespace()
-        created_at = datetime.now(UTC)
-        log = SimpleNamespace(
-            id=1,
-            created_at=created_at,
-            source_id=12,
-            direction="import",
-            operation="match_import",
-            entity_type="encounter",
-            entity_id=55,
-            challonge_id=900,
-            status="conflict",
-            conflict_type="local_completed_remote_diverged",
-            before_json={"local": "2-1"},
-            after_json={"remote": "0-2"},
-            error_message=None,
-        )
-
-        with patch.object(
-            challonge_routes.challonge_sync,
-            "get_sync_log",
-            AsyncMock(return_value=[log]),
-        ) as get_sync_log:
-            result = await challonge_routes.get_sync_log(7, limit=10, session=session)
-
-        self.assertEqual(
-            [
-                {
-                    "id": 1,
-                    "created_at": created_at,
-                    "source_id": 12,
-                    "direction": "import",
-                    "operation": "match_import",
-                    "entity_type": "encounter",
-                    "entity_id": 55,
-                    "challonge_id": 900,
-                    "status": "conflict",
-                    "conflict_type": "local_completed_remote_diverged",
-                    "before_json": {"local": "2-1"},
-                    "after_json": {"remote": "0-2"},
-                    "error_message": None,
-                }
-            ],
-            result,
-        )
-        get_sync_log.assert_awaited_once_with(session, 7, 10)

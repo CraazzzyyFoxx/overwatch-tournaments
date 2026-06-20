@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, NoReturn
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.core import enums
 from shared.domain.player_sub_roles import (
     REGISTRATION_ROLE_CODES,

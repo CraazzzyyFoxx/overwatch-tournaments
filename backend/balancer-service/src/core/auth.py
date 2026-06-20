@@ -5,17 +5,16 @@ workspace-scoped admin access must be enforced against workspace RBAC from that
 payload instead of legacy global roles only.
 """
 
-from typing import Annotated, Any
+from typing import Any
 
 import sqlalchemy as sa
-from fastapi import Depends, HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.auth import create_auth_dependencies
 from shared.models.auth_user import AuthUser
 from shared.models.rbac import Permission, Role
 from src import models
-from src.core import db
 
 
 def _safe_str(value: Any) -> str:
@@ -139,19 +138,6 @@ async def _resolve_user_from_token(user_id: int, payload: dict[str, Any]) -> Aut
     return user
 
 
-_auth = create_auth_dependencies(_resolve_user_from_token)
-
-get_current_user = _auth.get_current_user
-get_current_active_user = _auth.get_current_active_user
-get_current_superuser = _auth.get_current_superuser
-require_permission = _auth.require_permission
-require_role = _auth.require_role
-require_any_role = _auth.require_any_role
-require_admin_panel_access = _auth.require_admin_panel_access
-require_workspace_member = _auth.require_workspace_member
-require_workspace_admin = _auth.require_workspace_admin
-
-
 async def _require_workspace_permission(
     current_user: AuthUser,
     *,
@@ -215,7 +201,7 @@ async def _get_balance_workspace_id(session: AsyncSession, balance_id: int) -> i
 def require_workspace_permission(resource: str, action: str):
     async def permission_checker(
         workspace_id: int,
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        current_user: AuthUser,
     ) -> AuthUser:
         return await _require_workspace_permission(
             current_user,
@@ -230,8 +216,8 @@ def require_workspace_permission(resource: str, action: str):
 def require_tournament_permission(resource: str, action: str):
     async def permission_checker(
         tournament_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        session: AsyncSession,
+        current_user: AuthUser,
     ) -> AuthUser:
         workspace_id = await _get_tournament_workspace_id(session, tournament_id)
         return await _require_workspace_permission(
@@ -247,8 +233,8 @@ def require_tournament_permission(resource: str, action: str):
 def require_registration_permission(resource: str, action: str):
     async def permission_checker(
         registration_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        session: AsyncSession,
+        current_user: AuthUser,
     ) -> AuthUser:
         workspace_id = await _get_registration_workspace_id(session, registration_id)
         return await _require_workspace_permission(
@@ -264,8 +250,8 @@ def require_registration_permission(resource: str, action: str):
 def require_balance_permission(resource: str, action: str):
     async def permission_checker(
         balance_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        session: AsyncSession,
+        current_user: AuthUser,
     ) -> AuthUser:
         workspace_id = await _get_balance_workspace_id(session, balance_id)
         return await _require_workspace_permission(
@@ -301,8 +287,8 @@ async def _get_pick_workspace_id(session: AsyncSession, pick_id: int) -> int:
 def require_draft_session_permission(resource: str, action: str):
     async def permission_checker(
         session_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        session: AsyncSession,
+        current_user: AuthUser,
     ) -> AuthUser:
         workspace_id = await _get_draft_session_workspace_id(session, session_id)
         return await _require_workspace_permission(
@@ -315,8 +301,8 @@ def require_draft_session_permission(resource: str, action: str):
 def require_pick_permission(resource: str, action: str):
     async def permission_checker(
         pick_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
+        session: AsyncSession,
+        current_user: AuthUser,
     ) -> AuthUser:
         workspace_id = await _get_pick_workspace_id(session, pick_id)
         return await _require_workspace_permission(

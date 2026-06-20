@@ -24,7 +24,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import BaseModel, ValidationError
 

@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from cashews import cache
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

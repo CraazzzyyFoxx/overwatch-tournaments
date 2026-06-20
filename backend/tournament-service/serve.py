@@ -21,6 +21,7 @@ from shared.observability import (
 from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
+from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
 from src.rpc import admin_misc, integrations, public_rpc, reads as rpc_reads, registration_admin, stage_admin
 from src.services.admin import registry as admin_registry
@@ -32,6 +33,7 @@ from src.services.computation.standings_worker import process_standings_job
 # publish encounter map-veto realtime signals (encounter:{id}:map-veto).
 from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.registration import admin as registration_service
+from src.services.tournament import recalculation_events
 
 logger = setup_logging(
     service_name="tournament-worker",
@@ -43,6 +45,10 @@ logger = setup_logging(
 broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
+
+# Expose the worker broker to event publishers that don't thread one through
+# (e.g. standings-invalidation enqueues from the bracket/standings workers).
+set_worker_broker(broker)
 
 # The cashews cache is a process-global singleton; the worker must configure it
 # (like the API does) or after-commit cache invalidation raises NotConfiguredError.
@@ -58,6 +64,10 @@ registration_admin.register(broker, logger)
 integrations.register(broker, logger)
 stage_admin.register(broker, logger)
 public_rpc.register(broker, logger)
+# Recalculation-event consumers (tournament.changed / standings.invalidated).
+# Previously mounted by the deleted HTTP main.py; the worker now hosts them so
+# cache invalidation + standings recalculation run on those domain events.
+broker.include_router(recalculation_events.task_router)
 
 
 async def drain_outbox() -> None:

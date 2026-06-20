@@ -6,7 +6,8 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 

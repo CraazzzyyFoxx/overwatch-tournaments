@@ -22,49 +22,11 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 
 
 class TournamentServiceSmokeTests(IsolatedAsyncioTestCase):
-    async def test_live_health_payload(self) -> None:
-        main = importlib.import_module("main")
-
-        response = await main.live_health_check()
-
-        self.assertEqual("tournament-service", response.service)
-        self.assertEqual("ok", response.status)
-
-    async def test_public_read_routes_are_registered(self) -> None:
-        main = importlib.import_module("main")
-
-        paths = {getattr(route, "path", "") for route in main.app.routes}
-
-        self.assertIn("/tournaments/{id}", paths)
-        self.assertIn("/tournaments/{id}/standings", paths)
-        self.assertIn("/encounters/{id}", paths)
-        self.assertIn("/encounters/{encounter_id}/submit-result", paths)
-        self.assertIn("/encounters/{encounter_id}/map-pool/ws", paths)
-        self.assertIn("/teams/{id}", paths)
-        self.assertIn(
-            "/tournaments/{tournament_id}/registration/form",
-            paths,
-        )
-        self.assertIn(
-            "/tournaments/{tournament_id}/registration/me",
-            paths,
-        )
-        self.assertIn("/admin/tournaments", paths)
-        self.assertIn("/admin/stages/tournament/{tournament_id}", paths)
-        self.assertIn("/admin/stages/{stage_id}/merge-group-stages", paths)
-        self.assertIn("/admin/tournament-jobs/{job_id}", paths)
-        self.assertIn("/admin/teams", paths)
-        self.assertIn("/admin/encounters/bulk", paths)
-        self.assertIn("/admin/standings/recalculate/{tournament_id}", paths)
-        self.assertIn("/admin/player-sub-roles", paths)
-        self.assertIn("/admin/challonge/sync/import/{tournament_id}", paths)
-        self.assertIn("/admin/balancer/tournaments/{tournament_id}/registration-form", paths)
-        self.assertIn("/admin/balancer/tournaments/{tournament_id}/registrations", paths)
-        self.assertIn("/admin/balancer/registrations/{registration_id}/approve", paths)
-        self.assertIn("/admin/balancer/registrations/{registration_id}/check-in", paths)
-        self.assertIn("/admin/balancer/tournaments/{tournament_id}/sheet/sync", paths)
-        self.assertIn("/admin/balancer/tournaments/{tournament_id}/players/export", paths)
-        self.assertIn("/admin/ws/{workspace_id}/balancer-statuses/catalog", paths)
+    # The HTTP service (main.py) is decommissioned — the worker (serve.py) is the
+    # only entrypoint. Former smoke tests for the FastAPI app's health payload and
+    # registered routes are gone; route coverage now lives in the gateway's Go
+    # route/guard tests (gateway/internal/edge). The worker-entrypoint regressions
+    # below remain the meaningful smoke checks.
 
     async def test_worker_queue_handlers_are_registered(self) -> None:
         worker = importlib.import_module("serve")

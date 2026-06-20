@@ -2,7 +2,8 @@
 
 from collections.abc import Iterable
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from loguru import logger
 from shared.models.oauth import OAuthConnection
 from shared.models.user import User, UserBattleTag, UserDiscord

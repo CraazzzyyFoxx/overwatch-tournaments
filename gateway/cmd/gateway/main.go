@@ -151,10 +151,45 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
 	mux.HandleFunc("DELETE /api/auth/api-keys/{id}", identityHandler.RevokeApiKey)
-	// Everything else under /api/auth/ (rbac, player, me/avatar, ...) is tunneled
-	// to identity-svc's in-process ASGI app over RPC — no proxy to auth-service.
-	// Typed routes above are more specific and win; this subtree catches the rest.
-	mux.HandleFunc("/api/auth/", identityHandler.Tunnel)
+	// RBAC admin (typed RPC into identity-svc; permission checks + cache
+	// invalidation enforced in the worker's rbac_flows).
+	mux.HandleFunc("GET /api/auth/rbac/permissions", identityHandler.RbacListPermissions)
+	mux.HandleFunc("POST /api/auth/rbac/permissions", identityHandler.RbacCreatePermission)
+	mux.HandleFunc("DELETE /api/auth/rbac/permissions/{permission_id}", identityHandler.RbacDeletePermission)
+	mux.HandleFunc("GET /api/auth/rbac/roles", identityHandler.RbacListRoles)
+	mux.HandleFunc("POST /api/auth/rbac/roles", identityHandler.RbacCreateRole)
+	mux.HandleFunc("GET /api/auth/rbac/roles/{role_id}", identityHandler.RbacGetRole)
+	mux.HandleFunc("PATCH /api/auth/rbac/roles/{role_id}", identityHandler.RbacUpdateRole)
+	mux.HandleFunc("DELETE /api/auth/rbac/roles/{role_id}", identityHandler.RbacDeleteRole)
+	mux.HandleFunc("GET /api/auth/rbac/users", identityHandler.RbacListAuthUsers)
+	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", identityHandler.RbacAssignRole)
+	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
+	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
+	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
+	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/linked-players", identityHandler.RbacAssignLinkedPlayer)
+	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/linked-players/{player_id}", identityHandler.RbacRemoveLinkedPlayer)
+	mux.HandleFunc("GET /api/auth/rbac/oauth-connections", identityHandler.RbacListOAuthConnections)
+	mux.HandleFunc("DELETE /api/auth/rbac/oauth-connections/{connection_id}", identityHandler.RbacDeleteOAuthConnection)
+	mux.HandleFunc("GET /api/auth/rbac/sessions", identityHandler.RbacListSessions)
+	// Player linking (typed RPC; identity-svc resolves the active user from the bearer).
+	mux.HandleFunc("POST /api/auth/player/link", identityHandler.PlayerLink)
+	mux.HandleFunc("DELETE /api/auth/player/unlink/{player_id}", identityHandler.PlayerUnlink)
+	mux.HandleFunc("GET /api/auth/player/linked", identityHandler.PlayerLinked)
+	mux.HandleFunc("PATCH /api/auth/player/linked/{player_id}/primary", identityHandler.PlayerSetPrimary)
+	// Current-user avatar (multipart -> base64 RPC body; the JSON path can't do it).
+	identityBinary := identity.NewBinary(identityHandler)
+	mux.HandleFunc("POST /api/auth/me/avatar", identityBinary.AvatarSet)
+	mux.HandleFunc("DELETE /api/auth/me/avatar", identityBinary.AvatarDelete)
+	// Guard the /api/auth namespace: the HTTP-over-RPC tunnel + auth-service proxy
+	// are gone — every /api/auth/* path is a typed RPC route above. Anything
+	// unmatched must NOT fall through to the "/" frontend catch-all (next.config
+	// rewrites /api/auth/* back to the gateway -> infinite gateway<->frontend proxy
+	// loop). Return 404 instead, mirroring the /api/v1 + /api/analytics guards.
+	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
+	})
 	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
 	// /api/v1 still proxies). Specific patterns win over the proxy.
 	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
@@ -208,9 +243,10 @@ func run() error {
 	// User avatar upload + CSV/Sheets user import (relocated from parser-service).
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/avatar", appBinary.UserAvatarUpload)
 	mux.HandleFunc("POST /api/v1/user/create/csv", appBinary.UsersCsvImport)
-	// balancer-service: typed RPC public config + admin balance/config (the rest
-	// of /api/balancer — jobs, draft — still proxies to balancer-service until
-	// decommission). Specific patterns win over the /api/balancer proxy below.
+	// balancer-service: typed RPC public config + admin balance/config + draft +
+	// jobs. The HTTP balancer-service is decommissioned and no longer proxied; the
+	// only un-migrated endpoint (SSE job stream) was dead code. Unmatched
+	// /api/balancer/* is guarded with 404 below.
 	balancerEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	balancerEdge.Register(mux, balancer.PublicRoutes)
 	balancerEdge.Register(mux, balancer.AdminRoutes)
@@ -238,6 +274,15 @@ func run() error {
 	// proxied. Guard unmatched /api/analytics/* with 404 (same gateway<->frontend
 	// loop hazard as /api/v1, since next.config rewrites /api/analytics -> gateway).
 	mux.HandleFunc("/api/analytics/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
+	})
+	// /api/balancer is fully served by the typed balancer routes above (RPC into
+	// balancer-worker); the HTTP balancer-service is decommissioned and no longer
+	// proxied. Guard unmatched /api/balancer/* with 404 (same gateway<->frontend
+	// loop hazard as /api/v1, since next.config rewrites /api/balancer -> gateway).
+	mux.HandleFunc("/api/balancer/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))

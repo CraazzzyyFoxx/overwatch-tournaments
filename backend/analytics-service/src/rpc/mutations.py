@@ -16,12 +16,12 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 
 from src import models, schemas
 from src.core import db
-from src.routes.v2 import AnomalyFeedbackBody, AnomalyFeedbackRow
+from src.schemas.v2 import AnomalyFeedbackBody, AnomalyFeedbackRow
 from src.services.analytics_read import flows as analytics_flows
 
 from . import _common as c
@@ -30,10 +30,11 @@ from . import _common as c
 async def _validate_tournament_workspace(
     session: Any, tournament_id: int, workspace_id: int | None
 ) -> None:
-    """Local copy of routes/analytics._validate_tournament_workspace.
+    """Workspace guard for the deprecated OpenSkill v1 endpoint.
 
-    Replicated (not imported) so the lightweight analytics-svc does not pull
-    src.routes.analytics → src.services.analytics.flows (pandas/numpy/openskill).
+    Replicated locally (this was the old ``routes/analytics`` helper) so the
+    lightweight analytics-svc does not pull ``src.services.analytics.flows``
+    (pandas/numpy/openskill) into the read/mutation path.
     """
     if workspace_id is None:
         return

@@ -14,13 +14,23 @@ dependencies = [
     "loguru>=0.7.3",
     "orjson>=3.10.14",
     "httpx>=0.28.1",
+    # ASGI toolkit (NOT FastAPI): observability HTTP middleware + balancer's
+    # multipart UploadFile reconstruction. Was transitively provided by fastapi
+    # before its removal; declared explicitly now.
+    "starlette>=0.40.0",
     "redis>=5.2.1",
     "cashews>=7.4.0",
     "tenacity>=9.0.0",
     "faststream[rabbit]>=0.6.4",
     "opentelemetry-api>=1.27.0",
     "opentelemetry-sdk>=1.27.0",
-    "scalar-fastapi>=1.8.2",
+    # Worker metrics (start_worker_metrics_server / balancer metrics). Was
+    # transitively provided by prometheus-fastapi-instrumentator before its removal.
+    "prometheus-client>=0.21.0",
+    # FastStream `--reload` (dev compose) + discord's watchfiles command. Was
+    # transitively provided by uvicorn[standard]/fastapi[standard]. Regular dep so
+    # it lands in the `--no-dev` image used for the dev stack's hot-reload.
+    "watchfiles>=0.24.0",
 ]
 
 [build-system]

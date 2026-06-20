@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 import uuid
-from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import HTTPException, Request, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from loguru import logger
 
 from shared.observability import metrics
@@ -227,53 +226,6 @@ async def get_job_result(*, job_id: str, user) -> BalanceJobResult:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balancer job result not found")
     return BalanceJobResult.model_validate(result)
-
-
-async def stream_job_events(
-    *,
-    request: Request,
-    job_id: str,
-    after_event_id: int,
-    last_event_id: str | None,
-    user,
-) -> AsyncIterator[str]:
-    job_store = get_job_store()
-    await get_api_key_limiter().check_request(user)
-    meta = await job_store.get_job_meta(job_id)
-    if meta is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balancer job not found")
-    _access_policy.ensure_workspace_access(
-        user,
-        meta.get("workspace_id"),
-        api_key_id=meta.get("api_key_id"),
-        require_api_key_job_match=True,
-    )
-
-    cursor = after_event_id
-    if last_event_id and last_event_id.isdigit():
-        cursor = max(cursor, int(last_event_id))
-
-    async def event_generator() -> AsyncIterator[str]:
-        next_cursor = cursor
-        while True:
-            if await request.is_disconnected():
-                break
-
-            events = await job_store.get_events_since(job_id, next_cursor)
-            for event in events:
-                next_cursor = max(next_cursor, int(event["event_id"]))
-                yield f"id: {event['event_id']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            current_meta = await job_store.get_job_meta(job_id)
-            if current_meta is None:
-                break
-            if current_meta.get("status") in TERMINAL_STATUSES and not events:
-                break
-
-            yield ": heartbeat\n\n"
-            await asyncio.sleep(1)
-
-    return event_generator()
 
 
 def _build_progress_callback(event_queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):

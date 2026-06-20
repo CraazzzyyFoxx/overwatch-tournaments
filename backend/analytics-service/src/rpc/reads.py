@@ -1,14 +1,15 @@
 """Public + authenticated read RPC subscribers (``rpc.analytics.*``).
 
-Each handler mirrors a read route in ``src/routes/analytics_read.py`` or
-``src/routes/v2.py`` exactly: it calls the same flow/query and coerces the
-result through the same response model (default ``exclude_none=False`` — none
-of the analytics read routes set ``response_model_exclude_none``). Response
-schemas are imported from the route modules so the contract stays single-source.
+Each handler calls a flow/query and coerces the result through the same
+response model the decommissioned HTTP layer used (default
+``exclude_none=False`` — none of the analytics reads set
+``response_model_exclude_none``). Response schemas now live in
+``src/schemas/analytics_read.py`` and ``src/schemas/v2.py`` so the contract
+stays single-source and fastapi-free.
 
 Auth: the v1 reads are public (gateway ``AuthNone``); the v2 + job reads require
 a global ``analytics.read`` permission (gateway ``AuthRequired`` + the same
-``has_permission`` check the routes use).
+``has_permission`` check the legacy routes used).
 """
 
 from __future__ import annotations
@@ -16,14 +17,14 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.orm import selectinload
 
 from src import models
 from src.core import db, pagination
-from src.routes.analytics_read import BalancePlayerSnapshotRead, BalanceQualityRead
-from src.routes.v2 import (
+from src.schemas.analytics_read import BalancePlayerSnapshotRead, BalanceQualityRead
+from src.schemas.v2 import (
     AnalyticsJobRow,
     AnomalyFeedbackRow,
     ExplanationRow,

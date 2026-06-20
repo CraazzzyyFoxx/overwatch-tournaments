@@ -14,7 +14,7 @@ import re
 from typing import Any
 
 import httpx
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 from shared.clients.s3 import upload_avatar
 from shared.rpc.query import build_query_model

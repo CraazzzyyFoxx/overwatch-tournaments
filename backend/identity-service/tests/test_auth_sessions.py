@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 
 def _ensure_test_env() -> None:
@@ -36,8 +36,7 @@ _ensure_test_env()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src import schemas  # noqa: E402
-from src.routes import auth as auth_routes  # noqa: E402
+from src.services import auth_flows  # noqa: E402
 from src.services.auth_service import AuthService  # noqa: E402
 from src.services.session_service import SessionService  # noqa: E402
 
@@ -228,21 +227,21 @@ def test_logout_rejects_refresh_token_owned_by_other_user(monkeypatch: pytest.Mo
         raise AssertionError("logout should not revoke another user's refresh token")
 
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.get_refresh_token_record",
+        "src.services.auth_flows.AuthService.get_refresh_token_record",
         fake_get_refresh_token_record,
         raising=False,
     )
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.revoke_refresh_token",
+        "src.services.auth_flows.AuthService.revoke_refresh_token",
         fake_revoke_refresh_token,
     )
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            auth_routes.logout(
-                token_data=schemas.RefreshTokenRequest(refresh_token="foreign-refresh-token"),
+            auth_flows.logout(
                 session=object(),
-                current_user=SimpleNamespace(id=1, is_active=True),
+                user=SimpleNamespace(id=1, is_active=True),
+                refresh_token="foreign-refresh-token",
             )
         )
 
@@ -267,25 +266,25 @@ def test_logout_revokes_logical_session_family(monkeypatch: pytest.MonkeyPatch) 
         raise AssertionError("logout should revoke the whole logical session family")
 
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.get_refresh_token_record",
+        "src.services.auth_flows.AuthService.get_refresh_token_record",
         fake_get_refresh_token_record,
         raising=False,
     )
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.revoke_session_tokens",
+        "src.services.auth_flows.AuthService.revoke_session_tokens",
         fake_revoke_session_tokens,
         raising=False,
     )
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.revoke_refresh_token",
+        "src.services.auth_flows.AuthService.revoke_refresh_token",
         fake_revoke_refresh_token,
     )
 
     asyncio.run(
-        auth_routes.logout(
-            token_data=schemas.RefreshTokenRequest(refresh_token="own-refresh-token"),
+        auth_flows.logout(
             session=object(),
-            current_user=SimpleNamespace(id=1, is_active=True),
+            user=SimpleNamespace(id=1, is_active=True),
+            refresh_token="own-refresh-token",
         )
     )
 
@@ -327,6 +326,8 @@ def test_refresh_route_preserves_session_id_during_rotation(monkeypatch: pytest.
         session_id=None,
         session_started_at=None,
         commit=True,
+        user_agent=None,
+        ip_address=None,
     ):
         create_calls.append((session_id, session_started_at, commit))
         assert user_id == 5
@@ -338,15 +339,17 @@ def test_refresh_route_preserves_session_id_during_rotation(monkeypatch: pytest.
     monkeypatch.setattr(AuthService, "revoke_refresh_token", fake_revoke_refresh_token)
     monkeypatch.setattr(AuthService, "create_refresh_token", lambda: "new-refresh-token")
     monkeypatch.setattr(AuthService, "create_refresh_token_db", fake_create_refresh_token_db)
+    monkeypatch.setattr("src.services.auth_flows.get_refresh_idem", AsyncMock(return_value=None))
+    monkeypatch.setattr("src.services.auth_flows.set_refresh_idem", AsyncMock())
 
     fake_session = SimpleNamespace(commit=AsyncMock())
-    fake_request = SimpleNamespace(headers={"user-agent": "Chrome"}, client=SimpleNamespace(host="10.0.0.1"))
 
     response = asyncio.run(
-        auth_routes.refresh_token(
-            token_data=schemas.RefreshTokenRequest(refresh_token="refresh-token"),
-            request=fake_request,
+        auth_flows.refresh(
             session=fake_session,
+            refresh_token="refresh-token",
+            user_agent="Chrome",
+            ip_address="10.0.0.1",
         )
     )
 
@@ -377,14 +380,14 @@ def test_list_current_user_sessions_route_uses_current_session_marker(monkeypatc
             }
         ]
 
-    monkeypatch.setattr("src.routes.auth.SessionService.list_user_sessions", fake_list_user_sessions)
+    monkeypatch.setattr("src.services.auth_flows.SessionService.list_user_sessions", fake_list_user_sessions)
 
     response = asyncio.run(
-        auth_routes.list_current_user_sessions(
+        auth_flows.list_sessions(
             session=object(),
-            current_user=SimpleNamespace(id=7, is_active=True, _current_session_id="session-1"),
-            )
+            user=SimpleNamespace(id=7, is_active=True, _current_session_id="session-1"),
         )
+    )
 
     assert captured == [(7, "session-1", 20)]
     assert len(response) == 1
@@ -415,10 +418,10 @@ def test_revoke_current_user_session_blocks_current_session() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            auth_routes.revoke_current_user_session(
-                session_id=session_id,
+            auth_flows.revoke_session(
                 session=object(),
-                current_user=SimpleNamespace(id=7, is_active=True, _current_session_id=str(session_id)),
+                user=SimpleNamespace(id=7, is_active=True, _current_session_id=str(session_id)),
+                session_id=session_id,
             )
         )
 

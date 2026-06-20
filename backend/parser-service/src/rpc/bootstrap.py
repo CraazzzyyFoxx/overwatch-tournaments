@@ -17,7 +17,7 @@ import json
 from datetime import date
 from typing import Any
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 from shared.rpc.identity import ensure_workspace_permission
 

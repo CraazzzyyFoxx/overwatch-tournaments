@@ -1,20 +1,12 @@
 """
 Workspace filtering utilities for SQLAlchemy queries.
 
-Usage:
-    from src.core.workspace import WorkspaceQuery, workspace_filter
+Usage (in services — returns list of conditions to unpack into .where()):
+    from src.core.workspace import workspace_filter
 
-    # In routes:
-    async def get_all(workspace_id: WorkspaceQuery = None, ...):
-        ...
-
-    # In services — returns list of conditions to unpack into .where():
     query = query.where(*workspace_filter(workspace_id))
 """
 
-import typing
-
-from fastapi import Query
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
@@ -24,8 +16,6 @@ from shared.services.division_grid_access import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-
-WorkspaceQuery = typing.Annotated[int | None, Query(alias="workspace_id")]
 
 
 def workspace_filter(workspace_id: int | None) -> list:

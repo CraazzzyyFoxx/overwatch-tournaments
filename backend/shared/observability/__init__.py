@@ -29,7 +29,7 @@ from .health import (
 from .logging import get_logger, setup_logging
 from .sentry import setup_sentry
 from .time_middleware import TimeMiddleware
-from .tracing import instrument_fastapi, instrument_sqlalchemy, setup_tracing
+from .tracing import instrument_sqlalchemy, setup_tracing
 from .worker import observe_message_processing, publish_message, start_worker_metrics_server
 
 __all__ = [
@@ -46,7 +46,6 @@ __all__ = [
     "set_correlation_id",
     "reset_correlation_id",
     "setup_tracing",
-    "instrument_fastapi",
     "instrument_sqlalchemy",
     "aggregate_status",
     "check_postgres",

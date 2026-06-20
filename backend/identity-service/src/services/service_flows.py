@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 
 from src import schemas
 from src.core.config import settings

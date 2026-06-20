@@ -11,15 +11,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 
 from src import schemas
 from src.core import db
-from src.routes.rank_history import _resolve_date_range
 from src.schemas.admin import rank_collection as rc_schemas
 from src.services.overwatch_rank import admin as rank_admin
 from src.services.overwatch_rank import read_service
+from src.services.overwatch_rank.date_range import _resolve_date_range
 
 from . import _common as c
 

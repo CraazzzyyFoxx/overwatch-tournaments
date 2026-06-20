@@ -32,7 +32,6 @@ type Config struct {
 // Defaults match the docker-compose service names / ports.
 type Upstreams struct {
 	Parser    string
-	Balancer  string
 	Analytics string
 	Frontend  string
 }
@@ -71,7 +70,6 @@ func Load() (*Config, error) {
 		WSReplayLimit: getenvInt("WS_REPLAY_LIMIT", 500),
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
-			Balancer:  getenv("UPSTREAM_BALANCER", "http://balancer:8003"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),
 			Frontend:  getenv("UPSTREAM_FRONTEND", "http://frontend:3000"),
 		},

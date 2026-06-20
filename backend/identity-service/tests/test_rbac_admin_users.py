@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 
 def _ensure_test_env() -> None:
@@ -35,9 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src import models  # noqa: E402
-from src.routes import auth as auth_routes  # noqa: E402
-from src.routes import rbac as rbac_routes  # noqa: E402
-from src.services import auth_service  # noqa: E402
+from src.services import auth_flows, auth_service, rbac_flows  # noqa: E402
 
 
 def _role(
@@ -119,18 +117,18 @@ def test_list_auth_users_route_returns_user_summaries(monkeypatch: pytest.Monkey
         return users
 
     monkeypatch.setattr(
-        "src.routes.rbac.auth_service.AuthService.list_users_with_rbac",
+        "src.services.rbac_flows.auth_service.AuthService.list_users_with_rbac",
         fake_list_users_with_rbac,
     )
 
     response = asyncio.run(
-        rbac_routes.list_auth_users(
+        rbac_flows.list_auth_users(
+            object(),
+            SimpleNamespace(is_superuser=True),
             search="ada",
             role_id=1,
             is_active=True,
             is_superuser=False,
-            session=object(),
-            current_user=SimpleNamespace(is_superuser=True),
         )
     )
 
@@ -273,15 +271,15 @@ def test_get_auth_user_route_returns_effective_permissions(monkeypatch: pytest.M
         return user
 
     monkeypatch.setattr(
-        "src.routes.rbac.auth_service.AuthService.get_user_with_rbac",
+        "src.services.rbac_flows.auth_service.AuthService.get_user_with_rbac",
         fake_get_user_with_rbac,
     )
 
     response = asyncio.run(
-        rbac_routes.get_auth_user(
-            user_id=9,
-            session=object(),
-            current_user=SimpleNamespace(is_superuser=True),
+        rbac_flows.get_auth_user(
+            object(),
+            SimpleNamespace(is_superuser=True, has_permission=lambda r, a: True),
+            9,
         )
     )
 
@@ -301,16 +299,16 @@ def test_get_auth_user_route_raises_not_found(monkeypatch: pytest.MonkeyPatch) -
         return None
 
     monkeypatch.setattr(
-        "src.routes.rbac.auth_service.AuthService.get_user_with_rbac",
+        "src.services.rbac_flows.auth_service.AuthService.get_user_with_rbac",
         fake_get_user_with_rbac,
     )
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            rbac_routes.get_auth_user(
-                user_id=404,
-                session=object(),
-                current_user=SimpleNamespace(is_superuser=True),
+            rbac_flows.get_auth_user(
+                object(),
+                SimpleNamespace(is_superuser=True, has_permission=lambda r, a: True),
+                404,
             )
         )
 
@@ -344,18 +342,18 @@ def test_get_current_user_info_returns_linked_players(monkeypatch: pytest.Monkey
             return _WorkspaceRows()
 
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.get_user_with_rbac",
+        "src.services.auth_flows.AuthService.get_user_with_rbac",
         fake_get_user_with_rbac,
     )
     monkeypatch.setattr(
-        "src.routes.auth.auth_service.AuthService.get_workspace_roles_and_permissions_db",
+        "src.services.auth_flows.AuthService.get_workspace_roles_and_permissions_db",
         fake_get_workspace_roles_and_permissions_db,
     )
 
     response = asyncio.run(
-        auth_routes.get_current_user_info(
+        auth_flows.get_me(
             session=_SessionStub(),
-            current_user=SimpleNamespace(id=9),
+            user_id=9,
         )
     )
 
@@ -389,15 +387,15 @@ def test_list_auth_sessions_route_returns_superuser_inventory(monkeypatch: pytes
             }
         ]
 
-    monkeypatch.setattr("src.routes.rbac.SessionService.list_all_sessions", fake_list_all_sessions)
+    monkeypatch.setattr("src.services.rbac_flows.SessionService.list_all_sessions", fake_list_all_sessions)
 
     response = asyncio.run(
-        rbac_routes.list_auth_sessions(
-            session=object(),
-            current_user=SimpleNamespace(is_superuser=True),
+        rbac_flows.list_auth_sessions(
+            object(),
+            SimpleNamespace(is_superuser=True),
             user_id=12,
             search="ada",
-            status="active",
+            status_filter="active",
         )
     )
 
@@ -430,16 +428,16 @@ def test_assign_linked_player_to_auth_user_route_calls_admin_link_service(monkey
     fake_session = _FakeSession()
 
     monkeypatch.setattr(
-        "src.routes.rbac.PlayerLinkService.admin_link_player",
+        "src.services.rbac_flows.PlayerLinkService.admin_link_player",
         fake_admin_link_player,
     )
 
     response = asyncio.run(
-        rbac_routes.assign_linked_player_to_auth_user(
-            user_id=9,
-            data=SimpleNamespace(player_id=42, is_primary=False),
-            session=fake_session,
-            current_user=SimpleNamespace(is_superuser=True),
+        rbac_flows.assign_linked_player_to_auth_user(
+            fake_session,
+            SimpleNamespace(is_superuser=True, has_permission=lambda r, a: True),
+            9,
+            SimpleNamespace(player_id=42, is_primary=False),
         )
     )
 
@@ -469,16 +467,16 @@ def test_remove_linked_player_from_auth_user_route_calls_admin_unlink_service(mo
     fake_session = _FakeSession()
 
     monkeypatch.setattr(
-        "src.routes.rbac.PlayerLinkService.admin_unlink_player",
+        "src.services.rbac_flows.PlayerLinkService.admin_unlink_player",
         fake_admin_unlink_player,
     )
 
     response = asyncio.run(
-        rbac_routes.remove_linked_player_from_auth_user(
-            user_id=9,
-            player_id=42,
-            session=fake_session,
-            current_user=SimpleNamespace(is_superuser=True),
+        rbac_flows.remove_linked_player_from_auth_user(
+            fake_session,
+            SimpleNamespace(is_superuser=True, has_permission=lambda r, a: True),
+            9,
+            42,
         )
     )
 
@@ -515,17 +513,17 @@ def test_remove_role_route_blocks_removing_last_admin_assignment(monkeypatch: py
     async def fake_invalidate_rbac(_user_id):
         return None
 
-    monkeypatch.setattr("src.routes.rbac._count_users_with_role", fake_count_users_with_role, raising=False)
-    monkeypatch.setattr("src.routes.rbac.invalidate_rbac", fake_invalidate_rbac, raising=False)
+    monkeypatch.setattr("src.services.rbac_flows._count_users_with_role", fake_count_users_with_role, raising=False)
+    monkeypatch.setattr("src.services.rbac_flows.invalidate_rbac", fake_invalidate_rbac, raising=False)
 
     session = _FakeSession()
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            rbac_routes.remove_role_from_user(
-                data=SimpleNamespace(user_id=1, role_id=1),
-                session=session,
-                current_user=current_user,
+            rbac_flows.remove_role_from_user(
+                session,
+                current_user,
+                SimpleNamespace(user_id=1, role_id=1),
             )
         )
 
@@ -566,16 +564,16 @@ def test_remove_role_route_allows_admin_removal_when_another_assignment_exists(
     async def fake_invalidate_rbac(_user_id):
         return None
 
-    monkeypatch.setattr("src.routes.rbac._count_users_with_role", fake_count_users_with_role, raising=False)
-    monkeypatch.setattr("src.routes.rbac.invalidate_rbac", fake_invalidate_rbac, raising=False)
+    monkeypatch.setattr("src.services.rbac_flows._count_users_with_role", fake_count_users_with_role, raising=False)
+    monkeypatch.setattr("src.services.rbac_flows.invalidate_rbac", fake_invalidate_rbac, raising=False)
 
     session = _FakeSession()
 
     asyncio.run(
-        rbac_routes.remove_role_from_user(
-            data=SimpleNamespace(user_id=1, role_id=1),
-            session=session,
-            current_user=current_user,
+        rbac_flows.remove_role_from_user(
+            session,
+            current_user,
+            SimpleNamespace(user_id=1, role_id=1),
         )
     )
 
@@ -599,11 +597,11 @@ def test_update_role_route_rejects_system_roles() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            rbac_routes.update_role(
-                role_id=11,
-                role_data=SimpleNamespace(name="moderator_v2", description=None, permission_ids=None),
-                session=_FakeSession(),
-                current_user=SimpleNamespace(is_superuser=True),
+            rbac_flows.update_role(
+                _FakeSession(),
+                SimpleNamespace(is_superuser=True),
+                11,
+                SimpleNamespace(name="moderator_v2", description=None, permission_ids=None),
             )
         )
 
@@ -627,10 +625,10 @@ def test_delete_role_route_rejects_system_roles() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            rbac_routes.delete_role(
-                role_id=12,
-                session=_FakeSession(),
-                current_user=SimpleNamespace(is_superuser=True),
+            rbac_flows.delete_role(
+                _FakeSession(),
+                SimpleNamespace(is_superuser=True),
+                12,
             )
         )
 
@@ -671,10 +669,10 @@ def test_delete_oauth_connection_route_deletes_connection(monkeypatch: pytest.Mo
     session = _FakeSession()
 
     asyncio.run(
-        rbac_routes.delete_oauth_connection(
-            connection_id=21,
-            session=session,
-            current_user=SimpleNamespace(id=1, is_superuser=True),
+        rbac_flows.delete_oauth_connection(
+            session,
+            SimpleNamespace(id=1, is_superuser=True, has_permission=lambda r, a: True),
+            21,
         )
     )
 
@@ -727,10 +725,10 @@ def test_delete_oauth_connection_route_blocks_last_passwordless_login() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            rbac_routes.delete_oauth_connection(
-                connection_id=31,
-                session=session,
-                current_user=SimpleNamespace(id=1, is_superuser=True),
+            rbac_flows.delete_oauth_connection(
+                session,
+                SimpleNamespace(id=1, is_superuser=True, has_permission=lambda r, a: True),
+                31,
             )
         )
 

@@ -1,6 +1,16 @@
+"""RPC-handler tests for the statistics surface.
+
+Targets:
+- champion -> ``rpc.app.statistics.champion``
+
+Replaces the former HTTP-client test (``GET /statistics/champion``) against the
+decommissioned HTTP service; assertions mirror the old test on the envelope
+``data``.
+"""
+
 import pytest
-from fastapi.testclient import TestClient
-from src.core import config
+
+from tests.conftest import RpcHarness, build_query
 
 
 @pytest.mark.parametrize(
@@ -12,25 +22,29 @@ from src.core import config
     ],
 )
 def test_get_champions(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
     order: str,
     entities: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/statistics/champion",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
+    env = rpc.call_sync(
+        "rpc.app.statistics.champion",
+        {
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                }
+            )
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]

@@ -129,52 +129,11 @@ services:
   # `/api/realtime/ws` (nginx -> gateway:8080). Service code kept under
   # backend/realtime-service/ as reference (not deployed).
 
-  balancer:
-    image: registry.craazzzyyfoxx.me/aqt-balancer:dev
-    build:
-      context: ./backend
-      args:
-        APP_PATH: balancer
-    command: uvicorn main:app --host 0.0.0.0 --port 8003 --loop uvloop --reload --reload-delay 5 --reload-dir /app/balancer-service --reload-dir /app/shared
-    ports:
-      - "8003:8003"
-    env_file:
-      - ./backend/env/common.env
-      - ./backend/env/balancer.env
-    environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
-      - TRACING_ENABLED=true
-      - OTLP_ENDPOINT=http://otel-collector:4317
-      - OTEL_TRACES_SAMPLER=always_on
-      - OTEL_TRACES_SAMPLER_ARG=1.0
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ss-local:
-        condition: service_healthy
-    volumes:
-      - ./backend/balancer-service:/app/balancer-service
-      - ./backend/shared:/app/shared
-      - ./logs/balancer:/logs
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health/live')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.10'
-          memory: 128M
+  # balancer-service HTTP decommissioned: /api/balancer is served by the headless
+  # balancer-worker (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
+  # The worker also consumes the balancer job queue + runs the draft clock + Rust
+  # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
+  # tournament:{id}:balancer WS topic).
 
   parser-worker:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
@@ -258,7 +217,6 @@ services:
 
   balancer-worker:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
-    profiles: ["workers"]
     build:
       context: ./backend
       args:
@@ -281,8 +239,6 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      balancer:
         condition: service_healthy
     volumes:
       - ./backend/balancer-service:/app/balancer-service
@@ -452,8 +408,8 @@ services:
       # Only server-side (SSR + route handlers + middleware) fetches need a base.
       - NEXT_INTERNAL_API_URL=${NEXT_INTERNAL_API_URL:-http://gateway:8080}
     depends_on:
-      balancer:
-        condition: service_healthy
+      gateway:
+        condition: service_started
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public

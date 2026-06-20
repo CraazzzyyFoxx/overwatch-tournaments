@@ -7,7 +7,8 @@ redirect). Provider code-exchange does outbound HTTP from identity-svc.
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.models.oauth import OAuthConnection
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession

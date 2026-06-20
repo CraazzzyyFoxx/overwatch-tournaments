@@ -1,10 +1,9 @@
-import asyncio
 import os
 import sys
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 
 def _ensure_test_env() -> None:
@@ -32,10 +31,9 @@ _ensure_test_env()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.routes import auth as auth_routes
-from src.routes import oauth as oauth_routes
-from src.schemas.oauth import OAuthProvider
-from src.services.oauth_service import OAuthService
+from src.schemas.oauth import OAuthProvider  # noqa: E402
+from src.services import oauth_flows  # noqa: E402
+from src.services.oauth_service import OAuthService  # noqa: E402
 
 
 def test_get_available_providers_returns_only_enabled_and_configured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,7 +63,7 @@ def test_list_oauth_providers_route_returns_enabled_providers(monkeypatch: pytes
     monkeypatch.setattr("src.services.oauth_service.settings.BATTLENET_OAUTH_ENABLED", True, raising=False)
     monkeypatch.setattr("src.services.oauth_service.settings.OAUTH_REDIRECT", "http://localhost:3000/auth/callback")
 
-    response = asyncio.run(oauth_routes.list_oauth_providers())
+    response = oauth_flows.list_providers()
 
     assert [item.provider for item in response] == [OAuthProvider.DISCORD, OAuthProvider.BATTLENET]
 
@@ -93,6 +91,6 @@ def test_list_available_oauth_providers_top_level_route_returns_enabled_provider
     monkeypatch.setattr("src.services.oauth_service.settings.BATTLENET_OAUTH_ENABLED", True)
     monkeypatch.setattr("src.services.oauth_service.settings.OAUTH_REDIRECT", "http://localhost:3000/auth/callback")
 
-    response = asyncio.run(auth_routes.list_available_oauth_providers())
+    response = oauth_flows.list_providers()
 
     assert [item.provider for item in response] == [OAuthProvider.DISCORD, OAuthProvider.BATTLENET]

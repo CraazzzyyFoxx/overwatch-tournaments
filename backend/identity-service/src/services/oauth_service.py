@@ -13,7 +13,8 @@ from urllib.parse import urlencode
 
 import httpx
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from loguru import logger
 from shared.models.oauth import OAuthConnection
 from shared.models.rbac import user_roles

@@ -46,6 +46,30 @@ const (
 	queueUpdateApiKey = "rpc.identity.update_api_key"
 	queueRevokeApiKey = "rpc.identity.revoke_api_key"
 
+	queueRbacListPermissions    = "rpc.identity.rbac.list_permissions"
+	queueRbacCreatePermission   = "rpc.identity.rbac.create_permission"
+	queueRbacDeletePermission   = "rpc.identity.rbac.delete_permission"
+	queueRbacListRoles          = "rpc.identity.rbac.list_roles"
+	queueRbacGetRole            = "rpc.identity.rbac.get_role"
+	queueRbacCreateRole         = "rpc.identity.rbac.create_role"
+	queueRbacUpdateRole         = "rpc.identity.rbac.update_role"
+	queueRbacDeleteRole         = "rpc.identity.rbac.delete_role"
+	queueRbacListAuthUsers      = "rpc.identity.rbac.list_auth_users"
+	queueRbacGetAuthUser        = "rpc.identity.rbac.get_auth_user"
+	queueRbacAssignLinkedPlayer = "rpc.identity.rbac.assign_linked_player"
+	queueRbacRemoveLinkedPlayer = "rpc.identity.rbac.remove_linked_player"
+	queueRbacAssignRole         = "rpc.identity.rbac.assign_role"
+	queueRbacRemoveRole         = "rpc.identity.rbac.remove_role"
+	queueRbacGetUserRoles       = "rpc.identity.rbac.get_user_roles"
+	queueRbacListOAuthConns     = "rpc.identity.rbac.list_oauth_connections"
+	queueRbacListSessions       = "rpc.identity.rbac.list_sessions"
+	queueRbacDeleteOAuthConn    = "rpc.identity.rbac.delete_oauth_connection"
+
+	queuePlayerLink       = "rpc.identity.player.link"
+	queuePlayerUnlink     = "rpc.identity.player.unlink"
+	queuePlayerLinked     = "rpc.identity.player.linked"
+	queuePlayerSetPrimary = "rpc.identity.player.set_primary"
+
 	rpcTimeout = 5 * time.Second
 )
 
@@ -320,6 +344,182 @@ func (h *Handler) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(map[string]any{"access_token": token, "api_key_id": r.PathValue("id")})
 	h.callIdentity(w, r, queueRevokeApiKey, body, http.StatusNoContent)
+}
+
+// --- RBAC admin (authenticated; permission checks enforced in identity-svc) ---
+//
+// Query filters (search/role_id/is_active/is_superuser/workspace_id/provider/
+// status/user_id) ride as scalar fields in the RPC body; path params likewise.
+// Permission checks + cache invalidation run in identity-svc's rbac_flows.
+
+// RbacListPermissions mirrors GET /rbac/permissions?workspace_id=.
+func (h *Handler) RbacListPermissions(w http.ResponseWriter, r *http.Request) {
+	h.authedQuery(w, r, queueRbacListPermissions, http.StatusOK, "workspace_id")
+}
+
+// RbacCreatePermission mirrors POST /rbac/permissions -> 201.
+func (h *Handler) RbacCreatePermission(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacCreatePermission, http.StatusCreated, nil)
+}
+
+// RbacDeletePermission mirrors DELETE /rbac/permissions/{permission_id} -> 204.
+func (h *Handler) RbacDeletePermission(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacDeletePermission, http.StatusNoContent,
+		map[string]any{"permission_id": r.PathValue("permission_id")})
+}
+
+// RbacListRoles mirrors GET /rbac/roles?workspace_id=.
+func (h *Handler) RbacListRoles(w http.ResponseWriter, r *http.Request) {
+	h.authedQuery(w, r, queueRbacListRoles, http.StatusOK, "workspace_id")
+}
+
+// RbacGetRole mirrors GET /rbac/roles/{role_id}.
+func (h *Handler) RbacGetRole(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacGetRole, http.StatusOK, map[string]any{"role_id": r.PathValue("role_id")})
+}
+
+// RbacCreateRole mirrors POST /rbac/roles -> 201.
+func (h *Handler) RbacCreateRole(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacCreateRole, http.StatusCreated, nil)
+}
+
+// RbacUpdateRole mirrors PATCH /rbac/roles/{role_id}.
+func (h *Handler) RbacUpdateRole(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacUpdateRole, http.StatusOK, map[string]any{"role_id": r.PathValue("role_id")})
+}
+
+// RbacDeleteRole mirrors DELETE /rbac/roles/{role_id} -> 204.
+func (h *Handler) RbacDeleteRole(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacDeleteRole, http.StatusNoContent, map[string]any{"role_id": r.PathValue("role_id")})
+}
+
+// RbacListAuthUsers mirrors GET /rbac/users?search=&role_id=&is_active=&is_superuser=&workspace_id=.
+func (h *Handler) RbacListAuthUsers(w http.ResponseWriter, r *http.Request) {
+	h.authedQuery(w, r, queueRbacListAuthUsers, http.StatusOK,
+		"search", "role_id", "is_active", "is_superuser", "workspace_id")
+}
+
+// RbacGetAuthUser mirrors GET /rbac/users/{user_id}.
+func (h *Handler) RbacGetAuthUser(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacGetAuthUser, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacAssignLinkedPlayer mirrors POST /rbac/users/{user_id}/linked-players -> 204.
+func (h *Handler) RbacAssignLinkedPlayer(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacAssignLinkedPlayer, http.StatusNoContent,
+		map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacRemoveLinkedPlayer mirrors DELETE /rbac/users/{user_id}/linked-players/{player_id} -> 204.
+func (h *Handler) RbacRemoveLinkedPlayer(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacRemoveLinkedPlayer, http.StatusNoContent,
+		map[string]any{"user_id": r.PathValue("user_id"), "player_id": r.PathValue("player_id")})
+}
+
+// RbacAssignRole mirrors POST /rbac/users/assign-role -> 204.
+func (h *Handler) RbacAssignRole(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacAssignRole, http.StatusNoContent, nil)
+}
+
+// RbacRemoveRole mirrors POST /rbac/users/remove-role -> 204.
+func (h *Handler) RbacRemoveRole(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacRemoveRole, http.StatusNoContent, nil)
+}
+
+// RbacGetUserRoles mirrors GET /rbac/users/{user_id}/roles.
+func (h *Handler) RbacGetUserRoles(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacGetUserRoles, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacListOAuthConnections mirrors GET /rbac/oauth-connections?search=&provider=.
+func (h *Handler) RbacListOAuthConnections(w http.ResponseWriter, r *http.Request) {
+	h.authedQuery(w, r, queueRbacListOAuthConns, http.StatusOK, "search", "provider")
+}
+
+// RbacListSessions mirrors GET /rbac/sessions?user_id=&search=&status=.
+func (h *Handler) RbacListSessions(w http.ResponseWriter, r *http.Request) {
+	h.authedQuery(w, r, queueRbacListSessions, http.StatusOK, "user_id", "search", "status")
+}
+
+// RbacDeleteOAuthConnection mirrors DELETE /rbac/oauth-connections/{connection_id} -> 204.
+func (h *Handler) RbacDeleteOAuthConnection(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacDeleteOAuthConn, http.StatusNoContent,
+		map[string]any{"connection_id": r.PathValue("connection_id")})
+}
+
+// --- Player linking (authenticated; resolves the active user in identity-svc) ---
+
+// PlayerLink mirrors POST /player/link -> 201.
+func (h *Handler) PlayerLink(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queuePlayerLink, http.StatusCreated, nil)
+}
+
+// PlayerUnlink mirrors DELETE /player/unlink/{player_id} -> 204.
+func (h *Handler) PlayerUnlink(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queuePlayerUnlink, http.StatusNoContent, map[string]any{"player_id": r.PathValue("player_id")})
+}
+
+// PlayerLinked mirrors GET /player/linked -> 200 [LinkedPlayer].
+func (h *Handler) PlayerLinked(w http.ResponseWriter, r *http.Request) {
+	h.authedNoBody(w, r, queuePlayerLinked, http.StatusOK)
+}
+
+// PlayerSetPrimary mirrors PATCH /player/linked/{player_id}/primary -> 200.
+func (h *Handler) PlayerSetPrimary(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queuePlayerSetPrimary, http.StatusOK, map[string]any{"player_id": r.PathValue("player_id")})
+}
+
+// authedFields handles a bearer-authenticated endpoint with no JSON request body,
+// forwarding the access token plus fixed extra fields (path params) to identity-svc.
+func (h *Handler) authedFields(w http.ResponseWriter, r *http.Request, queue string, successStatus int, extra map[string]any) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body := map[string]any{"access_token": token}
+	for k, v := range extra {
+		body[k] = v
+	}
+	b, _ := json.Marshal(body)
+	h.callIdentity(w, r, queue, b, successStatus)
+}
+
+// authedQuery handles a bearer-authenticated GET, forwarding the access token plus
+// the named query params (omitting any that are absent) to identity-svc.
+func (h *Handler) authedQuery(w http.ResponseWriter, r *http.Request, queue string, successStatus int, params ...string) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body := map[string]any{"access_token": token}
+	for _, p := range params {
+		if v := r.URL.Query().Get(p); v != "" {
+			body[p] = v
+		}
+	}
+	b, _ := json.Marshal(body)
+	h.callIdentity(w, r, queue, b, successStatus)
+}
+
+// authedMerge handles a bearer-authenticated endpoint with a JSON request body,
+// merging the access token plus fixed extra fields (path params) before forwarding.
+func (h *Handler) authedMerge(w http.ResponseWriter, r *http.Request, queue string, successStatus int, extra map[string]any) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	merged := map[string]any{"access_token": token}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	body, ok := mergeBody(w, r, merged)
+	if !ok {
+		return
+	}
+	h.callIdentity(w, r, queue, body, successStatus)
 }
 
 // authedNoBody handles a bearer-authenticated endpoint with no request body,

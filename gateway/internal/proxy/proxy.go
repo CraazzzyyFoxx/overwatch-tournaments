@@ -27,14 +27,12 @@ type Proxy struct {
 // New builds the proxy from the configured upstreams.
 func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
-		// /api/v1/* (tournament + app + parser) is served by the gateway's typed
-		// RPC routes into the workers — never proxied; the /api/v1/ 404 guard in
-		// main.go catches unmatched paths. /api/auth/* likewise via identity-svc.
-		// parser + analytics HTTP are decommissioned (parser folded into /api/v1;
-		// /api/analytics is fully served by typed RPC into analytics-svc), so neither
-		// is proxied. The /api/balancer fallback below serves only un-migrated
-		// (non-typed) balancer endpoints on their legacy paths.
-		{"/api/balancer", up.Balancer},
+		// All backend domains (/api/v1/* for tournament+app+parser, /api/auth/* via
+		// identity-svc, /api/analytics/* via analytics-svc, /api/balancer/* via
+		// balancer-worker) are served by the gateway's typed RPC routes — never
+		// proxied; per-prefix 404 guards in main.go catch unmatched paths. The HTTP
+		// parser/analytics/balancer services are decommissioned. Only the frontend
+		// is reverse-proxied now.
 		{"/api/account", up.Frontend},
 		{"/", up.Frontend},
 	}

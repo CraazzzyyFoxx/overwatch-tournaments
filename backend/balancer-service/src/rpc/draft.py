@@ -18,7 +18,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 

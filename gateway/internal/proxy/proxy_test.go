@@ -28,7 +28,6 @@ func TestProxy_LongestPrefixRouting(t *testing.T) {
 	p, err := New(config.Upstreams{
 		Frontend:  frontend.URL,
 		Parser:    unused,
-		Balancer:  unused,
 		Analytics: unused,
 	})
 	if err != nil {

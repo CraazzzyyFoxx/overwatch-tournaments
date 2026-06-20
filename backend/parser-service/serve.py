@@ -35,6 +35,7 @@ from shared.schemas.events import (
 
 from src import models
 from src.core import config, db
+from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
@@ -49,6 +50,7 @@ from src.services.match_logs import flows as logs_flows
 from src.services.match_logs import realtime as logs_realtime
 from src.services.match_logs import uploads as upload_service
 from src.services.match_logs.result_events import publish_match_log_result
+from src.services.overwatch_rank import scheduler as rank_scheduler
 from src.services.overwatch_rank import tasks as rank_tasks
 from src.services.s3 import service as s3_service
 
@@ -61,6 +63,12 @@ logger = setup_logging(
 
 broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
+
+# Expose the worker broker to publishers that don't thread one through (the
+# APScheduler rank tick, the admin "collect now" RPC, the Challonge-import
+# standings-recalculation enqueue, ...). Replaces the old task_router.broker
+# fallback now that the fastapi RabbitRouter is gone.
+set_worker_broker(broker)
 
 # The cashews singleton is process-global with no default backend; configure it
 # before any subscriber runs so cache reads/invalidation are routable.
@@ -102,11 +110,16 @@ async def start_worker() -> None:
     start_worker_metrics_server(config.settings.worker_metrics_port)
     await s3_client.start()
     await rank_tasks.rank_client.start()
+    # Periodic OverFast rank collection trigger (Redis leader-locked across worker
+    # replicas, admin-settings-gated — no-ops while collection is disabled). Lives
+    # in the worker now that the HTTP service is decommissioned.
+    rank_scheduler.start_scheduler()
     logger.info("Parser worker started")
 
 
 @app.on_shutdown
 async def stop_worker() -> None:
+    rank_scheduler.shutdown_scheduler()
     await s3_client.close()
     await rank_tasks.rank_client.close()
     await rank_tasks.close_redis()

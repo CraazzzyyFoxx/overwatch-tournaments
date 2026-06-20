@@ -13,7 +13,7 @@ import typing
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.query import build_query_model
 
 from src import schemas

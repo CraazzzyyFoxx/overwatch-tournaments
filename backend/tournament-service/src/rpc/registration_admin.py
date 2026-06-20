@@ -40,7 +40,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from shared.balancer_registration_statuses import get_status_metas_map

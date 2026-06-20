@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 from shared.messaging.config import PROCESS_MATCH_LOG_QUEUE, PROCESS_TOURNAMENT_LOGS_QUEUE
 from shared.models.log_processing import LogProcessingSource, LogProcessingStatus
@@ -29,16 +29,18 @@ from sqlalchemy import desc, select
 
 from src import models
 from src.core import auth, db
-from src.routes.admin.logs import (
+from src.schemas.admin.logs import (
     LogRecordRead,
     LogUploadError,
     LogUploadItem,
     LogUploadResponse,
+)
+from src.services.match_logs import uploads as upload_service
+from src.services.match_logs.admin_reads import (
     _fetch_queue_depths,
     _record_to_dict,
     _validate_attached_encounter,
 )
-from src.services.match_logs import uploads as upload_service
 from src.services.tournament import flows as tournament_flows
 
 from . import _clients
