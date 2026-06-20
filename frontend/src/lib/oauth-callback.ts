@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
+import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import type { OAuthProviderName } from "@/types/auth.types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+// Cookie lifetime used when the access token's `exp` can't be decoded.
+const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
 
 function createRedirectResponse(redirectUrl: URL, clearOAuthCookies: boolean = true): NextResponse {
   const response = NextResponse.redirect(redirectUrl);
@@ -85,7 +89,7 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 13 * 60
+      maxAge: getTokenMaxAgeSeconds(tokens.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS)
     });
 
     response.cookies.set("aqt_refresh_token", tokens.refresh_token, {
