@@ -8,7 +8,9 @@ from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHA
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
 
+from src.core import db
 from src.core.caching import CACHE_PREFIXES
+from src.services import hero_stats_refresh
 
 
 def _with_prefixes(*suffixes: str) -> tuple[str, ...]:
@@ -65,3 +67,6 @@ def register(broker: Any, logger: Any) -> None:
             logger=logger,
         ):
             await handle_tournament_changed_event(data)
+            # Match data changed → schedule a debounced refresh of the global
+            # hero-stats materialized view (no-op if refreshed recently).
+            hero_stats_refresh.request_refresh(db.async_session_maker, logger)

@@ -10,15 +10,15 @@ Run with: ``faststream run serve:app``.
 
 from cashews import cache
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from shared.observability import (
+    make_rabbit_broker,
     setup_logging,
     setup_sentry,
     setup_tracing,
     start_worker_metrics_server,
 )
 
-from src.core import config
+from src.core import config, db
 from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
@@ -35,7 +35,7 @@ from src.rpc import (
     users_admin,
     workspaces,
 )
-from src.services import tournament_events
+from src.services import hero_stats_refresh, tournament_events
 
 logger = setup_logging(
     service_name="app-svc",
@@ -44,7 +44,7 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
 # The cashews singleton is process-global and has no default backend. The
@@ -104,6 +104,9 @@ async def start_worker() -> None:
     # Drop stale cache on (re)deploy, mirroring the HTTP service lifespan.
     await cache.delete_match("fastapi:*")
     await cache.delete_match("backend:*")
+    # Kick off the initial build of the hero global-stats materialized view as a
+    # debounced background task — never blocks startup or the event consumer.
+    hero_stats_refresh.request_refresh(db.async_session_maker, logger)
     logger.info("App RPC service (app-svc) started")
 
 

@@ -2,8 +2,8 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
-from cashews import cache
 from shared.division_grid import DivisionGrid, division_case_expr
+from shared.models import mv_hero_global_stats
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -2172,120 +2172,48 @@ async def get_statistics_by_heroes(
     return result.all()
 
 
-async def _get_statistics_by_heroes_all_values_impl(
-    session: AsyncSession,
-    stats: list[enums.LogStatsName] | None,
-) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
+def _read_hero_global_stats_query(stats: list[enums.LogStatsName] | None) -> sa.Select:
+    """Read precomputed global per-(hero, stat) records from the materialized
+    view ``matches.mv_hero_global_stats``.
+
+    The heavy aggregation that used to run here on every cache miss (a window
+    function over the whole eligible set joined to 5 tables) blew past
+    ``statement_timeout``. It now lives in the view body and is refreshed
+    out-of-band by the app-worker (see ``hero_stats_refresh``); reads are a
+    cheap indexed scan, so the per-request cache is no longer needed.
     """
-    Retrieves the best statistics for all heroes across all users, including max value, average value, and metadata.
-
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-
-    Returns:
-        A sequence of tuples containing:
-        1. The statistic name (e.g., HeroDamageDealt, Eliminations).
-        2. The hero ID.
-        3. The maximum value of the statistic.
-        4. The average value of the statistic (per 10 minutes).
-        5. A dictionary containing metadata about the best performance (e.g., encounter ID, map name, tournament name, username).
-    """
-    eligible_stats = _build_eligible_hero_stats_cte(
-        user_id=None,
-        stats=stats,
-        cte_name="eligible_global_hero_stats",
+    mv = mv_hero_global_stats
+    query = sa.select(
+        mv.c.name,
+        mv.c.hero_id,
+        mv.c.best_value,
+        mv.c["avg"],
+        mv.c["metadata"],
     )
-    direction_score = _hero_direction_score(eligible_stats.c.value, eligible_stats.c.name)
-
-    best_encounter_cte = (
-        sa.select(
-            eligible_stats.c.hero_id,
-            eligible_stats.c.name,
-            models.Match.encounter_id,
-            models.Map.name.label("map_name"),
-            models.Map.image_path.label("map_image_path"),
-            models.Tournament.name.label("tournament_name"),
-            models.User.name.label("username"),
-            eligible_stats.c.value,
-            sa.func.row_number()
-            .over(
-                partition_by=[
-                    eligible_stats.c.hero_id,
-                    eligible_stats.c.name,
-                ],
-                order_by=[direction_score.desc(), models.Match.id.desc()],
-            )
-            .label("row_num"),
-        )
-        .join(models.Match, eligible_stats.c.match_id == models.Match.id)
-        .join(models.Map, models.Map.id == models.Match.map_id)
-        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
-        .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .join(models.User, models.User.id == eligible_stats.c.user_id)
-        .cte("best_global_hero_result")
-    )
-
-    query = (
-        sa.select(
-            eligible_stats.c.name,
-            models.Hero.id,
-            best_encounter_cte.c.value.label("best_value"),
-            (sa.func.sum(eligible_stats.c.value) / sa.func.nullif(sa.func.sum(models.Match.time), 0) * 600).label(
-                "avg"
-            ),
-            sa.func.jsonb_build_object(
-                "encounter_id",
-                best_encounter_cte.c.encounter_id,
-                "map_name",
-                best_encounter_cte.c.map_name,
-                "map_image_path",
-                best_encounter_cte.c.map_image_path,
-                "tournament_name",
-                best_encounter_cte.c.tournament_name,
-                "username",
-                best_encounter_cte.c.username,
-            ).label("metadata"),
-        )
-        .select_from(eligible_stats)
-        .join(models.Match, models.Match.id == eligible_stats.c.match_id)
-        .join(models.Hero, models.Hero.id == eligible_stats.c.hero_id)
-        .join(
-            best_encounter_cte,
-            sa.and_(
-                best_encounter_cte.c.hero_id == eligible_stats.c.hero_id,
-                best_encounter_cte.c.name == eligible_stats.c.name,
-                best_encounter_cte.c.row_num == 1,
-            ),
-        )
-        .group_by(
-            eligible_stats.c.name,
-            models.Hero.id,
-            best_encounter_cte.c.encounter_id,
-            best_encounter_cte.c.map_name,
-            best_encounter_cte.c.map_image_path,
-            best_encounter_cte.c.tournament_name,
-            best_encounter_cte.c.username,
-            best_encounter_cte.c.value,
-        )
-        .order_by(models.Hero.id)
-    )
-
-    result_all = await session.execute(query)
-    return result_all.all()  # type: ignore
+    if stats:
+        query = query.where(mv.c.name.in_(stats))
+    return query.order_by(mv.c.hero_id)
 
 
-@cache(ttl="1d", key="get_statistics_by_heroes_all_values", prefix="backend:")
 async def get_statistics_by_heroes_all_values(
     session: AsyncSession,
 ) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
-    return await _get_statistics_by_heroes_all_values_impl(session, stats=None)
+    """Best value (+ metadata) and global per-10min average for every (hero, stat).
+
+    Served from the precomputed ``matches.mv_hero_global_stats`` view. Returns an
+    empty sequence until the view's first refresh has populated it, so callers
+    degrade gracefully (per-user stats render without the global comparison).
+    """
+    result = await session.execute(_read_hero_global_stats_query(None))
+    return result.all()  # type: ignore[return-value]
 
 
 async def get_statistics_by_heroes_all_values_filtered(
     session: AsyncSession,
     stats: list[enums.LogStatsName],
 ) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
-    return await _get_statistics_by_heroes_all_values_impl(session, stats=stats)
+    result = await session.execute(_read_hero_global_stats_query(stats))
+    return result.all()  # type: ignore[return-value]
 
 
 async def get_best_teammates(
