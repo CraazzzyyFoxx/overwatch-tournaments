@@ -39,6 +39,7 @@ from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
     achievements as rpc_achievements,
+    bootstrap as rpc_bootstrap,
     logs as rpc_logs,
     misc as rpc_misc,
     rank as rpc_rank,
@@ -73,6 +74,7 @@ rpc_logs.register(broker, logger)
 rpc_rank.register(broker, logger)
 rpc_achievements.register(broker, logger)
 rpc_misc.register(broker, logger)
+rpc_bootstrap.register(broker, logger)
 
 
 @app.on_startup
