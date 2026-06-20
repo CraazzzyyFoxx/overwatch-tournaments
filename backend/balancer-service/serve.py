@@ -3,13 +3,13 @@ import json
 from typing import Any
 
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from redis.asyncio import Redis
 
 from shared.messaging.config import BALANCER_JOBS_QUEUE
 from shared.observability import (
+    make_rabbit_broker,
     setup_logging,
     setup_sentry,
     setup_tracing,
@@ -34,7 +34,7 @@ logger = setup_logging(
     json_output=config.json_logging,
 )
 
-broker = RabbitBroker(config.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
 # The cashews singleton is process-global with no default backend; the HTTP app

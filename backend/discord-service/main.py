@@ -17,6 +17,7 @@ from shared.messaging.config import (
 from shared.models import Tournament, TournamentDiscordChannel
 from shared.models.log_processing import LogProcessingRecord, LogProcessingStatus
 from shared.observability import (
+    make_rabbit_broker,
     observe_message_processing,
     publish_message,
     setup_logging,
@@ -496,7 +497,7 @@ async def start_rabbitmq_listener() -> None:
         logger.info("ℹ️ RABBITMQ_URL not set; RabbitMQ listener disabled")
         return
 
-    rabbit_broker = RabbitBroker(settings.broker_url, logger=logger)
+    rabbit_broker = make_rabbit_broker(settings.broker_url, logger=logger)
     register_rabbit_handlers(rabbit_broker)
     await rabbit_broker.start()
     logger.success(f"✅ RabbitMQ listener started (queue='{DISCORD_COMMANDS_QUEUE}')")

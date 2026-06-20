@@ -1,6 +1,5 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from shared.messaging.config import (
     TOURNAMENT_BRACKET_JOBS_DLQ,
@@ -12,6 +11,7 @@ from shared.messaging.config import (
 from shared.messaging.outbox import publish_pending_outbox_events
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
+    make_rabbit_broker,
     observe_message_processing,
     setup_logging,
     setup_sentry,
@@ -40,7 +40,7 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
 

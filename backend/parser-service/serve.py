@@ -2,7 +2,6 @@ import base64
 
 import sqlalchemy as sa
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
@@ -17,6 +16,7 @@ from shared.messaging.config import (
 )
 from shared.models.log_processing import LogProcessingSource
 from shared.observability import (
+    make_rabbit_broker,
     metrics,
     observe_message_processing,
     publish_message,
@@ -59,7 +59,7 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
 # The cashews singleton is process-global with no default backend; configure it

@@ -9,6 +9,7 @@ This module provides:
 """
 
 from . import metrics
+from .broker import make_rabbit_broker
 from .correlation import (
     CORRELATION_ID_HEADER,
     REQUEST_ID_HEADER,
@@ -32,6 +33,7 @@ from .tracing import instrument_fastapi, instrument_sqlalchemy, setup_tracing
 from .worker import observe_message_processing, publish_message, start_worker_metrics_server
 
 __all__ = [
+    "make_rabbit_broker",
     "setup_logging",
     "get_logger",
     "setup_sentry",
