@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/acl"
@@ -30,6 +32,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/observability"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
@@ -41,18 +44,25 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	if err := run(logger); err != nil {
-		logger.Error("gateway exited with error", "err", err)
+	if err := run(); err != nil {
+		slog.New(slog.NewJSONHandler(os.Stderr, nil)).Error("gateway exited with error", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
+func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+
+	// Sentry: error monitoring + tracing + logs. No-op when SENTRY_DSN is empty.
+	flush, err := observability.Init(cfg)
+	if err != nil {
+		return err
+	}
+	defer flush(2 * time.Second)
+	logger := observability.NewLogger(cfg)
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -101,12 +111,11 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	// mux holds the REST surface only. The WebSocket endpoints and /health are
+	// registered on the outer router below so they bypass the sentryhttp
+	// middleware (which would otherwise open a transaction spanning the whole
+	// long-lived WS connection, and trace every health probe).
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", health)
-	// The gateway owns the WebSocket endpoint. Serve both the dev path (/ws) and
-	// the external path (/api/realtime/ws) so the frontend connects unchanged.
-	mux.Handle("/ws", wsHandler)
-	mux.Handle("/api/realtime/ws", wsHandler)
 	// Identity HTTP face (RPC into identity-svc). Additive: these specific
 	// /api/auth/* paths are served here; the rest still proxy to auth-service.
 	mux.HandleFunc("POST /api/auth/validate", identityHandler.Validate)
@@ -235,9 +244,36 @@ func run(logger *slog.Logger) error {
 		}
 	}()
 
+	// WebSocket handler with Sentry panic recovery. The read loop runs
+	// synchronously in ServeHTTP, so a panic unwinds through this deferred
+	// recover. Each connection gets its own cloned hub (the global hub's scope is
+	// not safe for concurrent capture), carrying the request for context. The
+	// query string (which may hold ?token=) is scrubbed by the BeforeSend hook.
+	wsWithRecover := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hub := sentry.CurrentHub().Clone()
+		hub.Scope().SetRequest(r)
+		ctx := sentry.SetHubOnContext(r.Context(), hub)
+		defer sentry.RecoverWithContext(ctx)
+		wsHandler.ServeHTTP(w, r)
+	})
+
+	// Sentry middleware for the REST surface: per-request hub, an HTTP
+	// transaction (tracing), and panic capture. Repanic lets net/http's own
+	// per-request recovery run after Sentry has captured the panic, so the
+	// process stays up.
+	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(mux)
+
+	// Outer router: WS + health are served directly (bypassing tracing); every
+	// other path falls through "/" to the traced REST surface.
+	root := http.NewServeMux()
+	root.Handle("/ws", wsWithRecover)
+	root.Handle("/api/realtime/ws", wsWithRecover)
+	root.HandleFunc("GET /health", health)
+	root.Handle("/", tracedMux)
+
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: mux,
+		Handler: root,
 		// Bound only the header read. No write/idle timeout: long-lived
 		// WebSockets and long balancer requests (Kong allowed 120s) must not be
 		// cut off mid-flight.

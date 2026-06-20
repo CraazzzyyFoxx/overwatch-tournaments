@@ -24,6 +24,7 @@ type Config struct {
 	WSIdleTimeout time.Duration
 	WSReplayLimit int
 	Upstreams     Upstreams
+	Sentry        Sentry
 }
 
 // Upstreams are the base URLs of the existing services the gateway proxies to.
@@ -33,6 +34,15 @@ type Upstreams struct {
 	Balancer  string
 	Analytics string
 	Frontend  string
+}
+
+// Sentry holds the optional error-monitoring / tracing settings. An empty DSN
+// disables the SDK entirely, so the gateway behaves exactly as before.
+type Sentry struct {
+	DSN              string
+	Environment      string
+	Release          string
+	TracesSampleRate float64
 }
 
 // Load reads configuration from environment variables, applying defaults.
@@ -62,6 +72,12 @@ func Load() (*Config, error) {
 			Balancer:  getenv("UPSTREAM_BALANCER", "http://balancer:8003"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),
 			Frontend:  getenv("UPSTREAM_FRONTEND", "http://frontend:3000"),
+		},
+		Sentry: Sentry{
+			DSN:              os.Getenv("SENTRY_DSN"),
+			Environment:      getenv("SENTRY_ENVIRONMENT", "development"),
+			Release:          os.Getenv("SENTRY_RELEASE"),
+			TracesSampleRate: getenvFloat("SENTRY_TRACES_SAMPLE_RATE", 0.2),
 		},
 	}, nil
 }
@@ -100,6 +116,15 @@ func getenvBool(key string, fallback bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			return b
+		}
+	}
+	return fallback
+}
+
+func getenvFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return fallback

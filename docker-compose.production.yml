@@ -608,6 +608,8 @@ services:
     environment:
       # In prod the frontend is a compose service (dev default points at the host).
       - UPSTREAM_FRONTEND=http://frontend:3000
+      # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
+      - SENTRY_ENVIRONMENT=production
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
