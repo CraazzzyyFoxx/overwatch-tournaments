@@ -212,6 +212,50 @@ func TestBuilder_ManifestRefWiring(t *testing.T) {
 	}
 }
 
+func TestBuilder_QueryParams(t *testing.T) {
+	man := manifest{
+		Schemas: map[string]json.RawMessage{
+			"SortOrder": json.RawMessage(`{"type":"string","enum":["asc","desc"]}`),
+		},
+		Operations: map[string]opModels{
+			"rpc.q.list": {QueryParams: []queryParam{
+				{Name: "page", Schema: json.RawMessage(`{"type":"integer","default":1}`)},
+				{Name: "order", Schema: json.RawMessage(`{"$ref":"#/components/schemas/SortOrder","default":"asc"}`)},
+			}},
+		},
+	}
+	b := &builder{man: man, refs: map[string]bool{}}
+
+	params := b.parameters(edge.RouteSpec{Method: "GET", Pattern: "/x/{id}", Queue: "rpc.q.list"})
+	in := map[string]string{}
+	for _, p := range params {
+		m := p.(map[string]any)
+		in[m["name"].(string)] = m["in"].(string)
+	}
+	if in["id"] != "path" {
+		t.Errorf("path param id missing/wrong: %v", in)
+	}
+	if in["page"] != "query" || in["order"] != "query" {
+		t.Errorf("query params missing: %v", in)
+	}
+	// the enum $ref inside a query-param schema must be seeded + pulled into the closure
+	if !b.refs["SortOrder"] {
+		t.Error("query-param $ref not seeded into refs")
+	}
+	if !b.closure()["SortOrder"] {
+		t.Error("closure missing the query-param enum")
+	}
+	// AllQuery note is suppressed once a route has typed query params
+	if d := b.description(edge.RouteSpec{Queue: "rpc.q.list", AllQuery: true}); strings.Contains(d, "arbitrary") {
+		t.Errorf("AllQuery note should be suppressed when typed: %q", d)
+	}
+	// fallback: unmapped route falls back to RouteSpec.Query as plain strings
+	fb := b.parameters(edge.RouteSpec{Method: "GET", Pattern: "/y", Queue: "rpc.none", Query: []string{"workspace_id"}})
+	if len(fb) != 1 || fb[0].(map[string]any)["name"] != "workspace_id" {
+		t.Errorf("fallback Query param missing: %v", fb)
+	}
+}
+
 func keys(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

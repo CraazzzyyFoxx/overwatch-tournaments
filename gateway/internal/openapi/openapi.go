@@ -34,9 +34,19 @@ type schemaRef struct {
 	Array bool   `json:"array"`
 }
 
+// queryParam is one in:query parameter exported from a Pydantic query model or
+// declared explicitly. Schema is the raw OpenAPI schema (may carry a namespaced
+// $ref to an enum, which the builder seeds into the components closure).
+type queryParam struct {
+	Name     string          `json:"name"`
+	Required bool            `json:"required"`
+	Schema   json.RawMessage `json:"schema"`
+}
+
 type opModels struct {
-	Request  *schemaRef `json:"request"`
-	Response *schemaRef `json:"response"`
+	Request     *schemaRef   `json:"request"`
+	Response    *schemaRef   `json:"response"`
+	QueryParams []queryParam `json:"query_params"`
 }
 
 // manifest is the parsed schemas.json: a flat schema pool + per-subject models.
@@ -159,10 +169,10 @@ func (b *builder) operation(route edge.RouteSpec, tag string) map[string]any {
 		"summary":     summary(route),
 		"responses":   b.responses(route),
 	}
-	if desc := description(route); desc != "" {
+	if desc := b.description(route); desc != "" {
 		op["description"] = desc
 	}
-	if params := parameters(route); len(params) > 0 {
+	if params := b.parameters(route); len(params) > 0 {
 		op["parameters"] = params
 	}
 	if route.Body {
@@ -170,6 +180,63 @@ func (b *builder) operation(route edge.RouteSpec, tag string) map[string]any {
 	}
 	op["security"] = security(route)
 	return op
+}
+
+// queryParams returns the manifest-declared query parameters for a route.
+func (b *builder) queryParams(route edge.RouteSpec) []queryParam {
+	return b.man.Operations[b.key(route)].QueryParams
+}
+
+// parameters builds the path parameters (from the pattern placeholders, always
+// required) plus query parameters: the typed manifest set when present, else the
+// route's explicit Query names as plain strings.
+func (b *builder) parameters(route edge.RouteSpec) []any {
+	var params []any
+	for _, name := range pathParams(convertPattern(route.Pattern)) {
+		params = append(params, map[string]any{
+			"name":     name,
+			"in":       "path",
+			"required": true,
+			"schema":   map[string]any{"type": "string"},
+		})
+	}
+	if qps := b.queryParams(route); len(qps) > 0 {
+		for _, qp := range qps {
+			var schema any
+			if err := json.Unmarshal(qp.Schema, &schema); err != nil {
+				schema = map[string]any{"type": "string"}
+			}
+			// Pull any enum/model $ref in the param schema into the components closure.
+			for _, m := range refRe.FindAllSubmatch(qp.Schema, -1) {
+				b.refs[string(m[1])] = true
+			}
+			param := map[string]any{"name": qp.Name, "in": "query", "required": qp.Required, "schema": schema}
+			params = append(params, param)
+		}
+		return params
+	}
+	for _, name := range route.Query {
+		params = append(params, map[string]any{
+			"name":     name,
+			"in":       "query",
+			"required": false,
+			"schema":   map[string]any{"type": "string"},
+		})
+	}
+	return params
+}
+
+// description surfaces the generic-CRUD entity/action and — only when the route
+// has no typed query parameters — the arbitrary-query caveat.
+func (b *builder) description(route edge.RouteSpec) string {
+	var parts []string
+	if route.Entity != "" || route.Action != "" {
+		parts = append(parts, "Generic CRUD: entity="+route.Entity+" action="+route.Action+".")
+	}
+	if route.AllQuery && len(b.queryParams(route)) == 0 {
+		parts = append(parts, "Accepts arbitrary query parameters (pagination/filtering); see the service for the full list.")
+	}
+	return strings.Join(parts, " ")
 }
 
 // key is the manifest lookup key: the RPC subject, suffixed with the entity for
@@ -315,45 +382,9 @@ func summary(route edge.RouteSpec) string {
 	return route.Method + " " + route.Pattern
 }
 
-// description surfaces the generic-CRUD entity/action and the arbitrary-query
-// caveat, since neither is expressible as a typed parameter/schema.
-func description(route edge.RouteSpec) string {
-	var parts []string
-	if route.Entity != "" || route.Action != "" {
-		parts = append(parts, "Generic CRUD: entity="+route.Entity+" action="+route.Action+".")
-	}
-	if route.AllQuery {
-		parts = append(parts, "Accepts arbitrary query parameters (pagination/filtering); see the service for the full list.")
-	}
-	return strings.Join(parts, " ")
-}
-
 // operationID is unique per (method, path) within a document.
 func operationID(route edge.RouteSpec) string {
 	return sanitize(strings.ToLower(route.Method) + "_" + convertPattern(route.Pattern))
-}
-
-// parameters builds the path parameters (from the pattern placeholders, always
-// required) plus any explicitly-declared query parameters (optional).
-func parameters(route edge.RouteSpec) []any {
-	var params []any
-	for _, name := range pathParams(convertPattern(route.Pattern)) {
-		params = append(params, map[string]any{
-			"name":     name,
-			"in":       "path",
-			"required": true,
-			"schema":   map[string]any{"type": "string"},
-		})
-	}
-	for _, name := range route.Query {
-		params = append(params, map[string]any{
-			"name":     name,
-			"in":       "query",
-			"required": false,
-			"schema":   map[string]any{"type": "string"},
-		})
-	}
-	return params
 }
 
 // security maps the RouteSpec auth mode onto an OpenAPI security requirement.

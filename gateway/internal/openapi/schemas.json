@@ -1,12 +1,30 @@
 {
   "operations": {
     "rpc.analytics.balance_quality": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.BalanceQualityRead"
       }
     },
     "rpc.analytics.create_job": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "request": {
         "array": false,
         "ref": "analytics.AnalyticsJobCreate"
@@ -33,12 +51,44 @@
       }
     },
     "rpc.analytics.get_analytics": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "algorithm",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.TournamentAnalytics"
       }
     },
     "rpc.analytics.get_streaks": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.PlayerStreak"
@@ -55,6 +105,15 @@
       }
     },
     "rpc.analytics.jobs_active": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
@@ -67,24 +126,95 @@
       }
     },
     "rpc.analytics.jobs_list": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "active_only",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.AnalyticsJobRow"
       }
     },
     "rpc.analytics.list_algorithms": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.Paginated_AnalyticsAlgorithmRead_"
       }
     },
     "rpc.analytics.points": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
       }
     },
     "rpc.analytics.recalculate": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
@@ -111,54 +241,242 @@
       }
     },
     "rpc.analytics.v2_artifacts": {
+      "query_params": [
+        {
+          "name": "model_kind",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "active_only",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.MLArtifactRow"
       }
     },
     "rpc.analytics.v2_explain": {
+      "query_params": [
+        {
+          "name": "algorithm_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "analytics.ExplanationRow"
       }
     },
     "rpc.analytics.v2_feedback_list": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.AnomalyFeedbackRow"
       }
     },
     "rpc.analytics.v2_match_quality": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "algorithm_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.MatchQualityRow"
       }
     },
     "rpc.analytics.v2_performance": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "algorithm_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.PerformanceRow"
       }
     },
     "rpc.analytics.v2_player_anomalies": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "player_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "kind",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.PlayerAnomalyRow"
       }
     },
     "rpc.analytics.v2_standings": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "algorithm_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "analytics.StandingsRow"
       }
     },
     "rpc.app.achievements.user": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "without_tournament",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "include_locked",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "app.UserAchievementRead"
       }
     },
     "rpc.app.achievements.users": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_AchievementEarned_"
@@ -221,6 +539,73 @@
       }
     },
     "rpc.app.heroes.leaderboard": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "stat",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.LogStatsName",
+            "default": "eliminations"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroLeaderboardEntry_"
@@ -233,6 +618,105 @@
       }
     },
     "rpc.app.heroes.playtime": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "playtime",
+            "enum": [
+              "id",
+              "name",
+              "slug",
+              "playtime"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "user_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "const": "all",
+                "type": "string"
+              }
+            ],
+            "default": "all",
+            "title": "User Id"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroPlaytime_"
@@ -289,30 +773,423 @@
       }
     },
     "rpc.app.read.list#achievement": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "slug",
+              "rarity",
+              "similarity:name",
+              "similarity:slug"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_AchievementRead_"
       }
     },
     "rpc.app.read.list#gamemode": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "slug",
+              "similarity:name",
+              "similarity:slug"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_GamemodeRead_"
       }
     },
     "rpc.app.read.list#hero": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "slug",
+              "similarity:name",
+              "similarity:slug"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroRead_"
       }
     },
     "rpc.app.read.list#map": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "gamemode_id",
+              "name",
+              "similarity:name"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_MapRead_"
       }
     },
     "rpc.app.statistics.champion": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "value"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
@@ -325,12 +1202,142 @@
       }
     },
     "rpc.app.statistics.winrate": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "value"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
       }
     },
     "rpc.app.statistics.won_maps": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "value"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
@@ -395,12 +1402,284 @@
       }
     },
     "rpc.app.users.compare": {
+      "query_params": [
+        {
+          "name": "baseline",
+          "required": false,
+          "schema": {
+            "default": "global",
+            "enum": [
+              "target_user",
+              "global",
+              "cohort"
+            ],
+            "title": "Baseline",
+            "type": "string"
+          }
+        },
+        {
+          "name": "target_user_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target User Id"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app.HeroClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        {
+          "name": "div_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Min"
+          }
+        },
+        {
+          "name": "div_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Max"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.UserCompareResponse"
       }
     },
     "rpc.app.users.compare_heroes": {
+      "query_params": [
+        {
+          "name": "baseline",
+          "required": false,
+          "schema": {
+            "default": "global",
+            "enum": [
+              "target_user",
+              "global",
+              "cohort"
+            ],
+            "title": "Baseline",
+            "type": "string"
+          }
+        },
+        {
+          "name": "target_user_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target User Id"
+          }
+        },
+        {
+          "name": "left_hero_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Left Hero Id"
+          }
+        },
+        {
+          "name": "right_hero_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Right Hero Id"
+          }
+        },
+        {
+          "name": "map_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Map Id"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app.HeroClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        {
+          "name": "div_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Min"
+          }
+        },
+        {
+          "name": "div_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Max"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "stats",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/app.LogStatsName"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stats"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.UserHeroCompareResponse"
@@ -427,6 +1706,109 @@
       }
     },
     "rpc.app.users.encounters": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "home_team_id",
+              "away_team_id",
+              "closeness",
+              "round"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "result",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "stage",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "mvp1",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "has_logs",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "opponent",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_EncounterReadWithUserStats_"
@@ -439,18 +1821,343 @@
       }
     },
     "rpc.app.users.heroes": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "stats",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroWithUserStats_"
       }
     },
     "rpc.app.users.maps": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "min_count",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Count"
+          }
+        },
+        {
+          "name": "gamemode_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Gamemode Id"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_UserMap_"
       }
     },
     "rpc.app.users.maps_summary": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "min_count",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Count"
+          }
+        },
+        {
+          "name": "gamemode_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Gamemode Id"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.UserMapsSummary"
@@ -483,30 +2190,431 @@
       }
     },
     "rpc.app.users.overview": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "tournaments_count",
+              "achievements_count",
+              "avg_placement"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app.HeroClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        {
+          "name": "div_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Min"
+          }
+        },
+        {
+          "name": "div_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Max"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_UserOverviewRow_"
       }
     },
     "rpc.app.users.overview_catalog": {
+      "query_params": [
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app.HeroClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        {
+          "name": "div_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Min"
+          }
+        },
+        {
+          "name": "div_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Max"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          }
+        },
+        {
+          "name": "letter",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Letter"
+          }
+        },
+        {
+          "name": "per_letter",
+          "required": false,
+          "schema": {
+            "default": 12,
+            "maximum": 50,
+            "minimum": 1,
+            "title": "Per Letter",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "max_letters",
+          "required": false,
+          "schema": {
+            "default": 27,
+            "maximum": 40,
+            "minimum": 1,
+            "title": "Max Letters",
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.UserCatalogResponse"
       }
     },
     "rpc.app.users.overview_stats": {
+      "query_params": [
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app.HeroClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        {
+          "name": "div_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Min"
+          }
+        },
+        {
+          "name": "div_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Div Max"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.UserOverviewStats"
       }
     },
     "rpc.app.users.search": {
+      "query_params": [
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "app.UserSearch"
       }
     },
     "rpc.app.users.teammates": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "winrate",
+              "tournaments"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/app.SortOrder",
+            "default": "asc"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "app.Paginated_UserBestTeammate_"
@@ -1109,6 +3217,22 @@
       }
     },
     "rpc.parser.ach.list": {
+      "query_params": [
+        {
+          "name": "category",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "enabled",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "parser.AchievementRuleRead"
@@ -1173,6 +3297,43 @@
       }
     },
     "rpc.parser.logs.history": {
+      "query_params": [
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "encounter_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "parser.LogHistoryResponse"
@@ -1197,6 +3358,43 @@
       }
     },
     "rpc.parser.rank.battle_tag_history": {
+      "query_params": [
+        {
+          "name": "granularity",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_from",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_to",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "platform",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "parser.RankHistoryResponse"
@@ -1225,12 +3423,65 @@
       }
     },
     "rpc.parser.rank.user_current": {
+      "query_params": [
+        {
+          "name": "platform",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "parser.CurrentRanksResponse"
       }
     },
     "rpc.parser.rank.user_history": {
+      "query_params": [
+        {
+          "name": "granularity",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_from",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_to",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "battle_tag_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "platform",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "parser.RankHistoryResponse"
@@ -1275,6 +3526,43 @@
       }
     },
     "rpc.parser.tournament.create_with_groups": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "number",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "is_league",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "division_grid_version_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "challonge_slug",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "parser.TournamentRead"
@@ -1379,6 +3667,29 @@
       }
     },
     "rpc.tournament.admin.list#player_sub_role": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "include_inactive",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.PlayerSubRoleRead"
@@ -1499,18 +3810,274 @@
       }
     },
     "rpc.tournament.encounters_overview": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/tournament.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "stage_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stage Id"
+          }
+        },
+        {
+          "name": "stage_item_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stage Item Id"
+          }
+        },
+        {
+          "name": "best_of",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Best Of"
+          }
+        },
+        {
+          "name": "status",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        {
+          "name": "has_logs",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Has Logs"
+          }
+        },
+        {
+          "name": "closeness_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closeness Min"
+          }
+        },
+        {
+          "name": "closeness_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closeness Max"
+          }
+        },
+        {
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": [
+              "all",
+              "my_team"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.EncounterOverviewRead"
       }
     },
     "rpc.tournament.get_encounter": {
+      "query_params": [
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.EncounterRead"
       }
     },
     "rpc.tournament.get_match": {
+      "query_params": [
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.MatchReadWithStats"
@@ -1523,18 +4090,54 @@
       }
     },
     "rpc.tournament.get_standings": {
+      "query_params": [
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.StandingRead"
       }
     },
     "rpc.tournament.get_team": {
+      "query_params": [
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.TeamRead"
       }
     },
     "rpc.tournament.get_tournament": {
+      "query_params": [
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
@@ -1621,42 +4224,650 @@
       }
     },
     "rpc.tournament.list_encounters": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/tournament.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "stage_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stage Id"
+          }
+        },
+        {
+          "name": "stage_item_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stage Item Id"
+          }
+        },
+        {
+          "name": "best_of",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Best Of"
+          }
+        },
+        {
+          "name": "status",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        {
+          "name": "has_logs",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Has Logs"
+          }
+        },
+        {
+          "name": "closeness_min",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closeness Min"
+          }
+        },
+        {
+          "name": "closeness_max",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closeness Max"
+          }
+        },
+        {
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": [
+              "all",
+              "my_team"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.Paginated_EncounterRead_"
       }
     },
     "rpc.tournament.list_matches": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/tournament.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "home_team_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Home Team Id"
+          }
+        },
+        {
+          "name": "away_team_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Away Team Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.Paginated_MatchRead_"
       }
     },
     "rpc.tournament.list_teams": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/tournament.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "tournament_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tournament Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.Paginated_TeamRead_"
       }
     },
     "rpc.tournament.list_tournaments": {
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 10,
+            "maximum": 100,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "id",
+            "enum": [
+              "id",
+              "name",
+              "number",
+              "start_date",
+              "end_date",
+              "similarity:name"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/tournament.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "query",
+          "required": false,
+          "schema": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        {
+          "name": "fields",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        {
+          "name": "is_league",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Is League"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workspace Id"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.Paginated_TournamentRead_"
       }
     },
     "rpc.tournament.lookup_tournaments": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "is_league",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.LookupItem"
       }
     },
     "rpc.tournament.owal_results": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "season",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.OwalStandings"
       }
     },
+    "rpc.tournament.owal_seasons": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "rpc.tournament.owal_stacks": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "season",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.LeaguePlayerStack"
@@ -1887,6 +5098,15 @@
       }
     },
     "rpc.tournament.saved_views": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.EncounterSavedViewRead"
@@ -2001,18 +5221,45 @@
       }
     },
     "rpc.tournament.statistics_division": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.DivisionStatistics"
       }
     },
     "rpc.tournament.statistics_history": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": true,
         "ref": "tournament.TournamentStatistics"
       }
     },
     "rpc.tournament.statistics_overall": {
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.OverallStatistics"
@@ -4956,6 +8203,53 @@
       "title": "HeroLeaderboardEntry",
       "type": "object"
     },
+    "app.HeroLeaderboardQueryParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "stat": {
+          "$ref": "#/components/schemas/app.LogStatsName",
+          "default": "eliminations"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "HeroLeaderboardQueryParams",
+      "type": "object"
+    },
     "app.HeroPlaytime": {
       "properties": {
         "hero": {
@@ -4971,6 +8265,77 @@
         "playtime"
       ],
       "title": "HeroPlaytime",
+      "type": "object"
+    },
+    "app.HeroPlaytimeQueryPaginationParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "playtime",
+          "enum": [
+            "id",
+            "name",
+            "slug",
+            "playtime"
+          ],
+          "title": "Sort",
+          "type": "string"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        },
+        "user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "const": "all",
+              "type": "string"
+            }
+          ],
+          "default": "all",
+          "title": "User Id"
+        }
+      },
+      "title": "HeroPlaytimeQueryPaginationParams",
       "type": "object"
     },
     "app.HeroRead": {
@@ -5826,6 +9191,341 @@
       "title": "Paginated[UserOverviewRow]",
       "type": "object"
     },
+    "app.PaginationQueryParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        }
+      },
+      "title": "PaginationQueryParams",
+      "type": "object"
+    },
+    "app.PaginationSortQueryParams_Literal__id____name____home_team_id____away_team_id____closeness____round___": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "home_team_id",
+            "away_team_id",
+            "closeness",
+            "round"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortQueryParams[Literal['id', 'name', 'home_team_id', 'away_team_id', 'closeness', 'round']]",
+      "type": "object"
+    },
+    "app.PaginationSortQueryParams_Literal__id____name____slug____rarity____similarity___similarity__": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "slug",
+            "rarity",
+            "similarity:name",
+            "similarity:slug"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortQueryParams[Literal['id', 'name', 'slug', 'rarity', 'similarity:name', 'similarity:slug']]",
+      "type": "object"
+    },
+    "app.PaginationSortQueryParams_Literal__id____name____value___": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "value"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortQueryParams[Literal['id', 'name', 'value']]",
+      "type": "object"
+    },
+    "app.PaginationSortQueryParams_Literal__id____name____winrate____tournaments___": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "winrate",
+            "tournaments"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortQueryParams[Literal['id', 'name', 'winrate', 'tournaments']]",
+      "type": "object"
+    },
+    "app.PaginationSortSearchQueryParams_Literal__id____gamemode_id____name____similarity__": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "gamemode_id",
+            "name",
+            "similarity:name"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortSearchQueryParams[Literal['id', 'gamemode_id', 'name', 'similarity:name']]",
+      "type": "object"
+    },
+    "app.PaginationSortSearchQueryParams_Literal__id____name____slug____similarity___similarity__": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "slug",
+            "similarity:name",
+            "similarity:slug"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "PaginationSortSearchQueryParams[Literal['id', 'name', 'slug', 'similarity:name', 'similarity:slug']]",
+      "type": "object"
+    },
     "app.PlayerStatistics": {
       "properties": {
         "id": {
@@ -5873,6 +9573,14 @@
       ],
       "title": "Score",
       "type": "object"
+    },
+    "app.SortOrder": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "SortOrder",
+      "type": "string"
     },
     "app.TournamentStatus": {
       "enum": [
@@ -6222,6 +9930,91 @@
       "title": "UserCatalogLetter",
       "type": "object"
     },
+    "app.UserCatalogQueryParams": {
+      "properties": {
+        "div_max": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Max"
+        },
+        "div_min": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Min"
+        },
+        "letter": {
+          "anyOf": [
+            {
+              "maxLength": 2,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Letter"
+        },
+        "max_letters": {
+          "default": 27,
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Max Letters",
+          "type": "integer"
+        },
+        "per_letter": {
+          "default": 12,
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Per Letter",
+          "type": "integer"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.HeroClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "UserCatalogQueryParams",
+      "type": "object"
+    },
     "app.UserCatalogResponse": {
       "properties": {
         "available_letters": {
@@ -6436,6 +10229,87 @@
         "subject_percentile"
       ],
       "title": "UserCompareMetric",
+      "type": "object"
+    },
+    "app.UserCompareQueryParams": {
+      "properties": {
+        "baseline": {
+          "default": "global",
+          "enum": [
+            "target_user",
+            "global",
+            "cohort"
+          ],
+          "title": "Baseline",
+          "type": "string"
+        },
+        "div_max": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Max"
+        },
+        "div_min": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Min"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.HeroClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target_user_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target User Id"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "UserCompareQueryParams",
       "type": "object"
     },
     "app.UserCompareResponse": {
@@ -6729,6 +10603,141 @@
       "title": "UserHeroCompareMetric",
       "type": "object"
     },
+    "app.UserHeroCompareQueryParams": {
+      "properties": {
+        "baseline": {
+          "default": "global",
+          "enum": [
+            "target_user",
+            "global",
+            "cohort"
+          ],
+          "title": "Baseline",
+          "type": "string"
+        },
+        "div_max": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Max"
+        },
+        "div_min": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Min"
+        },
+        "left_hero_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left Hero Id"
+        },
+        "map_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Map Id"
+        },
+        "right_hero_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right Hero Id"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.HeroClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/components/schemas/app.LogStatsName"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stats"
+        },
+        "target_user_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target User Id"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "UserHeroCompareQueryParams",
+      "type": "object"
+    },
     "app.UserHeroCompareResponse": {
       "properties": {
         "baseline": {
@@ -6987,6 +10996,95 @@
         "win_rate"
       ],
       "title": "UserMapsOverall",
+      "type": "object"
+    },
+    "app.UserMapsSearchQueryParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "gamemode_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gamemode Id"
+        },
+        "min_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Count"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "title": "Sort",
+          "type": "string"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "UserMapsSearchQueryParams",
       "type": "object"
     },
     "app.UserMapsSummary": {
@@ -7547,6 +11645,104 @@
       "title": "UserOverviewHeroMetric",
       "type": "object"
     },
+    "app.UserOverviewQueryParams": {
+      "properties": {
+        "div_max": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Max"
+        },
+        "div_min": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Min"
+        },
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/app.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.HeroClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "tournaments_count",
+            "achievements_count",
+            "avg_placement"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "UserOverviewQueryParams",
+      "type": "object"
+    },
     "app.UserOverviewRoleDivision": {
       "properties": {
         "division": {
@@ -7673,6 +11869,63 @@
         "flex_count"
       ],
       "title": "UserOverviewStats",
+      "type": "object"
+    },
+    "app.UserOverviewStatsQueryParams": {
+      "properties": {
+        "div_max": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Max"
+        },
+        "div_min": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Div Min"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.HeroClass"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "UserOverviewStatsQueryParams",
       "type": "object"
     },
     "app.UserProfile": {
@@ -19540,6 +23793,167 @@
       "title": "EncounterScoreHeatmapCellRead",
       "type": "object"
     },
+    "tournament.EncounterSearchQueryParams": {
+      "properties": {
+        "best_of": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Of"
+        },
+        "closeness_max": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closeness Max"
+        },
+        "closeness_min": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closeness Min"
+        },
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "has_logs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Logs"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/tournament.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "scope": {
+          "default": "all",
+          "enum": [
+            "all",
+            "my_team"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "title": "Sort",
+          "type": "string"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Id"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Item Id"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "EncounterSearchQueryParams",
+      "type": "object"
+    },
     "tournament.EncounterSideBalanceRead": {
       "properties": {
         "away_win_pct": {
@@ -20546,6 +24960,94 @@
         "rounds"
       ],
       "title": "MatchReadWithStats",
+      "type": "object"
+    },
+    "tournament.MatchSearchQueryParams": {
+      "properties": {
+        "away_team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Away Team Id"
+        },
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "home_team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Home Team Id"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/tournament.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "title": "Sort",
+          "type": "string"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "MatchSearchQueryParams",
       "type": "object"
     },
     "tournament.MergeGroupStagesRequest": {
@@ -22288,6 +26790,14 @@
       "title": "SetBalancerStatusRequest",
       "type": "object"
     },
+    "tournament.SortOrder": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "SortOrder",
+      "type": "string"
+    },
     "tournament.StageCreate": {
       "properties": {
         "advance_count": {
@@ -23581,6 +28091,58 @@
       "title": "TeamCreate",
       "type": "object"
     },
+    "tournament.TeamFilterQueryParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/tournament.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "sort": {
+          "default": "id",
+          "title": "Sort",
+          "type": "string"
+        },
+        "tournament_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Id"
+        }
+      },
+      "title": "TeamFilterQueryParams",
+      "type": "object"
+    },
     "tournament.TeamRead": {
       "properties": {
         "avg_sr": {
@@ -24215,6 +28777,90 @@
         "challonge_slug"
       ],
       "title": "TournamentGroupRead",
+      "type": "object"
+    },
+    "tournament.TournamentPaginationSortSearchQueryParams": {
+      "properties": {
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "is_league": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is League"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/tournament.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "title": "Query",
+          "type": "string"
+        },
+        "sort": {
+          "default": "id",
+          "enum": [
+            "id",
+            "name",
+            "number",
+            "start_date",
+            "end_date",
+            "similarity:name"
+          ],
+          "title": "Sort",
+          "type": "string"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "title": "TournamentPaginationSortSearchQueryParams",
       "type": "object"
     },
     "tournament.TournamentRead": {

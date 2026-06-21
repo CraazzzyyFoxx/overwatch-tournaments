@@ -12,7 +12,7 @@ fall back to a generic object in the gateway docs.
 from __future__ import annotations
 
 from shared.core.pagination import Paginated
-from shared.rpc.openapi import Op
+from shared.rpc.openapi import Op, QueryParam
 
 from src import schemas
 from src.schemas import registration as reg_schemas
@@ -25,28 +25,34 @@ from src.schemas.admin import team as admin_team
 from src.schemas.admin import tournament as admin_tournament
 from src.schemas.admin.computation import TournamentComputationJobRead
 
+# Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
+_ENTITIES = QueryParam("entities", array=True)
+_WS = QueryParam("workspace_id", "integer")
+_SEASON = QueryParam("season")
+
 OPERATIONS: dict[str, Op] = {
     # ── public reads (single object) ───────────────────────────────────────
-    "rpc.tournament.get_tournament": Op(response=schemas.TournamentRead),
-    "rpc.tournament.get_team": Op(response=schemas.TeamRead),
-    "rpc.tournament.get_encounter": Op(response=schemas.EncounterRead),
-    "rpc.tournament.get_match": Op(response=schemas.MatchReadWithStats),
-    "rpc.tournament.encounters_overview": Op(response=schemas.EncounterOverviewRead),
-    "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics),
-    "rpc.tournament.owal_results": Op(response=schemas.OwalStandings),
+    "rpc.tournament.get_tournament": Op(response=schemas.TournamentRead, query_params=(_ENTITIES,)),
+    "rpc.tournament.get_team": Op(response=schemas.TeamRead, query_params=(_ENTITIES,)),
+    "rpc.tournament.get_encounter": Op(response=schemas.EncounterRead, query_params=(_ENTITIES,)),
+    "rpc.tournament.get_match": Op(response=schemas.MatchReadWithStats, query_params=(_ENTITIES, _WS)),
+    "rpc.tournament.encounters_overview": Op(response=schemas.EncounterOverviewRead, query=schemas.EncounterSearchQueryParams),
+    "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS,)),
+    "rpc.tournament.owal_results": Op(response=schemas.OwalStandings, query_params=(_WS, _SEASON)),
+    "rpc.tournament.owal_seasons": Op(query_params=(_WS,)),
     # ── public reads (arrays) ──────────────────────────────────────────────
-    "rpc.tournament.lookup_tournaments": Op(response=schemas.LookupItem, response_array=True),
+    "rpc.tournament.lookup_tournaments": Op(response=schemas.LookupItem, response_array=True, query_params=(_WS, QueryParam("is_league", "boolean"))),
     "rpc.tournament.get_stages": Op(response=schemas.StageRead, response_array=True),
-    "rpc.tournament.get_standings": Op(response=schemas.StandingRead, response_array=True),
-    "rpc.tournament.statistics_history": Op(response=schemas.TournamentStatistics, response_array=True),
-    "rpc.tournament.statistics_division": Op(response=schemas.DivisionStatistics, response_array=True),
-    "rpc.tournament.owal_stacks": Op(response=schemas.LeaguePlayerStack, response_array=True),
-    "rpc.tournament.saved_views": Op(response=schemas.EncounterSavedViewRead, response_array=True),
+    "rpc.tournament.get_standings": Op(response=schemas.StandingRead, response_array=True, query_params=(_ENTITIES,)),
+    "rpc.tournament.statistics_history": Op(response=schemas.TournamentStatistics, response_array=True, query_params=(_WS,)),
+    "rpc.tournament.statistics_division": Op(response=schemas.DivisionStatistics, response_array=True, query_params=(_WS,)),
+    "rpc.tournament.owal_stacks": Op(response=schemas.LeaguePlayerStack, response_array=True, query_params=(_WS, _SEASON)),
+    "rpc.tournament.saved_views": Op(response=schemas.EncounterSavedViewRead, response_array=True, query_params=(_WS,)),
     # ── public reads (paginated) ───────────────────────────────────────────
-    "rpc.tournament.list_tournaments": Op(response=Paginated[schemas.TournamentRead]),
-    "rpc.tournament.list_encounters": Op(response=Paginated[schemas.EncounterRead]),
-    "rpc.tournament.list_matches": Op(response=Paginated[schemas.MatchRead]),
-    "rpc.tournament.list_teams": Op(response=Paginated[schemas.TeamRead]),
+    "rpc.tournament.list_tournaments": Op(response=Paginated[schemas.TournamentRead], query=schemas.TournamentPaginationSortSearchQueryParams),
+    "rpc.tournament.list_encounters": Op(response=Paginated[schemas.EncounterRead], query=schemas.EncounterSearchQueryParams),
+    "rpc.tournament.list_matches": Op(response=Paginated[schemas.MatchRead], query=schemas.MatchSearchQueryParams),
+    "rpc.tournament.list_teams": Op(response=Paginated[schemas.TeamRead], query=schemas.TeamFilterQueryParams),
     # ── computation job reads ──────────────────────────────────────────────
     "rpc.tournament.job_get": Op(response=TournamentComputationJobRead),
     "rpc.tournament.job_list": Op(response=TournamentComputationJobRead, response_array=True),
@@ -72,7 +78,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.admin.get#team": Op(response=schemas.TeamRead),
     "rpc.tournament.admin.get#stage": Op(response=schemas.StageRead),
     "rpc.tournament.admin.list#stage": Op(response=schemas.StageRead, response_array=True),
-    "rpc.tournament.admin.list#player_sub_role": Op(response=admin_player_sub_role.PlayerSubRoleRead, response_array=True),
+    "rpc.tournament.admin.list#player_sub_role": Op(response=admin_player_sub_role.PlayerSubRoleRead, response_array=True, query_params=(_WS, QueryParam("role"), QueryParam("include_inactive", "boolean"))),
     # ── bespoke: tournament status / lifecycle ─────────────────────────────
     "rpc.tournament.tournament_finish": Op(response=schemas.TournamentRead),
     "rpc.tournament.tournament_status": Op(request=admin_tournament.TournamentStatusTransition, response=schemas.TournamentRead),
