@@ -1,15 +1,15 @@
-name: overwatch-monitoring
+name: owt-monitoring
 
 # ==============================================================================
 # System monitoring stack: Prometheus + Alertmanager + Loki + Promtail +
 # Tempo + OpenTelemetry Collector + Grafana + exporters.
 #
-# Runs as its own Compose project (`overwatch-monitoring`) and attaches to the
-# production stack's network so scrape targets (backend:8000, redis:6379,
+# Runs as its own Compose project (`owt-monitoring`) and attaches to the
+# production stack's network so scrape targets (gateway:9110, redis:6379,
 # rabbitmq:15672, workers, ...) resolve by service name.
 #
 # PREREQUISITE: the production stack must be up first so the external network
-# `overwatch-tournaments_app-network` exists. Run `make prod-up` before
+# `owt_app-network` exists. Run `make prod-up` before
 # `make monitoring-up`.
 # ==============================================================================
 
@@ -217,4 +217,4 @@ volumes:
 networks:
   app-network:
     external: true
-    name: overwatch-tournaments_app-network
+    name: owt_app-network

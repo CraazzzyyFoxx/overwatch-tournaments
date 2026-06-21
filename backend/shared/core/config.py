@@ -22,16 +22,16 @@ class BaseServiceSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Proxy (optional — supports http, socks5, shadowsocks via ss-local sidecar)
+    # Proxy (optional — supports http, socks5, shadowsocks via proxy sidecar)
     proxy_type: typing.Literal["http", "socks5", "shadowsocks"] | None = None
     proxy_ip: str | None = None
     proxy_port: int | None = None
     proxy_username: str | None = None
     proxy_password: str | None = None
-    # shadowsocks: ss-local sidecar exposes a local SOCKS5 port
-    proxy_ss_local_host: str = "ss-local"
+    # shadowsocks: proxy sidecar exposes a local SOCKS5 port
+    proxy_ss_local_host: str = "proxy"
     proxy_ss_local_port: int = 1080
-    proxy_http_host: str = "ss-local"
+    proxy_http_host: str = "proxy"
     proxy_http_port: int = 8080
 
     # Application

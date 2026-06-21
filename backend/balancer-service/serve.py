@@ -28,7 +28,7 @@ from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_supervisor
 
 logger = setup_logging(
-    service_name="balancer-worker",
+    service_name="balancer-svc",
     log_level=config.log_level,
     logs_root_path=config.logs_root_path,
     json_output=config.json_logging,
@@ -72,7 +72,7 @@ async def setup_worker_observability() -> None:
         dsn=config.sentry_dsn,
         traces_sample_rate=config.sentry_traces_sample_rate,
         profiles_sample_rate=config.sentry_profiles_sample_rate,
-        service_name="balancer-worker",
+        service_name="balancer-svc",
         enable_logs=config.sentry_enable_logs,
         logs_level=config.sentry_logs_level,
         enable_metrics=config.sentry_enable_metrics,
@@ -82,7 +82,7 @@ async def setup_worker_observability() -> None:
         https_proxy=config.sentry_https_proxy_url,
     )
     setup_tracing(
-        service_name="balancer-worker",
+        service_name="balancer-svc",
         otlp_endpoint=config.otlp_endpoint,
         enabled=config.tracing_enabled,
         sampler_name=config.otel_traces_sampler,

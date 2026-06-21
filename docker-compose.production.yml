@@ -1,4 +1,4 @@
-name: overwatch-tournaments
+name: owt
 
 services:
   redis:
@@ -46,7 +46,7 @@ services:
     networks:
       - app-network
 
-  ss-local:
+  proxy:
     image: teddysun/xray:latest
     deploy:
       resources:
@@ -68,11 +68,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # app-service is headless: served by app-worker (rpc.app.*) behind the gateway.
+  # app-service is headless: served by app-svc (rpc.app.*) behind the gateway.
   # The former HTTP `backend` service was decommissioned.
 
   # parser-service HTTP decommissioned: parser is now a headless FastStream worker
-  # (parser-worker below), serving its domains as typed RPC behind the gateway.
+  # (parser-svc below), serving its domains as typed RPC behind the gateway.
   # The bot uploads logs over RabbitMQ; the SSE log monitor moved to the WS hub.
 
   # realtime-service decommissioned: WebSockets are now served by the Go gateway
@@ -81,7 +81,7 @@ services:
   # through nginx -> gateway:8080. Service code kept under
   # backend/realtime-service/ as reference (not deployed).
 
-  discord:
+  discord-worker:
     image: registry.craazzzyyfoxx.me/aqt-discord:latest
     deploy:
       resources:
@@ -112,10 +112,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
-      - ./logs/discord:/logs
+      - ./logs/discord-worker:/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -158,7 +158,7 @@ services:
 #    restart: always
 
   # balancer-service HTTP decommissioned: /api/balancer is served by the headless
-  # balancer-worker (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
+  # balancer-svc (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
   # The worker also consumes the balancer job queue + runs the draft clock + Rust
   # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
   # tournament:{id}:balancer WS topic).
@@ -167,7 +167,7 @@ services:
   # analytics-svc (rpc.analytics.* reads + job-control) behind the gateway; heavy ML
   # compute stays in analytics-worker (job queues).
 
-  parser-worker:
+  parser-svc:
     image: registry.craazzzyyfoxx.me/aqt-parser:latest
     deploy:
       resources:
@@ -200,10 +200,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
-      - ./logs/parser-worker:/logs
+      - ./logs/parser-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -214,7 +214,7 @@ services:
       start_period: 40s
     restart: always
 
-  tournament-worker:
+  tournament-svc:
     image: registry.craazzzyyfoxx.me/aqt-tournament:latest
     deploy:
       resources:
@@ -246,7 +246,7 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ./logs/tournament-worker:/logs
+      - ./logs/tournament-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -258,8 +258,8 @@ services:
     restart: always
 
   # Headless RPC worker replacing the HTTP `backend` behind the gateway.
-  app-worker:
-    image: registry.craazzzyyfoxx.me/aqt-backend:latest
+  app-svc:
+    image: registry.craazzzyyfoxx.me/aqt-app:latest
     deploy:
       resources:
         limits:
@@ -291,10 +291,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
-      - ./logs/app-worker:/logs
+      - ./logs/app-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -305,7 +305,7 @@ services:
       start_period: 40s
     restart: always
 
-  balancer-worker:
+  balancer-svc:
     image: registry.craazzzyyfoxx.me/aqt-balancer:latest
     deploy:
       resources:
@@ -339,7 +339,7 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ./logs/balancer-worker:/logs
+      - ./logs/balancer-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -498,7 +498,7 @@ services:
   #   traefik (TLS) -> nginx -> gateway -> RPC -> identity
   # ==========================================================================
 
-  identity:
+  identity-svc:
     image: registry.craazzzyyfoxx.me/aqt-identity:latest
     deploy:
       resources:
@@ -532,10 +532,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
-      - ./logs/identity:/logs
+      - ./logs/identity-svc:/logs
     networks:
       - app-network
     healthcheck:
@@ -581,7 +581,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      identity:
+      identity-svc:
         condition: service_healthy
     networks:
       - app-network

@@ -2,10 +2,10 @@
 
 This document explains how the system monitoring stack is deployed for Anak Tournaments.
 
-Monitoring runs as its **own** Docker Compose project (`overwatch-monitoring`) defined in
+Monitoring runs as its **own** Docker Compose project (`owt-monitoring`) defined in
 the repository-root file `docker-compose.monitoring.yml`, using configs stored in `monitoring/`.
 It is intentionally separate from the application stack (`docker-compose.production.yml`,
-project `overwatch-tournaments`) so telemetry can be started, updated, and restarted
+project `owt`) so telemetry can be started, updated, and restarted
 independently of the app.
 
 Services:
@@ -31,12 +31,12 @@ The monitoring stack attaches to the application stack's network as an **externa
 networks:
   app-network:
     external: true
-    name: overwatch-tournaments_app-network
+    name: owt_app-network
 ```
 
-This means scrape targets such as `backend:8000`, `redis:6379`, and `rabbitmq:15672` resolve
+This means scrape targets such as `gateway:9110`, `redis:6379`, and `rabbitmq:15672` resolve
 by service name across the shared network — but it also means the **application stack must be
-running first**, because it is what creates `overwatch-tournaments_app-network`.
+running first**, because it is what creates `owt_app-network`.
 
 ## Prerequisites
 
@@ -165,7 +165,7 @@ the mounted path `/run/secrets/discord_webhook_url`, keeping the real webhook ou
 
 ### `make monitoring-up` fails with a network error
 
-Cause: the external network `overwatch-tournaments_app-network` does not exist yet.
+Cause: the external network `owt_app-network` does not exist yet.
 
 Fix: start the application stack first with `make prod-up`, then retry.
 
@@ -199,8 +199,8 @@ Fix: confirm fresh `.log` files exist under `logs/`, that `promtail` is running,
 
 ## Files involved in deployment
 
-- `docker-compose.monitoring.yml` - monitoring stack (project `overwatch-monitoring`)
-- `docker-compose.production.yml` - application stack (project `overwatch-tournaments`)
+- `docker-compose.monitoring.yml` - monitoring stack (project `owt-monitoring`)
+- `docker-compose.production.yml` - application stack (project `owt`)
 - `monitoring/prometheus/prometheus.yml` - Prometheus scrape jobs and alertmanager target
 - `monitoring/prometheus/rules/` - alert rules
 - `monitoring/alertmanager/alertmanager.yml` - alert routing

@@ -38,7 +38,7 @@ from src.result_waiter import ResultWaiter
 
 # Setup structured logging (replaces old src.core.logging)
 logger = setup_logging(
-    service_name="discord-service",
+    service_name="discord-worker",
     log_level=settings.log_level,
     logs_root_path=settings.logs_root_path,
     json_output=settings.json_logging,
@@ -598,7 +598,7 @@ async def main():
     try:
         logger.info("🚀 Starting Discord Log Collection Bot...")
         setup_tracing(
-            service_name="discord-service",
+            service_name="discord-worker",
             otlp_endpoint=settings.otlp_endpoint,
             enabled=settings.tracing_enabled,
             sampler_name=settings.otel_traces_sampler,

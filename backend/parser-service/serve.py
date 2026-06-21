@@ -55,7 +55,7 @@ from src.services.overwatch_rank import tasks as rank_tasks
 from src.services.s3 import service as s3_service
 
 logger = setup_logging(
-    service_name="parser-worker",
+    service_name="parser-svc",
     log_level=config.settings.log_level,
     logs_root_path=config.settings.logs_root_path,
     json_output=config.settings.json_logging,
@@ -91,7 +91,7 @@ async def start_worker() -> None:
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
         profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
-        service_name="parser-worker",
+        service_name="parser-svc",
         enable_logs=config.settings.sentry_enable_logs,
         logs_level=config.settings.sentry_logs_level,
         enable_metrics=config.settings.sentry_enable_metrics,
@@ -101,7 +101,7 @@ async def start_worker() -> None:
         https_proxy=config.settings.sentry_https_proxy_url,
     )
     setup_tracing(
-        service_name="parser-worker",
+        service_name="parser-svc",
         otlp_endpoint=config.settings.otlp_endpoint,
         enabled=config.settings.tracing_enabled,
         sampler_name=config.settings.otel_traces_sampler,

@@ -1,3 +1,5 @@
+name: owt
+
 services:
   postgres:
     profiles: ["db"]
@@ -75,8 +77,8 @@ services:
   # Headless RPC worker for app-service: serves ALL of /api/v1/core (rpc.app.*
   # reads/writes/binary) behind the gateway + owns the tournament_changed
   # cache-invalidation consumer. Replaces the former HTTP `backend` service.
-  app-worker:
-    image: registry.craazzzyyfoxx.me/aqt-backend:dev
+  app-svc:
+    image: registry.craazzzyyfoxx.me/aqt-app:dev
     build:
       context: ./backend
       args:
@@ -100,12 +102,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
       - ./backend/app-service:/app/app-service
       - ./backend/shared:/app/shared
-      - ./logs/app-worker:/logs
+      - ./logs/app-svc:/logs
     networks:
       - app-network
     deploy:
@@ -118,7 +120,7 @@ services:
           memory: 128M
 
   # parser-service HTTP decommissioned: parser is now a headless FastStream worker
-  # (parser-worker below), serving its unique domains (match-log, OverFast rank,
+  # (parser-svc below), serving its unique domains (match-log, OverFast rank,
   # achievement engine + rules admin, metadata sync, settings, discord-channel,
   # bootstrap importers) as typed RPC behind the gateway. The bot uploads logs
   # over RabbitMQ; the SSE log monitor moved to the gateway WS hub.
@@ -130,12 +132,12 @@ services:
   # backend/realtime-service/ as reference (not deployed).
 
   # balancer-service HTTP decommissioned: /api/balancer is served by the headless
-  # balancer-worker (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
+  # balancer-svc (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
   # The worker also consumes the balancer job queue + runs the draft clock + Rust
   # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
   # tournament:{id}:balancer WS topic).
 
-  parser-worker:
+  parser-svc:
     image: registry.craazzzyyfoxx.me/aqt-parser:dev
     build:
       context: ./backend
@@ -160,12 +162,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
       - ./backend/parser-service:/app/parser-service
       - ./backend/shared:/app/shared
-      - ./logs/parser-worker:/logs
+      - ./logs/parser-svc:/logs
     networks:
       - app-network
     deploy:
@@ -177,7 +179,7 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  tournament-worker:
+  tournament-svc:
     image: registry.craazzzyyfoxx.me/aqt-tournament:dev
     build:
       context: ./backend
@@ -203,7 +205,7 @@ services:
     volumes:
       - ./backend/tournament-service:/app/tournament-service
       - ./backend/shared:/app/shared
-      - ./logs/tournament-worker:/logs
+      - ./logs/tournament-svc:/logs
     networks:
       - app-network
     deploy:
@@ -215,7 +217,7 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  balancer-worker:
+  balancer-svc:
     image: registry.craazzzyyfoxx.me/aqt-balancer:dev
     build:
       context: ./backend
@@ -243,7 +245,7 @@ services:
     volumes:
       - ./backend/balancer-service:/app/balancer-service
       - ./backend/shared:/app/shared
-      - ./logs/balancer-worker:/logs
+      - ./logs/balancer-svc:/logs
     networks:
       - app-network
     deploy:
@@ -345,7 +347,7 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  discord:
+  discord-worker:
     image: registry.craazzzyyfoxx.me/aqt-discord:dev
     profiles: ["workers"]
     build:
@@ -373,12 +375,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      ss-local:
+      proxy:
         condition: service_healthy
     volumes:
       - ./backend/discord-service:/app/discord-service
       - ./backend/shared:/app/shared
-      - ./logs/discord:/logs
+      - ./logs/discord-worker:/logs
     networks:
       - app-network
     deploy:
@@ -449,7 +451,7 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  ss-local:
+  proxy:
     image: teddysun/xray:latest
     restart: unless-stopped
     command: ["xray", "run", "-c", "/etc/xray/config.json"]
@@ -476,7 +478,7 @@ services:
   # Headless worker (no HTTP), called by the gateway. Part of the default dev
   # stack so a plain `docker compose up -d --build` brings everything up.
   # --------------------------------------------------------------------------
-  identity:
+  identity-svc:
     image: registry.craazzzyyfoxx.me/aqt-identity:dev
     build:
       context: ./backend
@@ -495,7 +497,7 @@ services:
     volumes:
       - ./backend/identity-service:/app/identity-service
       - ./backend/shared:/app/shared
-      - ./logs/identity:/logs
+      - ./logs/identity-svc:/logs
     networks:
       - app-network
     # Headless worker: no HTTP server, so the image's HTTP healthcheck does not apply.
