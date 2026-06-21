@@ -35,6 +35,19 @@ func TestParseToken_Valid(t *testing.T) {
 	if u == nil || u.ID != 42 {
 		t.Fatalf("expected user 42, got %+v", u)
 	}
+	if u.IsSuperuser {
+		t.Fatal("is_superuser must default to false when the claim is absent")
+	}
+}
+
+func TestParseToken_Superuser(t *testing.T) {
+	a := New(testSecret)
+	c := accessClaims("42")
+	c["is_superuser"] = true
+	u := a.parseToken(signHS256(t, c))
+	if u == nil || u.ID != 42 || !u.IsSuperuser {
+		t.Fatalf("expected superuser 42, got %+v", u)
+	}
 }
 
 func TestParseToken_Rejected(t *testing.T) {

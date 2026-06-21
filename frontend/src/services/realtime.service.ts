@@ -167,12 +167,22 @@ class RealtimeClient {
     }
 
     if (frame.op === "error") {
+      // Surface (don't swallow) a rejected subscription so consumers can react
+      // instead of hanging forever. A topic-less protocol error has nowhere to
+      // attach, so it stays a console warning.
+      if (frame.topic) {
+        useRealtimeStore
+          .getState()
+          .setTopicError(frame.topic, { code: frame.code, message: frame.message });
+      }
       console.warn("Realtime subscription error", frame);
       return;
     }
 
     if (frame.op === "subscribed") {
       useRealtimeStore.getState().setLastEventId(frame.topic, frame.cursor);
+      // A successful (re)subscribe clears any prior rejection for this topic.
+      useRealtimeStore.getState().setTopicError(frame.topic, null);
       return;
     }
 

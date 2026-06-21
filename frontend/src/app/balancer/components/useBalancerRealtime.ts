@@ -186,6 +186,34 @@ export function useBalancerRealtime({
 
   useRealtimeTopic(topic, handleEvent);
 
+  // Surface a rejected balancer subscription instead of letting the job
+  // indicator hang. The events that drive progress + the result are delivered
+  // only over this topic, so if the gateway ACL denies it (e.g. `forbidden`)
+  // nothing will ever arrive — clear the optimistic state and tell the user
+  // once, rather than spinning silently (the old behaviour only console.warn'd).
+  const subscriptionError = useRealtimeStore((state) =>
+    topic ? state.topicErrors[topic] : undefined
+  );
+  const notifiedErrorRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!subscriptionError || topic == null) {
+      notifiedErrorRef.current = null;
+      return;
+    }
+    const key = `${topic}:${subscriptionError.code}`;
+    if (notifiedErrorRef.current === key) {
+      return;
+    }
+    notifiedErrorRef.current = key;
+    dispatchJob({ type: "clear" });
+    notify.error("Realtime updates unavailable", {
+      description:
+        subscriptionError.code === "forbidden"
+          ? "You don't have access to live balancer updates for this tournament."
+          : subscriptionError.message
+    });
+  }, [subscriptionError, topic, dispatchJob]);
+
   // Reset presence and the applied-job guard when switching tournaments; the new
   // topic re-emits a fresh presence frame on subscribe.
   useEffect(() => {

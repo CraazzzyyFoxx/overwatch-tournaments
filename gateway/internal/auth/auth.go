@@ -1,10 +1,12 @@
 // Package auth validates the shared HS256 JWT locally (no call to auth-service).
 //
 // The access token (issued by auth-service) carries sub/email/username/
-// is_superuser/sid/exp/type — NOT workspace membership. So this package only
-// authenticates the connection (signature + exp + type=="access" + sub).
-// Workspace membership (needed by the balancer/workspace topic ACL) is resolved
-// separately against the database (see internal/store).
+// is_superuser/sid/exp/type — NOT workspace membership. So this package
+// authenticates the connection (signature + exp + type=="access" + sub) and
+// surfaces is_superuser, which the topic ACL uses as a membership bypass
+// (mirroring AuthUser.is_workspace_member: superusers pass every workspace).
+// Per-workspace membership for non-superusers is resolved separately against
+// the database (see internal/workspace).
 package auth
 
 import (
@@ -21,6 +23,10 @@ const CookieName = "aqt_access_token"
 // User is an authenticated WebSocket/HTTP principal. A nil *User means anonymous.
 type User struct {
 	ID int64
+	// IsSuperuser mirrors the JWT's is_superuser claim. A superuser bypasses the
+	// per-workspace membership check in the topic ACL, exactly as the Python
+	// AuthUser.is_workspace_member does (`if self.is_superuser: return True`).
+	IsSuperuser bool
 }
 
 // Authenticator decodes and verifies access tokens with the shared secret.
@@ -73,7 +79,9 @@ func (a *Authenticator) parseToken(token string) *User {
 	if err != nil || id <= 0 {
 		return nil
 	}
-	return &User{ID: id}
+	// is_superuser is optional; a missing/non-bool claim safely yields false.
+	isSuperuser, _ := claims["is_superuser"].(bool)
+	return &User{ID: id, IsSuperuser: isSuperuser}
 }
 
 // extractToken pulls the bearer token from the query string, the Authorization

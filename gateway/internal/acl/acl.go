@@ -96,10 +96,16 @@ func allowPublic(context.Context, *auth.User, []string) (bool, error) {
 }
 
 // allowBalancer gates the tournament-scoped admin tool on membership of the
-// tournament's owning workspace.
+// tournament's owning workspace. Superusers bypass the membership check,
+// mirroring AuthUser.is_workspace_member on the REST side (which the balancer's
+// own WorkspaceAccessPolicy uses) — otherwise a superuser admin can create a
+// balance job over REST but is denied the realtime job-status subscription.
 func (r *Registry) allowBalancer(ctx context.Context, user *auth.User, groups []string) (bool, error) {
 	if user == nil || len(groups) == 0 {
 		return false, nil
+	}
+	if user.IsSuperuser {
+		return true, nil
 	}
 	tournamentID, err := strconv.ParseInt(groups[0], 10, 64)
 	if err != nil {
@@ -118,6 +124,9 @@ func (r *Registry) allowBalancer(ctx context.Context, user *auth.User, groups []
 func (r *Registry) allowWorkspaceMember(ctx context.Context, user *auth.User, groups []string) (bool, error) {
 	if user == nil || len(groups) == 0 {
 		return false, nil
+	}
+	if user.IsSuperuser {
+		return true, nil
 	}
 	workspaceID, err := strconv.ParseInt(groups[0], 10, 64)
 	if err != nil {

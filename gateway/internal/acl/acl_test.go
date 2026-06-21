@@ -97,6 +97,21 @@ func TestAllow_BalancerRequiresMembership(t *testing.T) {
 			t.Fatal("expected error to propagate")
 		}
 	})
+
+	t.Run("superuser bypass without membership row", func(t *testing.T) {
+		// Mirrors AuthUser.is_workspace_member: a superuser passes every
+		// workspace, so the membership table is not consulted at all.
+		members := &fakeMembers{member: false}
+		r := New(fakeResolver{found: false}, members)
+		su := &auth.User{ID: 9, IsSuperuser: true}
+		ok, err := r.Allow(ctx, su, "tournament:42:balancer")
+		if err != nil || !ok {
+			t.Fatalf("superuser should be allowed: ok=%v err=%v", ok, err)
+		}
+		if len(members.calls) != 0 {
+			t.Fatalf("superuser must bypass the membership check, got calls %v", members.calls)
+		}
+	})
 }
 
 func TestAllow_WorkspaceMember(t *testing.T) {
@@ -115,6 +130,16 @@ func TestAllow_WorkspaceMember(t *testing.T) {
 
 	if ok, _ := r.Allow(ctx, nil, "workspace:5:notifications"); ok {
 		t.Fatal("anon must be denied workspace topic")
+	}
+
+	suMembers := &fakeMembers{member: false}
+	suR := New(fakeResolver{}, suMembers)
+	su := &auth.User{ID: 9, IsSuperuser: true}
+	if ok, err := suR.Allow(ctx, su, "workspace:5:notifications"); err != nil || !ok {
+		t.Fatalf("superuser should be allowed workspace topic: ok=%v err=%v", ok, err)
+	}
+	if len(suMembers.calls) != 0 {
+		t.Fatalf("superuser must bypass the workspace membership check, got %v", suMembers.calls)
 	}
 }
 
