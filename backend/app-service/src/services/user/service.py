@@ -2,7 +2,7 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
-from shared.division_grid import DivisionGrid, division_case_expr
+from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
 from shared.models import mv_hero_global_stats
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -235,7 +235,6 @@ def _apply_overview_role_filters(
     div_max: int | None,
     grid: DivisionGrid,
 ) -> sa.Select:
-    div_expr = division_case_expr(models.Player.rank, grid)
     role_filters: list[typing.Any] = [
         models.Player.user_id == models.User.id,
         models.Player.is_substitution.is_(False),
@@ -243,10 +242,7 @@ def _apply_overview_role_filters(
 
     if role is not None:
         role_filters.append(models.Player.role == role)
-    if div_min is not None:
-        role_filters.append(div_expr >= div_min)
-    if div_max is not None:
-        role_filters.append(div_expr <= div_max)
+    role_filters.extend(division_filter_predicates(models.Player.rank, div_min, div_max, grid))
 
     role_exists = sa.exists(sa.select(1).select_from(models.Player).where(*role_filters))
     return query.where(role_exists)
@@ -262,7 +258,6 @@ def _compare_player_scope_filters(
     tournament_id: int | None = None,
     grid: DivisionGrid,
 ) -> list[typing.Any]:
-    div_expr = division_case_expr(player_model.rank, grid)
     filters: list[typing.Any] = [
         player_model.user_id == user_id_column,
         player_model.is_substitution.is_(False),
@@ -270,10 +265,7 @@ def _compare_player_scope_filters(
 
     if role is not None:
         filters.append(player_model.role == role)
-    if div_min is not None:
-        filters.append(div_expr >= div_min)
-    if div_max is not None:
-        filters.append(div_expr <= div_max)
+    filters.extend(division_filter_predicates(player_model.rank, div_min, div_max, grid))
     if tournament_id is not None:
         filters.append(player_model.tournament_id == tournament_id)
 
