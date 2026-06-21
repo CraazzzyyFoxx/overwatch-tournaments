@@ -68,6 +68,7 @@ credentials.
 ```bash
 export GRAFANA_ADMIN_USER=admin
 export GRAFANA_ADMIN_PASSWORD='change-me'
+export GRAFANA_PORT=3001
 export GRAFANA_ROOT_URL='http://localhost:3001'
 export TEMPO_URL='http://tempo:3200'
 
