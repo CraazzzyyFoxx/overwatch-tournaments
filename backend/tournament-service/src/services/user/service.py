@@ -146,17 +146,23 @@ def _build_eligible_hero_stats_cte(
     # instead of re-probing matches.statistics per candidate row. DISTINCT keeps
     # the join a true semi-join: even if a (match, user, hero) ever had duplicate
     # playtime rows, the eligible set is not fanned out.
+    qualified_where: list[typing.Any] = [
+        models.MatchStatistics.round == 0,
+        models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+        models.MatchStatistics.value > 60,
+    ]
+    if user_id is not None:
+        # Scope the playtime probe to the same user as the eligible base: a
+        # per-user query then touches only that user's rows (a user-leading
+        # index seek) instead of DISTINCT-scanning every player's playtime stats.
+        qualified_where.append(models.MatchStatistics.user_id == user_id)
     qualified_combos = (
         sa.select(
             models.MatchStatistics.match_id.label("match_id"),
             models.MatchStatistics.user_id.label("user_id"),
             models.MatchStatistics.hero_id.label("hero_id"),
         )
-        .where(
-            models.MatchStatistics.round == 0,
-            models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
-            models.MatchStatistics.value > 60,
-        )
+        .where(*qualified_where)
         .distinct()
         .cte(f"{cte_name}_qualified")
     )
