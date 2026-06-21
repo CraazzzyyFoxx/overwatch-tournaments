@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ type Conn struct {
 	ws      *websocket.Conn
 	user    *auth.User // nil => anonymous
 	baseCtx context.Context
+	log     *slog.Logger // request-scoped: carries correlation_id
 
 	writeMu   sync.Mutex // serializes writes to the socket
 	closeOnce sync.Once
@@ -30,8 +32,11 @@ type Conn struct {
 	pubWindowCount int
 }
 
-func newConn(ctx context.Context, c *websocket.Conn, user *auth.User) *Conn {
-	return &Conn{ws: c, user: user, baseCtx: ctx, topics: make(map[string]struct{})}
+func newConn(ctx context.Context, c *websocket.Conn, user *auth.User, log *slog.Logger) *Conn {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Conn{ws: c, user: user, baseCtx: ctx, log: log, topics: make(map[string]struct{})}
 }
 
 func (c *Conn) send(payload []byte) error {

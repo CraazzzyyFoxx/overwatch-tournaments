@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
 
@@ -539,21 +540,22 @@ func (h *Handler) callIdentity(w http.ResponseWriter, r *http.Request, queue str
 	ctx, cancel := context.WithTimeout(r.Context(), rpcTimeout)
 	defer cancel()
 
+	log := httplog.From(r.Context())
 	raw, err := h.rpc.Call(ctx, queue, body)
 	if err != nil {
 		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
-			h.log.Error("identity rpc unavailable", "method", queue, "err", err)
+			log.Error("identity rpc unavailable", "method", queue, "err", err)
 			writeDetail(w, http.StatusServiceUnavailable, "identity service unavailable")
 			return
 		}
-		h.log.Error("identity rpc failed", "method", queue, "err", err)
+		log.Error("identity rpc failed", "method", queue, "err", err)
 		writeDetail(w, http.StatusGatewayTimeout, "identity service timeout")
 		return
 	}
 
 	var env rpc.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		h.log.Error("invalid rpc envelope", "method", queue, "err", err)
+		log.Error("invalid rpc envelope", "method", queue, "err", err)
 		writeDetail(w, http.StatusBadGateway, "invalid identity response")
 		return
 	}

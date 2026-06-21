@@ -4,16 +4,12 @@
 package observability
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	sentryslog "github.com/getsentry/sentry-go/slog"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 )
@@ -56,30 +52,6 @@ func Init(cfg *config.Config) (func(time.Duration), error) {
 		return func(time.Duration) {}, fmt.Errorf("sentry init: %w", err)
 	}
 	return func(d time.Duration) { sentry.Flush(d) }, nil
-}
-
-// NewLogger builds the gateway logger. It always writes JSON to stdout (the
-// container log). When Sentry is enabled it additionally fans every record out
-// to Sentry: Info/Warn/Error are sent as Sentry Logs and Error/Fatal are
-// captured as Issues, so the error logging already spread across the handlers
-// needs no changes.
-func NewLogger(cfg *config.Config) *slog.Logger {
-	stdout := slog.NewJSONHandler(os.Stdout, nil)
-	if cfg.Sentry.DSN == "" {
-		return slog.New(stdout)
-	}
-	sentryHandler := sentryslog.Option{
-		// EventLevel turns logged errors into Sentry Issues without touching every
-		// log site. It is deprecated in sentry-go and slated for removal in 0.48.0;
-		// on that upgrade, drop it and capture errors via sentry.CaptureException
-		// (the SDK's recommended path), or rely on panic/HTTP capture alone.
-		EventLevel: []slog.Level{slog.LevelError, sentryslog.LevelFatal},
-		// LogLevel ships these levels to the Sentry Logs product. Info is omitted:
-		// the gateway is a high-throughput edge and Info would flood Logs ingest.
-		LogLevel:  []slog.Level{slog.LevelWarn, slog.LevelError},
-		AddSource: true,
-	}.NewSentryHandler(context.Background())
-	return slog.New(newFanout(stdout, sentryHandler))
 }
 
 // scrubEvent redacts sensitive query parameters from a captured event's request.

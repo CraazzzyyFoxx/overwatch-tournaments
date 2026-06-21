@@ -31,6 +31,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/events"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/metrics"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/observability"
@@ -323,13 +324,15 @@ func run() error {
 		wsHandler.ServeHTTP(w, r)
 	})
 
-	// Sentry middleware for the REST surface: per-request hub, an HTTP
-	// transaction (tracing), and panic capture. Repanic lets net/http's own
-	// per-request recovery run after Sentry has captured the panic, so the
-	// process stays up. The metrics middleware wraps mux directly (inside Sentry)
-	// so that, after ServeHTTP, r.Pattern holds the matched route template.
-	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).
-		Handle(mtr.Middleware(mux, authn, activeUsers))
+	// REST middleware chain (outer to inner): Sentry -> httplog -> metrics -> mux.
+	// httplog wraps the metrics handler (which wraps mux); all share the same
+	// *http.Request, so r.Pattern — set by mux — is the matched route template for
+	// both the access log and the metrics labels. httplog also binds a
+	// request-scoped logger (correlation_id) used by the handlers' error logs.
+	// Sentry stays outermost for per-request hub + tracing + panic recovery
+	// (Repanic lets net/http's own recovery run after capture).
+	instrumented := httplog.Middleware(mtr.Middleware(mux, authn, activeUsers), logger, authn)
+	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(instrumented)
 
 	// Outer router: WS + health are served directly (bypassing tracing); every
 	// other path falls through "/" to the traced REST surface.

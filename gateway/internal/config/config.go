@@ -26,6 +26,14 @@ type Config struct {
 	WSReplayLimit int
 	Upstreams     Upstreams
 	Sentry        Sentry
+	Log           Log
+}
+
+// Log holds logging settings. File is the path of the rotating JSON log that
+// Promtail tails; an empty File logs to stdout only.
+type Log struct {
+	Level string
+	File  string
 }
 
 // Upstreams are the base URLs of the existing services the gateway proxies to.
@@ -78,6 +86,10 @@ func Load() (*Config, error) {
 			Environment:      getenv("SENTRY_ENVIRONMENT", "development"),
 			Release:          os.Getenv("SENTRY_RELEASE"),
 			TracesSampleRate: getenvFloat("SENTRY_TRACES_SAMPLE_RATE", 0.2),
+		},
+		Log: Log{
+			Level: getenv("LOG_LEVEL", "info"),
+			File:  getenv("LOG_FILE", "/logs/gateway.log"),
 		},
 	}, nil
 }

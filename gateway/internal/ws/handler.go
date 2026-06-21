@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/protocol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 )
@@ -63,6 +64,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.recordActive(user.ID)
 	}
 
+	// Per-connection logger carrying the correlation id (this path bypasses the
+	// REST httplog middleware, so resolve the id here).
+	connLog := h.log.With("correlation_id", httplog.CorrelationID(r))
+
 	c, err := websocket.Accept(w, r, h.accept)
 	if err != nil {
 		return // Accept already wrote the error response.
@@ -72,7 +77,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conn := newConn(ctx, c, user)
+	conn := newConn(ctx, c, user, connLog)
 	h.hub.add(conn)
 	defer h.cleanup(conn)
 
@@ -123,7 +128,7 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 
 	allowed, err := h.authz.Allow(ctx, conn.user, op.Topic)
 	if err != nil {
-		h.log.Error("acl check failed", "topic", op.Topic, "err", err)
+		conn.log.Error("acl check failed", "topic", op.Topic, "err", err)
 		_ = conn.send(protocol.ErrorFrame("internal_error", "Could not authorize the subscription", topicPtr))
 		return
 	}
@@ -134,7 +139,7 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 
 	cursor, err := h.replay.CurrentCursor(ctx, op.Topic)
 	if err != nil {
-		h.log.Error("cursor lookup failed", "topic", op.Topic, "err", err)
+		conn.log.Error("cursor lookup failed", "topic", op.Topic, "err", err)
 		_ = conn.send(protocol.ErrorFrame("internal_error", "Could not load the subscription", topicPtr))
 		return
 	}
@@ -149,7 +154,7 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 		return
 	}
 	if err != nil {
-		h.log.Error("replay failed", "topic", op.Topic, "err", err)
+		conn.log.Error("replay failed", "topic", op.Topic, "err", err)
 		_ = conn.send(protocol.ErrorFrame("internal_error", "Could not load the subscription", topicPtr))
 		return
 	}

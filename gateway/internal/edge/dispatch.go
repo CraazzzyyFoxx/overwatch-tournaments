@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
 
@@ -201,21 +202,22 @@ func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, 
 	ctx, cancel := context.WithTimeout(r.Context(), rpcTimeout)
 	defer cancel()
 
+	log := httplog.From(r.Context())
 	raw, err := d.rpc.Call(ctx, queue, body)
 	if err != nil {
 		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
-			d.log.Error("rpc unavailable", "queue", queue, "err", err)
+			log.Error("rpc unavailable", "queue", queue, "err", err)
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
 			return
 		}
-		d.log.Error("rpc failed", "queue", queue, "err", err)
+		log.Error("rpc failed", "queue", queue, "err", err)
 		writeDetail(w, http.StatusGatewayTimeout, "service timeout")
 		return
 	}
 
 	var env rpc.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		d.log.Error("invalid rpc envelope", "queue", queue, "err", err)
+		log.Error("invalid rpc envelope", "queue", queue, "err", err)
 		writeDetail(w, http.StatusBadGateway, "invalid service response")
 		return
 	}

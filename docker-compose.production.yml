@@ -568,6 +568,12 @@ services:
       - UPSTREAM_FRONTEND=http://frontend:3000
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
       - SENTRY_ENVIRONMENT=production
+    volumes:
+      # Structured JSON logs tailed by Promtail into Loki (LOG_FILE=/logs/gateway.log).
+      # The distroless image runs as uid 65532 — ./logs/gateway must be writable by
+      # it (deploy: mkdir -p logs/gateway && chmod 777 logs/gateway), else the
+      # gateway falls back to stdout-only and logs won't reach Loki.
+      - ./logs/gateway:/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

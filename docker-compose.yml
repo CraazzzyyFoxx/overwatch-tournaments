@@ -526,6 +526,9 @@ services:
       - ./backend/env/common.env
       - ./backend/env/auth.env
       - ./backend/env/gateway.env
+    volumes:
+      # Structured JSON logs tailed by Promtail into Loki (LOG_FILE=/logs/gateway.log).
+      - ./logs/gateway:/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
