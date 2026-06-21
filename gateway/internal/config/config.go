@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,7 @@ import (
 type Config struct {
 	Port          string
 	MetricsPort   string
+	Environment   string
 	JWTSecret     string
 	RedisURL      string
 	RabbitMQURL   string
@@ -27,6 +29,20 @@ type Config struct {
 	Upstreams     Upstreams
 	Sentry        Sentry
 	Log           Log
+	Docs          Docs
+}
+
+// Docs holds the Scalar API-documentation settings. Two pages are served from
+// the route tables the gateway already owns: a public one (always on) and an
+// admin one that is gated to non-production environments.
+type Docs struct {
+	// Enabled is the master switch for the public docs page + spec.
+	Enabled bool
+	// AdminEnabled gates the admin docs page + spec (defaults to on only when
+	// Environment == "development"). When off, /api/docs/admin returns 404.
+	AdminEnabled bool
+	// CDN is the pinned <script src> for the standalone Scalar bundle.
+	CDN string
 }
 
 // Log holds logging settings. File is the path of the rotating JSON log that
@@ -66,9 +82,12 @@ func Load() (*Config, error) {
 		dbURL = buildDatabaseURL()
 	}
 
+	env := getenv("GATEWAY_ENV", getenv("SENTRY_ENVIRONMENT", "development"))
+
 	return &Config{
 		Port:          getenv("GATEWAY_PORT", "8080"),
 		MetricsPort:   getenv("GATEWAY_METRICS_PORT", "9110"),
+		Environment:   env,
 		JWTSecret:     secret,
 		RedisURL:      getenv("REDIS_URL", "redis://redis:6379"),
 		RabbitMQURL:   getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672"),
@@ -90,6 +109,11 @@ func Load() (*Config, error) {
 		Log: Log{
 			Level: getenv("LOG_LEVEL", "info"),
 			File:  getenv("LOG_FILE", "/logs/gateway.log"),
+		},
+		Docs: Docs{
+			Enabled:      getenvBool("GATEWAY_DOCS_ENABLED", true),
+			AdminEnabled: getenvBool("GATEWAY_DOCS_ADMIN", strings.EqualFold(env, "development")),
+			CDN:          getenv("GATEWAY_DOCS_CDN", "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.60.0"),
 		},
 	}, nil
 }

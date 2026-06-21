@@ -24,6 +24,7 @@ import (
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/acl"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/analytics"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/apidocs"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
@@ -35,6 +36,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/identity"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/metrics"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/observability"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/openapi"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
@@ -291,6 +293,20 @@ func run() error {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
 	})
+
+	// Scalar API docs: two pages generated from the route tables above. The
+	// public page (/api/docs) is always served; the admin page (/api/docs/admin)
+	// is gated to non-production environments (config.Docs.AdminEnabled). The spec
+	// + UI paths sit outside the guarded namespaces, so they win over the "/"
+	// proxy by ServeMux specificity.
+	publicGroups, adminGroups := apidocs.Groups()
+	docs := openapi.New(cfg.Docs, openapi.Info{
+		Title:       "anak-tournaments gateway API",
+		Version:     cfg.Sentry.Release,
+		Description: "Auto-generated from the gateway route tables. Request/response bodies are generic objects — the concrete schemas live in the domain services.",
+	}, publicGroups, adminGroups)
+	docs.Register(mux)
+
 	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers.
