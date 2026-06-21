@@ -1,6 +1,7 @@
 {
   "operations": {
     "rpc.analytics.balance_quality": {
+      "description": "Returns the stored balance-quality snapshot (objective score, SR spread, discomfort, per-player rows) for a tournament, or null if none exists.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -13,9 +14,11 @@
       "response": {
         "array": false,
         "ref": "analytics.BalanceQualityRead"
-      }
+      },
+      "summary": "Balance quality"
     },
     "rpc.analytics.create_job": {
+      "description": "Creates an analytics job and enqueues it to the worker, returning 202; gates by kind (compute=workspace analytics.update, train_ml=superuser), 409 on an active-job conflict.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -32,9 +35,11 @@
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "Create analytics job"
     },
     "rpc.analytics.feedback_submit": {
+      "description": "Upserts a reviewer verdict/note for a player anomaly and returns the saved row; requires analytics.update.",
       "request": {
         "array": false,
         "ref": "analytics.AnomalyFeedbackBody"
@@ -42,15 +47,19 @@
       "response": {
         "array": false,
         "ref": "analytics.AnomalyFeedbackRow"
-      }
+      },
+      "summary": "Submit anomaly feedback"
     },
     "rpc.analytics.get_algorithm": {
+      "description": "Returns a single analytics algorithm by id.",
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsAlgorithmRead"
-      }
+      },
+      "summary": "Get algorithm"
     },
     "rpc.analytics.get_analytics": {
+      "description": "Returns per-team analytics (players, wins/losses, shifts) for a tournament and required algorithm; 404 if the algorithm is missing.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -77,9 +86,11 @@
       "response": {
         "array": false,
         "ref": "analytics.TournamentAnalytics"
-      }
+      },
+      "summary": "Tournament analytics"
     },
     "rpc.analytics.get_streaks": {
+      "description": "Returns players' placement streaks across recent tournaments for the given tournament_id.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -92,9 +103,11 @@
       "response": {
         "array": true,
         "ref": "analytics.PlayerStreak"
-      }
+      },
+      "summary": "Player streaks"
     },
     "rpc.analytics.infer": {
+      "description": "Dispatches a 202 ML inference job for a tournament to the worker queue; requires analytics.update and configured RabbitMQ (503 otherwise).",
       "request": {
         "array": false,
         "ref": "analytics.InferRequestBody"
@@ -102,9 +115,11 @@
       "response": {
         "array": false,
         "ref": "analytics.JobAcceptedResponse"
-      }
+      },
+      "summary": "Run inference"
     },
     "rpc.analytics.jobs_active": {
+      "description": "Returns the currently active analytics job for the optional workspace_id, or null if none; requires analytics.read.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -117,15 +132,19 @@
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "Active job"
     },
     "rpc.analytics.jobs_get": {
+      "description": "Returns a single analytics job by id; 404 if not found; requires analytics.read.",
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "Get job"
     },
     "rpc.analytics.jobs_list": {
+      "description": "Returns recent analytics jobs (default limit 20), optionally scoped by workspace_id and active_only; requires analytics.read.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -152,9 +171,11 @@
       "response": {
         "array": true,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "List jobs"
     },
     "rpc.analytics.list_algorithms": {
+      "description": "Returns a paginated list of analytics algorithms, optionally filtered by tournament_id.",
       "query_params": [
         {
           "name": "page",
@@ -181,9 +202,15 @@
       "response": {
         "array": false,
         "ref": "analytics.Paginated_AnalyticsAlgorithmRead_"
-      }
+      },
+      "summary": "List algorithms"
+    },
+    "rpc.analytics.openskill": {
+      "description": "Deprecated OpenSkill v1 endpoint; validates tournament/workspace then always returns 410 gone, directing callers to run the unified analytics job.",
+      "summary": "OpenSkill (gone)"
     },
     "rpc.analytics.points": {
+      "description": "Creates a 202 async compute job scoped to the Points algorithm for the required tournament_id.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -203,9 +230,11 @@
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "Recompute points"
     },
     "rpc.analytics.recalculate": {
+      "description": "Creates a 202 async compute job for a tournament (optionally scoped to given algorithm_ids), replacing the legacy synchronous recompute.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -218,9 +247,11 @@
       "response": {
         "array": false,
         "ref": "analytics.AnalyticsJobRow"
-      }
+      },
+      "summary": "Recalculate analytics"
     },
     "rpc.analytics.shift": {
+      "description": "Applies a manual shift override for a player and returns recomputed player analytics; requires analytics.update.",
       "request": {
         "array": false,
         "ref": "analytics.PlayerShiftUpdate"
@@ -228,9 +259,11 @@
       "response": {
         "array": false,
         "ref": "analytics.PlayerAnalytics"
-      }
+      },
+      "summary": "Override player shift"
     },
     "rpc.analytics.train": {
+      "description": "Dispatches a 202 ML training job to the worker queue; requires analytics.update and configured RabbitMQ (503 otherwise).",
       "request": {
         "array": false,
         "ref": "analytics.TrainRequestBody"
@@ -238,9 +271,11 @@
       "response": {
         "array": false,
         "ref": "analytics.JobAcceptedResponse"
-      }
+      },
+      "summary": "Train model"
     },
     "rpc.analytics.v2_artifacts": {
+      "description": "Returns ML model artifacts ordered by creation, optionally filtered by model_kind and active_only; requires analytics.read.",
       "query_params": [
         {
           "name": "model_kind",
@@ -260,9 +295,11 @@
       "response": {
         "array": true,
         "ref": "analytics.MLArtifactRow"
-      }
+      },
+      "summary": "ML artifacts"
     },
     "rpc.analytics.v2_explain": {
+      "description": "Returns the most recent explanation row for a player in a tournament (optionally by algorithm_id); 404 if none found; requires analytics.read.",
       "query_params": [
         {
           "name": "algorithm_id",
@@ -275,9 +312,11 @@
       "response": {
         "array": false,
         "ref": "analytics.ExplanationRow"
-      }
+      },
+      "summary": "Explain player"
     },
     "rpc.analytics.v2_feedback_list": {
+      "description": "Returns all anomaly-feedback rows recorded for a tournament; requires analytics.read.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -290,9 +329,11 @@
       "response": {
         "array": true,
         "ref": "analytics.AnomalyFeedbackRow"
-      }
+      },
+      "summary": "List anomaly feedback"
     },
     "rpc.analytics.v2_match_quality": {
+      "description": "Returns per-encounter match-quality rows for a tournament, optionally filtered by algorithm_id; requires analytics.read.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -312,9 +353,11 @@
       "response": {
         "array": true,
         "ref": "analytics.MatchQualityRow"
-      }
+      },
+      "summary": "Match quality"
     },
     "rpc.analytics.v2_performance": {
+      "description": "Returns ML performance rows for a tournament, optionally filtered by algorithm_id; requires analytics.read.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -334,9 +377,11 @@
       "response": {
         "array": true,
         "ref": "analytics.PerformanceRow"
-      }
+      },
+      "summary": "Performance rows"
     },
     "rpc.analytics.v2_player_anomalies": {
+      "description": "Returns player-anomaly rows for a tournament, optionally filtered by player_id and kind; requires analytics.read.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -363,9 +408,11 @@
       "response": {
         "array": true,
         "ref": "analytics.PlayerAnomalyRow"
-      }
+      },
+      "summary": "Player anomalies"
     },
     "rpc.analytics.v2_standings": {
+      "description": "Returns standings-distribution rows for a tournament, optionally filtered by algorithm_id; requires analytics.read.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -385,9 +432,11 @@
       "response": {
         "array": true,
         "ref": "analytics.StandingsRow"
-      }
+      },
+      "summary": "Standings distribution"
     },
     "rpc.app.achievements.user": {
+      "description": "Returns a player's earned (and optionally locked) achievements, scoped by tournament or without-tournament and workspace; rejects combining tournament_id with without_tournament=true (public).",
       "query_params": [
         {
           "name": "tournament_id",
@@ -431,9 +480,11 @@
       "response": {
         "array": true,
         "ref": "app.UserAchievementRead"
-      }
+      },
+      "summary": "User achievements"
     },
     "rpc.app.achievements.users": {
+      "description": "Returns a paginated list of players who earned a given achievement (public).",
       "query_params": [
         {
           "name": "page",
@@ -480,9 +531,15 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_AchievementEarned_"
-      }
+      },
+      "summary": "Achievement earners"
+    },
+    "rpc.app.admin.delete#workspace": {
+      "description": "Deletes a workspace via the shared CRUD engine with workspace-scoped 'workspace.delete' permission; returns 204, 404 if not found.",
+      "summary": "Delete workspace"
     },
     "rpc.app.admin.update#workspace": {
+      "description": "Updates a workspace via the shared CRUD engine with workspace-scoped 'workspace.update' permission, 404 if not found.",
       "request": {
         "array": false,
         "ref": "app.WorkspaceUpdate"
@@ -490,9 +547,19 @@
       "response": {
         "array": false,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "Update workspace"
+    },
+    "rpc.app.assets.delete": {
+      "description": "Deletes an achievements/divisions asset from S3 by slug prefix (superuser only); 422 on invalid asset_type, 404 if nothing deleted.",
+      "summary": "Delete asset"
+    },
+    "rpc.app.assets.upload": {
+      "description": "Uploads an achievements/divisions asset to S3 (superuser only), optionally workspace-scoped, returning its key and public URL; 422 on invalid asset_type.",
+      "summary": "Upload asset"
     },
     "rpc.app.gamemodes.admin_create": {
+      "description": "Creates a gamemode; requires the global gamemode.create permission.",
       "request": {
         "array": false,
         "ref": "app.GamemodeCreate"
@@ -500,9 +567,19 @@
       "response": {
         "array": false,
         "ref": "app.GamemodeRead"
-      }
+      },
+      "summary": "Create gamemode"
+    },
+    "rpc.app.gamemodes.admin_delete": {
+      "description": "Deletes a gamemode by id; requires the global gamemode.delete permission, returns 204.",
+      "summary": "Delete gamemode"
+    },
+    "rpc.app.gamemodes.admin_list": {
+      "description": "Returns a paginated admin list of gamemodes; requires the global gamemode.read permission.",
+      "summary": "Admin list gamemodes"
     },
     "rpc.app.gamemodes.admin_update": {
+      "description": "Updates a gamemode by id; requires the global gamemode.update permission.",
       "request": {
         "array": false,
         "ref": "app.GamemodeUpdate"
@@ -510,15 +587,19 @@
       "response": {
         "array": false,
         "ref": "app.GamemodeRead"
-      }
+      },
+      "summary": "Update gamemode"
     },
     "rpc.app.gamemodes.lookup": {
+      "description": "Returns all gamemodes as id/name lookup items ordered by name (public, no pagination).",
       "response": {
         "array": true,
         "ref": "app.LookupItem"
-      }
+      },
+      "summary": "Gamemode lookup"
     },
     "rpc.app.heroes.admin_create": {
+      "description": "Creates a hero; requires the global hero.create permission.",
       "request": {
         "array": false,
         "ref": "app.HeroCreate"
@@ -526,9 +607,19 @@
       "response": {
         "array": false,
         "ref": "app.HeroRead"
-      }
+      },
+      "summary": "Create hero"
+    },
+    "rpc.app.heroes.admin_delete": {
+      "description": "Deletes a hero by id; requires the global hero.delete permission, returns 204.",
+      "summary": "Delete hero"
+    },
+    "rpc.app.heroes.admin_list": {
+      "description": "Returns a paginated admin list of heroes; requires the global hero.read permission.",
+      "summary": "Admin list heroes"
     },
     "rpc.app.heroes.admin_update": {
+      "description": "Updates a hero by id; requires the global hero.update permission.",
       "request": {
         "array": false,
         "ref": "app.HeroUpdate"
@@ -536,9 +627,11 @@
       "response": {
         "array": false,
         "ref": "app.HeroRead"
-      }
+      },
+      "summary": "Update hero"
     },
     "rpc.app.heroes.leaderboard": {
+      "description": "Returns a paginated per-hero player leaderboard resolved against the workspace context and its division grid (public).",
       "query_params": [
         {
           "name": "page",
@@ -609,15 +702,19 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroLeaderboardEntry_"
-      }
+      },
+      "summary": "Hero leaderboard"
     },
     "rpc.app.heroes.lookup": {
+      "description": "Returns all heroes as id/name lookup items ordered by name (public, no pagination).",
       "response": {
         "array": true,
         "ref": "app.LookupItem"
-      }
+      },
+      "summary": "Hero lookup"
     },
     "rpc.app.heroes.playtime": {
+      "description": "Returns paginated aggregated hero-playtime statistics, optionally scoped to a workspace (public).",
       "query_params": [
         {
           "name": "page",
@@ -720,9 +817,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroPlaytime_"
-      }
+      },
+      "summary": "Hero playtime stats"
     },
     "rpc.app.maps.admin_create": {
+      "description": "Creates a map; requires the global map.create permission.",
       "request": {
         "array": false,
         "ref": "app.MapCreate"
@@ -730,9 +829,19 @@
       "response": {
         "array": false,
         "ref": "app.MapRead"
-      }
+      },
+      "summary": "Create map"
+    },
+    "rpc.app.maps.admin_delete": {
+      "description": "Deletes a map by id; requires the global map.delete permission, returns 204.",
+      "summary": "Delete map"
+    },
+    "rpc.app.maps.admin_list": {
+      "description": "Returns a paginated admin list of maps; requires the global map.read permission.",
+      "summary": "Admin list maps"
     },
     "rpc.app.maps.admin_update": {
+      "description": "Updates a map by id; requires the global map.update permission.",
       "request": {
         "array": false,
         "ref": "app.MapUpdate"
@@ -740,39 +849,55 @@
       "response": {
         "array": false,
         "ref": "app.MapRead"
-      }
+      },
+      "summary": "Update map"
     },
     "rpc.app.maps.lookup": {
+      "description": "Returns all maps as id/name lookup items ordered by name (public, no pagination).",
       "response": {
         "array": true,
         "ref": "app.LookupItem"
-      }
+      },
+      "summary": "Map lookup"
+    },
+    "rpc.app.matches.log": {
+      "description": "Returns the raw match-log file bytes for a match (base64 from the worker, decoded by the gateway); 404 if the match or log is missing.",
+      "summary": "Download match log"
     },
     "rpc.app.read.get#achievement": {
+      "description": "Returns a single achievement rule by id with optional entity expansion (public read via the shared CRUD engine), 404 if not found.",
       "response": {
         "array": false,
         "ref": "app.AchievementRead"
-      }
+      },
+      "summary": "Get achievement"
     },
     "rpc.app.read.get#gamemode": {
+      "description": "Returns a single gamemode by id with optional entity expansion (public read via the shared CRUD engine), 404 if not found.",
       "response": {
         "array": false,
         "ref": "app.GamemodeRead"
-      }
+      },
+      "summary": "Get gamemode"
     },
     "rpc.app.read.get#hero": {
+      "description": "Returns a single hero by id (public read via the shared CRUD engine), 404 if not found.",
       "response": {
         "array": false,
         "ref": "app.HeroRead"
-      }
+      },
+      "summary": "Get hero"
     },
     "rpc.app.read.get#map": {
+      "description": "Returns a single map by id with optional entity expansion (public read via the shared CRUD engine), 404 if not found.",
       "response": {
         "array": false,
         "ref": "app.MapRead"
-      }
+      },
+      "summary": "Get map"
     },
     "rpc.app.read.list#achievement": {
+      "description": "Returns a paginated, sortable list of achievements optionally filtered by workspace (public read via the shared CRUD engine).",
       "query_params": [
         {
           "name": "page",
@@ -844,9 +969,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_AchievementRead_"
-      }
+      },
+      "summary": "List achievements"
     },
     "rpc.app.read.list#gamemode": {
+      "description": "Returns a paginated, sortable, name/slug-searchable list of gamemodes (public read via the shared CRUD engine).",
       "query_params": [
         {
           "name": "page",
@@ -937,9 +1064,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_GamemodeRead_"
-      }
+      },
+      "summary": "List gamemodes"
     },
     "rpc.app.read.list#hero": {
+      "description": "Returns a paginated, sortable, name/slug-searchable list of heroes (public read via the shared CRUD engine).",
       "query_params": [
         {
           "name": "page",
@@ -1030,9 +1159,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroRead_"
-      }
+      },
+      "summary": "List heroes"
     },
     "rpc.app.read.list#map": {
+      "description": "Returns a paginated, sortable, name-searchable list of maps (public read via the shared CRUD engine).",
       "query_params": [
         {
           "name": "page",
@@ -1122,9 +1253,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_MapRead_"
-      }
+      },
+      "summary": "List maps"
     },
     "rpc.app.statistics.champion": {
+      "description": "Returns paginated, sortable players ranked by tournaments won, optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -1193,15 +1326,19 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
-      }
+      },
+      "summary": "Most-champion players"
     },
     "rpc.app.statistics.dashboard": {
+      "description": "Returns aggregate dashboard statistics for the optional workspace (public).",
       "response": {
         "array": false,
         "ref": "app.DashboardStats"
-      }
+      },
+      "summary": "Dashboard stats"
     },
     "rpc.app.statistics.winrate": {
+      "description": "Returns paginated, sortable players ranked by win rate, optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -1270,9 +1407,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
-      }
+      },
+      "summary": "Top winrate players"
     },
     "rpc.app.statistics.won_maps": {
+      "description": "Returns paginated, sortable players ranked by maps won, optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -1341,9 +1480,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_PlayerStatistics_"
-      }
+      },
+      "summary": "Top won-maps players"
     },
     "rpc.app.users.admin_create": {
+      "description": "Creates a player and returns it with discord/battle_tag/twitch identities; requires the global user.create permission.",
       "request": {
         "array": false,
         "ref": "app.UserCreate"
@@ -1351,9 +1492,19 @@
       "response": {
         "array": false,
         "ref": "app.UserRead"
-      }
+      },
+      "summary": "Create user"
+    },
+    "rpc.app.users.admin_delete": {
+      "description": "Deletes a player by id; requires the global user.delete permission, returns 204.",
+      "summary": "Delete user"
+    },
+    "rpc.app.users.admin_list": {
+      "description": "Returns a paginated admin list of users; requires the global user.read permission.",
+      "summary": "Admin list users"
     },
     "rpc.app.users.admin_update": {
+      "description": "Updates a player by id and returns it with its identities; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.UserUpdate"
@@ -1361,21 +1512,27 @@
       "response": {
         "array": false,
         "ref": "app.UserRead"
-      }
+      },
+      "summary": "Update user"
     },
     "rpc.app.users.avatar_delete": {
+      "description": "Removes a player's avatar from S3 and clears its URL; requires the global user.update permission.",
       "response": {
         "array": false,
         "ref": "app.UserRead"
-      }
+      },
+      "summary": "Delete user avatar"
     },
     "rpc.app.users.avatar_upload": {
+      "description": "Uploads a player's avatar to S3 and stores its URL; requires the global user.update permission.",
       "response": {
         "array": false,
         "ref": "app.UserRead"
-      }
+      },
+      "summary": "Upload user avatar"
     },
     "rpc.app.users.battletag_add": {
+      "description": "Adds a BattleTag identity to a player; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.BattleTagIdentityCreate"
@@ -1383,9 +1540,15 @@
       "response": {
         "array": false,
         "ref": "app.UserBattleTagRead"
-      }
+      },
+      "summary": "Add BattleTag identity"
+    },
+    "rpc.app.users.battletag_delete": {
+      "description": "Removes a player's BattleTag identity by identity id; requires the global user.delete permission, returns 204.",
+      "summary": "Delete BattleTag identity"
     },
     "rpc.app.users.battletag_update": {
+      "description": "Updates a player's BattleTag identity by identity id; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.BattleTagIdentityUpdate"
@@ -1393,15 +1556,19 @@
       "response": {
         "array": false,
         "ref": "app.UserBattleTagRead"
-      }
+      },
+      "summary": "Update BattleTag identity"
     },
     "rpc.app.users.by_name": {
+      "description": "Resolves a player by BattleTag (name containing '#', dashes normalized) or by Discord name with optional entity expansion (public).",
       "response": {
         "array": false,
         "ref": "app.UserRead"
-      }
+      },
+      "summary": "Get user by name"
     },
     "rpc.app.users.compare": {
+      "description": "Returns a head-to-head comparison between the given user and others, resolved against the default division grid (public).",
       "query_params": [
         {
           "name": "baseline",
@@ -1506,9 +1673,11 @@
       "response": {
         "array": false,
         "ref": "app.UserCompareResponse"
-      }
+      },
+      "summary": "Compare users"
     },
     "rpc.app.users.compare_heroes": {
+      "description": "Returns a per-hero head-to-head comparison for the given user against others using the default grid (public).",
       "query_params": [
         {
           "name": "baseline",
@@ -1683,9 +1852,15 @@
       "response": {
         "array": false,
         "ref": "app.UserHeroCompareResponse"
-      }
+      },
+      "summary": "Compare user heroes"
+    },
+    "rpc.app.users.csv_import": {
+      "description": "Bulk-creates players from an uploaded CSV file or a Google Sheets URL using the given row/delimiter/flag params; requires the global admin role.",
+      "summary": "Bulk import users"
     },
     "rpc.app.users.discord_add": {
+      "description": "Adds a Discord identity to a player; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.DiscordIdentityCreate"
@@ -1693,9 +1868,15 @@
       "response": {
         "array": false,
         "ref": "app.UserDiscordRead"
-      }
+      },
+      "summary": "Add Discord identity"
+    },
+    "rpc.app.users.discord_delete": {
+      "description": "Removes a player's Discord identity by identity id; requires the global user.delete permission, returns 204.",
+      "summary": "Delete Discord identity"
     },
     "rpc.app.users.discord_update": {
+      "description": "Updates a player's Discord identity by identity id; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.DiscordIdentityUpdate"
@@ -1703,9 +1884,11 @@
       "response": {
         "array": false,
         "ref": "app.UserDiscordRead"
-      }
+      },
+      "summary": "Update Discord identity"
     },
     "rpc.app.users.encounters": {
+      "description": "Returns a player's paginated encounters filterable by result, stage, MVP, log availability, and opponent (public).",
       "query_params": [
         {
           "name": "page",
@@ -1812,15 +1995,19 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_EncounterReadWithUserStats_"
-      }
+      },
+      "summary": "User encounters"
     },
     "rpc.app.users.get_profile": {
+      "description": "Returns a player's full profile resolved against the workspace context and division grid (public).",
       "response": {
         "array": false,
         "ref": "app.UserProfile"
-      }
+      },
+      "summary": "User profile"
     },
     "rpc.app.users.heroes": {
+      "description": "Returns a player's paginated per-hero stats for the requested stat names, optionally scoped to a tournament and workspace; rejects invalid stat values with 422 (public).",
       "query_params": [
         {
           "name": "page",
@@ -1891,9 +2078,15 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_HeroWithUserStats_"
-      }
+      },
+      "summary": "User heroes"
+    },
+    "rpc.app.users.list": {
+      "description": "Returns a paginated, sortable, name-searchable list of players (public).",
+      "summary": "List users"
     },
     "rpc.app.users.maps": {
+      "description": "Returns a player's paginated, sortable per-map record (win/loss/draw/winrate), optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -2026,9 +2219,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_UserMap_"
-      }
+      },
+      "summary": "User maps"
     },
     "rpc.app.users.maps_summary": {
+      "description": "Returns aggregate totals for a player's per-map record, optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -2161,15 +2356,19 @@
       "response": {
         "array": false,
         "ref": "app.UserMapsSummary"
-      }
+      },
+      "summary": "User maps summary"
     },
     "rpc.app.users.matches_summary": {
+      "description": "Returns aggregate match totals for a player, optionally workspace-scoped (public).",
       "response": {
         "array": false,
         "ref": "app.UserMatchesSummary"
-      }
+      },
+      "summary": "User matches summary"
     },
     "rpc.app.users.merge_execute": {
+      "description": "Merges one player profile into another, stamping the operator's auth-user id (superuser only).",
       "request": {
         "array": false,
         "ref": "app.UserMergeExecuteRequest"
@@ -2177,9 +2376,11 @@
       "response": {
         "array": false,
         "ref": "app.UserMergeExecuteResponse"
-      }
+      },
+      "summary": "Execute user merge"
     },
     "rpc.app.users.merge_preview": {
+      "description": "Previews merging one player profile into another without applying changes (superuser only).",
       "request": {
         "array": false,
         "ref": "app.UserMergePreviewRequest"
@@ -2187,9 +2388,11 @@
       "response": {
         "array": false,
         "ref": "app.UserMergePreviewResponse"
-      }
+      },
+      "summary": "Preview user merge"
     },
     "rpc.app.users.overview": {
+      "description": "Returns a paginated, workspace-normalized player overview table built from the workspace grid (public).",
       "query_params": [
         {
           "name": "page",
@@ -2331,9 +2534,11 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_UserOverviewRow_"
-      }
+      },
+      "summary": "Users overview"
     },
     "rpc.app.users.overview_catalog": {
+      "description": "Returns the filter-catalog (facets) for the players-overview table from the workspace grid (public).",
       "query_params": [
         {
           "name": "role",
@@ -2446,9 +2651,11 @@
       "response": {
         "array": false,
         "ref": "app.UserCatalogResponse"
-      }
+      },
+      "summary": "Users overview catalog"
     },
     "rpc.app.users.overview_stats": {
+      "description": "Returns aggregate statistics for the players-overview table computed against the workspace grid (public).",
       "query_params": [
         {
           "name": "role",
@@ -2521,9 +2728,11 @@
       "response": {
         "array": false,
         "ref": "app.UserOverviewStats"
-      }
+      },
+      "summary": "Users overview stats"
     },
     "rpc.app.users.search": {
+      "description": "Returns players matching a free-text query across the requested identity fields (public).",
       "query_params": [
         {
           "name": "query",
@@ -2546,9 +2755,11 @@
       "response": {
         "array": true,
         "ref": "app.UserSearch"
-      }
+      },
+      "summary": "Search users"
     },
     "rpc.app.users.teammates": {
+      "description": "Returns a player's paginated, sortable best teammates by winrate and shared tournaments, optionally workspace-scoped (public).",
       "query_params": [
         {
           "name": "page",
@@ -2618,21 +2829,27 @@
       "response": {
         "array": false,
         "ref": "app.Paginated_UserBestTeammate_"
-      }
+      },
+      "summary": "User best teammates"
     },
     "rpc.app.users.tournament": {
+      "description": "Returns a player's participation and stats for one tournament, resolved against that tournament's division grid (public).",
       "response": {
         "array": false,
         "ref": "app.UserTournamentWithStats"
-      }
+      },
+      "summary": "User tournament stats"
     },
     "rpc.app.users.tournaments": {
+      "description": "Returns the tournaments a player participated in, scoped to the workspace context and grid (public).",
       "response": {
         "array": true,
         "ref": "app.UserTournament"
-      }
+      },
+      "summary": "User tournaments"
     },
     "rpc.app.users.twitch_add": {
+      "description": "Adds a Twitch identity to a player; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.TwitchIdentityCreate"
@@ -2640,9 +2857,15 @@
       "response": {
         "array": false,
         "ref": "app.UserTwitchRead"
-      }
+      },
+      "summary": "Add Twitch identity"
+    },
+    "rpc.app.users.twitch_delete": {
+      "description": "Removes a player's Twitch identity by identity id; requires the global user.delete permission, returns 204.",
+      "summary": "Delete Twitch identity"
     },
     "rpc.app.users.twitch_update": {
+      "description": "Updates a player's Twitch identity by identity id; requires the global user.update permission.",
       "request": {
         "array": false,
         "ref": "app.TwitchIdentityUpdate"
@@ -2650,9 +2873,11 @@
       "response": {
         "array": false,
         "ref": "app.UserTwitchRead"
-      }
+      },
+      "summary": "Update Twitch identity"
     },
     "rpc.app.workspaces.create": {
+      "description": "Creates a workspace (superuser only), provisions system roles, adds the creator as owner, and busts the RBAC cache; 400 on duplicate slug.",
       "request": {
         "array": false,
         "ref": "app.WorkspaceCreate"
@@ -2660,33 +2885,43 @@
       "response": {
         "array": false,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "Create workspace"
     },
     "rpc.app.workspaces.get": {
+      "description": "Returns a single workspace by id (public), 404 if not found.",
       "response": {
         "array": false,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "Get workspace"
     },
     "rpc.app.workspaces.icon_delete": {
+      "description": "Removes a workspace's icon from S3 and clears its URL; requires workspace.update, 404 if workspace missing.",
       "response": {
         "array": false,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "Delete workspace icon"
     },
     "rpc.app.workspaces.icon_upload": {
+      "description": "Uploads a workspace icon to S3 and stores its URL; requires workspace.update, 404 if workspace missing.",
       "response": {
         "array": false,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "Upload workspace icon"
     },
     "rpc.app.workspaces.list": {
+      "description": "Returns all workspaces (public, unpaginated).",
       "response": {
         "array": true,
         "ref": "app.WorkspaceRead"
-      }
+      },
+      "summary": "List workspaces"
     },
     "rpc.app.workspaces.member_add": {
+      "description": "Adds an auth user to a workspace with resolved role ids and busts the member's RBAC cache; requires workspace_member.create, 400 if already a member.",
       "request": {
         "array": false,
         "ref": "app.WorkspaceMemberCreate"
@@ -2694,9 +2929,15 @@
       "response": {
         "array": false,
         "ref": "app.WorkspaceMemberRead"
-      }
+      },
+      "summary": "Add workspace member"
+    },
+    "rpc.app.workspaces.member_remove": {
+      "description": "Removes a member from a workspace and busts their RBAC cache; requires workspace_member.delete, refuses to remove the last owner, returns 204.",
+      "summary": "Remove workspace member"
     },
     "rpc.app.workspaces.member_update": {
+      "description": "Updates a member's workspace roles and busts their RBAC cache; requires workspace_member.update, 404 if member missing.",
       "request": {
         "array": false,
         "ref": "app.WorkspaceMemberUpdate"
@@ -2704,21 +2945,31 @@
       "response": {
         "array": false,
         "ref": "app.WorkspaceMemberRead"
-      }
+      },
+      "summary": "Update workspace member"
     },
     "rpc.app.workspaces.members_list": {
+      "description": "Returns a workspace's members enriched with auth-user info and RBAC roles; requires workspace_member.read, 404 if workspace missing.",
       "response": {
         "array": true,
         "ref": "app.WorkspaceMemberRead"
-      }
+      },
+      "summary": "List workspace members"
     },
     "rpc.balancer.admin.balance_export": {
+      "description": "Materializes a saved balance into tournament teams, returning removed/imported counts and emitting a teams-changed realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.BalanceExportResponse"
-      }
+      },
+      "summary": "Export balance to teams"
+    },
+    "rpc.balancer.admin.balance_get": {
+      "description": "Returns the saved team balance for a tournament for admins with workspace team-read permission, or null when none exists.",
+      "summary": "Get saved balance"
     },
     "rpc.balancer.admin.balance_save": {
+      "description": "Persists a computed team balance for the tournament (requires workspace team-import) and emits a balance-saved realtime event.",
       "request": {
         "array": false,
         "ref": "balancer.BalanceSaveRequest"
@@ -2726,9 +2977,19 @@
       "response": {
         "array": false,
         "ref": "balancer.BalanceRead"
-      }
+      },
+      "summary": "Save tournament balance"
+    },
+    "rpc.balancer.admin.teams_import": {
+      "description": "Bulk-imports tournament teams from a multipart JSON upload (atravkovs or internal format, auto-detected) and emits a teams-changed realtime event.",
+      "summary": "Import teams file"
+    },
+    "rpc.balancer.admin.tournament_config_get": {
+      "description": "Returns the per-tournament balancer config for admins with workspace team-read permission, or null when none is set.",
+      "summary": "Get tournament balancer config"
     },
     "rpc.balancer.admin.tournament_config_upsert": {
+      "description": "Creates or updates the per-tournament balancer config (requires workspace team-import) and emits a balancer config-changed realtime event.",
       "request": {
         "array": false,
         "ref": "balancer.BalancerTournamentConfigUpsert"
@@ -2736,15 +2997,19 @@
       "response": {
         "array": false,
         "ref": "balancer.BalancerTournamentConfigRead"
-      }
+      },
+      "summary": "Upsert tournament balancer config"
     },
     "rpc.balancer.admin.workspace_config_get": {
+      "description": "Returns the workspace-level balancer config (rank-delta threshold and pool-hide flag) for members with workspace read permission.",
       "response": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigRead"
-      }
+      },
+      "summary": "Get workspace balancer config"
     },
     "rpc.balancer.admin.workspace_config_upsert": {
+      "description": "Creates or updates the workspace-level rank-delta threshold and hide-from-pool settings, requiring workspace admin permission.",
       "request": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigUpsert"
@@ -2752,33 +3017,43 @@
       "response": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigRead"
-      }
+      },
+      "summary": "Upsert workspace balancer config"
     },
     "rpc.balancer.config": {
+      "description": "Returns the public balancer configuration (ranks, roles, defaults) with no authentication required.",
       "response": {
         "array": false,
         "ref": "balancer.BalancerConfigResponse"
-      }
+      },
+      "summary": "Get balancer config"
     },
     "rpc.balancer.draft.cancel": {
+      "description": "Cancels the draft (requires team-import) and publishes a draft-cancelled realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Cancel draft session"
     },
     "rpc.balancer.draft.export": {
+      "description": "Finalizes the drafted rosters into tournament teams (requires team-import) and publishes a draft-completed realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Export draft to teams"
     },
     "rpc.balancer.draft.pause": {
+      "description": "Pauses an in-progress draft (requires team-import) and publishes a draft-paused realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Pause draft session"
     },
     "rpc.balancer.draft.pick_autopick": {
+      "description": "Auto-selects the best-fit available player for a pick using the session's autopick strategy (requires team-import) and broadcasts the result.",
       "request": {
         "array": false,
         "ref": "balancer.DraftPickAutopickRequest"
@@ -2786,9 +3061,11 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Autopick draft pick"
     },
     "rpc.balancer.draft.pick_override": {
+      "description": "Admin-overrides a pick to an arbitrary player (requires team-import), bypassing captain/clock constraints, and broadcasts a pick-made event.",
       "request": {
         "array": false,
         "ref": "balancer.DraftPickOverrideRequest"
@@ -2796,9 +3073,11 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Override draft pick"
     },
     "rpc.balancer.draft.pick_select": {
+      "description": "Makes a pick for the current slot as the on-clock captain (or admin), enforcing role fit and optimistic version, then broadcasts pick-made/next-pick events.",
       "request": {
         "array": false,
         "ref": "balancer.DraftPickSelectRequest"
@@ -2806,21 +3085,27 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Select draft pick"
     },
     "rpc.balancer.draft.resume": {
+      "description": "Resumes a paused draft (requires team-import) and publishes a draft-resumed realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Resume draft session"
     },
     "rpc.balancer.draft.rollback": {
+      "description": "Rolls back the most recent draft action (requires team-import) and publishes a rollback realtime event.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Rollback draft pick"
     },
     "rpc.balancer.draft.seed": {
+      "description": "Seeds a draft session with captains and players from the balancer pool or a manual list (requires team-import); 422 if neither is provided.",
       "request": {
         "array": false,
         "ref": "balancer.DraftSeedRequest"
@@ -2828,15 +3113,19 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Seed draft session"
     },
     "rpc.balancer.draft.session_board": {
+      "description": "Returns the full draft board snapshot (teams, picks, pool) for a given session id, with no authentication required.",
       "response": {
         "array": false,
         "ref": "balancer.DraftBoardSnapshot"
-      }
+      },
+      "summary": "Get draft session board"
     },
     "rpc.balancer.draft.session_create": {
+      "description": "Creates a new draft session for a tournament (requires workspace team-import) and publishes a session-updated realtime event.",
       "request": {
         "array": false,
         "ref": "balancer.DraftSessionCreateRequest"
@@ -2844,15 +3133,19 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Create draft session"
     },
     "rpc.balancer.draft.session_get": {
+      "description": "Returns a single draft session by id for spectating, with no authentication required.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Get draft session"
     },
     "rpc.balancer.draft.session_patch": {
+      "description": "Updates mutable draft settings (pick time, autopick strategy, override flag, rounds, settings) before the draft starts, requiring team-import.",
       "request": {
         "array": false,
         "ref": "balancer.DraftSessionPatchRequest"
@@ -2860,45 +3153,59 @@
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Patch draft session"
     },
     "rpc.balancer.draft.start": {
+      "description": "Starts the draft and opens the first pick (requires team-import), publishing a pick-started realtime event with the clock deadline.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSessionRead"
-      }
+      },
+      "summary": "Start draft session"
     },
     "rpc.balancer.draft.suggestions": {
+      "description": "Ranks the top five available players by fit for the current pick (requires workspace team-read); 409 if the draft has no current pick.",
       "response": {
         "array": false,
         "ref": "balancer.DraftSuggestionsResponse"
-      }
+      },
+      "summary": "Get pick suggestions"
     },
     "rpc.balancer.draft.tournament_board": {
+      "description": "Returns the live draft board snapshot for a tournament's active session (no auth), or null when no session is active.",
       "response": {
         "array": false,
         "ref": "balancer.DraftBoardSnapshot"
-      }
+      },
+      "summary": "Get tournament draft board"
     },
     "rpc.balancer.jobs.create": {
+      "description": "Queues an asynchronous balance job from a multipart player-data upload plus optional config overrides, returning 202 with the job id.",
       "response": {
         "array": false,
         "ref": "balancer.CreateJobResponse"
-      }
+      },
+      "summary": "Create balance job"
     },
     "rpc.balancer.jobs.result": {
+      "description": "Returns the computed result of a completed balance job by its uuid, scoped to the requesting token or API key.",
       "response": {
         "array": false,
         "ref": "balancer.BalanceJobResult"
-      }
+      },
+      "summary": "Get balance job result"
     },
     "rpc.balancer.jobs.status": {
+      "description": "Returns the current status of a balance job by its uuid, scoped to the requesting access token or workspace API key.",
       "response": {
         "array": false,
         "ref": "balancer.JobStatusResponse"
-      }
+      },
+      "summary": "Get balance job status"
     },
     "rpc.identity.create_api_key": {
+      "description": "Creates a workspace-scoped API key for the active user and returns it including the one-time plaintext key (201).",
       "request": {
         "array": false,
         "ref": "identity.ApiKeyCreate"
@@ -2906,27 +3213,39 @@
       "response": {
         "array": false,
         "ref": "identity.ApiKeyCreateResponse"
-      }
+      },
+      "summary": "Create API key"
     },
     "rpc.identity.get_me": {
+      "description": "Returns the profile of the bearer-authenticated user.",
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
-      }
+      },
+      "summary": "Get current user"
+    },
+    "rpc.identity.invalidate_session": {
+      "description": "Service-token-authenticated call that revokes all sessions for the given user_id; returns 204 No Content.",
+      "summary": "Invalidate user session"
     },
     "rpc.identity.list_api_keys": {
+      "description": "Returns the active user's API keys for the given workspace_id (422 if workspace_id is missing).",
       "response": {
         "array": true,
         "ref": "identity.ApiKeyRead"
-      }
+      },
+      "summary": "List API keys"
     },
     "rpc.identity.list_sessions": {
+      "description": "Returns all active refresh-token sessions for the bearer-authenticated user.",
       "response": {
         "array": true,
         "ref": "identity.SessionRead"
-      }
+      },
+      "summary": "List sessions"
     },
     "rpc.identity.login": {
+      "description": "Authenticates email + password and returns an access+refresh token, recording the session with the forwarded user-agent and IP.",
       "request": {
         "array": false,
         "ref": "identity.UserLogin"
@@ -2934,45 +3253,75 @@
       "response": {
         "array": false,
         "ref": "identity.Token"
-      }
+      },
+      "summary": "Login"
+    },
+    "rpc.identity.logout": {
+      "description": "Revokes the supplied refresh token for the bearer-authenticated user; returns 204 No Content.",
+      "summary": "Logout"
+    },
+    "rpc.identity.logout_all": {
+      "description": "Revokes every refresh-token session for the active user; returns 204 No Content.",
+      "summary": "Logout all sessions"
     },
     "rpc.identity.me.avatar_delete": {
+      "description": "Removes the active user's avatar from S3 and returns the updated user.",
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
-      }
+      },
+      "summary": "Delete avatar"
     },
     "rpc.identity.me.avatar_set": {
+      "description": "Uploads the active user's avatar image to S3 (base64 multipart body) and returns the updated user.",
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
-      }
+      },
+      "summary": "Set avatar"
     },
     "rpc.identity.oauth_callback": {
+      "description": "Exchanges the provider's code+state for an access+refresh token, logging in or creating the user; 422 if provider/code/state are missing.",
       "response": {
         "array": false,
         "ref": "identity.Token"
-      }
+      },
+      "summary": "OAuth callback"
     },
     "rpc.identity.oauth_connections": {
+      "description": "Returns the OAuth provider connections linked to the active user.",
       "response": {
         "array": true,
         "ref": "identity.OAuthUserInfo"
-      }
+      },
+      "summary": "List OAuth connections"
+    },
+    "rpc.identity.oauth_link": {
+      "description": "Links an OAuth provider connection to the active user via the provider code+state exchange.",
+      "summary": "Link OAuth provider"
     },
     "rpc.identity.oauth_providers": {
+      "description": "Returns the configured OAuth providers and their availability.",
       "response": {
         "array": true,
         "ref": "identity.OAuthProviderAvailability"
-      }
+      },
+      "summary": "List OAuth providers"
+    },
+    "rpc.identity.oauth_unlink": {
+      "description": "Unlinks the named OAuth provider from the active user; returns 204 and refuses to remove the last provider when no password is set.",
+      "summary": "Unlink OAuth provider"
     },
     "rpc.identity.oauth_url": {
+      "description": "Returns the provider's authorization redirect URL to start the OAuth flow; 400 if the provider is missing.",
       "response": {
         "array": false,
         "ref": "identity.OAuthURL"
-      }
+      },
+      "summary": "Get OAuth URL"
     },
     "rpc.identity.player.link": {
+      "description": "Links a game player to the active user and returns the link details (201).",
       "request": {
         "array": false,
         "ref": "identity.PlayerLinkRequest"
@@ -2980,27 +3329,43 @@
       "response": {
         "array": false,
         "ref": "identity.PlayerLinkResponse"
-      }
+      },
+      "summary": "Link player"
     },
     "rpc.identity.player.linked": {
+      "description": "Returns all game players linked to the active user.",
       "response": {
         "array": true,
         "ref": "identity.LinkedPlayer"
-      }
+      },
+      "summary": "List linked players"
+    },
+    "rpc.identity.player.set_primary": {
+      "description": "Marks a linked player as the active user's primary player and returns the updated link.",
+      "summary": "Set primary player"
+    },
+    "rpc.identity.player.unlink": {
+      "description": "Unlinks a game player from the active user by player_id; returns 204 No Content.",
+      "summary": "Unlink player"
     },
     "rpc.identity.rbac.assign_linked_player": {
+      "description": "Links a game player to the given auth user (admin); returns 204 No Content.",
       "request": {
         "array": false,
         "ref": "identity.AuthUserPlayerLinkAssign"
-      }
+      },
+      "summary": "Assign linked player"
     },
     "rpc.identity.rbac.assign_role": {
+      "description": "Assigns a role to a user and invalidates the RBAC cache; returns 204 No Content.",
       "request": {
         "array": false,
         "ref": "identity.UserRoleAssign"
-      }
+      },
+      "summary": "Assign role"
     },
     "rpc.identity.rbac.create_permission": {
+      "description": "Creates a new RBAC permission and returns it (201), enforcing the active user's permission check.",
       "request": {
         "array": false,
         "ref": "identity.PermissionCreate"
@@ -3008,9 +3373,11 @@
       "response": {
         "array": false,
         "ref": "identity.PermissionRead"
-      }
+      },
+      "summary": "Create permission"
     },
     "rpc.identity.rbac.create_role": {
+      "description": "Creates a new RBAC role and returns it (201), enforcing the active user's permission check.",
       "request": {
         "array": false,
         "ref": "identity.RoleCreate"
@@ -3018,63 +3385,99 @@
       "response": {
         "array": false,
         "ref": "identity.RoleRead"
-      }
+      },
+      "summary": "Create role"
+    },
+    "rpc.identity.rbac.delete_oauth_connection": {
+      "description": "Deletes an OAuth connection by connection_id (admin); returns 204 No Content.",
+      "summary": "Delete OAuth connection"
+    },
+    "rpc.identity.rbac.delete_permission": {
+      "description": "Deletes the RBAC permission by id; returns 204 No Content.",
+      "summary": "Delete permission"
+    },
+    "rpc.identity.rbac.delete_role": {
+      "description": "Deletes the role by role_id; returns 204 No Content.",
+      "summary": "Delete role"
     },
     "rpc.identity.rbac.get_auth_user": {
+      "description": "Returns detailed info for a single auth user by user_id (422 if user_id is missing).",
       "response": {
         "array": false,
         "ref": "identity.AuthUserDetailRead"
-      }
+      },
+      "summary": "Get auth user"
     },
     "rpc.identity.rbac.get_role": {
+      "description": "Returns a single role with its permissions by role_id (422 if role_id is missing).",
       "response": {
         "array": false,
         "ref": "identity.RoleWithPermissions"
-      }
+      },
+      "summary": "Get role"
     },
     "rpc.identity.rbac.get_user_roles": {
+      "description": "Returns the roles assigned to the given user_id.",
       "response": {
         "array": true,
         "ref": "identity.RoleRead"
-      }
+      },
+      "summary": "Get user roles"
     },
     "rpc.identity.rbac.list_auth_users": {
+      "description": "Returns auth users filtered by search/role_id/is_active/is_superuser/workspace_id, after the active user's permission check.",
       "response": {
         "array": true,
         "ref": "identity.AuthUserListRead"
-      }
+      },
+      "summary": "List auth users"
     },
     "rpc.identity.rbac.list_oauth_connections": {
+      "description": "Returns all OAuth connections (admin), optionally filtered by search and provider.",
       "response": {
         "array": true,
         "ref": "identity.OAuthConnectionAdminRead"
-      }
+      },
+      "summary": "List OAuth connections (admin)"
     },
     "rpc.identity.rbac.list_permissions": {
+      "description": "Returns RBAC permissions, optionally filtered by workspace_id, after the active user's permission check.",
       "response": {
         "array": true,
         "ref": "identity.PermissionRead"
-      }
+      },
+      "summary": "List permissions"
     },
     "rpc.identity.rbac.list_roles": {
+      "description": "Returns RBAC roles, optionally filtered by workspace_id, after the active user's permission check.",
       "response": {
         "array": true,
         "ref": "identity.RoleRead"
-      }
+      },
+      "summary": "List roles"
     },
     "rpc.identity.rbac.list_sessions": {
+      "description": "Returns auth-user sessions (admin), filterable by user_id/search and status (active/revoked/expired).",
       "response": {
         "array": true,
         "ref": "identity.AdminSessionRead"
-      }
+      },
+      "summary": "List all sessions (admin)"
+    },
+    "rpc.identity.rbac.remove_linked_player": {
+      "description": "Removes a linked game player from the given auth user (admin) by user_id/player_id; returns 204 No Content.",
+      "summary": "Remove linked player"
     },
     "rpc.identity.rbac.remove_role": {
+      "description": "Removes a role from a user and invalidates the RBAC cache; returns 204 No Content.",
       "request": {
         "array": false,
         "ref": "identity.UserRoleRemove"
-      }
+      },
+      "summary": "Remove role"
     },
     "rpc.identity.rbac.update_role": {
+      "description": "Updates the role by role_id and returns it, invalidating the RBAC cache.",
       "request": {
         "array": false,
         "ref": "identity.RoleUpdate"
@@ -3082,9 +3485,11 @@
       "response": {
         "array": false,
         "ref": "identity.RoleRead"
-      }
+      },
+      "summary": "Update role"
     },
     "rpc.identity.refresh": {
+      "description": "Rotates a valid refresh token and returns a fresh access+refresh token pair.",
       "request": {
         "array": false,
         "ref": "identity.RefreshTokenRequest"
@@ -3092,9 +3497,11 @@
       "response": {
         "array": false,
         "ref": "identity.Token"
-      }
+      },
+      "summary": "Refresh token"
     },
     "rpc.identity.register": {
+      "description": "Creates a new auth user from email/password registration and returns the created user (201).",
       "request": {
         "array": false,
         "ref": "identity.UserRegister"
@@ -3102,9 +3509,19 @@
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
-      }
+      },
+      "summary": "Register user"
+    },
+    "rpc.identity.revoke_api_key": {
+      "description": "Revokes the active user's API key by id; returns 204 No Content.",
+      "summary": "Revoke API key"
+    },
+    "rpc.identity.revoke_session": {
+      "description": "Revokes one of the active user's sessions by session id; returns 204 No Content (400 on an invalid session id).",
+      "summary": "Revoke session"
     },
     "rpc.identity.service_token": {
+      "description": "Exchanges service client credentials (client_id + client_secret) for a signed service access token.",
       "request": {
         "array": false,
         "ref": "identity.ServiceTokenRequest"
@@ -3112,15 +3529,19 @@
       "response": {
         "array": false,
         "ref": "identity.ServiceToken"
-      }
+      },
+      "summary": "Issue service token"
     },
     "rpc.identity.set_password": {
+      "description": "Sets or changes the active user's password; returns 204 No Content.",
       "request": {
         "array": false,
         "ref": "identity.PasswordSetRequest"
-      }
+      },
+      "summary": "Set password"
     },
     "rpc.identity.update_api_key": {
+      "description": "Updates the named API key (by id) for the active user and returns the updated record.",
       "request": {
         "array": false,
         "ref": "identity.ApiKeyUpdate"
@@ -3128,9 +3549,11 @@
       "response": {
         "array": false,
         "ref": "identity.ApiKeyRead"
-      }
+      },
+      "summary": "Update API key"
     },
     "rpc.identity.update_me": {
+      "description": "Applies a partial profile update to the active user and returns the updated user.",
       "request": {
         "array": false,
         "ref": "identity.UserUpdate"
@@ -3138,21 +3561,27 @@
       "response": {
         "array": false,
         "ref": "identity.AuthUser"
-      }
+      },
+      "summary": "Update current user"
     },
     "rpc.identity.validate_service_token": {
+      "description": "Validates a service JWT and returns the service token payload; 401 if the service token is missing or invalid.",
       "response": {
         "array": false,
         "ref": "identity.ServiceTokenPayload"
-      }
+      },
+      "summary": "Validate service token"
     },
     "rpc.identity.validate_token": {
+      "description": "Validates a bearer access token or API key and returns the RBAC token payload (user, permissions); 403 if not authenticated.",
       "response": {
         "array": false,
         "ref": "identity.TokenPayload"
-      }
+      },
+      "summary": "Validate token"
     },
     "rpc.parser.ach.calculate": {
+      "description": "Runs the achievement condition-tree engine across a workspace (optionally seeding rules and scoping to specific slugs); requires the global admin role.",
       "request": {
         "array": false,
         "ref": "parser.AchievementCalculateRequest"
@@ -3160,9 +3589,11 @@
       "response": {
         "array": false,
         "ref": "parser.AchievementCalculateResponse"
-      }
+      },
+      "summary": "Run achievement calculation"
     },
     "rpc.parser.ach.calculate_tournament": {
+      "description": "Runs the achievement engine for a single tournament's workspace; requires the global admin role.",
       "request": {
         "array": false,
         "ref": "parser.AchievementCalculateRequest"
@@ -3170,15 +3601,19 @@
       "response": {
         "array": false,
         "ref": "parser.AchievementCalculateResponse"
-      }
+      },
+      "summary": "Calculate tournament achievements"
     },
     "rpc.parser.ach.condition_types": {
+      "description": "Returns the catalog of available achievement condition-tree leaf types with their grain; requires workspace achievement.read.",
       "response": {
         "array": true,
         "ref": "parser.ConditionTypeInfo"
-      }
+      },
+      "summary": "List condition types"
     },
     "rpc.parser.ach.create": {
+      "description": "Creates a workspace achievement rule after validating its condition tree and enforcing slug uniqueness; requires workspace achievement.create.",
       "request": {
         "array": false,
         "ref": "parser.AchievementRuleCreate"
@@ -3186,9 +3621,15 @@
       "response": {
         "array": false,
         "ref": "parser.AchievementRuleRead"
-      }
+      },
+      "summary": "Create achievement rule"
+    },
+    "rpc.parser.ach.delete": {
+      "description": "Deletes a workspace achievement rule; requires workspace achievement.delete.",
+      "summary": "Delete achievement rule"
     },
     "rpc.parser.ach.evaluate": {
+      "description": "Triggers a manual achievement evaluation run for selected rules and/or a tournament; requires workspace achievement.calculate.",
       "request": {
         "array": false,
         "ref": "parser.EvaluateRequest"
@@ -3196,27 +3637,47 @@
       "response": {
         "array": false,
         "ref": "parser.EvaluationRunRead"
-      }
+      },
+      "summary": "Evaluate achievement rules"
+    },
+    "rpc.parser.ach.export": {
+      "description": "Returns a portable JSON export payload of all of a workspace's achievement rules; requires workspace achievement.export.",
+      "summary": "Export achievement rules"
     },
     "rpc.parser.ach.get": {
+      "description": "Returns a single achievement rule scoped to the workspace; requires workspace achievement.read.",
       "response": {
         "array": false,
         "ref": "parser.AchievementRuleRead"
-      }
+      },
+      "summary": "Get achievement rule"
+    },
+    "rpc.parser.ach.import": {
+      "description": "Imports portable achievement rules into a workspace (with source-workspace access check) and returns the import result; requires workspace achievement.import.",
+      "summary": "Import achievement rules"
+    },
+    "rpc.parser.ach.lib_import": {
+      "description": "Imports selected achievement rules from a source workspace's library into the target workspace, warning on missing slugs; requires workspace achievement.import.",
+      "summary": "Import library rules"
     },
     "rpc.parser.ach.lib_list": {
+      "description": "Lists the achievement rules of a source workspace available for library import; requires workspace achievement.read.",
       "response": {
         "array": true,
         "ref": "parser.AchievementLibraryRuleRead"
-      }
+      },
+      "summary": "List library rules"
     },
     "rpc.parser.ach.lib_workspaces": {
+      "description": "Lists other workspaces (visible to the caller) that have achievement rules available to import as a library; requires workspace achievement.read.",
       "response": {
         "array": true,
         "ref": "parser.AchievementLibraryWorkspaceRead"
-      }
+      },
+      "summary": "List library workspaces"
     },
     "rpc.parser.ach.list": {
+      "description": "Lists a workspace's achievement rules filtered by category and enabled flag; requires workspace achievement.read.",
       "query_params": [
         {
           "name": "category",
@@ -3236,9 +3697,11 @@
       "response": {
         "array": true,
         "ref": "parser.AchievementRuleRead"
-      }
+      },
+      "summary": "List achievement rules"
     },
     "rpc.parser.ach.override_create": {
+      "description": "Creates a manual achievement override (grant or revoke) for a user on a rule, stamped with the granting actor; requires workspace achievement.update.",
       "request": {
         "array": false,
         "ref": "parser.OverrideCreate"
@@ -3246,21 +3709,47 @@
       "response": {
         "array": false,
         "ref": "parser.OverrideRead"
-      }
+      },
+      "summary": "Create achievement override"
+    },
+    "rpc.parser.ach.override_delete": {
+      "description": "Deletes a manual achievement override scoped to the workspace; requires workspace achievement.update.",
+      "summary": "Delete achievement override"
     },
     "rpc.parser.ach.overrides_list": {
+      "description": "Lists manual grant/revoke achievement overrides for a workspace; requires workspace achievement.read.",
       "response": {
         "array": true,
         "ref": "parser.OverrideRead"
-      }
+      },
+      "summary": "List achievement overrides"
+    },
+    "rpc.parser.ach.reset": {
+      "description": "Hard-resets a workspace by reseeding rules and clearing evaluation results, returning the new run; requires workspace achievement.update.",
+      "summary": "Reset achievement rules"
+    },
+    "rpc.parser.ach.rule_users": {
+      "description": "Returns a paginated, sortable list of users who earned a rule's achievement with counts and first-qualified timestamps; requires workspace achievement.read.",
+      "summary": "List rule's qualifying users"
     },
     "rpc.parser.ach.runs": {
+      "description": "Returns the 50 most recent achievement evaluation runs for a workspace; requires workspace achievement.read.",
       "response": {
         "array": true,
         "ref": "parser.EvaluationRunRead"
-      }
+      },
+      "summary": "List evaluation runs"
+    },
+    "rpc.parser.ach.seed": {
+      "description": "Seeds the built-in achievement rules into a workspace and returns seeded/removed counts; requires workspace achievement.create.",
+      "summary": "Seed achievement rules"
+    },
+    "rpc.parser.ach.test": {
+      "description": "Dry-runs a rule's condition tree against an optional tournament and returns the qualifying count plus a sample of results; requires workspace achievement.calculate.",
+      "summary": "Test achievement rule"
     },
     "rpc.parser.ach.update": {
+      "description": "Updates an achievement rule, revalidating and bumping its version on condition-tree change and re-running evaluation when enabled; requires workspace achievement.update.",
       "request": {
         "array": false,
         "ref": "parser.AchievementRuleUpdate"
@@ -3268,9 +3757,11 @@
       "response": {
         "array": false,
         "ref": "parser.AchievementRuleRead"
-      }
+      },
+      "summary": "Update achievement rule"
     },
     "rpc.parser.ach.validate": {
+      "description": "Validates an achievement condition tree and returns errors plus the inferred grain; requires workspace achievement.read.",
       "request": {
         "array": false,
         "ref": "parser.ConditionTreeValidateRequest"
@@ -3278,15 +3769,23 @@
       "response": {
         "array": false,
         "ref": "parser.ConditionTreeValidateResponse"
-      }
+      },
+      "summary": "Validate condition tree"
+    },
+    "rpc.parser.discord_channel.delete": {
+      "description": "Removes a tournament's Discord channel configuration; requires discord_channel.delete on the workspace.",
+      "summary": "Delete tournament Discord channel"
     },
     "rpc.parser.discord_channel.get": {
+      "description": "Returns the Discord channel configuration for a tournament (or null); requires discord_channel.read on the workspace.",
       "response": {
         "array": false,
         "ref": "parser.DiscordChannelRead"
-      }
+      },
+      "summary": "Get tournament Discord channel"
     },
     "rpc.parser.discord_channel.upsert": {
+      "description": "Creates or updates a tournament's Discord guild/channel binding; requires discord_channel.update on the workspace.",
       "request": {
         "array": false,
         "ref": "parser.DiscordChannelUpsert"
@@ -3294,9 +3793,15 @@
       "response": {
         "array": false,
         "ref": "parser.DiscordChannelRead"
-      }
+      },
+      "summary": "Upsert tournament Discord channel"
+    },
+    "rpc.parser.encounter.create_challonge": {
+      "description": "Bulk-creates a tournament's encounters from its Challonge bracket, optionally skipping finals; requires the global admin role.",
+      "summary": "Create Challonge encounters"
     },
     "rpc.parser.logs.history": {
+      "description": "Lists match-log processing records filtered by tournament, encounter or workspace with pagination; permission is gated per filter argument.",
       "query_params": [
         {
           "name": "tournament_id",
@@ -3337,27 +3842,51 @@
       "response": {
         "array": false,
         "ref": "parser.LogHistoryResponse"
-      }
+      },
+      "summary": "List log processing records"
+    },
+    "rpc.parser.logs.process_tournament": {
+      "description": "Enqueues processing of all stored match logs for a tournament; requires the global admin role.",
+      "summary": "Process tournament logs"
     },
     "rpc.parser.logs.queue_status": {
+      "description": "Returns per-status counts of match-log processing records; admin-only (requires log.read permission).",
       "response": {
         "array": true,
         "ref": "parser.QueueDepth"
-      }
+      },
+      "summary": "Match-log queue depths"
     },
     "rpc.parser.logs.retry": {
+      "description": "Resets a failed/processed log record to pending and re-enqueues it for processing; requires log.reprocess on the record's workspace.",
       "response": {
         "array": false,
         "ref": "parser.LogRecordRead"
-      }
+      },
+      "summary": "Retry log processing"
     },
     "rpc.parser.logs.upload": {
+      "description": "Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected; requires log.upload.",
       "response": {
         "array": false,
         "ref": "parser.LogUploadResponse"
-      }
+      },
+      "summary": "Upload match logs"
+    },
+    "rpc.parser.metadata.sync_gamemodes": {
+      "description": "Syncs gamemode metadata from OverFast into the database and acks success; requires gamemode.sync permission.",
+      "summary": "Sync gamemodes"
+    },
+    "rpc.parser.metadata.sync_heroes": {
+      "description": "Syncs hero metadata from OverFast into the database and acks success; requires hero.sync permission.",
+      "summary": "Sync heroes"
+    },
+    "rpc.parser.metadata.sync_maps": {
+      "description": "Syncs map metadata from OverFast into the database and acks success; requires map.sync permission.",
+      "summary": "Sync maps"
     },
     "rpc.parser.rank.battle_tag_history": {
+      "description": "Returns a single battle tag's OverFast rank time series with granularity, date range, platform and role filters; public read.",
       "query_params": [
         {
           "name": "granularity",
@@ -3398,9 +3927,11 @@
       "response": {
         "array": false,
         "ref": "parser.RankHistoryResponse"
-      }
+      },
+      "summary": "Battle tag rank history"
     },
     "rpc.parser.rank.collect": {
+      "description": "Enqueues an OverFast rank-collection run for a user or specific battle tags and returns the enqueued count; requires the global admin role.",
       "request": {
         "array": false,
         "ref": "parser.CollectTriggerRequest"
@@ -3408,21 +3939,27 @@
       "response": {
         "array": false,
         "ref": "parser.CollectTriggerResponse"
-      }
+      },
+      "summary": "Trigger rank collection"
     },
     "rpc.parser.rank.fetch_log": {
+      "description": "Lists OverFast rank-collection fetch-log entries filtered by status, source and cursor; requires the global admin role.",
       "response": {
         "array": true,
         "ref": "parser.FetchLogRead"
-      }
+      },
+      "summary": "Rank fetch log"
     },
     "rpc.parser.rank.user_collection": {
+      "description": "Returns the OverFast rank-collection status for each of a user's battle tags; requires the global admin role.",
       "response": {
         "array": true,
         "ref": "parser.CollectionStatusRead"
-      }
+      },
+      "summary": "User rank collection status"
     },
     "rpc.parser.rank.user_current": {
+      "description": "Returns a user's current OverFast ranks for the requested platform; public read.",
       "query_params": [
         {
           "name": "platform",
@@ -3435,9 +3972,11 @@
       "response": {
         "array": false,
         "ref": "parser.CurrentRanksResponse"
-      }
+      },
+      "summary": "Current user ranks"
     },
     "rpc.parser.rank.user_history": {
+      "description": "Returns a user's OverFast rank time series with configurable granularity, date range, platform and role filters; public read.",
       "query_params": [
         {
           "name": "granularity",
@@ -3485,21 +4024,27 @@
       "response": {
         "array": false,
         "ref": "parser.RankHistoryResponse"
-      }
+      },
+      "summary": "User rank history"
     },
     "rpc.parser.settings.get": {
+      "description": "Returns a single global setting by key; superuser-only.",
       "response": {
         "array": false,
         "ref": "parser.SettingRead"
-      }
+      },
+      "summary": "Get global setting"
     },
     "rpc.parser.settings.list": {
+      "description": "Returns all global key/value settings; superuser-only.",
       "response": {
         "array": true,
         "ref": "parser.SettingRead"
-      }
+      },
+      "summary": "List global settings"
     },
     "rpc.parser.settings.upsert": {
+      "description": "Creates or updates a global setting by key, stamping the updating user; superuser-only.",
       "request": {
         "array": false,
         "ref": "parser.SettingUpsert"
@@ -3507,15 +4052,23 @@
       "response": {
         "array": false,
         "ref": "parser.SettingRead"
-      }
+      },
+      "summary": "Upsert global setting"
     },
     "rpc.parser.teams.challonge_preview": {
+      "description": "Previews the mapping of Challonge participants to teams for a tournament before syncing; requires the global admin role.",
       "response": {
         "array": false,
         "ref": "parser.ChallongeTeamSyncPreview"
-      }
+      },
+      "summary": "Preview Challonge team sync"
+    },
+    "rpc.parser.teams.create_balancer": {
+      "description": "Multipart (base64) import of teams from a balancer export JSON (atravkovs or internal format) for a tournament; requires the global admin role.",
+      "summary": "Import balancer teams"
     },
     "rpc.parser.teams.create_challonge": {
+      "description": "Applies Challonge participant-to-team mappings for a tournament; requires the global admin role.",
       "request": {
         "array": false,
         "ref": "parser.ChallongeTeamSyncRequest"
@@ -3523,9 +4076,11 @@
       "response": {
         "array": false,
         "ref": "parser.ChallongeTeamSyncResult"
-      }
+      },
+      "summary": "Sync Challonge teams"
     },
     "rpc.parser.tournament.create_with_groups": {
+      "description": "Creates a tournament and its group stages (optionally from a Challonge slug) for a workspace; requires workspace tournament.create.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -3566,9 +4121,11 @@
       "response": {
         "array": false,
         "ref": "parser.TournamentRead"
-      }
+      },
+      "summary": "Create tournament with groups"
     },
     "rpc.tournament.admin.create#encounter": {
+      "description": "Creates an encounter; requires match-create permission on the workspace resolved from the body's tournament_id.",
       "request": {
         "array": false,
         "ref": "tournament.EncounterCreate"
@@ -3576,9 +4133,11 @@
       "response": {
         "array": false,
         "ref": "tournament.EncounterRead"
-      }
+      },
+      "summary": "Create encounter"
     },
     "rpc.tournament.admin.create#player": {
+      "description": "Creates a player; requires player-create permission on the workspace resolved from the body's tournament_id.",
       "request": {
         "array": false,
         "ref": "tournament.PlayerCreate"
@@ -3586,9 +4145,11 @@
       "response": {
         "array": false,
         "ref": "tournament.PlayerRead"
-      }
+      },
+      "summary": "Create player"
     },
     "rpc.tournament.admin.create#player_sub_role": {
+      "description": "Creates a custom player sub-role; requires player-create permission on the workspace supplied in the body.",
       "request": {
         "array": false,
         "ref": "tournament.PlayerSubRoleCreate"
@@ -3596,9 +4157,11 @@
       "response": {
         "array": false,
         "ref": "tournament.PlayerSubRoleRead"
-      }
+      },
+      "summary": "Create player sub-role"
     },
     "rpc.tournament.admin.create#stage": {
+      "description": "Creates a stage under a tournament; requires stage-create permission on the workspace resolved from the path tournament_id.",
       "request": {
         "array": false,
         "ref": "tournament.StageCreate"
@@ -3606,9 +4169,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Create stage"
     },
     "rpc.tournament.admin.create#stage_item": {
+      "description": "Creates a stage item under a stage; requires stage-create permission on the workspace resolved from the path stage_id.",
       "request": {
         "array": false,
         "ref": "tournament.StageItemCreate"
@@ -3616,9 +4181,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageItemRead"
-      }
+      },
+      "summary": "Create stage item"
     },
     "rpc.tournament.admin.create#stage_item_input": {
+      "description": "Creates a stage item input under a stage item; requires stage-create permission on the workspace resolved from the path stage_item_id.",
       "request": {
         "array": false,
         "ref": "tournament.StageItemInputCreate"
@@ -3626,9 +4193,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageItemInputRead"
-      }
+      },
+      "summary": "Create stage item input"
     },
     "rpc.tournament.admin.create#team": {
+      "description": "Creates a team; requires team-create permission on the workspace resolved from the body's tournament_id.",
       "request": {
         "array": false,
         "ref": "tournament.TeamCreate"
@@ -3636,9 +4205,11 @@
       "response": {
         "array": false,
         "ref": "tournament.TeamRead"
-      }
+      },
+      "summary": "Create team"
     },
     "rpc.tournament.admin.create#tournament": {
+      "description": "Creates a tournament; requires the tournament-create permission on the workspace supplied in the body.",
       "request": {
         "array": false,
         "ref": "tournament.TournamentCreate"
@@ -3646,27 +4217,63 @@
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Create tournament"
+    },
+    "rpc.tournament.admin.delete#encounter": {
+      "description": "Deletes an encounter by id (204 no body); requires match-delete permission on its workspace.",
+      "summary": "Delete encounter"
+    },
+    "rpc.tournament.admin.delete#player": {
+      "description": "Deletes a player by id (204 no body); requires player-delete permission on its workspace.",
+      "summary": "Delete player"
+    },
+    "rpc.tournament.admin.delete#player_sub_role": {
+      "description": "Deactivates a player sub-role by id (204 no body); requires player-delete permission on its workspace.",
+      "summary": "Delete player sub-role"
+    },
+    "rpc.tournament.admin.delete#stage": {
+      "description": "Deletes a stage by id (204 no body); requires stage-delete permission on its workspace.",
+      "summary": "Delete stage"
+    },
+    "rpc.tournament.admin.delete#standing": {
+      "description": "Deletes a standing by id (204 no body); requires standing-delete permission on its workspace.",
+      "summary": "Delete standing"
+    },
+    "rpc.tournament.admin.delete#team": {
+      "description": "Deletes a team by id (204 no body); requires team-delete permission on its workspace.",
+      "summary": "Delete team"
+    },
+    "rpc.tournament.admin.delete#tournament": {
+      "description": "Deletes a tournament by id (204 no body); requires tournament-delete permission on its workspace.",
+      "summary": "Delete tournament"
     },
     "rpc.tournament.admin.get#stage": {
+      "description": "Returns one stage by id; requires stage-read permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Get stage"
     },
     "rpc.tournament.admin.get#team": {
+      "description": "Returns one team by id for admin editing; requires team-read permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.TeamRead"
-      }
+      },
+      "summary": "Get team (admin)"
     },
     "rpc.tournament.admin.get#tournament": {
+      "description": "Returns one tournament by id for admin editing; requires tournament-read permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Get tournament (admin)"
     },
     "rpc.tournament.admin.list#player_sub_role": {
+      "description": "Lists a workspace's player sub-roles, optionally filtered by role and including inactive ones; requires player-read permission on the workspace.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -3693,15 +4300,19 @@
       "response": {
         "array": true,
         "ref": "tournament.PlayerSubRoleRead"
-      }
+      },
+      "summary": "List player sub-roles"
     },
     "rpc.tournament.admin.list#stage": {
+      "description": "Lists all stages of a tournament; requires stage-read permission on the workspace resolved from the path tournament_id.",
       "response": {
         "array": true,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "List stages (admin)"
     },
     "rpc.tournament.admin.update#encounter": {
+      "description": "Updates an encounter by id; requires match-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.EncounterUpdate"
@@ -3709,9 +4320,11 @@
       "response": {
         "array": false,
         "ref": "tournament.EncounterRead"
-      }
+      },
+      "summary": "Update encounter"
     },
     "rpc.tournament.admin.update#player": {
+      "description": "Updates a player by id; requires player-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.PlayerUpdate"
@@ -3719,9 +4332,11 @@
       "response": {
         "array": false,
         "ref": "tournament.PlayerRead"
-      }
+      },
+      "summary": "Update player"
     },
     "rpc.tournament.admin.update#player_sub_role": {
+      "description": "Updates a player sub-role by id; requires player-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.PlayerSubRoleUpdate"
@@ -3729,9 +4344,11 @@
       "response": {
         "array": false,
         "ref": "tournament.PlayerSubRoleRead"
-      }
+      },
+      "summary": "Update player sub-role"
     },
     "rpc.tournament.admin.update#stage": {
+      "description": "Updates a stage by id; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.StageUpdate"
@@ -3739,9 +4356,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Update stage"
     },
     "rpc.tournament.admin.update#stage_item": {
+      "description": "Updates a stage item by id; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.StageItemUpdate"
@@ -3749,9 +4368,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageItemRead"
-      }
+      },
+      "summary": "Update stage item"
     },
     "rpc.tournament.admin.update#stage_item_input": {
+      "description": "Updates a stage item input by id; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.StageItemInputUpdate"
@@ -3759,9 +4380,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageItemInputRead"
-      }
+      },
+      "summary": "Update stage item input"
     },
     "rpc.tournament.admin.update#standing": {
+      "description": "Updates a standing by id; requires standing-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.StandingUpdate"
@@ -3769,9 +4392,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StandingRead"
-      }
+      },
+      "summary": "Update standing"
     },
     "rpc.tournament.admin.update#team": {
+      "description": "Updates a team by id; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.TeamUpdate"
@@ -3779,9 +4404,11 @@
       "response": {
         "array": false,
         "ref": "tournament.TeamRead"
-      }
+      },
+      "summary": "Update team"
     },
     "rpc.tournament.admin.update#tournament": {
+      "description": "Updates a tournament by id; requires tournament-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.TournamentUpdate"
@@ -3789,27 +4416,83 @@
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Update tournament"
+    },
+    "rpc.tournament.captain_confirm_result": {
+      "description": "Lets the opposing captain confirm a submitted encounter result; requires authentication.",
+      "summary": "Confirm encounter result"
+    },
+    "rpc.tournament.captain_dispute_result": {
+      "description": "Lets an encounter captain dispute a submitted result with a reason; requires authentication.",
+      "summary": "Dispute encounter result"
+    },
+    "rpc.tournament.captain_map_pool": {
+      "description": "Returns the public map pool for an encounter; no authentication required.",
+      "summary": "Get encounter map pool"
+    },
+    "rpc.tournament.captain_map_pool_state": {
+      "description": "Returns the encounter's map-veto state; with optional auth the requesting captain's side is annotated, otherwise viewer_side is null.",
+      "summary": "Get map veto state"
+    },
+    "rpc.tournament.captain_my_role": {
+      "description": "Returns the calling user's captain side (home/away) for an encounter, or null if they are not a captain; requires authentication.",
+      "summary": "Get my captain side"
+    },
+    "rpc.tournament.captain_submit_match_report": {
+      "description": "Lets an encounter captain submit per-match scores and a closeness rating; requires authentication.",
+      "summary": "Submit match report"
+    },
+    "rpc.tournament.captain_submit_result": {
+      "description": "Lets an encounter captain submit a home/away score and returns the updated result status; requires authentication.",
+      "summary": "Submit encounter result"
+    },
+    "rpc.tournament.captain_veto": {
+      "description": "Lets a captain ban or pick a map in the encounter's veto and returns the updated pool entry; requires authentication.",
+      "summary": "Veto map"
+    },
+    "rpc.tournament.challonge_export": {
+      "description": "Exports a tournament's bracket to Challonge; requires challonge-sync permission on the tournament.",
+      "summary": "Export to Challonge"
     },
     "rpc.tournament.challonge_fetch_matches": {
+      "description": "Fetches a Challonge tournament's matches from the Challonge API; requires the global challonge-read permission.",
       "response": {
         "array": true,
         "ref": "tournament.ChallongeMatch"
-      }
+      },
+      "summary": "Fetch Challonge matches"
     },
     "rpc.tournament.challonge_fetch_participants": {
+      "description": "Fetches a Challonge tournament's participants from the Challonge API; requires the global challonge-read permission.",
       "response": {
         "array": true,
         "ref": "tournament.ChallongeParticipant"
-      }
+      },
+      "summary": "Fetch Challonge participants"
     },
     "rpc.tournament.challonge_fetch_tournament": {
+      "description": "Fetches a Challonge tournament by slug from the Challonge API; requires the global challonge-read permission.",
       "response": {
         "array": false,
         "ref": "tournament.ChallongeTournament"
-      }
+      },
+      "summary": "Fetch Challonge tournament"
+    },
+    "rpc.tournament.challonge_import": {
+      "description": "Imports a tournament's bracket from Challonge, optionally as a dry run; requires challonge-sync permission on the tournament.",
+      "summary": "Import from Challonge"
+    },
+    "rpc.tournament.challonge_push_result": {
+      "description": "Pushes a confirmed encounter result to Challonge and returns a status acknowledgment; requires challonge-sync permission on the encounter.",
+      "summary": "Push result to Challonge"
+    },
+    "rpc.tournament.challonge_sync_log": {
+      "description": "Returns recent Challonge sync-log entries for a tournament (limit-bounded); requires challonge-read permission on the tournament.",
+      "summary": "Get Challonge sync log"
     },
     "rpc.tournament.encounters_overview": {
+      "description": "Returns an aggregated encounters overview for the search filters, with viewer-scoped fields resolved from the optional identity.",
       "query_params": [
         {
           "name": "page",
@@ -4038,9 +4721,11 @@
       "response": {
         "array": false,
         "ref": "tournament.EncounterOverviewRead"
-      }
+      },
+      "summary": "Get encounters overview"
     },
     "rpc.tournament.get_encounter": {
+      "description": "Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
         {
           "name": "entities",
@@ -4056,9 +4741,11 @@
       "response": {
         "array": false,
         "ref": "tournament.EncounterRead"
-      }
+      },
+      "summary": "Get encounter"
     },
     "rpc.tournament.get_match": {
+      "description": "Returns one match by id with player statistics and optionally hydrated related entities, scoped to the given workspace.",
       "query_params": [
         {
           "name": "entities",
@@ -4081,15 +4768,19 @@
       "response": {
         "array": false,
         "ref": "tournament.MatchReadWithStats"
-      }
+      },
+      "summary": "Get match with stats"
     },
     "rpc.tournament.get_stages": {
+      "description": "Returns all stages of a tournament ordered by stage order, with their items and item inputs hydrated.",
       "response": {
         "array": true,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "List tournament stages"
     },
     "rpc.tournament.get_standings": {
+      "description": "Returns the standings for a tournament with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
         {
           "name": "entities",
@@ -4105,9 +4796,11 @@
       "response": {
         "array": true,
         "ref": "tournament.StandingRead"
-      }
+      },
+      "summary": "Get tournament standings"
     },
     "rpc.tournament.get_team": {
+      "description": "Returns one team by id with optionally hydrated related entities (players, captain, tournament) selected via the entities query param.",
       "query_params": [
         {
           "name": "entities",
@@ -4123,9 +4816,11 @@
       "response": {
         "array": false,
         "ref": "tournament.TeamRead"
-      }
+      },
+      "summary": "Get team"
     },
     "rpc.tournament.get_tournament": {
+      "description": "Returns one tournament by id with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
         {
           "name": "entities",
@@ -4141,9 +4836,15 @@
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Get tournament"
+    },
+    "rpc.tournament.grid_mapping_get": {
+      "description": "Returns the division mapping between a source and target grid version; requires an authenticated user but no workspace permission.",
+      "summary": "Get grid mapping"
     },
     "rpc.tournament.grid_mapping_put": {
+      "description": "Creates or updates the division mapping between two grid versions; requires division_grid-update permission on the source version's workspace.",
       "request": {
         "array": false,
         "ref": "tournament.DivisionGridMappingWrite"
@@ -4151,9 +4852,15 @@
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridMappingRead"
-      }
+      },
+      "summary": "Upsert grid mapping"
+    },
+    "rpc.tournament.grid_marketplace_grids": {
+      "description": "Lists importable division grids from a source workspace; requires division_grid-read on the target and access to the source workspace.",
+      "summary": "List marketplace grids"
     },
     "rpc.tournament.grid_marketplace_import": {
+      "description": "Imports selected division grids from a source workspace (copying assets via S3, 201 Created); requires division_grid-import permission on the target workspace.",
       "request": {
         "array": false,
         "ref": "tournament.DivisionGridMarketplaceImportRequest"
@@ -4161,15 +4868,23 @@
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridMarketplaceImportResult"
-      }
+      },
+      "summary": "Import marketplace grids"
+    },
+    "rpc.tournament.grid_marketplace_workspaces": {
+      "description": "Lists workspaces whose division grids can be imported into the target workspace; requires division_grid-read permission.",
+      "summary": "List marketplace source workspaces"
     },
     "rpc.tournament.grid_version_clone": {
+      "description": "Clones a division grid version into a new draft (201 Created); requires division_grid-create permission on the grid's workspace.",
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridVersionRead"
-      }
+      },
+      "summary": "Clone grid version"
     },
     "rpc.tournament.grid_version_create": {
+      "description": "Creates a new version of a division grid (201 Created); requires division_grid-create permission on the grid's workspace.",
       "request": {
         "array": false,
         "ref": "tournament.DivisionGridVersionCreate"
@@ -4177,21 +4892,31 @@
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridVersionRead"
-      }
+      },
+      "summary": "Create grid version"
+    },
+    "rpc.tournament.grid_version_delete": {
+      "description": "Deletes a division grid version by id (204 no body); requires division_grid-delete permission on the grid's workspace.",
+      "summary": "Delete grid version"
     },
     "rpc.tournament.grid_version_get": {
+      "description": "Returns one division grid version by id; requires an authenticated user but no workspace permission.",
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridVersionRead"
-      }
+      },
+      "summary": "Get grid version"
     },
     "rpc.tournament.grid_version_publish": {
+      "description": "Publishes a division grid version; requires division_grid-publish permission on the grid's workspace.",
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridVersionRead"
-      }
+      },
+      "summary": "Publish grid version"
     },
     "rpc.tournament.grid_version_update": {
+      "description": "Updates a division grid version by id; requires division_grid-update permission on the grid's workspace.",
       "request": {
         "array": false,
         "ref": "tournament.DivisionGridVersionUpdate"
@@ -4199,9 +4924,15 @@
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridVersionRead"
-      }
+      },
+      "summary": "Update grid version"
+    },
+    "rpc.tournament.grid_versions_list": {
+      "description": "Lists the versions of a division grid; requires division_grid-read permission on the grid's workspace.",
+      "summary": "List grid versions"
     },
     "rpc.tournament.grid_workspace_create": {
+      "description": "Creates a division grid in a workspace; requires division_grid-create permission and an authenticated user.",
       "request": {
         "array": false,
         "ref": "tournament.DivisionGridCreate"
@@ -4209,21 +4940,31 @@
       "response": {
         "array": false,
         "ref": "tournament.DivisionGridRead"
-      }
+      },
+      "summary": "Create division grid"
+    },
+    "rpc.tournament.grid_workspace_list": {
+      "description": "Lists a workspace's division grids; requires division_grid-read permission and an authenticated user.",
+      "summary": "List workspace grids"
     },
     "rpc.tournament.job_get": {
+      "description": "Returns one tournament computation job by id; requires the caller's standing-recalculate or stage-update permission on the job's tournament.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentComputationJobRead"
-      }
+      },
+      "summary": "Get computation job"
     },
     "rpc.tournament.job_list": {
+      "description": "Lists tournament computation jobs filtered by tournament/stage/active-only with a 1-100 limit; requires stage-read permission on the scoped tournament (superusers may list unscoped).",
       "response": {
         "array": true,
         "ref": "tournament.TournamentComputationJobRead"
-      }
+      },
+      "summary": "List computation jobs"
     },
     "rpc.tournament.list_encounters": {
+      "description": "Returns a paginated list of encounters for the search filters, with viewer-scoped fields resolved from the optional identity.",
       "query_params": [
         {
           "name": "page",
@@ -4452,9 +5193,11 @@
       "response": {
         "array": false,
         "ref": "tournament.Paginated_EncounterRead_"
-      }
+      },
+      "summary": "List encounters"
     },
     "rpc.tournament.list_matches": {
+      "description": "Returns a paginated list of matches for the search filters within the given workspace.",
       "query_params": [
         {
           "name": "page",
@@ -4586,9 +5329,11 @@
       "response": {
         "array": false,
         "ref": "tournament.Paginated_MatchRead_"
-      }
+      },
+      "summary": "List matches"
     },
     "rpc.tournament.list_teams": {
+      "description": "Returns a paginated list of teams for the filter params within the given workspace.",
       "query_params": [
         {
           "name": "page",
@@ -4668,9 +5413,11 @@
       "response": {
         "array": false,
         "ref": "tournament.Paginated_TeamRead_"
-      }
+      },
+      "summary": "List teams"
     },
     "rpc.tournament.list_tournaments": {
+      "description": "Returns a paginated, sortable, searchable list of tournaments.",
       "query_params": [
         {
           "name": "page",
@@ -4794,9 +5541,11 @@
       "response": {
         "array": false,
         "ref": "tournament.Paginated_TournamentRead_"
-      }
+      },
+      "summary": "List tournaments"
     },
     "rpc.tournament.lookup_tournaments": {
+      "description": "Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace and league flag, for pickers.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -4816,9 +5565,11 @@
       "response": {
         "array": true,
         "ref": "tournament.LookupItem"
-      }
+      },
+      "summary": "Lookup tournaments"
     },
     "rpc.tournament.owal_results": {
+      "description": "Returns OWAL league standings for the workspace, for a specific season when given or overall, normalized against the workspace division grid.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -4838,9 +5589,11 @@
       "response": {
         "array": false,
         "ref": "tournament.OwalStandings"
-      }
+      },
+      "summary": "Get league standings"
     },
     "rpc.tournament.owal_seasons": {
+      "description": "Returns the list of available OWAL league seasons for the workspace.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -4849,9 +5602,11 @@
             "type": "integer"
           }
         }
-      ]
+      ],
+      "summary": "List league seasons"
     },
     "rpc.tournament.owal_stacks": {
+      "description": "Returns OWAL league player stacks for the workspace and season, defaulting to the latest season when none is given.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -4871,27 +5626,35 @@
       "response": {
         "array": true,
         "ref": "tournament.LeaguePlayerStack"
-      }
+      },
+      "summary": "Get league player stacks"
     },
     "rpc.tournament.reg_approve": {
+      "description": "Approves a registration (recording the reviewer) and broadcasts a realtime change; requires team-import permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Approve registration"
     },
     "rpc.tournament.reg_bulk_add_balancer": {
+      "description": "Adds multiple registrations to the balancer with a given status, returning updated/skipped counts and broadcasting a realtime change; requires team-import permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BulkBalancerStatusResponse"
-      }
+      },
+      "summary": "Bulk add to balancer"
     },
     "rpc.tournament.reg_bulk_approve": {
+      "description": "Approves multiple registrations by id, returning approved and skipped ids and broadcasting a realtime change; requires team-import permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BulkApproveResponse"
-      }
+      },
+      "summary": "Bulk approve registrations"
     },
     "rpc.tournament.reg_check_in": {
+      "description": "Checks a registration in or out (per the body flag) and broadcasts a realtime change; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.CheckInRequest"
@@ -4899,9 +5662,11 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Toggle registration check-in"
     },
     "rpc.tournament.reg_create_manual": {
+      "description": "Admin-creates a registration for a tournament (201 Created) and broadcasts a realtime change; requires team-import permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationCreateRequest"
@@ -4909,9 +5674,15 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Create manual registration"
+    },
+    "rpc.tournament.reg_delete": {
+      "description": "Soft-deletes a registration (204 no body) and broadcasts a realtime change; requires team-import permission on its workspace.",
+      "summary": "Delete registration"
     },
     "rpc.tournament.reg_exclusion": {
+      "description": "Sets a registration's exclude-from-balancer flag and reason and broadcasts a realtime change; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationExclusionRequest"
@@ -4919,21 +5690,27 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Set registration exclusion"
     },
     "rpc.tournament.reg_export_users": {
+      "description": "Exports a tournament's approved registrations into user records and returns the result summary; requires team-import permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.RegistrationUserExportResponse"
-      }
+      },
+      "summary": "Export registrations to users"
     },
     "rpc.tournament.reg_form_get": {
+      "description": "Returns a tournament's registration form config, or null if none; requires team-read permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.RegistrationFormRead"
-      }
+      },
+      "summary": "Get registration form (admin)"
     },
     "rpc.tournament.reg_form_upsert": {
+      "description": "Creates or replaces a tournament's registration form config (built-in and custom fields); requires team-import permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.RegistrationFormUpsert"
@@ -4941,21 +5718,27 @@
       "response": {
         "array": false,
         "ref": "tournament.RegistrationFormRead"
-      }
+      },
+      "summary": "Upsert registration form"
     },
     "rpc.tournament.reg_list": {
+      "description": "Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted; requires team-read permission.",
       "response": {
         "array": true,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "List registrations (admin)"
     },
     "rpc.tournament.reg_pub_check_in": {
+      "description": "Checks the calling user's own registration in, blocking when the form requires a confirmed-public OW profile that is private; requires authentication.",
       "response": {
         "array": false,
         "ref": "tournament.RegistrationRead"
-      }
+      },
+      "summary": "Check in to tournament"
     },
     "rpc.tournament.reg_pub_create": {
+      "description": "Lets a user self-register for a tournament (201 Created) after validating the form is open and the input; rejects duplicates with 409 and requires authentication.",
       "request": {
         "array": false,
         "ref": "tournament.RegistrationCreate"
@@ -4963,9 +5746,23 @@
       "response": {
         "array": false,
         "ref": "tournament.RegistrationRead"
-      }
+      },
+      "summary": "Submit registration"
+    },
+    "rpc.tournament.reg_pub_form": {
+      "description": "Returns the public registration form (with sub-role catalog) for a tournament, or null if none; no authentication required.",
+      "summary": "Get public registration form"
+    },
+    "rpc.tournament.reg_pub_get_me": {
+      "description": "Returns the calling user's registration for a tournament, or null if none; requires authentication.",
+      "summary": "Get my registration"
+    },
+    "rpc.tournament.reg_pub_list": {
+      "description": "Returns the live public registration list for a tournament with tournament-history and division grids; no authentication required.",
+      "summary": "List public registrations"
     },
     "rpc.tournament.reg_pub_update_me": {
+      "description": "Lets a user update their own still-pending registration after re-validating the input; requires authentication.",
       "request": {
         "array": false,
         "ref": "tournament.RegistrationUpdate"
@@ -4973,15 +5770,19 @@
       "response": {
         "array": false,
         "ref": "tournament.RegistrationRead"
-      }
+      },
+      "summary": "Update my registration"
     },
     "rpc.tournament.reg_pub_withdraw_me": {
+      "description": "Withdraws the calling user's own registration and returns the new status; requires authentication.",
       "response": {
         "array": false,
         "ref": "tournament.RegistrationStatusResponse"
-      }
+      },
+      "summary": "Withdraw my registration"
     },
     "rpc.tournament.reg_rank_autofill_apply": {
+      "description": "Autofills registration ranks from parsed OW data, persisting changes and broadcasting a realtime change; requires team-update permission on the tournament.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRankAutofillRequest"
@@ -4989,9 +5790,11 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRankAutofillResponse"
-      }
+      },
+      "summary": "Apply rank autofill"
     },
     "rpc.tournament.reg_rank_autofill_preview": {
+      "description": "Previews autofilling registration ranks from parsed OW data without writing; requires team-read permission on the tournament.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRankAutofillRequest"
@@ -4999,21 +5802,27 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRankAutofillResponse"
-      }
+      },
+      "summary": "Preview rank autofill"
     },
     "rpc.tournament.reg_reject": {
+      "description": "Rejects a registration (recording the reviewer) and broadcasts a realtime change; requires team-import permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Reject registration"
     },
     "rpc.tournament.reg_restore": {
+      "description": "Restores a withdrawn or rejected registration and broadcasts a realtime change; requires team-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Restore registration"
     },
     "rpc.tournament.reg_set_balancer_status": {
+      "description": "Sets a registration's balancer status and broadcasts a realtime change; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.SetBalancerStatusRequest"
@@ -5021,9 +5830,11 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Set balancer status"
     },
     "rpc.tournament.reg_update": {
+      "description": "Updates a registration's profile, roles, and statuses and broadcasts a realtime change; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationUpdateRequest"
@@ -5031,21 +5842,31 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Update registration"
     },
     "rpc.tournament.reg_user_rank_history": {
+      "description": "Returns a user's balancer rank history within a workspace; requires team-read permission on the query workspace_id.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRankHistoryResponse"
-      }
+      },
+      "summary": "Get user rank history"
     },
     "rpc.tournament.reg_withdraw": {
+      "description": "Withdraws a registration and broadcasts a realtime change; requires team-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationRead"
-      }
+      },
+      "summary": "Withdraw registration (admin)"
+    },
+    "rpc.tournament.regstatus_builtin_reset": {
+      "description": "Removes a workspace's override for a built-in registration status (204 no body), reverting to defaults; requires team-update permission.",
+      "summary": "Reset built-in status"
     },
     "rpc.tournament.regstatus_builtin_upsert": {
+      "description": "Creates or updates a workspace override (icon/color/name/description) for a built-in registration status identified by scope and slug; requires team-update permission.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusUpdate"
@@ -5053,15 +5874,19 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusRead"
-      }
+      },
+      "summary": "Override built-in status"
     },
     "rpc.tournament.regstatus_catalog": {
+      "description": "Returns the full registration status catalog (built-in plus custom) for a workspace; requires team-read permission on it.",
       "response": {
         "array": true,
         "ref": "tournament.BalancerRegistrationStatusRead"
-      }
+      },
+      "summary": "Get status catalog"
     },
     "rpc.tournament.regstatus_create": {
+      "description": "Creates a custom registration status in a workspace (201 Created); requires team-update permission on it.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusCreate"
@@ -5069,15 +5894,23 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusRead"
-      }
+      },
+      "summary": "Create custom status"
+    },
+    "rpc.tournament.regstatus_delete": {
+      "description": "Deletes a custom registration status by id (204 no body); requires team-update permission on its workspace.",
+      "summary": "Delete custom status"
     },
     "rpc.tournament.regstatus_list": {
+      "description": "Lists a workspace's custom registration statuses; requires team-read permission on it.",
       "response": {
         "array": true,
         "ref": "tournament.BalancerRegistrationStatusRead"
-      }
+      },
+      "summary": "List custom statuses"
     },
     "rpc.tournament.regstatus_update": {
+      "description": "Updates a custom registration status by id; requires team-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusUpdate"
@@ -5085,9 +5918,11 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerRegistrationStatusRead"
-      }
+      },
+      "summary": "Update custom status"
     },
     "rpc.tournament.saved_view_create": {
+      "description": "Creates or upserts the calling user's saved encounter filter view in a workspace; requires authentication.",
       "request": {
         "array": false,
         "ref": "tournament.EncounterSavedViewCreate"
@@ -5095,9 +5930,15 @@
       "response": {
         "array": false,
         "ref": "tournament.EncounterSavedViewRead"
-      }
+      },
+      "summary": "Save encounter view"
+    },
+    "rpc.tournament.saved_view_delete": {
+      "description": "Deletes the calling user's saved encounter view by id in a workspace (204 no body); requires authentication.",
+      "summary": "Delete saved view"
     },
     "rpc.tournament.saved_views": {
+      "description": "Returns the calling user's saved encounter filter views for the workspace; requires authentication.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -5110,27 +5951,35 @@
       "response": {
         "array": true,
         "ref": "tournament.EncounterSavedViewRead"
-      }
+      },
+      "summary": "List saved encounter views"
     },
     "rpc.tournament.sheet_get": {
+      "description": "Returns a tournament's registration Google Sheets feed config, or null if none; requires team-read permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetFeedRead"
-      }
+      },
+      "summary": "Get Google Sheet feed"
     },
     "rpc.tournament.sheet_mapping_catalog": {
+      "description": "Returns the available registration field mapping catalog (optionally with sheet headers); requires team-read permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetMappingCatalogResponse"
-      }
+      },
+      "summary": "Get sheet mapping catalog"
     },
     "rpc.tournament.sheet_players_export": {
+      "description": "Exports a tournament's active registrations as a players payload; requires player-read permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerPlayerExportResponse"
-      }
+      },
+      "summary": "Export sheet players"
     },
     "rpc.tournament.sheet_preview": {
+      "description": "Previews how sample sheet rows map to registrations under the given mapping config; requires team-read permission on the tournament.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetMappingPreviewRequest"
@@ -5138,9 +5987,11 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetMappingPreviewResponse"
-      }
+      },
+      "summary": "Preview sheet mapping"
     },
     "rpc.tournament.sheet_suggest_mapping": {
+      "description": "Reads a source sheet and suggests a column-to-field mapping with detected headers; requires team-read permission on the tournament.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetMappingSuggestRequest"
@@ -5148,15 +5999,19 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetMappingSuggestResponse"
-      }
+      },
+      "summary": "Suggest sheet mapping"
     },
     "rpc.tournament.sheet_sync": {
+      "description": "Syncs registrations from the configured Google Sheet and returns created/updated/withdrawn/skipped counts plus errors; requires team-import permission on the tournament.",
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetFeedSyncResponse"
-      }
+      },
+      "summary": "Sync Google Sheet feed"
     },
     "rpc.tournament.sheet_upsert": {
+      "description": "Creates or updates a tournament's registration Google Sheets feed config; requires team-import permission on the tournament.",
       "request": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetFeedUpsert"
@@ -5164,27 +6019,35 @@
       "response": {
         "array": false,
         "ref": "tournament.BalancerGoogleSheetFeedRead"
-      }
+      },
+      "summary": "Upsert Google Sheet feed"
     },
     "rpc.tournament.stage_activate": {
+      "description": "Activates a stage; requires stage-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Activate stage"
     },
     "rpc.tournament.stage_activate_and_generate": {
+      "description": "Enqueues a combined activate-and-generate bracket job (202 Accepted), honoring an optional force flag; requires stage-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentComputationJobRead"
-      }
+      },
+      "summary": "Activate and generate stage"
     },
     "rpc.tournament.stage_generate": {
+      "description": "Enqueues a bracket-generation job (202 Accepted) for the stage; requires stage-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentComputationJobRead"
-      }
+      },
+      "summary": "Generate stage bracket"
     },
     "rpc.tournament.stage_merge": {
+      "description": "Merges source group stages into a target stage; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.MergeGroupStagesRequest"
@@ -5192,9 +6055,15 @@
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Merge group stages"
+    },
+    "rpc.tournament.stage_progress": {
+      "description": "Returns per-stage progress for a tournament; requires stage-read permission on its workspace.",
+      "summary": "Get stage progress"
     },
     "rpc.tournament.stage_seed": {
+      "description": "Seeds the given teams into a stage using the requested mode; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.SeedTeamsRequest"
@@ -5202,9 +6071,11 @@
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Seed teams into stage"
     },
     "rpc.tournament.stage_wire": {
+      "description": "Wires a target stage's slots from a source group stage's top placements; requires stage-update permission on its workspace.",
       "request": {
         "array": false,
         "ref": "tournament.WireFromGroupsRequest"
@@ -5212,15 +6083,19 @@
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
-      }
+      },
+      "summary": "Wire stage from groups"
     },
     "rpc.tournament.standing_recalculate": {
+      "description": "Schedules a durable standings-recalculation job (202 Accepted) for the tournament; requires standing-recalculate permission.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentComputationJobRead"
-      }
+      },
+      "summary": "Recalculate standings"
     },
     "rpc.tournament.statistics_division": {
+      "description": "Returns average-division statistics per tournament, normalized against the workspace division grid with fallback to the global grid.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -5233,9 +6108,11 @@
       "response": {
         "array": true,
         "ref": "tournament.DivisionStatistics"
-      }
+      },
+      "summary": "Get division statistics"
     },
     "rpc.tournament.statistics_history": {
+      "description": "Returns per-tournament historical statistics for the workspace.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -5248,9 +6125,11 @@
       "response": {
         "array": true,
         "ref": "tournament.TournamentStatistics"
-      }
+      },
+      "summary": "Get tournament history stats"
     },
     "rpc.tournament.statistics_overall": {
+      "description": "Returns aggregate tournament statistics across the workspace.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -5263,15 +6142,19 @@
       "response": {
         "array": false,
         "ref": "tournament.OverallStatistics"
-      }
+      },
+      "summary": "Get overall statistics"
     },
     "rpc.tournament.tournament_finish": {
+      "description": "Toggles a tournament's legacy finished flag and returns it with stages; superuser-only.",
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Toggle tournament finished"
     },
     "rpc.tournament.tournament_status": {
+      "description": "Transitions a tournament to the requested status; requires tournament-update permission, and the force bypass is superuser-only.",
       "request": {
         "array": false,
         "ref": "tournament.TournamentStatusTransition"
@@ -5279,7 +6162,8 @@
       "response": {
         "array": false,
         "ref": "tournament.TournamentRead"
-      }
+      },
+      "summary": "Transition tournament status"
     }
   },
   "schemas": {

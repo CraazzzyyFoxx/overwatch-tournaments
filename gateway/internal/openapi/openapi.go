@@ -47,6 +47,8 @@ type opModels struct {
 	Request     *schemaRef   `json:"request"`
 	Response    *schemaRef   `json:"response"`
 	QueryParams []queryParam `json:"query_params"`
+	Summary     string       `json:"summary"`
+	Description string       `json:"description"`
 }
 
 // manifest is the parsed schemas.json: a flat schema pool + per-subject models.
@@ -166,7 +168,7 @@ func (b *builder) operation(route edge.RouteSpec, tag string) map[string]any {
 	op := map[string]any{
 		"tags":        []any{tag},
 		"operationId": operationID(route),
-		"summary":     summary(route),
+		"summary":     b.summary(route),
 		"responses":   b.responses(route),
 	}
 	if desc := b.description(route); desc != "" {
@@ -226,17 +228,21 @@ func (b *builder) parameters(route edge.RouteSpec) []any {
 	return params
 }
 
-// description surfaces the generic-CRUD entity/action and — only when the route
-// has no typed query parameters — the arbitrary-query caveat.
+// description renders the authored description (from the manifest) plus — only
+// when the route has no typed query parameters — the arbitrary-query caveat, and
+// a footer carrying the RPC subject for traceability.
 func (b *builder) description(route edge.RouteSpec) string {
 	var parts []string
-	if route.Entity != "" || route.Action != "" {
-		parts = append(parts, "Generic CRUD: entity="+route.Entity+" action="+route.Action+".")
+	if d := b.man.Operations[b.key(route)].Description; d != "" {
+		parts = append(parts, d)
 	}
 	if route.AllQuery && len(b.queryParams(route)) == 0 {
 		parts = append(parts, "Accepts arbitrary query parameters (pagination/filtering); see the service for the full list.")
 	}
-	return strings.Join(parts, " ")
+	if route.Queue != "" {
+		parts = append(parts, "RPC subject: `"+route.Queue+"`")
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // key is the manifest lookup key: the RPC subject, suffixed with the entity for
@@ -373,13 +379,37 @@ func (b *builder) closure() map[string]bool {
 	return out
 }
 
-// summary uses the RPC queue (the subject the request is dispatched to) when
-// present, falling back to "METHOD /path" for manually-wired routes.
-func summary(route edge.RouteSpec) string {
-	if route.Queue != "" {
-		return route.Queue
+// summary returns the human-readable operation title: an authored summary from
+// the manifest, else one auto-derived from the route (CRUD action + entity, or
+// the RPC subject's last segment). The raw RPC subject is no longer the title —
+// it moves to operationId + the description footer.
+func (b *builder) summary(route edge.RouteSpec) string {
+	if s := b.man.Operations[b.key(route)].Summary; s != "" {
+		return s
 	}
-	return route.Method + " " + route.Pattern
+	return autoSummary(route)
+}
+
+func autoSummary(route edge.RouteSpec) string {
+	if route.Entity != "" && route.Action != "" {
+		return titleFirst(route.Action) + " " + strings.ReplaceAll(route.Entity, "_", " ")
+	}
+	if route.Queue == "" {
+		return route.Method + " " + route.Pattern
+	}
+	seg := route.Queue[strings.LastIndexByte(route.Queue, '.')+1:]
+	words := strings.Split(seg, "_")
+	if len(words) > 0 {
+		words[0] = titleFirst(words[0])
+	}
+	return strings.Join(words, " ")
+}
+
+func titleFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // operationID is unique per (method, path) within a document.

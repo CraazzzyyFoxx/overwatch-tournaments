@@ -24,7 +24,15 @@ sys.path.insert(0, os.getcwd())
 
 from pydantic.json_schema import models_json_schema  # noqa: E402
 
-from src.openapi_schemas import OPERATIONS  # type: ignore  # noqa: E402
+import src.openapi_schemas as _svc  # type: ignore  # noqa: E402
+
+OPERATIONS = _svc.OPERATIONS
+
+# Optional human-readable docs: {subject: {"summary": str, "description": str}}.
+try:
+    from src.openapi_docs import DOCS  # type: ignore  # noqa: E402
+except ImportError:
+    DOCS: dict = getattr(_svc, "DOCS", {})
 
 # Component names are namespaced by service ("tournament.TournamentRead") so the
 # merge across services never conflates two same-named, differently-shaped models
@@ -87,19 +95,26 @@ def main() -> None:
         return out
 
     operations: dict[str, dict] = {}
-    for subject, op in OPERATIONS.items():
+    for subject in sorted(set(OPERATIONS) | set(DOCS)):
         entry: dict = {}
-        if op.response is not None:
-            entry["response"] = {"ref": ref_name(op.response, "serialization"), "array": op.response_array}
-        if op.request is not None:
-            entry["request"] = {"ref": ref_name(op.request, "validation"), "array": False}
-        qp: list[dict] = []
-        if op.query is not None:
-            qp.extend(model_query_params(op.query))
-        if op.query_params:
-            qp.extend(explicit_query_params(op.query_params))
-        if qp:
-            entry["query_params"] = qp
+        op = OPERATIONS.get(subject)
+        if op is not None:
+            if op.response is not None:
+                entry["response"] = {"ref": ref_name(op.response, "serialization"), "array": op.response_array}
+            if op.request is not None:
+                entry["request"] = {"ref": ref_name(op.request, "validation"), "array": False}
+            qp: list[dict] = []
+            if op.query is not None:
+                qp.extend(model_query_params(op.query))
+            if op.query_params:
+                qp.extend(explicit_query_params(op.query_params))
+            if qp:
+                entry["query_params"] = qp
+        doc = DOCS.get(subject) or {}
+        if doc.get("summary"):
+            entry["summary"] = doc["summary"]
+        if doc.get("description"):
+            entry["description"] = doc["description"]
         operations[subject] = entry
 
     json.dump({"schemas": schemas, "operations": operations}, sys.stdout, indent=2, sort_keys=True)
