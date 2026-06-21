@@ -79,6 +79,8 @@ OPERATIONS: dict[str, Op] = {
     # ── workspaces ─────────────────────────────────────────────────────────
     "rpc.app.workspaces.get": Op(response=schemas.WorkspaceRead),
     "rpc.app.workspaces.list": Op(response=schemas.WorkspaceRead, response_array=True),
+    "rpc.app.workspaces.icon_upload": Op(response=schemas.WorkspaceRead),
+    "rpc.app.workspaces.icon_delete": Op(response=schemas.WorkspaceRead),
     "rpc.app.workspaces.create": Op(request=schemas.WorkspaceCreate, response=schemas.WorkspaceRead),
     "rpc.app.admin.update#workspace": Op(request=schemas.WorkspaceUpdate, response=schemas.WorkspaceRead),
     "rpc.app.workspaces.members_list": Op(response=schemas.WorkspaceMemberRead, response_array=True),

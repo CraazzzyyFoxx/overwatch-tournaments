@@ -560,6 +560,18 @@
         "ref": "app.WorkspaceRead"
       }
     },
+    "rpc.app.workspaces.icon_delete": {
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      }
+    },
+    "rpc.app.workspaces.icon_upload": {
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      }
+    },
     "rpc.app.workspaces.list": {
       "response": {
         "array": true,
@@ -760,6 +772,12 @@
         "ref": "balancer.DraftBoardSnapshot"
       }
     },
+    "rpc.balancer.jobs.create": {
+      "response": {
+        "array": false,
+        "ref": "balancer.CreateJobResponse"
+      }
+    },
     "rpc.balancer.jobs.result": {
       "response": {
         "array": false,
@@ -770,6 +788,260 @@
       "response": {
         "array": false,
         "ref": "balancer.JobStatusResponse"
+      }
+    },
+    "rpc.identity.create_api_key": {
+      "request": {
+        "array": false,
+        "ref": "identity.ApiKeyCreate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.ApiKeyCreateResponse"
+      }
+    },
+    "rpc.identity.get_me": {
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUser"
+      }
+    },
+    "rpc.identity.list_api_keys": {
+      "response": {
+        "array": true,
+        "ref": "identity.ApiKeyRead"
+      }
+    },
+    "rpc.identity.list_sessions": {
+      "response": {
+        "array": true,
+        "ref": "identity.SessionRead"
+      }
+    },
+    "rpc.identity.login": {
+      "request": {
+        "array": false,
+        "ref": "identity.UserLogin"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.Token"
+      }
+    },
+    "rpc.identity.me.avatar_delete": {
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUser"
+      }
+    },
+    "rpc.identity.me.avatar_set": {
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUser"
+      }
+    },
+    "rpc.identity.oauth_callback": {
+      "response": {
+        "array": false,
+        "ref": "identity.Token"
+      }
+    },
+    "rpc.identity.oauth_connections": {
+      "response": {
+        "array": true,
+        "ref": "identity.OAuthUserInfo"
+      }
+    },
+    "rpc.identity.oauth_providers": {
+      "response": {
+        "array": true,
+        "ref": "identity.OAuthProviderAvailability"
+      }
+    },
+    "rpc.identity.oauth_url": {
+      "response": {
+        "array": false,
+        "ref": "identity.OAuthURL"
+      }
+    },
+    "rpc.identity.player.link": {
+      "request": {
+        "array": false,
+        "ref": "identity.PlayerLinkRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.PlayerLinkResponse"
+      }
+    },
+    "rpc.identity.player.linked": {
+      "response": {
+        "array": true,
+        "ref": "identity.LinkedPlayer"
+      }
+    },
+    "rpc.identity.rbac.assign_linked_player": {
+      "request": {
+        "array": false,
+        "ref": "identity.AuthUserPlayerLinkAssign"
+      }
+    },
+    "rpc.identity.rbac.assign_role": {
+      "request": {
+        "array": false,
+        "ref": "identity.UserRoleAssign"
+      }
+    },
+    "rpc.identity.rbac.create_permission": {
+      "request": {
+        "array": false,
+        "ref": "identity.PermissionCreate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.PermissionRead"
+      }
+    },
+    "rpc.identity.rbac.create_role": {
+      "request": {
+        "array": false,
+        "ref": "identity.RoleCreate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.RoleRead"
+      }
+    },
+    "rpc.identity.rbac.get_auth_user": {
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUserDetailRead"
+      }
+    },
+    "rpc.identity.rbac.get_role": {
+      "response": {
+        "array": false,
+        "ref": "identity.RoleWithPermissions"
+      }
+    },
+    "rpc.identity.rbac.get_user_roles": {
+      "response": {
+        "array": true,
+        "ref": "identity.RoleRead"
+      }
+    },
+    "rpc.identity.rbac.list_auth_users": {
+      "response": {
+        "array": true,
+        "ref": "identity.AuthUserListRead"
+      }
+    },
+    "rpc.identity.rbac.list_oauth_connections": {
+      "response": {
+        "array": true,
+        "ref": "identity.OAuthConnectionAdminRead"
+      }
+    },
+    "rpc.identity.rbac.list_permissions": {
+      "response": {
+        "array": true,
+        "ref": "identity.PermissionRead"
+      }
+    },
+    "rpc.identity.rbac.list_roles": {
+      "response": {
+        "array": true,
+        "ref": "identity.RoleRead"
+      }
+    },
+    "rpc.identity.rbac.list_sessions": {
+      "response": {
+        "array": true,
+        "ref": "identity.AdminSessionRead"
+      }
+    },
+    "rpc.identity.rbac.remove_role": {
+      "request": {
+        "array": false,
+        "ref": "identity.UserRoleRemove"
+      }
+    },
+    "rpc.identity.rbac.update_role": {
+      "request": {
+        "array": false,
+        "ref": "identity.RoleUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.RoleRead"
+      }
+    },
+    "rpc.identity.refresh": {
+      "request": {
+        "array": false,
+        "ref": "identity.RefreshTokenRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.Token"
+      }
+    },
+    "rpc.identity.register": {
+      "request": {
+        "array": false,
+        "ref": "identity.UserRegister"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUser"
+      }
+    },
+    "rpc.identity.service_token": {
+      "request": {
+        "array": false,
+        "ref": "identity.ServiceTokenRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.ServiceToken"
+      }
+    },
+    "rpc.identity.set_password": {
+      "request": {
+        "array": false,
+        "ref": "identity.PasswordSetRequest"
+      }
+    },
+    "rpc.identity.update_api_key": {
+      "request": {
+        "array": false,
+        "ref": "identity.ApiKeyUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.ApiKeyRead"
+      }
+    },
+    "rpc.identity.update_me": {
+      "request": {
+        "array": false,
+        "ref": "identity.UserUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "identity.AuthUser"
+      }
+    },
+    "rpc.identity.validate_service_token": {
+      "response": {
+        "array": false,
+        "ref": "identity.ServiceTokenPayload"
+      }
+    },
+    "rpc.identity.validate_token": {
+      "response": {
+        "array": false,
+        "ref": "identity.TokenPayload"
       }
     },
     "rpc.parser.ach.calculate": {
@@ -916,6 +1188,12 @@
       "response": {
         "array": false,
         "ref": "parser.LogRecordRead"
+      }
+    },
+    "rpc.parser.logs.upload": {
+      "response": {
+        "array": false,
+        "ref": "parser.LogUploadResponse"
       }
     },
     "rpc.parser.rank.battle_tag_history": {
@@ -8833,6 +9111,45 @@
       "title": "BalancerTournamentConfigUpsert",
       "type": "object"
     },
+    "balancer.CreateJobResponse": {
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "result_url": {
+          "title": "Result Url",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "status_url": {
+          "title": "Status Url",
+          "type": "string"
+        },
+        "stream_url": {
+          "title": "Stream Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "status",
+        "status_url",
+        "result_url",
+        "stream_url"
+      ],
+      "title": "CreateJobResponse",
+      "type": "object"
+    },
     "balancer.DraftAutopickStrategy": {
       "enum": [
         "best_fit",
@@ -10458,6 +10775,1985 @@
         }
       },
       "title": "WorkspaceBalancerConfigUpsert",
+      "type": "object"
+    },
+    "identity.AdminSessionRead": {
+      "description": "Schema for superuser session inventory across all auth users.",
+      "properties": {
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "ip_address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ip Address"
+        },
+        "last_seen_at": {
+          "format": "date-time",
+          "title": "Last Seen At",
+          "type": "string"
+        },
+        "login_at": {
+          "format": "date-time",
+          "title": "Login At",
+          "type": "string"
+        },
+        "revoked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revoked At"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "user_agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Agent"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Username"
+        }
+      },
+      "required": [
+        "session_id",
+        "user_id",
+        "status",
+        "login_at",
+        "last_seen_at",
+        "expires_at"
+      ],
+      "title": "AdminSessionRead",
+      "type": "object"
+    },
+    "identity.ApiKeyCreate": {
+      "properties": {
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "workspace_id": {
+          "exclusiveMinimum": 0,
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "workspace_id"
+      ],
+      "title": "ApiKeyCreate",
+      "type": "object"
+    },
+    "identity.ApiKeyCreateResponse": {
+      "properties": {
+        "api_key": {
+          "$ref": "#/components/schemas/identity.ApiKeyRead"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "api_key",
+        "key"
+      ],
+      "title": "ApiKeyCreateResponse",
+      "type": "object"
+    },
+    "identity.ApiKeyRead": {
+      "properties": {
+        "config_policy": {
+          "additionalProperties": true,
+          "title": "Config Policy",
+          "type": "object"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "last_used_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used At"
+        },
+        "limits": {
+          "additionalProperties": true,
+          "title": "Limits",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "public_id": {
+          "title": "Public Id",
+          "type": "string"
+        },
+        "revoked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revoked At"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "workspace_id",
+        "public_id",
+        "created_at"
+      ],
+      "title": "ApiKeyRead",
+      "type": "object"
+    },
+    "identity.ApiKeyUpdate": {
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ApiKeyUpdate",
+      "type": "object"
+    },
+    "identity.AuthLinkedPlayer": {
+      "description": "Analytics player linked to the authenticated user.",
+      "properties": {
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "linked_at": {
+          "title": "Linked At",
+          "type": "string"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "player_name": {
+          "title": "Player Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "player_name",
+        "is_primary",
+        "linked_at"
+      ],
+      "title": "AuthLinkedPlayer",
+      "type": "object"
+    },
+    "identity.AuthUser": {
+      "description": "Schema for authenticated user response",
+      "properties": {
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Name"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_superuser": {
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "is_verified": {
+          "title": "Is Verified",
+          "type": "boolean"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Name"
+        },
+        "linked_players": {
+          "items": {
+            "$ref": "#/components/schemas/identity.AuthLinkedPlayer"
+          },
+          "title": "Linked Players",
+          "type": "array"
+        },
+        "permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        },
+        "workspaces": {
+          "items": {
+            "$ref": "#/components/schemas/identity.AuthUserWorkspace"
+          },
+          "title": "Workspaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "username",
+        "is_active",
+        "is_superuser",
+        "is_verified",
+        "created_at"
+      ],
+      "title": "AuthUser",
+      "type": "object"
+    },
+    "identity.AuthUserDetailRead": {
+      "description": "Schema for auth-user detail view with effective permissions.",
+      "properties": {
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "effective_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Effective Permissions",
+          "type": "array"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Name"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_superuser": {
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "is_verified": {
+          "title": "Is Verified",
+          "type": "boolean"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Name"
+        },
+        "linked_players": {
+          "items": {
+            "$ref": "#/components/schemas/identity.AuthUserLinkedPlayerRead"
+          },
+          "title": "Linked Players",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/identity.RoleRead"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "username",
+        "is_active",
+        "is_superuser",
+        "is_verified",
+        "created_at"
+      ],
+      "title": "AuthUserDetailRead",
+      "type": "object"
+    },
+    "identity.AuthUserLinkedPlayerRead": {
+      "description": "Schema for a player account linked to an auth user.",
+      "properties": {
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "linked_at": {
+          "title": "Linked At",
+          "type": "string"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "player_name": {
+          "title": "Player Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "player_name",
+        "is_primary",
+        "linked_at"
+      ],
+      "title": "AuthUserLinkedPlayerRead",
+      "type": "object"
+    },
+    "identity.AuthUserListRead": {
+      "description": "Schema for listing auth users with assigned roles.",
+      "properties": {
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Name"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_superuser": {
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "is_verified": {
+          "title": "Is Verified",
+          "type": "boolean"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Name"
+        },
+        "linked_players": {
+          "items": {
+            "$ref": "#/components/schemas/identity.AuthUserLinkedPlayerRead"
+          },
+          "title": "Linked Players",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/identity.RoleRead"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "username",
+        "is_active",
+        "is_superuser",
+        "is_verified",
+        "created_at"
+      ],
+      "title": "AuthUserListRead",
+      "type": "object"
+    },
+    "identity.AuthUserPlayerLinkAssign": {
+      "description": "Schema for assigning a player account to an auth user from admin tools.",
+      "properties": {
+        "is_primary": {
+          "default": true,
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "player_id": {
+          "exclusiveMinimum": 0,
+          "title": "Player Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_id"
+      ],
+      "title": "AuthUserPlayerLinkAssign",
+      "type": "object"
+    },
+    "identity.AuthUserWorkspace": {
+      "description": "Workspace RBAC info for authenticated user response.",
+      "properties": {
+        "rbac_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rbac Permissions",
+          "type": "array"
+        },
+        "rbac_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rbac Roles",
+          "type": "array"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "slug",
+        "role"
+      ],
+      "title": "AuthUserWorkspace",
+      "type": "object"
+    },
+    "identity.LinkedPlayer": {
+      "description": "Linked player information",
+      "properties": {
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "linked_at": {
+          "title": "Linked At",
+          "type": "string"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "player_name": {
+          "title": "Player Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "player_name",
+        "is_primary",
+        "linked_at"
+      ],
+      "title": "LinkedPlayer",
+      "type": "object"
+    },
+    "identity.OAuthConnectionAdminRead": {
+      "description": "OAuth connection with owner info for admin views.",
+      "properties": {
+        "auth_user_email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Email"
+        },
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "auth_user_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Username"
+        },
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "provider": {
+          "$ref": "#/components/schemas/identity.OAuthProvider"
+        },
+        "provider_user_id": {
+          "title": "Provider User Id",
+          "type": "string"
+        },
+        "token_expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Expires At"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "provider_user_id",
+        "username",
+        "created_at",
+        "auth_user_id"
+      ],
+      "title": "OAuthConnectionAdminRead",
+      "type": "object"
+    },
+    "identity.OAuthProvider": {
+      "description": "Supported OAuth providers",
+      "enum": [
+        "discord",
+        "twitch",
+        "battlenet",
+        "google",
+        "github"
+      ],
+      "title": "OAuthProvider",
+      "type": "string"
+    },
+    "identity.OAuthProviderAvailability": {
+      "description": "OAuth provider availability response",
+      "properties": {
+        "provider": {
+          "$ref": "#/components/schemas/identity.OAuthProvider"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "title": "OAuthProviderAvailability",
+      "type": "object"
+    },
+    "identity.OAuthURL": {
+      "description": "OAuth URL response",
+      "properties": {
+        "provider": {
+          "$ref": "#/components/schemas/identity.OAuthProvider"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "url",
+        "state"
+      ],
+      "title": "OAuthURL",
+      "type": "object"
+    },
+    "identity.OAuthUserInfo": {
+      "description": "Generic OAuth user information",
+      "properties": {
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "provider": {
+          "$ref": "#/components/schemas/identity.OAuthProvider"
+        },
+        "provider_user_id": {
+          "title": "Provider User Id",
+          "type": "string"
+        },
+        "raw_data": {
+          "additionalProperties": true,
+          "title": "Raw Data",
+          "type": "object"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "provider_user_id",
+        "username"
+      ],
+      "title": "OAuthUserInfo",
+      "type": "object"
+    },
+    "identity.PasswordSetRequest": {
+      "description": "Schema for setting/changing password.",
+      "properties": {
+        "current_password": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Password"
+        },
+        "new_password": {
+          "maxLength": 100,
+          "minLength": 8,
+          "title": "New Password",
+          "type": "string"
+        }
+      },
+      "required": [
+        "new_password"
+      ],
+      "title": "PasswordSetRequest",
+      "type": "object"
+    },
+    "identity.PermissionCreate": {
+      "description": "Schema for creating a permission",
+      "properties": {
+        "action": {
+          "description": "Action type (e.g., 'create', 'read', 'update', 'delete')",
+          "maxLength": 50,
+          "title": "Action",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Permission description",
+          "title": "Description"
+        },
+        "name": {
+          "description": "Unique permission name",
+          "maxLength": 100,
+          "title": "Name",
+          "type": "string"
+        },
+        "resource": {
+          "description": "Resource type (e.g., 'tournament', 'user')",
+          "maxLength": 100,
+          "title": "Resource",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "resource",
+        "action"
+      ],
+      "title": "PermissionCreate",
+      "type": "object"
+    },
+    "identity.PermissionRead": {
+      "description": "Schema for reading a permission",
+      "properties": {
+        "action": {
+          "description": "Action type (e.g., 'create', 'read', 'update', 'delete')",
+          "maxLength": 50,
+          "title": "Action",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Permission description",
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Unique permission name",
+          "maxLength": 100,
+          "title": "Name",
+          "type": "string"
+        },
+        "resource": {
+          "description": "Resource type (e.g., 'tournament', 'user')",
+          "maxLength": 100,
+          "title": "Resource",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        }
+      },
+      "required": [
+        "name",
+        "resource",
+        "action",
+        "id",
+        "created_at"
+      ],
+      "title": "PermissionRead",
+      "type": "object"
+    },
+    "identity.PlayerLinkRequest": {
+      "description": "Request to link player to auth user",
+      "properties": {
+        "is_primary": {
+          "default": true,
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_id"
+      ],
+      "title": "PlayerLinkRequest",
+      "type": "object"
+    },
+    "identity.PlayerLinkResponse": {
+      "description": "Response after linking player",
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "player": {
+          "$ref": "#/components/schemas/identity.LinkedPlayer"
+        }
+      },
+      "required": [
+        "message",
+        "player"
+      ],
+      "title": "PlayerLinkResponse",
+      "type": "object"
+    },
+    "identity.RefreshTokenRequest": {
+      "description": "Schema for refresh token request",
+      "properties": {
+        "refresh_token": {
+          "title": "Refresh Token",
+          "type": "string"
+        }
+      },
+      "required": [
+        "refresh_token"
+      ],
+      "title": "RefreshTokenRequest",
+      "type": "object"
+    },
+    "identity.RoleCreate": {
+      "description": "Schema for creating a role",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Role description",
+          "title": "Description"
+        },
+        "name": {
+          "description": "Unique role name",
+          "maxLength": 100,
+          "title": "Name",
+          "type": "string"
+        },
+        "permission_ids": {
+          "description": "List of permission IDs to assign",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Permission Ids",
+          "type": "array"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace ID for scoped roles. NULL = global role",
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RoleCreate",
+      "type": "object"
+    },
+    "identity.RoleRead": {
+      "description": "Schema for reading a role",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Role description",
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_system": {
+          "title": "Is System",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Unique role name",
+          "maxLength": 100,
+          "title": "Name",
+          "type": "string"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "name",
+        "id",
+        "is_system",
+        "created_at"
+      ],
+      "title": "RoleRead",
+      "type": "object"
+    },
+    "identity.RoleUpdate": {
+      "description": "Schema for updating a role",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "permission_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of permission IDs to assign",
+          "title": "Permission Ids"
+        }
+      },
+      "title": "RoleUpdate",
+      "type": "object"
+    },
+    "identity.RoleWithPermissions": {
+      "description": "Schema for role with permissions",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Role description",
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_system": {
+          "title": "Is System",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Unique role name",
+          "maxLength": 100,
+          "title": "Name",
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/components/schemas/identity.PermissionRead"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "name",
+        "id",
+        "is_system",
+        "created_at"
+      ],
+      "title": "RoleWithPermissions",
+      "type": "object"
+    },
+    "identity.ServiceToken": {
+      "description": "Service access token response.",
+      "properties": {
+        "access_token": {
+          "title": "Access Token",
+          "type": "string"
+        },
+        "expires_in": {
+          "title": "Expires In",
+          "type": "integer"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "token_type": {
+          "default": "bearer",
+          "title": "Token Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "access_token",
+        "expires_in"
+      ],
+      "title": "ServiceToken",
+      "type": "object"
+    },
+    "identity.ServiceTokenPayload": {
+      "description": "Decoded service token payload.",
+      "properties": {
+        "aud": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aud"
+        },
+        "exp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exp"
+        },
+        "iss": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Iss"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "sub": {
+          "title": "Sub",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sub"
+      ],
+      "title": "ServiceTokenPayload",
+      "type": "object"
+    },
+    "identity.ServiceTokenRequest": {
+      "description": "Client credentials request for service-to-service access.",
+      "properties": {
+        "client_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Client Id",
+          "type": "string"
+        },
+        "client_secret": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Client Secret",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client_id",
+        "client_secret"
+      ],
+      "title": "ServiceTokenRequest",
+      "type": "object"
+    },
+    "identity.SessionRead": {
+      "description": "Logical auth session visible to the current user.",
+      "properties": {
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "ip_address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ip Address"
+        },
+        "is_current": {
+          "default": false,
+          "title": "Is Current",
+          "type": "boolean"
+        },
+        "last_seen_at": {
+          "format": "date-time",
+          "title": "Last Seen At",
+          "type": "string"
+        },
+        "login_at": {
+          "format": "date-time",
+          "title": "Login At",
+          "type": "string"
+        },
+        "revoked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revoked At"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "user_agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Agent"
+        }
+      },
+      "required": [
+        "session_id",
+        "status",
+        "login_at",
+        "last_seen_at",
+        "expires_at"
+      ],
+      "title": "SessionRead",
+      "type": "object"
+    },
+    "identity.Token": {
+      "description": "Schema for token response",
+      "properties": {
+        "access_token": {
+          "title": "Access Token",
+          "type": "string"
+        },
+        "refresh_token": {
+          "title": "Refresh Token",
+          "type": "string"
+        },
+        "token_type": {
+          "default": "bearer",
+          "title": "Token Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "access_token",
+        "refresh_token"
+      ],
+      "title": "Token",
+      "type": "object"
+    },
+    "identity.TokenApiKeyInfo": {
+      "description": "API key metadata returned by token validation for downstream services.",
+      "properties": {
+        "config_policy": {
+          "additionalProperties": true,
+          "title": "Config Policy",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "limits": {
+          "additionalProperties": true,
+          "title": "Limits",
+          "type": "object"
+        },
+        "public_id": {
+          "title": "Public Id",
+          "type": "string"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "public_id",
+        "workspace_id"
+      ],
+      "title": "TokenApiKeyInfo",
+      "type": "object"
+    },
+    "identity.TokenPayload": {
+      "description": "Schema for JWT token payload",
+      "properties": {
+        "api_key": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/identity.TokenApiKeyInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "credential_type": {
+          "default": "access_token",
+          "enum": [
+            "access_token",
+            "api_key"
+          ],
+          "title": "Credential Type",
+          "type": "string"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "exp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exp"
+        },
+        "is_superuser": {
+          "default": false,
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "permissions": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "sub": {
+          "title": "Sub",
+          "type": "integer"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        },
+        "workspaces": {
+          "items": {
+            "$ref": "#/components/schemas/identity.WorkspaceMembership"
+          },
+          "title": "Workspaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sub",
+        "email",
+        "username"
+      ],
+      "title": "TokenPayload",
+      "type": "object"
+    },
+    "identity.UserLogin": {
+      "description": "Schema for user login",
+      "properties": {
+        "email": {
+          "format": "email",
+          "title": "Email",
+          "type": "string"
+        },
+        "password": {
+          "maxLength": 100,
+          "title": "Password",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "password"
+      ],
+      "title": "UserLogin",
+      "type": "object"
+    },
+    "identity.UserRegister": {
+      "description": "Schema for user registration",
+      "properties": {
+        "email": {
+          "format": "email",
+          "title": "Email",
+          "type": "string"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Name"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Name"
+        },
+        "password": {
+          "maxLength": 100,
+          "minLength": 8,
+          "title": "Password",
+          "type": "string"
+        },
+        "username": {
+          "maxLength": 50,
+          "minLength": 3,
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "username",
+        "password"
+      ],
+      "title": "UserRegister",
+      "type": "object"
+    },
+    "identity.UserRoleAssign": {
+      "description": "Schema for assigning role to user",
+      "properties": {
+        "role_id": {
+          "description": "Role ID",
+          "title": "Role Id",
+          "type": "integer"
+        },
+        "user_id": {
+          "description": "User ID",
+          "title": "User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_id",
+        "role_id"
+      ],
+      "title": "UserRoleAssign",
+      "type": "object"
+    },
+    "identity.UserRoleRemove": {
+      "description": "Schema for removing role from user",
+      "properties": {
+        "role_id": {
+          "description": "Role ID",
+          "title": "Role Id",
+          "type": "integer"
+        },
+        "user_id": {
+          "description": "User ID",
+          "title": "User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_id",
+        "role_id"
+      ],
+      "title": "UserRoleRemove",
+      "type": "object"
+    },
+    "identity.UserUpdate": {
+      "description": "Schema for user update",
+      "properties": {
+        "email": {
+          "anyOf": [
+            {
+              "format": "email",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Name"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Name"
+        }
+      },
+      "title": "UserUpdate",
+      "type": "object"
+    },
+    "identity.WorkspaceMembership": {
+      "description": "Schema for workspace membership info",
+      "properties": {
+        "rbac_permissions": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Rbac Permissions",
+          "type": "array"
+        },
+        "rbac_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rbac Roles",
+          "type": "array"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "slug",
+        "role"
+      ],
+      "title": "WorkspaceMembership",
       "type": "object"
     },
     "parser.AchievementCalculateRequest": {
@@ -12109,6 +14405,85 @@
         "finished_at"
       ],
       "title": "LogRecordRead",
+      "type": "object"
+    },
+    "parser.LogUploadError": {
+      "properties": {
+        "error": {
+          "title": "Error",
+          "type": "string"
+        },
+        "filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Filename"
+        }
+      },
+      "required": [
+        "filename",
+        "error"
+      ],
+      "title": "LogUploadError",
+      "type": "object"
+    },
+    "parser.LogUploadItem": {
+      "properties": {
+        "attached_encounter_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attached Encounter Id"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "record_id": {
+          "title": "Record Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_id",
+        "filename",
+        "attached_encounter_id"
+      ],
+      "title": "LogUploadItem",
+      "type": "object"
+    },
+    "parser.LogUploadResponse": {
+      "properties": {
+        "errors": {
+          "items": {
+            "$ref": "#/components/schemas/parser.LogUploadError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "uploaded": {
+          "items": {
+            "$ref": "#/components/schemas/parser.LogUploadItem"
+          },
+          "title": "Uploaded",
+          "type": "array"
+        }
+      },
+      "required": [
+        "uploaded",
+        "errors"
+      ],
+      "title": "LogUploadResponse",
       "type": "object"
     },
     "parser.OverrideCreate": {

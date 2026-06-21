@@ -21,6 +21,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.parser.logs.queue_status": Op(response=admin_logs_schemas.QueueDepth, response_array=True),
     "rpc.parser.logs.history": Op(response=admin_logs_schemas.LogHistoryResponse),
     "rpc.parser.logs.retry": Op(response=admin_logs_schemas.LogRecordRead),
+    "rpc.parser.logs.upload": Op(response=admin_logs_schemas.LogUploadResponse),
     # ── OverFast rank (public reads) ───────────────────────────────────────
     "rpc.parser.rank.user_history": Op(response=schemas.RankHistoryResponse),
     "rpc.parser.rank.battle_tag_history": Op(response=schemas.RankHistoryResponse),

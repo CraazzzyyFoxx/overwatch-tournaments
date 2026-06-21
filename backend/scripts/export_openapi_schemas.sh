@@ -17,7 +17,7 @@ export REDIS_URL="redis://x:6379" RABBITMQ_URL="amqp://x" JWT_SECRET_KEY=x SECRE
 export PROJECT_URL="http://x" CHALLONGE_USERNAME=x CHALLONGE_API_KEY=x
 
 # Services that declare src/openapi_schemas.py. Extend as coverage grows.
-services=(tournament-service app-service analytics-service balancer-service parser-service)
+services=(tournament-service app-service analytics-service balancer-service parser-service identity-service)
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

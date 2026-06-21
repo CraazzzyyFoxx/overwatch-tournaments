@@ -30,6 +30,7 @@ OPERATIONS: dict[str, Op] = {
     # ── jobs (public, Redis-backed) ────────────────────────────────────────
     "rpc.balancer.jobs.status": Op(response=schemas.JobStatusResponse),
     "rpc.balancer.jobs.result": Op(response=schemas.BalanceJobResult),
+    "rpc.balancer.jobs.create": Op(response=schemas.CreateJobResponse),
     # ── draft: public reads ────────────────────────────────────────────────
     "rpc.balancer.draft.tournament_board": Op(response=draft_schemas.DraftBoardSnapshot),
     "rpc.balancer.draft.session_get": Op(response=draft_schemas.DraftSessionRead),
