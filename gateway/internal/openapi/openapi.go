@@ -5,20 +5,55 @@
 // are added.
 //
 // Scope: paths, methods, path/query parameters, auth requirements (security),
-// tags and success status are all derived from the RouteSpec. Request/response
-// bodies are rendered as a generic object — the concrete schemas live in the
-// Python workers (Pydantic) and the gateway never sees their types. The intent
-// is an internal API explorer ("what endpoints exist + try them"), not a
-// contract schema.
+// tags and success status are derived from the RouteSpec. Request/response body
+// SCHEMAS come from schemas.json — a manifest exported from the Python services'
+// Pydantic models (see backend/scripts/export_openapi_schemas.py), keyed by RPC
+// subject. Endpoints without a manifest entry fall back to a generic object.
 package openapi
 
 import (
+	_ "embed"
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 )
+
+// schemasJSON is the Pydantic-derived schema manifest. Regenerate with
+// backend/scripts/export_openapi_schemas.sh.
+//
+//go:embed schemas.json
+var schemasJSON []byte
+
+// schemaRef points at one component schema; Array wraps it as an array (a raw
+// list[...] return — a Paginated[...] wrapper is itself a model, not an array).
+type schemaRef struct {
+	Ref   string `json:"ref"`
+	Array bool   `json:"array"`
+}
+
+type opModels struct {
+	Request  *schemaRef `json:"request"`
+	Response *schemaRef `json:"response"`
+}
+
+// manifest is the parsed schemas.json: a flat schema pool + per-subject models.
+type manifest struct {
+	Schemas    map[string]json.RawMessage `json:"schemas"`
+	Operations map[string]opModels        `json:"operations"`
+}
+
+var loadedManifest = loadManifest()
+
+func loadManifest() manifest {
+	m := manifest{Schemas: map[string]json.RawMessage{}, Operations: map[string]opModels{}}
+	if len(schemasJSON) > 0 {
+		_ = json.Unmarshal(schemasJSON, &m)
+	}
+	return m
+}
 
 // Info is the top-level metadata for the generated document.
 type Info struct {
@@ -61,13 +96,16 @@ func AuthedOnly(routes []edge.RouteSpec) []edge.RouteSpec {
 
 // Build assembles an OpenAPI 3.1.0 document (indented JSON) from the groups.
 // Output is deterministic: encoding/json sorts the paths/methods maps, and the
-// tags array follows the declared group order.
+// tags array follows the declared group order. components.schemas carries only
+// the schemas transitively referenced by this document's operations, so the
+// public spec never leaks admin-only model shapes.
 func Build(info Info, groups []Group) []byte {
 	version := info.Version
 	if version == "" {
 		version = "dev"
 	}
 
+	b := &builder{man: loadedManifest, refs: map[string]bool{}}
 	tags := make([]any, 0, len(groups))
 	paths := map[string]any{}
 
@@ -85,7 +123,7 @@ func Build(info Info, groups []Group) []byte {
 				item = map[string]any{}
 				paths[p] = item
 			}
-			item[strings.ToLower(route.Method)] = operation(route, g.Tag)
+			item[strings.ToLower(route.Method)] = b.operation(route, g.Tag)
 		}
 	}
 
@@ -96,42 +134,30 @@ func Build(info Info, groups []Group) []byte {
 			"version":     version,
 			"description": info.Description,
 		},
-		"servers": []any{map[string]any{"url": "/"}},
-		"tags":    tags,
-		"paths":   paths,
-		"components": map[string]any{
-			"securitySchemes": map[string]any{
-				"bearerAuth": map[string]any{
-					"type":         "http",
-					"scheme":       "bearer",
-					"bearerFormat": "JWT",
-					"description":  "JWT access token. Also accepted via the `aqt_access_token` cookie or a `?token=Bearer <jwt>` query parameter.",
-				},
-			},
-			"schemas": map[string]any{
-				"Error": map[string]any{
-					"type":        "object",
-					"description": "FastAPI-style error envelope.",
-					"properties": map[string]any{
-						"detail": map[string]any{"type": "string"},
-					},
-					"required": []any{"detail"},
-				},
-			},
-		},
+		"servers":    []any{map[string]any{"url": "/"}},
+		"tags":       tags,
+		"paths":      paths,
+		"components": b.components(),
 	}
 
 	out, _ := json.MarshalIndent(doc, "", "  ")
 	return out
 }
 
+// builder carries the manifest and accumulates the set of referenced schema
+// names while operations are generated.
+type builder struct {
+	man  manifest
+	refs map[string]bool
+}
+
 // operation builds the OpenAPI operation object for one route.
-func operation(route edge.RouteSpec, tag string) map[string]any {
+func (b *builder) operation(route edge.RouteSpec, tag string) map[string]any {
 	op := map[string]any{
 		"tags":        []any{tag},
 		"operationId": operationID(route),
 		"summary":     summary(route),
-		"responses":   responses(route),
+		"responses":   b.responses(route),
 	}
 	if desc := description(route); desc != "" {
 		op["description"] = desc
@@ -140,17 +166,144 @@ func operation(route edge.RouteSpec, tag string) map[string]any {
 		op["parameters"] = params
 	}
 	if route.Body {
-		op["requestBody"] = map[string]any{
-			"required": true,
-			"content": map[string]any{
-				"application/json": map[string]any{
-					"schema": map[string]any{"type": "object"},
-				},
-			},
-		}
+		op["requestBody"] = b.requestBody(route)
 	}
 	op["security"] = security(route)
 	return op
+}
+
+// key is the manifest lookup key: the RPC subject, suffixed with the entity for
+// the shared generic-CRUD engine (one subject, many entities).
+func (b *builder) key(route edge.RouteSpec) string {
+	if route.Entity != "" {
+		return route.Queue + "#" + route.Entity
+	}
+	return route.Queue
+}
+
+// refSchema renders a schemaRef as an OpenAPI schema and records the reference.
+// Returns nil if the schema is unknown (so callers fall back to a generic object
+// rather than emit a dangling $ref).
+func (b *builder) refSchema(sr schemaRef) map[string]any {
+	if sr.Ref == "" || b.man.Schemas[sr.Ref] == nil {
+		return nil
+	}
+	b.refs[sr.Ref] = true
+	ref := map[string]any{"$ref": "#/components/schemas/" + sr.Ref}
+	if sr.Array {
+		return map[string]any{"type": "array", "items": ref}
+	}
+	return ref
+}
+
+func (b *builder) responseSchema(route edge.RouteSpec) map[string]any {
+	if op, ok := b.man.Operations[b.key(route)]; ok && op.Response != nil {
+		if s := b.refSchema(*op.Response); s != nil {
+			return s
+		}
+	}
+	return map[string]any{"type": "object"}
+}
+
+func (b *builder) requestBody(route edge.RouteSpec) map[string]any {
+	schema := map[string]any{"type": "object"}
+	if op, ok := b.man.Operations[b.key(route)]; ok && op.Request != nil {
+		if s := b.refSchema(*op.Request); s != nil {
+			schema = s
+		}
+	}
+	return map[string]any{
+		"required": true,
+		"content":  map[string]any{"application/json": map[string]any{"schema": schema}},
+	}
+}
+
+// responses builds the success response plus a small set of generic errors.
+func (b *builder) responses(route edge.RouteSpec) map[string]any {
+	status := route.Success
+	if status == 0 {
+		status = 200
+	}
+
+	success := map[string]any{"description": "Success"}
+	if status != 204 {
+		success["content"] = map[string]any{
+			"application/json": map[string]any{"schema": b.responseSchema(route)},
+		}
+	}
+
+	errContent := map[string]any{
+		"application/json": map[string]any{
+			"schema": map[string]any{"$ref": "#/components/schemas/Error"},
+		},
+	}
+	resp := map[string]any{
+		strconv.Itoa(status): success,
+		"404":                map[string]any{"description": "Not found", "content": errContent},
+		"422":                map[string]any{"description": "Validation error", "content": errContent},
+		"500":                map[string]any{"description": "Internal error", "content": errContent},
+	}
+	if route.Auth == edge.AuthRequired {
+		resp["401"] = map[string]any{"description": "Not authenticated", "content": errContent}
+	}
+	return resp
+}
+
+// components builds components.schemas (Error + the transitive closure of every
+// referenced model) and the bearer security scheme.
+func (b *builder) components() map[string]any {
+	schemas := map[string]any{
+		"Error": map[string]any{
+			"type":        "object",
+			"description": "FastAPI-style error envelope.",
+			"properties":  map[string]any{"detail": map[string]any{"type": "string"}},
+			"required":    []any{"detail"},
+		},
+	}
+	for name := range b.closure() {
+		var raw any
+		if err := json.Unmarshal(b.man.Schemas[name], &raw); err == nil {
+			schemas[name] = raw
+		}
+	}
+	return map[string]any{
+		"securitySchemes": map[string]any{
+			"bearerAuth": map[string]any{
+				"type":         "http",
+				"scheme":       "bearer",
+				"bearerFormat": "JWT",
+				"description":  "JWT access token. Also accepted via the `aqt_access_token` cookie or a `?token=Bearer <jwt>` query parameter.",
+			},
+		},
+		"schemas": schemas,
+	}
+}
+
+var refRe = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+
+// closure expands the recorded refs to every schema they transitively depend on.
+func (b *builder) closure() map[string]bool {
+	out := map[string]bool{}
+	stack := make([]string, 0, len(b.refs))
+	for n := range b.refs {
+		stack = append(stack, n)
+	}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		raw, ok := b.man.Schemas[n]
+		if out[n] || !ok {
+			continue
+		}
+		out[n] = true
+		for _, m := range refRe.FindAllSubmatch(raw, -1) {
+			dep := string(m[1])
+			if !out[dep] {
+				stack = append(stack, dep)
+			}
+		}
+	}
+	return out
 }
 
 // summary uses the RPC queue (the subject the request is dispatched to) when
@@ -216,39 +369,6 @@ func security(route edge.RouteSpec) []any {
 	default:
 		return []any{}
 	}
-}
-
-// responses builds the success response plus a small set of generic errors.
-func responses(route edge.RouteSpec) map[string]any {
-	status := route.Success
-	if status == 0 {
-		status = 200
-	}
-
-	success := map[string]any{"description": "Success"}
-	if status != 204 {
-		success["content"] = map[string]any{
-			"application/json": map[string]any{
-				"schema": map[string]any{"type": "object"},
-			},
-		}
-	}
-
-	errContent := map[string]any{
-		"application/json": map[string]any{
-			"schema": map[string]any{"$ref": "#/components/schemas/Error"},
-		},
-	}
-	resp := map[string]any{
-		strconv.Itoa(status): success,
-		"404":                map[string]any{"description": "Not found", "content": errContent},
-		"422":                map[string]any{"description": "Validation error", "content": errContent},
-		"500":                map[string]any{"description": "Internal error", "content": errContent},
-	}
-	if route.Auth == edge.AuthRequired {
-		resp["401"] = map[string]any{"description": "Not authenticated", "content": errContent}
-	}
-	return resp
 }
 
 // convertPattern turns a ServeMux pattern into an OpenAPI path template: the

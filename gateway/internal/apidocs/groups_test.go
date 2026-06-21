@@ -81,6 +81,19 @@ func TestGroups_NoOverlap(t *testing.T) {
 	}
 }
 
+// TestGroups_TypedResponses guards the end-to-end typing: the embedded manifest
+// must resolve at least one tournament + one app response to a real component
+// schema (vs the generic object fallback).
+func TestGroups_TypedResponses(t *testing.T) {
+	public, _ := Groups()
+	spec := string(openapi.Build(openapi.Info{Title: "t"}, public))
+	for _, want := range []string{"#/components/schemas/tournament.", "#/components/schemas/app."} {
+		if !strings.Contains(spec, want) {
+			t.Errorf("public spec has no typed response referencing %q (manifest not wired?)", want)
+		}
+	}
+}
+
 func opSet(groups []openapi.Group) map[string]bool {
 	raw := openapi.Build(openapi.Info{Title: "t"}, groups)
 	var doc struct {

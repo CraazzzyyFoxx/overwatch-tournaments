@@ -158,6 +158,60 @@ func TestPublicAuthedSplit(t *testing.T) {
 	}
 }
 
+func TestBuilder_ManifestRefWiring(t *testing.T) {
+	man := manifest{
+		Schemas: map[string]json.RawMessage{
+			"Thing":  json.RawMessage(`{"type":"object","properties":{"dep":{"$ref":"#/components/schemas/Dep"}}}`),
+			"Dep":    json.RawMessage(`{"type":"object"}`),
+			"Create": json.RawMessage(`{"type":"object"}`),
+			"Unused": json.RawMessage(`{"type":"object"}`),
+		},
+		Operations: map[string]opModels{
+			"rpc.x.get":      {Response: &schemaRef{Ref: "Thing"}},
+			"rpc.x.list":     {Response: &schemaRef{Ref: "Thing", Array: true}},
+			"rpc.x.cr#thing": {Request: &schemaRef{Ref: "Create"}, Response: &schemaRef{Ref: "Thing"}},
+		},
+	}
+	b := &builder{man: man, refs: map[string]bool{}}
+
+	if got := b.responseSchema(edge.RouteSpec{Queue: "rpc.x.get"}); got["$ref"] != "#/components/schemas/Thing" {
+		t.Errorf("single response = %v, want $ref Thing", got)
+	}
+	arr := b.responseSchema(edge.RouteSpec{Queue: "rpc.x.list"})
+	if arr["type"] != "array" {
+		t.Errorf("array response = %v, want type array", arr)
+	}
+	// entity key: rpc.x.cr#thing
+	if got := b.responseSchema(edge.RouteSpec{Queue: "rpc.x.cr", Entity: "thing"}); got["$ref"] != "#/components/schemas/Thing" {
+		t.Errorf("entity-keyed response = %v, want $ref Thing", got)
+	}
+	rb := b.requestBody(edge.RouteSpec{Queue: "rpc.x.cr", Entity: "thing", Body: true})
+	rbSchema := rb["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	if rbSchema["$ref"] != "#/components/schemas/Create" {
+		t.Errorf("requestBody schema = %v, want $ref Create", rbSchema)
+	}
+	// unknown subject -> generic object
+	if got := b.responseSchema(edge.RouteSpec{Queue: "rpc.unknown"}); got["type"] != "object" {
+		t.Errorf("unknown response = %v, want generic object", got)
+	}
+	// dangling ref (not in Schemas) -> generic object, no panic
+	b2 := &builder{man: manifest{Operations: map[string]opModels{"q": {Response: &schemaRef{Ref: "Missing"}}}}, refs: map[string]bool{}}
+	if got := b2.responseSchema(edge.RouteSpec{Queue: "q"}); got["type"] != "object" {
+		t.Errorf("dangling ref response = %v, want generic object", got)
+	}
+
+	// closure pulls transitive deps (Dep via Thing) but not unreferenced schemas.
+	cl := b.closure()
+	for _, want := range []string{"Thing", "Dep", "Create"} {
+		if !cl[want] {
+			t.Errorf("closure missing %q", want)
+		}
+	}
+	if cl["Unused"] {
+		t.Error("closure should not include unreferenced Unused")
+	}
+}
+
 func keys(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
