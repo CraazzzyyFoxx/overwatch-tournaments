@@ -79,7 +79,7 @@ export default function RosterRow({ player, tournamentGrid, onSelect }: RosterRo
       }}
     >
       <span className={styles.cRoleChip}>
-        <PlayerRoleIcon role={player.role} size={15} />
+        <PlayerRoleIcon role={player.role} size={19} />
       </span>
       <span className={styles.cBadgeWrap}>
         <DivisionIcon division={player.division} tournamentGrid={tournamentGrid} width={30} height={30} />

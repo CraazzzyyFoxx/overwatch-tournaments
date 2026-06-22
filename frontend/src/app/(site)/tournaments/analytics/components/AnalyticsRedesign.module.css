@@ -1731,11 +1731,10 @@
 }
 .cRoleChip {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   place-items: center;
-  border: 1px solid var(--c-line);
   border-radius: 8px;
   background: var(--c-surface-2);
   color: var(--c-muted);

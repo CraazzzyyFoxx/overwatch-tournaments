@@ -245,48 +245,35 @@ const AnalyticsPage = () => {
         }
       />
 
+      {/* Analytics controls, directly under the hero. */}
+      {picker}
+
       {canRecalculateAnalytics && tournamentId != null ? (
         <OrganizerTools tournamentId={tournamentId} workspaceId={currentWorkspaceId} />
       ) : null}
 
       {!isFiltersReady ? (
-        <>
-          {picker}
-          <AnalyticsContentSkeleton />
-        </>
-      ) : tournamentId == null || algorithmId == null ? (
-        picker
-      ) : isErrorAnalytics ? (
-        <>
-          {picker}
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
-              <CardDescription>{t("analytics.page.unavailableDesc")}</CardDescription>
-            </CardHeader>
-          </Card>
-        </>
+        <AnalyticsContentSkeleton />
+      ) : tournamentId == null || algorithmId == null ? null : isErrorAnalytics ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
+            <CardDescription>{t("analytics.page.unavailableDesc")}</CardDescription>
+          </CardHeader>
+        </Card>
       ) : loadingAnalytics || !analytics ? (
-        <>
-          {picker}
-          <AnalyticsContentSkeleton />
-        </>
+        <AnalyticsContentSkeleton />
       ) : isEmptyTeams ? (
-        <>
-          {picker}
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("analytics.page.noTeams")}</CardTitle>
-              <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
-            </CardHeader>
-          </Card>
-        </>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("analytics.page.noTeams")}</CardTitle>
+            <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
+          </CardHeader>
+        </Card>
       ) : viewModel ? (
         <>
           <VerdictBanner verdict={viewModel.verdict} onExplain={explain} />
           <KpiRail kpis={viewModel.kpis} onExplain={explain} onSelect={onKpiSelect} />
-          {/* Controls under the KPI cards. */}
-          {picker}
           <div ref={standingsRef}>
             <MasterDetail
               key={`${tournamentId}-${algorithmId}`}
