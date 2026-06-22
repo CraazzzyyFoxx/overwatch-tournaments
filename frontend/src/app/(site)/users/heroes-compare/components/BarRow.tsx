@@ -1,47 +1,77 @@
+import { memo } from "react";
 import Link from "next/link";
 
 import { HeroLeaderboardEntry } from "@/types/hero.types";
 import { toUserSlug } from "@/app/(site)/users/components/users-overview/utils";
 
+import { teamDotBackground } from "../utils/teamColor";
 import RankBadge from "./RankBadge";
 
 interface BarRowProps {
   entry: HeroLeaderboardEntry;
   rank: number;
   value: number;
+  minValue: number;
   maxValue: number;
   barColor: string;
   formatValue: (v: number) => string;
-  isEven: boolean;
+  isHighlighted: boolean;
+  onHoverUser: (userId: number | null) => void;
 }
 
-const BarRow = ({ entry, rank, value, maxValue, barColor, formatValue, isEven }: BarRowProps) => {
-  const barPct = Math.max((value / maxValue) * 100, 0);
+const BarRow = ({
+  entry,
+  rank,
+  value,
+  minValue,
+  maxValue,
+  barColor,
+  formatValue,
+  isHighlighted,
+  onHoverUser,
+}: BarRowProps) => {
+  // Min-anchored scaling so the smallest value stays visible (matches mockup).
+  const span = maxValue - minValue || 1;
+  const barPct = Math.min(Math.max(18 + ((value - minValue) / span) * 82, 0), 100);
+
   return (
     <Link
       href={`/users/${toUserSlug(entry.username)}`}
+      title={`${entry.username} · ${entry.team ?? "—"} · D${entry.div}`}
+      onMouseEnter={() => onHoverUser(entry.user_id)}
+      onMouseLeave={() => onHoverUser(null)}
       className={[
-        "flex items-center gap-3 px-4 py-[9px]",
-        "cursor-pointer transition-colors duration-150 hover:bg-muted/25",
-        isEven ? "bg-muted/[0.06]" : "",
+        "grid grid-cols-[26px_116px_1fr_52px] items-center gap-[9px] border-b border-white/[0.04] px-3.5 py-2",
+        "cursor-pointer transition-colors",
+        isHighlighted
+          ? "bg-[color-mix(in_srgb,var(--aqt-teal)_8%,transparent)]"
+          : "hover:bg-white/[0.025]",
       ].join(" ")}
-      title={entry.username}
     >
       <RankBadge rank={rank} />
-      <span className="w-32 shrink-0 truncate text-right text-sm font-medium leading-normal">
-        {entry.username}
-      </span>
-      <div className="relative h-[22px] flex-1 overflow-hidden rounded-[3px] bg-background/20 ring-1 ring-border/30">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="h-2 w-2 shrink-0 rounded-[2px]"
+          style={{ background: teamDotBackground(entry.team, entry.team_id) }}
+        />
+        <span className="truncate text-[13px] font-medium text-[var(--aqt-fg)]">
+          {entry.username}
+        </span>
+      </div>
+      <div className="relative h-5 overflow-hidden rounded-[4px] bg-white/[0.03] ring-1 ring-inset ring-[var(--aqt-border-2)]">
         <div
-          className={`absolute inset-y-0 left-0 rounded-[3px] transition-all duration-300 ${barColor}`}
+          className={`absolute inset-y-0 left-0 rounded-[4px] transition-[width] duration-500 ${barColor}`}
           style={{ width: `${barPct}%`, minWidth: barPct > 0 ? "3px" : "0" }}
         />
       </div>
-      <span className="w-14 shrink-0 text-left font-mono text-sm font-semibold tabular-nums text-foreground/85">
+      <span className="text-right font-[family-name:var(--aqt-mono)] text-[12.5px] font-semibold tabular-nums text-[var(--aqt-fg)]/90">
         {formatValue(value)}
       </span>
     </Link>
   );
 };
 
-export default BarRow;
+// Memoized: hovering one player flips `isHighlighted` on only the matching
+// rows, so unchanged rows across all 5 columns skip re-render (props are
+// stable refs / primitives from the module-level COL config).
+export default memo(BarRow);
