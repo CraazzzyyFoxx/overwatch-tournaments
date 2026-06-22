@@ -2144,9 +2144,13 @@
   box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.5);
   transform: translateY(110%);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Closed: stay out of the way. Without this the centered desktop sheet
+     (opacity:0, still positioned) swallows every click on the page. */
+  pointer-events: none;
 }
 .cSheet[data-open="true"] {
   transform: translateY(0);
+  pointer-events: auto;
 }
 .cSheetGrip {
   width: 38px;
