@@ -20,10 +20,7 @@ Usage in services:
     query = apply_workspace_filter(query, workspace_id, root=models.Encounter)
 """
 
-import typing
-
 import sqlalchemy as sa
-from fastapi import Query
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
@@ -33,8 +30,6 @@ from shared.services.division_grid_access import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-
-WorkspaceQuery = typing.Annotated[int | None, Query(alias="workspace_id")]
 
 
 def workspace_filter(workspace_id: int | None) -> list:

@@ -1,8 +1,8 @@
+import base64
+
 import sqlalchemy as sa
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
-from shared.clients.s3 import S3Client
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
     PROCESS_MATCH_LOG_QUEUE,
@@ -12,8 +12,11 @@ from shared.messaging.config import (
     TOURNAMENT_ENCOUNTER_COMPLETED_QUEUE,
     TOURNAMENT_EVENTS_EXCHANGE,
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
+    UPLOAD_MATCH_LOG_QUEUE,
 )
+from shared.models.log_processing import LogProcessingSource
 from shared.observability import (
+    make_rabbit_broker,
     metrics,
     observe_message_processing,
     publish_message,
@@ -27,33 +30,59 @@ from shared.schemas.events import (
     EncounterCompletedEvent,
     ProcessMatchLogEvent,
     ProcessTournamentLogsEvent,
+    UploadMatchLogEvent,
 )
 
 from src import models
 from src.core import config, db
+from src.core.broker import set_worker_broker
+from src.core.caching import configure_cache
+from src.rpc import (
+    _clients,
+    achievements as rpc_achievements,
+    bootstrap as rpc_bootstrap,
+    logs as rpc_logs,
+    misc as rpc_misc,
+    rank as rpc_rank,
+)
 from src.services.achievement.engine.consumer import handle_achievement_evaluate
 from src.services.match_logs import flows as logs_flows
+from src.services.match_logs import realtime as logs_realtime
+from src.services.match_logs import uploads as upload_service
 from src.services.match_logs.result_events import publish_match_log_result
+from src.services.overwatch_rank import scheduler as rank_scheduler
 from src.services.overwatch_rank import tasks as rank_tasks
 from src.services.s3 import service as s3_service
 
 logger = setup_logging(
-    service_name="parser-worker",
+    service_name="parser-svc",
     log_level=config.settings.log_level,
     logs_root_path=config.settings.logs_root_path,
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 
-s3_client = S3Client(
-    access_key=config.settings.s3_access_key,
-    secret_key=config.settings.s3_secret_key,
-    endpoint_url=config.settings.s3_endpoint_url,
-    bucket_name=config.settings.s3_bucket_name,
-    public_url=config.settings.s3_public_url,
-)
+# Expose the worker broker to publishers that don't thread one through (the
+# APScheduler rank tick, the admin "collect now" RPC, the Challonge-import
+# standings-recalculation enqueue, ...). Replaces the old task_router.broker
+# fallback now that the fastapi RabbitRouter is gone.
+set_worker_broker(broker)
+
+# The cashews singleton is process-global with no default backend; configure it
+# before any subscriber runs so cache reads/invalidation are routable.
+configure_cache()
+
+# Process-global S3 client shared with the match-log RPC/binary handlers.
+s3_client = _clients.s3_client
+
+# Typed-RPC subscribers for parser-unique domains served behind the gateway.
+rpc_logs.register(broker, logger)
+rpc_rank.register(broker, logger)
+rpc_achievements.register(broker, logger)
+rpc_misc.register(broker, logger)
+rpc_bootstrap.register(broker, logger)
 
 
 @app.on_startup
@@ -62,7 +91,7 @@ async def start_worker() -> None:
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
         profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
-        service_name="parser-worker",
+        service_name="parser-svc",
         enable_logs=config.settings.sentry_enable_logs,
         logs_level=config.settings.sentry_logs_level,
         enable_metrics=config.settings.sentry_enable_metrics,
@@ -72,7 +101,7 @@ async def start_worker() -> None:
         https_proxy=config.settings.sentry_https_proxy_url,
     )
     setup_tracing(
-        service_name="parser-worker",
+        service_name="parser-svc",
         otlp_endpoint=config.settings.otlp_endpoint,
         enabled=config.settings.tracing_enabled,
         sampler_name=config.settings.otel_traces_sampler,
@@ -81,14 +110,71 @@ async def start_worker() -> None:
     start_worker_metrics_server(config.settings.worker_metrics_port)
     await s3_client.start()
     await rank_tasks.rank_client.start()
+    # Periodic OverFast rank collection trigger (Redis leader-locked across worker
+    # replicas, admin-settings-gated — no-ops while collection is disabled). Lives
+    # in the worker now that the HTTP service is decommissioned.
+    rank_scheduler.start_scheduler()
     logger.info("Parser worker started")
 
 
 @app.on_shutdown
 async def stop_worker() -> None:
+    rank_scheduler.shutdown_scheduler()
     await s3_client.close()
     await rank_tasks.rank_client.close()
     await rank_tasks.close_redis()
+    await _clients.realtime_redis.aclose()
+
+
+@broker.subscriber(UPLOAD_MATCH_LOG_QUEUE)
+async def process_upload_match_log(data: dict, msg: RabbitMessage) -> None:
+    """Ingest a bot-uploaded match log carried over RabbitMQ (base64), then queue it.
+
+    Replaces the former direct ``POST /logs/{id}/upload`` HTTP call from the bot:
+    store the file to S3 + upsert the LogProcessingRecord, then publish a
+    ProcessMatchLogEvent so the normal processing path (and result delivery) runs.
+    """
+    async with observe_message_processing(
+        queue=UPLOAD_MATCH_LOG_QUEUE,
+        handler="process_upload_match_log",
+        message=msg,
+        logger=logger,
+    ):
+        event = UploadMatchLogEvent.model_validate(data)
+        log = logger.bind(tournament_id=event.tournament_id, filename=event.filename)
+        content = base64.b64decode(event.content_b64)
+
+        async with db.async_session_maker() as session:
+            uploader_user_id: int | None = None
+            if event.uploader_discord_name:
+                source = LogProcessingSource.discord
+                discord_user = await session.scalar(
+                    sa.select(models.UserDiscord)
+                    .where(models.UserDiscord.name == event.uploader_discord_name)
+                    .limit(1)
+                )
+                if discord_user is not None:
+                    uploader_user_id = discord_user.user_id
+            else:
+                source = LogProcessingSource.manual
+
+            await upload_service.store_uploaded_log_bytes(
+                session,
+                s3=s3_client,
+                tournament_id=event.tournament_id,
+                filename=event.filename,
+                content=content,
+                source=source,
+                uploader_id=uploader_user_id,
+            )
+
+        await publish_message(
+            broker,
+            ProcessMatchLogEvent(tournament_id=event.tournament_id, filename=event.filename).model_dump(),
+            PROCESS_MATCH_LOG_QUEUE,
+            logger=log,
+        )
+        log.info("Uploaded match log ingested and queued for processing")
 
 
 @broker.subscriber(PROCESS_MATCH_LOG_QUEUE)
@@ -118,6 +204,14 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
             log.exception(
                 f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}"
             )
+            try:
+                async with db.async_session_maker() as session:
+                    failed_workspace_id = await session.scalar(
+                        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == event.tournament_id)
+                    )
+                await logs_realtime.publish_logs_updated(_clients.realtime_redis, failed_workspace_id, reason="failed")
+            except Exception:
+                log.exception("Failed to emit logs.updated realtime signal")
             raise
         else:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "done", logger=log)
@@ -130,6 +224,7 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
             )
             if workspace_id is None:
                 raise RuntimeError(f"Tournament {event.tournament_id} not found")
+            await logs_realtime.publish_logs_updated(_clients.realtime_redis, workspace_id, reason="done")
             achievement_event = AchievementEvaluateEvent(
                 workspace_id=workspace_id,
                 tournament_id=event.tournament_id,

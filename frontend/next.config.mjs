@@ -6,42 +6,17 @@ const nextConfig = {
   ...(process.env.DOCKER === '1' && { watchOptions: { pollIntervalMs: 1000 } }),
   allowedDevOrigins: ['exultantly-peaceful-adjutant.cloudpub.ru'],
   async rewrites() {
-    const apiUrl = process.env.NEXT_API_URL ?? process.env.NEXT_PUBLIC_API_URL;
-    const parserUrl = process.env.NEXT_PARSER_URL ?? process.env.NEXT_PUBLIC_PARSER_API_URL;
-    const tournamentUrl =
-      (process.env.NEXT_TOURNAMENT_URL ?? process.env.NEXT_PUBLIC_TOURNAMENT_API_URL)?.replace(
-        /\/$/,
-        "",
-      );
-    // Single-prefix routing (mirrors Kong):
-    //   /api/v1/core/*  -> app-service     (most specific, must come first)
-    //   /api/v1/*       -> tournament-service (owns the rest of the namespace)
-    return [
-      ...(apiUrl
-        ? [
-            {
-              source: "/api/v1/core/:path*",
-              destination: `${apiUrl}/:path*`,
-            },
-          ]
-        : []),
-      ...(tournamentUrl
-        ? [
-            {
-              source: "/api/v1/:path*",
-              destination: `${tournamentUrl}/:path*`,
-            },
-          ]
-        : []),
-      ...(parserUrl
-        ? [
-            {
-              source: "/api/parser/:path*",
-              destination: `${parserUrl}/:path*`,
-            },
-          ]
-        : []),
-    ];
+    // Everything is one gateway behind one origin. In production the browser hits
+    // nginx and /api/* never reaches Next, so these rewrites are only a fallback
+    // for hitting the Next dev server (:3000) directly: each gateway namespace is
+    // forwarded to the internal gateway. /api/auth/* route handlers and /api/account
+    // are filesystem routes and take precedence over these afterFiles rewrites.
+    const gateway = process.env.NEXT_INTERNAL_API_URL?.replace(/\/$/, "");
+    if (!gateway) return [];
+    return ["/api/v1", "/api/balancer", "/api/analytics", "/api/auth"].map((prefix) => ({
+      source: `${prefix}/:path*`,
+      destination: `${gateway}${prefix}/:path*`,
+    }));
   },
   images: {
     unoptimized: true,

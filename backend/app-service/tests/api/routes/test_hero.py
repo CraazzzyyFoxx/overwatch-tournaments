@@ -1,6 +1,17 @@
+"""RPC-handler tests for the hero surface.
+
+Targets:
+- list     -> ``rpc.app.read.list`` (entity=hero, shared CRUD read engine)
+- get      -> ``rpc.app.read.get``  (entity=hero)
+- playtime -> ``rpc.app.heroes.playtime``
+
+Replaces the former HTTP-client tests against the decommissioned HTTP service;
+assertions mirror the old tests on the envelope ``data``.
+"""
+
 import pytest
-from fastapi.testclient import TestClient
-from src.core import config
+
+from tests.conftest import RpcHarness, build_query
 
 
 @pytest.mark.parametrize(
@@ -13,7 +24,7 @@ from src.core import config
     ],
 )
 def test_search_hero(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -22,20 +33,25 @@ def test_search_hero(
     query: str,
     fields: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/heroes",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
-            "query": query,
-            "fields": fields,
+    env = rpc.call_sync(
+        "rpc.app.read.list",
+        {
+            "entity": "hero",
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                    "query": query,
+                    "fields": fields,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]
@@ -54,10 +70,10 @@ def test_search_hero(
         (5,),
     ],
 )
-def test_get_hero_by_id(client: TestClient, hero_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/heroes/{hero_id}")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_hero_by_id(rpc: RpcHarness, hero_id: int) -> None:
+    env = rpc.call_sync("rpc.app.read.get", {"entity": "hero", "id": hero_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content["id"] == hero_id
 
 
@@ -73,7 +89,7 @@ def test_get_hero_by_id(client: TestClient, hero_id: int) -> None:
     ],
 )
 def test_get_hero_playtime(
-    client: TestClient,
+    rpc: RpcHarness,
     user_id: int,
     page: int,
     per_page: int,
@@ -81,19 +97,23 @@ def test_get_hero_playtime(
     order: str,
     entities: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/heroes/statistics/playtime",
-        params={
-            "user_id": user_id,
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
+    env = rpc.call_sync(
+        "rpc.app.heroes.playtime",
+        {
+            "query": build_query(
+                {
+                    "user_id": user_id,
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                }
+            )
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     if content["results"]:

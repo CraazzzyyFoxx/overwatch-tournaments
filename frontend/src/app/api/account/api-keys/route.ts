@@ -1,8 +1,8 @@
+import { authServiceBase } from "@/lib/api-routes";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+const AUTH_SERVICE_URL = authServiceBase();
 
 function authHeaders(accessToken: string): HeadersInit {
   return {
@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${AUTH_SERVICE_URL}/api-keys?workspace_id=${encodeURIComponent(workspaceId)}`, {
+    // Forward all query params (workspace_id + pagination/sort/search) to the gateway.
+    const query = request.nextUrl.searchParams.toString();
+    const response = await fetch(`${AUTH_SERVICE_URL}/api-keys?${query}`, {
       method: "GET",
       headers: authHeaders(accessToken),
       cache: "no-store",

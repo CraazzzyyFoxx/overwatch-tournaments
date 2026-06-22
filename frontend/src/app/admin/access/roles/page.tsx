@@ -52,7 +52,6 @@ import {
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type {
@@ -228,7 +227,7 @@ export default function AccessAdminRolesPage() {
   const permissionsQuery = useQuery({
     queryKey: ["access-admin", "permissions", effectiveScope],
     queryFn: () =>
-      rbacService.listPermissions(
+      rbacService.listPermissionsAll(
         effectiveScope === "global" ? undefined : { workspace_id: effectiveScope }
       ),
     enabled: canReadPermissions && (createDialogOpen || editingRoleId !== null)
@@ -289,6 +288,7 @@ export default function AccessAdminRolesPage() {
     {
       accessorKey: "description",
       header: "Description",
+      enableSorting: false,
       cell: ({ row }) =>
         row.original.description || <span className="text-muted-foreground">No description</span>
     },
@@ -603,18 +603,16 @@ export default function AccessAdminRolesPage() {
           sortField,
           sortDir
         ]}
-        queryFn={async (page, search, pageSize, sortField, sortDir) => {
+        queryFn={(page, search, pageSize, sortField, sortDir) => {
           const workspaceId = effectiveScope === "global" ? undefined : effectiveScope;
-          const roles = await rbacService.listRoles(
-            workspaceId !== undefined ? { workspace_id: workspaceId } : undefined
-          );
-          const filteredRoles = search
-            ? roles.filter((role) => {
-                const haystack = `${role.name} ${role.description || ""}`.toLowerCase();
-                return haystack.includes(search.toLowerCase());
-              })
-            : roles;
-          return paginateResults(sortArray(filteredRoles, sortField, sortDir), page, pageSize);
+          return rbacService.listRoles({
+            page,
+            per_page: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir,
+            search: search || undefined,
+            workspace_id: workspaceId,
+          });
         }}
         columns={columns}
         searchPlaceholder="Search roles..."

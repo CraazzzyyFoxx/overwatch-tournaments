@@ -15,7 +15,8 @@ from datetime import UTC, datetime
 from typing import TypedDict
 from urllib.parse import parse_qs, urlparse
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 
 # ---------------------------------------------------------------------------
 # Constants

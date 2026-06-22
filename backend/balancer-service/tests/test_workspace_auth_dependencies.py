@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import inspect
 import os
 import sys
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
@@ -35,7 +34,6 @@ os.environ["DEBUG"] = "false"
 
 from src import models  # noqa: E402
 from src.core import auth  # noqa: E402
-from src.routes.admin import draft as draft_route  # noqa: E402
 
 
 def _make_user() -> models.AuthUser:
@@ -141,8 +139,3 @@ class WorkspaceAuthDependencyTests(IsolatedAsyncioTestCase):
             await checker(tournament_id=55, session=session, current_user=user)
 
         self.assertEqual(ctx.exception.status_code, 403)
-
-    async def test_draft_select_route_uses_authenticated_user_dependency(self) -> None:
-        user_dependency = inspect.signature(draft_route.select_route).parameters["user"].default.dependency
-
-        self.assertIs(user_dependency, auth.get_current_active_user)

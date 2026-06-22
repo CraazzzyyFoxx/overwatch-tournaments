@@ -5,12 +5,11 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
-
-from fastapi import HTTPException
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -29,8 +28,25 @@ os.environ.setdefault("CHALLONGE_USERNAME", "test")
 os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 captain_service = importlib.import_module("src.services.encounter.captain")
-captain_route = importlib.import_module("src.routes.captain")
+captain_route = importlib.import_module("src.schemas.captain")
 enums = importlib.import_module("shared.core.enums")
+
+
+@contextmanager
+def assert_http_status(test_case: IsolatedAsyncioTestCase, expected_status: int):
+    """Assert the wrapped block raises an exception carrying ``status_code``.
+
+    The captain service still raises a FastAPI ``HTTPException`` (the worker's
+    error vehicle), but the test stays free of a fastapi import by inspecting the
+    ``status_code`` attribute rather than catching the concrete class.
+    """
+    try:
+        yield
+    except Exception as exc:  # noqa: BLE001 - we re-assert the status below
+        status_code = getattr(exc, "status_code", None)
+        test_case.assertEqual(status_code, expected_status)
+    else:
+        test_case.fail(f"expected an exception with status_code {expected_status}")
 
 
 def _mk_user(user_id: int = 1) -> SimpleNamespace:
@@ -121,7 +137,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
     async def test_rejects_closeness_out_of_range(self) -> None:
         session = _mk_session(_mk_encounter(), [100])
         user = _mk_user()
-        with self.assertRaises(HTTPException) as ctx:
+        with assert_http_status(self, 422):
             await captain_service.submit_match_report(
                 session,
                 user,
@@ -130,13 +146,12 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 away_score=1,
                 closeness_score=11,
             )
-        self.assertEqual(ctx.exception.status_code, 422)
 
     async def test_non_captain_gets_forbidden(self) -> None:
         encounter = _mk_encounter(home_captain_player_id=100, away_captain_player_id=200)
         session = _mk_session(encounter, [999])
         user = _mk_user()
-        with self.assertRaises(HTTPException) as ctx:
+        with assert_http_status(self, 403):
             await captain_service.submit_match_report(
                 session,
                 user,
@@ -145,7 +160,6 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 away_score=1,
                 closeness_score=3,
             )
-        self.assertEqual(ctx.exception.status_code, 403)
 
     async def test_updates_encounter_result_and_enqueues_recalc_outbox_before_commit(self) -> None:
         encounter = _mk_encounter()
@@ -182,10 +196,8 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
         session = _mk_session(encounter, [100])
         user = _mk_user()
 
-        with self.assertRaises(HTTPException) as ctx:
+        with assert_http_status(self, 400):
             await captain_service.confirm_result(session, user, encounter_id=10)
-
-        self.assertEqual(ctx.exception.status_code, 400)
 
     async def test_confirm_stores_linked_player_id_and_enqueues_domain_events(self) -> None:
         encounter = _mk_encounter()

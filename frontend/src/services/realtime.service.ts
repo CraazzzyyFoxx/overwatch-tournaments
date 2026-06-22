@@ -20,7 +20,7 @@ const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
 export function buildRealtimeWebSocketUrl(
-  realtimeBase = process.env.NEXT_PUBLIC_REALTIME_API_URL,
+  realtimeBase: string | undefined = undefined,
   origin = typeof window !== "undefined" ? window.location.origin : "http://localhost"
 ): string {
   if (realtimeBase) {
@@ -167,12 +167,22 @@ class RealtimeClient {
     }
 
     if (frame.op === "error") {
+      // Surface (don't swallow) a rejected subscription so consumers can react
+      // instead of hanging forever. A topic-less protocol error has nowhere to
+      // attach, so it stays a console warning.
+      if (frame.topic) {
+        useRealtimeStore
+          .getState()
+          .setTopicError(frame.topic, { code: frame.code, message: frame.message });
+      }
       console.warn("Realtime subscription error", frame);
       return;
     }
 
     if (frame.op === "subscribed") {
       useRealtimeStore.getState().setLastEventId(frame.topic, frame.cursor);
+      // A successful (re)subscribe clears any prior rejection for this topic.
+      useRealtimeStore.getState().setTopicError(frame.topic, null);
       return;
     }
 

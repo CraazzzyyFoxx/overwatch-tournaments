@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -14,7 +14,17 @@ __all__ = (
 
 class User(db.TimeStampIntegerMixin):
     __tablename__ = "user"
-    __table_args__ = ({"schema": "players"},)
+    __table_args__ = (
+        # Trigram GIN index so user-name search (`name ILIKE '%q%'` and the
+        # pg_trgm `%` operator) uses a Bitmap Index Scan instead of a Seq Scan.
+        Index(
+            "ix_user_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        {"schema": "players"},
+    )
 
     name: Mapped[str] = mapped_column(String(), unique=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -44,7 +54,17 @@ class UserDiscord(db.TimeStampIntegerMixin):
 
 class UserBattleTag(db.TimeStampIntegerMixin):
     __tablename__ = "battle_tag"
-    __table_args__ = ({"schema": "players"},)
+    __table_args__ = (
+        # Trigram GIN index backing `search_by_name` (battle_tag ILIKE '%q%' and
+        # the pg_trgm `%` operator) — turns its Seq Scan into an index scan.
+        Index(
+            "ix_battle_tag_battle_tag_trgm",
+            "battle_tag",
+            postgresql_using="gin",
+            postgresql_ops={"battle_tag": "gin_trgm_ops"},
+        ),
+        {"schema": "players"},
+    )
 
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"))
     user: Mapped[User] = relationship()

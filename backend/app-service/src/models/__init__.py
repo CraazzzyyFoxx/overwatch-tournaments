@@ -18,3 +18,4 @@ from shared.models.auth_user import *
 from shared.models.rbac import *
 from shared.models.api_key import *
 from shared.models.balancer import *
+from shared.models.log_processing import *

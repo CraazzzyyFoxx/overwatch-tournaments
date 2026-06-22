@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from faststream.rabbit.fastapi import RabbitRouter
 from loguru import logger
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
@@ -17,9 +16,7 @@ from shared.schemas.events import (
     TournamentStandingsInvalidatedEvent,
 )
 
-from src.core import config
-
-task_router = RabbitRouter(config.settings.rabbitmq_url, logger=logger)
+from src.core.broker import require_broker
 
 
 async def close_redis() -> None:
@@ -38,7 +35,7 @@ async def enqueue_tournament_recalculation(
         source_service="parser-service",
     )
     await publish_message(
-        broker or task_router.broker,
+        require_broker(broker),
         event.model_dump(),
         TOURNAMENT_STANDINGS_INVALIDATED_QUEUE,
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
@@ -60,7 +57,7 @@ async def publish_tournament_changed(
         source_service="parser-service",
     )
     await publish_message(
-        broker or task_router.broker,
+        require_broker(broker),
         event.model_dump(),
         TOURNAMENT_CHANGED_QUEUE,
         exchange=TOURNAMENT_CHANGED_EXCHANGE,

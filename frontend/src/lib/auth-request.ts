@@ -18,16 +18,24 @@ export async function retryWithRefreshOnUnauthorized({
     return response;
   }
 
-  const refreshedToken = await refreshAccessToken();
-  if (!refreshedToken) {
+  const outcome = await refreshAccessToken();
+
+  // The refresh token is dead (endpoint returned 401): the session is genuinely
+  // over — surface a global logout.
+  if (outcome.status === "unauthenticated") {
     notifyUnauthorized();
     return response;
   }
 
-  const retryResponse = await runRequest(refreshedToken);
-  if (retryResponse.status === 401) {
-    notifyUnauthorized();
+  // Transient refresh failure (network / 5xx). Do NOT log the user out — the
+  // session is still valid and a later request (or the proactive scheduler)
+  // will recover. Return the original 401 for this single request.
+  if (outcome.status === "error") {
+    return response;
   }
 
-  return retryResponse;
+  // Refreshed successfully — retry once. A 401 on the retry is treated as a
+  // per-resource / permission issue, not a dead session, so we do NOT trigger a
+  // global logout here (that was the source of the focus-refetch race).
+  return runRequest(outcome.token);
 }

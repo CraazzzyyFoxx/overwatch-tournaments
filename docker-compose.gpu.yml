@@ -1,7 +1,7 @@
 # Optional override for local machines with an NVIDIA GPU.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile workers up -d --build analytics analytics-worker
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile workers up -d --build analytics-worker
 #
 # Requirements on Windows:
 #   - Docker Desktop running Linux containers with the WSL2 backend

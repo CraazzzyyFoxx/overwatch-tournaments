@@ -1,3 +1,4 @@
+import { authServiceBase } from "@/lib/api-routes";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
@@ -23,8 +24,7 @@ export type MeResponse = {
   }>;
 };
 
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+const AUTH_SERVICE_URL = authServiceBase();
 
 export async function GET() {
   const cookieStore = await cookies();

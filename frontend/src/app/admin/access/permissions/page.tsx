@@ -5,7 +5,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Badge } from "@/components/ui/badge";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacPermission } from "@/types/rbac.types";
 
@@ -30,6 +29,7 @@ export default function AccessAdminPermissionsPage() {
     {
       accessorKey: "description",
       header: "Description",
+      enableSorting: false,
       cell: ({ row }) => row.original.description || <span className="text-muted-foreground">No description</span>,
     },
   ];
@@ -46,16 +46,15 @@ export default function AccessAdminPermissionsPage() {
         initialPageSize={PAGE_SIZE}
         pageSizeOptions={[10, 20, 50, 100]}
         queryKey={(page, search, pageSize, sortField, sortDir) => ["access-admin", "permissions", page, search, pageSize, sortField, sortDir]}
-        queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const permissions = await rbacService.listPermissions();
-          const filteredPermissions = search
-            ? permissions.filter((permission) => {
-                const haystack = `${permission.name} ${permission.resource} ${permission.action} ${permission.description || ""}`.toLowerCase();
-                return haystack.includes(search.toLowerCase());
-              })
-            : permissions;
-          return paginateResults(sortArray(filteredPermissions, sortField, sortDir), page, pageSize);
-        }}
+        queryFn={(page, search, pageSize, sortField, sortDir) =>
+          rbacService.listPermissions({
+            page,
+            per_page: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir,
+            search: search || undefined,
+          })
+        }
         columns={columns}
         searchPlaceholder="Search permissions..."
         emptyMessage="No permissions found."

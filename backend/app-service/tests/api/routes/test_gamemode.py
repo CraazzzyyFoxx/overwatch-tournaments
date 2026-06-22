@@ -1,6 +1,16 @@
+"""RPC-handler tests for the gamemode surface.
+
+Targets:
+- list -> ``rpc.app.read.list`` (entity=gamemode, shared CRUD read engine)
+- get  -> ``rpc.app.read.get``  (entity=gamemode)
+
+Replaces the former HTTP-client tests against the decommissioned HTTP service;
+assertions mirror the old tests on the envelope ``data``.
+"""
+
 import pytest
-from fastapi.testclient import TestClient
-from src.core import config
+
+from tests.conftest import RpcHarness, build_query
 
 
 @pytest.mark.parametrize(
@@ -13,7 +23,7 @@ from src.core import config
     ],
 )
 def test_search_gamemode(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -22,20 +32,25 @@ def test_search_gamemode(
     query: str,
     fields: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/gamemodes",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
-            "query": query,
-            "fields": fields,
+    env = rpc.call_sync(
+        "rpc.app.read.list",
+        {
+            "entity": "gamemode",
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                    "query": query,
+                    "fields": fields,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]
@@ -54,8 +69,8 @@ def test_search_gamemode(
         (5,),
     ],
 )
-def test_get_gamemode_by_id(client: TestClient, gamemode_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/gamemodes/{gamemode_id}")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_gamemode_by_id(rpc: RpcHarness, gamemode_id: int) -> None:
+    env = rpc.call_sync("rpc.app.read.get", {"entity": "gamemode", "id": gamemode_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content["id"] == gamemode_id

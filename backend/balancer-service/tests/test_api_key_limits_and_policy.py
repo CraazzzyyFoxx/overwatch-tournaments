@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"

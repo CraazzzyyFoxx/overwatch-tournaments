@@ -3,16 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from cashews import cache
-from faststream.rabbit.fastapi import RabbitMessage, RabbitRouter
-from loguru import logger
+from faststream.rabbit import RabbitMessage
 from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHANGED_EXCHANGE
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
 
-from src.core import config
+from src.core import db
 from src.core.caching import CACHE_PREFIXES
-
-task_router = RabbitRouter(config.settings.rabbitmq_url, logger=logger)
+from src.services import hero_stats_refresh
 
 
 def _with_prefixes(*suffixes: str) -> tuple[str, ...]:
@@ -52,12 +50,23 @@ async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     await invalidate_tournament_standings_cache(event.tournament_id)
 
 
-@task_router.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE)
-async def process_tournament_changed(data: dict[str, Any], msg: RabbitMessage) -> None:
-    async with observe_message_processing(
-        queue=TOURNAMENT_CHANGED_APP_QUEUE,
-        handler="process_tournament_changed",
-        message=msg,
-        logger=logger,
-    ):
-        await handle_tournament_changed_event(data)
+def register(broker: Any, logger: Any) -> None:
+    """Register the cache-invalidation consumer on the headless worker's broker.
+
+    Single owner of ``TOURNAMENT_CHANGED_APP_QUEUE`` (the app-worker). The HTTP
+    service no longer hosts this — running it in two processes would round-robin
+    invalidation messages between them.
+    """
+
+    @broker.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE)
+    async def process_tournament_changed(data: dict[str, Any], msg: RabbitMessage) -> None:
+        async with observe_message_processing(
+            queue=TOURNAMENT_CHANGED_APP_QUEUE,
+            handler="process_tournament_changed",
+            message=msg,
+            logger=logger,
+        ):
+            await handle_tournament_changed_event(data)
+            # Match data changed → schedule a debounced refresh of the global
+            # hero-stats materialized view (no-op if refreshed recently).
+            hero_stats_refresh.request_refresh(db.async_session_maker, logger)

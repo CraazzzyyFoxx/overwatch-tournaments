@@ -1,9 +1,35 @@
+"""RPC-handler tests for the /users/* surface.
+
+Each former ``GET /users/...`` HTTP route is now a bespoke typed-RPC handler in
+``src/rpc/users.py``; this suite dispatches them via the ``rpc`` harness instead
+of an HTTP client. Route -> topic mapping:
+
+- ``GET /users``                          -> ``rpc.app.users.list``
+- ``GET /users/overview``                 -> ``rpc.app.users.overview``
+- ``GET /users/{id}/compare``             -> ``rpc.app.users.compare``
+- ``GET /users/{id}/compare/heroes``      -> ``rpc.app.users.compare_heroes``
+- ``GET /users/{name}``                   -> ``rpc.app.users.by_name``
+- ``GET /users/{id}/profile``             -> ``rpc.app.users.get_profile``
+- ``GET /users/{id}/tournaments``         -> ``rpc.app.users.tournaments``
+- ``GET /users/{id}/tournaments/{tid}``   -> ``rpc.app.users.tournament``
+- ``GET /users/{id}/maps``                -> ``rpc.app.users.maps``
+- ``GET /users/{id}/maps/summary``        -> ``rpc.app.users.maps_summary``
+- ``GET /users/{id}/encounters``          -> ``rpc.app.users.encounters``
+- ``GET /users/{id}/heroes``              -> ``rpc.app.users.heroes``
+- ``GET /users/{id}/teammates``           -> ``rpc.app.users.teammates``
+
+Assertions mirror the old HTTP tests against the envelope ``data``. HTTP error
+statuses map to the envelope ``error.code`` (gateway mapping): 400->bad_request,
+404->not_found.
+"""
+
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from src import models
-from src.core import config, enums
+from src.core import enums
+
+from tests.conftest import RpcHarness, build_query
 
 
 _COMPARE_FIXTURE_IDS = {
@@ -486,7 +512,7 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
     ],
 )
 def test_search_user(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -495,20 +521,24 @@ def test_search_user(
     query: str,
     fields: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
-            "query": query,
-            "fields": fields,
+    env = rpc.call_sync(
+        "rpc.app.users.list",
+        {
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                    "query": query,
+                    "fields": fields,
+                }
+            )
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]
@@ -537,7 +567,7 @@ def test_search_user(
     ],
 )
 def test_get_users_overview(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -561,10 +591,10 @@ def test_get_users_overview(
     if div_max is not None:
         params["div_max"] = div_max
 
-    response = client.get(f"{config.settings.api_v1_str}/users/overview", params=params)
-    assert response.status_code == 200
+    env = rpc.call_sync("rpc.app.users.overview", {"query": build_query(params)})
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert "results" in content
@@ -591,23 +621,22 @@ def test_get_users_overview(
             assert any(div_min <= role_row["division"] <= max_division for role_row in first["roles"])
 
 
-def test_get_users_overview_invalid_division_range(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/overview",
-        params={"div_min": 15, "div_max": 5},
+def test_get_users_overview_invalid_division_range(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.overview",
+        {"query": build_query({"div_min": 15, "div_max": 5})},
     )
-    assert response.status_code == 400
-    content = response.json()
-    assert content["detail"][0]["code"] == "invalid_filter"
+    assert env["ok"] is False
+    assert env["error"]["code"] == "bad_request"
 
 
 @pytest.mark.parametrize(("user_id",), [(599,), (79,)])
 @pytest.mark.db
-def test_get_user_compare_global(client: TestClient, user_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{user_id}/compare")
-    assert response.status_code == 200
+def test_get_user_compare_global(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.compare", {"id": user_id})
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["subject"]["id"] == user_id
     assert content["baseline"]["mode"] == "global"
     assert content["baseline"]["sample_size"] >= 1
@@ -616,14 +645,14 @@ def test_get_user_compare_global(client: TestClient, user_id: int) -> None:
 
 
 @pytest.mark.db
-def test_get_user_compare_target_user(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/599/compare",
-        params={"baseline": "target_user", "target_user_id": 79},
+def test_get_user_compare_target_user(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.compare",
+        {"id": 599, "query": build_query({"baseline": "target_user", "target_user_id": 79})},
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["subject"]["id"] == 599
     assert content["baseline"]["mode"] == "target_user"
     assert content["baseline"]["sample_size"] == 1
@@ -633,19 +662,24 @@ def test_get_user_compare_target_user(client: TestClient) -> None:
 
 
 @pytest.mark.db
-def test_get_user_compare_cohort(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/599/compare",
-        params={
-            "baseline": "cohort",
-            "role": "Damage",
-            "div_min": 8,
-            "div_max": 20,
+def test_get_user_compare_cohort(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.compare",
+        {
+            "id": 599,
+            "query": build_query(
+                {
+                    "baseline": "cohort",
+                    "role": "Damage",
+                    "div_min": 8,
+                    "div_max": 20,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["baseline"]["mode"] == "cohort"
     assert content["baseline"]["role"] == "Damage"
     assert content["baseline"]["div_min"] == 8
@@ -655,22 +689,27 @@ def test_get_user_compare_cohort(client: TestClient) -> None:
 
 
 @pytest.mark.db
-def test_get_user_compare_cohort_scopes_average_placement_to_matching_division(client: TestClient, db: Session) -> None:
+def test_get_user_compare_cohort_scopes_average_placement_to_matching_division(rpc: RpcHarness, db: Session) -> None:
     _skip_if_compare_test_db_unavailable(db)
     fixture = _ensure_compare_division_fixture(db)
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{fixture['subject_user_id']}/compare",
-        params={
-            "baseline": "cohort",
-            "role": fixture["role"],
-            "div_min": fixture["division"],
-            "div_max": fixture["division"],
+    env = rpc.call_sync(
+        "rpc.app.users.compare",
+        {
+            "id": fixture["subject_user_id"],
+            "query": build_query(
+                {
+                    "baseline": "cohort",
+                    "role": fixture["role"],
+                    "div_min": fixture["division"],
+                    "div_max": fixture["division"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     metric = _get_compare_metric(content, "avg_placement")
 
     assert content["baseline"]["sample_size"] == 2
@@ -679,30 +718,35 @@ def test_get_user_compare_cohort_scopes_average_placement_to_matching_division(c
 
 
 @pytest.mark.db
-def test_get_user_hero_compare(client: TestClient) -> None:
-    left_heroes_response = client.get(f"{config.settings.api_v1_str}/users/599/heroes", params={"per_page": 1})
-    right_heroes_response = client.get(f"{config.settings.api_v1_str}/users/79/heroes", params={"per_page": 1})
-    assert left_heroes_response.status_code == 200
-    assert right_heroes_response.status_code == 200
+def test_get_user_hero_compare(rpc: RpcHarness) -> None:
+    left_env = rpc.call_sync("rpc.app.users.heroes", {"id": 599, "query": build_query({"per_page": 1})})
+    right_env = rpc.call_sync("rpc.app.users.heroes", {"id": 79, "query": build_query({"per_page": 1})})
+    assert left_env["ok"] is True
+    assert right_env["ok"] is True
 
-    left_heroes = left_heroes_response.json()["results"]
-    right_heroes = right_heroes_response.json()["results"]
+    left_heroes = left_env["data"]["results"]
+    right_heroes = right_env["data"]["results"]
     assert left_heroes
     assert right_heroes
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/599/compare/heroes",
-        params={
-            "baseline": "target_user",
-            "target_user_id": 79,
-            "left_hero_id": left_heroes[0]["hero"]["id"],
-            "right_hero_id": right_heroes[0]["hero"]["id"],
-            "stats": ["eliminations", "final_blows", "hero_damage_dealt", "healing_dealt"],
+    env = rpc.call_sync(
+        "rpc.app.users.compare_heroes",
+        {
+            "id": 599,
+            "query": build_query(
+                {
+                    "baseline": "target_user",
+                    "target_user_id": 79,
+                    "left_hero_id": left_heroes[0]["hero"]["id"],
+                    "right_hero_id": right_heroes[0]["hero"]["id"],
+                    "stats": ["eliminations", "final_blows", "hero_damage_dealt", "healing_dealt"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["subject"]["id"] == 599
     assert content["target"] is not None
     assert content["target"]["id"] == 79
@@ -716,25 +760,30 @@ def test_get_user_hero_compare(client: TestClient) -> None:
 
 
 @pytest.mark.db
-def test_get_user_hero_compare_cohort_scopes_stats_to_matching_division(client: TestClient, db: Session) -> None:
+def test_get_user_hero_compare_cohort_scopes_stats_to_matching_division(rpc: RpcHarness, db: Session) -> None:
     _skip_if_compare_test_db_unavailable(db)
     fixture = _ensure_compare_division_fixture(db)
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{fixture['subject_user_id']}/compare/heroes",
-        params={
-            "baseline": "cohort",
-            "role": fixture["role"],
-            "div_min": fixture["division"],
-            "div_max": fixture["division"],
-            "left_hero_id": fixture["hero_id"],
-            "right_hero_id": fixture["hero_id"],
-            "stats": ["eliminations"],
+    env = rpc.call_sync(
+        "rpc.app.users.compare_heroes",
+        {
+            "id": fixture["subject_user_id"],
+            "query": build_query(
+                {
+                    "baseline": "cohort",
+                    "role": fixture["role"],
+                    "div_min": fixture["division"],
+                    "div_max": fixture["division"],
+                    "left_hero_id": fixture["hero_id"],
+                    "right_hero_id": fixture["hero_id"],
+                    "stats": ["eliminations"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     metric = content["metrics"][0]
 
     assert content["baseline"]["sample_size"] == 2
@@ -744,23 +793,28 @@ def test_get_user_hero_compare_cohort_scopes_stats_to_matching_division(client: 
 
 
 @pytest.mark.db
-def test_get_user_hero_compare_includes_performance_without_hero_filter(client: TestClient, db: Session) -> None:
+def test_get_user_hero_compare_includes_performance_without_hero_filter(rpc: RpcHarness, db: Session) -> None:
     _skip_if_compare_test_db_unavailable(db)
     fixture = _ensure_compare_division_fixture(db)
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{fixture['subject_user_id']}/compare/heroes",
-        params={
-            "baseline": "cohort",
-            "role": fixture["role"],
-            "div_min": fixture["division"],
-            "div_max": fixture["division"],
-            "stats": ["performance"],
+    env = rpc.call_sync(
+        "rpc.app.users.compare_heroes",
+        {
+            "id": fixture["subject_user_id"],
+            "query": build_query(
+                {
+                    "baseline": "cohort",
+                    "role": fixture["role"],
+                    "div_min": fixture["division"],
+                    "div_max": fixture["division"],
+                    "stats": ["performance"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert len(content["metrics"]) == 1
     metric = content["metrics"][0]
 
@@ -770,17 +824,22 @@ def test_get_user_hero_compare_includes_performance_without_hero_filter(client: 
 
 
 @pytest.mark.db
-def test_get_user_hero_compare_global_baseline(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/599/compare/heroes",
-        params={
-            "baseline": "global",
-            "stats": ["eliminations", "final_blows"],
+def test_get_user_hero_compare_global_baseline(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.compare_heroes",
+        {
+            "id": 599,
+            "query": build_query(
+                {
+                    "baseline": "global",
+                    "stats": ["eliminations", "final_blows"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert content["subject"]["id"] == 599
     assert content["target"] is None
     assert content["baseline"]["mode"] == "global"
@@ -789,17 +848,22 @@ def test_get_user_hero_compare_global_baseline(client: TestClient) -> None:
 
 
 @pytest.mark.db
-def test_get_user_hero_compare_ascending_stat_better_worse(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/599/compare/heroes",
-        params={
-            "baseline": "global",
-            "stats": ["deaths"],
+def test_get_user_hero_compare_ascending_stat_better_worse(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.compare_heroes",
+        {
+            "id": 599,
+            "query": build_query(
+                {
+                    "baseline": "global",
+                    "stats": ["deaths"],
+                }
+            ),
         },
     )
-    assert response.status_code == 200
+    assert env["ok"] is True
 
-    content = response.json()
+    content = env["data"]
     assert len(content["metrics"]) == 1
 
     metric = content["metrics"][0]
@@ -835,10 +899,13 @@ def test_get_user_hero_compare_ascending_stat_better_worse(client: TestClient) -
         ("marmeladka-21557", ["battle_tag", "discord", "twitch"]),
     ],
 )
-def test_get_user_by_name(client: TestClient, name: str, entities: list[str]) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{name}", params={"entities": entities})
-    assert response.status_code == 200
-    content = response.json()
+def test_get_user_by_name(rpc: RpcHarness, name: str, entities: list[str]) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.by_name",
+        {"name": name, "query": build_query({"entities": entities})},
+    )
+    assert env["ok"] is True
+    content = env["data"]
     assert content["name"] == name.replace("-", "#")
     if "battle_tag" in entities:
         assert content["battle_tag"] != []
@@ -855,10 +922,10 @@ def test_get_user_by_name(client: TestClient, name: str, entities: list[str]) ->
         (583,),
     ],
 )
-def test_get_user_profile(client: TestClient, user_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{user_id}/profile")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_user_profile(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.get_profile", {"id": user_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content["tournaments"].__len__() >= 0
 
 
@@ -871,10 +938,10 @@ def test_get_user_profile(client: TestClient, user_id: int) -> None:
         (583,),
     ],
 )
-def test_get_user_tournaments(client: TestClient, user_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{user_id}/tournaments")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_user_tournaments(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.tournaments", {"id": user_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content.__len__() >= 0
 
 
@@ -887,10 +954,10 @@ def test_get_user_tournaments(client: TestClient, user_id: int) -> None:
         (583, 18),
     ],
 )
-def test_get_user_tournament(client: TestClient, user_id: int, tournament_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{user_id}/tournaments/{tournament_id}")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_user_tournament(rpc: RpcHarness, user_id: int, tournament_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.tournament", {"id": user_id, "tournament_id": tournament_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content.__len__() >= 0
 
 
@@ -903,11 +970,10 @@ def test_get_user_tournament(client: TestClient, user_id: int, tournament_id: in
         (583, 14),
     ],
 )
-def test_get_user_tournament_not_found(client: TestClient, user_id: int, tournament_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/users/{user_id}/tournaments/{tournament_id}")
-    assert response.status_code == 404
-    content = response.json()
-    assert content["detail"][0]["code"] == "not_found"
+def test_get_user_tournament_not_found(rpc: RpcHarness, user_id: int, tournament_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.tournament", {"id": user_id, "tournament_id": tournament_id})
+    assert env["ok"] is False
+    assert env["error"]["code"] == "not_found"
 
 
 @pytest.mark.parametrize(
@@ -924,7 +990,7 @@ def test_get_user_tournament_not_found(client: TestClient, user_id: int, tournam
     ],
 )
 def test_get_user_maps(
-    client: TestClient,
+    rpc: RpcHarness,
     user_id: int,
     page: int,
     per_page: int,
@@ -932,18 +998,23 @@ def test_get_user_maps(
     order: str,
     entities: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/maps",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
+    env = rpc.call_sync(
+        "rpc.app.users.maps",
+        {
+            "id": user_id,
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
 
@@ -965,19 +1036,16 @@ def test_get_user_maps(
         (79, [], 1),
     ],
 )
-def test_get_user_maps_summary(client: TestClient, user_id: int, entities: list[str], min_count: int | None) -> None:
+def test_get_user_maps_summary(rpc: RpcHarness, user_id: int, entities: list[str], min_count: int | None) -> None:
     params: dict[str, object] = {
         "entities": entities,
     }
     if min_count is not None:
         params["min_count"] = min_count
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/maps/summary",
-        params=params,
-    )
-    assert response.status_code == 200
-    content = response.json()
+    env = rpc.call_sync("rpc.app.users.maps_summary", {"id": user_id, "query": build_query(params)})
+    assert env["ok"] is True
+    content = env["data"]
 
     assert "overall" in content
     assert "total_maps" in content["overall"]
@@ -1009,7 +1077,7 @@ def test_get_user_maps_summary(client: TestClient, user_id: int, entities: list[
     ],
 )
 def test_get_user_encounters(
-    client: TestClient,
+    rpc: RpcHarness,
     user_id: int,
     page: int,
     per_page: int,
@@ -1017,18 +1085,23 @@ def test_get_user_encounters(
     order: str,
     entities: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/encounters",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
+    env = rpc.call_sync(
+        "rpc.app.users.encounters",
+        {
+            "id": user_id,
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
 
@@ -1057,11 +1130,9 @@ def test_get_user_encounters(
 
 
 @pytest.mark.parametrize(("user_id",), [(599,), (79,), (461,), (583,)])
-def test_get_user_heroes(client: TestClient, user_id: int) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/heroes",
-    )
-    assert response.status_code == 200
+def test_get_user_heroes(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync("rpc.app.users.heroes", {"id": user_id})
+    assert env["ok"] is True
 
 
 @pytest.mark.parametrize(
@@ -1105,18 +1176,23 @@ def test_get_user_heroes(client: TestClient, user_id: int) -> None:
         (583, 1, 25, "winrate", "asc"),
     ],
 )
-def test_get_user_teammates(client: TestClient, user_id: int, page: int, per_page: int, sort: str, order: str) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/teammates",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
+def test_get_user_teammates(rpc: RpcHarness, user_id: int, page: int, per_page: int, sort: str, order: str) -> None:
+    env = rpc.call_sync(
+        "rpc.app.users.teammates",
+        {
+            "id": user_id,
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
 
@@ -1127,9 +1203,10 @@ def test_get_user_teammates(client: TestClient, user_id: int, page: int, per_pag
             assert content["results"][0]["winrate"] <= content["results"][-1]["winrate"]
 
 
-def test_get_user_heroes_with_stats(client: TestClient) -> None:
+def test_get_user_heroes_with_stats(rpc: RpcHarness) -> None:
     user_id = 599
-    response = client.get(
-        f"{config.settings.api_v1_str}/users/{user_id}/heroes", params={"stats": ["deaths", "eliminations"]}
+    env = rpc.call_sync(
+        "rpc.app.users.heroes",
+        {"id": user_id, "query": build_query({"stats": ["deaths", "eliminations"]})},
     )
-    assert response.status_code == 200
+    assert env["ok"] is True

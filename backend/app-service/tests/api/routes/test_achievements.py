@@ -1,6 +1,19 @@
+"""RPC-handler tests for the achievements surface.
+
+Targets:
+- list  -> ``rpc.app.read.list``  (entity=achievement, shared CRUD read engine)
+- get   -> ``rpc.app.read.get``   (entity=achievement)
+- user  -> ``rpc.app.achievements.user``
+
+Replaces the former HTTP-client tests; the deployed app-service is the
+headless RPC worker. Assertions mirror the old HTTP tests against the envelope
+``data``; the conflict case (HTTP 400) maps to the envelope ``error.code`` =
+``bad_request`` (the gateway maps 400 -> bad_request).
+"""
+
 import pytest
-from fastapi.testclient import TestClient
-from src.core import config
+
+from tests.conftest import RpcHarness, build_query
 
 
 @pytest.mark.parametrize(
@@ -13,7 +26,7 @@ from src.core import config
     ],
 )
 def test_search_achievement(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -22,20 +35,25 @@ def test_search_achievement(
     query: str,
     fields: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/achievements",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
-            "query": query,
-            "fields": fields,
+    env = rpc.call_sync(
+        "rpc.app.read.list",
+        {
+            "entity": "achievement",
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                    "query": query,
+                    "fields": fields,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]
@@ -54,10 +72,10 @@ def test_search_achievement(
         (5,),
     ],
 )
-def test_get_achievement_by_id(client: TestClient, achievement_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/achievements/{achievement_id}")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_achievement_by_id(rpc: RpcHarness, achievement_id: int) -> None:
+    env = rpc.call_sync("rpc.app.read.get", {"entity": "achievement", "id": achievement_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content["id"] == achievement_id
 
 
@@ -70,10 +88,10 @@ def test_get_achievement_by_id(client: TestClient, achievement_id: int) -> None:
         (583,),
     ],
 )
-def test_get_achievement_by_user(client: TestClient, user_id: int) -> None:
-    response = client.get(f"{config.settings.api_v1_str}/achievements/user/{user_id}")
-    assert response.status_code == 200
-    content = response.json()
+def test_get_achievement_by_user(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync("rpc.app.achievements.user", {"id": user_id})
+    assert env["ok"] is True
+    content = env["data"]
     assert content.__len__() > 0
 
 
@@ -86,13 +104,13 @@ def test_get_achievement_by_user(client: TestClient, user_id: int) -> None:
         (583,),
     ],
 )
-def test_get_achievement_by_user_filter_without_tournament(client: TestClient, user_id: int) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/achievements/user/{user_id}",
-        params={"without_tournament": True},
+def test_get_achievement_by_user_filter_without_tournament(rpc: RpcHarness, user_id: int) -> None:
+    env = rpc.call_sync(
+        "rpc.app.achievements.user",
+        {"id": user_id, "query": build_query({"without_tournament": True})},
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
 
     for achievement in content:
         assert achievement["tournaments_ids"] == []
@@ -107,10 +125,10 @@ def test_get_achievement_by_user_filter_without_tournament(client: TestClient, u
         (583,),
     ],
 )
-def test_get_achievement_by_user_filter_tournament(client: TestClient, user_id: int) -> None:
-    initial_response = client.get(f"{config.settings.api_v1_str}/achievements/user/{user_id}")
-    assert initial_response.status_code == 200
-    initial_content = initial_response.json()
+def test_get_achievement_by_user_filter_tournament(rpc: RpcHarness, user_id: int) -> None:
+    initial_env = rpc.call_sync("rpc.app.achievements.user", {"id": user_id})
+    assert initial_env["ok"] is True
+    initial_content = initial_env["data"]
 
     tournament_id = None
     for achievement in initial_content:
@@ -121,20 +139,22 @@ def test_get_achievement_by_user_filter_tournament(client: TestClient, user_id: 
     if tournament_id is None:
         tournament_id = -1
 
-    response = client.get(
-        f"{config.settings.api_v1_str}/achievements/user/{user_id}",
-        params={"tournament_id": tournament_id},
+    env = rpc.call_sync(
+        "rpc.app.achievements.user",
+        {"id": user_id, "query": build_query({"tournament_id": tournament_id})},
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
 
     for achievement in content:
         assert tournament_id in achievement["tournaments_ids"]
 
 
-def test_get_achievement_by_user_filter_conflict(client: TestClient) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/achievements/user/599",
-        params={"tournament_id": 1, "without_tournament": True},
+def test_get_achievement_by_user_filter_conflict(rpc: RpcHarness) -> None:
+    env = rpc.call_sync(
+        "rpc.app.achievements.user",
+        {"id": 599, "query": build_query({"tournament_id": 1, "without_tournament": True})},
     )
-    assert response.status_code == 400
+    # HTTP 400 (ApiHTTPException invalid_request) -> envelope error.code bad_request.
+    assert env["ok"] is False
+    assert env["error"]["code"] == "bad_request"

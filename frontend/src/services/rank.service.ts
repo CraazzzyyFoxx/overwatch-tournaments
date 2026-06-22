@@ -21,7 +21,7 @@ export default class rankService {
     userId: number,
     params: RankHistoryQuery = {}
   ): Promise<RankHistoryResponse> {
-    return apiFetch("parser", `users/${userId}/rank-history`, {
+    return apiFetch(`/api/v1/users/${userId}/rank-history`, {
       query: historyQuery(params),
       skipWorkspace: true
     }).then((res) => res.json());
@@ -31,7 +31,7 @@ export default class rankService {
     battleTagId: number,
     params: RankHistoryQuery = {}
   ): Promise<RankHistoryResponse> {
-    return apiFetch("parser", `battle-tags/${battleTagId}/rank-history`, {
+    return apiFetch(`/api/v1/battle-tags/${battleTagId}/rank-history`, {
       query: historyQuery(params),
       skipWorkspace: true
     }).then((res) => res.json());
@@ -41,7 +41,7 @@ export default class rankService {
     userId: number,
     platform?: "pc" | "console"
   ): Promise<CurrentRanksResponse> {
-    return apiFetch("parser", `users/${userId}/current-ranks`, {
+    return apiFetch(`/api/v1/users/${userId}/current-ranks`, {
       query: { platform },
       skipWorkspace: true
     }).then((res) => res.json());

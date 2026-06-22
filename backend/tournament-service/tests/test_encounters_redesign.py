@@ -7,7 +7,7 @@ from typing import cast
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 backend_root = Path(__file__).resolve().parents[2]

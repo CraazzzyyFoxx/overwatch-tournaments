@@ -87,7 +87,7 @@ export default function AdminDashboard() {
   const statsQuery = useQuery({
     queryKey: ["admin", "dashboard", "stats"],
     queryFn: () =>
-      apiFetch("app", "statistics/dashboard").then(
+      apiFetch("/api/v1/statistics/dashboard").then(
         (r) => r.json() as Promise<DashboardStats>,
       ),
   });

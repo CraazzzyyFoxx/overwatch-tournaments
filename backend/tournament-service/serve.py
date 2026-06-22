@@ -1,6 +1,5 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from shared.messaging.config import (
     TOURNAMENT_BRACKET_JOBS_DLQ,
@@ -12,6 +11,7 @@ from shared.messaging.config import (
 from shared.messaging.outbox import publish_pending_outbox_events
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
+    make_rabbit_broker,
     observe_message_processing,
     setup_logging,
     setup_sentry,
@@ -21,26 +21,53 @@ from shared.observability import (
 from shared.schemas.events import TournamentComputationJobEvent
 
 from src.core import config, db
+from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
+from src.rpc import admin_misc, integrations, public_rpc, reads as rpc_reads, registration_admin, stage_admin
+from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
+
+# Import for side effects: registers the SQLAlchemy after-commit listeners that
+# publish encounter map-veto realtime signals (encounter:{id}:map-veto).
+from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.registration import admin as registration_service
+from src.services.tournament import recalculation_events
 
 logger = setup_logging(
-    service_name="tournament-worker",
+    service_name="tournament-svc",
     log_level=config.settings.log_level,
     logs_root_path=config.settings.logs_root_path,
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
+
+# Expose the worker broker to event publishers that don't thread one through
+# (e.g. standings-invalidation enqueues from the bracket/standings workers).
+set_worker_broker(broker)
 
 # The cashews cache is a process-global singleton; the worker must configure it
 # (like the API does) or after-commit cache invalidation raises NotConfiguredError.
 configure_cache()
+
+# Typed read RPC methods served by the gateway (rpc.tournament.*).
+rpc_reads.register(broker, logger)
+# Generic admin CRUD (rpc.tournament.admin.*) via the shared engine.
+admin_registry.register(broker)
+# Bespoke admin + integrations + division-grid typed RPC.
+admin_misc.register(broker, logger)
+registration_admin.register(broker, logger)
+integrations.register(broker, logger)
+stage_admin.register(broker, logger)
+public_rpc.register(broker, logger)
+# Recalculation-event consumers (tournament.changed / standings.invalidated).
+# Previously mounted by the deleted HTTP main.py; the worker now hosts them so
+# cache invalidation + standings recalculation run on those domain events.
+broker.include_router(recalculation_events.task_router)
 
 
 async def drain_outbox() -> None:
@@ -71,7 +98,7 @@ async def start_worker() -> None:
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
         profiles_sample_rate=config.settings.sentry_profiles_sample_rate,
-        service_name="tournament-worker",
+        service_name="tournament-svc",
         enable_logs=config.settings.sentry_enable_logs,
         logs_level=config.settings.sentry_logs_level,
         enable_metrics=config.settings.sentry_enable_metrics,
@@ -81,7 +108,7 @@ async def start_worker() -> None:
         https_proxy=config.settings.sentry_https_proxy_url,
     )
     setup_tracing(
-        service_name="tournament-worker",
+        service_name="tournament-svc",
         otlp_endpoint=config.settings.otlp_endpoint,
         enabled=config.settings.tracing_enabled,
         sampler_name=config.settings.otel_traces_sampler,

@@ -1,8 +1,8 @@
+import { authServiceBase } from "@/lib/api-routes";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+const AUTH_SERVICE_URL = authServiceBase();
 
 type RouteContext = {
   params: Promise<{ apiKeyId: string }>;

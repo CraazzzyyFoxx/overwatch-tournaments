@@ -2,12 +2,14 @@
 
 from typing import Any
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.core.enums import MapPickSide, MapPoolEntryStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+from src.services.encounter.realtime_commit import register_map_veto_realtime_update
 
 
 async def get_veto_config(session: AsyncSession, encounter: models.Encounter) -> models.MapVetoConfig | None:
@@ -141,6 +143,7 @@ async def auto_complete_decider(
     if entry is None:
         return None
 
+    register_map_veto_realtime_update(session, encounter_id)
     await session.commit()
     await session.refresh(entry)
     return entry
@@ -316,6 +319,7 @@ async def perform_veto_action(
         pick_order = sum(1 for e in pool if e.status == MapPoolEntryStatus.PICKED)
         entry.order = pick_order
 
+    register_map_veto_realtime_update(session, encounter_id)
     await session.commit()
     await session.refresh(entry)
     await auto_complete_decider(

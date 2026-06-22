@@ -15,7 +15,7 @@ export default class tournamentService {
     workspaceId?: number | null,
     isLeague?: boolean | null
   ): Promise<LookupItem[]> {
-    return apiFetch("tournament", "tournaments/lookup", {
+    return apiFetch("/api/v1/tournaments/lookup", {
       query: {
         workspace_id: workspaceId,
         is_league: isLeague
@@ -27,7 +27,7 @@ export default class tournamentService {
     isLeague: boolean | null = null,
     workspaceId?: number | null
   ): Promise<PaginatedResponse<Tournament>> {
-    return apiFetch("tournament", `tournaments`, {
+    return apiFetch(`/api/v1/tournaments`, {
       query: {
         is_league: isLeague,
         workspace_id: workspaceId,
@@ -42,7 +42,7 @@ export default class tournamentService {
       .then((response: PaginatedResponse<Tournament>) => normalizePaginatedResponse(response));
   }
   static async getOwalSeasons(workspaceId?: number | null): Promise<string[]> {
-    return apiFetch("tournament", `tournaments/league/seasons`, {
+    return apiFetch(`/api/v1/tournaments/league/seasons`, {
       query: { workspace_id: workspaceId }
     }).then((response) => response.json());
   }
@@ -51,7 +51,7 @@ export default class tournamentService {
     season?: string,
     workspaceId?: number | null
   ): Promise<OwalStandings> {
-    return apiFetch("tournament", `tournaments/league/results`, {
+    return apiFetch(`/api/v1/tournaments/league/results`, {
       query: {
         season,
         workspace_id: workspaceId
@@ -60,7 +60,7 @@ export default class tournamentService {
   }
 
   static async getOwalStacks(season?: string, workspaceId?: number | null): Promise<OwalStack[]> {
-    return apiFetch("tournament", `tournaments/league/stacks`, {
+    return apiFetch(`/api/v1/tournaments/league/stacks`, {
       query: {
         season,
         workspace_id: workspaceId
@@ -68,7 +68,7 @@ export default class tournamentService {
     }).then((response) => response.json());
   }
   static async getActive(): Promise<PaginatedResponse<Tournament>> {
-    return apiFetch("tournament", `tournaments`, {
+    return apiFetch(`/api/v1/tournaments`, {
       skipWorkspace: true,
       query: {
         page: 1,
@@ -83,7 +83,7 @@ export default class tournamentService {
   }
 
   static async get(id: number): Promise<Tournament> {
-    return apiFetch("tournament", `tournaments/${id}`, {
+    return apiFetch(`/api/v1/tournaments/${id}`, {
       query: {
         entities: ["participants_count", "registrations_count"]
       }
@@ -109,7 +109,7 @@ export default class tournamentService {
       entities.push("team.group");
     }
 
-    return apiFetch("tournament", `tournaments/${id}/standings`, {
+    return apiFetch(`/api/v1/tournaments/${id}/standings`, {
       query: {
         workspace_id: options.workspaceId,
         entities
@@ -118,6 +118,6 @@ export default class tournamentService {
   }
 
   static async getStages(id: number): Promise<Stage[]> {
-    return apiFetch("tournament", `tournaments/${id}/stages`).then((response) => response.json());
+    return apiFetch(`/api/v1/tournaments/${id}/stages`).then((response) => response.json());
   }
 }

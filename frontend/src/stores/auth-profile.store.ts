@@ -85,13 +85,30 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
 
       // If 401, attempt token refresh and retry once
       if (res.status === 401 && typeof window !== "undefined") {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
+        const outcome = await refreshAccessToken();
+        if (outcome.status === "refreshed") {
           res = await fetch("/api/auth/me", {
             method: "GET",
-            headers: { Authorization: `Bearer ${newToken}` },
+            headers: { Authorization: `Bearer ${outcome.token}` },
           });
+        } else if (outcome.status === "error") {
+          // Transient refresh failure (network / 5xx). Don't flip an already
+          // known auth state to anonymous. On the very first load there is no
+          // prior state to preserve, so surface an "error" status (recoverable
+          // on the next focus/visibility revalidation, since the freshness guard
+          // never short-circuits "error") instead of getting stuck in "loading".
+          if (isInitialLoad) {
+            set({
+              status: "error",
+              user: undefined,
+              error: "Failed to refresh session",
+              lastFetchedAt: Date.now(),
+            });
+          }
+          return;
         }
+        // outcome === "unauthenticated": fall through — res is still 401 and we
+        // set the anonymous state below.
       }
 
       const fetchedAt = Date.now();

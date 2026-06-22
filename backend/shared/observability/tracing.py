@@ -5,7 +5,6 @@ from __future__ import annotations
 from loguru import logger
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -63,15 +62,6 @@ def setup_tracing(
         )
     except Exception as exc:
         logger.error(f"Failed to setup OpenTelemetry: {exc}")
-
-
-def instrument_fastapi(app) -> None:
-    """Instrument a FastAPI app for automatic tracing."""
-    try:
-        FastAPIInstrumentor.instrument_app(app)
-        logger.debug("FastAPI instrumented for tracing")
-    except Exception as exc:
-        logger.error(f"Failed to instrument FastAPI: {exc}")
 
 
 def instrument_sqlalchemy(engine) -> None:

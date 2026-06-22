@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Any, Generic, TypedDict, TypeVar
 
 import sqlalchemy as sa
-from fastapi import Query
 from pydantic import BaseModel, Field
 from sqlalchemy import UnaryExpression
 from sqlalchemy.orm import InstrumentedAttribute
@@ -66,7 +65,7 @@ def apply_search(
 class PaginationQueryParams(BaseModel):
     page: int = Field(default=1, ge=1)
     per_page: int = Field(default=10, ge=-1, le=100)
-    entities: list[str] = Field(Query(default=[]))
+    entities: list[str] = Field(default_factory=list)
     only_count: bool = Field(default=False)
 
 
@@ -77,7 +76,7 @@ class PaginationSortQueryParams(PaginationQueryParams, Generic[SortType]):
 
 class PaginationSortSearchQueryParams(PaginationSortQueryParams):
     query: str = Field("")
-    fields: list[str] = Field(Query(default=[]))
+    fields: list[str] = Field(default_factory=list)
 
     def apply_search(self, query: sa.Select, model: type[Base]) -> sa.Select:
         return apply_search(model, query, self.query, self.fields)

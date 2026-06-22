@@ -107,7 +107,7 @@ export default function MapsAdminPage() {
   const { data: gamemodesData } = useQuery({
     queryKey: ["gamemodes"],
     queryFn: async () => {
-      const response = await apiFetch("app","/gamemodes");
+      const response = await apiFetch("/api/v1/gamemodes");
       const data = (await response.json()) as PaginatedResponse<Gamemode>;
       return data.results;
     },

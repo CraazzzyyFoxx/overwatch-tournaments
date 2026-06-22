@@ -21,26 +21,26 @@ function buildWorkspaceOpts(opts?: StatsOpts) {
 
 export default class statisticsService {
   static async getTournaments(opts?: StatsOpts): Promise<TournamentStatistics[]> {
-    return apiFetch("tournament", "tournaments/statistics/history", buildWorkspaceOpts(opts)).then(
+    return apiFetch("/api/v1/tournaments/statistics/history", buildWorkspaceOpts(opts)).then(
       (res) => res.json()
     );
   }
 
   static async getTournamentsDivision(opts?: StatsOpts): Promise<TournamentDivisionStatistics[]> {
-    return apiFetch("tournament", "tournaments/statistics/division", buildWorkspaceOpts(opts)).then(
+    return apiFetch("/api/v1/tournaments/statistics/division", buildWorkspaceOpts(opts)).then(
       (res) => res.json()
     );
   }
 
   static async getOverallStatistics(opts?: StatsOpts): Promise<TournamentOverall> {
-    return apiFetch("tournament", "tournaments/statistics/overall", buildWorkspaceOpts(opts)).then(
+    return apiFetch("/api/v1/tournaments/statistics/overall", buildWorkspaceOpts(opts)).then(
       (res) => res.json()
     );
   }
 
   static async getChampions(opts?: StatsOpts): Promise<PaginatedResponse<PlayerStatistics>> {
     const base = buildWorkspaceOpts(opts);
-    return apiFetch("app", "statistics/champion", {
+    return apiFetch("/api/v1/statistics/champion", {
       ...base,
       query: { ...base.query, sort: "value", order: "desc" },
     }).then((res) => res.json());
@@ -48,7 +48,7 @@ export default class statisticsService {
 
   static async getTopWinratePlayers(opts?: StatsOpts): Promise<PaginatedResponse<PlayerStatistics>> {
     const base = buildWorkspaceOpts(opts);
-    return apiFetch("app", "statistics/winrate", {
+    return apiFetch("/api/v1/statistics/winrate", {
       ...base,
       query: { ...base.query, sort: "value", order: "desc" },
     }).then((res) => res.json());
@@ -56,7 +56,7 @@ export default class statisticsService {
 
   static async getTopWonMapsPlayers(opts?: StatsOpts): Promise<PaginatedResponse<PlayerStatistics>> {
     const base = buildWorkspaceOpts(opts);
-    return apiFetch("app", "statistics/won-maps", {
+    return apiFetch("/api/v1/statistics/won-maps", {
       ...base,
       query: { ...base.query, sort: "value", order: "desc" },
     }).then((res) => res.json());
