@@ -14,7 +14,6 @@ export type StandingsMode = "standings" | "movers" | "watch";
 
 interface StandingsListProps {
   teams: TeamVM[];
-  algorithmName?: string | null;
   selectedTeamId: number | null;
   onSelectTeam: (teamId: number) => void;
   mode: StandingsMode;
@@ -89,7 +88,6 @@ function RowHorizon({ team, maxPosition }: { team: TeamVM; maxPosition: number }
  */
 export default function StandingsList({
   teams,
-  algorithmName,
   selectedTeamId,
   onSelectTeam,
   mode,
@@ -110,15 +108,6 @@ export default function StandingsList({
 
   return (
     <div className={styles.cStandings}>
-      <div className={styles.cStandingsHead}>
-        <span className={styles.cStandingsTitle}>{t("analytics.community.standings.title")}</span>
-        {algorithmName ? (
-          <span className={styles.cStandingsBy}>
-            {t("analytics.community.standings.rankedBy", { algorithm: algorithmName })}
-          </span>
-        ) : null}
-      </div>
-
       <div className={styles.cSeg} role="tablist">
         {MODES.map((value) => (
           <button

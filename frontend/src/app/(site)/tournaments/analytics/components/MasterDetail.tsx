@@ -20,7 +20,6 @@ import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedes
 interface MasterDetailProps {
   tournamentId: number;
   teams: TeamVM[];
-  algorithmName?: string | null;
   canReadV2?: boolean;
   mode: StandingsMode;
   onModeChange: (mode: StandingsMode) => void;
@@ -52,7 +51,6 @@ function useMediaQuery(query: string): boolean {
 export default function MasterDetail({
   tournamentId,
   teams,
-  algorithmName,
   canReadV2,
   mode,
   onModeChange,
@@ -112,7 +110,6 @@ export default function MasterDetail({
   const list = (
     <StandingsList
       teams={teams}
-      algorithmName={algorithmName}
       selectedTeamId={isDesktop ? selection.selectedTeamId : null}
       onSelectTeam={selection.selectTeam}
       mode={mode}

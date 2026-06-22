@@ -277,7 +277,6 @@ const AnalyticsPage = () => {
               key={`${tournamentId}-${algorithmId}`}
               tournamentId={tournamentId}
               teams={viewModel.teams}
-              algorithmName={activeAlgorithm?.name}
               canReadV2={canReadV2}
               mode={standingsMode}
               onModeChange={setStandingsMode}

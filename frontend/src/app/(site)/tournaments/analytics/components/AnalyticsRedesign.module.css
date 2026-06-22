@@ -856,8 +856,10 @@
   --c-text: var(--aqt-fg);
   --c-muted: var(--aqt-fg-muted);
   --c-faint: var(--aqt-fg-dim);
-  --c-up: var(--aqt-emerald);
-  --c-up-dim: hsl(142 70% 50% / 0.15);
+  /* Positive/up green: match the design's established win/positive tone
+     (trendPositive/deltaUp/wins) instead of the brighter, yellower emerald. */
+  --c-up: hsl(146 60% 58%);
+  --c-up-dim: hsl(146 60% 58% / 0.16);
   --c-down: var(--aqt-rose);
   --c-down-dim: hsl(340 75% 58% / 0.15);
   --c-warn: var(--aqt-amber);
