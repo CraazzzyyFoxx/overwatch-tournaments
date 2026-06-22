@@ -9,20 +9,20 @@ import AnalyticsPicker from "@/app/(site)/tournaments/analytics/components/Analy
 import TournamentHero from "@/app/(site)/tournaments/analytics/components/TournamentHero";
 import VerdictBanner from "@/app/(site)/tournaments/analytics/components/VerdictBanner";
 import KpiRail from "@/app/(site)/tournaments/analytics/components/KpiRail";
-import PredictedActualHorizon from "@/app/(site)/tournaments/analytics/components/PredictedActualHorizon";
 import MasterDetail from "@/app/(site)/tournaments/analytics/components/MasterDetail";
+import { type StandingsMode } from "@/app/(site)/tournaments/analytics/components/StandingsList";
 import HowItWorksCard from "@/app/(site)/tournaments/analytics/components/HowItWorksCard";
 import BottomSheet, {
   type SheetState
 } from "@/app/(site)/tournaments/analytics/components/BottomSheet";
 import { type GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import OrganizerTools from "@/app/(site)/tournaments/analytics/components/OrganizerTools";
-import ExpertLayer from "@/app/(site)/tournaments/analytics/components/ExpertLayer";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
   canShowAnalyticsAdminToolbar,
   getPreferredAnalyticsAlgorithmId,
-  sortAnalyticsAlgorithms
+  sortAnalyticsAlgorithms,
+  type KpiId
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { useAnalyticsViewModel } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { cn } from "@/lib/utils";
@@ -115,8 +115,8 @@ const AnalyticsPage = () => {
     [performanceRows]
   );
 
-  // Monte Carlo standings distribution — same query key as
-  // StandingsDistributionCard so react-query serves both from one request.
+  // Monte Carlo standings distribution — woven into the team detail (and the
+  // organizer table view); gated to analytics.read viewers.
   const { data: standingsRows } = useQuery({
     queryKey: ["analytics-standings-distribution", tournamentId, undefined],
     queryFn: () => analyticsService.getStandingsDistribution(tournamentId!),
@@ -138,6 +138,15 @@ const AnalyticsPage = () => {
   const explain = useCallback((term: GlossaryTerm) => setSheet({ kind: "term", term }), []);
   const showHow = useCallback(() => setSheet({ kind: "how" }), []);
   const closeSheet = useCallback(() => setSheet(null), []);
+
+  // Standings sort/filter is lifted so the KPI cards can drive it (triage folds
+  // into the standings instead of a separate section).
+  const [standingsMode, setStandingsMode] = useState<StandingsMode>("standings");
+  const standingsRef = React.useRef<HTMLDivElement | null>(null);
+  const onKpiSelect = useCallback((id: KpiId) => {
+    setStandingsMode(id === "watch" ? "watch" : "movers");
+    standingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
@@ -203,19 +212,38 @@ const AnalyticsPage = () => {
 
   const isFiltersReady = !loadingTournaments && !loadingAlgorithms;
   const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
+  const picker = (
+    <AnalyticsPicker
+      tournaments={tournamentsData?.results ?? []}
+      algorithms={availableAlgorithms}
+      tournamentId={tournamentId}
+      algorithmId={algorithmId}
+      loadingTournaments={loadingTournaments}
+      loadingAlgorithms={loadingAlgorithms}
+      isErrorTournaments={isErrorTournaments}
+      isErrorAlgorithms={isErrorAlgorithms}
+      onTournamentChange={pushTournamentId}
+      onAlgorithmChange={pushAlgorithm}
+    />
+  );
+
   return (
     <div className={cn(styles.surface, styles.cRoot)}>
-      <AnalyticsPicker
-        tournaments={tournamentsData?.results ?? []}
-        algorithms={availableAlgorithms}
-        tournamentId={tournamentId}
-        algorithmId={algorithmId}
-        loadingTournaments={loadingTournaments}
-        loadingAlgorithms={loadingAlgorithms}
-        isErrorTournaments={isErrorTournaments}
-        isErrorAlgorithms={isErrorAlgorithms}
-        onTournamentChange={pushTournamentId}
-        onAlgorithmChange={pushAlgorithm}
+      {/* Persistent header: tournament identity + the pickers, folded together. */}
+      <TournamentHero
+        tournament={activeTournament}
+        algorithmName={activeAlgorithm?.name}
+        totals={
+          analytics && activeTournament
+            ? {
+                teams: analytics.summary.total_teams,
+                players: analytics.summary.total_players,
+                groups: viewModel?.groupCount ?? 0,
+                stages: activeTournament.stages?.length ?? 0
+              }
+            : null
+        }
+        pickerSlot={picker}
       />
 
       {canRecalculateAnalytics && tournamentId != null ? (
@@ -224,14 +252,7 @@ const AnalyticsPage = () => {
 
       {!isFiltersReady ? (
         <AnalyticsContentSkeleton />
-      ) : tournamentId == null || algorithmId == null ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("analytics.page.chooseParams")}</CardTitle>
-            <CardDescription>{t("analytics.page.chooseParamsDesc")}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : isErrorAnalytics ? (
+      ) : tournamentId == null || algorithmId == null ? null : isErrorAnalytics ? (
         <Card>
           <CardHeader>
             <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
@@ -247,45 +268,27 @@ const AnalyticsPage = () => {
             <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
           </CardHeader>
         </Card>
-      ) : (
+      ) : viewModel ? (
         <>
-          {activeTournament ? (
-            <TournamentHero
-              tournament={activeTournament}
-              algorithmName={activeAlgorithm?.name}
-              totals={{
-                teams: analytics.summary.total_teams,
-                players: analytics.summary.total_players,
-                groups: viewModel?.groupCount ?? 0,
-                stages: activeTournament.stages?.length ?? 0
-              }}
-            />
-          ) : null}
-          {viewModel ? <VerdictBanner verdict={viewModel.verdict} onExplain={explain} /> : null}
-          {viewModel ? <KpiRail kpis={viewModel.kpis} onExplain={explain} /> : null}
-          {viewModel ? (
-            <PredictedActualHorizon teams={viewModel.teams} onExplain={explain} />
-          ) : null}
-          {viewModel ? (
+          <VerdictBanner verdict={viewModel.verdict} onExplain={explain} />
+          <KpiRail kpis={viewModel.kpis} onExplain={explain} onSelect={onKpiSelect} />
+          <div ref={standingsRef}>
             <MasterDetail
               key={`${tournamentId}-${algorithmId}`}
+              tournamentId={tournamentId}
               teams={viewModel.teams}
               algorithmName={activeAlgorithm?.name}
               canReadV2={canReadV2}
-              onExplain={explain}
-            />
-          ) : null}
-          <HowItWorksCard onOpen={showHow} />
-          {canReadV2 ? (
-            <ExpertLayer
-              tournamentId={tournamentId}
-              teams={analytics.teams}
+              mode={standingsMode}
+              onModeChange={setStandingsMode}
               performanceByPlayer={performanceByPlayer}
               distributionByTeam={distributionByTeam}
+              onExplain={explain}
             />
-          ) : null}
+          </div>
+          <HowItWorksCard onOpen={showHow} />
         </>
-      )}
+      ) : null}
 
       <BottomSheet state={sheet} onClose={closeSheet} />
     </div>

@@ -1,21 +1,24 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { TeamVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
+import { formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import DeltaPill from "@/app/(site)/tournaments/analytics/components/DeltaPill";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
-type StandingsMode = "standings" | "movers" | "watch";
+export type StandingsMode = "standings" | "movers" | "watch";
 
 interface StandingsListProps {
   teams: TeamVM[];
   algorithmName?: string | null;
   selectedTeamId: number | null;
   onSelectTeam: (teamId: number) => void;
+  mode: StandingsMode;
+  onModeChange: (mode: StandingsMode) => void;
 }
 
 const MODES: StandingsMode[] = ["standings", "movers", "watch"];
@@ -36,20 +39,68 @@ function sortTeams(teams: TeamVM[], mode: StandingsMode): TeamVM[] {
   return [...teams].sort((a, b) => placementRank(a.placement) - placementRank(b.placement));
 }
 
+function moveColor(delta: number | null): string {
+  if (delta == null || delta === 0) return "var(--c-muted)";
+  return delta > 0 ? "var(--c-up)" : "var(--c-down)";
+}
+
+/** The per-row predicted → actual mini-connector — the horizon, inlined. */
+function RowHorizon({ team, maxPosition }: { team: TeamVM; maxPosition: number }) {
+  const { t, locale } = useTranslation();
+  const predicted = team.predicted_place;
+  const actual = team.placement;
+  if (predicted == null || actual == null || maxPosition < 2) {
+    return <span className={styles.cRowHz} aria-hidden="true" />;
+  }
+  const pos = (place: number) => ((place - 1) / (maxPosition - 1)) * 100;
+  const predictedPct = pos(predicted);
+  const actualPct = pos(actual);
+  const low = Math.min(predictedPct, actualPct);
+  const high = Math.max(predictedPct, actualPct);
+  const color = moveColor(team.placement_delta);
+
+  return (
+    <span className={styles.cRowHz}>
+      <span className={styles.cRowHzPred}>
+        {t("analytics.community.standings.predShort", { place: formatPlace(predicted, locale) })}
+      </span>
+      <span className={styles.cHorizonTrack}>
+        <span className={styles.cHorizonLine} />
+        {team.placement_delta != null && team.placement_delta !== 0 ? (
+          <span
+            className={styles.cHconn}
+            style={{ left: `${low}%`, width: `${high - low}%`, background: color }}
+          />
+        ) : null}
+        <span className={cn(styles.cHdot, styles.cHdotPred)} style={{ left: `${predictedPct}%` }} />
+        <span
+          className={styles.cHdot}
+          style={{ left: `${actualPct}%`, background: color, border: `2px solid ${color}` }}
+        />
+      </span>
+    </span>
+  );
+}
+
 /**
  * The community standings: a sortable list (Standings / Biggest movers / Watch
- * list) where each row selects a team for the detail panel. Replaces the dense
- * organizer table as the primary read surface.
+ * list) where each row carries its predicted→actual connector inline and
+ * selects a team for the detail panel. The single team spine of the page.
  */
 export default function StandingsList({
   teams,
   algorithmName,
   selectedTeamId,
   onSelectTeam,
+  mode,
+  onModeChange,
 }: StandingsListProps) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<StandingsMode>("standings");
   const rows = useMemo(() => sortTeams(teams, mode), [teams, mode]);
+  const maxPosition = useMemo(
+    () => teams.reduce((max, team) => Math.max(max, team.placement ?? 0), 0),
+    [teams],
+  );
 
   const modeLabel: Record<StandingsMode, string> = {
     standings: t("analytics.community.standings.sortStandings"),
@@ -77,7 +128,7 @@ export default function StandingsList({
             aria-selected={mode === value}
             data-on={mode === value}
             className={styles.cSegBtn}
-            onClick={() => setMode(value)}
+            onClick={() => onModeChange(value)}
           >
             {modeLabel[value]}
           </button>
@@ -126,6 +177,7 @@ export default function StandingsList({
                     ) : null}
                   </span>
                 </span>
+                <RowHorizon team={team} maxPosition={maxPosition} />
                 <DeltaPill delta={team.placement_delta} />
                 <ChevronRight className={styles.cChevron} size={16} aria-hidden="true" />
               </button>

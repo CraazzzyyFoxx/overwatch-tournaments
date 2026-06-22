@@ -780,7 +780,10 @@ export const en = {
         flagCountOne: "{count} flag",
         watchEmpty: "No watch flags right now — the bracket's clean.",
         group: "Grp {group}",
-        onForm: "on form"
+        onForm: "on form",
+        predShort: "pred {place}",
+        viewList: "List",
+        viewTable: "Table"
       },
       horizon: {
         title: "Predicted vs Actual",

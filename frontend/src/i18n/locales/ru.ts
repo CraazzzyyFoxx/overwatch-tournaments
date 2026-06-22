@@ -782,7 +782,10 @@ export const ru = {
         flagCountOne: "{count} флаг",
         watchEmpty: "Сейчас флагов нет — сетка чистая.",
         group: "Гр. {group}",
-        onForm: "ровно"
+        onForm: "ровно",
+        predShort: "прог. {place}",
+        viewList: "Список",
+        viewTable: "Таблица"
       },
       horizon: {
         title: "Прогноз и факт",

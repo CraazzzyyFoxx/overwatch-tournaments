@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { ArrowRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { sortTeamPlayers } from "@/utils/player";
+import { StandingsDistribution } from "@/types/analytics.types";
 import { formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { TeamVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
@@ -15,7 +17,8 @@ import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedes
 
 interface TeamDetailProps {
   team: TeamVM;
-  totalTeams: number;
+  /** Monte-Carlo distribution for this team (organizer-only; woven into detail). */
+  distribution?: StandingsDistribution;
   onSelectPlayer: (playerId: number) => void;
   onExplain?: (term: GlossaryTerm) => void;
 }
@@ -25,68 +28,69 @@ function moveColor(delta: number | null): string {
   return delta > 0 ? "var(--c-up)" : "var(--c-down)";
 }
 
-/** The single-row predicted → actual horizon for one team. */
-function TeamHorizon({ team, totalTeams }: { team: TeamVM; totalTeams: number }) {
-  const { t, locale } = useTranslation();
-  const predicted = team.predicted_place;
-  const actual = team.placement;
-  if (predicted == null || actual == null || totalTeams < 2) return null;
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
 
-  const pos = (place: number) => ((place - 1) / (totalTeams - 1)) * 100;
-  const predictedPct = pos(predicted);
-  const actualPct = pos(actual);
-  const low = Math.min(predictedPct, actualPct);
-  const high = Math.max(predictedPct, actualPct);
-  const color = moveColor(team.placement_delta);
+/** Compact Monte-Carlo block — woven into the team detail for organizers. */
+function MonteCarlo({ distribution }: { distribution: StandingsDistribution }) {
+  const { t } = useTranslation();
+  const bars = useMemo(() => {
+    const entries = Object.entries(distribution.position_histogram)
+      .map(([pos, count]) => ({ pos: Number(pos), count }))
+      .sort((a, b) => a.pos - b.pos);
+    const max = entries.reduce((m, e) => Math.max(m, e.count), 0) || 1;
+    return entries.map((e) => ({ ...e, height: Math.max(6, (e.count / max) * 100) }));
+  }, [distribution.position_histogram]);
 
   return (
-    <>
-      <div className={styles.cHorizonRow}>
-        <span className={styles.cHorizonEnd}>{t("analytics.community.horizon.scaleStart")}</span>
-        <span className={styles.cHorizonTrack}>
-          <span className={styles.cHorizonLine} />
-          {team.placement_delta != null && team.placement_delta !== 0 ? (
-            <span
-              className={styles.cHconn}
-              style={{ left: `${low}%`, width: `${high - low}%`, background: color }}
-            />
-          ) : null}
-          <span className={cn(styles.cHdot, styles.cHdotPred)} style={{ left: `${predictedPct}%` }} />
-          <span
-            className={styles.cHdot}
-            style={{ left: `${actualPct}%`, background: color, border: `2px solid ${color}` }}
-          />
-        </span>
-        <span className={styles.cHorizonEnd} style={{ textAlign: "right" }}>
-          {t("analytics.community.horizon.scaleEnd", { count: totalTeams })}
-        </span>
+    <div className={styles.cMonte}>
+      <span className={styles.cCardTitle}>{t("analytics.distribution.title")}</span>
+      <div className={styles.cMonteProbs}>
+        <div className={styles.cMonteProb}>
+          <div className={styles.cMonteProbL}>{t("analytics.distribution.top1")}</div>
+          <div className={styles.cMonteProbV}>{percent(distribution.prob_top1)}</div>
+        </div>
+        <div className={styles.cMonteProb}>
+          <div className={styles.cMonteProbL}>{t("analytics.distribution.top3")}</div>
+          <div className={styles.cMonteProbV}>{percent(distribution.prob_top3)}</div>
+        </div>
+        <div className={styles.cMonteProb}>
+          <div className={styles.cMonteProbL}>{t("analytics.distribution.top8")}</div>
+          <div className={styles.cMonteProbV}>{percent(distribution.prob_top8)}</div>
+        </div>
       </div>
-      <div className={styles.cHorizonLegend}>
-        <span>
-          <span className={cn(styles.cHdotPred, styles.cHdotStatic)} style={{ borderRadius: "50%" }} />
-          {t("analytics.community.team.predictedShort", { place: formatPlace(predicted, locale) })}
-        </span>
-        <span>
+      <div className={styles.cMonteHist} aria-hidden="true">
+        {bars.map((bar) => (
           <span
-            className={styles.cHdotStatic}
-            style={{ background: color, borderRadius: "50%" }}
+            key={bar.pos}
+            className={styles.cMonteBar}
+            style={{ height: `${bar.height}%` }}
+            title={`#${bar.pos}: ${bar.count}`}
           />
-          {t("analytics.community.team.finishedShort", { place: formatPlace(actual, locale) })}
-        </span>
+        ))}
       </div>
-    </>
+    </div>
   );
 }
 
 /**
- * Team drill-down: place + delta header, the predicted-vs-actual horizon, and
- * the roster (each player opens the player detail).
+ * Team drill-down: place + delta header, a compact predicted→actual summary
+ * (the full connector lives inline in the standings row), the organizer
+ * Monte-Carlo distribution, and the roster (each player opens player detail).
  */
-export default function TeamDetail({ team, totalTeams, onSelectPlayer, onExplain }: TeamDetailProps) {
+export default function TeamDetail({
+  team,
+  distribution,
+  onSelectPlayer,
+  onExplain,
+}: TeamDetailProps) {
   const { t, locale } = useTranslation();
   const tournamentGrid = team.tournament?.division_grid_version;
   const players = useMemo(() => sortTeamPlayers(team.players), [team.players]);
   const groupName = team.group?.name ?? "—";
+  const hasForecast = team.predicted_place != null && team.placement != null;
+  const color = moveColor(team.placement_delta);
 
   return (
     <>
@@ -110,13 +114,22 @@ export default function TeamDetail({ team, totalTeams, onSelectPlayer, onExplain
           <DeltaPill delta={team.placement_delta} />
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <span className={styles.cCardTitle}>
-            {t("analytics.community.team.predictedVsActual")}{" "}
+        {hasForecast ? (
+          <div className={styles.cPvaLine}>
+            <span className={cn(styles.cPvaDot, styles.cHdotPred)} />
+            {t("analytics.community.team.predictedShort", {
+              place: formatPlace(team.predicted_place, locale),
+            })}
+            <ArrowRight size={13} aria-hidden="true" />
+            <span className={styles.cPvaDot} style={{ background: color }} />
+            {t("analytics.community.team.finishedShort", {
+              place: formatPlace(team.placement, locale),
+            })}
             <InfoDot term="predicted_move" onExplain={onExplain} />
-          </span>
-          <TeamHorizon team={team} totalTeams={totalTeams} />
-        </div>
+          </div>
+        ) : null}
+
+        {distribution ? <MonteCarlo distribution={distribution} /> : null}
       </div>
 
       <div className={styles.cRosterTitle}>

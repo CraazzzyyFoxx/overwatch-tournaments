@@ -972,6 +972,22 @@
   background: radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 60%);
   pointer-events: none;
 }
+.cHeroControls {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--c-line-2);
+}
+.cHeroPrompt {
+  position: relative;
+  z-index: 1;
+  color: var(--c-muted);
+  font-size: 14px;
+}
 .cHeroInner {
   position: relative;
   z-index: 1;
@@ -1163,6 +1179,16 @@
   background: var(--c-surface);
   padding: 13px 14px 14px;
 }
+.cKpiClickable {
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.cKpiClickable:hover {
+  border-color: var(--c-line-2);
+  background: var(--c-surface-2);
+}
 .cKpiLabel {
   display: flex;
   align-items: center;
@@ -1289,6 +1315,85 @@
   color: var(--c-text);
 }
 
+/* ── Organizer list/table view toggle ── */
+.cViewToggleRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.cViewToggle {
+  display: inline-flex;
+  gap: 3px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-surface);
+  padding: 3px;
+}
+.cViewToggle .cSegBtn {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+}
+
+/* ── Team detail: predicted→actual summary line + Monte-Carlo ── */
+.cPvaLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--c-muted);
+  font-size: 12.5px;
+}
+.cPvaDot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.cMonte {
+  margin-top: 12px;
+  border-top: 1px dashed var(--c-line-2);
+  padding-top: 12px;
+}
+.cMonteProbs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.cMonteProb {
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r-sm);
+  background: var(--c-surface-2);
+  padding: 8px 10px;
+  text-align: center;
+}
+.cMonteProbL {
+  color: var(--c-faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cMonteProbV {
+  margin-top: 3px;
+  font-family: var(--c-disp);
+  font-size: 18px;
+  font-weight: 700;
+}
+.cMonteHist {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  margin-top: 10px;
+}
+.cMonteBar {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--c-accent);
+  opacity: 0.55;
+}
+
 /* ── Generic community card ── */
 .cCard {
   border: 1px solid var(--c-line);
@@ -1377,7 +1482,8 @@
 }
 .cTeamRow {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 30px minmax(110px, 1fr) minmax(0, 1.5fr) auto auto;
   width: 100%;
   align-items: center;
   gap: 11px;
@@ -1389,6 +1495,31 @@
   text-align: left;
   cursor: pointer;
   transition: background 0.12s;
+}
+.cRowHz {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.cRowHzPred {
+  width: 52px;
+  flex-shrink: 0;
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.cRowHz .cHorizonTrack {
+  height: 18px;
+}
+@media (max-width: 760px) {
+  .cTeamRow {
+    grid-template-columns: 28px 1fr auto auto;
+  }
+  .cRowHz {
+    display: none;
+  }
 }
 .cTeamRow:hover {
   background: var(--c-surface-2);
