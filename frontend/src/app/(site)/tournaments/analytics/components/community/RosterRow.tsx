@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Minus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
@@ -19,30 +19,38 @@ interface RosterRowProps {
   onSelect: () => void;
 }
 
-function MoveChip({ player }: { player: PlayerVM }) {
+function MoveChip({
+  player,
+  tournamentGrid,
+}: {
+  player: PlayerVM;
+  tournamentGrid?: DivisionGridVersion | null;
+}) {
   const { t } = useTranslation();
   const target = player.predicted_division ?? player.division;
 
-  if (player.predicted_direction === "promote") {
+  if (player.predicted_direction === "flat") {
     return (
-      <span className={cn(styles.cMove, styles.cMoveUp)}>
-        <ArrowUp aria-hidden="true" />
-        {t("analytics.community.move.climb", { division: target })}
+      <span className={cn(styles.cMove, styles.cMoveFlat)}>
+        <Minus aria-hidden="true" />
+        {t("analytics.community.move.hold")}
       </span>
     );
   }
-  if (player.predicted_direction === "demote") {
-    return (
-      <span className={cn(styles.cMove, styles.cMoveDown)}>
-        <ArrowDown aria-hidden="true" />
-        {t("analytics.community.move.drop", { division: target })}
-      </span>
-    );
-  }
+
+  const up = player.predicted_direction === "promote";
   return (
-    <span className={cn(styles.cMove, styles.cMoveFlat)}>
-      <Minus aria-hidden="true" />
-      {t("analytics.community.move.hold")}
+    <span className={cn(styles.cMove, up ? styles.cMoveUp : styles.cMoveDown)}>
+      {up ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
+      {up ? t("analytics.community.move.climb") : t("analytics.community.move.drop")}
+      <ArrowRight className={styles.cMoveSep} aria-hidden="true" />
+      <DivisionIcon
+        division={target}
+        tournamentGrid={tournamentGrid}
+        width={20}
+        height={20}
+        className={styles.cMoveDiv}
+      />
     </span>
   );
 }
@@ -101,7 +109,7 @@ export default function RosterRow({ player, tournamentGrid, onSelect }: RosterRo
           ) : null}
         </span>
       </span>
-      <MoveChip player={player} />
+      <MoveChip player={player} tournamentGrid={tournamentGrid} />
     </div>
   );
 }

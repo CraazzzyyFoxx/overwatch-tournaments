@@ -834,8 +834,8 @@ export const ru = {
         newRoleTag: "новая роль"
       },
       move: {
-        climb: "Рост → Див {division}",
-        drop: "Падение → Див {division}",
+        climb: "Рост",
+        drop: "Падение",
         hold: "Без изменений"
       },
       why: {

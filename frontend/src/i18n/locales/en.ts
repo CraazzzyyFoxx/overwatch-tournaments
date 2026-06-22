@@ -832,8 +832,8 @@ export const en = {
         newRoleTag: "new role"
       },
       move: {
-        climb: "Climb → Div {division}",
-        drop: "Drop → Div {division}",
+        climb: "Climb",
+        drop: "Drop",
         hold: "Hold"
       },
       why: {
