@@ -1,21 +1,31 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import AnalyticsBriefing from "@/app/(site)/tournaments/analytics/components/AnalyticsBriefing";
+import AnalyticsPicker from "@/app/(site)/tournaments/analytics/components/AnalyticsPicker";
+import TournamentHero from "@/app/(site)/tournaments/analytics/components/TournamentHero";
+import VerdictBanner from "@/app/(site)/tournaments/analytics/components/VerdictBanner";
+import KpiRail from "@/app/(site)/tournaments/analytics/components/KpiRail";
+import PredictedActualHorizon from "@/app/(site)/tournaments/analytics/components/PredictedActualHorizon";
+import MasterDetail from "@/app/(site)/tournaments/analytics/components/MasterDetail";
+import HowItWorksCard from "@/app/(site)/tournaments/analytics/components/HowItWorksCard";
+import BottomSheet, {
+  type SheetState
+} from "@/app/(site)/tournaments/analytics/components/BottomSheet";
+import { type GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import OrganizerTools from "@/app/(site)/tournaments/analytics/components/OrganizerTools";
-import AttentionTriage from "@/app/(site)/tournaments/analytics/components/AttentionTriage";
-import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
-import DeepDiveSection from "@/app/(site)/tournaments/analytics/components/DeepDiveSection";
+import ExpertLayer from "@/app/(site)/tournaments/analytics/components/ExpertLayer";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
   canShowAnalyticsAdminToolbar,
   getPreferredAnalyticsAlgorithmId,
   sortAnalyticsAlgorithms
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import { useAnalyticsViewModel } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
+import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTranslation } from "@/i18n/LanguageContext";
 import tournamentService from "@/services/tournament.service";
@@ -26,7 +36,7 @@ const AnalyticsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, canAccessPermission } = usePermissions();
   const { t } = useTranslation();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
@@ -74,6 +84,10 @@ const AnalyticsPage = () => {
   const canQueryAnalytics =
     tournamentId != null && algorithmId != null && (!isSuccessAlgorithm || isKnownAlgorithmId);
   const canRecalculateAnalytics = canShowAnalyticsAdminToolbar(hasPermission("analytics.update"));
+  // v2 ML reads (performance, Monte-Carlo distribution, match quality, SHAP) are
+  // permission-gated server-side. Gate the fetches too so the public/community
+  // baseline (v1 + derived impact) never fires a 403 query.
+  const canReadV2 = canAccessPermission("analytics.read", currentWorkspaceId);
 
   const {
     data: analytics,
@@ -90,7 +104,7 @@ const AnalyticsPage = () => {
   } = useQuery({
     queryKey: ["analytics", "performance-v2", tournamentId],
     queryFn: () => analyticsService.getPerformanceV2(tournamentId!),
-    enabled: tournamentId != null
+    enabled: tournamentId != null && canReadV2
   });
 
   const performanceByPlayer = useMemo(
@@ -106,7 +120,7 @@ const AnalyticsPage = () => {
   const { data: standingsRows } = useQuery({
     queryKey: ["analytics-standings-distribution", tournamentId, undefined],
     queryFn: () => analyticsService.getStandingsDistribution(tournamentId!),
-    enabled: tournamentId != null,
+    enabled: tournamentId != null && canReadV2,
     staleTime: 60_000
   });
 
@@ -115,16 +129,15 @@ const AnalyticsPage = () => {
     [standingsRows]
   );
 
-  // Players the model expects to change division — drives the briefing verdict.
-  const predictedMoves = useMemo(
-    () =>
-      (analytics?.teams ?? []).reduce(
-        (total, team) =>
-          total + team.players.filter((player) => player.predicted_direction !== "flat").length,
-        0
-      ),
-    [analytics?.teams]
-  );
+  // Fan-facing view model: per-player impact, the six KPIs, the verdict and the
+  // group count. Derived from the public v1 payload (+ v2 impact when allowed).
+  const viewModel = useAnalyticsViewModel(analytics, performanceByPlayer, canReadV2);
+
+  // Glossary / how-it-works explainer sheet, opened by info dots + the help card.
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const explain = useCallback((term: GlossaryTerm) => setSheet({ kind: "term", term }), []);
+  const showHow = useCallback(() => setSheet({ kind: "how" }), []);
+  const closeSheet = useCallback(() => setSheet(null), []);
 
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
@@ -191,16 +204,12 @@ const AnalyticsPage = () => {
   const isFiltersReady = !loadingTournaments && !loadingAlgorithms;
   const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
   return (
-    <div className={styles.surface}>
-      <AnalyticsBriefing
+    <div className={cn(styles.surface, styles.cRoot)}>
+      <AnalyticsPicker
         tournaments={tournamentsData?.results ?? []}
         algorithms={availableAlgorithms}
         tournamentId={tournamentId}
         algorithmId={algorithmId}
-        activeTournament={activeTournament}
-        activeAlgorithm={activeAlgorithm}
-        summary={analytics?.summary}
-        predictedMoves={predictedMoves}
         loadingTournaments={loadingTournaments}
         loadingAlgorithms={loadingAlgorithms}
         isErrorTournaments={isErrorTournaments}
@@ -240,15 +249,45 @@ const AnalyticsPage = () => {
         </Card>
       ) : (
         <>
-          <AttentionTriage teams={analytics.teams} />
-          <AnalyticsStandings
-            teams={analytics.teams}
-            performanceByPlayer={performanceByPlayer}
-            distributionByTeam={distributionByTeam}
-          />
-          <DeepDiveSection tournamentId={tournamentId} teams={analytics.teams} />
+          {activeTournament ? (
+            <TournamentHero
+              tournament={activeTournament}
+              algorithmName={activeAlgorithm?.name}
+              totals={{
+                teams: analytics.summary.total_teams,
+                players: analytics.summary.total_players,
+                groups: viewModel?.groupCount ?? 0,
+                stages: activeTournament.stages?.length ?? 0
+              }}
+            />
+          ) : null}
+          {viewModel ? <VerdictBanner verdict={viewModel.verdict} onExplain={explain} /> : null}
+          {viewModel ? <KpiRail kpis={viewModel.kpis} onExplain={explain} /> : null}
+          {viewModel ? (
+            <PredictedActualHorizon teams={viewModel.teams} onExplain={explain} />
+          ) : null}
+          {viewModel ? (
+            <MasterDetail
+              key={`${tournamentId}-${algorithmId}`}
+              teams={viewModel.teams}
+              algorithmName={activeAlgorithm?.name}
+              canReadV2={canReadV2}
+              onExplain={explain}
+            />
+          ) : null}
+          <HowItWorksCard onOpen={showHow} />
+          {canReadV2 ? (
+            <ExpertLayer
+              tournamentId={tournamentId}
+              teams={analytics.teams}
+              performanceByPlayer={performanceByPlayer}
+              distributionByTeam={distributionByTeam}
+            />
+          ) : null}
         </>
       )}
+
+      <BottomSheet state={sheet} onClose={closeSheet} />
     </div>
   );
 };

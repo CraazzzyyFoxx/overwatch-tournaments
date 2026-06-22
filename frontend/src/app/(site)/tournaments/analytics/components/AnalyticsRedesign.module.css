@@ -838,3 +838,1279 @@
     display: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Community analytics layer — "Analytics Community Redesign.html".
+   A fan-facing reskin merged onto the organizer page. Class names are
+   c-prefixed to avoid colliding with the organizer classes above; colours
+   come from a local alias block over the global --aqt-* tokens so the markup
+   mirrors the design mock 1:1.
+   ═══════════════════════════════════════════════════════════════════════ */
+.cRoot {
+  --c-surface: var(--aqt-card);
+  --c-surface-2: var(--aqt-card-2);
+  --c-surface-3: hsl(215 20% 14%);
+  --c-bg-grad: hsl(215 24% 9%);
+  --c-line: var(--aqt-border);
+  --c-line-2: var(--aqt-border-2);
+  --c-text: var(--aqt-fg);
+  --c-muted: var(--aqt-fg-muted);
+  --c-faint: var(--aqt-fg-dim);
+  --c-up: var(--aqt-emerald);
+  --c-up-dim: hsl(142 70% 50% / 0.15);
+  --c-down: var(--aqt-rose);
+  --c-down-dim: hsl(340 75% 58% / 0.15);
+  --c-warn: var(--aqt-amber);
+  --c-warn-dim: hsl(38 95% 55% / 0.14);
+  --c-info: var(--aqt-blue);
+  --c-info-dim: hsl(210 80% 60% / 0.15);
+  --c-accent: var(--aqt-teal);
+  --c-accent-dim: hsl(174 72% 46% / 0.14);
+  --c-r: 14px;
+  --c-r-sm: 8px;
+  --c-disp: var(--aqt-display);
+  --c-mono: var(--aqt-mono);
+}
+.cTnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes cDotPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── Picker bar ── */
+.cPicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.cPickerField {
+  display: flex;
+  min-width: 200px;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+.cPickerLabel {
+  color: var(--c-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Status pill ── */
+.cStatusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--c-line-2);
+  border-radius: 999px;
+  background: var(--c-surface-2);
+  padding: 6px 11px;
+  font-family: var(--c-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cStatusDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cStatusDotLive {
+  animation: cDotPulse 2s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cStatusDotLive {
+    animation: none;
+  }
+}
+
+/* ── Tournament hero ── */
+.cHero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--c-line-2);
+  border-radius: var(--c-r);
+  background: var(--c-bg-grad);
+  padding: 26px 30px 22px;
+}
+.cHeroHex {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.05'/%3E%3C/svg%3E");
+  background-size: 80px 92.4px;
+}
+.cHeroGlowRose {
+  position: absolute;
+  top: -40%;
+  left: -10%;
+  width: 60%;
+  height: 160%;
+  background: radial-gradient(ellipse at 30% 50%, hsl(340 75% 58% / 0.14), transparent 60%);
+  pointer-events: none;
+}
+.cHeroGlowTeal {
+  position: absolute;
+  top: -30%;
+  right: -5%;
+  width: 55%;
+  height: 130%;
+  background: radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 60%);
+  pointer-events: none;
+}
+.cHeroInner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: flex-end;
+}
+.cHeroLeft {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.cHeroId {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11px;
+}
+.cHeroIdNum {
+  color: var(--c-accent);
+  font-weight: 600;
+}
+.cHeroSep {
+  opacity: 0.5;
+}
+.cHeroTitle {
+  margin: 6px 0 10px;
+  overflow-wrap: anywhere;
+  color: var(--c-text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+}
+.cHeroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.cMetaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--c-line-2);
+  border-radius: 8px;
+  background: hsl(0 0% 100% / 0.03);
+  padding: 6px 11px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+.cMetaPillK {
+  color: var(--c-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cMetaPillV {
+  color: var(--c-text);
+  font-weight: 600;
+}
+.cHeroStats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 30px;
+  align-items: flex-end;
+}
+.cHeroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+.cHeroStatL {
+  color: var(--c-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.cHeroStatV {
+  color: var(--c-text);
+  font-family: var(--c-disp);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cHeroStatS {
+  color: var(--c-faint);
+  font-size: 10.5px;
+}
+@media (max-width: 860px) {
+  .cHeroInner {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .cHeroStats {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .cHeroStat {
+    text-align: left;
+  }
+  .cHeroTitle {
+    font-size: 30px;
+  }
+}
+@media (max-width: 520px) {
+  .cHeroStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cHero {
+    padding: 18px 18px 16px;
+  }
+}
+
+/* ── Verdict banner ── */
+.cVerdict {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: linear-gradient(140deg, var(--c-up-dim), transparent 60%), var(--c-surface);
+  padding: 18px;
+}
+.cVerdictEyebrow {
+  margin-bottom: 9px;
+  color: var(--c-muted);
+  font-family: var(--c-disp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cVerdictH {
+  margin: 0;
+  color: var(--c-text);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.cVerdictH b {
+  color: var(--c-up);
+  font-weight: 700;
+}
+.cVerdictSub {
+  margin: 10px 0 0;
+  color: var(--c-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.cVerdictSub strong {
+  color: var(--c-text);
+}
+
+/* ── KPI rail ── */
+.cKpiRail {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 560px) {
+  .cKpiRail {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 860px) {
+  .cKpiRail {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+.cKpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r-sm);
+  background: var(--c-surface);
+  padding: 13px 14px 14px;
+}
+.cKpiLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--c-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cKpiVal {
+  margin-top: 3px;
+  font-family: var(--c-disp);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.cKpiSub {
+  color: var(--c-muted);
+  font-size: 11.5px;
+}
+.cToneUp {
+  color: var(--c-up);
+}
+.cToneDown {
+  color: var(--c-down);
+}
+.cToneWarn {
+  color: var(--c-warn);
+}
+.cToneInfo {
+  color: var(--c-info);
+}
+.cToneNeutral {
+  color: var(--c-text);
+}
+
+/* ── Info dot + dotted term ── */
+.cInfoDot {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1.4px solid var(--c-faint);
+  border-radius: 50%;
+  background: none;
+  padding: 0;
+  color: var(--c-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.cInfoDot:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.cTerm {
+  border: none;
+  border-bottom: 1.5px dotted var(--c-faint);
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cTerm:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+/* ── Master–detail layout ── */
+.cMasterDetail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(338px, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
+  align-items: start;
+}
+.cColMain {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.cAside {
+  position: sticky;
+  top: 78px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (max-width: 859px) {
+  .cMasterDetail {
+    grid-template-columns: 1fr;
+  }
+  .cAside {
+    position: static;
+  }
+}
+.cAsideEmpty {
+  border: 1px dashed var(--c-line);
+  border-radius: var(--c-r);
+  padding: 40px 24px;
+  color: var(--c-faint);
+  text-align: center;
+}
+.cAsideBack {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.cAsideBack:hover {
+  color: var(--c-text);
+}
+
+/* ── Generic community card ── */
+.cCard {
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+  padding: 16px;
+}
+.cCardFlush {
+  overflow: hidden;
+  padding: 0;
+}
+.cCardTitle {
+  color: var(--c-muted);
+  font-family: var(--c-disp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── Standings list ── */
+.cStandings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cStandingsHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+.cStandingsTitle {
+  color: var(--c-muted);
+  font-family: var(--c-disp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cStandingsBy {
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11.5px;
+}
+.cSeg {
+  display: flex;
+  gap: 3px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-surface);
+  padding: 3px;
+}
+.cSegBtn {
+  flex: 1;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  padding: 8px 6px;
+  color: var(--c-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.cSegBtn[data-on="true"] {
+  background: var(--c-surface-3);
+  color: var(--c-text);
+}
+.cTeamRows {
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+}
+.cTeamRow {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  border: none;
+  background: transparent;
+  padding: 11px 16px;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cTeamRow:hover {
+  background: var(--c-surface-2);
+}
+.cTeamRow + .cTeamRow {
+  border-top: 1px solid var(--c-line);
+}
+.cTeamRow[data-sel="true"] {
+  background: var(--c-surface-2);
+  box-shadow: inset 3px 0 0 var(--c-accent);
+}
+.cRank {
+  width: 30px;
+  flex-shrink: 0;
+  color: var(--c-text);
+  font-family: var(--c-disp);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.cRank1 {
+  color: var(--c-up);
+}
+.cTeamId {
+  flex: 1;
+  min-width: 0;
+}
+.cTeamName {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cTeamMeta {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.cFlagText {
+  color: var(--c-warn);
+}
+.cChevron {
+  flex-shrink: 0;
+  color: var(--c-muted);
+  opacity: 0.5;
+}
+.cStandingsEmpty {
+  padding: 24px;
+  color: var(--c-muted);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* ── Delta pill ── */
+.cDelta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-family: var(--c-disp);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.cDeltaUp {
+  background: var(--c-up-dim);
+  color: var(--c-up);
+}
+.cDeltaDown {
+  background: var(--c-down-dim);
+  color: var(--c-down);
+}
+.cDeltaFlat {
+  background: var(--c-surface-2);
+  color: var(--c-faint);
+}
+
+/* ── Predicted-vs-actual horizon (shared) ── */
+.cHorizonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+.cHorizonEnd {
+  width: 40px;
+  flex-shrink: 0;
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11px;
+}
+.cHorizonTrack {
+  position: relative;
+  flex: 1;
+  height: 22px;
+}
+.cHorizonLine {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--c-line-2);
+}
+.cHconn {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+}
+.cHdot {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.cHdotPred {
+  border: 2px solid var(--c-faint);
+  background: var(--c-surface-3);
+}
+.cHdotStatic {
+  position: static;
+  width: 11px;
+  height: 11px;
+  transform: none;
+}
+.cHorizonLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+.cHorizonLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Team detail ── */
+.cTeamHeadTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cTeamEyebrow {
+  color: var(--c-faint);
+  font-family: var(--c-disp);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cTeamPlaceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 4px;
+}
+.cTeamPlace {
+  font-family: var(--c-disp);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+.cTeamPlaceWin {
+  color: var(--c-up);
+}
+.cTeamNameBig {
+  font-size: 18px;
+  font-weight: 600;
+}
+.cRosterTitle {
+  padding: 4px 4px 0;
+  color: var(--c-muted);
+  font-family: var(--c-disp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Roster row ── */
+.cRoster {
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+}
+.cRosterRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  border: none;
+  background: transparent;
+  padding: 11px 16px;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cRosterRow:hover {
+  background: var(--c-surface-2);
+}
+.cRosterRow + .cRosterRow {
+  border-top: 1px solid var(--c-line);
+}
+.cRoleChip {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface-2);
+  color: var(--c-muted);
+}
+.cBadgeWrap {
+  flex-shrink: 0;
+  line-height: 0;
+}
+.cPId {
+  flex: 1;
+  min-width: 0;
+}
+.cPName {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cPMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.cTagNew {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--c-info-dim);
+  padding: 2px 7px;
+  color: var(--c-info);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Impact bar ── */
+.cImpact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cImpactTrack {
+  overflow: hidden;
+  height: 7px;
+  flex: 1;
+  border-radius: 4px;
+  background: var(--c-surface-3);
+}
+.cImpactFill {
+  height: 100%;
+  border-radius: 4px;
+}
+.cImpactNum {
+  width: 26px;
+  font-family: var(--c-disp);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* ── Move chip ── */
+.cMove {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 9px 5px 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cMove svg {
+  width: 13px;
+  height: 13px;
+}
+.cMoveUp {
+  background: var(--c-up-dim);
+  color: var(--c-up);
+}
+.cMoveDown {
+  background: var(--c-down-dim);
+  color: var(--c-down);
+}
+.cMoveFlat {
+  background: var(--c-surface-2);
+  color: var(--c-muted);
+}
+
+/* ── Flag chip ── */
+.cFlag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: var(--c-warn-dim);
+  padding: 3px 8px;
+  color: var(--c-warn);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
+}
+.cFlagDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-warn);
+}
+
+/* ── Player detail ── */
+.cPlayerHero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cPlayerName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.cPlayerRole {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.cMoveCardUp {
+  background: linear-gradient(140deg, var(--c-up-dim), transparent 65%), var(--c-surface);
+}
+.cMoveCardDown {
+  background: linear-gradient(140deg, var(--c-down-dim), transparent 65%), var(--c-surface);
+}
+.cMoveWord {
+  font-family: var(--c-disp);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.cMoveSub {
+  margin-top: 3px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.cMoveBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cMetricGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.cMetric {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r-sm);
+  background: var(--c-surface-2);
+  padding: 12px 13px;
+}
+.cMetricL {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--c-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cMetricV {
+  margin-top: 5px;
+  font-family: var(--c-disp);
+  font-size: 22px;
+  font-weight: 700;
+}
+.cMetricS {
+  margin-top: 1px;
+  color: var(--c-muted);
+  font-size: 11.5px;
+}
+.cFlagCard {
+  border: 1px solid var(--c-warn);
+  border-radius: var(--c-r);
+  background: linear-gradient(140deg, var(--c-warn-dim), transparent 70%), var(--c-surface);
+  padding: 16px;
+}
+.cFlagCardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-warn);
+}
+.cFlagCardBody {
+  margin: 8px 0 0;
+  color: var(--c-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.cWhy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.cWhy li {
+  display: flex;
+  gap: 10px;
+  color: var(--c-text);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.cWhyBullet {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  border-radius: 50%;
+}
+.cShiftEdit {
+  margin-top: 4px;
+}
+
+/* ── Full predicted-vs-actual chart (all teams) ── */
+.cHzHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cHzCount {
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11.5px;
+}
+.cHzAxis {
+  display: grid;
+  grid-template-columns: 24px 104px minmax(0, 1fr) 50px;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 2px 0 8px;
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 10px;
+}
+.cHzScale {
+  display: flex;
+  justify-content: space-between;
+}
+.cHzRows {
+  display: flex;
+  flex-direction: column;
+}
+.cHzRow {
+  display: grid;
+  grid-template-columns: 24px 104px minmax(0, 1fr) 50px;
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+}
+.cHzRow + .cHzRow {
+  border-top: 1px solid var(--c-line);
+}
+.cHzRow .cHorizonTrack {
+  height: 20px;
+}
+.cHzRank {
+  color: var(--c-faint);
+  font-family: var(--c-mono);
+  font-size: 11px;
+  text-align: right;
+}
+.cHzName {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cHzDelta {
+  display: flex;
+  justify-content: flex-end;
+}
+.cHzLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px dashed var(--c-line-2);
+  color: var(--c-muted);
+  font-size: 11.5px;
+}
+.cLg {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.cLgDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+@media (max-width: 520px) {
+  .cHzAxis,
+  .cHzRow {
+    grid-template-columns: 22px 74px minmax(0, 1fr) 44px;
+    gap: 7px;
+  }
+  .cHzName {
+    font-size: 12px;
+  }
+}
+
+/* ── How-it-works card + bottom sheet ── */
+.cHowCard {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-r);
+  background: var(--c-surface);
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cHowCard:hover {
+  background: var(--c-surface-2);
+}
+.cHowMark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  font-family: var(--c-disp);
+  font-weight: 700;
+}
+.cHowTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.cHowSub {
+  display: block;
+  margin-top: 2px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+.cSheetScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s;
+}
+.cSheetScrim[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cSheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 81;
+  display: flex;
+  max-height: 82vh;
+  flex-direction: column;
+  border-top: 1px solid var(--c-line);
+  border-top-left-radius: 26px;
+  border-top-right-radius: 26px;
+  background: var(--c-surface);
+  box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.5);
+  transform: translateY(110%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cSheet[data-open="true"] {
+  transform: translateY(0);
+}
+.cSheetGrip {
+  width: 38px;
+  height: 5px;
+  flex-shrink: 0;
+  margin: 10px auto 4px;
+  border-radius: 3px;
+  background: var(--c-surface-3);
+}
+.cSheetBody {
+  overflow-y: auto;
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom));
+}
+.cSheetKicker {
+  color: var(--c-accent);
+  font-family: var(--c-disp);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cSheetBody h3 {
+  margin: 6px 0 4px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cSheetBody p {
+  margin: 0 0 12px;
+  color: var(--c-muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.cSheetStep {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.cSheetStepNum {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  font-family: var(--c-disp);
+  font-size: 14px;
+  font-weight: 700;
+}
+.cSheetStepTitle {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cSheetStepBody {
+  display: block;
+  margin-top: 2px;
+  color: var(--c-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.cSheetFoot {
+  font-size: 13px;
+  font-style: italic;
+}
+@media (min-width: 760px) {
+  .cSheet {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(460px, 92vw);
+    max-height: 80vh;
+    border: 1px solid var(--c-line);
+    border-radius: 22px;
+    transform: translate(-50%, -46%) scale(0.96);
+    opacity: 0;
+    transition:
+      transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.2s;
+  }
+  .cSheet[data-open="true"] {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  .cSheetGrip {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cSheet,
+  .cSheetScrim {
+    transition: none;
+  }
+}

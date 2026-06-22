@@ -495,7 +495,8 @@ export const en = {
       colConfidence: "Confidence",
       colManual: "Manual",
       colFlags: "Flags",
-      editManualShift: "Edit manual shift"
+      editManualShift: "Edit manual shift",
+      save: "Save changes"
     },
     forecast: {
       up: "Moving up",
@@ -697,7 +698,176 @@ export const en = {
         label: "Possible sandbag",
         plain: "One unexpectedly weak tournament that stands out against the player's own track record."
       },
-      reasonsLabel: "Why flagged"
+      reasonsLabel: "Why flagged",
+      climbing: {
+        label: "Climbing",
+        plain: "Players the model thinks are playing above their division and should move up a tier."
+      },
+      dropping: {
+        label: "Dropping",
+        plain: "Players performing below their division — the model leans toward moving them down a tier."
+      },
+      watch: {
+        label: "Watch flags",
+        plain: "Automatic heads-ups when someone's results look unusual. A prompt for a human to look — never a verdict."
+      },
+      avg_confidence: {
+        label: "Average confidence",
+        plain: "How much data is behind the calls across the whole bracket. It climbs as more maps are played."
+      },
+      upsets: {
+        label: "Upsets",
+        plain: "Teams that finished four or more places away from their predicted spot — the bracket's biggest surprises."
+      },
+      new_faces: {
+        label: "New faces",
+        plain: "Players new to the tournament, or playing a role they haven't before. Their numbers carry less weight until we see more."
+      },
+      predicted_move: {
+        label: "Predicted move",
+        plain: "Whether the model thinks a player belongs in a higher (climb) or lower (drop) division than they're in now. Hold means they're right where they should be."
+      },
+      impact_percentile: {
+        label: "Impact percentile",
+        plain: "Where a player's impact ranks among others in the same role and division — 90 means they beat almost everyone at their level."
+      }
+    },
+    hero: {
+      idLine: "#{number} · {dates}",
+      statTeams: "Teams",
+      statTeamsSub: "registered",
+      statPlayers: "Players",
+      statPlayersSub: "rostered",
+      statGroups: "Groups",
+      statGroupsSub: "group stage",
+      statStages: "Stages",
+      statStagesSub: "groups → playoff",
+      pillFormat: "Format",
+      pillTeamsBy: "Teams by",
+      formatLeague: "League",
+      formatCup: "Cup",
+      stageProgress: "{stage}"
+    },
+    community: {
+      verdict: {
+        eyebrow: "The bracket so far",
+        story: "{team} are the story — the model had them {predicted}, they're sitting {place}.",
+        letdown: "Meanwhile {team} are the bracket's let-down, slipping from a predicted {predicted} to {place}.",
+        empty: "Too early to call — no team has strayed far from its forecast yet.",
+        whatsThis: "What's this?"
+      },
+      kpi: {
+        climbing: "Climbing",
+        climbingFoot: "players ↑ a division",
+        dropping: "Dropping",
+        droppingFoot: "players ↓ a division",
+        watch: "Watch flags",
+        watchFoot: "need a human look",
+        avgConfidence: "Avg confidence",
+        avgConfidenceFoot: "across the bracket",
+        upsets: "Upsets",
+        upsetsFoot: "off forecast by 4+",
+        newFaces: "New faces",
+        newFacesFoot: "new player or role"
+      },
+      standings: {
+        title: "Standings",
+        rankedBy: "ranked by {algorithm}",
+        sortStandings: "Standings",
+        sortMovers: "Biggest movers",
+        sortWatch: "Watch list",
+        flagCount: "{count} flags",
+        flagCountOne: "{count} flag",
+        watchEmpty: "No watch flags right now — the bracket's clean.",
+        group: "Grp {group}",
+        onForm: "on form"
+      },
+      horizon: {
+        title: "Predicted vs Actual",
+        allTeams: "all {count} teams",
+        predicted: "Predicted",
+        climbed: "Climbed",
+        fellShort: "Fell short",
+        scaleStart: "1st",
+        scaleFinish: "finish →",
+        scaleEnd: "{count}th",
+        predictedTip: "Predicted {place}",
+        finishedTip: "Finished {place}"
+      },
+      team: {
+        rosterCount: "Roster · {count} players",
+        predictedVsActual: "Predicted vs actual",
+        predictedShort: "Predicted {place}",
+        finishedShort: "Finished {place}",
+        backTo: "Back to {team}",
+        groupRecord: "Group {group} · {wins}–{losses}",
+        pickPrompt: "Pick a team to dig into its roster."
+      },
+      player: {
+        backTo: "Back to {team}",
+        predictedMove: "Predicted move",
+        climb: "Predicted to climb",
+        drop: "Predicted to drop",
+        hold: "Right where they belong",
+        divMove: "Div {from} → Div {to}",
+        impact: "Impact",
+        confidence: "Confidence",
+        impactElite: "elite for this tier",
+        impactAbove: "above the median",
+        impactMid: "around the median",
+        impactBelow: "below the median",
+        confidencePlenty: "plenty of data",
+        confidenceSolid: "solid sample",
+        confidenceThin: "thin sample",
+        percentileTitle: "Impact percentile",
+        percentileVs: "vs Div {division} {role}s",
+        flagTitle: "{kind} flag",
+        flagBody: "Automatically raised for review — not a verdict. Tap the ⓘ to see what \"{kind}\" means.",
+        whyTitle: "Why the model says this",
+        roleLine: "{role} · Div {division} · {team}",
+        newTag: "new",
+        newRoleTag: "new role"
+      },
+      move: {
+        climb: "Climb → Div {division}",
+        drop: "Drop → Div {division}",
+        hold: "Hold"
+      },
+      why: {
+        flag: "Flagged as {kind} — the model is holding its forecast until it sees more.",
+        flagSignal: "Signal strength {pct}% · still under review.",
+        climbImpact: "Top-tier impact among Div {division} {role}s this event.",
+        climbConfidence: "The model is {pct}% confident — enough evidence to suggest a climb.",
+        dropImpact: "Bottom-tier impact for a Div {division} {role}.",
+        dropConsistent: "Consistent across {maps} maps, so the model leans toward a drop.",
+        holdInBand: "Performing about where a Div {division} player should — no move expected.",
+        holdThin: "Sample is still thin, so confidence is only {pct}%.",
+        holdSteady: "Steady, in-band results across the bracket."
+      },
+      role: {
+        tank: "Tank",
+        damage: "Damage",
+        support: "Support"
+      }
+    },
+    howItWorks: {
+      kicker: "How this works",
+      title: "Reading the analytics",
+      intro: "After every map, the model re-rates every player and team. This page turns that into three simple questions:",
+      step1Title: "Who surprised us?",
+      step1Body: "The verdict up top names the team that beat its predicted finish by the most — and the one that fell short.",
+      step2Title: "Who's climbing or dropping?",
+      step2Body: "Each player gets a predicted move — the model's read on whether they're playing above or below their current division.",
+      step3Title: "How sure are we?",
+      step3Body: "Confidence bars show how much data is behind each call. Tap any dotted term or the ⓘ to see what it means.",
+      foot: "Nothing here is final — it's a live read that sharpens as the bracket plays out.",
+      cardTitle: "New here? Read the analytics in 30s",
+      cardSubtitle: "What every number on this page means."
+    },
+    sheet: {
+      glossaryKicker: "Glossary",
+      close: "Close",
+      help: "How this works"
     }
   }
 };

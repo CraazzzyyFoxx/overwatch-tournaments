@@ -3,7 +3,7 @@
 import React from "react";
 import { ChevronDown, FlaskConical } from "lucide-react";
 
-import { TeamAnalytics } from "@/types/analytics.types";
+import { PerformanceV2, StandingsDistribution, TeamAnalytics } from "@/types/analytics.types";
 import { Card } from "@/components/ui/card";
 import {
   Collapsible,
@@ -12,22 +12,30 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
-import AnalyticsHorizon from "@/app/(site)/tournaments/analytics/components/AnalyticsHorizon";
+import AttentionTriage from "@/app/(site)/tournaments/analytics/components/AttentionTriage";
+import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
 import StandingsDistributionCard from "@/app/(site)/tournaments/analytics/components/StandingsDistributionCard";
 import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/MatchQualityCard";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
-interface DeepDiveSectionProps {
+interface ExpertLayerProps {
   tournamentId: number;
   teams: TeamAnalytics[];
+  performanceByPlayer: Map<number, PerformanceV2>;
+  distributionByTeam?: Map<number, StandingsDistribution>;
 }
 
 /**
- * The expert layer, collapsed by default: predicted-vs-actual horizon, the
- * Monte Carlo standings distribution and per-match quality / anomaly review.
- * Kept one click away so the read view stays a clean briefing.
+ * The organizer/expert surface, gated to `analytics.read` viewers by the caller.
+ * Collapsed by default so the community read stays clean: needs-attention
+ * triage, the dense per-player standings table, the Monte-Carlo standings
+ * distribution and per-match quality / anomaly review.
  */
-export default function DeepDiveSection({ tournamentId, teams }: DeepDiveSectionProps) {
+export default function ExpertLayer({
+  tournamentId,
+  teams,
+  performanceByPlayer,
+  distributionByTeam,
+}: ExpertLayerProps) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
 
@@ -51,10 +59,13 @@ export default function DeepDiveSection({ tournamentId, teams }: DeepDiveSection
           />
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 border-t border-border/60 p-4">
-          <div className={styles.split}>
-            <AnalyticsHorizon teams={teams} />
-            <StandingsDistributionCard tournamentId={tournamentId} teams={teams} />
-          </div>
+          <AttentionTriage teams={teams} />
+          <AnalyticsStandings
+            teams={teams}
+            performanceByPlayer={performanceByPlayer}
+            distributionByTeam={distributionByTeam}
+          />
+          <StandingsDistributionCard tournamentId={tournamentId} teams={teams} />
           <MatchQualityCard tournamentId={tournamentId} />
         </CollapsibleContent>
       </Collapsible>

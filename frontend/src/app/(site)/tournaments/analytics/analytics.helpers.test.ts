@@ -1,12 +1,43 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  buildCommunityVerdict,
+  buildKpiRail,
   buildVerdict,
   canShowAnalyticsAdminToolbar,
   confidenceWord,
+  deriveImpact,
   getAnalyticsRefreshKeys,
   getPreferredAnalyticsAlgorithmId,
+  ordinal,
+  resolveImpact,
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+
+type TestPlayer = {
+  points: number;
+  predicted_direction: "promote" | "demote" | "flat";
+  anomalies: unknown[];
+};
+
+const player = (
+  predicted_direction: TestPlayer["predicted_direction"],
+  points = 0,
+  flagged = false,
+): TestPlayer => ({
+  points,
+  predicted_direction,
+  anomalies: flagged ? [{}] : [],
+});
+
+const team = (...players: TestPlayer[]) => ({ players });
+
+const verdictTeam = (
+  id: number,
+  name: string,
+  placement: number | null,
+  predicted_place: number | null,
+  placement_delta: number | null,
+) => ({ id, name, placement, predicted_place, placement_delta });
 
 const baseSummary = {
   total_teams: 12,
@@ -106,5 +137,82 @@ describe("analytics helpers", () => {
     ]);
 
     expect(getAnalyticsRefreshKeys(null, 42, null)).toEqual([["analytics", "global", 42]]);
+  });
+
+  it("derives a clamped 0–100 impact from raw shift points", () => {
+    expect(deriveImpact(0)).toBe(40);
+    expect(deriveImpact(0.4)).toBe(50);
+    // tails clamp so a bar never reads as empty or full
+    expect(deriveImpact(-5)).toBe(3);
+    expect(deriveImpact(5)).toBe(99);
+    expect(deriveImpact(Number.NaN)).toBe(50);
+  });
+
+  it("prefers the v2 impact score only when allowed and present", () => {
+    expect(resolveImpact({ points: 0 }, { impact_score: 88 }, true)).toBe(88);
+    // not allowed → fall back to derived
+    expect(resolveImpact({ points: 0 }, { impact_score: 88 }, false)).toBe(40);
+    // allowed but no row → derived
+    expect(resolveImpact({ points: 0.4 }, undefined, true)).toBe(50);
+  });
+
+  it("formats English ordinals", () => {
+    expect(ordinal(1)).toBe("1st");
+    expect(ordinal(2)).toBe("2nd");
+    expect(ordinal(3)).toBe("3rd");
+    expect(ordinal(4)).toBe("4th");
+    expect(ordinal(11)).toBe("11th");
+    expect(ordinal(22)).toBe("22nd");
+  });
+
+  it("names the story and the let-down by largest placement delta", () => {
+    const verdict = buildCommunityVerdict([
+      verdictTeam(1, "Story", 1, 5, 4), // beat forecast hardest
+      verdictTeam(2, "Steady", 6, 6, 0),
+      verdictTeam(3, "Letdown", 11, 4, -7), // missed forecast hardest
+    ]);
+
+    expect(verdict.story?.id).toBe(1);
+    expect(verdict.letdown?.id).toBe(3);
+  });
+
+  it("omits a verdict side when there is no genuine surprise", () => {
+    const verdict = buildCommunityVerdict([
+      verdictTeam(1, "A", 2, 2, 0),
+      verdictTeam(2, "B", 4, 5, 1), // only an overperformer, no let-down
+    ]);
+
+    expect(verdict.story?.id).toBe(2);
+    expect(verdict.letdown).toBeUndefined();
+  });
+
+  it("ignores teams without a placement delta in the verdict", () => {
+    expect(buildCommunityVerdict([verdictTeam(1, "A", null, null, null)])).toEqual({});
+  });
+
+  it("builds the six KPIs with climber/dropper counts and tones", () => {
+    const kpis = buildKpiRail(
+      {
+        avg_confidence: 0.78,
+        anomaly_count: 4,
+        divergent_team_count: 3,
+        newcomer_count: 5,
+      },
+      [
+        team(player("promote"), player("promote"), player("flat")),
+        team(player("demote"), player("flat")),
+      ],
+    );
+
+    const byId = Object.fromEntries(kpis.map((kpi) => [kpi.id, kpi]));
+    expect(kpis).toHaveLength(6);
+    expect(byId.climbing.value).toBe(2);
+    expect(byId.dropping.value).toBe(1);
+    expect(byId.watch.value).toBe(4);
+    expect(byId.avgConfidence.display).toBe("78%");
+    expect(byId.upsets.value).toBe(3);
+    expect(byId.newFaces.value).toBe(5);
+    expect(byId.climbing.tone).toBe("up");
+    expect(byId.watch.tone).toBe("warn");
   });
 });
