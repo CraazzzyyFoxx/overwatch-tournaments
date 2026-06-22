@@ -600,13 +600,17 @@ async def get_hero_leaderboard(
             models.Player.name,
             models.Player.role,
             division_case_expr(models.Player.rank, grid).label("div"),
+            models.Team.id.label("team_id"),
+            models.Team.name.label("team"),
             sa.func.row_number()
             .over(
                 partition_by=models.Player.user_id,
                 order_by=models.Player.tournament_id.desc(),
             )
             .label("rn"),
-        ).where(models.Player.is_substitution.is_(False))
+        )
+        .join(models.Team, models.Team.id == models.Player.team_id)
+        .where(models.Player.is_substitution.is_(False))
     ).subquery("player_rn")
 
     player_latest_subq = (
@@ -615,6 +619,8 @@ async def get_hero_leaderboard(
             player_rn_subq.c.name,
             player_rn_subq.c.role,
             player_rn_subq.c.div,
+            player_rn_subq.c.team_id,
+            player_rn_subq.c.team,
         ).where(player_rn_subq.c.rn == 1)
     ).subquery("player_latest")
 
@@ -635,6 +641,8 @@ async def get_hero_leaderboard(
             player_latest_subq.c.name.label("player_name"),
             player_latest_subq.c.role,
             player_latest_subq.c.div,
+            player_latest_subq.c.team_id,
+            player_latest_subq.c.team,
             stats_agg_cte.c.games_played,
             stats_agg_cte.c.playtime_seconds,
             stats_agg_cte.c.per10_eliminations,

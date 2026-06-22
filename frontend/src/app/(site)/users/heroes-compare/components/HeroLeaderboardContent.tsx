@@ -1,13 +1,10 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Sword } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { Card } from "@/components/ui/card";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
-import { getGlowVarsFromColor } from "@/app/(site)/users/compare/utils";
 import heroService from "@/services/hero.service";
 import tournamentService from "@/services/tournament.service";
 import { type SearchableImageOption } from "@/app/(site)/users/compare/components/SearchableImageSelect";
@@ -18,14 +15,9 @@ import {
   NUM_COLUMNS,
   getDefaultColumnKeys,
 } from "../config/stat-columns";
+import HeroCompareHero from "./HeroCompareHero";
 import HeroLeaderboardFiltersCard from "./HeroLeaderboardFiltersCard";
 import HeroLeaderboardTable from "./HeroLeaderboardTable";
-
-const DEFAULT_LG_VARS = {
-  "--lg-a": "14 165 233",
-  "--lg-b": "16 185 129",
-  "--lg-c": "244 63 94",
-} as React.CSSProperties;
 
 const HeroLeaderboardContent = () => {
   const searchParams = useSearchParams();
@@ -120,21 +112,21 @@ const HeroLeaderboardContent = () => {
     updateParams({ [`dir${colIndex}`]: sortDirs[colIndex] === "asc" ? "desc" : "asc" });
   };
 
-  const heroGlowVars = useMemo(
-    () => getGlowVarsFromColor(selectedHero?.color ?? null),
-    [selectedHero?.color]
-  );
-
-  const lgVars = (
-    heroGlowVars
-      ? { "--lg-a": heroGlowVars["--lg-a"], "--lg-b": heroGlowVars["--lg-b"], "--lg-c": heroGlowVars["--lg-c"] }
-      : DEFAULT_LG_VARS
-  ) as React.CSSProperties;
+  const handleResetColumns = () => {
+    const updates: Record<string, undefined> = {};
+    for (let i = 0; i < NUM_COLUMNS; i++) {
+      updates[`col${i}`] = undefined;
+      updates[`dir${i}`] = undefined;
+    }
+    updateParams(updates);
+  };
 
   const rows = leaderboardQuery.data?.results ?? [];
 
   return (
-    <div className="liquid-glass space-y-4" style={lgVars}>
+    <div className="space-y-[22px]">
+      <HeroCompareHero selectedHero={selectedHero} rows={rows} />
+
       <HeroLeaderboardFiltersCard
         heroId={heroId}
         tournamentId={tournamentId}
@@ -146,18 +138,17 @@ const HeroLeaderboardContent = () => {
         isErrorTournaments={tournamentsQuery.isError}
         onHeroChange={(v) => updateParams({ hero_id: v ? Number(v) : undefined })}
         onTournamentChange={(v) => updateParams({ tournament_id: v ? Number(v) : undefined })}
+        onResetColumns={handleResetColumns}
+        resetDisabled={heroId === undefined}
       />
 
       {heroId === undefined ? (
-        <Card className="relative overflow-hidden">
-          <GlassGlow />
-          <div className="relative flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <Sword className="h-10 w-10 text-muted-foreground/30" />
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Select a hero above to view the leaderboard
-            </p>
-          </div>
-        </Card>
+        <div className="flex flex-col items-center justify-center gap-3.5 rounded-[var(--aqt-radius)] border border-[var(--aqt-border)] bg-[var(--aqt-card)] py-[90px] text-center">
+          <Sword className="h-10 w-10 text-[var(--aqt-fg-faint)] opacity-50" />
+          <p className="max-w-sm text-sm leading-relaxed text-[var(--aqt-fg-dim)]">
+            Select a hero above to rank every player who&apos;s logged time on it.
+          </p>
+        </div>
       ) : (
         <HeroLeaderboardTable
           selectedHero={selectedHero}

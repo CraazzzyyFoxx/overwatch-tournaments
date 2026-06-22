@@ -40,6 +40,8 @@ async def get_hero_leaderboard(
                 player_name=row.player_name,
                 role=row.role,
                 div=row.div,
+                team=row.team,
+                team_id=row.team_id,
                 games_played=int(row.games_played),
                 playtime_seconds=float(row.playtime_seconds),
                 per10_eliminations=float(row.per10_eliminations),

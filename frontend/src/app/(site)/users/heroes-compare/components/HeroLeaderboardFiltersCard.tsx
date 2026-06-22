@@ -1,11 +1,8 @@
-import { Sword } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { TypographyH4 } from "@/components/ui/typography";
 import SearchableImageSelect, {
   type SearchableImageOption,
 } from "@/app/(site)/users/compare/components/SearchableImageSelect";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
 
 interface HeroLeaderboardFiltersCardProps {
   heroId: number | undefined;
@@ -18,7 +15,13 @@ interface HeroLeaderboardFiltersCardProps {
   isErrorTournaments: boolean;
   onHeroChange: (value: string | undefined) => void;
   onTournamentChange: (value: string | undefined) => void;
+  onResetColumns: () => void;
+  resetDisabled: boolean;
 }
+
+const TRIGGER =
+  "border-[var(--aqt-border-2)] bg-white/[0.025] text-[var(--aqt-fg)] hover:bg-white/[0.04]";
+const LABEL = "text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--aqt-fg-faint)]";
 
 const HeroLeaderboardFiltersCard = ({
   heroId,
@@ -31,41 +34,49 @@ const HeroLeaderboardFiltersCard = ({
   isErrorTournaments,
   onHeroChange,
   onTournamentChange,
+  onResetColumns,
+  resetDisabled,
 }: HeroLeaderboardFiltersCardProps) => (
-  <Card className="relative overflow-hidden">
-    <GlassGlow />
-    <CardHeader className="relative pb-3">
-      <div className="flex items-center gap-2">
-        <Sword className="h-5 w-5" />
-        <TypographyH4>Hero Performance Leaderboard</TypographyH4>
-      </div>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Compare player performance on a specific hero. Each column is independently ranked.
-      </p>
-    </CardHeader>
-    <CardContent className="relative">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SearchableImageSelect
-          value={heroId !== undefined ? String(heroId) : undefined}
-          onValueChange={(v) => onHeroChange(v || undefined)}
-          options={heroOptions}
-          placeholder="Select hero"
-          searchPlaceholder="Search heroes..."
-          isLoading={isLoadingHeroes}
-          disabled={isLoadingHeroes || isErrorHeroes}
-        />
-        <SearchableImageSelect
-          value={tournamentId !== undefined ? String(tournamentId) : undefined}
-          onValueChange={(v) => onTournamentChange(v || undefined)}
-          options={tournamentOptions}
-          placeholder="All tournaments"
-          searchPlaceholder="Search tournaments..."
-          isLoading={isLoadingTournaments}
-          disabled={isLoadingTournaments || isErrorTournaments}
-        />
-      </div>
-    </CardContent>
-  </Card>
+  <section className="grid items-end gap-3.5 rounded-[var(--aqt-radius)] border border-[var(--aqt-border)] bg-[var(--aqt-card)] px-5 py-[18px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className={LABEL}>Hero</span>
+      <SearchableImageSelect
+        value={heroId !== undefined ? String(heroId) : undefined}
+        onValueChange={(v) => onHeroChange(v || undefined)}
+        options={heroOptions}
+        placeholder="Select hero"
+        searchPlaceholder="Search heroes..."
+        isLoading={isLoadingHeroes}
+        disabled={isLoadingHeroes || isErrorHeroes}
+        triggerClassName={TRIGGER}
+      />
+    </div>
+
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className={LABEL}>Tournament scope</span>
+      <SearchableImageSelect
+        value={tournamentId !== undefined ? String(tournamentId) : undefined}
+        onValueChange={(v) => onTournamentChange(v || undefined)}
+        options={tournamentOptions}
+        placeholder="All tournaments"
+        searchPlaceholder="Search tournaments..."
+        isLoading={isLoadingTournaments}
+        disabled={isLoadingTournaments || isErrorTournaments}
+        triggerClassName={TRIGGER}
+      />
+    </div>
+
+    <button
+      type="button"
+      onClick={onResetColumns}
+      disabled={resetDisabled}
+      title="Reset columns to role defaults"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--aqt-border-2)] bg-white/[0.025] px-3 text-xs font-semibold text-[var(--aqt-fg-muted)] transition-colors hover:bg-white/[0.05] hover:text-[var(--aqt-fg)] disabled:pointer-events-none disabled:opacity-40"
+    >
+      <RotateCcw className="h-3.5 w-3.5" />
+      Reset columns
+    </button>
+  </section>
 );
 
 export default HeroLeaderboardFiltersCard;

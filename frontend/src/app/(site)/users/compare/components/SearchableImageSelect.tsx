@@ -6,6 +6,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -37,6 +38,8 @@ interface SearchableImageSelectProps {
   isLoading?: boolean;
   /** Whether the selector is disabled (loading or error). */
   disabled?: boolean;
+  /** Override the trigger's appearance (border/background). Layout is fixed. */
+  triggerClassName?: string;
 }
 
 const SearchableImageSelect = ({
@@ -47,6 +50,7 @@ const SearchableImageSelect = ({
   searchPlaceholder = "Search...",
   isLoading = false,
   disabled = false,
+  triggerClassName,
 }: SearchableImageSelectProps) => {
   const [open, setOpen] = useState(false);
 
@@ -66,7 +70,10 @@ const SearchableImageSelect = ({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="h-10 w-full justify-between border-border/60 bg-background/15 font-normal hover:bg-background/20"
+          className={cn(
+            "h-10 w-full justify-between font-normal",
+            triggerClassName ?? "border-border/60 bg-background/15 hover:bg-background/20"
+          )}
         >
           <div className="flex items-center gap-2 overflow-hidden">
             {selected?.imageSrc ? (

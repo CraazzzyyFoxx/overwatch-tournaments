@@ -2,27 +2,29 @@ interface RankBadgeProps {
   rank: number;
 }
 
+const BASE = "w-full text-center tabular-nums";
+
 const RankBadge = ({ rank }: RankBadgeProps) => {
   if (rank === 1)
     return (
-      <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-amber-400">
+      <span className={`${BASE} font-[family-name:var(--aqt-display)] text-[15px] font-extrabold text-[var(--aqt-gold)]`}>
         1
       </span>
     );
   if (rank === 2)
     return (
-      <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-300">
+      <span className={`${BASE} font-[family-name:var(--aqt-mono)] text-[11px] font-bold text-[hsl(210_14%_78%)]`}>
         2
       </span>
     );
   if (rank === 3)
     return (
-      <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-amber-700/90">
+      <span className={`${BASE} font-[family-name:var(--aqt-mono)] text-[11px] font-bold text-[hsl(28_60%_56%)]`}>
         3
       </span>
     );
   return (
-    <span className="w-6 shrink-0 text-center text-xs tabular-nums text-muted-foreground/50">
+    <span className={`${BASE} font-[family-name:var(--aqt-mono)] text-[11px] font-semibold text-[var(--aqt-fg-faint)]`}>
       {rank}
     </span>
   );
