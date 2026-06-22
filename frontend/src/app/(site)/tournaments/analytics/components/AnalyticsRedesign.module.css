@@ -51,7 +51,7 @@
   position: relative;
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid hsl(var(--border) / 0.6);
+  border-right: 1px solid var(--c-line);
   padding: 22px;
 }
 
@@ -71,7 +71,7 @@
 
 .eyebrow {
   margin-bottom: 8px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
@@ -89,7 +89,7 @@
 .heroSub {
   margin-top: 12px;
   max-width: 760px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -99,11 +99,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 999px;
   background: hsl(var(--muted) / 0.36);
   padding: 6px 10px;
-  color: hsl(var(--foreground));
+  color: var(--c-text);
   font-size: 12px;
   font-weight: 600;
 }
@@ -130,7 +130,7 @@
 }
 
 .label {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
@@ -142,7 +142,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  border-top: 1px dashed hsl(var(--border));
+  border-top: 1px dashed var(--c-line);
   padding-top: 12px;
 }
 
@@ -158,14 +158,14 @@
 
 .kpi {
   min-width: 0;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--card));
+  background: var(--c-surface);
   padding: 14px;
 }
 
 .kpiLabel {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-weight: 650;
 }
@@ -183,7 +183,7 @@
 
 .kpiFoot {
   margin-top: 8px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -211,16 +211,16 @@
 
 .sectionSub {
   margin-top: 3px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 13px;
 }
 
 .sectionTabs {
   display: flex;
   gap: 4px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--muted) / 0.32);
+  background: var(--c-surface-2);
   padding: 3px;
 }
 
@@ -228,14 +228,14 @@
   min-height: 34px;
   border-radius: 6px;
   padding: 0 12px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
   font-weight: 650;
 }
 
 .sectionTabActive {
-  background: hsl(var(--foreground) / 0.08);
-  color: hsl(var(--foreground));
+  background: var(--c-surface-3);
+  color: var(--c-text);
 }
 
 .teamGrid {
@@ -247,9 +247,9 @@
 
 .teamRow {
   overflow: hidden;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--card));
+  background: var(--c-surface);
 }
 
 .teamRowMain {
@@ -263,7 +263,7 @@
 .groupBand {
   align-self: stretch;
   min-height: 72px;
-  background: hsl(var(--muted-foreground) / 0.35);
+  background: var(--c-line-2);
 }
 
 .groupA {
@@ -297,7 +297,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -327,7 +327,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
 }
 
@@ -343,9 +343,9 @@
   flex: 1;
   align-items: center;
   gap: 6px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--muted) / 0.22);
+  background: var(--c-surface-2);
   padding: 6px 7px;
 }
 
@@ -380,7 +380,7 @@
 }
 
 .losses {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 18px;
   font-weight: 700;
 }
@@ -413,7 +413,7 @@
 }
 
 .confidenceText {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   line-height: 1.25;
 }
@@ -425,9 +425,9 @@
 .shiftBar {
   position: relative;
   height: 18px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--muted) / 0.28);
+  background: var(--c-surface-2);
 }
 
 .shiftAxis {
@@ -436,7 +436,7 @@
   bottom: 0;
   left: 50%;
   width: 1px;
-  background: hsl(var(--border));
+  background: var(--c-line);
 }
 
 .shiftFill {
@@ -457,7 +457,7 @@
 
 .shiftLabel {
   margin-top: 5px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -473,9 +473,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 999px;
-  background: hsl(var(--muted) / 0.32);
+  background: var(--c-surface-2);
   padding: 3px 7px;
   font-size: 10px;
   font-weight: 760;
@@ -499,7 +499,7 @@
 }
 
 .teamDetail {
-  border-top: 1px dashed hsl(var(--border));
+  border-top: 1px dashed var(--c-line);
   padding: 14px 16px 16px;
 }
 
@@ -514,16 +514,16 @@
 }
 
 .detailTable th {
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--c-line);
   padding: 8px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-weight: 720;
   text-align: left;
 }
 
 .detailTable td {
-  border-bottom: 1px solid hsl(var(--border) / 0.55);
+  border-bottom: 1px solid var(--c-line);
   padding: 10px 8px;
   font-size: 13px;
 }
@@ -576,7 +576,7 @@
 }
 
 .horizonRank {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -593,14 +593,14 @@
   right: 0;
   left: 0;
   height: 1px;
-  background: hsl(var(--border));
+  background: var(--c-line);
 }
 
 .horizonLink {
   position: absolute;
   top: 10px;
   height: 1px;
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: var(--c-faint);
 }
 
 .horizonLinkDivergent {
@@ -617,8 +617,8 @@
 }
 
 .horizonPredicted {
-  border: 2px solid hsl(var(--muted-foreground));
-  background: hsl(var(--card));
+  border: 2px solid var(--c-muted);
+  background: var(--c-surface);
 }
 
 .horizonActual {
@@ -635,7 +635,7 @@
   top: 0;
   max-width: 170px;
   overflow: hidden;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -650,9 +650,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  border-top: 1px dashed hsl(var(--border));
+  border-top: 1px dashed var(--c-line);
   padding-top: 10px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 12px;
 }
 
@@ -669,7 +669,7 @@
 }
 
 .swatchOutline {
-  border: 2px solid hsl(var(--muted-foreground));
+  border: 2px solid var(--c-muted);
 }
 
 .swatchActual {
@@ -684,9 +684,9 @@
 }
 
 .insight {
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: hsl(var(--muted) / 0.22);
+  background: var(--c-surface-2);
   padding: 12px;
 }
 
@@ -705,9 +705,9 @@
 
 .insightCount {
   border-radius: 999px;
-  background: hsl(var(--muted));
+  background: var(--c-surface-3);
   padding: 2px 7px;
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
   font-weight: 760;
 }
@@ -723,7 +723,7 @@
   min-width: 0;
   align-items: center;
   gap: 8px;
-  color: hsl(var(--foreground));
+  color: var(--c-text);
   font-size: 12px;
 }
 
@@ -736,7 +736,7 @@
 }
 
 .insightMeta {
-  color: hsl(var(--muted-foreground));
+  color: var(--c-muted);
   font-size: 11px;
 }
 
@@ -759,7 +759,7 @@
 
   .heroTitle {
     border-right: 0;
-    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    border-bottom: 1px solid var(--c-line);
   }
 
   .teamRowMain {
@@ -887,26 +887,21 @@
   }
 }
 
-/* ── Picker bar ── */
-.cPicker {
+/* ── Picker row (compact, label-less; sits under the KPI cards) ── */
+.cPickerRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
-.cPickerField {
-  display: flex;
-  min-width: 200px;
-  flex: 1;
-  flex-direction: column;
-  gap: 6px;
+.cPickTournament {
+  min-width: 240px;
+  max-width: 440px;
+  flex: 1 1 240px;
 }
-.cPickerLabel {
-  color: var(--c-faint);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.cPickAlgorithm {
+  min-width: 170px;
+  flex: 0 1 220px;
 }
 
 /* ── Status pill ── */
@@ -973,16 +968,6 @@
   height: 130%;
   background: radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 60%);
   pointer-events: none;
-}
-.cHeroControls {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--c-line-2);
 }
 .cHeroPrompt {
   position: relative;
@@ -1806,6 +1791,7 @@
   background: var(--c-surface-3);
 }
 .cImpactFill {
+  display: block;
   height: 100%;
   border-radius: 4px;
 }

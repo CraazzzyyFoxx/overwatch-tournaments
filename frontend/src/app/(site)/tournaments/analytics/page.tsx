@@ -229,7 +229,7 @@ const AnalyticsPage = () => {
 
   return (
     <div className={cn(styles.surface, styles.cRoot)}>
-      {/* Persistent header: tournament identity + the pickers, folded together. */}
+      {/* Persistent header: tournament identity + stat blocks. */}
       <TournamentHero
         tournament={activeTournament}
         algorithmName={activeAlgorithm?.name}
@@ -243,7 +243,6 @@ const AnalyticsPage = () => {
               }
             : null
         }
-        pickerSlot={picker}
       />
 
       {canRecalculateAnalytics && tournamentId != null ? (
@@ -251,27 +250,43 @@ const AnalyticsPage = () => {
       ) : null}
 
       {!isFiltersReady ? (
-        <AnalyticsContentSkeleton />
-      ) : tournamentId == null || algorithmId == null ? null : isErrorAnalytics ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
-            <CardDescription>{t("analytics.page.unavailableDesc")}</CardDescription>
-          </CardHeader>
-        </Card>
+        <>
+          {picker}
+          <AnalyticsContentSkeleton />
+        </>
+      ) : tournamentId == null || algorithmId == null ? (
+        picker
+      ) : isErrorAnalytics ? (
+        <>
+          {picker}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
+              <CardDescription>{t("analytics.page.unavailableDesc")}</CardDescription>
+            </CardHeader>
+          </Card>
+        </>
       ) : loadingAnalytics || !analytics ? (
-        <AnalyticsContentSkeleton />
+        <>
+          {picker}
+          <AnalyticsContentSkeleton />
+        </>
       ) : isEmptyTeams ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("analytics.page.noTeams")}</CardTitle>
-            <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
-          </CardHeader>
-        </Card>
+        <>
+          {picker}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("analytics.page.noTeams")}</CardTitle>
+              <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
+            </CardHeader>
+          </Card>
+        </>
       ) : viewModel ? (
         <>
           <VerdictBanner verdict={viewModel.verdict} onExplain={explain} />
           <KpiRail kpis={viewModel.kpis} onExplain={explain} onSelect={onKpiSelect} />
+          {/* Controls under the KPI cards. */}
+          {picker}
           <div ref={standingsRef}>
             <MasterDetail
               key={`${tournamentId}-${algorithmId}`}

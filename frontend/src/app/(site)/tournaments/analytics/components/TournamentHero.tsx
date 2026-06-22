@@ -17,13 +17,11 @@ interface HeroTotals {
 }
 
 interface TournamentHeroProps {
-  /** Null before a tournament is picked — the hero still renders the picker. */
+  /** Null before a tournament is picked — the hero still renders a prompt. */
   tournament?: Tournament | null;
   algorithmName?: string | null;
   /** Present once analytics has loaded; the stat blocks render only then. */
   totals?: HeroTotals | null;
-  /** Tournament + algorithm selectors, folded into the hero header. */
-  pickerSlot: React.ReactNode;
 }
 
 function formatDateRange(start: Date | string, end: Date | string, locale: "en" | "ru"): string {
@@ -56,7 +54,6 @@ export default function TournamentHero({
   tournament,
   algorithmName,
   totals,
-  pickerSlot,
 }: TournamentHeroProps) {
   const { t, locale } = useTranslation();
   const statusMeta = tournament ? getTournamentStatusMeta(tournament.status) : null;
@@ -71,8 +68,6 @@ export default function TournamentHero({
       <span className={styles.cHeroHex} aria-hidden="true" />
       <span className={styles.cHeroGlowRose} aria-hidden="true" />
       <span className={styles.cHeroGlowTeal} aria-hidden="true" />
-
-      <div className={styles.cHeroControls}>{pickerSlot}</div>
 
       {tournament ? (
         <div className={styles.cHeroInner}>
