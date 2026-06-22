@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { OAuthConnectionAdmin, OAuthProvider } from "@/types/rbac.types";
 
@@ -257,13 +256,16 @@ export default function OAuthConnectionsAdminPage() {
             sortDir,
             providerFilter
           ]}
-          queryFn={async (page, search, pageSize, sortField, sortDir) => {
-            const connections = await rbacService.listOAuthConnections({
+          queryFn={(page, search, pageSize, sortField, sortDir) =>
+            rbacService.listOAuthConnections({
+              page,
+              per_page: pageSize,
+              sort: sortField ?? undefined,
+              order: sortDir,
               search: search || undefined,
               provider: providerFilter !== "all" ? providerFilter : undefined
-            });
-            return paginateResults(sortArray(connections, sortField, sortDir), page, pageSize);
-          }}
+            })
+          }
           columns={columns}
           searchPlaceholder="Search by username, email, or provider ID..."
           emptyMessage="No OAuth connections found."

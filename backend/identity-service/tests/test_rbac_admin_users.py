@@ -34,7 +34,7 @@ _ensure_test_env()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src import models  # noqa: E402
+from src import models, schemas  # noqa: E402
 from src.services import auth_flows, auth_service, rbac_flows  # noqa: E402
 
 
@@ -100,21 +100,15 @@ def test_list_auth_users_route_returns_user_summaries(monkeypatch: pytest.Monkey
     admin_role = _role(1, "admin")
     users = [_user(7, "ada@example.com", roles=[admin_role], player_links=[_linked_player(12, "AdaPlayer")])]
 
-    async def fake_list_users_with_rbac(
-        session,
-        search=None,
-        role_id=None,
-        is_active=None,
-        is_superuser=None,
-        *,
-        include_player_links=False,
-    ):
-        assert search == "ada"
-        assert role_id == 1
-        assert is_active is True
-        assert is_superuser is False
+    async def fake_list_users_with_rbac(session, params, *, include_player_links=False):
+        assert params.search == "ada"
+        assert params.role_id == 1
+        assert params.is_active is True
+        assert params.is_superuser is False
+        assert params.page == 2
+        assert params.per_page == 25
         assert include_player_links is True
-        return users
+        return users, 51
 
     monkeypatch.setattr(
         "src.services.rbac_flows.auth_service.AuthService.list_users_with_rbac",
@@ -125,17 +119,20 @@ def test_list_auth_users_route_returns_user_summaries(monkeypatch: pytest.Monkey
         rbac_flows.list_auth_users(
             object(),
             SimpleNamespace(is_superuser=True),
-            search="ada",
-            role_id=1,
-            is_active=True,
-            is_superuser=False,
+            schemas.AuthUserListParams(
+                search="ada", role_id=1, is_active=True, is_superuser=False, page=2, per_page=25
+            ),
         )
     )
 
-    assert len(response) == 1
-    assert response[0].email == "ada@example.com"
-    assert response[0].linked_players[0].player_name == "AdaPlayer"
-    assert response[0].roles[0].name == "admin"
+    assert response["total"] == 51
+    assert response["page"] == 2
+    assert response["per_page"] == 25
+    results = response["results"]
+    assert len(results) == 1
+    assert results[0].email == "ada@example.com"
+    assert results[0].linked_players[0].player_name == "AdaPlayer"
+    assert results[0].roles[0].name == "admin"
 
 
 def test_require_permission_allows_user_with_matching_permission() -> None:
@@ -393,15 +390,68 @@ def test_list_auth_sessions_route_returns_superuser_inventory(monkeypatch: pytes
         rbac_flows.list_auth_sessions(
             object(),
             SimpleNamespace(is_superuser=True),
-            user_id=12,
-            search="ada",
-            status_filter="active",
+            schemas.SessionListParams(user_id=12, search="ada", status="active"),
         )
     )
 
-    assert len(response) == 1
-    assert response[0].session_id == "session-1"
-    assert response[0].email == "ada@example.com"
+    assert response["total"] == 1
+    assert response["page"] == 1
+    results = response["results"]
+    assert len(results) == 1
+    assert results[0].session_id == "session-1"
+    assert results[0].email == "ada@example.com"
+
+
+def test_list_auth_sessions_route_sorts_and_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+
+    def _summary(session_id: str, hours: int) -> dict:
+        seen = base.replace(hour=hours)
+        return {
+            "session_id": session_id,
+            "user_id": 1,
+            "email": f"{session_id}@example.com",
+            "username": session_id,
+            "status": "active",
+            "login_at": seen,
+            "last_seen_at": seen,
+            "expires_at": seen,
+            "revoked_at": None,
+            "user_agent": "Chrome",
+            "ip_address": "10.0.0.1",
+        }
+
+    summaries = [_summary("s1", 1), _summary("s2", 2), _summary("s3", 3)]
+
+    async def fake_list_all_sessions(session, *, user_id=None, search=None, status=None):
+        return list(summaries)
+
+    monkeypatch.setattr("src.services.rbac_flows.SessionService.list_all_sessions", fake_list_all_sessions)
+
+    # last_seen_at desc, page 1 of size 2 -> newest two sessions.
+    response = asyncio.run(
+        rbac_flows.list_auth_sessions(
+            object(),
+            SimpleNamespace(is_superuser=True),
+            schemas.SessionListParams(page=1, per_page=2, sort="last_seen_at", order="desc"),
+        )
+    )
+
+    assert response["total"] == 3
+    ids = [row.session_id for row in response["results"]]
+    assert ids == ["s3", "s2"]
+
+    # page 2 -> the remaining oldest session.
+    response_page2 = asyncio.run(
+        rbac_flows.list_auth_sessions(
+            object(),
+            SimpleNamespace(is_superuser=True),
+            schemas.SessionListParams(page=2, per_page=2, sort="last_seen_at", order="desc"),
+        )
+    )
+
+    assert response_page2["total"] == 3
+    assert [row.session_id for row in response_page2["results"]] == ["s1"]
 
 
 def test_assign_linked_player_to_auth_user_route_calls_admin_link_service(monkeypatch: pytest.MonkeyPatch) -> None:

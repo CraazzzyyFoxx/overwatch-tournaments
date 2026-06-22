@@ -1,10 +1,31 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { AccountApiKey, AccountApiKeyCreateResponse } from "@/types/auth.types";
+import type { PaginatedResponse } from "@/types/pagination.types";
 
 export const ACCOUNT_API_KEYS_QUERY_KEY = ["account", "api-keys"] as const;
+
+export interface AccountApiKeyStatusCounts {
+  total: number;
+  active: number;
+  expired: number;
+  revoked: number;
+}
+
+export type AccountApiKeyListResult = PaginatedResponse<AccountApiKey> & {
+  counts: AccountApiKeyStatusCounts;
+};
+
+export interface FetchAccountApiKeysArgs {
+  workspaceId: number;
+  page: number;
+  perPage: number;
+  sort?: string;
+  order?: string;
+  search?: string;
+}
 
 async function parseError(response: Response, fallback: string): Promise<Error> {
   const payload = await response.json().catch(() => null);
@@ -20,8 +41,18 @@ async function parseError(response: Response, fallback: string): Promise<Error> 
   return new Error(fallback);
 }
 
-async function fetchApiKeys(workspaceId: number): Promise<AccountApiKey[]> {
-  const response = await fetch(`/api/account/api-keys?workspace_id=${workspaceId}`, {
+export async function fetchAccountApiKeys(
+  args: FetchAccountApiKeysArgs
+): Promise<AccountApiKeyListResult> {
+  const params = new URLSearchParams();
+  params.set("workspace_id", String(args.workspaceId));
+  params.set("page", String(args.page));
+  params.set("per_page", String(args.perPage));
+  if (args.sort) params.set("sort", args.sort);
+  if (args.order) params.set("order", args.order);
+  if (args.search) params.set("search", args.search);
+
+  const response = await fetch(`/api/account/api-keys?${params.toString()}`, {
     method: "GET",
     cache: "no-store",
   });
@@ -73,15 +104,6 @@ async function revokeApiKey(id: number): Promise<void> {
   if (!response.ok && response.status !== 204) {
     throw await parseError(response, "Failed to revoke API key");
   }
-}
-
-export function useAccountApiKeys(workspaceId: number | null) {
-  return useQuery({
-    queryKey: [...ACCOUNT_API_KEYS_QUERY_KEY, workspaceId],
-    queryFn: () => fetchApiKeys(workspaceId as number),
-    enabled: workspaceId !== null,
-    retry: false,
-  });
 }
 
 export function useCreateAccountApiKey() {

@@ -167,6 +167,55 @@ func TestLogout_ForwardsAccessToken(t *testing.T) {
 	}
 }
 
+func TestRbacListSessions_ForwardsAllQuery(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":2,"per_page":25}}`)}
+	r := httptest.NewRequest(http.MethodGet,
+		"/api/auth/rbac/sessions?page=2&per_page=25&sort=last_seen_at&order=desc&status=active", nil)
+	r.Header.Set("Authorization", "Bearer acc")
+	w := httptest.NewRecorder()
+	newHandler(caller).RbacListSessions(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if caller.gotQueue != queueRbacListSessions {
+		t.Fatalf("queue = %q", caller.gotQueue)
+	}
+
+	var req struct {
+		AccessToken string              `json:"access_token"`
+		Query       map[string][]string `json:"query"`
+	}
+	if err := json.Unmarshal(caller.gotBody, &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.AccessToken != "acc" {
+		t.Fatalf("access_token = %q, want acc", req.AccessToken)
+	}
+	for key, want := range map[string]string{
+		"page": "2", "per_page": "25", "sort": "last_seen_at", "order": "desc", "status": "active",
+	} {
+		got := req.Query[key]
+		if len(got) != 1 || got[0] != want {
+			t.Fatalf("query[%q] = %v, want [%q]", key, got, want)
+		}
+	}
+}
+
+func TestRbacListSessions_NoBearer(t *testing.T) {
+	caller := &fakeCaller{}
+	r := httptest.NewRequest(http.MethodGet, "/api/auth/rbac/sessions?page=1", nil)
+	w := httptest.NewRecorder()
+	newHandler(caller).RbacListSessions(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if caller.called {
+		t.Fatal("RPC must not run without a bearer token")
+	}
+}
+
 func TestClientMeta(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")

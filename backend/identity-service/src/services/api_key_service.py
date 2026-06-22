@@ -6,6 +6,7 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
+import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
@@ -158,19 +159,80 @@ async def ensure_can_manage_api_keys(
         )
 
 
+async def _api_key_status_counts(
+    session: AsyncSession,
+    *,
+    auth_user_id: int,
+    workspace_id: int,
+) -> schemas.ApiKeyStatusCounts:
+    """Workspace-wide (current user's) API-key tallies by derived status."""
+    status_expr = sa.case(
+        (models.ApiKey.revoked_at.isnot(None), "revoked"),
+        (
+            sa.and_(models.ApiKey.expires_at.isnot(None), models.ApiKey.expires_at <= _now()),
+            "expired",
+        ),
+        else_="active",
+    )
+    rows = (
+        await session.execute(
+            sa.select(status_expr, sa.func.count(models.ApiKey.id))
+            .where(
+                models.ApiKey.auth_user_id == auth_user_id,
+                models.ApiKey.workspace_id == workspace_id,
+            )
+            .group_by(status_expr)
+        )
+    ).all()
+    tally = {str(label): int(count) for label, count in rows}
+    return schemas.ApiKeyStatusCounts(
+        total=sum(tally.values()),
+        active=tally.get("active", 0),
+        expired=tally.get("expired", 0),
+        revoked=tally.get("revoked", 0),
+    )
+
+
 async def list_api_keys(
     session: AsyncSession,
     *,
     user: models.AuthUser,
-    workspace_id: int,
-) -> list[schemas.ApiKeyRead]:
-    await ensure_can_manage_api_keys(session, user=user, workspace_id=workspace_id)
-    rows = await _api_key_repo.list_for_user_workspace(
-        session,
-        auth_user_id=user.id,
-        workspace_id=workspace_id,
+    params: schemas.ApiKeyListParams,
+) -> dict:
+    """Paginated list of the current user's API keys for a workspace, plus status counts."""
+    if params.workspace_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="workspace_id is required",
+        )
+    await ensure_can_manage_api_keys(session, user=user, workspace_id=params.workspace_id)
+
+    query = sa.select(models.ApiKey).where(
+        models.ApiKey.auth_user_id == user.id,
+        models.ApiKey.workspace_id == params.workspace_id,
     )
-    return [_serialize_api_key(row) for row in rows]
+    count_query = sa.select(sa.func.count(models.ApiKey.id)).where(
+        models.ApiKey.auth_user_id == user.id,
+        models.ApiKey.workspace_id == params.workspace_id,
+    )
+    if params.search:
+        term = f"%{params.search}%"
+        query = query.where(models.ApiKey.name.ilike(term))
+        count_query = count_query.where(models.ApiKey.name.ilike(term))
+
+    query = params.apply_pagination_sort(query, models.ApiKey)
+    rows = (await session.execute(query)).scalars().all()
+    total = (await session.execute(count_query)).scalar_one()
+    counts = await _api_key_status_counts(
+        session, auth_user_id=user.id, workspace_id=params.workspace_id
+    )
+    return {
+        "results": [_serialize_api_key(row) for row in rows],
+        "total": total,
+        "page": params.page,
+        "per_page": params.per_page,
+        "counts": counts,
+    }
 
 
 async def create_api_key(

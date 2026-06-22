@@ -297,15 +297,9 @@ func (h *Handler) OAuthUnlink(w http.ResponseWriter, r *http.Request) {
 
 // --- API keys (workspace-scoped, authenticated) ---
 
-// ListApiKeys mirrors GET /api-keys?workspace_id=.
+// ListApiKeys mirrors GET /api-keys?workspace_id=&page=&per_page=&sort=&order=&search=.
 func (h *Handler) ListApiKeys(w http.ResponseWriter, r *http.Request) {
-	token := bearerToken(r)
-	if token == "" {
-		writeDetail(w, http.StatusForbidden, "Not authenticated")
-		return
-	}
-	body, _ := json.Marshal(map[string]any{"access_token": token, "workspace_id": r.URL.Query().Get("workspace_id")})
-	h.callIdentity(w, r, queueListApiKeys, body, http.StatusOK)
+	h.authedAllQuery(w, r, queueListApiKeys, http.StatusOK)
 }
 
 // CreateApiKey mirrors POST /api-keys -> 201.
@@ -353,9 +347,9 @@ func (h *Handler) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
 // status/user_id) ride as scalar fields in the RPC body; path params likewise.
 // Permission checks + cache invalidation run in identity-svc's rbac_flows.
 
-// RbacListPermissions mirrors GET /rbac/permissions?workspace_id=.
+// RbacListPermissions mirrors GET /rbac/permissions?page=&per_page=&sort=&order=&search=&workspace_id=.
 func (h *Handler) RbacListPermissions(w http.ResponseWriter, r *http.Request) {
-	h.authedQuery(w, r, queueRbacListPermissions, http.StatusOK, "workspace_id")
+	h.authedAllQuery(w, r, queueRbacListPermissions, http.StatusOK)
 }
 
 // RbacCreatePermission mirrors POST /rbac/permissions -> 201.
@@ -369,9 +363,9 @@ func (h *Handler) RbacDeletePermission(w http.ResponseWriter, r *http.Request) {
 		map[string]any{"permission_id": r.PathValue("permission_id")})
 }
 
-// RbacListRoles mirrors GET /rbac/roles?workspace_id=.
+// RbacListRoles mirrors GET /rbac/roles?page=&per_page=&sort=&order=&search=&workspace_id=.
 func (h *Handler) RbacListRoles(w http.ResponseWriter, r *http.Request) {
-	h.authedQuery(w, r, queueRbacListRoles, http.StatusOK, "workspace_id")
+	h.authedAllQuery(w, r, queueRbacListRoles, http.StatusOK)
 }
 
 // RbacGetRole mirrors GET /rbac/roles/{role_id}.
@@ -394,10 +388,9 @@ func (h *Handler) RbacDeleteRole(w http.ResponseWriter, r *http.Request) {
 	h.authedFields(w, r, queueRbacDeleteRole, http.StatusNoContent, map[string]any{"role_id": r.PathValue("role_id")})
 }
 
-// RbacListAuthUsers mirrors GET /rbac/users?search=&role_id=&is_active=&is_superuser=&workspace_id=.
+// RbacListAuthUsers mirrors GET /rbac/users?page=&per_page=&sort=&order=&search=&role_id=&is_active=&is_superuser=&workspace_id=.
 func (h *Handler) RbacListAuthUsers(w http.ResponseWriter, r *http.Request) {
-	h.authedQuery(w, r, queueRbacListAuthUsers, http.StatusOK,
-		"search", "role_id", "is_active", "is_superuser", "workspace_id")
+	h.authedAllQuery(w, r, queueRbacListAuthUsers, http.StatusOK)
 }
 
 // RbacGetAuthUser mirrors GET /rbac/users/{user_id}.
@@ -432,14 +425,14 @@ func (h *Handler) RbacGetUserRoles(w http.ResponseWriter, r *http.Request) {
 	h.authedFields(w, r, queueRbacGetUserRoles, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
 }
 
-// RbacListOAuthConnections mirrors GET /rbac/oauth-connections?search=&provider=.
+// RbacListOAuthConnections mirrors GET /rbac/oauth-connections?page=&per_page=&sort=&order=&search=&provider=.
 func (h *Handler) RbacListOAuthConnections(w http.ResponseWriter, r *http.Request) {
-	h.authedQuery(w, r, queueRbacListOAuthConns, http.StatusOK, "search", "provider")
+	h.authedAllQuery(w, r, queueRbacListOAuthConns, http.StatusOK)
 }
 
-// RbacListSessions mirrors GET /rbac/sessions?user_id=&search=&status=.
+// RbacListSessions mirrors GET /rbac/sessions?page=&per_page=&sort=&order=&search=&user_id=&status=.
 func (h *Handler) RbacListSessions(w http.ResponseWriter, r *http.Request) {
-	h.authedQuery(w, r, queueRbacListSessions, http.StatusOK, "user_id", "search", "status")
+	h.authedAllQuery(w, r, queueRbacListSessions, http.StatusOK)
 }
 
 // RbacDeleteOAuthConnection mirrors DELETE /rbac/oauth-connections/{connection_id} -> 204.
@@ -502,6 +495,23 @@ func (h *Handler) authedQuery(w http.ResponseWriter, r *http.Request, queue stri
 	}
 	b, _ := json.Marshal(body)
 	h.callIdentity(w, r, queue, b, successStatus)
+}
+
+// authedAllQuery handles a bearer-authenticated paginated GET, forwarding the
+// access token plus ALL query params nested under "query" (as {key: [values]},
+// mirroring edge.AllQuery). identity-svc rebuilds its query-params model via
+// shared.rpc.query.build_query_model — pagination, sort, and filters all ride here.
+func (h *Handler) authedAllQuery(w http.ResponseWriter, r *http.Request, queue string, successStatus int) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusForbidden, "Not authenticated")
+		return
+	}
+	body, _ := json.Marshal(map[string]any{
+		"access_token": token,
+		"query":        map[string][]string(r.URL.Query()),
+	})
+	h.callIdentity(w, r, queue, body, successStatus)
 }
 
 // authedMerge handles a bearer-authenticated endpoint with a JSON request body,

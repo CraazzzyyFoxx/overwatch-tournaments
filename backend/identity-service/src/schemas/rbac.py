@@ -1,9 +1,12 @@
 """
 RBAC (Role-Based Access Control) schemas
 """
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+from shared.core import pagination
 
 __all__ = (
     "AuthUserLinkedPlayerRead",
@@ -21,6 +24,14 @@ __all__ = (
     "RoleWithPermissions",
     "UserRoleAssign",
     "UserRoleRemove",
+    "AuthUserListQueryParams",
+    "AuthUserListParams",
+    "SessionListQueryParams",
+    "SessionListParams",
+    "PermissionListQueryParams",
+    "PermissionListParams",
+    "RoleListQueryParams",
+    "RoleListParams",
 )
 
 
@@ -158,3 +169,85 @@ class UserRoleRemove(BaseModel):
     """Schema for removing role from user"""
     user_id: int = Field(..., description="User ID")
     role_id: int = Field(..., description="Role ID")
+
+
+# --- Pagination query/params for admin list endpoints ---
+
+_AUTH_USER_SORT = Literal["id", "email", "username", "created_at"]
+_SESSION_SORT = Literal["login_at", "last_seen_at", "expires_at", "status"]
+_PERMISSION_SORT = Literal["id", "name", "resource", "action"]
+_ROLE_SORT = Literal["id", "name"]
+
+
+class AuthUserListQueryParams(pagination.PaginationSortQueryParams[_AUTH_USER_SORT]):
+    """Query params for the admin auth-user list (GET /rbac/users)."""
+
+    per_page: int = Field(default=20, ge=-1, le=100)
+    sort: _AUTH_USER_SORT = "id"
+    order: pagination.SortOrder = pagination.SortOrder.DESC
+    search: str | None = None
+    role_id: int | None = None
+    is_active: bool | None = None
+    is_superuser: bool | None = None
+    workspace_id: int | None = None
+
+
+@dataclass
+class AuthUserListParams(pagination.PaginationSortParams):
+    per_page: int = 20
+    search: str | None = None
+    role_id: int | None = None
+    is_active: bool | None = None
+    is_superuser: bool | None = None
+    workspace_id: int | None = None
+
+
+class SessionListQueryParams(pagination.PaginationSortQueryParams[_SESSION_SORT]):
+    """Query params for the admin session inventory (GET /rbac/sessions)."""
+
+    per_page: int = Field(default=20, ge=-1, le=100)
+    sort: _SESSION_SORT = "last_seen_at"
+    order: pagination.SortOrder = pagination.SortOrder.DESC
+    search: str | None = None
+    user_id: int | None = None
+    status: Literal["active", "revoked", "expired"] | None = None
+
+
+@dataclass
+class SessionListParams(pagination.PaginationSortParams):
+    per_page: int = 20
+    search: str | None = None
+    user_id: int | None = None
+    status: str | None = None
+
+
+class PermissionListQueryParams(pagination.PaginationSortQueryParams[_PERMISSION_SORT]):
+    """Query params for the permission inventory (GET /rbac/permissions)."""
+
+    per_page: int = Field(default=20, ge=-1, le=100)
+    sort: _PERMISSION_SORT = "name"
+    search: str | None = None
+    workspace_id: int | None = None
+
+
+@dataclass
+class PermissionListParams(pagination.PaginationSortParams):
+    per_page: int = 20
+    search: str | None = None
+    workspace_id: int | None = None
+
+
+class RoleListQueryParams(pagination.PaginationSortQueryParams[_ROLE_SORT]):
+    """Query params for the role list (GET /rbac/roles)."""
+
+    per_page: int = Field(default=20, ge=-1, le=100)
+    sort: _ROLE_SORT = "name"
+    search: str | None = None
+    workspace_id: int | None = None
+
+
+@dataclass
+class RoleListParams(pagination.PaginationSortParams):
+    per_page: int = 20
+    search: str | None = None
+    workspace_id: int | None = None

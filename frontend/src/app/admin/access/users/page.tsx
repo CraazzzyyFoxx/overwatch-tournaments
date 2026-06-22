@@ -39,7 +39,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { AuthAdminUser } from "@/types/rbac.types";
 import type { MinimizedUser } from "@/types/user.types";
@@ -60,7 +59,7 @@ export default function AccessAdminUsersPage() {
 
   const rolesQuery = useQuery({
     queryKey: ["access-admin", "roles", "all"],
-    queryFn: () => rbacService.listRoles(),
+    queryFn: () => rbacService.listRolesAll(),
     enabled: canAssignRoles
   });
 
@@ -236,10 +235,15 @@ export default function AccessAdminUsersPage() {
           sortField,
           sortDir
         ]}
-        queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const users = await rbacService.listUsers({ search: search || undefined });
-          return paginateResults(sortArray(users, sortField, sortDir), page, pageSize);
-        }}
+        queryFn={(page, search, pageSize, sortField, sortDir) =>
+          rbacService.listUsers({
+            page,
+            per_page: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir,
+            search: search || undefined,
+          })
+        }
         columns={columns}
         searchPlaceholder="Search auth users..."
         emptyMessage="No auth users found."

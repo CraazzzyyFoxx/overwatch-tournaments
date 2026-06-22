@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 
 from faststream import FastStream
@@ -24,6 +24,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.rpc.query import build_query_model
 
 from src import schemas
 from src.core import db
@@ -419,13 +420,11 @@ async def rpc_oauth_unlink(data: dict, msg: RabbitMessage) -> dict:
 async def rpc_list_api_keys(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        try:
-            workspace_id = int(data.get("workspace_id"))
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=422, detail="workspace_id is required")
-        keys = await api_key_service.list_api_keys(session, user=user, workspace_id=workspace_id)
-        return [k.model_dump(mode="json") for k in keys]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.ApiKeyListQueryParams, data.get("query"))
+        params = schemas.ApiKeyListParams.from_query_params(qp)
+        res = await api_key_service.list_api_keys(session, user=user, params=params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -513,13 +512,33 @@ def _opt_str(data: dict, key: str) -> str | None:
     return str(raw)
 
 
+def _paginated_dump(res: dict) -> dict:
+    """Serialize a service-layer ``{results, total, page, per_page}`` envelope.
+
+    ``results`` holds Pydantic models; everything else is passed through (so an
+    optional ``counts`` model is serialized too).
+    """
+    out: dict[str, Any] = {
+        "results": [item.model_dump(mode="json") for item in res["results"]],
+        "total": res["total"],
+        "page": res["page"],
+        "per_page": res["per_page"],
+    }
+    counts = res.get("counts")
+    if counts is not None:
+        out["counts"] = counts.model_dump(mode="json")
+    return out
+
+
 @broker.subscriber("rpc.identity.rbac.list_permissions")
 async def rpc_rbac_list_permissions(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        permissions = await rbac_flows.list_permissions(session, user, _opt_int(data, "workspace_id"))
-        return [schemas.PermissionRead.model_validate(p, from_attributes=True).model_dump(mode="json") for p in permissions]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.PermissionListQueryParams, data.get("query"))
+        params = schemas.PermissionListParams.from_query_params(qp)
+        res = await rbac_flows.list_permissions(session, user, params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -553,9 +572,11 @@ async def rpc_rbac_delete_permission(data: dict, msg: RabbitMessage) -> dict:
 async def rpc_rbac_list_roles(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        roles = await rbac_flows.list_roles(session, user, _opt_int(data, "workspace_id"))
-        return [schemas.RoleRead.model_validate(r, from_attributes=True).model_dump(mode="json") for r in roles]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.RoleListQueryParams, data.get("query"))
+        params = schemas.RoleListParams.from_query_params(qp)
+        res = await rbac_flows.list_roles(session, user, params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -618,17 +639,11 @@ async def rpc_rbac_delete_role(data: dict, msg: RabbitMessage) -> dict:
 async def rpc_rbac_list_auth_users(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        users = await rbac_flows.list_auth_users(
-            session,
-            user,
-            search=_opt_str(data, "search"),
-            role_id=_opt_int(data, "role_id"),
-            is_active=_opt_bool(data, "is_active"),
-            is_superuser=_opt_bool(data, "is_superuser"),
-            workspace_id=_opt_int(data, "workspace_id"),
-        )
-        return [u.model_dump(mode="json") for u in users]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.AuthUserListQueryParams, data.get("query"))
+        params = schemas.AuthUserListParams.from_query_params(qp)
+        res = await rbac_flows.list_auth_users(session, user, params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -717,11 +732,11 @@ async def rpc_rbac_get_user_roles(data: dict, msg: RabbitMessage) -> dict:
 async def rpc_rbac_list_oauth_connections(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        conns = await rbac_flows.list_oauth_connections(
-            session, user, search=_opt_str(data, "search"), provider=_opt_str(data, "provider")
-        )
-        return [c.model_dump(mode="json") for c in conns]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.OAuthConnectionListQueryParams, data.get("query"))
+        params = schemas.OAuthConnectionListParams.from_query_params(qp)
+        res = await rbac_flows.list_oauth_connections(session, user, params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -730,21 +745,11 @@ async def rpc_rbac_list_oauth_connections(data: dict, msg: RabbitMessage) -> dic
 async def rpc_rbac_list_sessions(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
-    async def op(session: Any, user: Any) -> list[dict]:
-        status_filter: Literal["active", "revoked", "expired"] | None = None
-        raw_status = _opt_str(data, "status")
-        if raw_status is not None:
-            if raw_status not in ("active", "revoked", "expired"):
-                raise HTTPException(status_code=422, detail="invalid status filter")
-            status_filter = raw_status  # type: ignore[assignment]
-        summaries = await rbac_flows.list_auth_sessions(
-            session,
-            user,
-            user_id=_opt_int(data, "user_id"),
-            search=_opt_str(data, "search"),
-            status_filter=status_filter,
-        )
-        return [s.model_dump(mode="json") for s in summaries]
+    async def op(session: Any, user: Any) -> dict:
+        qp = build_query_model(schemas.SessionListQueryParams, data.get("query"))
+        params = schemas.SessionListParams.from_query_params(qp)
+        res = await rbac_flows.list_auth_sessions(session, user, params)
+        return _paginated_dump(res)
 
     return await _with_active_user(data.get("access_token"), op)
 

@@ -2,10 +2,13 @@
 Generic OAuth schemas for multiple providers
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
+from shared.core import pagination
 
 __all__ = (
     "OAuthProvider",
@@ -15,6 +18,8 @@ __all__ = (
     "OAuthUserInfo",
     "OAuthConnectionRead",
     "OAuthConnectionAdminRead",
+    "OAuthConnectionListQueryParams",
+    "OAuthConnectionListParams",
     "PlayerLinkRequest",
     "PlayerLinkResponse",
     "LinkedPlayer",
@@ -92,6 +97,26 @@ class OAuthConnectionAdminRead(OAuthConnectionRead):
     auth_user_email: str | None = None
     auth_user_username: str | None = None
     token_expires_at: datetime | None = None
+
+
+_OAUTH_CONN_SORT = Literal["id", "created_at", "provider", "provider_user_id", "username", "email"]
+
+
+class OAuthConnectionListQueryParams(pagination.PaginationSortQueryParams[_OAUTH_CONN_SORT]):
+    """Query params for the admin OAuth-connections list (GET /rbac/oauth-connections)."""
+
+    per_page: int = Field(default=20, ge=-1, le=100)
+    sort: _OAUTH_CONN_SORT = "created_at"
+    order: pagination.SortOrder = pagination.SortOrder.DESC
+    search: str | None = None
+    provider: str | None = None
+
+
+@dataclass
+class OAuthConnectionListParams(pagination.PaginationSortParams):
+    per_page: int = 20
+    search: str | None = None
+    provider: str | None = None
 
 
 class PlayerLinkRequest(BaseModel):

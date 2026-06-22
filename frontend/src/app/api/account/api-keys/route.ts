@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${AUTH_SERVICE_URL}/api-keys?workspace_id=${encodeURIComponent(workspaceId)}`, {
+    // Forward all query params (workspace_id + pagination/sort/search) to the gateway.
+    const query = request.nextUrl.searchParams.toString();
+    const response = await fetch(`${AUTH_SERVICE_URL}/api-keys?${query}`, {
       method: "GET",
       headers: authHeaders(accessToken),
       cache: "no-store",

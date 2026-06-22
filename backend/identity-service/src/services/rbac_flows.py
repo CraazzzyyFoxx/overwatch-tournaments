@@ -9,16 +9,18 @@ later phase removes it.
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Sequence
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core import pagination
 from loguru import logger
 from shared.models.oauth import OAuthConnection
 from shared.models.rbac import Permission, Role, role_permissions, user_roles
 from shared.models.workspace import WorkspaceMember
 from shared.rbac import user_has_only_workspace_owner_role
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -134,22 +136,43 @@ def _require_superuser(user: models.AuthUser) -> None:
 async def list_permissions(
     session: AsyncSession,
     current_user: models.AuthUser,
-    workspace_id: int | None = None,
-) -> list[Permission]:
-    """List all permissions visible to RBAC operators."""
-    if workspace_id is None:
+    params: schemas.PermissionListParams,
+) -> dict:
+    """List permissions visible to RBAC operators (paginated, server-side search)."""
+    if params.workspace_id is None:
         if not _has_global_permission(current_user, "permission", "read"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Permission denied: permission.read required",
             )
-    elif not _has_workspace_permission(current_user, workspace_id, "permission", "read"):
+    elif not _has_workspace_permission(current_user, params.workspace_id, "permission", "read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied: permission.read required",
         )
-    result = await session.execute(select(Permission))
-    return list(result.scalars().all())
+
+    query = select(Permission)
+    count_query = select(func.count(Permission.id))
+    if params.search:
+        term = f"%{params.search}%"
+        condition = (
+            Permission.name.ilike(term)
+            | Permission.resource.ilike(term)
+            | Permission.action.ilike(term)
+            | Permission.description.ilike(term)
+        )
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    query = params.apply_pagination_sort(query, Permission)
+    permissions = (await session.execute(query)).scalars().all()
+    total = (await session.execute(count_query)).scalar_one()
+    return {
+        "results": [schemas.PermissionRead.model_validate(p, from_attributes=True) for p in permissions],
+        "total": total,
+        "page": params.page,
+        "per_page": params.per_page,
+    }
 
 
 async def create_permission(
@@ -206,22 +229,38 @@ async def delete_permission(
 async def list_roles(
     session: AsyncSession,
     current_user: models.AuthUser,
-    workspace_id: int | None = None,
-) -> list[Role]:
-    """List roles, optionally filtered by workspace scope."""
+    params: schemas.RoleListParams,
+) -> dict:
+    """List roles by scope (paginated, server-side search)."""
     query = select(Role)
+    count_query = select(func.count(Role.id))
 
-    if workspace_id is not None:
-        if not _has_workspace_permission(current_user, workspace_id, "role", "read") and not _has_global_permission(current_user, "role", "read"):
+    if params.workspace_id is not None:
+        if not _has_workspace_permission(current_user, params.workspace_id, "role", "read") and not _has_global_permission(current_user, "role", "read"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-        query = query.where(Role.workspace_id == workspace_id)
+        query = query.where(Role.workspace_id == params.workspace_id)
+        count_query = count_query.where(Role.workspace_id == params.workspace_id)
     else:
         if not _has_global_permission(current_user, "role", "read"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied: role.read required")
         query = query.where(Role.workspace_id.is_(None))
+        count_query = count_query.where(Role.workspace_id.is_(None))
 
-    result = await session.execute(query)
-    return list(result.scalars().all())
+    if params.search:
+        term = f"%{params.search}%"
+        condition = Role.name.ilike(term) | Role.description.ilike(term)
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    query = params.apply_pagination_sort(query, Role)
+    roles = (await session.execute(query)).scalars().all()
+    total = (await session.execute(count_query)).scalar_one()
+    return {
+        "results": [schemas.RoleRead.model_validate(r, from_attributes=True) for r in roles],
+        "total": total,
+        "page": params.page,
+        "per_page": params.per_page,
+    }
 
 
 async def get_role(
@@ -377,34 +416,32 @@ async def delete_role(
 async def list_auth_users(
     session: AsyncSession,
     current_user: models.AuthUser,
-    search: str | None = None,
-    role_id: int | None = None,
-    is_active: bool | None = None,
-    is_superuser: bool | None = None,
-    workspace_id: int | None = None,
-) -> list[schemas.AuthUserListRead]:
-    """List auth users with assigned roles."""
-    if workspace_id is None:
+    params: schemas.AuthUserListParams,
+) -> dict:
+    """List auth users with assigned roles (paginated, server-side filters)."""
+    if params.workspace_id is None:
         if not _has_global_permission(current_user, "auth_user", "read"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Permission denied: auth_user.read required",
             )
-    elif not _has_workspace_permission(current_user, workspace_id, "auth_user", "read"):
+    elif not _has_workspace_permission(current_user, params.workspace_id, "auth_user", "read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied: auth_user.read required",
         )
 
-    users = await auth_service.AuthService.list_users_with_rbac(
+    users, total = await auth_service.AuthService.list_users_with_rbac(
         session,
-        search=search,
-        role_id=role_id,
-        is_active=is_active,
-        is_superuser=is_superuser,
+        params,
         include_player_links=True,
     )
-    return [schemas.AuthUserListRead.model_validate(_auth_user_list_payload(user)) for user in users]
+    return {
+        "results": [schemas.AuthUserListRead.model_validate(_auth_user_list_payload(user)) for user in users],
+        "total": total,
+        "page": params.page,
+        "per_page": params.per_page,
+    }
 
 
 async def get_auth_user(
@@ -586,34 +623,34 @@ async def get_user_roles(
 async def list_oauth_connections(
     session: AsyncSession,
     current_user: models.AuthUser,
-    search: str | None = None,
-    provider: str | None = None,
-) -> list[schemas.OAuthConnectionAdminRead]:
-    """List all OAuth connections across all users (admin view)."""
+    params: schemas.OAuthConnectionListParams,
+) -> dict:
+    """List OAuth connections across all users (admin view, paginated)."""
     _require_permission(current_user, "auth_user", "read")
 
-    query = (
-        select(OAuthConnection)
-        .options(selectinload(OAuthConnection.auth_user))
-        .order_by(OAuthConnection.id.desc())
-    )
+    query = select(OAuthConnection).options(selectinload(OAuthConnection.auth_user))
+    count_query = select(func.count(OAuthConnection.id))
 
-    if provider:
-        query = query.where(OAuthConnection.provider == provider)
+    if params.provider:
+        query = query.where(OAuthConnection.provider == params.provider)
+        count_query = count_query.where(OAuthConnection.provider == params.provider)
 
-    if search:
-        term = f"%{search}%"
-        query = query.where(
+    if params.search:
+        term = f"%{params.search}%"
+        condition = (
             OAuthConnection.username.ilike(term)
             | OAuthConnection.email.ilike(term)
             | OAuthConnection.display_name.ilike(term)
             | OAuthConnection.provider_user_id.ilike(term)
         )
+        query = query.where(condition)
+        count_query = count_query.where(condition)
 
-    result = await session.execute(query)
-    connections = result.scalars().all()
+    query = params.apply_pagination_sort(query, OAuthConnection)
+    connections = (await session.execute(query)).scalars().all()
+    total = (await session.execute(count_query)).scalar_one()
 
-    return [
+    results = [
         schemas.OAuthConnectionAdminRead(
             id=conn.id,
             provider=conn.provider,
@@ -631,24 +668,62 @@ async def list_oauth_connections(
         )
         for conn in connections
     ]
+    return {"results": results, "total": total, "page": params.page, "per_page": params.per_page}
+
+
+_SESSION_SORT_KEYS = frozenset({"login_at", "last_seen_at", "expires_at", "status"})
+
+
+def _sort_session_summaries(
+    summaries: Sequence[dict],
+    sort: str,
+    order: pagination.SortOrder | str,
+) -> list[dict]:
+    """Stable-sort aggregated session summaries by a whitelisted key.
+
+    Logical sessions are aggregated from refresh tokens in Python, so sorting
+    happens here (not in SQL). Falls back to ``last_seen_at`` for unknown keys.
+    """
+    key_name = sort if sort in _SESSION_SORT_KEYS else "last_seen_at"
+    reverse = order == pagination.SortOrder.DESC or order == "desc"
+    _min_dt = datetime.min.replace(tzinfo=UTC)
+
+    if key_name == "status":
+        def key(summary: dict) -> tuple:
+            return (summary.get("status") or "",)
+    else:
+        def key(summary: dict) -> tuple:
+            return (summary.get(key_name) or _min_dt,)
+
+    return sorted(summaries, key=key, reverse=reverse)
 
 
 async def list_auth_sessions(
     session: AsyncSession,
     current_user: models.AuthUser,
-    user_id: int | None = None,
-    search: str | None = None,
-    status_filter: Literal["active", "revoked", "expired"] | None = None,
-) -> list[schemas.AdminSessionRead]:
-    """List logical auth sessions across all users (superuser only)."""
+    params: schemas.SessionListParams,
+) -> dict:
+    """List logical auth sessions across all users (superuser only, paginated).
+
+    Aggregation/status derivation stay in Python; sort + pagination are applied
+    to the aggregated summaries, and ``total`` reflects the filtered set.
+    """
     _require_superuser(current_user)
     summaries = await SessionService.list_all_sessions(
         session,
-        user_id=user_id,
-        search=search,
-        status=status_filter,
+        user_id=params.user_id,
+        search=params.search,
+        status=params.status,
     )
-    return [schemas.AdminSessionRead.model_validate(summary) for summary in summaries]
+    summaries = _sort_session_summaries(summaries, params.sort, params.order)
+    total = len(summaries)
+    page_items = params.paginate_data(summaries)
+    return {
+        "results": [schemas.AdminSessionRead.model_validate(summary) for summary in page_items],
+        "total": total,
+        "page": params.page,
+        "per_page": params.per_page,
+    }
 
 
 async def delete_oauth_connection(

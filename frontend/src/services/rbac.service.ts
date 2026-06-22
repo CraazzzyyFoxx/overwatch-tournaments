@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-fetch";
+import type { PaginatedResponse } from "@/types/pagination.types";
 import type {
   AdminAuthSession,
   AssignLinkedPlayerPayload,
@@ -11,6 +12,13 @@ import type {
   RbacRoleDetail,
   UpsertRolePayload,
 } from "@/types/rbac.types";
+
+type ListParams = {
+  page?: number;
+  per_page?: number;
+  sort?: string;
+  order?: string;
+};
 
 function normalizeAuthAdminUser(user: AuthAdminUser): AuthAdminUser {
   return {
@@ -26,6 +34,18 @@ function normalizeAuthAdminUserDetail(user: AuthAdminUserDetail): AuthAdminUserD
   };
 }
 
+/** Build a `?key=value` query string, skipping null/undefined/empty values. */
+function listQuery(params?: Record<string, unknown>): string {
+  if (!params) return "";
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    searchParams.set(key, String(value));
+  }
+  const suffix = searchParams.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
 async function rbacFetch<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const response = await apiFetch(`/api/auth${path}`, {
     method: init?.method,
@@ -39,36 +59,60 @@ async function rbacFetch<T>(path: string, init?: { method?: string; body?: unkno
   return response.json() as Promise<T>;
 }
 
-export const rbacService = {
-  listUsers(params?: {
-    search?: string;
-    role_id?: number;
-    is_active?: boolean;
-    is_superuser?: boolean;
-    workspace_id?: number;
-  }) {
-    const searchParams = new URLSearchParams();
-    if (params?.search) searchParams.set("search", params.search);
-    if (params?.role_id !== undefined) searchParams.set("role_id", String(params.role_id));
-    if (params?.is_active !== undefined) searchParams.set("is_active", String(params.is_active));
-    if (params?.is_superuser !== undefined) searchParams.set("is_superuser", String(params.is_superuser));
-    if (params?.workspace_id !== undefined) searchParams.set("workspace_id", String(params.workspace_id));
+type UserListParams = ListParams & {
+  search?: string;
+  role_id?: number;
+  is_active?: boolean;
+  is_superuser?: boolean;
+  workspace_id?: number;
+};
 
-    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
-    return rbacFetch<AuthAdminUser[]>(`/rbac/users${suffix}`).then((users) => users.map(normalizeAuthAdminUser));
+type RoleListParams = ListParams & {
+  search?: string;
+  workspace_id?: number | null;
+};
+
+type PermissionListParams = ListParams & {
+  search?: string;
+  workspace_id?: number | null;
+};
+
+type OAuthConnectionListParams = ListParams & {
+  search?: string;
+  provider?: string;
+};
+
+type SessionListParams = ListParams & {
+  search?: string;
+  user_id?: number;
+  status?: "active" | "revoked" | "expired";
+};
+
+export const rbacService = {
+  listUsers(params?: UserListParams): Promise<PaginatedResponse<AuthAdminUser>> {
+    return rbacFetch<PaginatedResponse<AuthAdminUser>>(`/rbac/users${listQuery(params)}`).then(
+      (page) => ({ ...page, results: page.results.map(normalizeAuthAdminUser) })
+    );
+  },
+
+  /** Fetch every matching auth user (for comboboxes/dropdowns, not paginated tables). */
+  async listUsersAll(params?: Omit<UserListParams, "page" | "per_page">): Promise<AuthAdminUser[]> {
+    const page = await this.listUsers({ ...params, per_page: -1 });
+    return page.results;
   },
 
   getUser(userId: number) {
     return rbacFetch<AuthAdminUserDetail>(`/rbac/users/${userId}`).then(normalizeAuthAdminUserDetail);
   },
 
-  listRoles(params?: { workspace_id?: number | null }) {
-    const searchParams = new URLSearchParams();
-    if (params?.workspace_id !== undefined && params.workspace_id !== null) {
-      searchParams.set("workspace_id", String(params.workspace_id));
-    }
-    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
-    return rbacFetch<RbacRole[]>(`/rbac/roles${suffix}`);
+  listRoles(params?: RoleListParams): Promise<PaginatedResponse<RbacRole>> {
+    return rbacFetch<PaginatedResponse<RbacRole>>(`/rbac/roles${listQuery(params)}`);
+  },
+
+  /** Fetch every role in scope (for selectors/matrices, not paginated tables). */
+  async listRolesAll(params?: Omit<RoleListParams, "page" | "per_page">): Promise<RbacRole[]> {
+    const page = await this.listRoles({ ...params, per_page: -1 });
+    return page.results;
   },
 
   getRole(roleId: number) {
@@ -95,13 +139,16 @@ export const rbacService = {
     });
   },
 
-  listPermissions(params?: { workspace_id?: number | null }) {
-    const searchParams = new URLSearchParams();
-    if (params?.workspace_id !== undefined && params.workspace_id !== null) {
-      searchParams.set("workspace_id", String(params.workspace_id));
-    }
-    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
-    return rbacFetch<RbacPermission[]>(`/rbac/permissions${suffix}`);
+  listPermissions(params?: PermissionListParams): Promise<PaginatedResponse<RbacPermission>> {
+    return rbacFetch<PaginatedResponse<RbacPermission>>(`/rbac/permissions${listQuery(params)}`);
+  },
+
+  /** Fetch every permission in scope (for the role permission matrix, not paginated tables). */
+  async listPermissionsAll(
+    params?: Omit<PermissionListParams, "page" | "per_page">
+  ): Promise<RbacPermission[]> {
+    const page = await this.listPermissions({ ...params, per_page: -1 });
+    return page.results;
   },
 
   assignRole(payload: AssignRolePayload) {
@@ -131,13 +178,12 @@ export const rbacService = {
     });
   },
 
-  listOAuthConnections(params?: { search?: string; provider?: string }) {
-    const searchParams = new URLSearchParams();
-    if (params?.search) searchParams.set("search", params.search);
-    if (params?.provider) searchParams.set("provider", params.provider);
-
-    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
-    return rbacFetch<OAuthConnectionAdmin[]>(`/rbac/oauth-connections${suffix}`);
+  listOAuthConnections(
+    params?: OAuthConnectionListParams
+  ): Promise<PaginatedResponse<OAuthConnectionAdmin>> {
+    return rbacFetch<PaginatedResponse<OAuthConnectionAdmin>>(
+      `/rbac/oauth-connections${listQuery(params)}`
+    );
   },
 
   deleteOAuthConnection(connectionId: number) {
@@ -146,13 +192,7 @@ export const rbacService = {
     });
   },
 
-  listSessions(params?: { user_id?: number; search?: string; status?: "active" | "revoked" | "expired" }) {
-    const searchParams = new URLSearchParams();
-    if (params?.user_id !== undefined) searchParams.set("user_id", String(params.user_id));
-    if (params?.search) searchParams.set("search", params.search);
-    if (params?.status) searchParams.set("status", params.status);
-
-    const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
-    return rbacFetch<AdminAuthSession[]>(`/rbac/sessions${suffix}`);
+  listSessions(params?: SessionListParams): Promise<PaginatedResponse<AdminAuthSession>> {
+    return rbacFetch<PaginatedResponse<AdminAuthSession>>(`/rbac/sessions${listQuery(params)}`);
   },
 };

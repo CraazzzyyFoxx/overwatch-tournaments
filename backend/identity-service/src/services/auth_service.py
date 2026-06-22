@@ -11,7 +11,7 @@ from loguru import logger
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.rbac import role_permissions, user_roles
-from sqlalchemy import insert, or_, select
+from sqlalchemy import func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -281,41 +281,48 @@ class AuthService:
     @staticmethod
     async def list_users_with_rbac(
         session: AsyncSession,
-        search: str | None = None,
-        role_id: int | None = None,
-        is_active: bool | None = None,
-        is_superuser: bool | None = None,
+        params: schemas.AuthUserListParams,
         *,
         include_player_links: bool = False,
-    ) -> list[models.AuthUser]:
-        """List auth users with roles and permissions eagerly loaded."""
+    ) -> tuple[list[models.AuthUser], int]:
+        """List auth users (paginated) with roles and permissions eagerly loaded.
 
-        query = AuthService._user_query_with_rbac(include_player_links=include_player_links).order_by(
-            models.AuthUser.id.desc()
-        )
+        Returns ``(page_of_users, total_matching)``. Filters are applied to both
+        the page query and the count query so the totals stay consistent.
+        """
 
-        if search:
-            term = f"%{search}%"
-            query = query.where(
-                or_(
-                    models.AuthUser.email.ilike(term),
-                    models.AuthUser.username.ilike(term),
-                    models.AuthUser.first_name.ilike(term),
-                    models.AuthUser.last_name.ilike(term),
-                )
+        query = AuthService._user_query_with_rbac(include_player_links=include_player_links)
+        count_query = select(func.count(models.AuthUser.id))
+
+        if params.search:
+            term = f"%{params.search}%"
+            condition = or_(
+                models.AuthUser.email.ilike(term),
+                models.AuthUser.username.ilike(term),
+                models.AuthUser.first_name.ilike(term),
+                models.AuthUser.last_name.ilike(term),
             )
+            query = query.where(condition)
+            count_query = count_query.where(condition)
 
-        if role_id is not None:
-            query = query.where(models.AuthUser.roles.any(models.Role.id == role_id))
+        if params.role_id is not None:
+            condition = models.AuthUser.roles.any(models.Role.id == params.role_id)
+            query = query.where(condition)
+            count_query = count_query.where(condition)
 
-        if is_active is not None:
-            query = query.where(models.AuthUser.is_active == is_active)
+        if params.is_active is not None:
+            query = query.where(models.AuthUser.is_active == params.is_active)
+            count_query = count_query.where(models.AuthUser.is_active == params.is_active)
 
-        if is_superuser is not None:
-            query = query.where(models.AuthUser.is_superuser == is_superuser)
+        if params.is_superuser is not None:
+            query = query.where(models.AuthUser.is_superuser == params.is_superuser)
+            count_query = count_query.where(models.AuthUser.is_superuser == params.is_superuser)
 
-        result = await session.execute(query)
-        return list(result.scalars().all())
+        query = params.apply_pagination_sort(query, models.AuthUser)
+
+        users = (await session.execute(query)).scalars().unique().all()
+        total = (await session.execute(count_query)).scalar_one()
+        return list(users), total
 
     @staticmethod
     async def authenticate_user(session: AsyncSession, email: str, password: str) -> models.AuthUser | None:
