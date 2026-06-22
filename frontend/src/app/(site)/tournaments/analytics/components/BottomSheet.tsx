@@ -1,28 +1,42 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 
 import { useTranslation } from "@/i18n/LanguageContext";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
-export type SheetState =
-  | { kind: "term"; term: GlossaryTerm }
-  | { kind: "how" };
+export type SheetState = { kind: "term"; term: GlossaryTerm } | { kind: "how" };
 
 interface BottomSheetProps {
   state: SheetState | null;
   onClose: () => void;
 }
 
+function Kicker({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-primary">
+      {children}
+    </span>
+  );
+}
+
 function TermBody({ term }: { term: GlossaryTerm }) {
   const { t } = useTranslation();
   return (
-    <>
-      <div className={styles.cSheetKicker}>{t("analytics.sheet.glossaryKicker")}</div>
-      <h3>{t(`analytics.glossary.${term}.label`)}</h3>
-      <p>{t(`analytics.glossary.${term}.plain`)}</p>
-    </>
+    <SheetHeader>
+      <Kicker>{t("analytics.sheet.glossaryKicker")}</Kicker>
+      <SheetTitle className="text-xl">{t(`analytics.glossary.${term}.label`)}</SheetTitle>
+      <SheetDescription className="text-sm leading-relaxed">
+        {t(`analytics.glossary.${term}.plain`)}
+      </SheetDescription>
+    </SheetHeader>
   );
 }
 
@@ -31,74 +45,57 @@ function HowBody() {
   const steps = [1, 2, 3] as const;
   return (
     <>
-      <div className={styles.cSheetKicker}>{t("analytics.howItWorks.kicker")}</div>
-      <h3>{t("analytics.howItWorks.title")}</h3>
-      <p>{t("analytics.howItWorks.intro")}</p>
-      <div style={{ margin: "4px 0 14px" }}>
+      <SheetHeader>
+        <Kicker>{t("analytics.howItWorks.kicker")}</Kicker>
+        <SheetTitle className="text-xl">{t("analytics.howItWorks.title")}</SheetTitle>
+        <SheetDescription className="text-sm leading-relaxed">
+          {t("analytics.howItWorks.intro")}
+        </SheetDescription>
+      </SheetHeader>
+      <div className="mt-4 flex flex-col gap-4">
         {steps.map((step) => (
-          <div className={styles.cSheetStep} key={step}>
-            <span className={styles.cSheetStepNum}>{step}</span>
+          <div className="flex items-start gap-3" key={step}>
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/15 text-sm font-bold text-primary">
+              {step}
+            </span>
             <span>
-              <span className={styles.cSheetStepTitle}>
+              <span className="block text-[15px] font-semibold text-foreground">
                 {t(`analytics.howItWorks.step${step}Title`)}
               </span>
-              <span className={styles.cSheetStepBody}>
+              <span className="mt-0.5 block text-sm leading-relaxed text-muted-foreground">
                 {t(`analytics.howItWorks.step${step}Body`)}
               </span>
             </span>
           </div>
         ))}
       </div>
-      <p className={styles.cSheetFoot}>{t("analytics.howItWorks.foot")}</p>
+      <p className="mt-4 text-[13px] italic text-muted-foreground">
+        {t("analytics.howItWorks.foot")}
+      </p>
     </>
   );
 }
 
 /**
- * The glossary / how-it-works explainer overlay — a bottom sheet on mobile, a
- * centered modal ≥760px. Opened by info dots, dotted terms and the help card.
+ * Glossary / how-it-works explainer, built on the shadcn Sheet (a bottom
+ * drawer). It only mounts while open (Radix portal), so nothing lingers in the
+ * DOM when closed. Opened by info dots, dotted terms and the help card.
  */
 export default function BottomSheet({ state, onClose }: BottomSheetProps) {
-  const { t } = useTranslation();
-  const open = state != null;
-  const label =
-    state?.kind === "how"
-      ? t("analytics.howItWorks.title")
-      : state?.kind === "term"
-        ? t(`analytics.glossary.${state.term}.label`)
-        : undefined;
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   return (
-    <>
-      <div
-        className={styles.cSheetScrim}
-        data-open={open}
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div
-        className={styles.cSheet}
-        data-open={open}
-        role="dialog"
-        aria-modal="true"
-        aria-hidden={!open}
-        aria-label={label}
+    <Sheet
+      open={state != null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[85vh] max-w-lg overflow-y-auto rounded-t-2xl"
       >
-        <div className={styles.cSheetGrip} />
-        <div className={styles.cSheetBody}>
-          {state?.kind === "term" ? <TermBody term={state.term} /> : null}
-          {state?.kind === "how" ? <HowBody /> : null}
-        </div>
-      </div>
-    </>
+        {state?.kind === "term" ? <TermBody term={state.term} /> : null}
+        {state?.kind === "how" ? <HowBody /> : null}
+      </SheetContent>
+    </Sheet>
   );
 }
