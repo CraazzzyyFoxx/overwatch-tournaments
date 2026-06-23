@@ -229,7 +229,8 @@ const AnalyticsPage = () => {
 
   return (
     <div className={cn(styles.surface, styles.cRoot)}>
-      {/* Persistent header: tournament identity + stat blocks. */}
+      {/* Persistent header: tournament identity + stat blocks + the analytics
+          picker, which sits in the right rail under the KPI stat blocks. */}
       <TournamentHero
         tournament={activeTournament}
         algorithmName={activeAlgorithm?.name}
@@ -243,10 +244,8 @@ const AnalyticsPage = () => {
               }
             : null
         }
+        controlsSlot={picker}
       />
-
-      {/* Analytics controls, directly under the hero. */}
-      {picker}
 
       {canRecalculateAnalytics && tournamentId != null ? (
         <OrganizerTools tournamentId={tournamentId} workspaceId={currentWorkspaceId} />

@@ -22,6 +22,8 @@ interface TournamentHeroProps {
   algorithmName?: string | null;
   /** Present once analytics has loaded; the stat blocks render only then. */
   totals?: HeroTotals | null;
+  /** Analytics picker controls, rendered in the right rail under the KPI blocks. */
+  controlsSlot?: React.ReactNode;
 }
 
 function formatDateRange(start: Date | string, end: Date | string, locale: "en" | "ru"): string {
@@ -47,13 +49,14 @@ function formatDateRange(start: Date | string, end: Date | string, locale: "en" 
 /**
  * The tournament identity hero — id-line, title, live status + format pills and
  * the four bracket stat blocks. Mirrors the design mock's `tn-hero`, sourced
- * from the active tournament + analytics totals. Accepts an `organizerSlot` for
- * permission-gated controls.
+ * from the active tournament + analytics totals. The `controlsSlot` (analytics
+ * picker) lives in the right rail, directly under the KPI stat blocks.
  */
 export default function TournamentHero({
   tournament,
   algorithmName,
   totals,
+  controlsSlot,
 }: TournamentHeroProps) {
   const { t, locale } = useTranslation();
   const statusMeta = tournament ? getTournamentStatusMeta(tournament.status) : null;
@@ -69,55 +72,64 @@ export default function TournamentHero({
       <span className={styles.cHeroGlowRose} aria-hidden="true" />
       <span className={styles.cHeroGlowTeal} aria-hidden="true" />
 
-      {tournament ? (
-        <div className={styles.cHeroInner}>
-          <div className={styles.cHeroLeft}>
-            <div className={styles.cHeroId}>
-              <span className={styles.cHeroIdNum}>#{tournament.number}</span>
-              {dates ? (
-                <>
-                  <span className={styles.cHeroSep}>·</span>
-                  <span>{dates}</span>
-                </>
-              ) : null}
-              {algorithmName ? (
-                <>
-                  <span className={styles.cHeroSep}>·</span>
-                  <span>
-                    {t("analytics.community.standings.rankedBy", { algorithm: algorithmName })}
+      <div className={styles.cHeroInner}>
+        <div className={styles.cHeroLeft}>
+          {tournament ? (
+            <>
+              <div className={styles.cHeroId}>
+                <span className={styles.cHeroIdNum}>#{tournament.number}</span>
+                {dates ? (
+                  <>
+                    <span className={styles.cHeroSep}>·</span>
+                    <span>{dates}</span>
+                  </>
+                ) : null}
+                {algorithmName ? (
+                  <>
+                    <span className={styles.cHeroSep}>·</span>
+                    <span>
+                      {t("analytics.community.standings.rankedBy", { algorithm: algorithmName })}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+
+              <h1 className={styles.cHeroTitle}>{tournament.name}</h1>
+
+              <div className={styles.cHeroMeta}>
+                {statusMeta ? (
+                  <span className={cn(styles.cStatusPill, statusMeta.textClassName)}>
+                    <span
+                      className={cn(
+                        styles.cStatusDot,
+                        statusMeta.isActive && styles.cStatusDotLive
+                      )}
+                    />
+                    {statusText}
                   </span>
-                </>
-              ) : null}
-            </div>
-
-            <h1 className={styles.cHeroTitle}>{tournament.name}</h1>
-
-            <div className={styles.cHeroMeta}>
-              {statusMeta ? (
-                <span className={cn(styles.cStatusPill, statusMeta.textClassName)}>
-                  <span
-                    className={cn(styles.cStatusDot, statusMeta.isActive && styles.cStatusDotLive)}
-                  />
-                  {statusText}
-                </span>
-              ) : null}
-              <span className={styles.cMetaPill}>
-                <span className={styles.cMetaPillK}>{t("analytics.hero.pillFormat")}</span>
-                <span className={styles.cMetaPillV}>
-                  {tournament.is_league
-                    ? t("analytics.hero.formatLeague")
-                    : t("analytics.hero.formatCup")}
-                </span>
-              </span>
-              {tournament.team_formation ? (
+                ) : null}
                 <span className={styles.cMetaPill}>
-                  <span className={styles.cMetaPillK}>{t("analytics.hero.pillTeamsBy")}</span>
-                  <span className={styles.cMetaPillV}>{tournament.team_formation}</span>
+                  <span className={styles.cMetaPillK}>{t("analytics.hero.pillFormat")}</span>
+                  <span className={styles.cMetaPillV}>
+                    {tournament.is_league
+                      ? t("analytics.hero.formatLeague")
+                      : t("analytics.hero.formatCup")}
+                  </span>
                 </span>
-              ) : null}
-            </div>
-          </div>
+                {tournament.team_formation ? (
+                  <span className={styles.cMetaPill}>
+                    <span className={styles.cMetaPillK}>{t("analytics.hero.pillTeamsBy")}</span>
+                    <span className={styles.cMetaPillV}>{tournament.team_formation}</span>
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className={styles.cHeroPrompt}>{t("analytics.briefing.pickPrompt")}</div>
+          )}
+        </div>
 
+        <div className={styles.cHeroRight}>
           {totals ? (
             <div className={styles.cHeroStats}>
               <div className={styles.cHeroStat}>
@@ -142,10 +154,10 @@ export default function TournamentHero({
               </div>
             </div>
           ) : null}
+
+          {controlsSlot ? <div className={styles.cHeroControls}>{controlsSlot}</div> : null}
         </div>
-      ) : (
-        <div className={styles.cHeroPrompt}>{t("analytics.briefing.pickPrompt")}</div>
-      )}
+      </div>
     </div>
   );
 }
