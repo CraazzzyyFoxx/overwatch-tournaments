@@ -215,6 +215,14 @@
   font-size: 13px;
 }
 
+.sectionHeadEnd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .sectionTabs {
   display: flex;
   gap: 4px;
@@ -822,8 +830,12 @@
     flex-direction: column;
   }
 
-  .sectionTabs {
+  .sectionHeadEnd {
     width: 100%;
+  }
+
+  .sectionTabs {
+    flex: 1;
   }
 
   .sectionTab {
@@ -1334,12 +1346,7 @@
   color: var(--c-text);
 }
 
-/* ── Organizer list/table view toggle ── */
-.cViewToggleRow {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
+/* ── List/table view toggle (rides the sort-tab row) ── */
 .cViewToggle {
   display: inline-flex;
   gap: 3px;
@@ -1447,10 +1454,20 @@
 }
 .cStandingsHead {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 2px 2px 0;
+}
+@media (max-width: 859px) {
+  .cStandingsHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cStandingsHead .cViewToggle {
+    align-self: flex-end;
+  }
 }
 .cStandingsTitle {
   color: var(--c-muted);

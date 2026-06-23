@@ -18,6 +18,8 @@ interface StandingsListProps {
   onSelectTeam: (teamId: number) => void;
   mode: StandingsMode;
   onModeChange: (mode: StandingsMode) => void;
+  /** Trailing control on the sort-tab row (the list/table view toggle). */
+  headerEnd?: React.ReactNode;
 }
 
 const MODES: StandingsMode[] = ["standings", "movers", "watch"];
@@ -92,6 +94,7 @@ export default function StandingsList({
   onSelectTeam,
   mode,
   onModeChange,
+  headerEnd,
 }: StandingsListProps) {
   const { t } = useTranslation();
   const rows = useMemo(() => sortTeams(teams, mode), [teams, mode]);
@@ -108,20 +111,23 @@ export default function StandingsList({
 
   return (
     <div className={styles.cStandings}>
-      <div className={styles.cSeg} role="tablist">
-        {MODES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={mode === value}
-            data-on={mode === value}
-            className={styles.cSegBtn}
-            onClick={() => onModeChange(value)}
-          >
-            {modeLabel[value]}
-          </button>
-        ))}
+      <div className={styles.cStandingsHead}>
+        <div className={styles.cSeg} role="tablist">
+          {MODES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              data-on={mode === value}
+              className={styles.cSegBtn}
+              onClick={() => onModeChange(value)}
+            >
+              {modeLabel[value]}
+            </button>
+          ))}
+        </div>
+        {headerEnd}
       </div>
 
       <div className={styles.cTeamRows}>

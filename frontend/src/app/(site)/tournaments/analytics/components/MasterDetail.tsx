@@ -43,10 +43,11 @@ function useMediaQuery(query: string): boolean {
 
 /**
  * The single team spine: a community standings list beside a sticky detail
- * aside (desktop) / push-nav stack (mobile). Organizer depth is woven in, not
- * bolted on — a "List | Table" toggle swaps the community list for the dense
- * per-player table (+ match quality), and the team detail shows the Monte-Carlo
- * distribution. Selection resets when the parent re-keys on tournament switch.
+ * aside (desktop) / push-nav stack (mobile). A public "List | Table" toggle —
+ * sitting on each view's sort-tab row — swaps the community list for the dense
+ * per-player table. Organizer-only depth (match quality, the v2 impact / vs-local
+ * / Monte-Carlo columns) is woven in where the viewer has `analytics.read`.
+ * Selection resets when the parent re-keys on tournament switch.
  */
 export default function MasterDetail({
   tournamentId,
@@ -67,7 +68,9 @@ export default function MasterDetail({
   const teamById = (id: number | null) =>
     id == null ? null : teams.find((team) => team.id === id) ?? null;
 
-  const viewToggle = canReadV2 ? (
+  // The list/table view toggle is public — it rides the right edge of each
+  // view's sort-tab row (passed in as `headerEnd`).
+  const viewToggle = (
     <div className={styles.cViewToggle} role="tablist">
       <button
         type="button"
@@ -90,19 +93,20 @@ export default function MasterDetail({
         {t("analytics.community.standings.viewTable")}
       </button>
     </div>
-  ) : null;
+  );
 
-  // ── Organizer table view: the dense per-player table + match quality ──
-  if (canReadV2 && view === "table") {
+  // ── Table view: the dense per-player table (public). Match quality stays
+  //    organizer-only — its data is permission-gated server-side. ──
+  if (view === "table") {
     return (
       <div className={styles.cColMain}>
-        {viewToggle ? <div className={styles.cViewToggleRow}>{viewToggle}</div> : null}
         <AnalyticsStandings
           teams={teams}
           performanceByPlayer={performanceByPlayer}
           distributionByTeam={distributionByTeam}
+          headerEnd={viewToggle}
         />
-        <MatchQualityCard tournamentId={tournamentId} />
+        {canReadV2 ? <MatchQualityCard tournamentId={tournamentId} /> : null}
       </div>
     );
   }
@@ -114,6 +118,7 @@ export default function MasterDetail({
       onSelectTeam={selection.selectTeam}
       mode={mode}
       onModeChange={onModeChange}
+      headerEnd={viewToggle}
     />
   );
 
@@ -146,12 +151,7 @@ export default function MasterDetail({
   if (!isDesktop) {
     const current = selection.current;
     if (current.kind === "overview") {
-      return (
-        <div className={styles.cColMain}>
-          {viewToggle ? <div className={styles.cViewToggleRow}>{viewToggle}</div> : null}
-          {list}
-        </div>
-      );
+      return <div className={styles.cColMain}>{list}</div>;
     }
     const team = teamById(current.teamId);
     if (!team) return <div className={styles.cColMain}>{list}</div>;
@@ -176,30 +176,27 @@ export default function MasterDetail({
       : null;
 
   return (
-    <div>
-      {viewToggle ? <div className={styles.cViewToggleRow}>{viewToggle}</div> : null}
-      <div className={styles.cMasterDetail}>
-        <div className={styles.cColMain}>{list}</div>
-        <aside className={styles.cAside}>
-          {selectedPlayer && selectedTeam ? (
-            <>
-              <button
-                type="button"
-                className={styles.cAsideBack}
-                onClick={() => selection.selectTeam(selectedTeam.id)}
-              >
-                <ChevronLeft size={14} aria-hidden="true" />
-                {t("analytics.community.player.backTo", { team: selectedTeam.name })}
-              </button>
-              {renderPlayer(selectedTeam, selectedPlayer.id)}
-            </>
-          ) : selectedTeam ? (
-            renderTeam(selectedTeam)
-          ) : (
-            <div className={styles.cAsideEmpty}>{t("analytics.community.team.pickPrompt")}</div>
-          )}
-        </aside>
-      </div>
+    <div className={styles.cMasterDetail}>
+      <div className={styles.cColMain}>{list}</div>
+      <aside className={styles.cAside}>
+        {selectedPlayer && selectedTeam ? (
+          <>
+            <button
+              type="button"
+              className={styles.cAsideBack}
+              onClick={() => selection.selectTeam(selectedTeam.id)}
+            >
+              <ChevronLeft size={14} aria-hidden="true" />
+              {t("analytics.community.player.backTo", { team: selectedTeam.name })}
+            </button>
+            {renderPlayer(selectedTeam, selectedPlayer.id)}
+          </>
+        ) : selectedTeam ? (
+          renderTeam(selectedTeam)
+        ) : (
+          <div className={styles.cAsideEmpty}>{t("analytics.community.team.pickPrompt")}</div>
+        )}
+      </aside>
     </div>
   );
 }
