@@ -9,7 +9,15 @@ from their cohort — so a clear individual outlier moves even when the team res
 doesn't capture it, instead of being averaged away:
 
     shift_v2 = clamp( w_team·team_result + w_os·os_shift
-                      + clip(indiv_scale·local_zscore, ±indiv_clamp) , ±3 )
+                      + clip(scale(div)·local_zscore, ±clamp(div)) , ±3 )
+
+The individual term's scale/clamp are **rank-dependent**: the same +N move is a
+far bigger claim near the ceiling (sparse cohort, steep real skill-per-SR, hard
+cap) than mid-ladder, so ``scale``/``clamp`` ramp linearly with the canonical
+division number — small at the top (division 1), full at the bottom — instead of
+applying one flat factor to everyone. The team/OS backbone is untouched, so a
+high-rank player still needs a strong *team* result to move far; one bright
+tournament can no longer yank them.
 
 There is no learned regression toward the (mostly-zero) realised move — that
 collapsed the signal. Weights/scales are fixed (config-tunable) and snapshotted
@@ -24,6 +32,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+from shared.division_grid import DEFAULT_GRID
 
 from .base import MLModel
 
@@ -42,8 +51,21 @@ NEWCOMER_SHIFT_RANGE: float = 1.5
 # Blend defaults (team-dominant backbone; additive individual skill term).
 BLEND_W_TEAM: float = 0.7
 BLEND_W_OS: float = 0.3
-INDIV_MOD_SCALE: float = 0.5   # divisions per std-dev of individual skill
-INDIV_MOD_CLAMP: float = 1.5   # max |individual skill modifier| in divisions
+# Individual skill modifier — RANK-DEPENDENT scale/clamp (divisions per std-dev
+# of, and max |modifier| in, divisions). ``_TOP`` applies at the highest rank
+# (canonical division 1, near the ceiling) and ``_BOTTOM`` at the lowest. The
+# same outlier therefore moves much less near the top (sparse, high-variance,
+# capped) than mid/low ladder where over-/under-ranking is common and cheap.
+INDIV_MOD_SCALE_TOP: float = 0.2
+INDIV_MOD_SCALE_BOTTOM: float = 0.8
+INDIV_MOD_CLAMP_TOP: float = 0.75
+INDIV_MOD_CLAMP_BOTTOM: float = 2.0
+
+# Canonical OW grid bounds (number 1 = top … 40 = bottom); the ramp is keyed on
+# the division number so it stays comparable across workspace grids.
+_GRID_MIN_DIV: float = float(DEFAULT_GRID.min_division)
+_GRID_MAX_DIV: float = float(DEFAULT_GRID.max_division)
+_GRID_MID_DIV: float = (_GRID_MIN_DIV + _GRID_MAX_DIV) / 2.0
 
 # Columns the blend reads (for MLModel/feature introspection).
 SHIFT_BLEND_COLUMNS: tuple[str, ...] = (
@@ -70,19 +92,43 @@ def _os_shift(df: pd.DataFrame) -> pd.Series:
     ).fillna(0.0)
 
 
-def _indiv_mod(df: pd.DataFrame, *, scale: float, clamp: float) -> pd.Series:
-    """Additive individual-skill modifier from Performance v2 local z-score.
+def _rank_ramp(div: pd.Series, *, top: float, bottom: float) -> pd.Series:
+    """Linear ramp on the canonical division number (1 = top … 40 = bottom).
+
+    Returns ``top`` at the highest rank (division 1) and ``bottom`` at the lowest;
+    rows with an unknown division fall back to the mid-ladder value (neutral).
+    """
+    d = pd.to_numeric(div, errors="coerce").fillna(_GRID_MID_DIV)
+    span = (_GRID_MAX_DIV - _GRID_MIN_DIV) or 1.0
+    t = ((d - _GRID_MIN_DIV) / span).clip(0.0, 1.0)
+    return top + (bottom - top) * t
+
+
+def _indiv_mod(
+    df: pd.DataFrame,
+    *,
+    scale_top: float,
+    scale_bottom: float,
+    clamp_top: float,
+    clamp_bottom: float,
+) -> pd.Series:
+    """Additive, rank-dependent individual-skill modifier from local z-score.
 
     ``local_zscore`` is the player's skill vs the same role + nearby division
-    cohort (not all players). Scaled to divisions and clamped to ±``clamp`` so a
-    strong outlier moves meaningfully but cannot run away. Zero where Performance
-    v2 is absent.
+    cohort (not all players). Scaled to divisions and clamped, with BOTH the
+    scale and the clamp ramped by the player's canonical division: small near the
+    ceiling (a +N there is a sparse, high-variance, capped claim), full mid/low
+    ladder. So a strong outlier moves meaningfully but a top-rank player can't be
+    yanked by one bright tournament. Zero where Performance v2 is absent.
     """
     z = pd.to_numeric(
         df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
         errors="coerce",
     ).fillna(0.0)
-    return (scale * z).clip(-clamp, clamp)
+    div = df.get("current_div", pd.Series(np.nan, index=df.index))
+    scale = _rank_ramp(div, top=scale_top, bottom=scale_bottom)
+    clamp = _rank_ramp(div, top=clamp_top, bottom=clamp_bottom)
+    return (scale * z).clip(lower=-clamp, upper=clamp)
 
 
 def _linear_confidence(df: pd.DataFrame) -> pd.Series:
@@ -105,8 +151,10 @@ class ShiftModelV2(MLModel):
 
     w_team: float = BLEND_W_TEAM
     w_os: float = BLEND_W_OS
-    indiv_scale: float = INDIV_MOD_SCALE
-    indiv_clamp: float = INDIV_MOD_CLAMP
+    indiv_scale_top: float = INDIV_MOD_SCALE_TOP
+    indiv_scale_bottom: float = INDIV_MOD_SCALE_BOTTOM
+    indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP
+    indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM
     shift_range: float = SHIFT_RANGE
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
 
@@ -115,7 +163,15 @@ class ShiftModelV2(MLModel):
             self.w_team * _team_result(df).to_numpy()
             + self.w_os * _os_shift(df).to_numpy()
         )
-        indiv = _indiv_mod(df, scale=self.indiv_scale, clamp=self.indiv_clamp).to_numpy()
+        # getattr fallbacks let artifacts pickled before the rank-dependent ramp
+        # load and degrade to the current code defaults instead of erroring.
+        indiv = _indiv_mod(
+            df,
+            scale_top=getattr(self, "indiv_scale_top", INDIV_MOD_SCALE_TOP),
+            scale_bottom=getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM),
+            clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
+            clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
+        ).to_numpy()
         shift = np.clip(backbone + indiv, -self.shift_range, self.shift_range)
         # Newcomers: team backbone only (one tournament of individual signal is
         # too noisy), clipped to the conservative newcomer range.
@@ -158,8 +214,10 @@ def train_shift_v2(
     val_df: pd.DataFrame | None = None,
     w_team: float = BLEND_W_TEAM,
     w_os: float = BLEND_W_OS,
-    indiv_scale: float = INDIV_MOD_SCALE,
-    indiv_clamp: float = INDIV_MOD_CLAMP,
+    indiv_scale_top: float = INDIV_MOD_SCALE_TOP,
+    indiv_scale_bottom: float = INDIV_MOD_SCALE_BOTTOM,
+    indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP,
+    indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM,
 ) -> ShiftTrainingResult:
     """Snapshot the (config-tunable) blend weights into a model artifact.
 
@@ -171,15 +229,22 @@ def train_shift_v2(
     if df.empty:
         raise ValueError("training DataFrame is empty")
     model = ShiftModelV2(
-        w_team=w_team, w_os=w_os, indiv_scale=indiv_scale, indiv_clamp=indiv_clamp
+        w_team=w_team,
+        w_os=w_os,
+        indiv_scale_top=indiv_scale_top,
+        indiv_scale_bottom=indiv_scale_bottom,
+        indiv_clamp_top=indiv_clamp_top,
+        indiv_clamp_bottom=indiv_clamp_bottom,
     )
 
     metrics: dict[str, float] = {
         "n_rows": float(len(df)),
         "w_team": w_team,
         "w_os": w_os,
-        "indiv_scale": indiv_scale,
-        "indiv_clamp": indiv_clamp,
+        "indiv_scale_top": indiv_scale_top,
+        "indiv_scale_bottom": indiv_scale_bottom,
+        "indiv_clamp_top": indiv_clamp_top,
+        "indiv_clamp_bottom": indiv_clamp_bottom,
     }
 
     def _mae_vs_realised(frame: pd.DataFrame) -> tuple[float, int] | None:
@@ -209,5 +274,9 @@ def train_shift_v2(
     return ShiftTrainingResult(
         model=model,
         metrics=metrics,
-        feature_importance={"team": w_team, "os": w_os, "indiv": indiv_scale},
+        feature_importance={
+            "team": w_team,
+            "os": w_os,
+            "indiv": (indiv_scale_top + indiv_scale_bottom) / 2.0,
+        },
     )

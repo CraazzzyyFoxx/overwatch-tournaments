@@ -50,9 +50,15 @@ class AppConfig(BaseServiceSettings):
     shift_w_team: float = 0.7
     shift_w_os: float = 0.3
     # Individual skill modifier: divisions per std-dev of Performance v2
-    # local_zscore (vs same role + nearby division), additive, clamped.
-    shift_indiv_scale: float = 0.5
-    shift_indiv_clamp: float = 1.5
+    # local_zscore (vs same role + nearby division), additive, clamped. The
+    # scale AND clamp are RANK-DEPENDENT — they ramp linearly with the canonical
+    # division number (1 = top … 40 = bottom): ``_top`` applies near the ceiling
+    # (the same +N is a sparse, high-variance, capped claim there) and
+    # ``_bottom`` at the lowest ranks (over-/under-ranking is common and cheap).
+    shift_indiv_scale_top: float = 0.2
+    shift_indiv_scale_bottom: float = 0.8
+    shift_indiv_clamp_top: float = 0.75
+    shift_indiv_clamp_bottom: float = 2.0
 
     # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
     # this flags the player as a strong cohort outlier regardless of rank (in

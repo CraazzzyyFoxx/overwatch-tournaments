@@ -94,7 +94,9 @@ class ShiftBlendTests(TestCase):
         self.assertIn("performance_v2_local_zscore", shift_v2.SHIFT_BLEND_COLUMNS)
 
     def test_backbone_is_weighted_team_plus_os(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5)
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3, indiv_scale_top=0.5, indiv_scale_bottom=0.5
+        )
         frame = pd.DataFrame(
             {
                 "linear_stable_shift": [1.0],
@@ -109,7 +111,11 @@ class ShiftBlendTests(TestCase):
         self.assertAlmostEqual(0.1, float(model.predict(frame).iloc[0]), places=6)
 
     def test_individual_skill_is_additive_and_widened(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.5, indiv_scale_bottom=0.5,
+            indiv_clamp_top=1.5, indiv_clamp_bottom=1.5,
+        )
         base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
                 "tournaments_played": [3], "is_newcomer": [False]}
 
@@ -119,12 +125,16 @@ class ShiftBlendTests(TestCase):
         s1 = float(model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [1.0]})).iloc[0])
         self.assertAlmostEqual(1.5, s3, places=6)
         self.assertAlmostEqual(0.5, s1, places=6)
-        # Clamped: a huge z saturates at indiv_clamp, not beyond.
+        # Clamped: a huge z saturates at the clamp, not beyond.
         s_big = float(model.predict(pd.DataFrame({**base, "performance_v2_local_zscore": [9.0]})).iloc[0])
         self.assertAlmostEqual(1.5, s_big, places=6)
 
     def test_individual_lifts_outlier_on_top_of_team(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.5, indiv_scale_bottom=0.5,
+            indiv_clamp_top=1.5, indiv_clamp_bottom=1.5,
+        )
         frame = pd.DataFrame(
             {
                 "linear_stable_shift": [1.0],
@@ -138,7 +148,11 @@ class ShiftBlendTests(TestCase):
         self.assertAlmostEqual(2.0, float(model.predict(frame).iloc[0]), places=6)
 
     def test_newcomer_uses_clipped_team_backbone_only(self) -> None:
-        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, indiv_scale=0.5, indiv_clamp=1.5)
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.5, indiv_scale_bottom=0.5,
+            indiv_clamp_top=1.5, indiv_clamp_bottom=1.5,
+        )
         frame = pd.DataFrame(
             {
                 "linear_stable_shift": [2.0],
@@ -150,6 +164,52 @@ class ShiftBlendTests(TestCase):
         )
         # backbone = 2.0 → clipped to newcomer range 1.5; individual term ignored.
         self.assertAlmostEqual(1.5, float(model.predict(frame).iloc[0]), places=6)
+
+    def test_individual_modifier_ramps_with_rank(self) -> None:
+        # Same outlier, flat team: the individual lift is small near the ceiling
+        # (canonical division 1) and large at the bottom (division 40).
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.2, indiv_scale_bottom=0.8,
+            indiv_clamp_top=0.75, indiv_clamp_bottom=2.0,
+        )
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "tournaments_played": [3], "is_newcomer": [False],
+                "performance_v2_local_zscore": [2.0]}
+        top = float(model.predict(pd.DataFrame({**base, "current_div": [1]})).iloc[0])
+        bottom = float(model.predict(pd.DataFrame({**base, "current_div": [40]})).iloc[0])
+        # div 1: 0.2*2 = 0.40 ; div 40: 0.8*2 = 1.60.
+        self.assertAlmostEqual(0.40, top, places=6)
+        self.assertAlmostEqual(1.60, bottom, places=6)
+        self.assertLess(top, bottom)
+
+    def test_individual_clamp_ramps_with_rank(self) -> None:
+        # A blatant outlier saturates at the rank-dependent clamp, not a flat one.
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.2, indiv_scale_bottom=0.8,
+            indiv_clamp_top=0.75, indiv_clamp_bottom=2.0,
+        )
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "tournaments_played": [3], "is_newcomer": [False],
+                "performance_v2_local_zscore": [9.0]}
+        top = float(model.predict(pd.DataFrame({**base, "current_div": [1]})).iloc[0])
+        bottom = float(model.predict(pd.DataFrame({**base, "current_div": [40]})).iloc[0])
+        self.assertAlmostEqual(0.75, top, places=6)   # capped tight near the ceiling
+        self.assertAlmostEqual(2.0, bottom, places=6)  # full range at the bottom
+
+    def test_missing_division_falls_back_to_mid_ladder(self) -> None:
+        # No current_div → neutral mid-ladder ramp (no over-/under-promotion).
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.2, indiv_scale_bottom=0.8,
+            indiv_clamp_top=0.75, indiv_clamp_bottom=2.0,
+        )
+        frame = pd.DataFrame({"linear_stable_shift": [0.0], "os_shift": [0.0],
+                              "tournaments_played": [3], "is_newcomer": [False],
+                              "performance_v2_local_zscore": [2.0]})
+        # mid t=0.5 → scale 0.5 → 0.5*2 = 1.0 (within mid clamp 1.375).
+        self.assertAlmostEqual(1.0, float(model.predict(frame).iloc[0]), places=6)
 
 
 class ShiftTrainTests(TestCase):
@@ -174,12 +234,17 @@ class ShiftTrainTests(TestCase):
 
     def test_snapshots_config_weights(self) -> None:
         result = shift_v2.train_shift_v2(
-            self._frame(60, seed=1), w_team=0.8, w_os=0.2, indiv_scale=0.4, indiv_clamp=2.0
+            self._frame(60, seed=1),
+            w_team=0.8, w_os=0.2,
+            indiv_scale_top=0.1, indiv_scale_bottom=0.4,
+            indiv_clamp_top=0.5, indiv_clamp_bottom=2.0,
         )
         self.assertEqual(0.8, result.model.w_team)
-        self.assertEqual(0.4, result.model.indiv_scale)
-        self.assertEqual(2.0, result.model.indiv_clamp)
+        self.assertEqual(0.1, result.model.indiv_scale_top)
+        self.assertEqual(0.4, result.model.indiv_scale_bottom)
+        self.assertEqual(2.0, result.model.indiv_clamp_bottom)
         self.assertEqual(0.8, result.metrics["w_team"])
+        self.assertEqual(0.1, result.metrics["indiv_scale_top"])
 
     def test_validation_frame_produces_held_out_metric(self) -> None:
         result = shift_v2.train_shift_v2(self._frame(60, seed=1), val_df=self._frame(40, seed=2))
