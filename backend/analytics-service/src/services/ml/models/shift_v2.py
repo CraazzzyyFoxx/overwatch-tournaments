@@ -9,11 +9,12 @@ individual signal is far from their cohort. It is the MAX of two channels:
 division) and a **raw match-log MVP dominance** lift. The dominance channel is a
 first-class signal bounded only by the rank/grid output clamp (not the softer
 local clamp), so a consistent scoreboard-topper that the expectation-adjusted
-impact under-credits is pushed to their rank-appropriate ceiling. The positive
-individual lift is then **gated by the team's final placement** — scaled down
-toward zero for a last-placed team — so strong individual play on a losing team
-does not earn a promotion. A clear individual outlier therefore moves even when
-the team result doesn't capture it, instead of being averaged away:
+impact under-credits is pushed to their rank-appropriate ceiling. A clear
+individual outlier therefore moves even when the team result doesn't capture it,
+instead of being averaged away. Finally the whole **positive shift is gated by
+the team's final placement** — scaled toward zero for a last-placed team — so no
+source (individual play OR a rating swing) promotes a player whose team finished
+poorly; demotions pass through:
 
     shift_v2 = clamp( w_team·team_result + w_os·os_shift
                       + clip(scale(div)·local_zscore, ±clamp(div)) ,
@@ -294,13 +295,6 @@ class ShiftModelV2(MLModel):
         ).to_numpy()
         dom_term = np.clip(dom_z, 0.0, out_clamp)
         indiv = np.maximum(z_term, dom_term)
-        # Gate the POSITIVE individual lift by the team's final placement — strong
-        # individual play on a last-placed team must not earn a promotion. A
-        # downward individual signal is placement-independent.
-        placement = _placement_factor(
-            df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)
-        ).to_numpy()
-        indiv = np.where(indiv > 0.0, indiv * placement, indiv)
         shift = np.clip(backbone + indiv, -out_clamp, out_clamp)
         # Newcomers: team backbone only (one tournament of individual signal is
         # too noisy), clipped to the conservative newcomer range but never looser
@@ -312,6 +306,14 @@ class ShiftModelV2(MLModel):
             np.clip(backbone, -newcomer_clamp, newcomer_clamp),
             shift,
         )
+        # Gate the POSITIVE shift by the team's final placement — no promotion for
+        # a poorly-placed team, however strong the individual play OR the rating
+        # swing (a losing team's spurious os_shift cannot promote either). Applies
+        # to the full shift, not just the individual lift; demotions pass through.
+        placement = _placement_factor(
+            df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)
+        ).to_numpy()
+        shift = np.where(shift > 0.0, shift * placement, shift)
         return shift, newcomer
 
     def predict(self, df: pd.DataFrame) -> pd.Series:

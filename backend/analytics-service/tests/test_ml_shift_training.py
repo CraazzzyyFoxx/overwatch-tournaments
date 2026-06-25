@@ -282,29 +282,40 @@ class ShiftBlendTests(TestCase):
         self.assertAlmostEqual(1.97, mid, places=2)
         self.assertGreater(mid, top)
 
-    def test_placement_gates_positive_individual_lift(self) -> None:
-        # Same strong scoreboard-topper: full lift when the team wins, ~zero when
-        # the team takes last place; missing standings → no gate.
+    def test_placement_gates_whole_positive_shift(self) -> None:
+        # The WHOLE positive shift is gated by team placement — including a
+        # backbone driven by a (spurious) large os_shift, not just the individual
+        # lift. Mirrors the prod case: a 2-8 last-placed player with os_shift 11.
         model = shift_v2.ShiftModelV2(
-            w_team=0.0, w_os=0.0,  # isolate the individual term
-            dominance_gain=6.0, dominance_cap=3.0, placement_floor=0.0,
+            w_team=0.7, w_os=0.3, dominance_gain=6.0, dominance_cap=3.0,
+            placement_floor=0.0, clamp_top_grid_ref=20.0,
         )
-        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
-                "performance_v2_local_zscore": [0.0], "current_div": [20],
-                "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False],
-                "mvp_dominance": [1.0], "team_count": [8]}
-        s_first = float(model.predict(pd.DataFrame({**base, "overall_position": [1]})).iloc[0])
-        s_last = float(model.predict(pd.DataFrame({**base, "overall_position": [8]})).iloc[0])
-        s_nostd = float(model.predict(pd.DataFrame({
-            "linear_stable_shift": [0.0], "os_shift": [0.0],
-            "performance_v2_local_zscore": [0.0], "current_div": [20],
-            "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False],
-            "mvp_dominance": [1.0],
-        })).iloc[0])
-        self.assertGreater(s_first, 1.0)        # winner keeps the full lift
-        self.assertAlmostEqual(0.0, s_last, places=6)  # last place → no +
-        self.assertGreater(s_last, -0.01)       # gate does not push negative
-        self.assertGreater(s_nostd, 1.0)        # missing standings → no gate
+        base = {"linear_stable_shift": [0.0], "os_shift": [11.0],
+                "performance_v2_local_zscore": [-0.8], "mvp_dominance": [0.41],
+                "current_div": [26], "grid_n_div": [20], "tournaments_played": [5],
+                "is_newcomer": [False], "team_count": [32]}
+        s_win = float(model.predict(pd.DataFrame({**base, "overall_position": [0]})).iloc[0])
+        s_last = float(model.predict(pd.DataFrame({**base, "overall_position": [31]})).iloc[0])
+        # winner: backbone-driven shift survives; near-last: gated to ~0.
+        self.assertGreater(s_win, 2.0)
+        self.assertLess(s_last, 0.2)
+        self.assertGreaterEqual(s_last, 0.0)
+
+    def test_placement_gate_passes_through_demotions_and_missing_standings(self) -> None:
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, placement_floor=0.0)
+        # Negative shift on a last-placed team is NOT attenuated (demotion stands).
+        neg = pd.DataFrame({"linear_stable_shift": [-2.0], "os_shift": [-2.0],
+                            "performance_v2_local_zscore": [-0.5], "current_div": [26],
+                            "grid_n_div": [20], "tournaments_played": [5],
+                            "is_newcomer": [False], "overall_position": [31],
+                            "team_count": [32]})
+        self.assertLess(float(model.predict(neg).iloc[0]), -0.5)
+        # Missing standings → no gate (positive shift survives).
+        nostd = pd.DataFrame({"linear_stable_shift": [2.0], "os_shift": [2.0],
+                              "performance_v2_local_zscore": [0.0], "current_div": [26],
+                              "grid_n_div": [20], "tournaments_played": [5],
+                              "is_newcomer": [False]})
+        self.assertGreater(float(model.predict(nostd).iloc[0]), 1.0)
 
     def test_low_dominance_does_not_push_down(self) -> None:
         # A low scoreboard position must not drag the individual term negative.
