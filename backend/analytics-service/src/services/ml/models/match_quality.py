@@ -165,6 +165,14 @@ def compute_match_quality(
             ]
         )
 
+    # Enforce the one-row-per-encounter contract. Upstream LEFT-join merges in
+    # ``build_standings_training_frame`` can fan a single encounter into several
+    # rows; left unguarded those propagate into the writer's INSERT and trip
+    # ``uq_analytics_match_quality (encounter_id, algorithm_id)`` (a delete
+    # before insert can't help — the duplicate is within one INSERT). Dropping
+    # here also keeps the derived ``sigma_pool`` from double-counting mu gaps.
+    encounters = encounters.drop_duplicates(subset="encounter_id", keep="first")
+
     if sigma_pool is None:
         gaps = [
             float(home) - float(away)

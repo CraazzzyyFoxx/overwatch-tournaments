@@ -128,6 +128,30 @@ class ComputeMatchQualityTests(TestCase):
         result = mq.compute_match_quality(pd.DataFrame(), pd.DataFrame())
         self.assertTrue(result.empty)
 
+    def test_duplicate_encounter_ids_collapse_to_one_row(self) -> None:
+        # Upstream merge fan-out can repeat an encounter; the writer inserts into
+        # analytics.match_quality keyed by (encounter_id, algorithm_id), so the
+        # scorer must emit exactly one row per encounter or the INSERT trips
+        # uq_analytics_match_quality on a within-batch duplicate.
+        encounters = pd.DataFrame(
+            {
+                "encounter_id": [1, 1, 2],
+                "home_avg_mu": [2000.0, 2000.0, 2000.0],
+                "away_avg_mu": [2010.0, 2010.0, 2400.0],
+                "home_won": [1.0, 1.0, 1.0],
+                "p_home_wins": [0.5, 0.5, 0.9],
+            }
+        )
+        scores = pd.DataFrame(
+            {"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]}
+        )
+
+        result = mq.compute_match_quality(encounters, scores)
+
+        self.assertEqual(2, len(result))
+        self.assertEqual([1, 2], sorted(result["encounter_id"].tolist()))
+        self.assertEqual(1, int((result["encounter_id"] == 1).sum()))
+
     def test_missing_mu_never_emits_nan(self) -> None:
         # Reproduces the production 500: an encounter whose teams have no mu
         # snapshot (NaN mu) — bracket placeholder / forfeit rows — must yield
