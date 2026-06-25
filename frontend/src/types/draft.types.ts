@@ -52,7 +52,9 @@ export interface DraftPlayer {
   is_captain: boolean;
   drafted_by_team_id: number | null;
   secondary_roles_json: string[] | null;
-  anomaly_flags: Record<string, unknown>;
+  role_ranks: Record<string, number>;
+  role_top_heroes: Record<string, Array<string | { slug: string; image_path: string | null }>>;
+  additional_info: Record<string, unknown>;
 }
 
 export interface DraftPick {
@@ -63,6 +65,7 @@ export interface DraftPick {
   pick_in_round: number;
   draft_team_id: number;
   target_role: DraftRole | null;
+  target_rank_value: number | null;
   status: DraftPickStatus;
   picked_player_id: number | null;
   picked_by_user_id: number | null;

@@ -67,7 +67,7 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         )
     ).all()
 
-    # Dynamically inject notes if not already snapshot in anomaly_flags (supports existing drafts)
+    # Dynamically inject notes if not already snapshot in additional_info (supports existing drafts)
     if players:
         user_ids = [p.user_id for p in players if p.user_id is not None]
         if user_ids:
@@ -85,10 +85,10 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
             user_notes = {r_user_id: r_notes for r_user_id, r_notes in regs if r_notes}
             for p in players:
                 if p.user_id in user_notes:
-                    flags = dict(p.anomaly_flags) if p.anomaly_flags else {}
-                    if "notes" not in flags or not flags["notes"]:
-                        flags["notes"] = user_notes[p.user_id]
-                        p.anomaly_flags = flags
+                    info = dict(p.additional_info) if p.additional_info else {}
+                    if "notes" not in info or not info["notes"]:
+                        info["notes"] = user_notes[p.user_id]
+                        p.additional_info = info
 
     current = await session.get(DraftPick, draft_session.current_pick_id) if draft_session.current_pick_id else None
     topic = realtime_topics.draft(draft_session.tournament_id)

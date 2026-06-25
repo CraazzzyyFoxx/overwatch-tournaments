@@ -25,6 +25,7 @@ from shared.core.enums import (
 )
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from src.services.draft import ranks
 from src.services.draft import suggestions as sug
 
 
@@ -109,21 +110,9 @@ async def _advance(session: AsyncSession, draft_session: DraftSession) -> DraftP
         if round_idx < len(round_rules):
             rule = round_rules[round_idx]
             if rule in ("team_avg_asc", "team_avg_desc"):
-                # Compute average rank_value of picked players for each team
-                stmt = (
-                    sa.select(
-                        DraftPlayer.drafted_by_team_id,
-                        sa.func.avg(sa.func.coalesce(DraftPlayer.rank_value, 0)).label("avg_rank")
-                    )
-                    .where(
-                        DraftPlayer.session_id == draft_session.id,
-                        DraftPlayer.drafted_by_team_id.isnot(None),
-                        DraftPlayer.status == DraftPlayerStatus.PICKED.value
-                    )
-                    .group_by(DraftPlayer.drafted_by_team_id)
-                )
-                team_averages = (await session.execute(stmt)).all()
-                avg_by_team = {t.drafted_by_team_id: t.avg_rank for t in team_averages}
+                # Average the drafted-role rank (off-role aware), not the
+                # primary-role rank_value.
+                avg_by_team = await _team_avg_drafted_rank(session, draft_session.id)
 
                 # Load all teams in this draft session
                 teams = (
@@ -236,6 +225,48 @@ async def _team_role_counts(session: AsyncSession, team_id: int) -> dict[DraftRo
     return counts
 
 
+async def _team_avg_drafted_rank(session: AsyncSession, draft_session_id: int) -> dict[int, float]:
+    """Average drafted-role rank per team (picked players + captains).
+
+    Uses each pick's frozen ``target_rank_value``; falls back to the
+    role-specific rank for the drafted/primary role (captains have no pick).
+    """
+    players = (
+        await session.scalars(
+            sa.select(DraftPlayer).where(
+                DraftPlayer.session_id == draft_session_id,
+                DraftPlayer.drafted_by_team_id.isnot(None),
+                DraftPlayer.status == DraftPlayerStatus.PICKED.value,
+            )
+        )
+    ).all()
+    picks = (
+        await session.scalars(
+            sa.select(DraftPick).where(
+                DraftPick.session_id == draft_session_id,
+                DraftPick.status.in_(
+                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
+                ),
+            )
+        )
+    ).all()
+    pick_by_player_id = {pk.picked_player_id: pk for pk in picks if pk.picked_player_id is not None}
+
+    sums: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    for p in players:
+        pk = pick_by_player_id.get(p.id)
+        if pk is not None and pk.target_rank_value is not None:
+            rank = pk.target_rank_value
+        else:
+            role = (pk.target_role if pk else None) or p.primary_role
+            rank = ranks.role_rank(p, role) or 0
+        tid = p.drafted_by_team_id
+        sums[tid] = sums.get(tid, 0.0) + rank
+        counts[tid] = counts.get(tid, 0) + 1
+    return {tid: sums[tid] / counts[tid] for tid in sums}
+
+
 def _role_capacity(team_size: int, counts: dict[DraftRole, int]) -> dict[DraftRole, int]:
     targets = role_targets(team_size)
     return {
@@ -329,8 +360,10 @@ async def select(
     )
     if not won:
         raise _err("pick_already_resolved", "Pick was already resolved")
-    if target_role is not None:
-        pick.target_role = target_role.value
+    # Always record the resolved decision (role + its rank) on the pick, so the
+    # pick is a complete (player, role, rank) record regardless of off-role.
+    pick.target_role = chosen_role.value
+    pick.target_rank_value = ranks.role_rank(player, chosen_role)
     return await _apply_won(session, draft_session, pick, player)
 
 
@@ -362,6 +395,7 @@ async def autopick(
             preference_order=(DraftRole(p.primary_role),),
             is_flex=p.is_flex,
             user_id=p.user_id,
+            rank_by_role={DraftRole(k): v for k, v in (p.role_ranks or {}).items()},
         )
         for p in available
     ]
@@ -392,9 +426,10 @@ async def autopick(
         next_pick = await _advance(session, draft_session)
         await session.refresh(draft_session)
         return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
-    if chosen_role is not None:
-        pick.target_role = chosen_role.value
     player = await session.get(DraftPlayer, chosen_id)
+    resolved_role = chosen_role or DraftRole(player.primary_role)
+    pick.target_role = resolved_role.value
+    pick.target_rank_value = ranks.role_rank(player, resolved_role)
     return await _apply_won(session, draft_session, pick, player)
 
 
@@ -406,6 +441,7 @@ async def override(
     player_id: int | None,
     expected_version: int,
     actor_user_id: int | None,
+    target_role: DraftRole | None = None,
 ) -> DraftResult:
     if not draft_session.allow_admin_override:
         raise _err("override_disabled", "Admin override is disabled for this draft")
@@ -413,6 +449,8 @@ async def override(
     if player_id is None:
         raise _err("override_needs_player", "Override requires a player_id", status_code=422)
     player = await _load_available_player(session, draft_session.id, player_id)
+    if not _role_is_legal(player, target_role):
+        raise _err("illegal_role", "Player cannot play the requested role", status_code=422)
     won = await _finalize(
         session,
         pick.id,
@@ -425,4 +463,7 @@ async def override(
     )
     if not won:
         raise _err("pick_already_resolved", "Pick was already resolved")
+    resolved_role = target_role or DraftRole(player.primary_role)
+    pick.target_role = resolved_role.value
+    pick.target_rank_value = ranks.role_rank(player, resolved_role)
     return await _apply_won(session, draft_session, pick, player)

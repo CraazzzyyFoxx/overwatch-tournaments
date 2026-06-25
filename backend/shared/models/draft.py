@@ -150,7 +150,15 @@ class DraftPlayer(db.TimeStampIntegerMixin):
         ForeignKey("balancer.draft_team.id", ondelete="SET NULL"), nullable=True, index=True
     )
     secondary_roles_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    anomaly_flags: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    # Per-role rank catalogue: ``role.value -> SR``. The single source of truth
+    # for "what rank does this player have on role X" — ``rank_value`` is the
+    # primary-role default/fallback (see ``services.draft.ranks.role_rank``).
+    role_ranks: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    # Per-role top heroes: ``role.value -> [{"slug", "image_path"}]`` (display only).
+    role_top_heroes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    # Misc/extensible per-player data (e.g. ``notes``). Replaces the misnamed
+    # ``anomaly_flags`` bag — known concepts live in their own columns above.
+    additional_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
 
     session: Mapped["DraftSession"] = relationship(back_populates="players")
     user: Mapped["User | None"] = relationship()
@@ -173,6 +181,9 @@ class DraftPick(db.TimeStampIntegerMixin):
     pick_in_round: Mapped[int] = mapped_column(Integer(), nullable=False)
     draft_team_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_team.id", ondelete="CASCADE"), index=True)
     target_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Frozen rank of the drafted role at finalize time, so a pick is a complete
+    # ``(player, role, rank)`` record (resolved via ``ranks.role_rank``).
+    target_rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="upcoming", default="upcoming")
     picked_player_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.draft_player.id", ondelete="SET NULL"), nullable=True, index=True

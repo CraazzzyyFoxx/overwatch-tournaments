@@ -15,13 +15,14 @@ from uuid import uuid4
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import DraftPlayerStatus, DraftStatus
+from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftStatus
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.draft import DraftPlayer, DraftSession, DraftTeam
+from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 
 from src import models
 from src.schemas.team import BalancerTeam, BalancerTeamMember
 from src.services import team as team_flows
+from src.services.draft import ranks
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
@@ -31,13 +32,17 @@ def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
 def _draft_to_balancer_payload(
     teams: list[DraftTeam],
     roster_by_team: dict[int, list[DraftPlayer]],
+    pick_by_player_id: dict[int, DraftPick] | None = None,
 ) -> list[BalancerTeam]:
     """Pure mapping: draft rosters -> balancer export payload.
 
     The team name is the captain's battle_tag/name so the export's
     ``find_by_battle_tag`` resolves the captain; members carry their
-    battle_tag, role (tank/dps/support), and rank.
+    battle_tag, the role they were *drafted on* (tank/dps/support), and the
+    rank for that role. Mirrors the balancer's own payload (assigned role +
+    assigned rating) so both feed ``bulk_create_from_balancer`` identically.
     """
+    pick_by_player_id = pick_by_player_id or {}
     payload: list[BalancerTeam] = []
     for team in sorted(teams, key=lambda t: t.draft_position):
         roster = roster_by_team.get(team.id, [])
@@ -47,14 +52,20 @@ def _draft_to_balancer_payload(
         members: list[BalancerTeamMember] = []
         total_sr = 0
         for p in roster:
-            rank = p.rank_value or 0
+            pk = pick_by_player_id.get(p.id)
+            # Drafted role + its rank. Captains have no pick -> primary role.
+            role = (pk.target_role if (pk and pk.target_role) else None) or p.primary_role
+            if pk is not None and pk.target_rank_value is not None:
+                rank = pk.target_rank_value
+            else:
+                rank = ranks.role_rank(p, role) or 0
             total_sr += rank
             members.append(
                 BalancerTeamMember(
                     uuid=str(p.user_id) if p.user_id is not None else str(uuid4()),
                     name=p.battle_tag or "",
                     sub_role=p.sub_role,
-                    role=p.primary_role,  # already tank/dps/support
+                    role=role,  # tank/dps/support
                     rank=rank,
                 )
             )
@@ -82,7 +93,20 @@ async def export(session: AsyncSession, draft_session: DraftSession) -> tuple[Dr
         if p.drafted_by_team_id is not None:
             roster_by_team[p.drafted_by_team_id].append(p)
 
-    payload = _draft_to_balancer_payload(list(teams), roster_by_team)
+    # Resolved picks carry the drafted role + its rank (frozen at finalize).
+    pick_rows = (
+        await session.scalars(
+            sa.select(DraftPick).where(
+                DraftPick.session_id == draft_session.id,
+                DraftPick.status.in_(
+                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
+                ),
+            )
+        )
+    ).all()
+    pick_by_player_id = {pk.picked_player_id: pk for pk in pick_rows if pk.picked_player_id is not None}
+
+    payload = _draft_to_balancer_payload(list(teams), roster_by_team, pick_by_player_id)
 
     # Idempotent cleanup of any prior export (mirror export_balance).
     linked_ids = [t.exported_team_id for t in teams if t.exported_team_id is not None]

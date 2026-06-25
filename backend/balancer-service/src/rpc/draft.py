@@ -219,6 +219,7 @@ def register(broker: Any, logger: Any) -> None:
                     preference_order=(DraftRole(p.primary_role),),
                     is_flex=p.is_flex,
                     user_id=p.user_id,
+                    rank_by_role={DraftRole(k): v for k, v in (p.role_ranks or {}).items()},
                 )
                 for p in available
             ]
@@ -312,6 +313,7 @@ def register(broker: Any, logger: Any) -> None:
                         is_flex=p.is_flex,
                         division_number=p.division_number,
                         rank_value=p.rank_value,
+                        role_ranks=({p.primary_role.value: p.rank_value} if p.rank_value is not None else {}),
                     )
                     for p in payload.players
                 ]
@@ -476,6 +478,7 @@ def register(broker: Any, logger: Any) -> None:
                 player_id=payload.player_id,
                 expected_version=payload.expected_version,
                 actor_user_id=public_user_id,
+                target_role=payload.target_role,
             )
             await _publish_result(
                 session, _redis(logger), draft, result, made_event="draft.pick_made", actor_user_id=public_user_id

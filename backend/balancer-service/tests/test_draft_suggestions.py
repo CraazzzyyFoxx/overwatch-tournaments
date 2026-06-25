@@ -25,13 +25,14 @@ from src.services.draft import suggestions as sug  # noqa: E402
 T, D, SUP = DraftRole.TANK, DraftRole.DPS, DraftRole.SUPPORT
 
 
-def fp(pid, rank, playable, prefs=(), is_flex=False):
+def fp(pid, rank, playable, prefs=(), is_flex=False, rank_by_role=None):
     return sug.FitPlayer(
         player_id=pid,
         rank_value=rank,
         playable_roles=frozenset(playable),
         preference_order=tuple(prefs),
         is_flex=is_flex,
+        rank_by_role=rank_by_role or {},
     )
 
 
@@ -133,6 +134,30 @@ def test_deterministic_tiebreak_prefers_lower_player_id() -> None:
 
 
 # ---- suggestions ranking ----
+
+
+# ---- per-role ranks (off-role scoring) ----
+
+
+def test_player_fit_uses_off_role_rank_not_primary() -> None:
+    # 4000 DPS who flexes support at 2800: BEST_AVAILABLE score for SUPPORT is 2800.
+    p = fp(1, 4000, {D, SUP}, prefs=(D,), rank_by_role={D: 4000, SUP: 2800})
+    res = sug.player_fit(p, SUP, sug.FitConfig(), strategy=DraftAutopickStrategy.BEST_AVAILABLE)
+    assert res.fit_score == 2800.0
+
+
+def test_rank_for_falls_back_to_rank_value() -> None:
+    p = fp(1, 4000, {D, SUP}, prefs=(D,), rank_by_role={D: 4000})
+    assert p.rank_for(SUP) == 4000  # no SUP entry -> fallback
+
+
+def test_off_role_candidate_loses_to_native_when_scored_correctly() -> None:
+    # Native support@3000 vs a 4000-DPS flexing support@2800.
+    native = fp(1, 3000, {SUP}, prefs=(SUP,))
+    flex = fp(2, 4000, {D, SUP}, prefs=(D,), rank_by_role={D: 4000, SUP: 2800})
+    res = sug.best_fit([native, flex], {SUP: 1}, DraftAutopickStrategy.BEST_AVAILABLE, sug.FitConfig())
+    # If scored at primary (the bug) flex's 4000 would win; scored at off-role 2800, native wins.
+    assert res.player_id == 1
 
 
 def test_rank_suggestions_returns_sorted_topn() -> None:

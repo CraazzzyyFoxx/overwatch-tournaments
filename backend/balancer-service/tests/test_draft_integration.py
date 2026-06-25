@@ -223,6 +223,52 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
             self.assertEqual(chosen.drafted_by_team_id, current.draft_team_id)
 
+    async def test_select_off_role_records_role_and_its_rank(self) -> None:
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s,
+                tournament_id=self.tournament_id,
+                workspace_id=self.workspace_id,
+                rounds=2,
+                team_size=3,
+            )
+            # Primary TANK@3000 who can flex DPS@2500.
+            special = lifecycle.PlayerSeed(
+                primary_role=DraftRole.TANK,
+                battle_tag="Flex#1",
+                secondary_roles=[DraftRole.DPS],
+                rank_value=3000,
+                role_ranks={"tank": 3000, "dps": 2500},
+            )
+            await lifecycle.seed(s, draft, captains=self._captains(), players=[special, *self._players()])
+            await s.commit()
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            chosen = await s.scalar(
+                sa.select(lifecycle.DraftPlayer).where(
+                    lifecycle.DraftPlayer.session_id == draft.id,
+                    lifecycle.DraftPlayer.battle_tag == "Flex#1",
+                )
+            )
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=DraftRole.DPS,
+                actor_user_id=team.captain_user_id,
+                actor_auth_user_id=None,
+                actor_player_ids=[team.captain_user_id],
+                is_admin=False,
+            )
+            await s.commit()
+            # The pick records the drafted off-role and its rank (not primary TANK@3000).
+            self.assertEqual(res.pick.target_role, DraftRole.DPS.value)
+            self.assertEqual(res.pick.target_rank_value, 2500)
+
     async def test_select_allows_captain_auth_user_without_team_import(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.create_session(

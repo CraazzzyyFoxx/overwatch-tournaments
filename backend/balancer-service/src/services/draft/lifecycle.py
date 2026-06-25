@@ -53,7 +53,9 @@ class CaptainSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
-    anomaly_flags: dict = field(default_factory=dict)
+    role_ranks: dict = field(default_factory=dict)
+    role_top_heroes: dict = field(default_factory=dict)
+    additional_info: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,9 @@ class PlayerSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
-    anomaly_flags: dict = field(default_factory=dict)
+    role_ranks: dict = field(default_factory=dict)
+    role_top_heroes: dict = field(default_factory=dict)
+    additional_info: dict = field(default_factory=dict)
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
@@ -188,7 +192,9 @@ async def seed(
                 is_captain=True,
                 status=DraftPlayerStatus.PICKED.value,
                 drafted_by_team_id=team.id,
-                anomaly_flags=cap.anomaly_flags,
+                role_ranks=cap.role_ranks,
+                role_top_heroes=cap.role_top_heroes,
+                additional_info=cap.additional_info,
             )
         )
     # Pool players.
@@ -205,7 +211,9 @@ async def seed(
                 division_number=p.division_number,
                 rank_value=p.rank_value,
                 status=DraftPlayerStatus.AVAILABLE.value,
-                anomaly_flags=p.anomaly_flags,
+                role_ranks=p.role_ranks,
+                role_top_heroes=p.role_top_heroes,
+                additional_info=p.additional_info,
             )
         )
     await session.flush()
@@ -299,26 +307,29 @@ def _map_registration(reg: BalancerRegistration) -> dict:
     rank_value = (primary_entry.rank_value if primary_entry else None) or (max(ranks) if ranks else None)
     sub_role = primary_entry.subrole if primary_entry else None
 
-    # Save role-specific ranks/divisions inside metadata
-    roles_ranks = {}
+    # Per-role rank catalogue and top heroes, keyed by role.value, promoted to
+    # dedicated typed fields (no more burying them in an "anomaly_flags" bag).
+    role_ranks: dict[str, int] = {}
+    role_top_heroes: dict[str, list[dict]] = {}
     for r in active:
         role = _to_draft_role(r.role)
-        if role is not None:
-            roles_ranks[role.value] = {
-                "rank_value": r.rank_value,
-                "division_number": None,
-                "top_heroes": [
-                    {
-                        "slug": getattr(he.hero, "slug", ""),
-                        "image_path": getattr(he.hero, "image_path", None)
-                    }
-                    for he in getattr(r, "hero_entries", [])
-                    if he and getattr(he, "hero", None) is not None
-                ] if isinstance(getattr(r, "hero_entries", None), (list, set)) or (
-                    getattr(r, "hero_entries", None) is not None
-                    and not hasattr(getattr(r, "hero_entries", None), "_mock_return_value")
-                ) else [],
+        if role is None:
+            continue
+        if r.rank_value is not None:
+            role_ranks[role.value] = r.rank_value
+        hero_entries = getattr(r, "hero_entries", None)
+        heroes = [
+            {
+                "slug": getattr(he.hero, "slug", ""),
+                "image_path": getattr(he.hero, "image_path", None),
             }
+            for he in (hero_entries or [])
+            if he and getattr(he, "hero", None) is not None
+        ] if isinstance(hero_entries, (list, set)) or (
+            hero_entries is not None and not hasattr(hero_entries, "_mock_return_value")
+        ) else []
+        if heroes:
+            role_top_heroes[role.value] = heroes
 
     return {
         "primary_role": primary,
@@ -327,10 +338,9 @@ def _map_registration(reg: BalancerRegistration) -> dict:
         "rank_value": rank_value,
         "division_number": None,
         "is_flex": bool(reg.is_flex_computed),
-        "anomaly_flags": {
-            "roles_ranks": roles_ranks,
-            "notes": reg.notes,
-        },
+        "role_ranks": role_ranks,
+        "role_top_heroes": role_top_heroes,
+        "additional_info": {"notes": reg.notes} if reg.notes else {},
     }
 
 
@@ -444,7 +454,9 @@ async def seed_from_pool(
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
-                anomaly_flags=mapped.get("anomaly_flags") or {},
+                role_ranks=mapped.get("role_ranks") or {},
+                role_top_heroes=mapped.get("role_top_heroes") or {},
+                additional_info=mapped.get("additional_info") or {},
             )
         )
 
@@ -464,7 +476,9 @@ async def seed_from_pool(
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
-                anomaly_flags=mapped.get("anomaly_flags") or {},
+                role_ranks=mapped.get("role_ranks") or {},
+                role_top_heroes=mapped.get("role_top_heroes") or {},
+                additional_info=mapped.get("additional_info") or {},
             )
         )
 

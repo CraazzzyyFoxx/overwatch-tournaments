@@ -37,7 +37,9 @@ function player(id: number): DraftPlayer {
     is_captain: false,
     drafted_by_team_id: null,
     secondary_roles_json: null,
-    anomaly_flags: {},
+    role_ranks: {},
+    role_top_heroes: {},
+    additional_info: {},
   };
 }
 
@@ -50,6 +52,7 @@ function pick(id: number, teamId: number, status: DraftPick["status"]): DraftPic
     pick_in_round: id,
     draft_team_id: teamId,
     target_role: null,
+    target_rank_value: null,
     status,
     picked_player_id: null,
     picked_by_user_id: null,
