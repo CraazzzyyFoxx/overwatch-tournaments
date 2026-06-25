@@ -85,15 +85,25 @@ async def get_analytics(
         .group_by(models.Team.tournament_id)
     ).cte("team_counts")
 
+    # A team's FINAL tournament placement is the overall_position of its LATEST
+    # stage standing (the playoff bracket if it advanced, else the group stage),
+    # not ``min()`` across stages: an advancing team carries a placeholder
+    # overall_position=0 in the group stage, so ``min()`` mis-reads a 13th-place
+    # finisher as the champion (inflating placement_score and the placement gate).
     standings = (
         sa.select(
             models.Standing.team_id.label("team_id"),
             models.Standing.tournament_id.label("tournament_id"),
-            sa.func.min(models.Standing.overall_position).label("overall_position"),
+            models.Standing.overall_position.label("overall_position"),
         )
         .join(models.Tournament, models.Standing.tournament_id == models.Tournament.id)
         .where(*workspace_scope_filter(workspace_id, workspace_ids))
-        .group_by(models.Standing.team_id, models.Standing.tournament_id)
+        .distinct(models.Standing.team_id, models.Standing.tournament_id)
+        .order_by(
+            models.Standing.team_id,
+            models.Standing.tournament_id,
+            models.Standing.stage_id.desc(),
+        )
     ).cte("team_standings")
 
     performance_points = (
