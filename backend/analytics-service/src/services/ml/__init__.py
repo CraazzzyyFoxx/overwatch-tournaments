@@ -14,4 +14,5 @@ Subpackages:
 
 # Bump on any change to feature-frame semantics so the file/disk feature cache
 # is invalidated. v1.1: divisions normalized to the canonical OW grid.
-FEATURE_VERSION = "v1.1"
+# v1.2: pre-encounter mu snapshot drops self-encounters (no fan-out).
+FEATURE_VERSION = "v1.2"
