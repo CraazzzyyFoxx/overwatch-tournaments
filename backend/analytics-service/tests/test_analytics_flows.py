@@ -272,3 +272,39 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
             )
 
         get_analytics.assert_awaited_once_with(session, 7, algorithm, workspace_id=5)
+
+
+class PredictPlayerDivisionTests(IsolatedAsyncioTestCase):
+    """The DivisionGrid display must equal the shift signal rounded to a division
+    (no hidden (-1, 1) dead-zone, so the grid and the shown signal agree)."""
+
+    @staticmethod
+    def _player(division: int | None = 10) -> SimpleNamespace:
+        return SimpleNamespace(division=division)
+
+    async def test_rounds_signal_to_nearest_division(self) -> None:
+        predict = analytics_flows._predict_player_division
+        # +0.7 used to be "flat"; now rounds to a one-division promote.
+        _, direction, delta = predict(self._player(), points=0.7, manual_shift=None)
+        self.assertEqual("promote", direction)
+        self.assertEqual(-1, delta)
+        # Sub-half stays flat.
+        _, d2, delta2 = predict(self._player(), points=0.4, manual_shift=None)
+        self.assertEqual("flat", d2)
+        self.assertEqual(0, delta2)
+        # Negative → demote.
+        _, d3, delta3 = predict(self._player(), points=-0.7, manual_shift=None)
+        self.assertEqual("demote", d3)
+        self.assertEqual(1, delta3)
+
+    async def test_clamped_to_three_divisions(self) -> None:
+        predict = analytics_flows._predict_player_division
+        div, _, delta = predict(self._player(20), points=9.0, manual_shift=None)
+        self.assertEqual(-3, delta)
+        self.assertEqual(17, div)
+
+    async def test_manual_shift_overrides_signal(self) -> None:
+        predict = analytics_flows._predict_player_division
+        _, direction, delta = predict(self._player(), points=0.0, manual_shift=500)
+        self.assertEqual("promote", direction)
+        self.assertEqual(-1, delta)

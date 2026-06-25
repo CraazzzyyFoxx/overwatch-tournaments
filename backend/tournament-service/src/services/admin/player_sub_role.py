@@ -1,4 +1,5 @@
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.domain.player_sub_roles import normalize_role, normalize_sub_role
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

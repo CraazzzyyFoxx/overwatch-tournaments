@@ -12,7 +12,6 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
-from faststream.rabbit.fastapi import RabbitRouter
 from loguru import logger
 from redis import asyncio as redis_async
 from shared.core import enums
@@ -22,6 +21,7 @@ from shared.schemas.events import FetchRankEvent, RegistrationApprovedEvent
 from shared.services import settings_provider
 
 from src.core import config, db
+from src.core.broker import require_broker
 
 from . import mapping, service
 from .client import OverFastError, OverFastRankClient, OverFastRateLimited
@@ -29,8 +29,6 @@ from .client import OverFastError, OverFastRankClient, OverFastRateLimited
 PENDING_TTL_SECONDS = 15 * 60
 INFLIGHT_TTL_SECONDS = 180
 COOLDOWN_KEY = "ow_rank:cooldown"
-
-task_router = RabbitRouter(config.settings.rabbitmq_url, logger=logger)
 
 rank_client = OverFastRankClient(
     base_url=config.settings.overfast_base_url,
@@ -101,7 +99,7 @@ async def enqueue_fetch(
     queue = RANK_FETCH_PRIORITY_QUEUE if priority else RANK_FETCH_QUEUE
     try:
         await publish_message(
-            broker or task_router.broker,
+            require_broker(broker),
             event.model_dump(),
             queue,
             logger=logger.bind(battle_tag_id=event.battle_tag_id, source=event.source),

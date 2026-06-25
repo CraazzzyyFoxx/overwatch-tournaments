@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api-fetch";
 
 export default class heroService {
   static async lookup(): Promise<LookupItem[]> {
-    return apiFetch("app", "heroes/lookup").then((res) => res.json());
+    return apiFetch("/api/v1/heroes/lookup").then((res) => res.json());
   }
 
   static async getAll({
@@ -21,7 +21,7 @@ export default class heroService {
     order?: "asc" | "desc";
     query?: string;
   } = {}): Promise<PaginatedResponse<Hero>> {
-    return apiFetch("app","heroes", {
+    return apiFetch("/api/v1/heroes", {
       query: {
         page,
         per_page: perPage,
@@ -40,7 +40,7 @@ export default class heroService {
     tournamentId: number | null = null,
     opts?: { workspaceId?: number; skipWorkspace?: boolean }
   ): Promise<PaginatedResponse<HeroPlaytime>> {
-    return apiFetch("app", "heroes/statistics/playtime", {
+    return apiFetch("/api/v1/heroes/statistics/playtime", {
       skipWorkspace: opts?.skipWorkspace,
       query: {
         page,
@@ -68,7 +68,7 @@ export default class heroService {
       perPage?: number;
     } = {}
   ): Promise<PaginatedResponse<HeroLeaderboardEntry>> {
-    return apiFetch("app",`heroes/${heroId}/leaderboard`, {
+    return apiFetch(`/api/v1/heroes/${heroId}/leaderboard`, {
       query: {
         tournament_id: tournamentId ?? undefined,
         stat,

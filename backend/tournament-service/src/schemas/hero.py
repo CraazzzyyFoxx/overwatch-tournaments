@@ -73,6 +73,8 @@ class HeroLeaderboardEntry(BaseModel):
     player_name: str
     role: enums.HeroClass | None
     div: int
+    team: str | None = None
+    team_id: int | None = None
     games_played: int
     playtime_seconds: float
     per10_eliminations: float

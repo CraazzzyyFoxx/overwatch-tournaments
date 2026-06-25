@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
 import sqlalchemy as sa
-from fastapi import Depends, HTTPException, Request, WebSocket, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from shared.core.auth import create_auth_dependencies
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.auth_user import AuthUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-from src.core import db
 
 
 async def _resolve_user_from_db(user_id: int, payload: dict[str, Any], *, session: AsyncSession) -> AuthUser | None:
@@ -35,64 +33,6 @@ async def _resolve_user_from_db(user_id: int, payload: dict[str, Any], *, sessio
             workspace_rbac=workspace_rbac,
         )
     return user
-
-
-_auth = create_auth_dependencies(
-    _resolve_user_from_db,
-    get_session=db.get_async_session,
-)
-
-get_current_user = _auth.get_current_user
-get_current_active_user = _auth.get_current_active_user
-get_current_superuser = _auth.get_current_superuser
-require_permission = _auth.require_permission
-require_role = _auth.require_role
-require_any_role = _auth.require_any_role
-require_admin_panel_access = _auth.require_admin_panel_access
-require_workspace_member = _auth.require_workspace_member
-require_workspace_admin = _auth.require_workspace_admin
-
-_optional_security = HTTPBearer(auto_error=False)
-
-
-async def get_current_user_optional(
-    request: Request,
-    token: Annotated[HTTPAuthorizationCredentials | None, Depends(_optional_security)],
-    session: Annotated[AsyncSession, Depends(db.get_async_session)],
-) -> AuthUser | None:
-    raw_token: str | None = None
-    if token is not None:
-        raw_token = token.credentials
-    if not raw_token:
-        raw_token = request.query_params.get("token")
-    if not raw_token:
-        raw_token = request.cookies.get("aqt_access_token")
-    if not raw_token:
-        return None
-
-    raw_token = raw_token.removeprefix("Bearer ").strip()
-    if not raw_token:
-        return None
-
-    auth_client = getattr(request.app.state, "auth_client", None)
-    if auth_client is None:
-        return None
-
-    try:
-        payload = await auth_client.validate_token(raw_token)
-    except Exception:
-        return None
-    if not payload:
-        return None
-
-    try:
-        user_id = int(payload.get("sub"))
-    except (TypeError, ValueError):
-        return None
-    if user_id <= 0:
-        return None
-
-    return await _resolve_user_from_db(user_id, payload, session=session)
 
 
 async def _require_workspace_permission(
@@ -236,191 +176,6 @@ async def _get_registration_workspace_id(session: AsyncSession, registration_id:
     return int(workspace_id)
 
 
-def require_workspace_permission(resource: str, action: str):
-    async def permission_checker(
-        workspace_id: int,
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_tournament_permission(resource: str, action: str):
-    async def permission_checker(
-        tournament_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_tournament_workspace_id(session, tournament_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_team_permission(resource: str, action: str):
-    async def permission_checker(
-        team_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_team_workspace_id(session, team_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_player_permission(resource: str, action: str):
-    async def permission_checker(
-        player_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_player_workspace_id(session, player_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_player_sub_role_permission(resource: str, action: str):
-    async def permission_checker(
-        sub_role_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_player_sub_role_workspace_id(session, sub_role_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_stage_permission(resource: str, action: str):
-    async def permission_checker(
-        stage_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_stage_workspace_id(session, stage_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_stage_item_permission(resource: str, action: str):
-    async def permission_checker(
-        stage_item_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_stage_item_workspace_id(session, stage_item_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_stage_item_input_permission(resource: str, action: str):
-    async def permission_checker(
-        input_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_stage_item_input_workspace_id(session, input_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_encounter_permission(resource: str, action: str):
-    async def permission_checker(
-        encounter_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_encounter_workspace_id(session, encounter_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_match_permission(resource: str, action: str):
-    async def permission_checker(
-        match_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_match_workspace_id(session, match_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def require_standing_permission(resource: str, action: str):
-    async def permission_checker(
-        standing_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_standing_workspace_id(session, standing_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
 async def require_tournament_id_permission(
     session: AsyncSession,
     current_user: AuthUser,
@@ -463,64 +218,3 @@ async def require_encounter_ids_permission(
             action=action,
         )
     return current_user
-
-
-def require_registration_permission(resource: str, action: str):
-    async def permission_checker(
-        registration_id: int,
-        session: Annotated[AsyncSession, Depends(db.get_async_session)],
-        current_user: Annotated[AuthUser, Depends(get_current_active_user)],
-    ) -> AuthUser:
-        workspace_id = await _get_registration_workspace_id(session, registration_id)
-        return await _require_workspace_permission(
-            current_user,
-            workspace_id=workspace_id,
-            resource=resource,
-            action=action,
-        )
-
-    return permission_checker
-
-
-def _get_websocket_token(websocket: WebSocket) -> str | None:
-    query_token = websocket.query_params.get("token")
-    if query_token:
-        return query_token.removeprefix("Bearer ").strip() or None
-
-    authorization = websocket.headers.get("authorization")
-    if authorization:
-        scheme, _, credentials = authorization.partition(" ")
-        if scheme.lower() == "bearer" and credentials:
-            return credentials.strip()
-
-    cookie_token = websocket.cookies.get("aqt_access_token")
-    if not cookie_token:
-        return None
-
-    return cookie_token.removeprefix("Bearer ").strip() or None
-
-
-async def get_websocket_user_optional(
-    websocket: WebSocket,
-    session: AsyncSession,
-) -> AuthUser | None:
-    token = _get_websocket_token(websocket)
-    if not token:
-        return None
-
-    import main  # noqa: PLC0415
-
-    payload = await main.auth_client.validate_token(token)
-    if not payload:
-        return None
-
-    user_id_raw = payload.get("sub")
-    try:
-        user_id = int(user_id_raw)
-    except (TypeError, ValueError):
-        return None
-
-    if user_id <= 0:
-        return None
-
-    return await _resolve_user_from_db(user_id, payload, session=session)

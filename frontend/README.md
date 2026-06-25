@@ -31,7 +31,8 @@ The site name and main icon/logo are configurable via environment variables.
 - Set `NEXT_PUBLIC_SITE_NAME` (e.g. "Moonrise Tournaments")
 - Set `NEXT_PUBLIC_SITE_ICON` (e.g. "/logo.webp")
 - (Optional) Set `NEXT_PUBLIC_SITE_FAVICON` (e.g. "/favicon.ico")
-- Point `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_AUTH_SERVICE_URL` at the backend
+- For a host-run dev server, set `NEXT_INTERNAL_API_URL` to the gateway
+  (e.g. `http://localhost:8080`); the browser uses relative same-origin paths
 - Restart `npm run dev`
 
 > **Note:** When self-hosting a **modified** version of OWT, the license requires a visible link back to
@@ -54,10 +55,10 @@ bind-mounting your own file into the container:
 docker compose up -d --wait
 ```
 
-- Enable the Kong gateway and workers when needed:
+- Enable background workers when needed:
 
 ```bash
-docker compose --profile gateway --profile workers up -d --wait
+docker compose --profile workers up -d --wait
 ```
 
 Production image builds use explicit Docker build args/env values and no longer copy `.env` into image layers.

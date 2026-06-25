@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, text
+from sqlalchemy import BigInteger, Boolean, Enum, Float, ForeignKey, Index, Integer, column, table, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -9,6 +10,7 @@ __all__ = (
     "MatchStatistics",
     "MatchKillFeed",
     "MatchEvent",
+    "mv_hero_global_stats",
 )
 
 
@@ -61,6 +63,15 @@ class MatchStatistics(db.TimeStampIntegerMixin):
             "name",
             postgresql_where=text("round = 0 AND hero_id IS NOT NULL"),
         ),
+        Index(
+            "ix_match_statistics_playtime_r0",
+            "match_id",
+            "user_id",
+            "hero_id",
+            # Enum(LogStatsName) persists the member NAME (HeroTimePlayed), not
+            # its .value (hero_time_played); this raw predicate bypasses the type.
+            postgresql_where=text("round = 0 AND name = 'HeroTimePlayed'"),
+        ),
         {"schema": "matches"},
     )
 
@@ -82,6 +93,26 @@ class MatchStatistics(db.TimeStampIntegerMixin):
         Enum(enums.LogStatsName), index=True
     )
     value: Mapped[float] = mapped_column(Float())
+
+
+# Materialized view holding precomputed global per-(hero, stat) records: the
+# best value across all players (+ metadata) and the global per-10min average.
+# Created and refreshed out-of-band — see migration ``herostatmv01`` and
+# ``app-service/src/services/hero_stats_refresh.py`` (app-worker). This is a
+# lightweight TableClause for typed reads ONLY; it is deliberately NOT a Base
+# model so alembic autogenerate never tries to manage it as a real table.
+# ``name`` carries the Enum type so ``.in_(stats)`` binds the stored member
+# names and results come back as ``LogStatsName``; ``metadata`` (JSONB) is
+# deserialized to a dict by the asyncpg dialect.
+mv_hero_global_stats = table(
+    "mv_hero_global_stats",
+    column("name", Enum(enums.LogStatsName)),
+    column("hero_id", BigInteger),
+    column("best_value", Float),
+    column("avg", Float),
+    column("metadata", JSONB),
+    schema="matches",
+)
 
 
 class MatchKillFeed(db.TimeStampIntegerMixin):

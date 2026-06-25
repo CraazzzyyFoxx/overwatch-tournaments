@@ -21,6 +21,9 @@ scrape_configs:
         labels:
           job: app_services
           __path__: /var/log/app/**/*.log
+          # The Go gateway emits flat slog JSON (not Loguru's nested shape); it is
+          # parsed by the dedicated `gateway` job below, so exclude it here.
+          __path_exclude__: /var/log/app/gateway/*.log
 
     pipeline_stages:
       # Parse the JSON log lines emitted by Loguru with serialize=True
@@ -55,6 +58,41 @@ scrape_configs:
           format: Unix
 
       # Drop health check poll noise from Loki to keep log volume down
+      - drop:
+          source: message
+          expression: "GET /health"
+
+  # --------------------------------------------------------------------------
+  # Go gateway — flat slog JSON (keys: level, msg, time, service, status,
+  # correlation_id, trace_id, route, ...). Different shape from the Loguru
+  # services above, so it gets its own pipeline.
+  # --------------------------------------------------------------------------
+  - job_name: gateway
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: gateway
+          __path__: /var/log/app/gateway/*.log
+
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            service: service
+            status: status
+            message: msg
+            correlation_id: correlation_id
+            trace_id: trace_id
+            route: route
+            timestamp: time
+      - labels:
+          level:
+          service:
+          status:
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
       - drop:
           source: message
           expression: "GET /health"

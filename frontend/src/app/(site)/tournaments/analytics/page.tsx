@@ -1,21 +1,31 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import AnalyticsBriefing from "@/app/(site)/tournaments/analytics/components/AnalyticsBriefing";
+import AnalyticsPicker from "@/app/(site)/tournaments/analytics/components/AnalyticsPicker";
+import TournamentHero from "@/app/(site)/tournaments/analytics/components/TournamentHero";
+import VerdictBanner from "@/app/(site)/tournaments/analytics/components/VerdictBanner";
+import KpiRail from "@/app/(site)/tournaments/analytics/components/KpiRail";
+import MasterDetail from "@/app/(site)/tournaments/analytics/components/MasterDetail";
+import { type StandingsMode } from "@/app/(site)/tournaments/analytics/components/StandingsList";
+import HowItWorksCard from "@/app/(site)/tournaments/analytics/components/HowItWorksCard";
+import BottomSheet, {
+  type SheetState
+} from "@/app/(site)/tournaments/analytics/components/BottomSheet";
+import { type GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import OrganizerTools from "@/app/(site)/tournaments/analytics/components/OrganizerTools";
-import AttentionTriage from "@/app/(site)/tournaments/analytics/components/AttentionTriage";
-import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/AnalyticsStandings";
-import DeepDiveSection from "@/app/(site)/tournaments/analytics/components/DeepDiveSection";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 import {
   canShowAnalyticsAdminToolbar,
   getPreferredAnalyticsAlgorithmId,
-  sortAnalyticsAlgorithms
+  sortAnalyticsAlgorithms,
+  type KpiId
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+import { useAnalyticsViewModel } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
+import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTranslation } from "@/i18n/LanguageContext";
 import tournamentService from "@/services/tournament.service";
@@ -26,7 +36,7 @@ const AnalyticsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, canAccessPermission } = usePermissions();
   const { t } = useTranslation();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
@@ -74,6 +84,10 @@ const AnalyticsPage = () => {
   const canQueryAnalytics =
     tournamentId != null && algorithmId != null && (!isSuccessAlgorithm || isKnownAlgorithmId);
   const canRecalculateAnalytics = canShowAnalyticsAdminToolbar(hasPermission("analytics.update"));
+  // v2 ML reads (performance, Monte-Carlo distribution, match quality, SHAP) are
+  // permission-gated server-side. Gate the fetches too so the public/community
+  // baseline (v1 + derived impact) never fires a 403 query.
+  const canReadV2 = canAccessPermission("analytics.read", currentWorkspaceId);
 
   const {
     data: analytics,
@@ -90,7 +104,7 @@ const AnalyticsPage = () => {
   } = useQuery({
     queryKey: ["analytics", "performance-v2", tournamentId],
     queryFn: () => analyticsService.getPerformanceV2(tournamentId!),
-    enabled: tournamentId != null
+    enabled: tournamentId != null && canReadV2
   });
 
   const performanceByPlayer = useMemo(
@@ -101,12 +115,12 @@ const AnalyticsPage = () => {
     [performanceRows]
   );
 
-  // Monte Carlo standings distribution — same query key as
-  // StandingsDistributionCard so react-query serves both from one request.
+  // Monte Carlo standings distribution — woven into the team detail (and the
+  // organizer table view); gated to analytics.read viewers.
   const { data: standingsRows } = useQuery({
     queryKey: ["analytics-standings-distribution", tournamentId, undefined],
     queryFn: () => analyticsService.getStandingsDistribution(tournamentId!),
-    enabled: tournamentId != null,
+    enabled: tournamentId != null && canReadV2,
     staleTime: 60_000
   });
 
@@ -115,16 +129,24 @@ const AnalyticsPage = () => {
     [standingsRows]
   );
 
-  // Players the model expects to change division — drives the briefing verdict.
-  const predictedMoves = useMemo(
-    () =>
-      (analytics?.teams ?? []).reduce(
-        (total, team) =>
-          total + team.players.filter((player) => player.predicted_direction !== "flat").length,
-        0
-      ),
-    [analytics?.teams]
-  );
+  // Fan-facing view model: per-player impact, the six KPIs, the verdict and the
+  // group count. Derived from the public v1 payload (+ v2 impact when allowed).
+  const viewModel = useAnalyticsViewModel(analytics, performanceByPlayer, canReadV2);
+
+  // Glossary / how-it-works explainer sheet, opened by info dots + the help card.
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const explain = useCallback((term: GlossaryTerm) => setSheet({ kind: "term", term }), []);
+  const showHow = useCallback(() => setSheet({ kind: "how" }), []);
+  const closeSheet = useCallback(() => setSheet(null), []);
+
+  // Standings sort/filter is lifted so the KPI cards can drive it (triage folds
+  // into the standings instead of a separate section).
+  const [standingsMode, setStandingsMode] = useState<StandingsMode>("standings");
+  const standingsRef = React.useRef<HTMLDivElement | null>(null);
+  const onKpiSelect = useCallback((id: KpiId) => {
+    setStandingsMode(id === "watch" ? "watch" : "movers");
+    standingsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const activeTournament = useMemo(() => {
     if (!tournamentId) return null;
@@ -190,23 +212,39 @@ const AnalyticsPage = () => {
 
   const isFiltersReady = !loadingTournaments && !loadingAlgorithms;
   const isEmptyTeams = canQueryAnalytics && !!analytics && analytics.teams.length === 0;
+  const picker = (
+    <AnalyticsPicker
+      tournaments={tournamentsData?.results ?? []}
+      algorithms={availableAlgorithms}
+      tournamentId={tournamentId}
+      algorithmId={algorithmId}
+      loadingTournaments={loadingTournaments}
+      loadingAlgorithms={loadingAlgorithms}
+      isErrorTournaments={isErrorTournaments}
+      isErrorAlgorithms={isErrorAlgorithms}
+      onTournamentChange={pushTournamentId}
+      onAlgorithmChange={pushAlgorithm}
+    />
+  );
+
   return (
-    <div className={styles.surface}>
-      <AnalyticsBriefing
-        tournaments={tournamentsData?.results ?? []}
-        algorithms={availableAlgorithms}
-        tournamentId={tournamentId}
-        algorithmId={algorithmId}
-        activeTournament={activeTournament}
-        activeAlgorithm={activeAlgorithm}
-        summary={analytics?.summary}
-        predictedMoves={predictedMoves}
-        loadingTournaments={loadingTournaments}
-        loadingAlgorithms={loadingAlgorithms}
-        isErrorTournaments={isErrorTournaments}
-        isErrorAlgorithms={isErrorAlgorithms}
-        onTournamentChange={pushTournamentId}
-        onAlgorithmChange={pushAlgorithm}
+    <div className={cn(styles.surface, styles.cRoot)}>
+      {/* Persistent header: tournament identity + stat blocks + the analytics
+          picker, which sits in the right rail under the KPI stat blocks. */}
+      <TournamentHero
+        tournament={activeTournament}
+        algorithmName={activeAlgorithm?.name}
+        totals={
+          analytics && activeTournament
+            ? {
+                teams: analytics.summary.total_teams,
+                players: analytics.summary.total_players,
+                groups: viewModel?.groupCount ?? 0,
+                stages: activeTournament.stages?.length ?? 0
+              }
+            : null
+        }
+        controlsSlot={picker}
       />
 
       {canRecalculateAnalytics && tournamentId != null ? (
@@ -215,14 +253,7 @@ const AnalyticsPage = () => {
 
       {!isFiltersReady ? (
         <AnalyticsContentSkeleton />
-      ) : tournamentId == null || algorithmId == null ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("analytics.page.chooseParams")}</CardTitle>
-            <CardDescription>{t("analytics.page.chooseParamsDesc")}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : isErrorAnalytics ? (
+      ) : tournamentId == null || algorithmId == null ? null : isErrorAnalytics ? (
         <Card>
           <CardHeader>
             <CardTitle>{t("analytics.page.unavailable")}</CardTitle>
@@ -238,17 +269,28 @@ const AnalyticsPage = () => {
             <CardDescription>{t("analytics.page.noTeamsDesc")}</CardDescription>
           </CardHeader>
         </Card>
-      ) : (
+      ) : viewModel ? (
         <>
-          <AttentionTriage teams={analytics.teams} />
-          <AnalyticsStandings
-            teams={analytics.teams}
-            performanceByPlayer={performanceByPlayer}
-            distributionByTeam={distributionByTeam}
-          />
-          <DeepDiveSection tournamentId={tournamentId} teams={analytics.teams} />
+          <VerdictBanner verdict={viewModel.verdict} onExplain={explain} />
+          <KpiRail kpis={viewModel.kpis} onExplain={explain} onSelect={onKpiSelect} />
+          <div ref={standingsRef}>
+            <MasterDetail
+              key={`${tournamentId}-${algorithmId}`}
+              tournamentId={tournamentId}
+              teams={viewModel.teams}
+              canReadV2={canReadV2}
+              mode={standingsMode}
+              onModeChange={setStandingsMode}
+              performanceByPlayer={performanceByPlayer}
+              distributionByTeam={distributionByTeam}
+              onExplain={explain}
+            />
+          </div>
+          <HowItWorksCard onOpen={showHow} />
         </>
-      )}
+      ) : null}
+
+      <BottomSheet state={sheet} onClose={closeSheet} />
     </div>
   );
 };

@@ -2,7 +2,8 @@
 
 from collections.abc import Sequence
 
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from loguru import logger
 from shared.core import enums
 

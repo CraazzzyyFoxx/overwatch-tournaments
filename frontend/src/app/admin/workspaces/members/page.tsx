@@ -122,7 +122,7 @@ export default function WorkspaceMembersPage() {
 
   const { data: allUsers } = useQuery({
     queryKey: ["rbac-users", currentWorkspaceId],
-    queryFn: () => rbacService.listUsers({ workspace_id: currentWorkspaceId ?? undefined }),
+    queryFn: () => rbacService.listUsersAll({ workspace_id: currentWorkspaceId ?? undefined }),
     enabled: canCreateMembers
   });
 
@@ -130,7 +130,7 @@ export default function WorkspaceMembersPage() {
     queryKey: ["workspace-rbac-roles", currentWorkspaceId],
     queryFn: () =>
       currentWorkspaceId
-        ? rbacService.listRoles({ workspace_id: currentWorkspaceId })
+        ? rbacService.listRolesAll({ workspace_id: currentWorkspaceId })
         : Promise.resolve([]),
     enabled: !!currentWorkspaceId && (canCreateMembers || canUpdateMembers)
   });

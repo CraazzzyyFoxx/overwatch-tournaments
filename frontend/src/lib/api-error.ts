@@ -16,6 +16,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * True when a thrown value represents "resource not found" — either an HTTP 404
+ * or a business error whose code is `not_found`. Some backend lookups signal a
+ * missing entity with 400 + code "not_found" (e.g. user-by-name), so a bare
+ * `status === 404` check is not enough. Use to map to Next's notFound()/404
+ * metadata instead of letting it bubble up as a 500.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 404 || error.details.some((d) => d.code === "not_found"))
+  );
+}
+
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 const PYDANTIC_LOC_PREFIXES = ["body", "query", "path", "header", "cookie"];

@@ -48,6 +48,8 @@ export interface HeroLeaderboardEntry {
   player_name: string;
   role: string | null;
   div: number;
+  team: string | null;
+  team_id: number | null;
   games_played: number;
   playtime_seconds: number;
   per10_eliminations: number;

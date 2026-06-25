@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 
 import pytest
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))

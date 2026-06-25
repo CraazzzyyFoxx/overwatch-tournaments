@@ -121,7 +121,7 @@ class ExtractSheetSourceTests(TestCase):
         assert gid == "789"
 
     def test_invalid_url_raises(self) -> None:
-        from fastapi import HTTPException
+        from shared.core.errors import BaseAPIException as HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
             extract_sheet_source("https://example.com/not-a-sheet")
@@ -265,7 +265,7 @@ class FetchCsvRowsTests(TestCase):
         assert rows[0] == ["Name", "Age"]
 
     def test_empty_raises(self) -> None:
-        from fastapi import HTTPException
+        from shared.core.errors import BaseAPIException as HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
             fetch_csv_rows("")

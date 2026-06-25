@@ -1,8 +1,11 @@
 import {
   AlgorithmAnalytics,
+  PerformanceV2,
   PlayerAnalytics,
+  TeamAnalytics,
   TournamentAnalyticsSummary,
 } from "@/types/analytics.types";
+import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 
 const RECOMMENDED_ALGORITHM_ORDER = [
   "Linear",
@@ -202,5 +205,221 @@ export function getConfidenceBreakdownLines(
     `Tournaments: ${player.sample_tournaments}`,
     `Matches: ${player.sample_matches}`,
     `Log coverage: ${formatConfidencePercent(player.log_coverage)}`,
+  ];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Community layer — fan-facing derivations shared by the redesigned page.
+// Pure functions only (no i18n / React) so they stay unit-testable; components
+// translate the returned keys/ids.
+// ────────────────────────────────────────────────────────────────────────────
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Map a raw shift `points` value to a 0–100 "impact" score for the public/
+ * community view. Mirrors the design mock so anonymous users see the same
+ * number without needing the permission-gated v2 `impact_score`. Points sit
+ * roughly in [-1.6, +2.4]; we rescale to a percentile-ish band and clamp the
+ * tails so a bar always reads as non-empty / non-full.
+ */
+export function deriveImpact(points: number): number {
+  if (!Number.isFinite(points)) return 50;
+  return clamp(Math.round(((points + 1.6) / 4.0) * 100), 3, 99);
+}
+
+/**
+ * Prefer the real v2 `impact_score` (0–100 percentile within tournament+role)
+ * when the viewer may read it and a row exists; otherwise fall back to the
+ * derived public impact. Keeps the community baseline working with v1 alone.
+ */
+export function resolveImpact(
+  player: Pick<PlayerAnalytics, "points">,
+  perf: Pick<PerformanceV2, "impact_score"> | undefined,
+  canReadV2: boolean,
+): number {
+  if (canReadV2 && perf && Number.isFinite(perf.impact_score)) {
+    return clamp(Math.round(perf.impact_score), 0, 100);
+  }
+  return deriveImpact(player.points);
+}
+
+const ORDINAL_SUFFIX_RULES = new Intl.PluralRules("en-US", { type: "ordinal" });
+const ORDINAL_SUFFIXES: Record<Intl.LDMLPluralRule, string> = {
+  zero: "th",
+  one: "st",
+  two: "nd",
+  few: "rd",
+  many: "th",
+  other: "th",
+};
+
+/** English ordinal ("1st", "2nd", "13th") for compact rank displays. */
+export function ordinal(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  const suffix = ORDINAL_SUFFIXES[ORDINAL_SUFFIX_RULES.select(n)] ?? "th";
+  return `${n}${suffix}`;
+}
+
+/**
+ * Locale-aware place formatter the community components feed into the `{place}`
+ * / `{predicted}` translation slots: English shows an ordinal ("3rd"), Russian
+ * keeps a bare number (the RU copy supplies the surrounding "№"/"место"). Null
+ * places render as an em dash.
+ */
+export function formatPlace(n: number | null | undefined, locale: "en" | "ru"): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return locale === "en" ? ordinal(n) : String(n);
+}
+
+export type CommunityRoleKey = "tank" | "damage" | "support";
+
+/**
+ * Normalise a raw player role ("Tank" / "Damage" / "dps" / "Support") to the
+ * community role key used for the localized role label. Returns null for
+ * unknown roles so callers can fall back to the raw string.
+ */
+export function roleKey(role: string | null | undefined): CommunityRoleKey | null {
+  switch ((role ?? "").toLowerCase()) {
+    case "tank":
+      return "tank";
+    case "damage":
+    case "dps":
+      return "damage";
+    case "support":
+      return "support";
+    default:
+      return null;
+  }
+}
+
+export interface VerdictTeam {
+  id: number;
+  name: string;
+  /** Actual finishing place (standings). */
+  place: number | null;
+  /** Model's pre-bracket predicted place. */
+  predicted: number | null;
+  /** predicted_place − actual_place; positive = finished better than forecast. */
+  delta: number;
+}
+
+export interface CommunityVerdict {
+  /** Team that beat its forecast by the most (delta > 0). */
+  story?: VerdictTeam;
+  /** Team that fell short of its forecast by the most (delta < 0). */
+  letdown?: VerdictTeam;
+}
+
+type VerdictTeamSource = Pick<
+  TeamAnalytics,
+  "id" | "name" | "placement" | "predicted_place" | "placement_delta"
+>;
+
+/**
+ * The headline "who's the story / who's the let-down" of the bracket: the
+ * teams with the largest positive and negative placement deltas. Only returns
+ * a side when there is a genuine surprise (delta ≠ 0), and never names the same
+ * team for both.
+ */
+export function buildCommunityVerdict(teams: VerdictTeamSource[]): CommunityVerdict {
+  const rated = teams
+    .filter((team) => team.placement_delta != null)
+    .map<VerdictTeam>((team) => ({
+      id: team.id,
+      name: team.name,
+      place: team.placement,
+      predicted: team.predicted_place,
+      delta: team.placement_delta as number,
+    }));
+
+  if (rated.length === 0) return {};
+
+  const story = rated.reduce((best, team) => (team.delta > best.delta ? team : best), rated[0]);
+  const letdown = rated.reduce((worst, team) => (team.delta < worst.delta ? team : worst), rated[0]);
+
+  return {
+    story: story.delta > 0 ? story : undefined,
+    letdown: letdown.delta < 0 && letdown.id !== story.id ? letdown : undefined,
+  };
+}
+
+export type KpiTone = "up" | "down" | "warn" | "info" | "neutral";
+
+export type KpiId =
+  | "climbing"
+  | "dropping"
+  | "watch"
+  | "avgConfidence"
+  | "upsets"
+  | "newFaces";
+
+export interface KpiVM {
+  id: KpiId;
+  /** Glossary term opened by the KPI's info dot. */
+  glossaryTerm: GlossaryTerm;
+  /** Raw numeric value (count, or 0–1 for confidence). */
+  value: number;
+  /** Pre-formatted display string ("12", "78%"). */
+  display: string;
+  tone: KpiTone;
+}
+
+type KpiSummary = Pick<
+  TournamentAnalyticsSummary,
+  "avg_confidence" | "anomaly_count" | "divergent_team_count" | "newcomer_count"
+>;
+
+/**
+ * The six fan-facing KPIs. Climbers/droppers are counted from the per-player
+ * predicted direction; the rest come straight off the summary. Labels/footers
+ * live in i18n keyed by {@link KpiId} so this stays render-free.
+ */
+export function buildKpiRail(
+  summary: KpiSummary,
+  teams: Array<Pick<TeamAnalytics, "players">>,
+): KpiVM[] {
+  let climbers = 0;
+  let droppers = 0;
+  for (const team of teams) {
+    for (const player of team.players) {
+      if (player.predicted_direction === "promote") climbers += 1;
+      else if (player.predicted_direction === "demote") droppers += 1;
+    }
+  }
+
+  return [
+    { id: "climbing", glossaryTerm: "climbing", value: climbers, display: String(climbers), tone: "up" },
+    { id: "dropping", glossaryTerm: "dropping", value: droppers, display: String(droppers), tone: "down" },
+    {
+      id: "watch",
+      glossaryTerm: "watch",
+      value: summary.anomaly_count,
+      display: String(summary.anomaly_count),
+      tone: "warn",
+    },
+    {
+      id: "avgConfidence",
+      glossaryTerm: "avg_confidence",
+      value: summary.avg_confidence,
+      display: formatConfidencePercent(summary.avg_confidence),
+      tone: "info",
+    },
+    {
+      id: "upsets",
+      glossaryTerm: "upsets",
+      value: summary.divergent_team_count,
+      display: String(summary.divergent_team_count),
+      tone: "neutral",
+    },
+    {
+      id: "newFaces",
+      glossaryTerm: "new_faces",
+      value: summary.newcomer_count,
+      display: String(summary.newcomer_count),
+      tone: "neutral",
+    },
   ];
 }

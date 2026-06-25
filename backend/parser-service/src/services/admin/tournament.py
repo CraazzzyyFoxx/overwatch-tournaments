@@ -3,7 +3,8 @@
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
 from shared.services import division_grid_cache

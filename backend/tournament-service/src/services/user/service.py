@@ -2,8 +2,8 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
-from cashews import cache
-from shared.division_grid import DivisionGrid, division_case_expr
+from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
+from shared.models import mv_hero_global_stats
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -140,36 +140,60 @@ def _build_eligible_hero_stats_cte(
     tournament_id: int | None = None,
     workspace_id: int | None = None,
 ) -> sa.CTE:
-    hero_playtime_stat = sa.alias(models.MatchStatistics)
+    # (match, user, hero) combos that actually played the hero (HeroTimePlayed
+    # > 60s). Expressed as a DISTINCT semi-join CTE rather than a correlated
+    # EXISTS so the planner joins it once (backed by ix_match_statistics_playtime_r0)
+    # instead of re-probing matches.statistics per candidate row. DISTINCT keeps
+    # the join a true semi-join: even if a (match, user, hero) ever had duplicate
+    # playtime rows, the eligible set is not fanned out.
+    qualified_where: list[typing.Any] = [
+        models.MatchStatistics.round == 0,
+        models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+        models.MatchStatistics.value > 60,
+    ]
+    if user_id is not None:
+        # Scope the playtime probe to the same user as the eligible base: a
+        # per-user query then touches only that user's rows (a user-leading
+        # index seek) instead of DISTINCT-scanning every player's playtime stats.
+        qualified_where.append(models.MatchStatistics.user_id == user_id)
+    qualified_combos = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.hero_id.label("hero_id"),
+        )
+        .where(*qualified_where)
+        .distinct()
+        .cte(f"{cte_name}_qualified")
+    )
 
     where_conditions: list[typing.Any] = [
         models.MatchStatistics.round == 0,
         models.MatchStatistics.hero_id.isnot(None),
-        sa.exists(
-            sa.select(1)
-            .select_from(hero_playtime_stat)
-            .where(
-                hero_playtime_stat.c.match_id == models.MatchStatistics.match_id,
-                hero_playtime_stat.c.user_id == models.MatchStatistics.user_id,
-                hero_playtime_stat.c.hero_id == models.MatchStatistics.hero_id,
-                hero_playtime_stat.c.name == enums.LogStatsName.HeroTimePlayed,
-                hero_playtime_stat.c.round == 0,
-                hero_playtime_stat.c.value > 60,
-            )
-        ),
     ]
     if user_id is not None:
         where_conditions.append(models.MatchStatistics.user_id == user_id)
     if stats:
         where_conditions.append(models.MatchStatistics.name.in_(stats))
 
-    base_select = sa.select(
-        models.MatchStatistics.match_id.label("match_id"),
-        models.MatchStatistics.user_id.label("user_id"),
-        models.MatchStatistics.hero_id.label("hero_id"),
-        models.MatchStatistics.name.label("name"),
-        models.MatchStatistics.value.label("value"),
-    ).where(*where_conditions)
+    base_select = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.hero_id.label("hero_id"),
+            models.MatchStatistics.name.label("name"),
+            models.MatchStatistics.value.label("value"),
+        )
+        .join(
+            qualified_combos,
+            sa.and_(
+                qualified_combos.c.match_id == models.MatchStatistics.match_id,
+                qualified_combos.c.user_id == models.MatchStatistics.user_id,
+                qualified_combos.c.hero_id == models.MatchStatistics.hero_id,
+            ),
+        )
+        .where(*where_conditions)
+    )
 
     if tournament_id is not None or workspace_id is not None:
         base_select = base_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id).join(
@@ -193,7 +217,6 @@ def _apply_overview_role_filters(
     div_max: int | None,
     grid: DivisionGrid,
 ) -> sa.Select:
-    div_expr = division_case_expr(models.Player.rank, grid)
     role_filters: list[typing.Any] = [
         models.Player.user_id == models.User.id,
         models.Player.is_substitution.is_(False),
@@ -201,10 +224,7 @@ def _apply_overview_role_filters(
 
     if role is not None:
         role_filters.append(models.Player.role == role)
-    if div_min is not None:
-        role_filters.append(div_expr >= div_min)
-    if div_max is not None:
-        role_filters.append(div_expr <= div_max)
+    role_filters.extend(division_filter_predicates(models.Player.rank, div_min, div_max, grid))
 
     role_exists = sa.exists(sa.select(1).select_from(models.Player).where(*role_filters))
     return query.where(role_exists)
@@ -220,7 +240,6 @@ def _compare_player_scope_filters(
     tournament_id: int | None = None,
     grid: DivisionGrid,
 ) -> list[typing.Any]:
-    div_expr = division_case_expr(player_model.rank, grid)
     filters: list[typing.Any] = [
         player_model.user_id == user_id_column,
         player_model.is_substitution.is_(False),
@@ -228,10 +247,7 @@ def _compare_player_scope_filters(
 
     if role is not None:
         filters.append(player_model.role == role)
-    if div_min is not None:
-        filters.append(div_expr >= div_min)
-    if div_max is not None:
-        filters.append(div_expr <= div_max)
+    filters.extend(division_filter_predicates(player_model.rank, div_min, div_max, grid))
     if tournament_id is not None:
         filters.append(player_model.tournament_id == tournament_id)
 
@@ -2154,120 +2170,48 @@ async def get_statistics_by_heroes(
     return result.all()
 
 
-async def _get_statistics_by_heroes_all_values_impl(
-    session: AsyncSession,
-    stats: list[enums.LogStatsName] | None,
-) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
+def _read_hero_global_stats_query(stats: list[enums.LogStatsName] | None) -> sa.Select:
+    """Read precomputed global per-(hero, stat) records from the materialized
+    view ``matches.mv_hero_global_stats``.
+
+    The heavy aggregation that used to run here on every cache miss (a window
+    function over the whole eligible set joined to 5 tables) blew past
+    ``statement_timeout``. It now lives in the view body and is refreshed
+    out-of-band by the app-worker (see ``hero_stats_refresh``); reads are a
+    cheap indexed scan, so the per-request cache is no longer needed.
     """
-    Retrieves the best statistics for all heroes across all users, including max value, average value, and metadata.
-
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-
-    Returns:
-        A sequence of tuples containing:
-        1. The statistic name (e.g., HeroDamageDealt, Eliminations).
-        2. The hero ID.
-        3. The maximum value of the statistic.
-        4. The average value of the statistic (per 10 minutes).
-        5. A dictionary containing metadata about the best performance (e.g., encounter ID, map name, tournament name, username).
-    """
-    eligible_stats = _build_eligible_hero_stats_cte(
-        user_id=None,
-        stats=stats,
-        cte_name="eligible_global_hero_stats",
+    mv = mv_hero_global_stats
+    query = sa.select(
+        mv.c.name,
+        mv.c.hero_id,
+        mv.c.best_value,
+        mv.c["avg"],
+        mv.c["metadata"],
     )
-    direction_score = _hero_direction_score(eligible_stats.c.value, eligible_stats.c.name)
-
-    best_encounter_cte = (
-        sa.select(
-            eligible_stats.c.hero_id,
-            eligible_stats.c.name,
-            models.Match.encounter_id,
-            models.Map.name.label("map_name"),
-            models.Map.image_path.label("map_image_path"),
-            models.Tournament.name.label("tournament_name"),
-            models.User.name.label("username"),
-            eligible_stats.c.value,
-            sa.func.row_number()
-            .over(
-                partition_by=[
-                    eligible_stats.c.hero_id,
-                    eligible_stats.c.name,
-                ],
-                order_by=[direction_score.desc(), models.Match.id.desc()],
-            )
-            .label("row_num"),
-        )
-        .join(models.Match, eligible_stats.c.match_id == models.Match.id)
-        .join(models.Map, models.Map.id == models.Match.map_id)
-        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
-        .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .join(models.User, models.User.id == eligible_stats.c.user_id)
-        .cte("best_global_hero_result")
-    )
-
-    query = (
-        sa.select(
-            eligible_stats.c.name,
-            models.Hero.id,
-            best_encounter_cte.c.value.label("best_value"),
-            (sa.func.sum(eligible_stats.c.value) / sa.func.nullif(sa.func.sum(models.Match.time), 0) * 600).label(
-                "avg"
-            ),
-            sa.func.jsonb_build_object(
-                "encounter_id",
-                best_encounter_cte.c.encounter_id,
-                "map_name",
-                best_encounter_cte.c.map_name,
-                "map_image_path",
-                best_encounter_cte.c.map_image_path,
-                "tournament_name",
-                best_encounter_cte.c.tournament_name,
-                "username",
-                best_encounter_cte.c.username,
-            ).label("metadata"),
-        )
-        .select_from(eligible_stats)
-        .join(models.Match, models.Match.id == eligible_stats.c.match_id)
-        .join(models.Hero, models.Hero.id == eligible_stats.c.hero_id)
-        .join(
-            best_encounter_cte,
-            sa.and_(
-                best_encounter_cte.c.hero_id == eligible_stats.c.hero_id,
-                best_encounter_cte.c.name == eligible_stats.c.name,
-                best_encounter_cte.c.row_num == 1,
-            ),
-        )
-        .group_by(
-            eligible_stats.c.name,
-            models.Hero.id,
-            best_encounter_cte.c.encounter_id,
-            best_encounter_cte.c.map_name,
-            best_encounter_cte.c.map_image_path,
-            best_encounter_cte.c.tournament_name,
-            best_encounter_cte.c.username,
-            best_encounter_cte.c.value,
-        )
-        .order_by(models.Hero.id)
-    )
-
-    result_all = await session.execute(query)
-    return result_all.all()  # type: ignore
+    if stats:
+        query = query.where(mv.c.name.in_(stats))
+    return query.order_by(mv.c.hero_id)
 
 
-@cache(ttl="1d", key="get_statistics_by_heroes_all_values", prefix="backend:")
 async def get_statistics_by_heroes_all_values(
     session: AsyncSession,
 ) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
-    return await _get_statistics_by_heroes_all_values_impl(session, stats=None)
+    """Best value (+ metadata) and global per-10min average for every (hero, stat).
+
+    Served from the precomputed ``matches.mv_hero_global_stats`` view. Returns an
+    empty sequence until the view's first refresh has populated it, so callers
+    degrade gracefully (per-user stats render without the global comparison).
+    """
+    result = await session.execute(_read_hero_global_stats_query(None))
+    return result.all()  # type: ignore[return-value]
 
 
 async def get_statistics_by_heroes_all_values_filtered(
     session: AsyncSession,
     stats: list[enums.LogStatsName],
 ) -> typing.Sequence[tuple[enums.LogStatsName, int, float, float, dict]]:
-    return await _get_statistics_by_heroes_all_values_impl(session, stats=stats)
+    result = await session.execute(_read_hero_global_stats_query(stats))
+    return result.all()  # type: ignore[return-value]
 
 
 async def get_best_teammates(

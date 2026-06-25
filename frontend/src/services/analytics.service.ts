@@ -4,7 +4,6 @@ import {
   AlgorithmAnalytics,
   AnalyticsJob,
   AnalyticsJobCreate,
-  AnalyticsRecalculateResponse,
   AnomalyFeedback,
   AnomalyFeedbackInput,
   Explanation,
@@ -34,7 +33,7 @@ export default class analyticsService {
     algorithm: number,
     workspaceId?: number | null,
   ): Promise<TournamentAnalytics> {
-    return apiFetch("analytics", `analytics`, {
+    return apiFetch(`/api/analytics`, {
       query: {
         tournament_id: id,
         algorithm: algorithm,
@@ -48,7 +47,7 @@ export default class analyticsService {
     playerId: number,
     shift: number,
   ): Promise<PlayerAnalytics> {
-    return apiFetch("analytics", `analytics/shift`, {
+    return apiFetch(`/api/analytics/shift`, {
       method: "POST",
       body: {
         team_id: teamId,
@@ -61,7 +60,7 @@ export default class analyticsService {
   static async getAlgorithms(
     tournamentId?: number | null,
   ): Promise<PaginatedResponse<AlgorithmAnalytics>> {
-    return apiFetch("analytics", `analytics/algorithms`, {
+    return apiFetch(`/api/analytics/algorithms`, {
       query: {
         page: 1,
         per_page: -1,
@@ -72,12 +71,14 @@ export default class analyticsService {
     }).then((response) => response.json());
   }
 
+  // Now enqueues an async compute job (202) instead of computing synchronously;
+  // the returned AnalyticsJob can be tracked via the job-status endpoints/realtime.
   static async recalculateAnalytics(
     tournamentId: number,
     algorithmIds?: number[],
     workspaceId?: number | null,
-  ): Promise<AnalyticsRecalculateResponse> {
-    return apiFetch("analytics", "analytics/recalculate", {
+  ): Promise<AnalyticsJob> {
+    return apiFetch("/api/analytics/recalculate", {
       query: { workspace_id: workspaceId },
       method: "POST",
       body: {
@@ -93,7 +94,7 @@ export default class analyticsService {
     tournamentId: number,
     algorithmId?: number,
   ): Promise<PerformanceV2[]> {
-    return apiFetch("analytics", "v2/performance", {
+    return apiFetch("/api/analytics/performance", {
       query: { tournament_id: tournamentId, algorithm_id: algorithmId },
     }).then((response) => response.json());
   }
@@ -102,7 +103,7 @@ export default class analyticsService {
     tournamentId: number,
     algorithmId?: number,
   ): Promise<StandingsDistribution[]> {
-    return apiFetch("analytics", "v2/standings/distribution", {
+    return apiFetch("/api/analytics/standings/distribution", {
       query: { tournament_id: tournamentId, algorithm_id: algorithmId },
     }).then((response) => response.json());
   }
@@ -111,7 +112,7 @@ export default class analyticsService {
     tournamentId: number,
     algorithmId?: number,
   ): Promise<MatchQuality[]> {
-    return apiFetch("analytics", "v2/match-quality", {
+    return apiFetch("/api/analytics/match-quality", {
       query: { tournament_id: tournamentId, algorithm_id: algorithmId },
     }).then((response) => response.json());
   }
@@ -121,7 +122,7 @@ export default class analyticsService {
     playerId?: number,
     kind?: string,
   ): Promise<PlayerAnomaly[]> {
-    return apiFetch("analytics", "v2/player-anomalies", {
+    return apiFetch("/api/analytics/player-anomalies", {
       query: {
         tournament_id: tournamentId,
         player_id: playerId,
@@ -133,7 +134,7 @@ export default class analyticsService {
   static async getAnomalyFeedback(
     tournamentId: number,
   ): Promise<AnomalyFeedback[]> {
-    return apiFetch("analytics", "v2/player-anomalies/feedback", {
+    return apiFetch("/api/analytics/player-anomalies/feedback", {
       query: { tournament_id: tournamentId },
     }).then((response) => response.json());
   }
@@ -141,7 +142,7 @@ export default class analyticsService {
   static async submitAnomalyFeedback(
     body: AnomalyFeedbackInput,
   ): Promise<AnomalyFeedback> {
-    return apiFetch("analytics", "v2/player-anomalies/feedback", {
+    return apiFetch("/api/analytics/player-anomalies/feedback", {
       method: "POST",
       body,
     }).then((response) => response.json());
@@ -152,9 +153,7 @@ export default class analyticsService {
     tournamentId: number,
     algorithmId?: number,
   ): Promise<Explanation> {
-    return apiFetch(
-      "analytics",
-      `v2/explain/player/${playerId}/tournament/${tournamentId}`,
+    return apiFetch(`/api/analytics/explain/player/${playerId}/tournament/${tournamentId}`,
       {
         query: { algorithm_id: algorithmId },
       },
@@ -167,7 +166,7 @@ export default class analyticsService {
     modelKind?: MLModelKind,
     activeOnly = false,
   ): Promise<MLArtifact[]> {
-    return apiFetch("analytics", "v2/artifacts", {
+    return apiFetch("/api/analytics/artifacts", {
       query: { model_kind: modelKind, active_only: activeOnly || undefined },
     }).then((response) => response.json());
   }
@@ -178,7 +177,7 @@ export default class analyticsService {
     workspaceId?: number | null,
     workspaceIds?: number[] | null,
   ): Promise<JobAcceptedResponse> {
-    return apiFetch("analytics", "v2/train", {
+    return apiFetch("/api/analytics/train", {
       method: "POST",
       body: {
         cutoff_tournament_id: cutoffTournamentId,
@@ -194,7 +193,7 @@ export default class analyticsService {
     modelKinds?: MLModelKind[],
     workspaceId?: number | null,
   ): Promise<JobAcceptedResponse> {
-    return apiFetch("analytics", "v2/infer", {
+    return apiFetch("/api/analytics/infer", {
       method: "POST",
       body: {
         tournament_id: tournamentId,
@@ -210,7 +209,7 @@ export default class analyticsService {
     body: AnalyticsJobCreate,
     workspaceId?: number | null,
   ): Promise<AnalyticsJob> {
-    return apiFetch("analytics", "v2/jobs", {
+    return apiFetch("/api/analytics/jobs", {
       method: "POST",
       query: { workspace_id: workspaceId },
       body,
@@ -220,13 +219,13 @@ export default class analyticsService {
   static async getActiveJob(
     workspaceId?: number | null,
   ): Promise<AnalyticsJob | null> {
-    return apiFetch("analytics", "v2/jobs/active", {
+    return apiFetch("/api/analytics/jobs/active", {
       query: { workspace_id: workspaceId },
     }).then((response) => response.json());
   }
 
   static async getJob(jobId: number): Promise<AnalyticsJob> {
-    return apiFetch("analytics", `v2/jobs/${jobId}`).then((response) => response.json());
+    return apiFetch(`/api/analytics/jobs/${jobId}`).then((response) => response.json());
   }
 
   static async listJobs(
@@ -234,7 +233,7 @@ export default class analyticsService {
     limit = 20,
     workspaceId?: number | null,
   ): Promise<AnalyticsJob[]> {
-    return apiFetch("analytics", "v2/jobs", {
+    return apiFetch("/api/analytics/jobs", {
       query: {
         active_only: activeOnly || undefined,
         limit,

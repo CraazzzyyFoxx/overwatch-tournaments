@@ -50,8 +50,8 @@ The configuration can be found in the `.pre-commit-config.yaml` file. It consist
 ## 🏛️ Architecture
 
 OWT is a microservices monorepo: a set of independent Python services under `backend/` (sharing one ORM layer
-via `backend/shared/`) plus a Next.js frontend. In production the services sit behind a Kong API gateway and
-communicate over PostgreSQL, Redis, and RabbitMQ.
+via `backend/shared/`) plus a Next.js frontend. In production the services sit behind nginx and a Go gateway
+(`gateway/`) and communicate over PostgreSQL, Redis, and RabbitMQ.
 
 ### Backend services (`backend/`)
 
@@ -122,8 +122,8 @@ The local Docker workflow has changed and is now profile-driven.
 
 - `docker-compose.override.yml` has been removed.
 - Default dev startup (`docker compose up -d --wait`) now starts core services only.
+- The Go gateway + nginx edge are part of the default stack (nginx on `APP_PORT` -> gateway:8080).
 - Optional profiles:
-  - `gateway` for Kong (`docker compose --profile gateway up -d --wait`)
   - `workers` for background services (`docker compose --profile workers up -d --wait`)
 - Local PostgreSQL is now part of the dev stack by default.
 

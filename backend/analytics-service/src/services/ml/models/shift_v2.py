@@ -1,23 +1,20 @@
-"""Shift v2 ("OpenSkill + ML") — transparent team-result × individual blend.
+"""Shift v2 ("OpenSkill + ML") — team-result backbone + additive individual skill.
 
-Prod analysis showed the **team result** (W/L overperformance vs the balanced
-seeding) is by far the strongest predictor of realised division moves, while
-individual impact adds ~0 on top of it. So Shift v2 is no longer a residual
-regressor toward the (mostly-zero) realised move — that collapsed confident
-signals to nil. Instead it is a convex blend of three division-unit shift
-components:
+Prod analysis showed the **team result** (W/L vs the balanced seeding) is by far
+the strongest predictor of realised division moves. So the backbone is a
+team-dominant convex mix of the v1 team-result Linear shift and the OpenSkill mu
+shift. On top of it an **additive individual skill term** lifts players whose
+Performance v2 ``local_zscore`` (skill vs same role + nearby division) is far
+from their cohort — so a clear individual outlier moves even when the team result
+doesn't capture it, instead of being averaged away:
 
-    shift_v2 = clamp( w_team·team_result + w_os·os_shift + w_imp·indiv_mod , ±3 )
+    shift_v2 = clamp( w_team·team_result + w_os·os_shift
+                      + clip(indiv_scale·local_zscore, ±indiv_clamp) , ±3 )
 
-- ``team_result`` — the v1 team-result Linear ``stable_shift`` (backbone).
-- ``os_shift``    — OpenSkill mu-implied shift (rating context, the "OpenSkill").
-- ``indiv_mod``   — Performance v2 ``local_zscore`` scaled small and hard-clamped
-  to ±0.5 div (the "ML" part): differentiates carry vs passenger WITHIN a team
-  but cannot flip or cancel the team signal.
-
-Weights are fit from data (NNLS vs realised move, normalised to sum 1 so the
-blend keeps ``team_result``'s calibration and never collapses). Newcomers
-(no prior tournament) return the clipped team baseline with halved confidence.
+There is no learned regression toward the (mostly-zero) realised move — that
+collapsed the signal. Weights/scales are fixed (config-tunable) and snapshotted
+into the artifact at train time. Newcomers (no prior tournament) get the clipped
+team backbone only (no individual term — one tournament is too noisy).
 """
 
 from __future__ import annotations
@@ -38,16 +35,15 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
-# Output bounds (match the v1 linear stable clamp) and individual-modulation
-# calibration: divisions of nudge per 1 std-dev of individual impact, hard-capped
-# so it can only tilt the team signal, never override it.
+# Output bounds (match the v1 linear stable clamp).
 SHIFT_RANGE: float = 3.0
 NEWCOMER_SHIFT_RANGE: float = 1.5
-INDIV_MOD_SCALE: float = 0.25
-INDIV_MOD_CLAMP: float = 0.5
 
-# Fallback blend weights (team-dominant) when the fit is degenerate / data-poor.
-DEFAULT_BLEND: dict[str, float] = {"team": 0.6, "os": 0.3, "impact": 0.1}
+# Blend defaults (team-dominant backbone; additive individual skill term).
+BLEND_W_TEAM: float = 0.7
+BLEND_W_OS: float = 0.3
+INDIV_MOD_SCALE: float = 0.5   # divisions per std-dev of individual skill
+INDIV_MOD_CLAMP: float = 1.5   # max |individual skill modifier| in divisions
 
 # Columns the blend reads (for MLModel/feature introspection).
 SHIFT_BLEND_COLUMNS: tuple[str, ...] = (
@@ -57,12 +53,8 @@ SHIFT_BLEND_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _clip(arr: np.ndarray, lo: float, hi: float) -> np.ndarray:
-    return np.clip(arr, lo, hi)
-
-
 def _team_result(df: pd.DataFrame) -> pd.Series:
-    """Team-result backbone: v1 Linear ``stable_shift``, falling back to os_shift."""
+    """Team-result backbone component: v1 Linear ``stable_shift`` (fallback os_shift)."""
     fallback = pd.to_numeric(
         df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce"
     ).fillna(0.0)
@@ -78,18 +70,19 @@ def _os_shift(df: pd.DataFrame) -> pd.Series:
     ).fillna(0.0)
 
 
-def _indiv_mod(df: pd.DataFrame) -> pd.Series:
-    """Individual carry/passenger nudge from Performance v2 local z-score.
+def _indiv_mod(df: pd.DataFrame, *, scale: float, clamp: float) -> pd.Series:
+    """Additive individual-skill modifier from Performance v2 local z-score.
 
-    Scaled small and hard-clamped to ±``INDIV_MOD_CLAMP`` divisions so it can only
-    tilt the team-result backbone, not override it. Zero where Performance v2 is
-    absent.
+    ``local_zscore`` is the player's skill vs the same role + nearby division
+    cohort (not all players). Scaled to divisions and clamped to ±``clamp`` so a
+    strong outlier moves meaningfully but cannot run away. Zero where Performance
+    v2 is absent.
     """
     z = pd.to_numeric(
         df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
         errors="coerce",
     ).fillna(0.0)
-    return (INDIV_MOD_SCALE * z).clip(-INDIV_MOD_CLAMP, INDIV_MOD_CLAMP)
+    return (scale * z).clip(-clamp, clamp)
 
 
 def _linear_confidence(df: pd.DataFrame) -> pd.Series:
@@ -99,35 +92,38 @@ def _linear_confidence(df: pd.DataFrame) -> pd.Series:
 
 
 def _newcomer_mask(df: pd.DataFrame) -> np.ndarray:
-    return (
-        df.get("is_newcomer", pd.Series(False, index=df.index)).fillna(False).astype(bool)
-        | (pd.to_numeric(df.get("tournaments_played", 0), errors="coerce").fillna(0) <= 1)
-    ).to_numpy()
+    is_newcomer = df.get("is_newcomer", pd.Series(False, index=df.index))
+    played = pd.to_numeric(
+        df.get("tournaments_played", pd.Series(0, index=df.index)), errors="coerce"
+    ).fillna(0)
+    return (is_newcomer.fillna(False).astype(bool) | (played <= 1)).to_numpy()
 
 
 @dataclass
 class ShiftModelV2(MLModel):
-    """Transparent convex blend of team-result, OpenSkill and individual impact."""
+    """Team-result backbone + additive individual-skill modifier (no regression)."""
 
-    w_team: float = DEFAULT_BLEND["team"]
-    w_os: float = DEFAULT_BLEND["os"]
-    w_impact: float = DEFAULT_BLEND["impact"]
+    w_team: float = BLEND_W_TEAM
+    w_os: float = BLEND_W_OS
+    indiv_scale: float = INDIV_MOD_SCALE
+    indiv_clamp: float = INDIV_MOD_CLAMP
     shift_range: float = SHIFT_RANGE
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
 
     def _shift_array(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        team = _team_result(df).to_numpy()
-        blend = (
-            self.w_team * team
+        backbone = (
+            self.w_team * _team_result(df).to_numpy()
             + self.w_os * _os_shift(df).to_numpy()
-            + self.w_impact * _indiv_mod(df).to_numpy()
         )
-        shift = _clip(blend, -self.shift_range, self.shift_range)
-        # Newcomers: pure team baseline (the blend's individual/os terms are noisy
-        # with no history), clipped to the conservative newcomer range.
+        indiv = _indiv_mod(df, scale=self.indiv_scale, clamp=self.indiv_clamp).to_numpy()
+        shift = np.clip(backbone + indiv, -self.shift_range, self.shift_range)
+        # Newcomers: team backbone only (one tournament of individual signal is
+        # too noisy), clipped to the conservative newcomer range.
         newcomer = _newcomer_mask(df)
         shift = np.where(
-            newcomer, _clip(team, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE), shift
+            newcomer,
+            np.clip(backbone, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE),
+            shift,
         )
         return shift, newcomer
 
@@ -156,90 +152,62 @@ class ShiftTrainingResult:
     feature_importance: dict[str, float]
 
 
-def _fit_blend_weights(
-    components: np.ndarray, realised: np.ndarray, *, min_samples: int = 30
-) -> tuple[float, float, float]:
-    """Fit convex blend weights via NNLS against realised division moves.
-
-    Non-negative least squares finds the relative importance of
-    ``[team_result, os_shift, indiv_mod]``; the coefficients are normalised to
-    sum to 1 so the blend keeps ``team_result``'s scale (this is what prevents the
-    collapse the old residual-toward-realised regression suffered). Falls back to
-    :data:`DEFAULT_BLEND` on too little data or a degenerate fit.
-    """
-    from scipy.optimize import nnls
-
-    X = np.asarray(components, dtype=float)
-    y = np.asarray(realised, dtype=float)
-    default = (DEFAULT_BLEND["team"], DEFAULT_BLEND["os"], DEFAULT_BLEND["impact"])
-    if X.ndim != 2 or X.shape[1] != 3 or len(y) < min_samples:
-        return default
-    coef, _ = nnls(X, y)
-    total = float(coef.sum())
-    if not np.isfinite(total) or total <= 1e-9:
-        return default
-    w = coef / total
-    return (float(w[0]), float(w[1]), float(w[2]))
-
-
 def train_shift_v2(
-    df: pd.DataFrame, *, val_df: pd.DataFrame | None = None
+    df: pd.DataFrame,
+    *,
+    val_df: pd.DataFrame | None = None,
+    w_team: float = BLEND_W_TEAM,
+    w_os: float = BLEND_W_OS,
+    indiv_scale: float = INDIV_MOD_SCALE,
+    indiv_clamp: float = INDIV_MOD_CLAMP,
 ) -> ShiftTrainingResult:
-    """Fit the blend weights from realised division moves.
+    """Snapshot the (config-tunable) blend weights into a model artifact.
 
-    ``df`` must carry ``current_div`` and ``next_tournament_div`` (the realised
-    move label) plus the blend component columns. Rows without the future label
-    are dropped for the fit; the resulting model still scores everyone.
+    There is no learned fit — the data showed regressing the sparse realised move
+    collapses the signal and an NNLS fit drifted to an unstable os-heavy solution.
+    Weights/scales come from config; this just builds the model and reports a
+    diagnostic MAE of the blend vs the realised move on any labelled rows.
     """
     if df.empty:
         raise ValueError("training DataFrame is empty")
-    label_cols = ("current_div", "next_tournament_div")
-    if any(c not in df.columns for c in label_cols):
-        raise ValueError(
-            "no labelled rows for shift v2 (need current_div + next_tournament_div)"
-        )
-    labelled = df.dropna(subset=list(label_cols)).copy()
-    if labelled.empty:
-        raise ValueError(
-            "no labelled rows for shift v2 (need current_div + next_tournament_div)"
-        )
+    model = ShiftModelV2(
+        w_team=w_team, w_os=w_os, indiv_scale=indiv_scale, indiv_clamp=indiv_clamp
+    )
 
-    realised = (
-        labelled["current_div"].astype(float) - labelled["next_tournament_div"].astype(float)
-    ).to_numpy()
-    team = _team_result(labelled).to_numpy()
-    os_ = _os_shift(labelled).to_numpy()
-    indiv = _indiv_mod(labelled).to_numpy()
-    components = np.column_stack([team, os_, indiv])
-
-    w_team, w_os, w_impact = _fit_blend_weights(components, realised)
-    model = ShiftModelV2(w_team=w_team, w_os=w_os, w_impact=w_impact)
-
-    blend = components @ np.array([w_team, w_os, w_impact])
-    blend = np.clip(blend, -SHIFT_RANGE, SHIFT_RANGE)
-    mae = float(np.mean(np.abs(blend - realised)))
-    metrics = {
-        "n_rows": float(len(labelled)),
+    metrics: dict[str, float] = {
+        "n_rows": float(len(df)),
         "w_team": w_team,
         "w_os": w_os,
-        "w_impact": w_impact,
-        "mae_vs_realised": mae,
+        "indiv_scale": indiv_scale,
+        "indiv_clamp": indiv_clamp,
     }
+
+    def _mae_vs_realised(frame: pd.DataFrame) -> tuple[float, int] | None:
+        if any(c not in frame.columns for c in ("current_div", "next_tournament_div")):
+            return None
+        labelled = frame.dropna(subset=["current_div", "next_tournament_div"])
+        if labelled.empty:
+            return None
+        realised = (
+            labelled["current_div"].astype(float)
+            - labelled["next_tournament_div"].astype(float)
+        ).to_numpy()
+        pred = model.predict(labelled).to_numpy()
+        return float(np.mean(np.abs(pred - realised))), int(len(labelled))
+
+    train_mae = _mae_vs_realised(df)
+    if train_mae is not None:
+        metrics["mae_vs_realised"], metrics["n_labelled"] = train_mae[0], float(train_mae[1])
     if val_df is not None and not val_df.empty:
-        v = val_df.dropna(subset=["current_div", "next_tournament_div"])
-        if not v.empty:
-            vr = (v["current_div"].astype(float) - v["next_tournament_div"].astype(float)).to_numpy()
-            vb = np.clip(
-                np.column_stack([_team_result(v).to_numpy(), _os_shift(v).to_numpy(), _indiv_mod(v).to_numpy()])
-                @ np.array([w_team, w_os, w_impact]),
-                -SHIFT_RANGE,
-                SHIFT_RANGE,
+        val_mae = _mae_vs_realised(val_df)
+        if val_mae is not None:
+            metrics["mae_vs_realised_val"], metrics["n_rows_val"] = (
+                val_mae[0],
+                float(val_mae[1]),
             )
-            metrics["mae_vs_realised_val"] = float(np.mean(np.abs(vb - vr)))
-            metrics["n_rows_val"] = float(len(v))
 
     return ShiftTrainingResult(
         model=model,
         metrics=metrics,
-        feature_importance={"team": w_team, "os": w_os, "impact": w_impact},
+        feature_importance={"team": w_team, "os": w_os, "indiv": indiv_scale},
     )

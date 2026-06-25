@@ -42,6 +42,23 @@ class AppConfig(BaseServiceSettings):
     # Applied at read time — recompute v1 shifts to refresh stored rows.
     linear_shift_scale: float = 6.25
 
+    # OpenSkill + ML (shift v2) blend. The team-result backbone is a
+    # team-dominant convex mix of the Linear team signal and the OpenSkill mu
+    # shift; the individual skill term is ADDED on top (so a player far above
+    # their rank/role cohort moves even if the team result doesn't capture it).
+    # Retrain shift v2 to snapshot changes into the artifact.
+    shift_w_team: float = 0.7
+    shift_w_os: float = 0.3
+    # Individual skill modifier: divisions per std-dev of Performance v2
+    # local_zscore (vs same role + nearby division), additive, clamped.
+    shift_indiv_scale: float = 0.5
+    shift_indiv_clamp: float = 1.5
+
+    # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
+    # this flags the player as a strong cohort outlier regardless of rank (in
+    # addition to the classic low-rank smurf rule).
+    smurf_strong_local_z: float = 1.5
+
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5
 

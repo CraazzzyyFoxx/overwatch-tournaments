@@ -14,6 +14,8 @@ __all__ = (
     "PlayerShiftUpdate",
     "PredictedDirection",
     "TournamentAnalyticsSummary",
+    "BalancePlayerSnapshotRead",
+    "BalanceQualityRead",
 )
 
 
@@ -95,3 +97,38 @@ class PlayerStreak(BaseModel):
 class PlayerShiftUpdate(BaseModel):
     player_id: int
     shift: int
+
+
+# ---------------------------------------------------------------------------
+# Balance quality snapshot schemas (extracted from the decommissioned
+# ``src/routes/analytics_read.py``; the ``balance_quality`` RPC handler builds
+# these by hand from ``AnalyticsBalanceSnapshot`` rows — keep field names,
+# order and defaults identical so the response bytes stay the same).
+# ---------------------------------------------------------------------------
+
+
+class BalancePlayerSnapshotRead(BaseModel):
+    user_id: int | None = None
+    team_id: int | None = None
+    assigned_role: str
+    preferred_role: str | None = None
+    assigned_rank: int
+    discomfort: int = 0
+    division_number: int | None = None
+    is_captain: bool = False
+    was_off_role: bool = False
+
+
+class BalanceQualityRead(BaseModel):
+    tournament_id: int
+    algorithm: str
+    division_scope: str | None = None
+    team_count: int
+    player_count: int
+    avg_sr_overall: float
+    sr_std_dev: float
+    sr_range: float
+    total_discomfort: int
+    off_role_count: int
+    objective_score: float | None = None
+    players: list[BalancePlayerSnapshotRead]

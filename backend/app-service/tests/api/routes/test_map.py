@@ -1,6 +1,16 @@
+"""RPC-handler tests for the map surface.
+
+Targets:
+- list -> ``rpc.app.read.list`` (entity=map, shared CRUD read engine)
+
+Replaces the former HTTP-client tests against the decommissioned HTTP service;
+assertions mirror the old tests on the envelope ``data``. The get-by-id cases
+were already commented out in the HTTP suite and stay disabled.
+"""
+
 import pytest
-from fastapi.testclient import TestClient
-from src.core import config
+
+from tests.conftest import RpcHarness, build_query
 
 
 @pytest.mark.parametrize(
@@ -12,7 +22,7 @@ from src.core import config
     ],
 )
 def test_search_map(
-    client: TestClient,
+    rpc: RpcHarness,
     page: int,
     per_page: int,
     sort: str,
@@ -21,20 +31,25 @@ def test_search_map(
     query: str,
     fields: list[str],
 ) -> None:
-    response = client.get(
-        f"{config.settings.api_v1_str}/maps",
-        params={
-            "page": page,
-            "per_page": per_page,
-            "sort": sort,
-            "order": order,
-            "entities": entities,
-            "query": query,
-            "fields": fields,
+    env = rpc.call_sync(
+        "rpc.app.read.list",
+        {
+            "entity": "map",
+            "query": build_query(
+                {
+                    "page": page,
+                    "per_page": per_page,
+                    "sort": sort,
+                    "order": order,
+                    "entities": entities,
+                    "query": query,
+                    "fields": fields,
+                }
+            ),
         },
     )
-    assert response.status_code == 200
-    content = response.json()
+    assert env["ok"] is True
+    content = env["data"]
     assert content["page"] == page
     assert content["per_page"] == per_page
     assert content["results"]
@@ -43,35 +58,5 @@ def test_search_map(
         assert query in content["results"][0]["name"].lower()
 
 
-# @pytest.mark.parametrize(
-#     ("map_id", ),
-#     [
-#         (1, ),
-#         (2, ),
-#         (3, ),
-#         (4, ),
-#         (5, ),
-#     ]
-# )
-# def test_get_map_by_id(client: TestClient, map_id: int) -> None:
-#     response = client.get(f"{config.settings.api_v1_str}/maps/{map_id}")
-#     assert response.status_code == 200
-#     content = response.json()
-#     assert content["id"] == map_id
-#
-#
-# @pytest.mark.parametrize(
-#     ("map_name", ),
-#     [
-#         ("Hanamura", ),
-#         ("Paris", ),
-#         ("Antarctic Peninsula", ),
-#         ("Malevento", ),
-#         ("Shambali Monastery", ),
-#     ]
-# )
-# def test_get_map_by_id(client: TestClient, map_name: int) -> None:
-#     response = client.get(f"{config.settings.api_v1_str}/maps/{map_name}")
-#     assert response.status_code == 200
-#     content = response.json()
-#     assert content["id"] == map_name
+# get-by-id / get-by-name were commented out in the original HTTP suite
+# (no /maps/{id} route); they remain disabled under the RPC engine too.

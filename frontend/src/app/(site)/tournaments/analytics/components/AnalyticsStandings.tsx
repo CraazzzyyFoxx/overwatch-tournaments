@@ -44,6 +44,8 @@ interface AnalyticsStandingsProps {
   teams: TeamAnalytics[];
   performanceByPlayer: Map<number, PerformanceV2>;
   distributionByTeam?: Map<number, StandingsDistribution>;
+  /** Trailing control on the sort-tab row (the list/table view toggle). */
+  headerEnd?: React.ReactNode;
 }
 
 const anomalyHue: Record<string, string> = {
@@ -555,7 +557,12 @@ const sortedTeams = (teams: TeamAnalytics[], mode: SortMode) => {
   );
 };
 
-const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: AnalyticsStandingsProps) => {
+const AnalyticsStandings = ({
+  teams,
+  performanceByPlayer,
+  distributionByTeam,
+  headerEnd
+}: AnalyticsStandingsProps) => {
   const { t } = useTranslation();
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
@@ -575,28 +582,31 @@ const AnalyticsStandings = ({ teams, performanceByPlayer, distributionByTeam }: 
             {t("analytics.standings.sortedBy", { count: teams.length, mode: modeLabel[mode] })}
           </div>
         </div>
-        <div className={styles.sectionTabs} aria-label={t("analytics.standings.title")}>
-          <button
-            type="button"
-            className={cn(styles.sectionTab, mode === "standings" && styles.sectionTabActive)}
-            onClick={() => setMode("standings")}
-          >
-            {modeLabel.standings}
-          </button>
-          <button
-            type="button"
-            className={cn(styles.sectionTab, mode === "predicted" && styles.sectionTabActive)}
-            onClick={() => setMode("predicted")}
-          >
-            {modeLabel.predicted}
-          </button>
-          <button
-            type="button"
-            className={cn(styles.sectionTab, mode === "shift" && styles.sectionTabActive)}
-            onClick={() => setMode("shift")}
-          >
-            {modeLabel.shift}
-          </button>
+        <div className={styles.sectionHeadEnd}>
+          <div className={styles.sectionTabs} aria-label={t("analytics.standings.title")}>
+            <button
+              type="button"
+              className={cn(styles.sectionTab, mode === "standings" && styles.sectionTabActive)}
+              onClick={() => setMode("standings")}
+            >
+              {modeLabel.standings}
+            </button>
+            <button
+              type="button"
+              className={cn(styles.sectionTab, mode === "predicted" && styles.sectionTabActive)}
+              onClick={() => setMode("predicted")}
+            >
+              {modeLabel.predicted}
+            </button>
+            <button
+              type="button"
+              className={cn(styles.sectionTab, mode === "shift" && styles.sectionTabActive)}
+              onClick={() => setMode("shift")}
+            >
+              {modeLabel.shift}
+            </button>
+          </div>
+          {headerEnd}
         </div>
       </div>
       <div className={styles.teamGrid}>

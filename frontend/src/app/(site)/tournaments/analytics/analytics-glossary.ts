@@ -28,7 +28,16 @@ export type GlossaryTerm =
   | "smurf"
   | "throw"
   | "troll"
-  | "sandbag";
+  | "sandbag"
+  // Community layer — KPI rail + player detail explainers.
+  | "climbing"
+  | "dropping"
+  | "watch"
+  | "avg_confidence"
+  | "upsets"
+  | "new_faces"
+  | "predicted_move"
+  | "impact_percentile";
 
 /** Anomaly ``kind`` values that have a glossary entry. */
 export const ANOMALY_GLOSSARY_TERMS: ReadonlySet<GlossaryTerm> = new Set([

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
+import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { authService } from "@/services/auth.service";
+
+// Cookie lifetime used when the access token's `exp` can't be decoded.
+const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -24,7 +28,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 13 * 60
+      maxAge: getTokenMaxAgeSeconds(tokens.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS)
     });
 
     response.cookies.set("aqt_refresh_token", tokens.refresh_token, {

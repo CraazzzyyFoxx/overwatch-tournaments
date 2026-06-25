@@ -1,9 +1,9 @@
+import { authServiceBase } from "@/lib/api-routes";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import type { OAuthProviderName } from "@/types/auth.types";
 
-const AUTH_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL?.replace(/\/$/, "") || "http://localhost:8001";
+const AUTH_SERVICE_URL = authServiceBase();
 
 const ALLOWED_PROVIDERS = new Set<OAuthProviderName>(["discord", "twitch", "battlenet"]);
 

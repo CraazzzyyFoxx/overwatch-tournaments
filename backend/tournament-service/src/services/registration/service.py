@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import HTTPException
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import enums
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries

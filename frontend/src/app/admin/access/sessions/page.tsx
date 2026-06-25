@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { rbacService } from "@/services/rbac.service";
 import type { AdminAuthSession, AdminSessionStatus } from "@/types/rbac.types";
 
@@ -102,6 +101,7 @@ export default function AccessAdminSessionsPage() {
     {
       id: "user",
       header: "User",
+      enableSorting: false,
       accessorFn: (row) => row.email ?? row.username ?? `#${row.user_id}`,
       cell: ({ row }) => (
         <div className="min-w-0">
@@ -115,6 +115,7 @@ export default function AccessAdminSessionsPage() {
     {
       id: "device",
       header: "Device",
+      enableSorting: false,
       accessorFn: (row) => formatDeviceLabel(row.user_agent),
       cell: ({ row }) => (
         <div className="min-w-0">
@@ -155,6 +156,7 @@ export default function AccessAdminSessionsPage() {
     {
       id: "network",
       header: "Network",
+      enableSorting: false,
       accessorFn: (row) => row.ip_address ?? "",
       cell: ({ row }) => (
         <div className="min-w-0">
@@ -196,13 +198,16 @@ export default function AccessAdminSessionsPage() {
           sortDir,
           statusFilter,
         ]}
-        queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const sessions = await rbacService.listSessions({
+        queryFn={(page, search, pageSize, sortField, sortDir) =>
+          rbacService.listSessions({
+            page,
+            per_page: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir,
             search: search || undefined,
             status: statusFilter !== "all" ? statusFilter : undefined,
-          });
-          return paginateResults(sortArray(sessions, sortField, sortDir), page, pageSize);
-        }}
+          })
+        }
         columns={columns}
         searchPlaceholder="Search by email, username, IP, or user agent..."
         emptyMessage="No sessions found."

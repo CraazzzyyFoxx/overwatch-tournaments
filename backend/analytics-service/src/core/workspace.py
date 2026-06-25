@@ -8,7 +8,6 @@ after the move.
 
 import typing
 
-from fastapi import Query
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
@@ -18,8 +17,6 @@ from shared.services.division_grid_access import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
-
-WorkspaceQuery = typing.Annotated[int | None, Query(alias="workspace_id")]
 
 
 def workspace_filter(workspace_id: int | None) -> list:

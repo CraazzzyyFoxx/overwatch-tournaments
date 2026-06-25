@@ -1,7 +1,6 @@
 import time
 
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 from faststream.rabbit.annotations import RabbitMessage
 from redis.asyncio import Redis
 from shared.messaging.config import (
@@ -10,6 +9,7 @@ from shared.messaging.config import (
     ANALYTICS_TRAIN_QUEUE,
 )
 from shared.observability import (
+    make_rabbit_broker,
     metrics,
     observe_message_processing,
     setup_logging,
@@ -36,7 +36,7 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = RabbitBroker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = register_jobs()
 redis_client: Redis | None = None
@@ -68,7 +68,7 @@ async def start_worker() -> None:
     if config.settings.worker_metrics_port is not None:
         start_worker_metrics_server(config.settings.worker_metrics_port)
     # Redis is used to publish analytics_job realtime envelopes for the
-    # realtime-service WS fan-out. Missing/broken Redis degrades to "no
+    # gateway WS fan-out. Missing/broken Redis degrades to "no
     # progress events", not an outright failure.
     try:
         redis_client = Redis.from_url(str(config.settings.redis_url))

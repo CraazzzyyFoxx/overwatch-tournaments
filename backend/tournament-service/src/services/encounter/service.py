@@ -3,7 +3,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
-from fastapi import HTTPException, status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core import http_status as status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.strategy_options import _AbstractLoad

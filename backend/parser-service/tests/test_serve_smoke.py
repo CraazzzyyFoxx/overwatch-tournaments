@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from faststream import FastStream
-from fastapi.routing import APIRoute
 
 
 def _import_serve():
@@ -50,36 +49,18 @@ def test_serve_module_leaves_tournament_worker_queues_to_tournament_service() ->
     assert not hasattr(serve, "scheduler")
 
 
-def _route_paths(router) -> set[str]:
-    return {route.path for route in router.routes if isinstance(route, APIRoute)}
+def test_serve_registers_parser_unique_rpc_subjects() -> None:
+    """The FastAPI HTTP face was removed; the parser-unique admin/read surface now
+    runs as ``rpc.parser.*`` FastStream subscribers registered in ``serve.py``."""
+    serve = _import_serve()
 
-
-def test_parser_api_unmounts_cutover_tournament_routes() -> None:
-    _import_serve()
-    routes = importlib.import_module("src.routes")
-    admin_routes = importlib.import_module("src.routes.admin")
-
-    public_paths = _route_paths(routes.router)
-    admin_paths = _route_paths(admin_routes.admin_router)
-
-    assert "/encounters/{encounter_id}/submit-result" not in public_paths
-    assert "/encounters/{encounter_id}/map-pool" not in public_paths
-    assert "/tournament/create/with_groups" in public_paths
-    assert "/teams/create/balancer" in public_paths
-    assert "/encounter/challonge" in public_paths
-
-    allowed_parser_admin_tournament_paths = {
-        "/admin/tournaments/{tournament_id}/discord-channel",
+    subjects = {
+        getattr(subscriber, "subject", None)
+        or getattr(getattr(subscriber, "queue", None), "name", None)
+        for subscriber in serve.broker.subscribers
     }
-    removed_admin_prefixes = (
-        "/admin/tournaments",
-        "/admin/stages",
-        "/admin/teams",
-        "/admin/encounters",
-        "/admin/standings",
-        "/admin/player-sub-roles",
-    )
-    unexpected_admin_paths = admin_paths - allowed_parser_admin_tournament_paths
-    assert not any(path.startswith(removed_admin_prefixes) for path in unexpected_admin_paths)
-    assert "/admin/tournaments/{tournament_id}/discord-channel" in admin_paths
-    assert "/admin/players" in admin_paths
+
+    assert "rpc.parser.logs.upload" in subjects
+    assert "rpc.parser.logs.history" in subjects
+    assert "rpc.parser.rank.user_history" in subjects
+    assert "rpc.parser.ach.calculate" in subjects

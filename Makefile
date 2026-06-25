@@ -1,10 +1,10 @@
 .PHONY: help dev-build dev-up dev-up-full dev-down dev-restart dev-logs dev-ps dev-health dev-rebuild \
 	prod-build prod-up prod-down prod-logs migrate test clean \
 	build up down restart logs ps health build-prod up-prod down-prod logs-prod \
-	backend-logs auth-logs parser-logs frontend-logs discord-logs balancer-logs \
-	backend-restart auth-restart parser-restart frontend-restart \
+	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs \
+	app-restart identity-restart parser-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	backend-rebuild auth-rebuild parser-rebuild frontend-rebuild
+	app-rebuild identity-rebuild parser-rebuild frontend-rebuild
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
@@ -13,8 +13,8 @@ MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 help:
 	@echo "Available commands:"
 	@echo "  make dev-build      - Build dev images"
-	@echo "  make dev-up         - Start core dev stack (no workers, no gateway)"
-	@echo "  make dev-up-full    - Start dev stack with workers and Kong gateway"
+	@echo "  make dev-up         - Start core dev stack (no workers)"
+	@echo "  make dev-up-full    - Start dev stack with workers"
 	@echo "  make dev-down       - Stop dev stack"
 	@echo "  make dev-logs       - Follow dev logs"
 	@echo "  make dev-ps         - Show dev services"
@@ -42,7 +42,7 @@ dev-up:
 	$(COMPOSE) up -d --wait
 
 dev-up-full:
-	$(COMPOSE) --profile workers --profile gateway up -d --wait
+	$(COMPOSE) --profile workers up -d --wait
 
 dev-down:
 	$(COMPOSE) down --remove-orphans
@@ -75,10 +75,10 @@ prod-logs:
 	$(PROD_COMPOSE) logs -f
 
 migrate:
-	$(COMPOSE) exec backend alembic upgrade head
+	$(COMPOSE) exec app-svc alembic upgrade head
 
 test:
-	$(COMPOSE) exec backend pytest
+	$(COMPOSE) exec app-svc pytest
 
 clean:
 	$(COMPOSE) down -v --remove-orphans
@@ -96,55 +96,55 @@ up-prod: prod-up
 down-prod: prod-down
 logs-prod: prod-logs
 
-backend-logs:
-	$(COMPOSE) logs -f backend
+app-logs:
+	$(COMPOSE) logs -f app-svc
 
-auth-logs:
-	$(COMPOSE) logs -f auth
+identity-logs:
+	$(COMPOSE) logs -f identity-svc
 
 parser-logs:
-	$(COMPOSE) logs -f parser
+	$(COMPOSE) logs -f parser-svc
 
 frontend-logs:
 	$(COMPOSE) logs -f frontend
 
 discord-logs:
-	$(COMPOSE) logs -f discord
+	$(COMPOSE) logs -f discord-worker
 
 balancer-logs:
-	$(COMPOSE) logs -f balancer
+	$(COMPOSE) logs -f balancer-svc
 
-backend-restart:
-	$(COMPOSE) restart backend
+app-restart:
+	$(COMPOSE) restart app-svc
 
-auth-restart:
-	$(COMPOSE) restart auth
+identity-restart:
+	$(COMPOSE) restart identity-svc
 
 parser-restart:
-	$(COMPOSE) restart parser
+	$(COMPOSE) restart parser-svc
 
 frontend-restart:
 	$(COMPOSE) restart frontend
 
-backend-rebuild:
-	$(COMPOSE) up -d --build --wait backend
+app-rebuild:
+	$(COMPOSE) up -d --build --wait app-svc
 
-auth-rebuild:
-	$(COMPOSE) up -d --build --wait auth
+identity-rebuild:
+	$(COMPOSE) up -d --build --wait identity-svc
 
 parser-rebuild:
-	$(COMPOSE) up -d --build --wait parser
+	$(COMPOSE) up -d --build --wait parser-svc
 
 frontend-rebuild:
 	$(COMPOSE) stop frontend && $(COMPOSE) rm -f frontend
-	-docker volume rm anak-tournaments_frontend-node-modules 2>/dev/null
-	-docker volume rm anak-tournaments_frontend-next 2>/dev/null
+	-docker volume rm owt_frontend-node-modules 2>/dev/null
+	-docker volume rm owt_frontend-next 2>/dev/null
 	$(COMPOSE) up -d --build --wait frontend
 
 # ==============================================================================
-# Monitoring stack (separate Compose project: overwatch-monitoring)
+# Monitoring stack (separate Compose project: owt-monitoring)
 # Attaches to the production stack's network, so the prod stack must be up
-# first (`make prod-up`) — it creates the shared `overwatch-tournaments_app-network`.
+# first (`make prod-up`) — it creates the shared `owt_app-network`.
 # ==============================================================================
 monitoring-up:
 	$(MONITORING_COMPOSE) up -d

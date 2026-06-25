@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
+
 from .. import FEATURE_VERSION
 from ..features.aggregations import build_match_features_with_strength
 from ..features.shift_features import build_shift_feature_frame
@@ -419,6 +421,10 @@ async def train_shift_v2_for_cutoff(
         result: ShiftTrainingResult = train_shift_v2(
             train_df,
             val_df=val_df if not val_df.empty else None,
+            w_team=settings.shift_w_team,
+            w_os=settings.shift_w_os,
+            indiv_scale=settings.shift_indiv_scale,
+            indiv_clamp=settings.shift_indiv_clamp,
         )
     except ValueError as exc:
         logger.warning("Shift v2 training skipped: %s", exc)

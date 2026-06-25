@@ -1,0 +1,138 @@
+"""FastAPI-free auth-token helpers shared by RPC flows.
+
+These were relocated verbatim from the (now-deleted) ``src/routes/auth.py`` so
+the live flows (``auth_flows``, ``token_validation``) keep their exact behaviour
+without depending on any HTTP route module. ``HTTPException`` is the aliased,
+fastapi-free ``BaseAPIException`` that the RPC envelope maps.
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src import models, schemas
+from src.services import auth_service
+from src.services.session_cache import get_rbac, set_rbac
+
+
+def _linked_players_payload(user: models.AuthUser) -> list[schemas.AuthLinkedPlayer]:
+    player_links = sorted(
+        user.player_links,
+        key=lambda link: (
+            not link.is_primary,
+            link.created_at,
+            link.player_id,
+        ),
+    )
+    return [
+        schemas.AuthLinkedPlayer(
+            player_id=link.player_id,
+            player_name=link.player.name,
+            is_primary=link.is_primary,
+            linked_at=link.created_at.isoformat(),
+        )
+        for link in player_links
+        if link.player is not None
+    ]
+
+
+async def _build_access_token_payload(
+    session: AsyncSession,
+    current_user: models.AuthUser,
+) -> schemas.TokenPayload:
+    cached = await get_rbac(current_user.id)
+    if cached is not None:
+        roles = cached["roles"]
+        permissions = cached["permissions"]
+        workspace_roles_cached = cached.get("workspace_roles")
+    else:
+        roles = None
+        permissions = None
+        workspace_roles_cached = None
+
+    if roles is None:
+        roles, permissions = await auth_service.AuthService.get_user_roles_and_permissions_db(session, current_user.id)
+
+    # Fetch workspace memberships
+    workspace_rows = await session.execute(
+        sa.select(
+            models.WorkspaceMember.workspace_id,
+            models.Workspace.slug,
+            models.WorkspaceMember.role,
+        )
+        .join(models.Workspace, models.Workspace.id == models.WorkspaceMember.workspace_id)
+        .where(models.WorkspaceMember.auth_user_id == current_user.id)
+    )
+    ws_memberships = workspace_rows.all()
+    ws_ids = [row[0] for row in ws_memberships]
+
+    # Fetch workspace-scoped RBAC data
+    if workspace_roles_cached is not None:
+        ws_rbac = {
+            int(k): (v["roles"], v["permissions"])
+            for k, v in workspace_roles_cached.items()
+        }
+    else:
+        ws_rbac = await auth_service.AuthService.get_workspace_roles_and_permissions_db(
+            session, current_user.id, ws_ids
+        )
+
+    # Build cache payload
+    ws_cache: dict[str, dict] = {}
+    for ws_id in ws_ids:
+        ws_data = ws_rbac.get(ws_id, ([], []))
+        ws_cache[str(ws_id)] = {"roles": ws_data[0], "permissions": ws_data[1]}
+
+    await set_rbac(current_user.id, roles, permissions, workspace_roles=ws_cache)
+
+    workspaces = []
+    for row in ws_memberships:
+        ws_id, slug, member_role = row
+        ws_data = ws_rbac.get(ws_id, ([], []))
+        workspaces.append(
+            schemas.WorkspaceMembership(
+                workspace_id=ws_id,
+                slug=slug,
+                role=member_role,
+                rbac_roles=ws_data[0],
+                rbac_permissions=ws_data[1],
+            )
+        )
+
+    return schemas.TokenPayload(
+        sub=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        is_superuser=current_user.is_superuser,
+        roles=roles,
+        permissions=permissions,
+        workspaces=workspaces,
+    )
+
+
+async def _resolve_access_token_user(
+    session: AsyncSession,
+    raw_token: str,
+) -> models.AuthUser:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = auth_service.AuthService.decode_token(raw_token)
+        user_id_str = payload.get("sub")
+        token_type = payload.get("type")
+        if not user_id_str or token_type != "access":
+            raise credentials_exception
+        user_id = int(user_id_str)
+    except (HTTPException, ValueError):
+        raise credentials_exception
+
+    user = await auth_service.AuthService.get_user_with_rbac(session, user_id)
+    if user is None or not user.is_active:
+        raise credentials_exception
+    return user

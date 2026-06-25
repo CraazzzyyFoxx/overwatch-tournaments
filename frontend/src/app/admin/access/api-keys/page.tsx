@@ -1,18 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  Check,
-  Clipboard,
-  KeyRound,
-  Loader2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Trash2,
-  X
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Check, Clipboard, KeyRound, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import {
   AlertDialog,
@@ -42,28 +32,22 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
+import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
-  useAccountApiKeys,
+  fetchAccountApiKeys,
   useCreateAccountApiKey,
   useRenameAccountApiKey,
-  useRevokeAccountApiKey
+  useRevokeAccountApiKey,
+  type AccountApiKeyStatusCounts
 } from "@/hooks/use-account-api-keys";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getApiErrorMessage } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AccountApiKey, ApiKeyConfigPolicy, ApiKeyLimits } from "@/types/auth.types";
+
+const PAGE_SIZE = 20;
 
 const DEFAULT_LIMITS: ApiKeyLimits = {
   requests_per_minute: 60,
@@ -87,6 +71,8 @@ const DEFAULT_POLICY: ApiKeyConfigPolicy = {
     max_result_variants: 10
   }
 };
+
+const EMPTY_COUNTS: AccountApiKeyStatusCounts = { total: 0, active: 0, expired: 0, revoked: 0 };
 
 type ApiKeyStatus = "active" | "expired" | "revoked";
 
@@ -236,6 +222,7 @@ export default function AccessAdminApiKeysPage() {
   const [renameTarget, setRenameTarget] = useState<AccountApiKey | null>(null);
   const [renameName, setRenameName] = useState("");
   const [revokeTarget, setRevokeTarget] = useState<AccountApiKey | null>(null);
+  const [counts, setCounts] = useState<AccountApiKeyStatusCounts>(EMPTY_COUNTS);
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -269,27 +256,9 @@ export default function AccessAdminApiKeysPage() {
   const selectedWorkspace =
     manageableWorkspaces.find((workspace) => workspace.id === effectiveSelectedWorkspaceId) ?? null;
 
-  const { data, isLoading, isError, error, refetch } = useAccountApiKeys(
-    effectiveSelectedWorkspaceId
-  );
   const createMutation = useCreateAccountApiKey();
   const renameMutation = useRenameAccountApiKey(effectiveSelectedWorkspaceId);
   const revokeMutation = useRevokeAccountApiKey(effectiveSelectedWorkspaceId);
-
-  const apiKeys = useMemo(
-    () =>
-      [...(data ?? [])].sort((left, right) => {
-        const leftTime = new Date(left.created_at).getTime();
-        const rightTime = new Date(right.created_at).getTime();
-        return (
-          (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
-        );
-      }),
-    [data]
-  );
-  const activeCount = apiKeys.filter((apiKey) => getApiKeyStatus(apiKey) === "active").length;
-  const revokedCount = apiKeys.filter((apiKey) => getApiKeyStatus(apiKey) === "revoked").length;
-  const expiredCount = apiKeys.filter((apiKey) => getApiKeyStatus(apiKey) === "expired").length;
 
   const openRenameDialog = (apiKey: AccountApiKey) => {
     setRenameTarget(apiKey);
@@ -353,6 +322,104 @@ export default function AccessAdminApiKeysPage() {
     notify.success("API key copied");
   };
 
+  const columns: ColumnDef<AccountApiKey>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => {
+        const apiKey = row.original;
+        return (
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/20">
+              <KeyRound className="size-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{apiKey.name}</p>
+              <p className="truncate font-mono text-xs text-muted-foreground">
+                aqt_sk_{apiKey.public_id}_...
+              </p>
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      id: "status",
+      header: "Status",
+      enableSorting: false,
+      cell: ({ row }) => <StatusCell status={getApiKeyStatus(row.original)} />
+    },
+    {
+      accessorKey: "created_at",
+      header: "Created",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{formatTimestamp(row.original.created_at)}</span>
+      )
+    },
+    {
+      accessorKey: "last_used_at",
+      header: "Last Used",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {formatTimestamp(row.original.last_used_at)}
+        </span>
+      )
+    },
+    {
+      accessorKey: "expires_at",
+      header: "Expires",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{formatTimestamp(row.original.expires_at)}</span>
+      )
+    },
+    {
+      id: "limits",
+      header: "Limits",
+      enableSorting: false,
+      cell: ({ row }) => <LimitsText limits={row.original.limits} />
+    },
+    {
+      id: "policy",
+      header: "Policy",
+      enableSorting: false,
+      cell: ({ row }) => <PolicyText policy={row.original.config_policy} />
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => {
+        const apiKey = row.original;
+        if (getApiKeyStatus(apiKey) !== "active") {
+          return <span className="text-xs text-muted-foreground/60">No actions</span>;
+        }
+        return (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-md"
+              disabled={renameMutation.isPending || revokeMutation.isPending}
+              onClick={() => openRenameDialog(apiKey)}
+            >
+              <Pencil className="size-4" />
+              <span className="sr-only">Rename API key</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-md text-destructive hover:text-destructive"
+              disabled={revokeMutation.isPending}
+              onClick={() => setRevokeTarget(apiKey)}
+            >
+              <Trash2 className="size-4" />
+              <span className="sr-only">Revoke API key</span>
+            </Button>
+          </div>
+        );
+      }
+    }
+  ];
+
   if (manageableWorkspaces.length === 0) {
     return (
       <div className="space-y-4">
@@ -413,14 +480,14 @@ export default function AccessAdminApiKeysPage() {
 
           <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[520px]">
             <Metric label="Workspace" value={selectedWorkspace?.name ?? "Selected"} />
-            <Metric label="Active" value={activeCount} />
-            <Metric label="Expired" value={expiredCount} />
-            <Metric label="Revoked" value={revokedCount} />
+            <Metric label="Active" value={counts.active} />
+            <Metric label="Expired" value={counts.expired} />
+            <Metric label="Revoked" value={counts.revoked} />
           </div>
         </div>
 
         {oneTimeKey ? (
-          <div className="border-b border-border/40 bg-emerald-500/5 px-3 py-3">
+          <div className="bg-emerald-500/5 px-3 py-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">One-time secret</p>
@@ -454,136 +521,40 @@ export default function AccessAdminApiKeysPage() {
             </div>
           </div>
         ) : null}
-
-        {isError ? (
-          <div className="p-4">
-            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-              <p className="flex items-center gap-2">
-                <AlertCircle className="size-4" />
-                {getApiErrorMessage(error, "Failed to load API keys")}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 h-8 rounded-md"
-                onClick={() => {
-                  void refetch();
-                }}
-              >
-                <RefreshCw className="size-4" />
-                Retry
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Table wrapperClassName="overflow-x-auto">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9 min-w-[220px] bg-muted/20 pl-4 text-[11px]">
-                  Name
-                </TableHead>
-                <TableHead className="h-9 bg-muted/20 text-[11px]">Status</TableHead>
-                <TableHead className="h-9 bg-muted/20 text-[11px]">Created</TableHead>
-                <TableHead className="h-9 bg-muted/20 text-[11px]">Last Used</TableHead>
-                <TableHead className="h-9 bg-muted/20 text-[11px]">Expires</TableHead>
-                <TableHead className="h-9 min-w-[260px] bg-muted/20 text-[11px]">Limits</TableHead>
-                <TableHead className="h-9 min-w-[260px] bg-muted/20 text-[11px]">Policy</TableHead>
-                <TableHead className="h-9 bg-muted/20 pr-4 text-right text-[11px]">
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell colSpan={8} className="px-4 py-2.5">
-                      <Skeleton className="h-9 w-full rounded-md" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : apiKeys.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-28 text-center text-sm text-muted-foreground">
-                    No API keys for this workspace.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                apiKeys.map((apiKey) => {
-                  const status = getApiKeyStatus(apiKey);
-                  const canManage = status === "active";
-
-                  return (
-                    <TableRow key={apiKey.id} className="hover:bg-muted/30">
-                      <TableCell className="pl-4">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/20">
-                            <KeyRound className="size-4 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">
-                              {apiKey.name}
-                            </p>
-                            <p className="truncate font-mono text-xs text-muted-foreground">
-                              aqt_sk_{apiKey.public_id}_...
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusCell status={status} />
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatTimestamp(apiKey.created_at)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatTimestamp(apiKey.last_used_at)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatTimestamp(apiKey.expires_at)}
-                      </TableCell>
-                      <TableCell>
-                        <LimitsText limits={apiKey.limits} />
-                      </TableCell>
-                      <TableCell>
-                        <PolicyText policy={apiKey.config_policy} />
-                      </TableCell>
-                      <TableCell className="pr-4 text-right">
-                        {canManage ? (
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-md"
-                              disabled={renameMutation.isPending || revokeMutation.isPending}
-                              onClick={() => openRenameDialog(apiKey)}
-                            >
-                              <Pencil className="size-4" />
-                              <span className="sr-only">Rename API key</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-md text-destructive hover:text-destructive"
-                              disabled={revokeMutation.isPending}
-                              onClick={() => setRevokeTarget(apiKey)}
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Revoke API key</span>
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60">No actions</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        )}
       </div>
+
+      <AdminDataTable
+        initialPageSize={PAGE_SIZE}
+        pageSizeOptions={[10, 20, 50, 100]}
+        queryKey={(page, search, pageSize, sortField, sortDir) => [
+          "account",
+          "api-keys",
+          effectiveSelectedWorkspaceId,
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
+        ]}
+        queryFn={async (page, search, pageSize, sortField, sortDir) => {
+          if (effectiveSelectedWorkspaceId === null) {
+            return { results: [], total: 0, page: 1, per_page: pageSize };
+          }
+          const result = await fetchAccountApiKeys({
+            workspaceId: effectiveSelectedWorkspaceId,
+            page,
+            perPage: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir,
+            search: search || undefined
+          });
+          setCounts(result.counts);
+          return result;
+        }}
+        columns={columns}
+        searchPlaceholder="Search by name..."
+        emptyMessage="No API keys for this workspace."
+      />
 
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="max-w-md rounded-xl">

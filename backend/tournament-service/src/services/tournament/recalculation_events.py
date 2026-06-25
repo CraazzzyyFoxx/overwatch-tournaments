@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from faststream.rabbit.fastapi import RabbitMessage, RabbitRouter
+from faststream.rabbit import RabbitRouter
+from faststream.rabbit.annotations import RabbitMessage
 from loguru import logger
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
@@ -13,12 +14,12 @@ from shared.messaging.config import (
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent, TournamentStandingsInvalidatedEvent
 
-from src.core import config, db
+from src.core import db
 from src.services.computation.jobs import request_standings_recalculation
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 from src.services.tournament.realtime_pubsub import publish_tournament_update
 
-task_router = RabbitRouter(config.settings.rabbitmq_url, logger=logger)
+task_router = RabbitRouter()
 
 
 async def handle_tournament_changed_event(data: dict[str, Any]) -> None:

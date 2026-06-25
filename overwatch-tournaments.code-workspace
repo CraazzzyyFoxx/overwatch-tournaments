@@ -7,6 +7,9 @@
             "path": "backend/shared"
         },
         {
+            "path": "gateway"
+        },
+        {
             "path": "backend/app-service"
         },
         {

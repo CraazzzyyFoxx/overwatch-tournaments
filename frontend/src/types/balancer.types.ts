@@ -182,16 +182,6 @@ export interface BalanceJobProgress {
   percent?: number;
 }
 
-export interface BalanceJobEvent {
-  event_id: number;
-  timestamp: number;
-  level: string;
-  status: BalanceJobStatus;
-  stage: string;
-  message: string;
-  progress?: BalanceJobProgress | null;
-}
-
 export interface BalanceJobCreateResponse {
   job_id: string;
   status: BalanceJobStatus;

@@ -32,7 +32,7 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-registration = importlib.import_module("src.routes.registration")
+registration = importlib.import_module("src.schemas.registration_build")
 
 
 def _registration(reg_id: int, user_id: int) -> SimpleNamespace:

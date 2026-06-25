@@ -18,7 +18,7 @@ import {
 } from "@/app/(site)/users/pages/UserTournamentsPage";
 import UserAchievementPage from "@/app/(site)/users/pages/UserAchievementPage";
 import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
-import { ApiError } from "@/lib/api-error";
+import { isNotFoundError } from "@/lib/api-error";
 import { decodePlayerSlug } from "@/utils/player";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
@@ -93,7 +93,7 @@ export async function generateMetadata(props: {
       }
     };
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (isNotFoundError(error)) {
       return {
         title: `User Not Found | ${SITE_NAME}`,
         description: `The requested user profile could not be found on ${SITE_NAME}.`
@@ -109,7 +109,7 @@ const getUserAndProfile = cache(async (slug: string) => {
     const profile = await userService.getUserProfile(user.id);
     return { user, profile };
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (isNotFoundError(error)) {
       notFound();
     }
     throw error;

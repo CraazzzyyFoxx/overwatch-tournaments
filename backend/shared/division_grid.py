@@ -177,3 +177,96 @@ def division_case_expr(
         whens.append((condition, tier.number))
 
     return sa.case(*whens, else_=grid.tiers[-1].number)
+
+
+def division_rank_bounds(
+    grid: DivisionGrid,
+    div_min: int | None,
+    div_max: int | None,
+) -> tuple[int | None, int | None] | None:
+    """Translate a division-number filter into an equivalent, indexable ``rank`` range.
+
+    ``division_case_expr`` maps ``rank`` to a tier ``number`` monotonically
+    (higher rank -> lower number), so ``div_min <= division(rank) <= div_max`` is
+    equivalent to a contiguous ``rank`` range. Filtering ``Player.rank`` by that
+    range is index-friendly and avoids evaluating the N-branch CASE per row.
+
+    Returns ``(rank_min, rank_max)`` where either bound may be ``None`` (unbounded):
+    - ``rank_max is None`` when the selection includes the top, unbounded tier;
+    - ``rank_min is None`` when the selection includes the floor tier, which is
+      also the CASE's ``else_`` target — ranks below the grid floor map to it, so
+      there is no lower bound.
+
+    Returns ``None`` when equivalence cannot be guaranteed (custom/non-contiguous
+    grid, floor tier is not the ``else_`` target, or no tier matches). Callers
+    must fall back to :func:`division_case_expr` in that case.
+    """
+    if div_min is None and div_max is None:
+        return None
+
+    ordered = sorted(grid.tiers, key=lambda tier: tier.rank_min)
+    if not ordered:
+        return None
+
+    # Equivalence requires: floor tier (lowest rank) == CASE else_ target,
+    # exactly the top tier unbounded, and no gaps/overlaps between tiers.
+    floor_tier = ordered[0]
+    if grid.tiers[-1].number != floor_tier.number:
+        return None
+    if ordered[-1].rank_max is not None:
+        return None
+    for lower, upper in zip(ordered, ordered[1:], strict=False):
+        if lower.rank_max is None or lower.rank_max + 1 != upper.rank_min:
+            return None
+
+    selected = [
+        tier
+        for tier in grid.tiers
+        if (div_min is None or tier.number >= div_min) and (div_max is None or tier.number <= div_max)
+    ]
+    if not selected:
+        return None
+
+    includes_floor = any(tier.number == floor_tier.number for tier in selected)
+    rank_min = None if includes_floor else min(tier.rank_min for tier in selected)
+    rank_max = (
+        None
+        if any(tier.rank_max is None for tier in selected)
+        else max(tier.rank_max for tier in selected if tier.rank_max is not None)
+    )
+    return rank_min, rank_max
+
+
+def division_filter_predicates(
+    rank_column: sa.ColumnElement[int],
+    div_min: int | None,
+    div_max: int | None,
+    grid: DivisionGrid,
+) -> list[sa.ColumnElement[bool]]:
+    """Predicates for ``div_min <= division(rank) <= div_max``.
+
+    Prefers a plain, index-friendly ``rank`` range (:func:`division_rank_bounds`)
+    and falls back to the per-row :func:`division_case_expr` only when the grid
+    can't be reduced to a contiguous range. Returns ``[]`` when both bounds are
+    ``None`` (no division constraint).
+    """
+    if div_min is None and div_max is None:
+        return []
+
+    bounds = division_rank_bounds(grid, div_min, div_max)
+    if bounds is None:
+        div_expr = division_case_expr(rank_column, grid)
+        preds: list[sa.ColumnElement[bool]] = []
+        if div_min is not None:
+            preds.append(div_expr >= div_min)
+        if div_max is not None:
+            preds.append(div_expr <= div_max)
+        return preds
+
+    rank_min, rank_max = bounds
+    preds = []
+    if rank_min is not None:
+        preds.append(rank_column >= rank_min)
+    if rank_max is not None:
+        preds.append(rank_column <= rank_max)
+    return preds

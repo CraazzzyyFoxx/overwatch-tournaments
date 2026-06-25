@@ -31,7 +31,7 @@ const USER_TTL_SECONDS = 300;
 
 export default class userService {
   static async getAll(params: SearchPaginationParams): Promise<PaginatedResponse<User>> {
-    return apiFetch("app","users", {
+    return apiFetch("/api/v1/users", {
       query: {
         ...params
       }
@@ -39,7 +39,7 @@ export default class userService {
   }
   static async getUserByName(name: string): Promise<User> {
     const apiName = name.replace("#", "-");
-    return apiFetch("app", `users/${encodeURIComponent(apiName)}`, {
+    return apiFetch(`/api/v1/users/${encodeURIComponent(apiName)}`, {
       query: {
         entities: ["twitch", "discord", "battle_tag"]
       },
@@ -47,7 +47,7 @@ export default class userService {
     }).then((res) => res.json());
   }
   static async getUserProfile(id: number): Promise<UserProfile> {
-    return apiFetch("app", `users/${id}/profile`, {
+    return apiFetch(`/api/v1/users/${id}/profile`, {
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     }).then((res) => res.json());
   }
@@ -55,7 +55,7 @@ export default class userService {
     id: number,
     tournamentId: number | null
   ): Promise<UserTournamentWithStats | null> {
-    return apiFetch("app", `users/${id}/tournaments/${tournamentId}`, {
+    return apiFetch(`/api/v1/users/${id}/tournaments/${tournamentId}`, {
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     })
       .then((res) => {
@@ -72,7 +72,7 @@ export default class userService {
   static async getUserTournaments(id: number, workspaceId?: number | null): Promise<UserTournament[]> {
     const query = workspaceId !== undefined && workspaceId !== null ? { workspace_id: workspaceId } : undefined;
     const skipWorkspace = workspaceId === null;
-    return apiFetch("app", `users/${id}/tournaments`, {
+    return apiFetch(`/api/v1/users/${id}/tournaments`, {
       query,
       skipWorkspace,
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
@@ -102,7 +102,7 @@ export default class userService {
   ): Promise<PaginatedResponse<UserMapRead>> {
     const entities = ["gamemode", "hero_stats"];
 
-    return apiFetch("app",`users/${id}/maps`, {
+    return apiFetch(`/api/v1/users/${id}/maps`, {
       query: {
         page,
         per_page: perPage,
@@ -127,7 +127,7 @@ export default class userService {
       tournamentId
     }: { query?: string; minCount?: number; gamemodeId?: number | null; tournamentId?: number | null } = {}
   ): Promise<UserMapsSummary> {
-    return apiFetch("app",`users/${id}/maps/summary`, {
+    return apiFetch(`/api/v1/users/${id}/maps/summary`, {
       query: {
         query,
         fields: ["name"],
@@ -162,7 +162,7 @@ export default class userService {
       opponent?: string;
     }
   ): Promise<PaginatedResponse<EncounterWithUserStats>> {
-    return apiFetch("app",`users/${id}/encounters`, {
+    return apiFetch(`/api/v1/users/${id}/encounters`, {
       query: {
         page: page,
         per_page: perPage,
@@ -183,7 +183,7 @@ export default class userService {
     stats?: LogStatsName[],
     tournamentId?: number
   ): Promise<PaginatedResponse<HeroWithUserStats>> {
-    return apiFetch("app",`users/${id}/heroes`, {
+    return apiFetch(`/api/v1/users/${id}/heroes`, {
       query: {
         per_page: -1,
         sort: "id",
@@ -205,7 +205,7 @@ export default class userService {
       includeLocked?: boolean;
     } = {}
   ): Promise<AchievementRarity[]> {
-    return apiFetch("app",`achievements/user/${id}`, {
+    return apiFetch(`/api/v1/achievements/user/${id}`, {
       query: {
         entities: ["tournaments", "matches"],
         tournament_id: tournamentId,
@@ -218,7 +218,7 @@ export default class userService {
     id: number,
     perPage: number = 5
   ): Promise<PaginatedResponse<UserBestTeammate>> {
-    return apiFetch("app",`users/${id}/teammates`, {
+    return apiFetch(`/api/v1/users/${id}/teammates`, {
       query: {
         per_page: perPage,
         sort: "winrate",
@@ -228,12 +228,12 @@ export default class userService {
     }).then((res) => res.json());
   }
   static async getUserMatchesSummary(id: number): Promise<UserMatchesSummary> {
-    return apiFetch("app", `users/${id}/matches/summary`, {
+    return apiFetch(`/api/v1/users/${id}/matches/summary`, {
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
     }).then((res) => res.json());
   }
   static async searchUsers(query: string, signal?: AbortSignal): Promise<MinimizedUser[]> {
-    return apiFetch("app",`users/search`, {
+    return apiFetch(`/api/v1/users/search`, {
       query: {
         query: query,
         fields: ["battle_tag"]
@@ -261,7 +261,7 @@ export default class userService {
     divMin?: number;
     divMax?: number;
   } = {}): Promise<PaginatedResponse<UserOverviewRow>> {
-    return apiFetch("app","users/overview", {
+    return apiFetch("/api/v1/users/overview", {
       query: {
         page,
         per_page: perPage,
@@ -287,7 +287,7 @@ export default class userService {
     divMin?: number;
     divMax?: number;
   } = {}): Promise<UserOverviewStats> {
-    return apiFetch("app", "users/overview/stats", {
+    return apiFetch("/api/v1/users/overview/stats", {
       query: {
         query,
         role,
@@ -314,7 +314,7 @@ export default class userService {
     perLetter?: number;
     maxLetters?: number;
   } = {}): Promise<UserCatalogResponse> {
-    return apiFetch("app", "users/overview/catalog", {
+    return apiFetch("/api/v1/users/overview/catalog", {
       query: {
         query,
         role,
@@ -345,7 +345,7 @@ export default class userService {
       tournamentId?: number;
     } = {}
   ): Promise<UserCompareResponse> {
-    return apiFetch("app",`users/${userId}/compare`, {
+    return apiFetch(`/api/v1/users/${userId}/compare`, {
       query: {
         baseline,
         target_user_id: targetUserId,
@@ -383,7 +383,7 @@ export default class userService {
       stats?: LogStatsName[];
     }
   ): Promise<UserHeroCompareResponse> {
-    return apiFetch("app",`users/${userId}/compare/heroes`, {
+    return apiFetch(`/api/v1/users/${userId}/compare/heroes`, {
       query: {
         baseline,
         target_user_id: targetUserId,

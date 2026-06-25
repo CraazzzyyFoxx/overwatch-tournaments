@@ -73,7 +73,7 @@ class PublishOp(BaseModel):
     """Client-originated ephemeral broadcast to a subscribed topic.
 
     Used for transient collaboration cues (e.g. live drag overlays) that are
-    fanned out to co-subscribers without being persisted. The realtime-service
+    fanned out to co-subscribers without being persisted. The gateway
     enforces auth, topic subscription, an event-type allowlist, and server-side
     stamping of the actor — clients cannot persist events or spoof identity.
     """

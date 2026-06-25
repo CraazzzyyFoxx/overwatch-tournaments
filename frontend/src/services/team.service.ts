@@ -9,7 +9,7 @@ export default class teamService {
     sort: string = "avg_sr",
     order: string = "asc"
   ): Promise<PaginatedResponse<Team>> {
-    return apiFetch("tournament", `teams`, {
+    return apiFetch(`/api/v1/teams`, {
       query: {
         page: 1,
         per_page: -1,
@@ -24,7 +24,7 @@ export default class teamService {
   }
 
   static async getCount(tournament_id: number | null = null): Promise<number> {
-    return apiFetch("tournament", `teams`, {
+    return apiFetch(`/api/v1/teams`, {
       query: {
         page: 1,
         per_page: 1,
