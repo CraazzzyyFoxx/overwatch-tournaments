@@ -243,9 +243,9 @@ class ShiftBlendTests(TestCase):
                               "current_div": [9], "grid_n_div": [20]})
         self.assertAlmostEqual(1.41, float(model.predict(frame).iloc[0]), places=2)
 
-    def test_raw_mvp_dominance_lifts_when_local_z_is_low(self) -> None:
-        # A consistent scoreboard-topper (high mvp_dominance) with only mid
-        # local_zscore still gets an individual lift via max(local_z, dominance_z).
+    def test_raw_mvp_dominance_lifts_bounded_only_by_output_clamp(self) -> None:
+        # A consistent scoreboard-topper: the dominance lift bypasses the softer
+        # local scale/clamp and is bounded only by the rank/grid output clamp.
         model = shift_v2.ShiftModelV2(
             w_team=0.7, w_os=0.3,
             indiv_scale_top=0.5, indiv_scale_bottom=0.5,
@@ -255,13 +255,32 @@ class ShiftBlendTests(TestCase):
         base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
                 "performance_v2_local_zscore": [0.3], "current_div": [20],
                 "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False]}
-        # dominance 0.81 → dominance_z=(0.81-0.5)*4=1.24 > local_z 0.3 → 0.5*1.24
+        # dominance 0.81 → dominance_z=(0.81-0.5)*4=1.24, under out_clamp (~2.49),
+        # NOT scaled by the local 0.5 → individual term 1.24 (was 0.62 when scaled).
         s_dom = float(model.predict(pd.DataFrame({**base, "mvp_dominance": [0.81]})).iloc[0])
-        # neutral dominance 0.5 → dominance_z 0 → falls back to local_z 0.3 → 0.5*0.3
+        # neutral dominance 0.5 → dominance_z 0 → falls back to local term 0.5*0.3.
         s_neu = float(model.predict(pd.DataFrame({**base, "mvp_dominance": [0.5]})).iloc[0])
-        self.assertAlmostEqual(0.62, s_dom, places=2)
+        self.assertAlmostEqual(1.24, s_dom, places=2)
         self.assertAlmostEqual(0.15, s_neu, places=2)
         self.assertGreater(s_dom, s_neu)
+
+    def test_dominance_lift_is_bounded_by_rank_output_clamp(self) -> None:
+        # The same blatant dominator is held tighter near the ceiling (small output
+        # clamp) than mid-ladder — dominance can't yank a high rank.
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3, dominance_gain=6.0, dominance_cap=3.0,
+            clamp_top_grid_ref=20.0,
+        )
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "performance_v2_local_zscore": [0.0], "grid_n_div": [20],
+                "tournaments_played": [5], "is_newcomer": [False], "mvp_dominance": [1.0]}
+        top = float(model.predict(pd.DataFrame({**base, "current_div": [1]})).iloc[0])
+        mid = float(model.predict(pd.DataFrame({**base, "current_div": [20]})).iloc[0])
+        # div 1 (grid 20): output clamp = 1.0 → lift capped at 1.0.
+        self.assertAlmostEqual(1.0, top, places=2)
+        # div 20: output clamp ≈ 1.0+(3-1)*0.487 = 1.97 → dominance_z 3.0 capped to it.
+        self.assertAlmostEqual(1.97, mid, places=2)
+        self.assertGreater(mid, top)
 
     def test_low_dominance_does_not_push_down(self) -> None:
         # A low scoreboard position must not drag the individual term negative.

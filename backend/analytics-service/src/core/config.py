@@ -66,10 +66,11 @@ class AppConfig(BaseServiceSettings):
     # range from one tournament. Retrain shift v2 to snapshot changes.
     shift_clamp_top_grid_ref: float = 20.0
     # Raw match-log MVP-dominance lift for the individual term: ``mvp_dominance``
-    # ∈ [0,1] (0.5 = median) → ``(dom-0.5)*gain`` clamped to ``cap``, MAX-blended
-    # with local_zscore so a consistent scoreboard-topper moves. Retrain to snapshot.
-    shift_dominance_gain: float = 4.0
-    shift_dominance_cap: float = 2.0
+    # ∈ [0,1] (0.5 = median) → ``(dom-0.5)*gain`` clamped to ``cap``, then bounded
+    # by the rank/grid output clamp (not the softer local clamp) so a consistent
+    # scoreboard-topper is pushed to their rank-appropriate ceiling. Retrain to snapshot.
+    shift_dominance_gain: float = 6.0
+    shift_dominance_cap: float = 3.0
 
     # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
     # this flags the player as a strong cohort outlier regardless of rank (in

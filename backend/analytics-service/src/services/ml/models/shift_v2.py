@@ -4,10 +4,12 @@ Prod analysis showed the **team result** (W/L vs the balanced seeding) is by far
 the strongest predictor of realised division moves. So the backbone is a
 team-dominant convex mix of the v1 team-result Linear shift and the OpenSkill mu
 shift. On top of it an **additive individual skill term** lifts players whose
-individual signal — ``max(local_zscore, raw MVP dominance)`` — is far from their
-cohort. ``local_zscore`` is skill vs same role + nearby division; the raw
-match-log MVP dominance is a second channel so a consistent scoreboard-topper
-that the expectation-adjusted impact under-credits still moves. A clear
+individual signal is far from their cohort. It is the MAX of two channels:
+``local_zscore`` (skill vs same role + nearby division, softly clamped per
+division) and a **raw match-log MVP dominance** lift. The dominance channel is a
+first-class signal bounded only by the rank/grid output clamp (not the softer
+local clamp), so a consistent scoreboard-topper that the expectation-adjusted
+impact under-credits is pushed to their rank-appropriate ceiling. A clear
 individual outlier therefore moves even when the team result doesn't capture it,
 instead of being averaged away:
 
@@ -79,12 +81,14 @@ INDIV_MOD_CLAMP_TOP: float = 0.75
 INDIV_MOD_CLAMP_BOTTOM: float = 2.0
 
 # Raw match-log MVP dominance lift. ``mvp_dominance`` ∈ [0,1] (0.5 = median) is
-# turned into a non-negative z-like signal and MAX-blended with local_zscore, so
-# a consistent scoreboard-topper that expectation-adjusted impact under-credits
-# still moves. Only lifts (never lowers); the rank ramp + output clamp still bound it.
+# turned into a non-negative z-like signal, then MAX-blended with the local term
+# and bounded ONLY by the rank/grid output clamp (not the softer per-division
+# local clamp) — so a consistent scoreboard-topper that expectation-adjusted
+# impact under-credits is pushed to their rank-appropriate ceiling. Only lifts
+# (never lowers); high ranks stay protected by the tight output clamp.
 DOMINANCE_PIVOT: float = 0.5
-DOMINANCE_GAIN: float = 4.0
-DOMINANCE_CAP: float = 2.0
+DOMINANCE_GAIN: float = 6.0
+DOMINANCE_CAP: float = 3.0
 
 # Canonical OW grid bounds (number 1 = top … 40 = bottom); the ramp is keyed on
 # the division number so it stays comparable across workspace grids.
@@ -178,32 +182,24 @@ def _indiv_mod(
     scale_bottom: float,
     clamp_top: float,
     clamp_bottom: float,
-    dominance_gain: float,
-    dominance_cap: float,
 ) -> pd.Series:
-    """Additive, rank-dependent individual-skill modifier.
+    """Local-cohort individual term: ``clip(scale(div)·local_zscore, ±clamp(div))``.
 
-    Individual signal = ``max(local_zscore, dominance_z)`` — the player's skill vs
-    same role + nearby division cohort, OR (whichever is larger) their raw
-    scoreboard dominance, so a consistent match-MVP that the expectation-adjusted
-    ``local_zscore`` under-credits still gets lifted. Scaled to divisions and
-    clamped, with BOTH scale and clamp ramped by canonical division: small near
-    the ceiling (a +N there is a sparse, high-variance, capped claim), full
-    mid/low ladder. So a strong/dominant low-rank player moves meaningfully but a
-    top-rank player can't be yanked by one bright tournament.
+    ``local_zscore`` is the player's skill vs the same role + nearby division
+    cohort. Both scale and clamp ramp by canonical division — small near the
+    ceiling (a +N there is a sparse, high-variance, capped claim), full mid/low
+    ladder. The raw scoreboard-dominance lift is applied separately (and bounded
+    only by the output clamp), so this softer per-division clamp governs only the
+    noisier expectation-adjusted cohort signal.
     """
     z = pd.to_numeric(
         df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
         errors="coerce",
     ).fillna(0.0)
-    dominance_z = _dominance_z(df, gain=dominance_gain, cap=dominance_cap)
-    indiv_signal = pd.Series(
-        np.maximum(z.to_numpy(), dominance_z.to_numpy()), index=df.index
-    )
     div = df.get("current_div", pd.Series(np.nan, index=df.index))
     scale = _rank_ramp(div, top=scale_top, bottom=scale_bottom)
     clamp = _rank_ramp(div, top=clamp_top, bottom=clamp_bottom)
-    return (scale * indiv_signal).clip(lower=-clamp, upper=clamp)
+    return (scale * z).clip(lower=-clamp, upper=clamp)
 
 
 def _linear_confidence(df: pd.DataFrame) -> pd.Series:
@@ -241,25 +237,36 @@ class ShiftModelV2(MLModel):
             self.w_team * _team_result(df).to_numpy()
             + self.w_os * _os_shift(df).to_numpy()
         )
-        # getattr fallbacks let artifacts pickled before the rank-dependent ramp
-        # load and degrade to the current code defaults instead of erroring.
-        indiv = _indiv_mod(
-            df,
-            scale_top=getattr(self, "indiv_scale_top", INDIV_MOD_SCALE_TOP),
-            scale_bottom=getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM),
-            clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
-            clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
-            dominance_gain=getattr(self, "dominance_gain", DOMINANCE_GAIN),
-            dominance_cap=getattr(self, "dominance_cap", DOMINANCE_CAP),
-        ).to_numpy()
         # Rank- and grid-dependent output clamp: squeezed at the top of the
         # ladder so no source (backbone or individual) can yank a high-rank player
         # the full range from one tournament; top cap scales with grid size.
+        # getattr fallbacks let artifacts pickled before these fields load and
+        # degrade to the current code defaults instead of erroring.
         out_clamp = _output_clamp(
             df,
             shift_range=self.shift_range,
             top_grid_ref=getattr(self, "clamp_top_grid_ref", CLAMP_TOP_GRID_REF),
         ).to_numpy()
+        # Local-cohort term — softer per-division clamp on the noisier
+        # expectation-adjusted ``local_zscore``.
+        z_term = _indiv_mod(
+            df,
+            scale_top=getattr(self, "indiv_scale_top", INDIV_MOD_SCALE_TOP),
+            scale_bottom=getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM),
+            clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
+            clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
+        ).to_numpy()
+        # Raw scoreboard-dominance term — a first-class signal bounded ONLY by the
+        # rank/grid output clamp (not the softer local clamp), so a consistent
+        # match-MVP is pushed to their rank-appropriate ceiling. High ranks stay
+        # protected because the output clamp is tight there.
+        dom_z = _dominance_z(
+            df,
+            gain=getattr(self, "dominance_gain", DOMINANCE_GAIN),
+            cap=getattr(self, "dominance_cap", DOMINANCE_CAP),
+        ).to_numpy()
+        dom_term = np.clip(dom_z, 0.0, out_clamp)
+        indiv = np.maximum(z_term, dom_term)
         shift = np.clip(backbone + indiv, -out_clamp, out_clamp)
         # Newcomers: team backbone only (one tournament of individual signal is
         # too noisy), clipped to the conservative newcomer range but never looser
