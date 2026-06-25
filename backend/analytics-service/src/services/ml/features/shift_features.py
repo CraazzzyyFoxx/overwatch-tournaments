@@ -23,11 +23,14 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.division_grid import DEFAULT_GRID, division_case_expr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.workspace import workspace_scope_filter
+from src.services.analytics.canonical_division import (
+    assign_canonical_division,
+    load_source_grids,
+)
 from src.services.analytics.flows import (
     compute_linear_metrics,
     compute_openskill_shift_map,
@@ -65,7 +68,6 @@ async def _player_rank_history(
         history_through_tournament_id or max(tournament_ids),
     )
 
-    div_expr = division_case_expr(models.Player.rank, DEFAULT_GRID)
     query = (
         sa.select(
             models.Player.id.label("player_id"),
@@ -74,7 +76,7 @@ async def _player_rank_history(
             models.Player.tournament_id.label("tournament_id"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
-            div_expr.label("div"),
+            models.Tournament.division_grid_version_id.label("version_id"),
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -91,6 +93,11 @@ async def _player_rank_history(
 
     df["tournament_id"] = df["tournament_id"].astype(int)
     df = df.sort_values(["user_id", "role", "tournament_id"]).reset_index(drop=True)
+
+    # Resolve every player's division on the canonical OW grid so
+    # div/prior_div/next_tournament_div are comparable across workspaces.
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
+    assign_canonical_division(df, grids, rank_col="rank")
 
     grouped = df.groupby(["user_id", "role"], sort=False)
     df["prior_div"] = grouped["div"].shift(1)

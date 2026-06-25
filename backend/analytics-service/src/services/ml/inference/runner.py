@@ -12,12 +12,12 @@ import typing
 
 import pandas as pd
 import sqlalchemy as sa
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.config import settings
 from src.core.workspace import get_division_grid, get_tournament_workspace_id
+from src.services.analytics.canonical_division import canonical_division_number
 
 from ..features.aggregations import build_match_features_with_strength
 from ..features.local_performance import attach_local_performance
@@ -195,14 +195,15 @@ async def run_performance_for_tournament(
     if per_player.empty:
         return 0
     per_player["impact_score"] = impact_score_within_role(per_player)
-    grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
+    # Canonical OW division per player so the local-performance cohort bands are
+    # comparable across workspaces.
+    source_grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
     player_ranks = (
         feature_frame.groupby("player_id", dropna=False)["rank"].first().to_dict()
     )
     per_player["division"] = per_player["player_id"].map(
-        lambda player_id: resolve_tournament_division(
-            int(player_ranks.get(player_id, 0) or 0),
-            tournament_grid=grid,
+        lambda player_id: canonical_division_number(
+            source_grid, int(player_ranks.get(player_id, 0) or 0)
         )
     )
     per_player = attach_local_performance(per_player)

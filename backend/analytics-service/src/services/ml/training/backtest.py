@@ -18,11 +18,14 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.division_grid import DEFAULT_GRID, division_case_expr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.workspace import workspace_scope_filter
+from src.services.analytics.canonical_division import (
+    assign_canonical_division,
+    load_source_grids,
+)
 
 from ..inference.runner import run_for_tournament
 from .calibration import compute_calibration_report
@@ -104,22 +107,22 @@ async def _realised_shift_map(
     ``realised_shift = current_div - next_tournament_div`` — the same sign
     convention as the shift signal (positive = moved up to a lower division
     number) and the label Shift v2 fits its blend weights against. The division
-    is resolved with ``DEFAULT_GRID`` to
-    match :func:`shift_features._player_rank_history`, so the label scale lines
-    up with what the model was trained to predict.
+    is resolved on the canonical OW grid (per the tournament's source grid
+    version) to match :func:`shift_features._player_rank_history`, so the label
+    scale lines up with what the model was trained to predict.
 
     ``history_through_tournament_id`` must cover each player's *next* tournament;
     players whose next-division is unknown (e.g. the most recent tournament) are
     dropped because their realised move cannot be observed yet.
     """
-    div_expr = division_case_expr(models.Player.rank, DEFAULT_GRID)
     query = (
         sa.select(
             models.Player.id.label("player_id"),
             models.Player.user_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
-            div_expr.label("div"),
+            models.Player.rank.label("rank"),
+            models.Tournament.division_grid_version_id.label("version_id"),
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -136,6 +139,9 @@ async def _realised_shift_map(
 
     df["tournament_id"] = df["tournament_id"].astype(int)
     df = df.sort_values(["user_id", "role", "tournament_id"]).reset_index(drop=True)
+
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
+    assign_canonical_division(df, grids, rank_col="rank")
     df["next_tournament_div"] = df.groupby(["user_id", "role"], sort=False)["div"].shift(-1)
 
     fold = df[df["tournament_id"] == int(tournament_id)]

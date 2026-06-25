@@ -12,4 +12,6 @@ Subpackages:
 - ``metrics`` — regression / classification / ranking metric helpers.
 """
 
-FEATURE_VERSION = "v1.0"
+# Bump on any change to feature-frame semantics so the file/disk feature cache
+# is invalidated. v1.1: divisions normalized to the canonical OW grid.
+FEATURE_VERSION = "v1.1"

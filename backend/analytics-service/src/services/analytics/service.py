@@ -2,7 +2,7 @@ import typing
 
 import sqlalchemy as sa
 from shared.core import enums
-from shared.division_grid import DEFAULT_GRID, DivisionGrid, division_case_expr, load_runtime_grid
+from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.models.division_grid import DivisionGridMapping, DivisionGridMappingRule, DivisionGridVersion
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,14 +149,6 @@ async def get_analytics(
                 partition_by=(models.Player.user_id, models.Player.role),
                 order_by=models.Tournament.id,
             ).label("pre_previous_cost"),
-            sa.func.lag(division_case_expr(models.Player.rank, DEFAULT_GRID), 1).over(
-                partition_by=(models.Player.user_id, models.Player.role),
-                order_by=models.Tournament.id,
-            ).label("previous_div"),
-            sa.func.lag(division_case_expr(models.Player.rank, DEFAULT_GRID), 2).over(
-                partition_by=(models.Player.user_id, models.Player.role),
-                order_by=models.Tournament.id,
-            ).label("pre_previous_div"),
         )
         .select_from(models.Team)
         .join(models.Player, models.Team.id == models.Player.team_id)

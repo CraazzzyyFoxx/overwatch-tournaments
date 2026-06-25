@@ -5,8 +5,6 @@ import pandas as pd
 import sqlalchemy as sa
 from loguru import logger
 from openskill.models import PlackettLuce, PlackettLuceRating
-from shared.division_grid import DEFAULT_GRID, DivisionGrid
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -15,6 +13,7 @@ from src.core.workspace import get_tournament_workspace_id
 from src.schemas.analytics import AnalyticsMatch
 
 from . import service
+from .canonical_division import canonical_div_for, load_source_grids
 from .linear import TournamentSignal, score_history
 
 COEF_NOVICE_FIRST = 1 / 0.15
@@ -38,13 +37,6 @@ def division_delta_points(
     if current_div is None or pd.isna(current_div):
         return None
     return int(round((float(previous_div) - float(current_div)) * 100))
-
-
-def rating_to_division(grid: DivisionGrid, rating_mu: float) -> int:
-    return resolve_tournament_division(
-        int(round(rating_mu)),
-        tournament_grid=grid,
-    )
 
 
 async def get_data_frame(
@@ -90,8 +82,6 @@ async def get_data_frame(
                 "placement_score": 0.0,
                 "previous_cost": row["previous_cost"],
                 "pre_previous_cost": row["pre_previous_cost"],
-                "previous_div": row["previous_div"],
-                "pre_previous_div": row["pre_previous_div"],
                 "is_newcomer": bool(row["is_newcomer"]),
                 "is_newcomer_role": bool(row["is_newcomer_role"]),
                 "is_changed": False,
@@ -111,50 +101,22 @@ async def get_data_frame(
 
     df = pd.DataFrame(rows)
 
-    all_version_ids = {int(v) for v in df["version_id"].dropna().unique()}
-    grids = await service.get_grid_versions(session, all_version_ids)
+    # Normalize every division to the canonical OW grid so current/previous div
+    # are comparable across workspaces and grid versions.
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
 
-    def grid_for(version_id) -> DivisionGrid:
-        if version_id is None or pd.isna(version_id):
-            return DEFAULT_GRID
-        return grids.get(int(version_id), DEFAULT_GRID)
-
-    df["div"] = df.apply(
-        lambda r: resolve_tournament_division(
-            int(r["cost"]),
-            tournament_grid=grid_for(r["version_id"]),
-        ),
-        axis=1,
-    )
+    df["div"] = [
+        canonical_div_for(grids, version_id, cost)
+        for version_id, cost in zip(df["version_id"], df["cost"], strict=False)
+    ]
     df = df.sort_values(["id_role", "tournament_id"]).reset_index(drop=True)
     df["prev_version_id"] = df.groupby("id_role")["version_id"].shift(1)
-
-    cross = df[["prev_version_id", "version_id"]].dropna().drop_duplicates()
-    cross = cross[cross["prev_version_id"] != cross["version_id"]]
-    pairs = [(int(r["prev_version_id"]), int(r["version_id"])) for _, r in cross.iterrows()]
-    tier_mappings = await service.get_primary_division_mappings(session, pairs)
 
     def resolve_previous_div(row) -> int | None:
         prev_cost = row["previous_cost"]
         if prev_cost is None or pd.isna(prev_cost):
-            return row["previous_div"]
-        prev_vid = row["prev_version_id"]
-        curr_vid = row["version_id"]
-        raw = resolve_tournament_division(
-            int(prev_cost),
-            tournament_grid=grid_for(prev_vid),
-        )
-        if (
-            prev_vid is not None
-            and not pd.isna(prev_vid)
-            and curr_vid is not None
-            and not pd.isna(curr_vid)
-            and int(prev_vid) != int(curr_vid)
-        ):
-            mapping = tier_mappings.get((int(prev_vid), int(curr_vid)))
-            if mapping:
-                return mapping.get(raw, raw)
-        return raw
+            return None
+        return canonical_div_for(grids, row["prev_version_id"], int(prev_cost))
 
     df["previous_div"] = df.apply(resolve_previous_div, axis=1)
     df["is_changed"] = df["previous_div"] != df["div"]
@@ -393,15 +355,9 @@ async def compute_openskill_shift_map(
         workspace_ids=workspace_ids,
     )
     teams = await service.get_teams_with_players(session, tournament_id)
-    version_ids = {int(v) for v in df["version_id"].dropna().unique()}
-    grids = await service.get_grid_versions(session, version_ids)
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
     pl = get_plackett_luce()
     _, players_rating, _ = prepare_openskill_data(df, pl, teams, matches)
-
-    def grid_for(version_id) -> DivisionGrid:
-        if version_id is None or pd.isna(version_id):
-            return DEFAULT_GRID
-        return grids.get(int(version_id), DEFAULT_GRID)
 
     final_df = df[df["tournament_id"] == tournament_id].replace({np.nan: None})
     shift_map: dict[int, float] = {}
@@ -409,7 +365,7 @@ async def compute_openskill_shift_map(
         rating = players_rating.get(row["id_role"])
         if rating is None:
             continue
-        predicted_div = rating_to_division(grid_for(row["version_id"]), rating.mu)
+        predicted_div = canonical_div_for(grids, row["version_id"], int(round(rating.mu)))
         shift_map[int(row["player_id"])] = round(float(row["div"] - predicted_div), 2)
 
     return shift_map, bool(matches)

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pandas as pd
@@ -33,26 +33,34 @@ shift_features = importlib.import_module("src.services.ml.features.shift_feature
 shift_v2 = importlib.import_module("src.services.ml.models.shift_v2")
 
 
+def _identity_assign(df, grids, *, rank_col, version_col="version_id", out_col="div"):
+    """Stub: canonical division == the supplied rank (1:1), for mechanics tests."""
+    df[out_col] = df[rank_col].astype(int)
+    return df
+
+
 class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
     async def test_explicit_history_horizon_keeps_sparse_future_tournament_labels(self) -> None:
+        # rank doubles as the canonical division under the identity stub; the two
+        # tournaments use different source grid versions but land on one scale.
         rows = [
             {
                 "player_id": 1,
                 "user_id": 10,
                 "role": "tank",
                 "tournament_id": 10,
-                "rank": 1500,
+                "rank": 7,
                 "is_newcomer": False,
-                "div": 7,
+                "version_id": 2,
             },
             {
                 "player_id": 2,
                 "user_id": 10,
                 "role": "tank",
                 "tournament_id": 20,
-                "rank": 1600,
+                "rank": 6,
                 "is_newcomer": False,
-                "div": 6,
+                "version_id": 11,
             },
         ]
         result = SimpleNamespace(
@@ -60,13 +68,18 @@ class ShiftRankHistoryTests(IsolatedAsyncioTestCase):
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=result))
 
-        history = await shift_features._player_rank_history(
-            session,
-            [10],
-            history_through_tournament_id=20,
-        )
+        with (
+            patch.object(shift_features, "load_source_grids", AsyncMock(return_value={})),
+            patch.object(shift_features, "assign_canonical_division", _identity_assign),
+        ):
+            history = await shift_features._player_rank_history(
+                session,
+                [10],
+                history_through_tournament_id=20,
+            )
 
         first_row = history.loc[history["tournament_id"] == 10].iloc[0]
+        self.assertEqual(7, first_row["div"])
         self.assertEqual(6, first_row["next_tournament_div"])
 
         query = session.execute.await_args.args[0]
