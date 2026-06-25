@@ -59,6 +59,12 @@ class AppConfig(BaseServiceSettings):
     shift_indiv_scale_bottom: float = 0.8
     shift_indiv_clamp_top: float = 0.75
     shift_indiv_clamp_bottom: float = 2.0
+    # Output clamp: bottom-of-ladder (low rank) keeps the full ±3; the top is
+    # squeezed to ``grid_n_div / shift_clamp_top_grid_ref`` divisions (a
+    # 20-division grid → ±1 at the top, a 40-division grid → ±2) so no source
+    # (team/OS backbone or individual term) can yank a high-rank player the full
+    # range from one tournament. Retrain shift v2 to snapshot changes.
+    shift_clamp_top_grid_ref: float = 20.0
 
     # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
     # this flags the player as a strong cohort outlier regardless of rank (in

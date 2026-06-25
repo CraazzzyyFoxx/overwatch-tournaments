@@ -23,6 +23,7 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
+from shared.division_grid import DEFAULT_GRID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
@@ -98,6 +99,17 @@ async def _player_rank_history(
     # div/prior_div/next_tournament_div are comparable across workspaces.
     grids = await load_source_grids(session, df["version_id"].dropna().unique())
     assign_canonical_division(df, grids, rank_col="rank")
+
+    # Workspace grid size (division count) per row — shift v2 scales the
+    # top-of-ladder output clamp by it so the same cap means the same real rank
+    # distance regardless of granularity. Missing grid → canonical 40-tier.
+    def _grid_div_count(version_id: object) -> int:
+        if pd.isna(version_id):
+            return DEFAULT_GRID.max_division
+        grid = grids.get(int(version_id))
+        return grid.max_division if grid is not None else DEFAULT_GRID.max_division
+
+    df["grid_n_div"] = [_grid_div_count(v) for v in df["version_id"]]
 
     grouped = df.groupby(["user_id", "role"], sort=False)
     df["prior_div"] = grouped["div"].shift(1)
@@ -267,6 +279,7 @@ async def build_shift_feature_frame(
                     "tournaments_played",
                     "tournaments_at_current_div",
                     "div",
+                    "grid_n_div",
                 ]
             ],
             on="player_id",

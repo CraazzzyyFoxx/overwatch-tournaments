@@ -427,6 +427,7 @@ async def train_shift_v2_for_cutoff(
             indiv_scale_bottom=settings.shift_indiv_scale_bottom,
             indiv_clamp_top=settings.shift_indiv_clamp_top,
             indiv_clamp_bottom=settings.shift_indiv_clamp_bottom,
+            clamp_top_grid_ref=settings.shift_clamp_top_grid_ref,
         )
     except ValueError as exc:
         logger.warning("Shift v2 training skipped: %s", exc)

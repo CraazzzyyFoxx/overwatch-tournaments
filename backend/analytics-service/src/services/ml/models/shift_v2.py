@@ -9,15 +9,24 @@ from their cohort — so a clear individual outlier moves even when the team res
 doesn't capture it, instead of being averaged away:
 
     shift_v2 = clamp( w_team·team_result + w_os·os_shift
-                      + clip(scale(div)·local_zscore, ±clamp(div)) , ±3 )
+                      + clip(scale(div)·local_zscore, ±clamp(div)) ,
+                      ±out_clamp(div, grid) )
 
 The individual term's scale/clamp are **rank-dependent**: the same +N move is a
 far bigger claim near the ceiling (sparse cohort, steep real skill-per-SR, hard
 cap) than mid-ladder, so ``scale``/``clamp`` ramp linearly with the canonical
 division number — small at the top (division 1), full at the bottom — instead of
-applying one flat factor to everyone. The team/OS backbone is untouched, so a
-high-rank player still needs a strong *team* result to move far; one bright
-tournament can no longer yank them.
+applying one flat factor to everyone.
+
+The **output clamp itself is rank- AND grid-dependent**: the individual damping
+alone can't hold a high-rank player whose team/OS backbone (e.g. a large
+OpenSkill mu jump) already pushes toward ±3. So the final clamp is squeezed at
+the top of the ladder and the top cap scales with the workspace grid's division
+count — ``grid_n_div / clamp_top_grid_ref`` (a 20-division grid → ±1 at the top,
+a 40-division grid → ±2) so the cap means the same *real* rank distance
+regardless of granularity — ramping back up to the full ``shift_range`` at the
+bottom. A high-rank player therefore can't be yanked ±3 by one tournament from
+any source, while low ranks still move freely.
 
 There is no learned regression toward the (mostly-zero) realised move — that
 collapsed the signal. Weights/scales are fixed (config-tunable) and snapshotted
@@ -44,8 +53,13 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
-# Output bounds (match the v1 linear stable clamp).
+# Output bounds. ``SHIFT_RANGE`` is the bottom-of-ladder (low rank) clamp; the
+# top of the ladder is squeezed to ``grid_n_div / CLAMP_TOP_GRID_REF`` divisions
+# (a 20-division grid → 1.0, a 40-division grid → 2.0) so the cap means the same
+# real rank distance regardless of grid granularity. The clamp ramps between the
+# two by canonical division number.
 SHIFT_RANGE: float = 3.0
+CLAMP_TOP_GRID_REF: float = 20.0
 NEWCOMER_SHIFT_RANGE: float = 1.5
 
 # Blend defaults (team-dominant backbone; additive individual skill term).
@@ -104,6 +118,33 @@ def _rank_ramp(div: pd.Series, *, top: float, bottom: float) -> pd.Series:
     return top + (bottom - top) * t
 
 
+def _output_clamp(
+    df: pd.DataFrame,
+    *,
+    shift_range: float,
+    top_grid_ref: float,
+) -> pd.Series:
+    """Per-row rank- and grid-dependent output clamp.
+
+    Top of the ladder (canonical division 1) is capped at
+    ``grid_n_div / top_grid_ref`` divisions (a 20-division grid → 1.0, a 40 → 2.0)
+    so the cap means the same real rank distance regardless of granularity; the
+    cap ramps up to ``shift_range`` at the bottom (division 40). Missing grid size
+    falls back to the canonical 40-tier grid; missing division → mid-ladder.
+    """
+    div = pd.to_numeric(
+        df.get("current_div", pd.Series(np.nan, index=df.index)), errors="coerce"
+    ).fillna(_GRID_MID_DIV)
+    n_div = pd.to_numeric(
+        df.get("grid_n_div", pd.Series(_GRID_MAX_DIV, index=df.index)), errors="coerce"
+    ).fillna(_GRID_MAX_DIV)
+    ref = top_grid_ref or 1.0
+    top_cap = (n_div / ref).clip(lower=0.0, upper=shift_range)
+    span = (_GRID_MAX_DIV - _GRID_MIN_DIV) or 1.0
+    t = ((div - _GRID_MIN_DIV) / span).clip(0.0, 1.0)
+    return top_cap + (shift_range - top_cap) * t
+
+
 def _indiv_mod(
     df: pd.DataFrame,
     *,
@@ -156,6 +197,7 @@ class ShiftModelV2(MLModel):
     indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM
     shift_range: float = SHIFT_RANGE
+    clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
 
     def _shift_array(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -172,13 +214,23 @@ class ShiftModelV2(MLModel):
             clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
             clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
         ).to_numpy()
-        shift = np.clip(backbone + indiv, -self.shift_range, self.shift_range)
+        # Rank- and grid-dependent output clamp: squeezed at the top of the
+        # ladder so no source (backbone or individual) can yank a high-rank player
+        # the full range from one tournament; top cap scales with grid size.
+        out_clamp = _output_clamp(
+            df,
+            shift_range=self.shift_range,
+            top_grid_ref=getattr(self, "clamp_top_grid_ref", CLAMP_TOP_GRID_REF),
+        ).to_numpy()
+        shift = np.clip(backbone + indiv, -out_clamp, out_clamp)
         # Newcomers: team backbone only (one tournament of individual signal is
-        # too noisy), clipped to the conservative newcomer range.
+        # too noisy), clipped to the conservative newcomer range but never looser
+        # than the rank/grid output clamp.
         newcomer = _newcomer_mask(df)
+        newcomer_clamp = np.minimum(NEWCOMER_SHIFT_RANGE, out_clamp)
         shift = np.where(
             newcomer,
-            np.clip(backbone, -NEWCOMER_SHIFT_RANGE, NEWCOMER_SHIFT_RANGE),
+            np.clip(backbone, -newcomer_clamp, newcomer_clamp),
             shift,
         )
         return shift, newcomer
@@ -218,6 +270,7 @@ def train_shift_v2(
     indiv_scale_bottom: float = INDIV_MOD_SCALE_BOTTOM,
     indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP,
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM,
+    clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF,
 ) -> ShiftTrainingResult:
     """Snapshot the (config-tunable) blend weights into a model artifact.
 
@@ -235,6 +288,7 @@ def train_shift_v2(
         indiv_scale_bottom=indiv_scale_bottom,
         indiv_clamp_top=indiv_clamp_top,
         indiv_clamp_bottom=indiv_clamp_bottom,
+        clamp_top_grid_ref=clamp_top_grid_ref,
     )
 
     metrics: dict[str, float] = {
@@ -245,6 +299,7 @@ def train_shift_v2(
         "indiv_scale_bottom": indiv_scale_bottom,
         "indiv_clamp_top": indiv_clamp_top,
         "indiv_clamp_bottom": indiv_clamp_bottom,
+        "clamp_top_grid_ref": clamp_top_grid_ref,
     }
 
     def _mae_vs_realised(frame: pd.DataFrame) -> tuple[float, int] | None:

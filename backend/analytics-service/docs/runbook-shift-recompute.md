@@ -14,6 +14,7 @@
 | `SHIFT_W_TEAM` (0.7), `SHIFT_W_OS` (0.3) | веса костяка v2 | снапшот при train → retrain shift |
 | `SHIFT_INDIV_SCALE_TOP` (0.2), `SHIFT_INDIV_SCALE_BOTTOM` (0.8) | сила инд-скилла у потолка / у низа (ramp по дивизиону) | снапшот при train → retrain shift |
 | `SHIFT_INDIV_CLAMP_TOP` (0.75), `SHIFT_INDIV_CLAMP_BOTTOM` (2.0) | потолок инд-члена у верха / у низа | снапшот при train → retrain shift |
+| `SHIFT_CLAMP_TOP_GRID_REF` (20.0) | выходной кламп: верх = `grid_n_div/REF` дивизионов (20-тир→±1, 40-тир→±2), низ = ±3; режет +3 у высоких рангов из ЛЮБОГО источника (вкл. os_shift) | снапшот при train → retrain shift |
 | `SMURF_STRONG_LOCAL_Z` (1.5) | порог сильного аутлайера для флага | read при infer → backfill anomalies |
 | `STANDINGS_PROB_SHARPENING` (1.5) | разброс предсказанных мест | снапшот при train standings |
 
@@ -43,7 +44,7 @@ curl -X POST https://<api-host>/v2/jobs -H "Authorization: Bearer <token>" \
 ```
 
 ## Тюнинг
-Сила/потолок инд-скилла (рангозависимо) / порог флага — через env (`SHIFT_INDIV_SCALE_TOP|BOTTOM`/`SHIFT_INDIV_CLAMP_TOP|BOTTOM`/`SMURF_STRONG_LOCAL_Z`), затем `train --models shift` (для весов) + backfill. `LINEAR_SHIFT_SCALE` — только пересчёт v1 (compute-джоб), без retrain.
+Сила/потолок инд-скилла (рангозависимо) / порог флага / выходной кламп — через env (`SHIFT_INDIV_SCALE_TOP|BOTTOM`/`SHIFT_INDIV_CLAMP_TOP|BOTTOM`/`SHIFT_CLAMP_TOP_GRID_REF`/`SMURF_STRONG_LOCAL_Z`), затем `train --models shift` (для весов) + backfill. `LINEAR_SHIFT_SCALE` — только пересчёт v1 (compute-джоб), без retrain.
 
 ## Верификация (read-only, с лаптопа)
 ```bash

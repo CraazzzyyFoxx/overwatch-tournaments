@@ -211,6 +211,38 @@ class ShiftBlendTests(TestCase):
         # mid t=0.5 → scale 0.5 → 0.5*2 = 1.0 (within mid clamp 1.375).
         self.assertAlmostEqual(1.0, float(model.predict(frame).iloc[0]), places=6)
 
+    def test_output_clamp_squeezes_top_by_grid_size(self) -> None:
+        # A top-rank player (canonical division 1) whose backbone alone wants ±3:
+        # the output clamp squeezes it, and the cap scales with grid size.
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, clamp_top_grid_ref=20.0)
+        base = {"linear_stable_shift": [0.0], "os_shift": [10.0],  # backbone = 3.0
+                "performance_v2_local_zscore": [0.0],
+                "tournaments_played": [3], "is_newcomer": [False], "current_div": [1]}
+        s20 = float(model.predict(pd.DataFrame({**base, "grid_n_div": [20]})).iloc[0])
+        s40 = float(model.predict(pd.DataFrame({**base, "grid_n_div": [40]})).iloc[0])
+        self.assertAlmostEqual(1.0, s20, places=6)  # 20-tier grid → +-1 at the top
+        self.assertAlmostEqual(2.0, s40, places=6)  # 40-tier grid → +-2 at the top
+
+    def test_output_clamp_keeps_full_range_at_bottom(self) -> None:
+        # Lowest rank keeps the full +-3 regardless of grid size.
+        model = shift_v2.ShiftModelV2(w_team=0.7, w_os=0.3, clamp_top_grid_ref=20.0)
+        frame = pd.DataFrame({"linear_stable_shift": [0.0], "os_shift": [20.0],
+                              "performance_v2_local_zscore": [0.0],
+                              "tournaments_played": [3], "is_newcomer": [False],
+                              "current_div": [40], "grid_n_div": [20]})
+        self.assertAlmostEqual(3.0, float(model.predict(frame).iloc[0]), places=6)
+
+    def test_output_clamp_regression_tref_case(self) -> None:
+        # Real prod case (tournament 73, Tref): GM-zone player in a 20-tier grid
+        # whose +3 came from a huge os_shift. With the rank/grid output clamp the
+        # OpenSkill+ML shift is held near +1.4 instead of saturating at +3.
+        model = shift_v2.ShiftModelV2()  # config defaults
+        frame = pd.DataFrame({"linear_stable_shift": [1.216], "os_shift": [6.0],
+                              "performance_v2_local_zscore": [2.318],
+                              "tournaments_played": [37], "is_newcomer": [False],
+                              "current_div": [9], "grid_n_div": [20]})
+        self.assertAlmostEqual(1.41, float(model.predict(frame).iloc[0]), places=2)
+
 
 class ShiftTrainTests(TestCase):
     def _frame(self, n: int, *, seed: int) -> pd.DataFrame:
@@ -238,13 +270,16 @@ class ShiftTrainTests(TestCase):
             w_team=0.8, w_os=0.2,
             indiv_scale_top=0.1, indiv_scale_bottom=0.4,
             indiv_clamp_top=0.5, indiv_clamp_bottom=2.0,
+            clamp_top_grid_ref=25.0,
         )
         self.assertEqual(0.8, result.model.w_team)
         self.assertEqual(0.1, result.model.indiv_scale_top)
         self.assertEqual(0.4, result.model.indiv_scale_bottom)
         self.assertEqual(2.0, result.model.indiv_clamp_bottom)
+        self.assertEqual(25.0, result.model.clamp_top_grid_ref)
         self.assertEqual(0.8, result.metrics["w_team"])
         self.assertEqual(0.1, result.metrics["indiv_scale_top"])
+        self.assertEqual(25.0, result.metrics["clamp_top_grid_ref"])
 
     def test_validation_frame_produces_held_out_metric(self) -> None:
         result = shift_v2.train_shift_v2(self._frame(60, seed=1), val_df=self._frame(40, seed=2))
