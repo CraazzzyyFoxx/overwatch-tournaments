@@ -134,6 +134,13 @@ async def _snapshot_pre_encounter_team_mu_uncached(
             continue
         seen_encounters.add(encounter.id)
 
+        # A team cannot meaningfully play itself. Such placeholder/self rows
+        # (home_team_id == away_team_id) would snapshot the same
+        # (encounter_id, team_id) twice — fanning out the downstream standings
+        # merge — and feed a bogus self-vs-self OpenSkill update. Skip them.
+        if encounter.home_team_id == encounter.away_team_id:
+            continue
+
         for team in (encounter.home_team, encounter.away_team):
             if team is None or not getattr(team, "players", None):
                 continue
@@ -196,4 +203,14 @@ async def _snapshot_pre_encounter_team_mu_uncached(
         ):
             rating_map[get_id_role(player)] = new_rating
 
-    return pd.DataFrame(snapshots)
+    if not snapshots:
+        return pd.DataFrame(
+            columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"]
+        )
+    # Enforce the documented one-row-per-(encounter_id, team_id) contract as a
+    # defensive backstop against any future fan-out source.
+    return (
+        pd.DataFrame(snapshots)
+        .drop_duplicates(subset=["encounter_id", "team_id"], keep="first")
+        .reset_index(drop=True)
+    )
