@@ -40,6 +40,7 @@ from src.services.analytics.flows import (
 
 from .aggregations import build_tournament_feature_frame
 from .cache import get_or_build_dataframe, scope_cache_params
+from .mvp_dominance import compute_mvp_dominance
 
 __all__ = ("build_shift_feature_frame",)
 
@@ -316,6 +317,16 @@ async def build_shift_feature_frame(
                 on=["player_id", "tournament_id"],
                 how="left",
             )
+        # Raw match-log MVP dominance — a secondary individual-skill signal that
+        # lifts a consistent scoreboard-topper the expectation-adjusted impact
+        # under-credits. Neutral (0.5) where there is no match log.
+        dominance_df = await compute_mvp_dominance(session, tid)
+        if not dominance_df.empty:
+            merged = merged.merge(dominance_df, on="player_id", how="left")
+        merged["mvp_dominance"] = pd.to_numeric(
+            merged.get("mvp_dominance", pd.Series(index=merged.index, dtype=float)),
+            errors="coerce",
+        ).fillna(0.5)
         # Flag rows that actually carry a Performance v2 row BEFORE the fillna
         # below masks missing perf as 0.0 — the merit target trains only on these
         # (treating "no perf data" as "average performance" would poison it).

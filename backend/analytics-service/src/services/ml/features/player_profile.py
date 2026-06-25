@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import models
 from src.core.workspace import workspace_filter
 
+from .mvp_dominance import compute_mvp_dominance
+
 __all__ = ("load_player_signal_profile",)
 
 
@@ -102,6 +104,15 @@ async def load_player_signal_profile(
         base_df["kd"] = 0.0
         base_df["weapon_accuracy"] = 0.0
         base_df["final_blows_p10"] = 0.0
+
+    # Raw match-log MVP dominance (separate from expectation-adjusted impact):
+    # catches a consistent scoreboard-topper that impact under-credits.
+    dominance_df = await compute_mvp_dominance(session, tournament_id)
+    if not dominance_df.empty:
+        base_df = base_df.merge(dominance_df, on="player_id", how="left")
+    else:
+        base_df["mvp_dominance"] = float("nan")
+        base_df["mvp_matches"] = 0
 
     history_query = (
         sa.select(

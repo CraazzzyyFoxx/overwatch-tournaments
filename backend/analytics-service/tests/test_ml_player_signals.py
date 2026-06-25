@@ -142,6 +142,51 @@ class PlayerAnomalyTests(TestCase):
 
         self.assertEqual([], anomalies.detect_smurfs(frame))
 
+    def test_smurf_flags_raw_scoreboard_dominator(self) -> None:
+        # Player 4: mid local_z / impact (neither classic smurf nor strong cohort
+        # outlier) but consistently tops the raw match scoreboard → flagged.
+        frame = pd.DataFrame(
+            {
+                "player_id": [1, 2, 3, 4],
+                "role": ["Tank"] * 4,
+                "rank": [1100, 1200, 1000, 1300],
+                "impact_score": [55.0, 50.0, 60.0, 58.0],
+                "local_zscore": [0.0, -0.1, 0.2, 0.3],
+                "local_percentile": [50.0, 45.0, 55.0, 56.0],
+                "kd": [1.0, 1.1, 1.0, 1.2],
+                "weapon_accuracy": [30.0, 31.0, 28.0, 32.0],
+                "final_blows_p10": [4.0, 4.5, 4.2, 5.0],
+                "mvp_dominance": [0.5, 0.45, 0.55, 0.85],
+            }
+        )
+
+        flags = anomalies.detect_smurfs(frame)
+
+        smurf = next(f for f in flags if f["player_id"] == 4)
+        self.assertEqual("smurf", smurf["kind"])
+        self.assertIn("raw_mvp_dominance", smurf["reasons"])
+        self.assertNotIn("strong_cohort_outlier", smurf["reasons"])
+        self.assertAlmostEqual(0.85, smurf["evidence"]["mvp_dominance"], places=2)
+
+    def test_smurf_dominance_threshold_respected(self) -> None:
+        # mvp_dominance below threshold and nothing else suspicious → no flag.
+        frame = pd.DataFrame(
+            {
+                "player_id": [1, 2, 3, 4],
+                "role": ["Tank"] * 4,
+                "rank": [1100, 1200, 1000, 1300],
+                "impact_score": [55.0, 50.0, 60.0, 58.0],
+                "local_zscore": [0.0, -0.1, 0.2, 0.3],
+                "local_percentile": [50.0, 45.0, 55.0, 56.0],
+                "kd": [1.0, 1.1, 1.0, 1.2],
+                "weapon_accuracy": [30.0, 31.0, 28.0, 32.0],
+                "final_blows_p10": [4.0, 4.5, 4.2, 5.0],
+                "mvp_dominance": [0.5, 0.45, 0.55, 0.70],
+            }
+        )
+
+        self.assertEqual([], anomalies.detect_smurfs(frame))
+
     def test_troll_prefers_local_history(self) -> None:
         frame = pd.DataFrame(
             {

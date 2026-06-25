@@ -4,9 +4,12 @@ Prod analysis showed the **team result** (W/L vs the balanced seeding) is by far
 the strongest predictor of realised division moves. So the backbone is a
 team-dominant convex mix of the v1 team-result Linear shift and the OpenSkill mu
 shift. On top of it an **additive individual skill term** lifts players whose
-Performance v2 ``local_zscore`` (skill vs same role + nearby division) is far
-from their cohort — so a clear individual outlier moves even when the team result
-doesn't capture it, instead of being averaged away:
+individual signal — ``max(local_zscore, raw MVP dominance)`` — is far from their
+cohort. ``local_zscore`` is skill vs same role + nearby division; the raw
+match-log MVP dominance is a second channel so a consistent scoreboard-topper
+that the expectation-adjusted impact under-credits still moves. A clear
+individual outlier therefore moves even when the team result doesn't capture it,
+instead of being averaged away:
 
     shift_v2 = clamp( w_team·team_result + w_os·os_shift
                       + clip(scale(div)·local_zscore, ±clamp(div)) ,
@@ -74,6 +77,14 @@ INDIV_MOD_SCALE_TOP: float = 0.2
 INDIV_MOD_SCALE_BOTTOM: float = 0.8
 INDIV_MOD_CLAMP_TOP: float = 0.75
 INDIV_MOD_CLAMP_BOTTOM: float = 2.0
+
+# Raw match-log MVP dominance lift. ``mvp_dominance`` ∈ [0,1] (0.5 = median) is
+# turned into a non-negative z-like signal and MAX-blended with local_zscore, so
+# a consistent scoreboard-topper that expectation-adjusted impact under-credits
+# still moves. Only lifts (never lowers); the rank ramp + output clamp still bound it.
+DOMINANCE_PIVOT: float = 0.5
+DOMINANCE_GAIN: float = 4.0
+DOMINANCE_CAP: float = 2.0
 
 # Canonical OW grid bounds (number 1 = top … 40 = bottom); the ramp is keyed on
 # the division number so it stays comparable across workspace grids.
@@ -145,6 +156,21 @@ def _output_clamp(
     return top_cap + (shift_range - top_cap) * t
 
 
+def _dominance_z(df: pd.DataFrame, *, gain: float, cap: float) -> pd.Series:
+    """Raw MVP dominance turned into a non-negative z-like lift.
+
+    ``mvp_dominance`` ∈ [0,1] (0.5 = median scoreboard position). Above the pivot
+    it lifts (``(dom-0.5)*gain``, capped); at/below it contributes nothing — a low
+    scoreboard position must not push a player *down* (that is the team result's
+    job). Neutral (0) where there is no match log.
+    """
+    dom = pd.to_numeric(
+        df.get("mvp_dominance", pd.Series(DOMINANCE_PIVOT, index=df.index)),
+        errors="coerce",
+    ).fillna(DOMINANCE_PIVOT)
+    return ((dom - DOMINANCE_PIVOT) * gain).clip(lower=0.0, upper=cap)
+
+
 def _indiv_mod(
     df: pd.DataFrame,
     *,
@@ -152,24 +178,32 @@ def _indiv_mod(
     scale_bottom: float,
     clamp_top: float,
     clamp_bottom: float,
+    dominance_gain: float,
+    dominance_cap: float,
 ) -> pd.Series:
-    """Additive, rank-dependent individual-skill modifier from local z-score.
+    """Additive, rank-dependent individual-skill modifier.
 
-    ``local_zscore`` is the player's skill vs the same role + nearby division
-    cohort (not all players). Scaled to divisions and clamped, with BOTH the
-    scale and the clamp ramped by the player's canonical division: small near the
-    ceiling (a +N there is a sparse, high-variance, capped claim), full mid/low
-    ladder. So a strong outlier moves meaningfully but a top-rank player can't be
-    yanked by one bright tournament. Zero where Performance v2 is absent.
+    Individual signal = ``max(local_zscore, dominance_z)`` — the player's skill vs
+    same role + nearby division cohort, OR (whichever is larger) their raw
+    scoreboard dominance, so a consistent match-MVP that the expectation-adjusted
+    ``local_zscore`` under-credits still gets lifted. Scaled to divisions and
+    clamped, with BOTH scale and clamp ramped by canonical division: small near
+    the ceiling (a +N there is a sparse, high-variance, capped claim), full
+    mid/low ladder. So a strong/dominant low-rank player moves meaningfully but a
+    top-rank player can't be yanked by one bright tournament.
     """
     z = pd.to_numeric(
         df.get("performance_v2_local_zscore", pd.Series(0.0, index=df.index)),
         errors="coerce",
     ).fillna(0.0)
+    dominance_z = _dominance_z(df, gain=dominance_gain, cap=dominance_cap)
+    indiv_signal = pd.Series(
+        np.maximum(z.to_numpy(), dominance_z.to_numpy()), index=df.index
+    )
     div = df.get("current_div", pd.Series(np.nan, index=df.index))
     scale = _rank_ramp(div, top=scale_top, bottom=scale_bottom)
     clamp = _rank_ramp(div, top=clamp_top, bottom=clamp_bottom)
-    return (scale * z).clip(lower=-clamp, upper=clamp)
+    return (scale * indiv_signal).clip(lower=-clamp, upper=clamp)
 
 
 def _linear_confidence(df: pd.DataFrame) -> pd.Series:
@@ -196,6 +230,8 @@ class ShiftModelV2(MLModel):
     indiv_scale_bottom: float = INDIV_MOD_SCALE_BOTTOM
     indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM
+    dominance_gain: float = DOMINANCE_GAIN
+    dominance_cap: float = DOMINANCE_CAP
     shift_range: float = SHIFT_RANGE
     clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
@@ -213,6 +249,8 @@ class ShiftModelV2(MLModel):
             scale_bottom=getattr(self, "indiv_scale_bottom", INDIV_MOD_SCALE_BOTTOM),
             clamp_top=getattr(self, "indiv_clamp_top", INDIV_MOD_CLAMP_TOP),
             clamp_bottom=getattr(self, "indiv_clamp_bottom", INDIV_MOD_CLAMP_BOTTOM),
+            dominance_gain=getattr(self, "dominance_gain", DOMINANCE_GAIN),
+            dominance_cap=getattr(self, "dominance_cap", DOMINANCE_CAP),
         ).to_numpy()
         # Rank- and grid-dependent output clamp: squeezed at the top of the
         # ladder so no source (backbone or individual) can yank a high-rank player
@@ -270,6 +308,8 @@ def train_shift_v2(
     indiv_scale_bottom: float = INDIV_MOD_SCALE_BOTTOM,
     indiv_clamp_top: float = INDIV_MOD_CLAMP_TOP,
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM,
+    dominance_gain: float = DOMINANCE_GAIN,
+    dominance_cap: float = DOMINANCE_CAP,
     clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF,
 ) -> ShiftTrainingResult:
     """Snapshot the (config-tunable) blend weights into a model artifact.
@@ -288,6 +328,8 @@ def train_shift_v2(
         indiv_scale_bottom=indiv_scale_bottom,
         indiv_clamp_top=indiv_clamp_top,
         indiv_clamp_bottom=indiv_clamp_bottom,
+        dominance_gain=dominance_gain,
+        dominance_cap=dominance_cap,
         clamp_top_grid_ref=clamp_top_grid_ref,
     )
 
@@ -299,6 +341,8 @@ def train_shift_v2(
         "indiv_scale_bottom": indiv_scale_bottom,
         "indiv_clamp_top": indiv_clamp_top,
         "indiv_clamp_bottom": indiv_clamp_bottom,
+        "dominance_gain": dominance_gain,
+        "dominance_cap": dominance_cap,
         "clamp_top_grid_ref": clamp_top_grid_ref,
     }
 

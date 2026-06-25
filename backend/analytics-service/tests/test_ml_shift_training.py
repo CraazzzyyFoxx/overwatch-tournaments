@@ -243,6 +243,40 @@ class ShiftBlendTests(TestCase):
                               "current_div": [9], "grid_n_div": [20]})
         self.assertAlmostEqual(1.41, float(model.predict(frame).iloc[0]), places=2)
 
+    def test_raw_mvp_dominance_lifts_when_local_z_is_low(self) -> None:
+        # A consistent scoreboard-topper (high mvp_dominance) with only mid
+        # local_zscore still gets an individual lift via max(local_z, dominance_z).
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.5, indiv_scale_bottom=0.5,
+            indiv_clamp_top=2.0, indiv_clamp_bottom=2.0,
+            dominance_gain=4.0, dominance_cap=2.0,
+        )
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "performance_v2_local_zscore": [0.3], "current_div": [20],
+                "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False]}
+        # dominance 0.81 → dominance_z=(0.81-0.5)*4=1.24 > local_z 0.3 → 0.5*1.24
+        s_dom = float(model.predict(pd.DataFrame({**base, "mvp_dominance": [0.81]})).iloc[0])
+        # neutral dominance 0.5 → dominance_z 0 → falls back to local_z 0.3 → 0.5*0.3
+        s_neu = float(model.predict(pd.DataFrame({**base, "mvp_dominance": [0.5]})).iloc[0])
+        self.assertAlmostEqual(0.62, s_dom, places=2)
+        self.assertAlmostEqual(0.15, s_neu, places=2)
+        self.assertGreater(s_dom, s_neu)
+
+    def test_low_dominance_does_not_push_down(self) -> None:
+        # A low scoreboard position must not drag the individual term negative.
+        model = shift_v2.ShiftModelV2(
+            w_team=0.7, w_os=0.3,
+            indiv_scale_top=0.5, indiv_scale_bottom=0.5,
+            indiv_clamp_top=2.0, indiv_clamp_bottom=2.0,
+        )
+        frame = pd.DataFrame({"linear_stable_shift": [0.0], "os_shift": [0.0],
+                              "performance_v2_local_zscore": [0.0], "current_div": [20],
+                              "grid_n_div": [40], "tournaments_played": [5],
+                              "is_newcomer": [False], "mvp_dominance": [0.1]})
+        # dominance_z floored at 0; local_z 0 → individual term 0.
+        self.assertAlmostEqual(0.0, float(model.predict(frame).iloc[0]), places=6)
+
 
 class ShiftTrainTests(TestCase):
     def _frame(self, n: int, *, seed: int) -> pd.DataFrame:

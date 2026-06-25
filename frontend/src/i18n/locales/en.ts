@@ -571,6 +571,7 @@ export const en = {
       low_rank: "Registered at a low rank for results this strong",
       cohort_overperformance: "Outplayed others of the same role and division",
       strong_cohort_outlier: "Far above peers of the same role and division",
+      raw_mvp_dominance: "Consistently tops the match scoreboard (MVP) for their rank",
       single_tournament_underperformance: "Played well below their level this tournament",
       sustained_underperformance: "Consistently below their level across recent tournaments",
       sharp_recent_drop: "A sharp drop from their usual results",

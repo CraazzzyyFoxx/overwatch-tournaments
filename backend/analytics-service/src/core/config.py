@@ -65,11 +65,20 @@ class AppConfig(BaseServiceSettings):
     # (team/OS backbone or individual term) can yank a high-rank player the full
     # range from one tournament. Retrain shift v2 to snapshot changes.
     shift_clamp_top_grid_ref: float = 20.0
+    # Raw match-log MVP-dominance lift for the individual term: ``mvp_dominance``
+    # ∈ [0,1] (0.5 = median) → ``(dom-0.5)*gain`` clamped to ``cap``, MAX-blended
+    # with local_zscore so a consistent scoreboard-topper moves. Retrain to snapshot.
+    shift_dominance_gain: float = 4.0
+    shift_dominance_cap: float = 2.0
 
     # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
     # this flags the player as a strong cohort outlier regardless of rank (in
     # addition to the classic low-rank smurf rule).
     smurf_strong_local_z: float = 1.5
+    # Smurf flag: a raw match-log ``mvp_dominance`` (mean per-match MVP position,
+    # 0.5 = median) at/above this flags a consistent scoreboard-topper that the
+    # expectation-adjusted impact/local_zscore under-credit.
+    smurf_mvp_dominance: float = 0.75
 
     # Read-side cache TTL (matches the app-service default).
     tournaments_cache_ttl: int = 60 * 5

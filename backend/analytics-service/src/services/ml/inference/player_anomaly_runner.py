@@ -70,7 +70,11 @@ async def run_player_anomalies_for_tournament(
     flags: list[dict[str, typing.Any]] = []
     if not profile.empty:
         flags.extend(
-            detect_smurfs(profile, strong_local_z_threshold=settings.smurf_strong_local_z)
+            detect_smurfs(
+                profile,
+                strong_local_z_threshold=settings.smurf_strong_local_z,
+                mvp_dominance_threshold=settings.smurf_mvp_dominance,
+            )
         )
         flags.extend(detect_trolls(profile))
         flags.extend(detect_sandbags(profile))
