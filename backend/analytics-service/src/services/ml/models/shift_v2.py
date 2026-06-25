@@ -9,9 +9,11 @@ individual signal is far from their cohort. It is the MAX of two channels:
 division) and a **raw match-log MVP dominance** lift. The dominance channel is a
 first-class signal bounded only by the rank/grid output clamp (not the softer
 local clamp), so a consistent scoreboard-topper that the expectation-adjusted
-impact under-credits is pushed to their rank-appropriate ceiling. A clear
-individual outlier therefore moves even when the team result doesn't capture it,
-instead of being averaged away:
+impact under-credits is pushed to their rank-appropriate ceiling. The positive
+individual lift is then **gated by the team's final placement** — scaled down
+toward zero for a last-placed team — so strong individual play on a losing team
+does not earn a promotion. A clear individual outlier therefore moves even when
+the team result doesn't capture it, instead of being averaged away:
 
     shift_v2 = clamp( w_team·team_result + w_os·os_shift
                       + clip(scale(div)·local_zscore, ±clamp(div)) ,
@@ -89,6 +91,12 @@ INDIV_MOD_CLAMP_BOTTOM: float = 2.0
 DOMINANCE_PIVOT: float = 0.5
 DOMINANCE_GAIN: float = 6.0
 DOMINANCE_CAP: float = 3.0
+
+# Team final-placement gate on the POSITIVE individual lift. The lift is scaled
+# by a factor ∈ [PLACEMENT_FLOOR, 1] — 1.0 for the tournament winner, ramping to
+# the floor for last place — so strong individual play on a last-placed team is
+# not promoted. Floor 0.0 = full gate at last place.
+PLACEMENT_FLOOR: float = 0.0
 
 # Canonical OW grid bounds (number 1 = top … 40 = bottom); the ramp is keyed on
 # the division number so it stays comparable across workspace grids.
@@ -175,6 +183,24 @@ def _dominance_z(df: pd.DataFrame, *, gain: float, cap: float) -> pd.Series:
     return ((dom - DOMINANCE_PIVOT) * gain).clip(lower=0.0, upper=cap)
 
 
+def _placement_factor(df: pd.DataFrame, *, floor: float) -> pd.Series:
+    """Team final-placement gate ∈ [floor, 1] for the positive individual lift.
+
+    1.0 for the tournament winner, ramping to ``floor`` for last place — so a
+    strong individual on a last-placed team is not promoted. Missing standings
+    (no ``overall_position``/``team_count``) → 1.0 (no gate).
+    """
+    pos = pd.to_numeric(
+        df.get("overall_position", pd.Series(np.nan, index=df.index)), errors="coerce"
+    )
+    n = pd.to_numeric(
+        df.get("team_count", pd.Series(np.nan, index=df.index)), errors="coerce"
+    )
+    raw = ((n - pos) / (n - 1.0).clip(lower=1.0)).clip(0.0, 1.0)
+    factor = floor + (1.0 - floor) * raw
+    return factor.where(pos.notna() & n.notna() & (n > 1), 1.0)
+
+
 def _indiv_mod(
     df: pd.DataFrame,
     *,
@@ -228,6 +254,7 @@ class ShiftModelV2(MLModel):
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM
     dominance_gain: float = DOMINANCE_GAIN
     dominance_cap: float = DOMINANCE_CAP
+    placement_floor: float = PLACEMENT_FLOOR
     shift_range: float = SHIFT_RANGE
     clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
@@ -267,6 +294,13 @@ class ShiftModelV2(MLModel):
         ).to_numpy()
         dom_term = np.clip(dom_z, 0.0, out_clamp)
         indiv = np.maximum(z_term, dom_term)
+        # Gate the POSITIVE individual lift by the team's final placement — strong
+        # individual play on a last-placed team must not earn a promotion. A
+        # downward individual signal is placement-independent.
+        placement = _placement_factor(
+            df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)
+        ).to_numpy()
+        indiv = np.where(indiv > 0.0, indiv * placement, indiv)
         shift = np.clip(backbone + indiv, -out_clamp, out_clamp)
         # Newcomers: team backbone only (one tournament of individual signal is
         # too noisy), clipped to the conservative newcomer range but never looser
@@ -317,6 +351,7 @@ def train_shift_v2(
     indiv_clamp_bottom: float = INDIV_MOD_CLAMP_BOTTOM,
     dominance_gain: float = DOMINANCE_GAIN,
     dominance_cap: float = DOMINANCE_CAP,
+    placement_floor: float = PLACEMENT_FLOOR,
     clamp_top_grid_ref: float = CLAMP_TOP_GRID_REF,
 ) -> ShiftTrainingResult:
     """Snapshot the (config-tunable) blend weights into a model artifact.
@@ -337,6 +372,7 @@ def train_shift_v2(
         indiv_clamp_bottom=indiv_clamp_bottom,
         dominance_gain=dominance_gain,
         dominance_cap=dominance_cap,
+        placement_floor=placement_floor,
         clamp_top_grid_ref=clamp_top_grid_ref,
     )
 
@@ -350,6 +386,7 @@ def train_shift_v2(
         "indiv_clamp_bottom": indiv_clamp_bottom,
         "dominance_gain": dominance_gain,
         "dominance_cap": dominance_cap,
+        "placement_floor": placement_floor,
         "clamp_top_grid_ref": clamp_top_grid_ref,
     }
 

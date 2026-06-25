@@ -282,6 +282,30 @@ class ShiftBlendTests(TestCase):
         self.assertAlmostEqual(1.97, mid, places=2)
         self.assertGreater(mid, top)
 
+    def test_placement_gates_positive_individual_lift(self) -> None:
+        # Same strong scoreboard-topper: full lift when the team wins, ~zero when
+        # the team takes last place; missing standings → no gate.
+        model = shift_v2.ShiftModelV2(
+            w_team=0.0, w_os=0.0,  # isolate the individual term
+            dominance_gain=6.0, dominance_cap=3.0, placement_floor=0.0,
+        )
+        base = {"linear_stable_shift": [0.0], "os_shift": [0.0],
+                "performance_v2_local_zscore": [0.0], "current_div": [20],
+                "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False],
+                "mvp_dominance": [1.0], "team_count": [8]}
+        s_first = float(model.predict(pd.DataFrame({**base, "overall_position": [1]})).iloc[0])
+        s_last = float(model.predict(pd.DataFrame({**base, "overall_position": [8]})).iloc[0])
+        s_nostd = float(model.predict(pd.DataFrame({
+            "linear_stable_shift": [0.0], "os_shift": [0.0],
+            "performance_v2_local_zscore": [0.0], "current_div": [20],
+            "grid_n_div": [40], "tournaments_played": [5], "is_newcomer": [False],
+            "mvp_dominance": [1.0],
+        })).iloc[0])
+        self.assertGreater(s_first, 1.0)        # winner keeps the full lift
+        self.assertAlmostEqual(0.0, s_last, places=6)  # last place → no +
+        self.assertGreater(s_last, -0.01)       # gate does not push negative
+        self.assertGreater(s_nostd, 1.0)        # missing standings → no gate
+
     def test_low_dominance_does_not_push_down(self) -> None:
         # A low scoreboard position must not drag the individual term negative.
         model = shift_v2.ShiftModelV2(

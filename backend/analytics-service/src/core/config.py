@@ -71,6 +71,11 @@ class AppConfig(BaseServiceSettings):
     # scoreboard-topper is pushed to their rank-appropriate ceiling. Retrain to snapshot.
     shift_dominance_gain: float = 6.0
     shift_dominance_cap: float = 3.0
+    # Team final-placement gate on the positive individual lift: scaled by a
+    # factor ∈ [floor, 1] (1.0 for the tournament winner → floor for last place),
+    # so strong individual play on a last-placed team is not promoted. 0.0 = full
+    # gate at last place. Retrain to snapshot.
+    shift_placement_floor: float = 0.0
 
     # Smurf flag: a local_zscore (skill vs same role + nearby division) at/above
     # this flags the player as a strong cohort outlier regardless of rank (in

@@ -16,6 +16,7 @@
 | `SHIFT_INDIV_CLAMP_TOP` (0.75), `SHIFT_INDIV_CLAMP_BOTTOM` (2.0) | потолок инд-члена у верха / у низа | снапшот при train → retrain shift |
 | `SHIFT_CLAMP_TOP_GRID_REF` (20.0) | выходной кламп: верх = `grid_n_div/REF` дивизионов (20-тир→±1, 40-тир→±2), низ = ±3; режет +3 у высоких рангов из ЛЮБОГО источника (вкл. os_shift) | снапшот при train → retrain shift |
 | `SHIFT_DOMINANCE_GAIN` (6.0), `SHIFT_DOMINANCE_CAP` (3.0) | raw MVP-dominance лифт: `(mvp_dominance−0.5)·gain` clamp `cap`, max-бленд с local-членом, ограничен ТОЛЬКО выходным клампом (минуя мягкий индив-кламп) → явный раздатчик доезжает до рангового потолка | снапшот при train → retrain shift |
+| `SHIFT_PLACEMENT_FLOOR` (0.0) | гейт ПОЛОЖИТЕЛЬНОГО инд-лифта итоговым местом команды: фактор ∈[floor,1] (1.0 чемпион → floor последнее место); 0.0 = последнему месту никакого +, даже при отличной личной игре | снапшот при train → retrain shift |
 | `SMURF_STRONG_LOCAL_Z` (1.5) | порог сильного аутлайера для флага | read при infer → backfill anomalies |
 | `SMURF_MVP_DOMINANCE` (0.75) | порог raw MVP-dominance (среднее MVP-место по матч-логу) для смурф-флага `raw_mvp_dominance` | read при infer → backfill anomalies |
 | `STANDINGS_PROB_SHARPENING` (1.5) | разброс предсказанных мест | снапшот при train standings |

@@ -429,6 +429,7 @@ async def train_shift_v2_for_cutoff(
             indiv_clamp_bottom=settings.shift_indiv_clamp_bottom,
             dominance_gain=settings.shift_dominance_gain,
             dominance_cap=settings.shift_dominance_cap,
+            placement_floor=settings.shift_placement_floor,
             clamp_top_grid_ref=settings.shift_clamp_top_grid_ref,
         )
     except ValueError as exc:

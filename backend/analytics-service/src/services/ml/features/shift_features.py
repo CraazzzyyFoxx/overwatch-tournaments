@@ -295,6 +295,8 @@ async def build_shift_feature_frame(
                 "effective_evidence",
                 "sample_tournaments",
                 "sample_matches",
+                "overall_position",
+                "team_count",
             ]
         ].rename(
             columns={
