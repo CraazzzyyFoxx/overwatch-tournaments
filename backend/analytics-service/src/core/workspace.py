@@ -8,6 +8,7 @@ after the move.
 
 import typing
 
+import sqlalchemy as sa
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
@@ -52,6 +53,28 @@ def workspace_scope_filter(
     if workspace_ids is not None:
         return workspace_filter_any(workspace_ids)
     return workspace_filter(workspace_id)
+
+
+async def get_tournament_workspace_id(
+    session: AsyncSession,
+    tournament_id: int,
+) -> int | None:
+    """Return the workspace a tournament belongs to — its canonical scope.
+
+    Per-tournament inference/recalculation must be scoped to the tournament's
+    own workspace. Otherwise the feature cohorts (OpenSkill ratings, linear
+    history, Performance-v2 percentile) and the effective division grid are
+    built globally when ``workspace_id`` is ``None``, silently diverging from
+    the RPC recalculate job (which always passes ``job.workspace_id``). A
+    tournament belongs to exactly one workspace, so resolving from it makes
+    every entry point — CLI, backfill, RPC — agree. Returns ``None`` if the
+    tournament does not exist (callers fall back to the prior global behaviour).
+    """
+    return await session.scalar(
+        sa.select(models.Tournament.workspace_id).where(
+            models.Tournament.id == tournament_id
+        )
+    )
 
 
 async def get_division_grid(

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.config import settings
-from src.core.workspace import get_division_grid
+from src.core.workspace import get_division_grid, get_tournament_workspace_id
 
 from ..features.aggregations import build_match_features_with_strength
 from ..features.local_performance import attach_local_performance
@@ -497,6 +497,13 @@ async def run_for_tournament(
         model_kinds
         or ("performance", "player_anomalies", "shift", "standings", "match_quality")
     )
+    # Scope to the tournament's own workspace when not given one. The CLI
+    # (``ml.cli infer/backfill``) defaults to ``None``; without this it would
+    # build feature cohorts and pick the division grid globally (all
+    # workspaces) and diverge from the RPC recalculate job, which always passes
+    # ``job.workspace_id``. A tournament belongs to exactly one workspace.
+    if workspace_id is None:
+        workspace_id = await get_tournament_workspace_id(session, tournament_id)
     summary: dict[str, int] = {}
     if "performance" in kinds:
         summary["performance"] = await run_performance_for_tournament(

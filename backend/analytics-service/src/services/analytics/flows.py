@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.config import settings
+from src.core.workspace import get_tournament_workspace_id
 from src.schemas.analytics import AnalyticsMatch
 
 from . import service
@@ -481,6 +482,11 @@ async def recalculate_analytics(
     algorithm_names: typing.Iterable[str] | None = None,
     workspace_id: int | None = None,
 ) -> list[str]:
+    # Scope to the tournament's own workspace when not given one, so the v1
+    # Points/Linear recalc uses the same cohort the RPC job (workspace-scoped)
+    # would — see get_tournament_workspace_id.
+    if workspace_id is None:
+        workspace_id = await get_tournament_workspace_id(session, tournament_id)
     df = await get_data_frame(session, workspace_id=workspace_id)
     if df.empty:
         logger.warning("No analytics data found for tournament {}", tournament_id)
