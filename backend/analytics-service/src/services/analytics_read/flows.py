@@ -196,24 +196,22 @@ def _predict_player_division(
     player: schemas.PlayerRead,
     *,
     points: float,
-    manual_shift: int | None,
 ) -> tuple[int | None, schemas.PredictedDirection, int]:
-    # Division move = the shift signal rounded to the nearest division, so the
-    # DivisionGrid display stays consistent with the displayed shift value.
-    # Positive points = promote (lower division number) → negative delta. Bounded
-    # to ±3 to match the shift clamp. (The old fixed ±1/±1.5 thresholds hid any
-    # signal in (-1, 1): the number was non-zero but the grid showed "flat".)
-    delta = max(-3, min(3, -round(float(points))))
-
-    if manual_shift:
-        delta = -1 if manual_shift > 0 else 1
-
-    if delta < 0:
+    # The forecast must always agree with the displayed Signal (``points``).
+    # DIRECTION is the sign of the signal — any non-zero signal leans
+    # promote/demote, never "flat" (a positive Signal must never show a flat or
+    # down forecast). The predicted-division MAGNITUDE still rounds the signal to
+    # whole divisions, bounded to ±3 (the shift clamp); sub-half signals lean in
+    # the badge arrow while the predicted division holds. Positive points =
+    # promote (lower division number) → negative delta.
+    if points > 0:
         direction: schemas.PredictedDirection = "promote"
-    elif delta > 0:
+    elif points < 0:
         direction = "demote"
     else:
         direction = "flat"
+
+    delta = max(-3, min(3, -round(float(points))))
 
     if player.division is None:
         return None, direction, 0
@@ -360,7 +358,6 @@ async def get_analytics(
                 _predict_player_division(
                     player_read,
                     points=shift.shift,
-                    manual_shift=analytics.shift,
                 )
             )
             team_players.append(

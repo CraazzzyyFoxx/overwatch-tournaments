@@ -275,36 +275,43 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
 
 
 class PredictPlayerDivisionTests(IsolatedAsyncioTestCase):
-    """The DivisionGrid display must equal the shift signal rounded to a division
-    (no hidden (-1, 1) dead-zone, so the grid and the shown signal agree)."""
+    """The forecast must always agree with the displayed Signal (``points``):
+    direction is the sign of the signal (no hidden dead-zone that shows "flat"
+    for a non-zero Signal), while the predicted-division magnitude rounds it."""
 
     @staticmethod
     def _player(division: int | None = 10) -> SimpleNamespace:
         return SimpleNamespace(division=division)
 
-    async def test_rounds_signal_to_nearest_division(self) -> None:
+    async def test_direction_follows_signal_sign(self) -> None:
         predict = analytics_flows._predict_player_division
-        # +0.7 used to be "flat"; now rounds to a one-division promote.
-        _, direction, delta = predict(self._player(), points=0.7, manual_shift=None)
+        # +0.7 → one-division promote.
+        _, direction, delta = predict(self._player(), points=0.7)
         self.assertEqual("promote", direction)
         self.assertEqual(-1, delta)
-        # Sub-half stays flat.
-        _, d2, delta2 = predict(self._player(), points=0.4, manual_shift=None)
-        self.assertEqual("flat", d2)
-        self.assertEqual(0, delta2)
         # Negative → demote.
-        _, d3, delta3 = predict(self._player(), points=-0.7, manual_shift=None)
-        self.assertEqual("demote", d3)
-        self.assertEqual(1, delta3)
+        _, d_neg, delta_neg = predict(self._player(), points=-0.7)
+        self.assertEqual("demote", d_neg)
+        self.assertEqual(1, delta_neg)
+        # Exactly zero → flat.
+        _, d_zero, delta_zero = predict(self._player(), points=0.0)
+        self.assertEqual("flat", d_zero)
+        self.assertEqual(0, delta_zero)
+
+    async def test_sub_half_signal_still_leans_not_flat(self) -> None:
+        # The reported desync: a +0.4 Signal must NOT show a "flat" forecast.
+        # Direction leans promote; the predicted division holds (rounds to 0).
+        predict = analytics_flows._predict_player_division
+        _, direction, delta = predict(self._player(), points=0.4)
+        self.assertEqual("promote", direction)
+        self.assertEqual(0, delta)
+        _, d_neg, delta_neg = predict(self._player(), points=-0.4)
+        self.assertEqual("demote", d_neg)
+        self.assertEqual(0, delta_neg)
 
     async def test_clamped_to_three_divisions(self) -> None:
         predict = analytics_flows._predict_player_division
-        div, _, delta = predict(self._player(20), points=9.0, manual_shift=None)
+        div, direction, delta = predict(self._player(20), points=9.0)
+        self.assertEqual("promote", direction)
         self.assertEqual(-3, delta)
         self.assertEqual(17, div)
-
-    async def test_manual_shift_overrides_signal(self) -> None:
-        predict = analytics_flows._predict_player_division
-        _, direction, delta = predict(self._player(), points=0.0, manual_shift=500)
-        self.assertEqual("promote", direction)
-        self.assertEqual(-1, delta)
