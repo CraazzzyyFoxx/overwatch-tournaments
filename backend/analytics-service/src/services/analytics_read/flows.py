@@ -197,21 +197,23 @@ def _predict_player_division(
     *,
     points: float,
 ) -> tuple[int | None, schemas.PredictedDirection, int]:
-    # The forecast must always agree with the displayed Signal (``points``).
-    # DIRECTION is the sign of the signal — any non-zero signal leans
-    # promote/demote, never "flat" (a positive Signal must never show a flat or
-    # down forecast). The predicted-division MAGNITUDE still rounds the signal to
-    # whole divisions, bounded to ±3 (the shift clamp); sub-half signals lean in
-    # the badge arrow while the predicted division holds. Positive points =
-    # promote (lower division number) → negative delta.
-    if points > 0:
+    # The forecast moves whole divisions only. A division is 100 signal points
+    # (``division_delta_points``), so a Signal below 1.0 (i.e. < 100 points) is
+    # less than a full division and is IGNORED — the forecast holds at the current
+    # division and the direction is "flat" (no Climb/Drop badge). At/above a full
+    # division the magnitude rounds to whole divisions, bounded to ±3 (the shift
+    # clamp). Positive points = promote (lower division number) → negative delta.
+    delta = -round(float(points))
+    if abs(float(points)) < 1.0:
+        delta = 0
+    delta = max(-3, min(3, delta))
+
+    if delta < 0:
         direction: schemas.PredictedDirection = "promote"
-    elif points < 0:
+    elif delta > 0:
         direction = "demote"
     else:
         direction = "flat"
-
-    delta = max(-3, min(3, -round(float(points))))
 
     if player.division is None:
         return None, direction, 0

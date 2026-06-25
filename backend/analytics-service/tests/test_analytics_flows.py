@@ -275,39 +275,40 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
 
 
 class PredictPlayerDivisionTests(IsolatedAsyncioTestCase):
-    """The forecast must always agree with the displayed Signal (``points``):
-    direction is the sign of the signal (no hidden dead-zone that shows "flat"
-    for a non-zero Signal), while the predicted-division magnitude rounds it."""
+    """A division is 100 signal points, so the forecast moves whole divisions
+    only: a Signal below 1.0 (< 100 points) is ignored — the forecast holds at
+    the current division and the direction is "flat" (no Climb/Drop). At/above a
+    full division the magnitude rounds, bounded to ±3."""
 
     @staticmethod
     def _player(division: int | None = 10) -> SimpleNamespace:
         return SimpleNamespace(division=division)
 
-    async def test_direction_follows_signal_sign(self) -> None:
+    async def test_full_division_promotes_or_demotes(self) -> None:
         predict = analytics_flows._predict_player_division
-        # +0.7 → one-division promote.
-        _, direction, delta = predict(self._player(), points=0.7)
+        # +1.2 (>= a full division) → promote one division.
+        div, direction, delta = predict(self._player(), points=1.2)
         self.assertEqual("promote", direction)
         self.assertEqual(-1, delta)
-        # Negative → demote.
-        _, d_neg, delta_neg = predict(self._player(), points=-0.7)
+        self.assertEqual(9, div)
+        # -1.6 → demote two divisions.
+        _, d_neg, delta_neg = predict(self._player(), points=-1.6)
         self.assertEqual("demote", d_neg)
-        self.assertEqual(1, delta_neg)
-        # Exactly zero → flat.
-        _, d_zero, delta_zero = predict(self._player(), points=0.0)
-        self.assertEqual("flat", d_zero)
-        self.assertEqual(0, delta_zero)
+        self.assertEqual(2, delta_neg)
+        # Exactly 1.0 (a full division) still moves.
+        _, d_one, delta_one = predict(self._player(), points=1.0)
+        self.assertEqual("promote", d_one)
+        self.assertEqual(-1, delta_one)
 
-    async def test_sub_half_signal_still_leans_not_flat(self) -> None:
-        # The reported desync: a +0.4 Signal must NOT show a "flat" forecast.
-        # Direction leans promote; the predicted division holds (rounds to 0).
+    async def test_sub_division_signal_is_flat(self) -> None:
+        # A Signal below a full division (< 100 points) must show "flat", not
+        # Climb/Drop, and must hold the predicted division.
         predict = analytics_flows._predict_player_division
-        _, direction, delta = predict(self._player(), points=0.4)
-        self.assertEqual("promote", direction)
-        self.assertEqual(0, delta)
-        _, d_neg, delta_neg = predict(self._player(), points=-0.4)
-        self.assertEqual("demote", d_neg)
-        self.assertEqual(0, delta_neg)
+        for pts in (0.7, 0.99, 0.4, -0.7, -0.99, 0.0):
+            div, direction, delta = predict(self._player(), points=pts)
+            self.assertEqual("flat", direction, msg=f"points={pts}")
+            self.assertEqual(0, delta, msg=f"points={pts}")
+            self.assertEqual(10, div, msg=f"points={pts}")
 
     async def test_clamped_to_three_divisions(self) -> None:
         predict = analytics_flows._predict_player_division
