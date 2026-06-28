@@ -583,7 +583,10 @@ func (h *Handler) callIdentity(w http.ResponseWriter, r *http.Request, queue str
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(successStatus)
-	if successStatus != http.StatusNoContent && len(env.Data) > 0 && string(env.Data) != "null" {
+	// Relay a literal JSON `null` for nullable response models rather than an
+	// empty body, so callers' response.json() doesn't throw on a 200. See the
+	// note in edge/dispatch.go. 204 still carries no body.
+	if successStatus != http.StatusNoContent && len(env.Data) > 0 {
 		_, _ = w.Write(env.Data)
 	}
 }
