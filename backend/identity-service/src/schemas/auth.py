@@ -119,6 +119,7 @@ class TokenPayload(BaseModel):
     is_superuser: bool = False
     roles: list[str] = Field(default_factory=list)  # List of role names
     permissions: list[dict[str, str]] = Field(default_factory=list)  # List of {resource, action} dicts
+    denies: list[dict[str, str]] = Field(default_factory=list)  # Per-user deny overlay {resource, action}
     workspaces: list[WorkspaceMembership] = Field(default_factory=list)
     credential_type: Literal["access_token", "api_key"] = "access_token"
     api_key: TokenApiKeyInfo | None = None
@@ -193,6 +194,7 @@ class AuthUser(BaseModel):
     is_verified: bool
     roles: list[str] = Field(default_factory=list)  # List of role names
     permissions: list[str] = Field(default_factory=list)  # List of "resource.action" strings
+    denies: list[str] = Field(default_factory=list)  # Denied "resource.action" capabilities
     workspaces: list[AuthUserWorkspace] = Field(default_factory=list)
     linked_players: list[AuthLinkedPlayer] = Field(default_factory=list)
     created_at: datetime

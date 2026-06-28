@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
+import { UserDenyEditor } from "./UserDenyEditor";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -299,6 +300,8 @@ export default function AccessAdminUsersPage() {
                   </div>
                 </div>
               </div>
+
+              <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
 
               <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">

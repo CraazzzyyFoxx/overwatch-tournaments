@@ -100,6 +100,10 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _permission("challonge", "sync"),
     *_crud("asset"),
     _permission("asset", "upload"),
+    # Self-service capabilities: allowed by default for every authenticated user;
+    # exist only so an admin can DENY them per user (negative RBAC).
+    _permission("account", "avatar", "Change one's own avatar"),
+    _permission("account", "social", "Manage one's own social accounts"),
 )
 
 _ALL_PERMISSION_NAMES = frozenset(permission.name for permission in PERMISSION_CATALOG)

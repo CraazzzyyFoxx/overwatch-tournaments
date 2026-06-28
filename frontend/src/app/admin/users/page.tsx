@@ -287,7 +287,11 @@ export default function UsersAdminPage() {
   const canUpdate = canAccessPermission("user.update", workspaceId);
   const canDelete = canAccessPermission("user.delete", workspaceId);
   const canMerge = isSuperuser;
-  const canOpenProfile = canUpdate || canDelete;
+  // Identity (social account) full management is superuser-only; display
+  // visibility can be toggled by anyone with read access.
+  const canManageIdentity = isSuperuser;
+  const canSetVisibility = canAccessPermission("user.read", workspaceId);
+  const canOpenProfile = canUpdate || canDelete || canManageIdentity || canSetVisibility;
   const isCreateDirty = createDialogOpen && hasUnsavedChanges({ name: createName }, { name: "" });
 
   const createMutation = useMutation({
@@ -495,6 +499,9 @@ export default function UsersAdminPage() {
           onClose={() => setProfileUser(null)}
           canEdit={canUpdate}
           canDelete={canDelete}
+          canManageIdentity={canManageIdentity}
+          canSetVisibility={canSetVisibility}
+          workspaceId={workspaceId}
           canMerge={canMerge}
           onMergeRequested={(user) => setMergeUser(user)}
         />

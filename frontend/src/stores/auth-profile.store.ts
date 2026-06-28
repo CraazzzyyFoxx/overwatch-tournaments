@@ -22,6 +22,8 @@ export type AuthProfile = {
   avatarUrl?: string | null;
   roles: string[];
   permissions: string[];
+  /** Denied "resource.action" capabilities (negative RBAC). */
+  denies: string[];
   isSuperuser: boolean;
   workspaces: WorkspaceRbac[];
   linkedPlayers: AuthLinkedPlayer[];
@@ -134,6 +136,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
         avatar_url?: string | null;
         roles?: string[];
         permissions?: string[];
+        denies?: string[];
         is_superuser?: boolean;
         linked_players?: Array<{
           player_id: number;
@@ -165,6 +168,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
           avatarUrl: data.avatar_url ?? null,
           roles: data.roles ?? [],
           permissions: data.permissions ?? [],
+          denies: data.denies ?? [],
           isSuperuser: data.is_superuser ?? false,
           workspaces: (data.workspaces ?? []).map((ws) => ({
             workspace_id: ws.workspace_id,

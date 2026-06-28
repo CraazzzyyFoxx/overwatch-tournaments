@@ -991,23 +991,9 @@ class OAuthService:
         )
         existing_conn = result.scalar_one_or_none()
 
-        # Enforce one connection per provider per auth user.
-        result = await session.execute(
-            select(OAuthConnection).where(
-                OAuthConnection.auth_user_id == auth_user.id,
-                OAuthConnection.provider == oauth_info.provider.value,
-            )
-        )
-        current_provider_conn = result.scalar_one_or_none()
-
-        if current_provider_conn and current_provider_conn.provider_user_id != oauth_info.provider_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"A different {oauth_info.provider.value} account is already linked. "
-                    "Unlink it first before linking another one."
-                ),
-            )
+        # A user may link MULTIPLE accounts of the same provider (e.g. two
+        # battle.net) — each a distinct verified social identity. We only block
+        # re-linking the *same* external account to a *different* user (below).
 
         if existing_conn:
             if existing_conn.auth_user_id == auth_user.id:

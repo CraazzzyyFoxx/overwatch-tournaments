@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
 from src.services.auth_service import AuthService
-from src.services.auth_token_helpers import _linked_players_payload
+from src.services.auth_token_helpers import _linked_players_payload, _load_user_denies
 from src.services.session_cache import get_refresh_idem, set_refresh_idem
 from src.services.session_service import SessionService
 
@@ -242,6 +242,8 @@ async def get_me(session: AsyncSession, user_id: int) -> schemas.AuthUser:
 
     data["workspaces"] = [w.model_dump() for w in workspaces]
     data["linked_players"] = [player.model_dump() for player in _linked_players_payload(user)]
+    denies = await _load_user_denies(session, user.id)
+    data["denies"] = [f"{d['resource']}.{d['action']}" for d in denies]
     return schemas.AuthUser.model_validate(data)
 
 

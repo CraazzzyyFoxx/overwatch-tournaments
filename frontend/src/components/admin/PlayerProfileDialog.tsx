@@ -237,8 +237,15 @@ function NameSection({ user, canEdit, onUserUpdated }: NameSectionProps) {
 interface PlayerProfileDialogProps {
   user: User;
   onClose: () => void;
+  /** Avatar + name editing (user.update). */
   canEdit: boolean;
   canDelete: boolean;
+  /** Full identity management — add/edit/delete/set-primary (superuser only). */
+  canManageIdentity: boolean;
+  /** Toggle per-workspace / global display visibility (user.read). */
+  canSetVisibility: boolean;
+  /** Current workspace for the per-workspace visibility toggle. */
+  workspaceId: number | null;
   canMerge?: boolean;
   onMergeRequested?: (user: User) => void;
 }
@@ -248,6 +255,9 @@ export function PlayerProfileDialog({
   onClose,
   canEdit,
   canDelete,
+  canManageIdentity,
+  canSetVisibility,
+  workspaceId,
   canMerge = false,
   onMergeRequested,
 }: PlayerProfileDialogProps) {
@@ -285,8 +295,9 @@ export function PlayerProfileDialog({
           <SocialAccountsEditor
             userId={user.id}
             accounts={user.social_accounts ?? []}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canManage={canManageIdentity}
+            canSetVisibility={canSetVisibility}
+            workspaceId={workspaceId}
             onUserUpdated={setUser}
           />
         </div>

@@ -101,7 +101,19 @@ async def connections(session: AsyncSession, user: models.AuthUser) -> list[sche
     ]
 
 
-async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) -> None:
+async def unlink(
+    session: AsyncSession,
+    user: models.AuthUser,
+    provider: str,
+    provider_user_id: str | None = None,
+) -> None:
+    """Unlink OAuth connection(s) for a provider.
+
+    When ``provider_user_id`` is given, unlinks only that specific connection
+    (a user may have several of the same provider); otherwise unlinks every
+    connection for the provider. Drops the verified mark from the matching
+    social account(s); the account row itself is kept (re-verify by re-linking).
+    """
     if not user.hashed_password:
         result = await session.execute(select(OAuthConnection).where(OAuthConnection.auth_user_id == user.id))
         if len(result.scalars().all()) <= 1:
@@ -109,18 +121,17 @@ async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) ->
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot unlink last OAuth provider. Set a password first.",
             )
-    result = await session.execute(
-        delete(OAuthConnection).where(
-            OAuthConnection.auth_user_id == user.id, OAuthConnection.provider == provider
-        )
+    del_query = delete(OAuthConnection).where(
+        OAuthConnection.auth_user_id == user.id, OAuthConnection.provider == provider
     )
+    if provider_user_id is not None:
+        del_query = del_query.where(OAuthConnection.provider_user_id == provider_user_id)
+    result = await session.execute(del_query)
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"{provider.title()} account not linked"
         )
 
-    # Drop the verified mark from the player's social account(s) for this provider;
-    # the account itself is kept (the user can re-verify by re-linking).
     provider_social = OAUTH_TO_SOCIAL.get(provider)
     if provider_social is not None:
         links = (
@@ -129,14 +140,16 @@ async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) ->
             )
         ).scalars().all()
         for link in links:
-            await session.execute(
+            unverify = (
                 update(SocialAccount)
                 .where(
                     SocialAccount.user_id == link.player_id,
                     SocialAccount.provider == provider_social,
                     SocialAccount.is_verified.is_(True),
                 )
-                .values(is_verified=False, provider_user_id=None)
             )
+            if provider_user_id is not None:
+                unverify = unverify.where(SocialAccount.provider_user_id == provider_user_id)
+            await session.execute(unverify.values(is_verified=False, provider_user_id=None))
 
     await session.commit()

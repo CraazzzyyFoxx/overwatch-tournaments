@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.schemas import BaseRead
 
@@ -26,10 +26,16 @@ class SocialAccountRead(BaseRead):
     url: str | None = None
     is_verified: bool = False
     is_primary: bool = False
+    # Display visibility (populated only when the visibilities relationship is
+    # loaded — e.g. the admin profile dialog). ``visible_global`` = shown on the
+    # public profile; ``visible_workspace_ids`` = workspaces it is shown in.
+    visible_global: bool = True
+    visible_workspace_ids: list[int] = Field(default_factory=list)
 
 
 class UserRead(BaseRead):
     name: str
+    avatar_url: str | None = None
     social_accounts: list[SocialAccountRead] = []
 
 

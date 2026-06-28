@@ -407,11 +407,14 @@ async def rpc_oauth_connections(data: dict, msg: RabbitMessage) -> dict:
 async def rpc_oauth_unlink(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
     provider = data.get("provider")
+    # Optional: target one specific connection when several of the same provider
+    # are linked; omitted = unlink all connections for the provider.
+    provider_user_id = data.get("provider_user_id")
 
     async def op(session: Any, user: Any) -> None:
         if not provider:
             raise HTTPException(status_code=400, detail="provider is required")
-        await oauth_flows.unlink(session, user, provider)
+        await oauth_flows.unlink(session, user, provider, provider_user_id=provider_user_id)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -728,6 +731,47 @@ async def rpc_rbac_get_user_roles(data: dict, msg: RabbitMessage) -> dict:
     return await _with_active_user(data.get("access_token"), op)
 
 
+@broker.subscriber("rpc.identity.rbac.list_user_denies")
+async def rpc_rbac_list_user_denies(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        return await rbac_flows.list_user_denies(session, user, user_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.add_user_deny")
+async def rpc_rbac_add_user_deny(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        user_id = _opt_int(data, "user_id")
+        permission_id = _opt_int(data, "permission_id")
+        if user_id is None or permission_id is None:
+            raise HTTPException(status_code=422, detail="user_id and permission_id are required")
+        return await rbac_flows.add_user_deny(session, user, user_id, permission_id, reason=data.get("reason"))
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.remove_user_deny")
+async def rpc_rbac_remove_user_deny(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> list[dict]:
+        user_id = _opt_int(data, "user_id")
+        permission_id = _opt_int(data, "permission_id")
+        if user_id is None or permission_id is None:
+            raise HTTPException(status_code=422, detail="user_id and permission_id are required")
+        return await rbac_flows.remove_user_deny(session, user, user_id, permission_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
 @broker.subscriber("rpc.identity.rbac.list_oauth_connections")
 async def rpc_rbac_list_oauth_connections(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
@@ -827,6 +871,8 @@ async def rpc_me_avatar_set(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
     async def op(session: Any, user: Any) -> dict:
+        if user.is_denied("account", "avatar"):
+            raise HTTPException(status_code=403, detail="You are not allowed to change your avatar")
         raw = data.get("content_b64")
         if not isinstance(raw, str) or not raw:
             raise HTTPException(status_code=422, detail="content_b64 is required")
@@ -852,6 +898,8 @@ async def rpc_me_avatar_delete(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
 
     async def op(session: Any, user: Any) -> dict:
+        if user.is_denied("account", "avatar"):
+            raise HTTPException(status_code=403, detail="You are not allowed to change your avatar")
         updated = await avatar_flows.delete_avatar(session, user, s3_client)
         return schemas.AuthUser.model_validate(updated, from_attributes=True).model_dump(mode="json")
 

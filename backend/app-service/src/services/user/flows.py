@@ -1,6 +1,7 @@
 import typing
 from statistics import mean
 
+import sqlalchemy as sa
 from cashews import cache
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
@@ -127,12 +128,27 @@ async def to_pydantic(session: AsyncSession, user: models.User, entities: list[s
     social_accounts: list[schemas.SocialAccountRead] = []
     if any(name in entities for name in _IDENTITY_ENTITIES):
         social_accounts = [
-            schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+            _social_account_read(account)
             for account in sorted(
                 user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
             )
         ]
-    return schemas.UserRead(id=user.id, name=user.name, social_accounts=social_accounts)
+    return schemas.UserRead(
+        id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts
+    )
+
+
+def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccountRead:
+    """Serialize a social account, including display-visibility scopes when the
+    ``visibilities`` relationship is eager-loaded (admin profile dialog). When it
+    isn't loaded we leave the defaults (``visible_global=True``) and never touch
+    the relationship — avoiding a lazy load outside the async greenlet."""
+    read = schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+    if "visibilities" not in sa.inspect(account).unloaded:
+        scopes = list(account.visibilities)
+        read.visible_global = any(v.workspace_id is None for v in scopes)
+        read.visible_workspace_ids = sorted({v.workspace_id for v in scopes if v.workspace_id is not None})
+    return read
 
 
 async def get(session: AsyncSession, user_id: int, entities: list[str]) -> models.User:

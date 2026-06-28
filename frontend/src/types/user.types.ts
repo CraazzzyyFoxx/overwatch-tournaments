@@ -15,6 +15,9 @@ export interface SocialAccount {
   url: string | null;
   is_verified: boolean;
   is_primary: boolean;
+  /** Display visibility (populated by the admin profile dialog read). */
+  visible_global?: boolean;
+  visible_workspace_ids?: number[];
 }
 
 export interface User {

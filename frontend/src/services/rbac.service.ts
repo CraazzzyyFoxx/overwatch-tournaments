@@ -20,6 +20,14 @@ type ListParams = {
   order?: string;
 };
 
+export type RbacUserDeny = {
+  permission_id: number;
+  name: string;
+  resource: string;
+  action: string;
+  description?: string | null;
+};
+
 function normalizeAuthAdminUser(user: AuthAdminUser): AuthAdminUser {
   return {
     ...user,
@@ -162,6 +170,24 @@ export const rbacService = {
     return rbacFetch<void>("/rbac/users/remove-role", {
       method: "POST",
       body: payload,
+    });
+  },
+
+  // Per-user permission denies (negative RBAC). Each call returns the user's full deny list.
+  getUserDenies(userId: number) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies`);
+  },
+
+  addUserDeny(userId: number, permissionId: number) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies`, {
+      method: "POST",
+      body: { permission_id: permissionId },
+    });
+  },
+
+  removeUserDeny(userId: number, permissionId: number) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies/${permissionId}`, {
+      method: "DELETE",
     });
   },
 

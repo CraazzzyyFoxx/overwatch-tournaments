@@ -18,11 +18,11 @@ from src.schemas.admin import user as admin_schemas
 
 
 async def get_user_or_404(session: AsyncSession, user_id: int) -> models.User:
-    """Get a user by ID (with social identities loaded) or raise 404."""
+    """Get a user by ID (with social identities + their visibility scopes) or raise 404."""
     result = await session.execute(
         select(models.User)
         .where(models.User.id == user_id)
-        .options(selectinload(models.User.social_accounts))
+        .options(selectinload(models.User.social_accounts).selectinload(models.SocialAccount.visibilities))
     )
     user = result.scalar_one_or_none()
     if not user:

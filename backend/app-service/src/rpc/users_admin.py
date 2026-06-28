@@ -1,10 +1,12 @@
 """Admin CRUD for users + identities + profile merge + avatar + CSV import,
 relocated from parser-service. Reads of users already live in app-service.
 
-Permission model mirrors the parser routes: user CRUD/identities require the
-global ``user.<action>`` permission; merge is superuser-only; CSV import requires
-the global ``admin`` role. Avatar + CSV are binary/multipart (base64 via the
-gateway binary handler).
+Permission model: user CRUD requires the global ``user.<action>`` permission;
+merge is superuser-only. Social identities are managed by **superusers only**
+(add/update/delete/set_primary); their per-workspace/global display **visibility**
+is a lighter capability gated on ``user.read``. CSV import requires the global
+``admin`` role. Avatar + CSV are binary/multipart (base64 via the gateway binary
+handler).
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import re
 from typing import Any
 
 import httpx
+import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 from shared.clients.s3 import upload_avatar
@@ -21,6 +24,7 @@ from shared.core.social import SOCIAL_PROVIDERS, SocialProvider
 from shared.rpc.query import build_query_model
 from shared.services import social_identity as social_svc
 
+from src import models
 from src.core import db
 from src.schemas.admin import user as admin_schemas
 from src.schemas.admin import user_merge as merge_schemas
@@ -45,6 +49,30 @@ def _gate(data: dict, action: str) -> Any:
     if not user.has_permission("user", action):
         raise HTTPException(status_code=403, detail=f"Permission denied: user.{action} required")
     return user
+
+
+def _account_gate(data: dict) -> Any:
+    """Self-service gate: any active user may manage their own accounts unless the
+    ``account.social`` capability is explicitly denied (negative RBAC)."""
+    user = c.actor(data)
+    c.require_active(user)
+    if user.is_denied("account", "social"):
+        raise HTTPException(status_code=403, detail="You are not allowed to manage your accounts")
+    return user
+
+
+async def _resolve_my_player_id(session: Any, user: Any) -> int:
+    """Current user's primary linked player id (404 if the user has no player)."""
+    link = (
+        await session.execute(
+            sa.select(models.AuthUserPlayer)
+            .where(models.AuthUserPlayer.auth_user_id == user.id)
+            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id)
+        )
+    ).scalars().first()
+    if link is None:
+        raise HTTPException(status_code=404, detail="No linked player profile")
+    return link.player_id
 
 
 def _sheets_to_csv_url(url: str) -> str:
@@ -147,7 +175,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.social_add")
     async def _social_add(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _gate(data, "update")
+            c.require_superuser(c.actor(data))
             user_id = c.require_id(data)
             await admin_service.get_user_or_404(session, user_id)
             payload = admin_schemas.SocialAccountCreate.model_validate(c.payload(data))
@@ -167,7 +195,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.social_update")
     async def _social_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _gate(data, "update")
+            c.require_superuser(c.actor(data))
             user_id = c.require_id(data)
             account_id = int(data["account_id"])
             payload = admin_schemas.SocialAccountUpdate.model_validate(c.payload(data))
@@ -191,7 +219,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.social_delete")
     async def _social_delete(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _gate(data, "delete")
+            c.require_superuser(c.actor(data))
             user_id = c.require_id(data)
             account = await social_svc.delete_social_account(
                 session, account_id=int(data["account_id"]), user_id=user_id
@@ -206,7 +234,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.social_set_primary")
     async def _social_set_primary(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _gate(data, "update")
+            c.require_superuser(c.actor(data))
             user_id = c.require_id(data)
             account = await social_svc.set_primary(session, account_id=int(data["account_id"]), user_id=user_id)
             if account is None:
@@ -219,7 +247,9 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.social_set_visibility")
     async def _social_set_visibility(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _gate(data, "update")
+            # Display visibility (per-workspace / global) is a lighter capability than
+            # editing identities: anyone with ``user.read`` may configure it.
+            _gate(data, "read")
             user_id = c.require_id(data)
             account_id = int(data["account_id"])
             account = await social_svc.get_social_account(session, account_id)
@@ -233,6 +263,50 @@ def register(broker: Any, logger: Any) -> None:
             return await _refresh_user(session, user_id)
 
         return await c.envelope(logger, "users.social_set_visibility", op, session_factory=_SF)
+
+    # ── Self-service: a user manages their OWN player's social accounts ───────
+    # Adding is OAuth-only (handled by identity-service link flow); here we only
+    # list / set-primary (verified only) / remove. Gated on the account.social
+    # capability (deny-aware), NOT superuser.
+    @broker.subscriber("rpc.app.users.me_social_list")
+    async def _me_social_list(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _account_gate(data)
+            player_id = await _resolve_my_player_id(session, user)
+            return await _refresh_user(session, player_id)
+
+        return await c.envelope(logger, "users.me_social_list", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.users.me_social_set_primary")
+    async def _me_social_set_primary(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _account_gate(data)
+            player_id = await _resolve_my_player_id(session, user)
+            account = await social_svc.get_social_account(session, int(data["account_id"]))
+            if account is None or account.user_id != player_id:
+                raise HTTPException(status_code=404, detail="Social account not found")
+            if not account.is_verified:
+                raise HTTPException(status_code=400, detail="Only OAuth-verified accounts can be primary")
+            await social_svc.set_primary(session, account_id=account.id, user_id=player_id)
+            await session.commit()
+            return await _refresh_user(session, player_id)
+
+        return await c.envelope(logger, "users.me_social_set_primary", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.users.me_social_delete")
+    async def _me_social_delete(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _account_gate(data)
+            player_id = await _resolve_my_player_id(session, user)
+            account = await social_svc.delete_social_account(
+                session, account_id=int(data["account_id"]), user_id=player_id
+            )
+            if account is None:
+                raise HTTPException(status_code=404, detail="Social account not found")
+            await session.commit()
+            return await _refresh_user(session, player_id)
+
+        return await c.envelope(logger, "users.me_social_delete", op, session_factory=_SF)
 
     # ── Avatar (binary base64) ────────────────────────────────────────────────
     @broker.subscriber("rpc.app.users.avatar_upload")

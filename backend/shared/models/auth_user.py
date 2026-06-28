@@ -65,12 +65,17 @@ class AuthUser(db.TimeStampIntegerMixin):
         permissions: list[dict[str, str]],
         workspaces: list[dict] | None = None,
         workspace_rbac: dict[int, dict] | None = None,
+        denies: list[dict[str, str]] | None = None,
     ) -> None:
         """Attach RBAC data from auth-service /validate response.
 
         When set, has_role() and has_permission() use these cached
         values instead of traversing ORM relationships, avoiding an
         extra DB query and ensuring instant propagation of changes.
+
+        ``denies`` is a per-user deny overlay (negative RBAC): an exact
+        (resource, action) deny overrides any grant — including the
+        superuser/admin bypass — for that action only.
 
         Stored as plain instance attributes (not Mapped) so SQLAlchemy
         ignores them.
@@ -79,6 +84,20 @@ class AuthUser(db.TimeStampIntegerMixin):
         object.__setattr__(self, "_cached_permissions", permissions)
         object.__setattr__(self, "_cached_workspaces", workspaces or [])
         object.__setattr__(self, "_cached_workspace_rbac", workspace_rbac or {})
+        object.__setattr__(self, "_cached_denies", denies or [])
+
+    def is_denied(self, resource: str, action: str) -> bool:
+        """Per-user deny overlay: True when this exact (resource, action) is
+        explicitly denied for the user. Exact match only — never wildcard."""
+        for deny in getattr(self, "_cached_denies", None) or []:
+            if deny.get("resource") == resource and deny.get("action") == action:
+                return True
+        return False
+
+    def can_capability(self, resource: str, action: str) -> bool:
+        """Allow-by-default capability (e.g. ``account.avatar``): every
+        authenticated user may do it unless an explicit deny removes it."""
+        return not self.is_denied(resource, action)
 
     def get_workspace_ids(self) -> list[int]:
         """Return workspace IDs the user is a member of."""
@@ -116,6 +135,8 @@ class AuthUser(db.TimeStampIntegerMixin):
         Checks: superuser -> global admin role -> global permissions
         -> workspace-scoped permissions.
         """
+        if self.is_denied(resource, action):
+            return False
         if self.is_superuser or self._has_admin_equivalent_role():
             return True
 
@@ -207,6 +228,10 @@ class AuthUser(db.TimeStampIntegerMixin):
 
     def has_permission(self, resource: str, action: str) -> bool:
         """Check if user has a specific permission"""
+        # Negative RBAC: an explicit per-user deny overrides any grant,
+        # including the superuser/admin bypass, for this exact action.
+        if self.is_denied(resource, action):
+            return False
         if self.is_superuser or self._has_admin_equivalent_role():
             return True
 
