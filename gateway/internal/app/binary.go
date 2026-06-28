@@ -221,7 +221,8 @@ func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(success)
-	if len(raw) > 0 && string(raw) != "null" {
+	// Relay a literal JSON `null` rather than an empty body (see edge/dispatch.go).
+	if len(raw) > 0 {
 		_, _ = w.Write(raw)
 	}
 }

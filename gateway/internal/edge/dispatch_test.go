@@ -166,3 +166,22 @@ func TestDispatch_NoContent(t *testing.T) {
 		t.Fatalf("204 must have no body, got %q", w.Body.String())
 	}
 }
+
+// A 200 with a null `X | None` payload must relay a literal JSON `null` body, not
+// an empty one — otherwise callers' response.json() throws "Unexpected end of
+// JSON input". Regression for the balancer Form / Google Sheets tabs.
+func TestDispatch_NullData_WritesLiteralNull(t *testing.T) {
+	m := &mockCaller{reply: []byte(`{"ok":true,"data":null}`)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x/{id}", Queue: "q", IDParam: "id", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x/5", "")
+	if w.Code != 200 {
+		t.Fatalf("code=%d", w.Code)
+	}
+	if w.Body.String() != "null" {
+		t.Fatalf("expected literal null body, got %q", w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("content-type=%q", ct)
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
@@ -122,7 +121,8 @@ func (b *Binary) relayAvatar(w http.ResponseWriter, r *http.Request, queue strin
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if len(env.Data) > 0 && strings.TrimSpace(string(env.Data)) != "null" {
+	// Relay a literal JSON `null` rather than an empty body (see edge/dispatch.go).
+	if len(env.Data) > 0 {
 		_, _ = w.Write(env.Data)
 	}
 }
