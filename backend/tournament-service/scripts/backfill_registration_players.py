@@ -1,12 +1,12 @@
 """One-time backfill of player identity for existing registrations.
 
 For every non-deleted registration in an active (not completed/archived)
-tournament, ensures a ``players.user`` + ``UserBattleTag`` exists for its battle
-tags and links ``registration.user_id`` — the same provisioning that now runs on
-new submissions. This lets already-registered players (who weren't yet in the
-analytics system) be picked up by rank collection / the open-profile gate.
+tournament, ensures a ``players.user`` + battlenet ``social_account`` exists for
+its battle tags and links ``registration.user_id`` — the same provisioning that
+now runs on new submissions. This lets already-registered players (who weren't yet
+in the analytics system) be picked up by rank collection / the open-profile gate.
 
-Idempotent (dedups by ``UserBattleTag.battle_tag``), so safe to re-run.
+Idempotent (dedups by normalized battlenet handle), so safe to re-run.
 
 Run once from the ``backend/`` directory so the service ``.env`` is picked up::
 

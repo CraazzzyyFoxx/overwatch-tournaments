@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
 from shared.core import enums
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.schemas.settings import RankCollectionConfig
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,7 +64,7 @@ def _seed_next_eligible(interval_seconds: int) -> sa.ColumnElement[datetime]:
 async def log_fetch(
     session: AsyncSession,
     *,
-    battle_tag_id: int | None,
+    social_account_id: int | None,
     battle_tag: str,
     status: str,
     source: str,
@@ -73,7 +74,7 @@ async def log_fetch(
     """Append a worker fetch attempt to the task-history log (caller commits)."""
     session.add(
         models.RankFetchLog(
-            battle_tag_id=battle_tag_id,
+            social_account_id=social_account_id,
             battle_tag=battle_tag,
             status=str(status),
             source=source,
@@ -89,7 +90,7 @@ def battle_tag_to_slug(battle_tag: str) -> str:
 
 async def ensure_state(
     session: AsyncSession,
-    battle_tag_id: int,
+    social_account_id: int,
     battle_tag: str,
     *,
     priority_tier: int = 0,
@@ -97,12 +98,12 @@ async def ensure_state(
     """Get-or-create the collection state for a battle tag, bumping priority."""
     state = await session.scalar(
         sa.select(models.BattleTagRankState).where(
-            models.BattleTagRankState.battle_tag_id == battle_tag_id
+            models.BattleTagRankState.social_account_id == social_account_id
         )
     )
     if state is None:
         state = models.BattleTagRankState(
-            battle_tag_id=battle_tag_id,
+            social_account_id=social_account_id,
             battle_tag=battle_tag,
             player_id_slug=battle_tag_to_slug(battle_tag),
             priority_tier=priority_tier,
@@ -120,29 +121,37 @@ async def ensure_state(
 async def resolve_user_registration_targets(
     session: AsyncSession,
     user_id: int,
-    registered_lower: set[str],
+    registered_normalized: set[str],
     extra_accounts: int,
 ) -> list[tuple[int, str]]:
     """A user's collection pool: their registered tags + up to N extra accounts.
 
-    ``registered_lower`` is the set of lowercased tags the player entered (main +
-    smurfs). Every matching ``UserBattleTag`` is included; then up to
-    ``extra_accounts`` of their *other* tags (lowest id first, deterministic).
+    ``registered_normalized`` is the set of normalized battlenet handles the
+    player entered (main + smurfs). Every matching ``social_account`` is
+    included; then up to ``extra_accounts`` of their *other* battlenet accounts
+    (lowest id first, deterministic).
     """
     rows = (
         await session.execute(
-            sa.select(models.UserBattleTag.id, models.UserBattleTag.battle_tag)
-            .where(models.UserBattleTag.user_id == user_id)
-            .order_by(models.UserBattleTag.id.asc())
+            sa.select(
+                models.SocialAccount.id,
+                models.SocialAccount.username,
+                models.SocialAccount.username_normalized,
+            )
+            .where(
+                models.SocialAccount.user_id == user_id,
+                models.SocialAccount.provider == SocialProvider.BATTLENET,
+            )
+            .order_by(models.SocialAccount.id.asc())
         )
     ).all()
     targets: list[tuple[int, str]] = []
     extras = 0
-    for tag_id, battle_tag in rows:
-        if battle_tag and battle_tag.lower() in registered_lower:
-            targets.append((tag_id, battle_tag))
+    for account_id, username, normalized in rows:
+        if normalized and normalized in registered_normalized:
+            targets.append((account_id, username))
         elif extras < extra_accounts:
-            targets.append((tag_id, battle_tag))
+            targets.append((account_id, username))
             extras += 1
     return targets
 
@@ -156,7 +165,7 @@ async def resolve_registration_targets(
     extra_accounts: int,
 ) -> list[tuple[int, str]]:
     """Collection pool for one approved registration (registered tags + N extra)."""
-    registered_lower: set[str] = set()
+    registered_normalized: set[str] = set()
     registration = (
         await session.get(models.BalancerRegistration, registration_id)
         if registration_id is not None
@@ -164,15 +173,15 @@ async def resolve_registration_targets(
     )
     if registration is not None:
         if registration.battle_tag:
-            registered_lower.add(registration.battle_tag.lower())
+            registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, registration.battle_tag))
         for smurf in registration.smurf_tags_json or []:
             if smurf:
-                registered_lower.add(str(smurf).lower())
+                registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, str(smurf)))
     elif fallback_battle_tag:
-        registered_lower.add(fallback_battle_tag.lower())
+        registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, fallback_battle_tag))
 
     return await resolve_user_registration_targets(
-        session, user_id, registered_lower, extra_accounts
+        session, user_id, registered_normalized, extra_accounts
     )
 
 
@@ -185,17 +194,21 @@ async def seed_states_for_all_battle_tags(
     ``[now, now+interval_seconds]`` so the first collection cycle is even rather
     than a thundering herd.
     """
-    bt = models.UserBattleTag
+    acc = models.SocialAccount
     state = models.BattleTagRankState
     missing = sa.select(
-        bt.id.label("battle_tag_id"),
-        bt.battle_tag.label("battle_tag"),
-        sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
+        acc.id.label("social_account_id"),
+        acc.username.label("battle_tag"),
+        sa.func.replace(acc.username, "#", "-").label("player_id_slug"),
         _seed_next_eligible(interval_seconds).label("next_eligible_at"),
-    ).where(~sa.exists().where(state.battle_tag_id == bt.id))
+    ).where(
+        acc.provider == SocialProvider.BATTLENET,
+        acc.username.like("%#%"),
+        ~sa.exists().where(state.social_account_id == acc.id),
+    )
     result = await session.execute(
         sa.insert(state).from_select(
-            ["battle_tag_id", "battle_tag", "player_id_slug", "next_eligible_at"],
+            ["social_account_id", "battle_tag", "player_id_slug", "next_eligible_at"],
             missing,
         )
     )
@@ -205,16 +218,16 @@ async def seed_states_for_all_battle_tags(
 async def _registration_collection_targets(
     session: AsyncSession, extra_accounts: int
 ) -> set[int]:
-    """``battle_tag_id`` set to collect under ``registrations_only``.
+    """``social_account_id`` set to collect under ``registrations_only``.
 
     For active-tournament registrations: the tags the player *entered* (main +
-    smurfs), matched to ``UserBattleTag`` rows, plus up to ``extra_accounts`` of
-    each registrant's *other* battle.net accounts. Tournaments that are
-    ``completed``/``archived`` are excluded.
+    smurfs), matched to battlenet ``social_account`` rows, plus up to
+    ``extra_accounts`` of each registrant's *other* battle.net accounts.
+    Tournaments that are ``completed``/``archived`` are excluded.
     """
     reg = models.BalancerRegistration
     tournament = models.Tournament
-    bt = models.UserBattleTag
+    acc = models.SocialAccount
 
     rows = (
         await session.execute(
@@ -227,43 +240,49 @@ async def _registration_collection_targets(
         )
     ).all()
 
-    registered_lower: set[str] = set()
+    registered_normalized: set[str] = set()
     user_ids: set[int] = set()
     for user_id, battle_tag, smurfs in rows:
         if user_id is not None:
             user_ids.add(user_id)
         if battle_tag:
-            registered_lower.add(battle_tag.lower())
+            registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, battle_tag))
         for smurf in smurfs or []:
             if smurf:
-                registered_lower.add(str(smurf).lower())
+                registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, str(smurf)))
 
     target_ids: set[int] = set()
 
-    # Tags explicitly registered (matches by string; covers regs without a user).
-    if registered_lower:
+    # Tags explicitly registered (matches by normalized handle; covers regs without a user).
+    if registered_normalized:
         ids = (
             await session.scalars(
-                sa.select(bt.id).where(sa.func.lower(bt.battle_tag).in_(registered_lower))
+                sa.select(acc.id).where(
+                    acc.provider == SocialProvider.BATTLENET,
+                    acc.username_normalized.in_(registered_normalized),
+                )
             )
         ).all()
         target_ids.update(ids)
 
-    # Per registrant user: registered tags + up to N extra accounts (lowest id first).
+    # Per registrant user: registered accounts + up to N extra accounts (lowest id first).
     if user_ids:
         user_rows = (
             await session.execute(
-                sa.select(bt.user_id, bt.id, bt.battle_tag)
-                .where(bt.user_id.in_(user_ids))
-                .order_by(bt.user_id.asc(), bt.id.asc())
+                sa.select(acc.user_id, acc.id, acc.username_normalized)
+                .where(
+                    acc.user_id.in_(user_ids),
+                    acc.provider == SocialProvider.BATTLENET,
+                )
+                .order_by(acc.user_id.asc(), acc.id.asc())
             )
         ).all()
         extras_per_user: dict[int, int] = {}
-        for uid, tag_id, battle_tag in user_rows:
-            if battle_tag and battle_tag.lower() in registered_lower:
-                target_ids.add(tag_id)
+        for uid, account_id, normalized in user_rows:
+            if normalized and normalized in registered_normalized:
+                target_ids.add(account_id)
             elif extras_per_user.get(uid, 0) < extra_accounts:
-                target_ids.add(tag_id)
+                target_ids.add(account_id)
                 extras_per_user[uid] = extras_per_user.get(uid, 0) + 1
 
     return target_ids
@@ -285,7 +304,7 @@ async def seed_states_from_registrations(
     Tier 2 (manual triggers / approval hook) is never touched. Returns the number
     of new state rows inserted.
     """
-    bt = models.UserBattleTag
+    acc = models.SocialAccount
     state = models.BattleTagRankState
 
     target_ids = await _registration_collection_targets(session, extra_accounts)
@@ -293,7 +312,7 @@ async def seed_states_from_registrations(
     # Demote tier-1 rows that are no longer in the registration pool.
     demote = sa.update(state).where(state.priority_tier == 1)
     if target_ids:
-        demote = demote.where(state.battle_tag_id.notin_(target_ids))
+        demote = demote.where(state.social_account_id.notin_(target_ids))
     await session.execute(demote.values(priority_tier=0))
 
     if not target_ids:
@@ -302,26 +321,26 @@ async def seed_states_from_registrations(
     # Promote existing tier-0 rows that are now in the pool.
     await session.execute(
         sa.update(state)
-        .where(state.priority_tier == 0, state.battle_tag_id.in_(target_ids))
+        .where(state.priority_tier == 0, state.social_account_id.in_(target_ids))
         .values(priority_tier=1)
     )
 
-    # Insert tier-1 rows for pool tags that have no state row yet, spread across
-    # the interval (see ``seed_states_for_all_battle_tags``).
+    # Insert tier-1 rows for pool accounts that have no state row yet, spread
+    # across the interval (see ``seed_states_for_all_battle_tags``).
     missing = sa.select(
-        bt.id.label("battle_tag_id"),
-        bt.battle_tag.label("battle_tag"),
-        sa.func.replace(bt.battle_tag, "#", "-").label("player_id_slug"),
+        acc.id.label("social_account_id"),
+        acc.username.label("battle_tag"),
+        sa.func.replace(acc.username, "#", "-").label("player_id_slug"),
         sa.literal(1).label("priority_tier"),
         _seed_next_eligible(interval_seconds).label("next_eligible_at"),
     ).where(
-        bt.id.in_(target_ids),
-        ~sa.exists().where(state.battle_tag_id == bt.id),
+        acc.id.in_(target_ids),
+        ~sa.exists().where(state.social_account_id == acc.id),
     )
     result = await session.execute(
         sa.insert(state).from_select(
             [
-                "battle_tag_id",
+                "social_account_id",
                 "battle_tag",
                 "player_id_slug",
                 "priority_tier",
@@ -387,16 +406,16 @@ async def select_and_claim_due(
     return rows
 
 
-async def _user_id_for_tag(session: AsyncSession, battle_tag_id: int) -> int | None:
+async def _user_id_for_tag(session: AsyncSession, social_account_id: int) -> int | None:
     return await session.scalar(
-        sa.select(models.UserBattleTag.user_id).where(models.UserBattleTag.id == battle_tag_id)
+        sa.select(models.SocialAccount.user_id).where(models.SocialAccount.id == social_account_id)
     )
 
 
 async def record_result(
     session: AsyncSession,
     *,
-    battle_tag_id: int,
+    social_account_id: int,
     battle_tag: str,
     source: str,
     result: RankFetchResult,
@@ -410,7 +429,7 @@ async def record_result(
     Returns the number of snapshot rows written.
     """
     now = now or _now()
-    state = await ensure_state(session, battle_tag_id, battle_tag)
+    state = await ensure_state(session, social_account_id, battle_tag)
     state.last_checked_at = now
     state.last_error = None
 
@@ -418,7 +437,7 @@ async def record_result(
     written = 0
 
     if status == enums.RankCollectionStatus.ok:
-        user_id = await _user_id_for_tag(session, battle_tag_id)
+        user_id = await _user_id_for_tag(session, social_account_id)
         last_snapshot: models.UserRankSnapshot | None = None
         if user_id is not None:
             for parsed in result.ranks:
@@ -427,7 +446,7 @@ async def record_result(
                 )
                 snapshot = models.UserRankSnapshot(
                     user_id=user_id,
-                    battle_tag_id=battle_tag_id,
+                    social_account_id=social_account_id,
                     battle_tag=battle_tag,
                     platform=parsed.platform,
                     role=parsed.role,
@@ -474,7 +493,7 @@ async def record_result(
     else:  # error
         return await record_failure(
             session,
-            battle_tag_id=battle_tag_id,
+            social_account_id=social_account_id,
             battle_tag=battle_tag,
             status=enums.RankCollectionStatus.error,
             error=result.error,
@@ -489,7 +508,7 @@ async def record_result(
 async def record_failure(
     session: AsyncSession,
     *,
-    battle_tag_id: int,
+    social_account_id: int,
     battle_tag: str,
     status: enums.RankCollectionStatus,
     error: str | None,
@@ -498,7 +517,7 @@ async def record_failure(
 ) -> int:
     """Apply exponential backoff for a transient failure; auto-disable dead tags."""
     now = now or _now()
-    state = await ensure_state(session, battle_tag_id, battle_tag)
+    state = await ensure_state(session, social_account_id, battle_tag)
     state.last_checked_at = now
     state.last_error = (error or "")[:2000] or None
     state.consecutive_failures = (state.consecutive_failures or 0) + 1
@@ -520,7 +539,7 @@ async def record_failure(
 async def defer_tag(
     session: AsyncSession,
     *,
-    battle_tag_id: int,
+    social_account_id: int,
     delay_seconds: int,
     now: datetime | None = None,
 ) -> None:
@@ -528,6 +547,6 @@ async def defer_tag(
     now = now or _now()
     await session.execute(
         sa.update(models.BattleTagRankState)
-        .where(models.BattleTagRankState.battle_tag_id == battle_tag_id)
+        .where(models.BattleTagRankState.social_account_id == social_account_id)
         .values(next_eligible_at=now + timedelta(seconds=delay_seconds))
     )

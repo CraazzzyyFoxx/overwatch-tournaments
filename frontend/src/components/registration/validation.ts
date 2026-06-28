@@ -3,6 +3,7 @@ import type {
   CustomFieldDefinition,
   FieldValidationConfig,
 } from "@/types/registration.types";
+import type { SocialAccount, SocialProvider } from "@/types/user.types";
 
 const BUILT_IN_LABELS: Record<string, string> = {
   battle_tag: "BattleTag",
@@ -10,6 +11,17 @@ const BUILT_IN_LABELS: Record<string, string> = {
   discord_nick: "Discord",
   twitch_nick: "Twitch",
   notes: "Notes",
+};
+
+/**
+ * Identity registration fields that can require an OAuth-verified social
+ * account, mapped to the canonical provider their handle must match. Mirrors
+ * the backend `VERIFIED_FIELD_PROVIDERS` (tournament-service validation.py).
+ */
+export const VERIFIED_FIELD_PROVIDERS: Record<string, SocialProvider> = {
+  battle_tag: "battlenet",
+  discord_nick: "discord",
+  twitch_nick: "twitch",
 };
 
 const BUILT_IN_LABEL_KEYS: Record<string, string> = {
@@ -120,6 +132,65 @@ export function getBuiltInListValidationError(
     if (error) {
       return error;
     }
+  }
+
+  return null;
+}
+
+/** Canonical handle form for matching against a verified account. Mirrors the
+ *  backend `normalize_social_handle`: all providers are casefolded; BattleTags
+ *  additionally have `#`-separator spacing and whitespace stripped. */
+function normalizeSocialHandle(provider: SocialProvider, value: string): string {
+  let text = value.trim();
+  if (provider === "battlenet") {
+    text = text.replace(/\s*#\s*/g, "#").replace(/\s+/g, "");
+  }
+  return text.toLowerCase();
+}
+
+/**
+ * Validate a `require_verified` identity field against the registrant's
+ * OAuth-verified social accounts. Returns a (localized) error when the field is
+ * gated and the player has no verified account for the provider, or the value
+ * doesn't match one. Returns null when the field isn't gated.
+ */
+export function getVerifiedFieldError(
+  fieldKey: string,
+  value: string,
+  config: BuiltInFieldConfig | undefined,
+  verifiedAccounts: readonly SocialAccount[],
+  t?: (key: string, variables?: Record<string, string | number>) => string,
+): string | null {
+  if (!config || config.enabled === false || !config.require_verified) {
+    return null;
+  }
+  const provider = VERIFIED_FIELD_PROVIDERS[fieldKey];
+  if (!provider) {
+    return null;
+  }
+
+  const labelKey = BUILT_IN_LABEL_KEYS[fieldKey];
+  const label = (t && labelKey) ? t(labelKey) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
+
+  const candidates = verifiedAccounts.filter((a) => a.provider === provider && a.is_verified);
+  if (candidates.length === 0) {
+    return t
+      ? t("registration.wizard.validation.verifiedNoAccount", { label })
+      : `Link a verified ${label} account via OAuth to register.`;
+  }
+
+  if (!value.trim()) {
+    return t
+      ? t("registration.wizard.validation.verifiedRequired", { label })
+      : `Select your verified ${label} account.`;
+  }
+
+  const target = normalizeSocialHandle(provider, value);
+  const matched = candidates.some((a) => normalizeSocialHandle(provider, a.username) === target);
+  if (!matched) {
+    return t
+      ? t("registration.wizard.validation.verifiedMismatch", { label })
+      : `${label} must match an OAuth-verified account on your profile.`;
   }
 
   return null;

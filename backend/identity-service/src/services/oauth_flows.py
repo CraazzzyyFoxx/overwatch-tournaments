@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.oauth import OAuthConnection
-from sqlalchemy import delete, select
+from shared.models.social import SocialAccount
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -116,4 +118,25 @@ async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) ->
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"{provider.title()} account not linked"
         )
+
+    # Drop the verified mark from the player's social account(s) for this provider;
+    # the account itself is kept (the user can re-verify by re-linking).
+    provider_social = OAUTH_TO_SOCIAL.get(provider)
+    if provider_social is not None:
+        links = (
+            await session.execute(
+                select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == user.id)
+            )
+        ).scalars().all()
+        for link in links:
+            await session.execute(
+                update(SocialAccount)
+                .where(
+                    SocialAccount.user_id == link.player_id,
+                    SocialAccount.provider == provider_social,
+                    SocialAccount.is_verified.is_(True),
+                )
+                .values(is_verified=False, provider_user_id=None)
+            )
+
     await session.commit()

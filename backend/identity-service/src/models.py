@@ -5,11 +5,13 @@ Models for auth service - imported from shared library
 from shared.models.api_key import ApiKey
 from shared.models.auth_user import AuthUser, AuthUserPlayer, RefreshToken
 from shared.models.rbac import Permission, Role
+from shared.models.social import SocialAccount, SocialAccountVisibility
 from shared.models.user import User
 from shared.models.workspace import Workspace, WorkspaceMember
 
 __all__ = [
     "AuthUser", "RefreshToken", "AuthUserPlayer", "ApiKey",
     "User", "Role", "Permission",
+    "SocialAccount", "SocialAccountVisibility",
     "Workspace", "WorkspaceMember",
 ]

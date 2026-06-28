@@ -11,7 +11,7 @@ __all__ = (
 
 
 class CollectionStatusRead(BaseModel):
-    battle_tag_id: int
+    social_account_id: int
     battle_tag: str
     status: str | None = None
     last_checked_at: datetime | None = None
@@ -24,7 +24,7 @@ class CollectionStatusRead(BaseModel):
 
 class CollectTriggerRequest(BaseModel):
     user_id: int | None = None
-    battle_tag_ids: list[int] | None = None
+    social_account_ids: list[int] | None = None
 
 
 class CollectTriggerResponse(BaseModel):
@@ -35,7 +35,7 @@ class FetchLogRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    battle_tag_id: int | None
+    social_account_id: int | None
     battle_tag: str
     status: str
     source: str

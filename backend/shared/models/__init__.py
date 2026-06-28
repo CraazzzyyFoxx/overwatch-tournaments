@@ -4,6 +4,7 @@ from .hero import *
 from .map import *
 from .user import *
 from .workspace import *
+from .social import *
 from .division_grid import *
 from .tournament import *
 from .stage import *

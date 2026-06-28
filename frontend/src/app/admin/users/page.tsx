@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Plus, Minus, Pencil, Trash2, Upload, ArrowRightLeft } from "lucide-react";
 
@@ -13,6 +12,7 @@ import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { PlayerProfileDialog } from "@/components/admin/PlayerProfileDialog";
 import { UserMergeDialog } from "@/components/admin/UserMergeDialog";
+import { SocialAccountList } from "@/components/social/SocialAccountList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,16 +32,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 import adminService from "@/services/admin.service";
 import type { User } from "@/types/user.types";
@@ -354,82 +347,10 @@ export default function UsersAdminPage() {
       header: "Identities",
       cell: ({ row }) => {
         const user = row.original;
-        const discordCount = user.discord?.length || 0;
-        const battleTagCount = user.battle_tag?.length || 0;
-        const twitchCount = user.twitch?.length || 0;
-        const totalCount = discordCount + battleTagCount + twitchCount;
-
-        if (totalCount === 0) {
-          return (
-            <span className="text-xs text-muted-foreground/50 italic">
-              No identities linked
-            </span>
-          );
+        if (!user.social_accounts?.length) {
+          return <span className="text-xs text-muted-foreground/50 italic">No identities linked</span>;
         }
-
-        return (
-          <TooltipProvider delayDuration={200}>
-            <div className="flex items-center gap-1.5">
-              {discordCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      className="border-[#5865F2]/30 bg-[#5865F2]/10 text-[#5865F2] hover:bg-[#5865F2]/20 gap-1.5 cursor-default"
-                      variant="outline"
-                    >
-                      <Image src="/discord.png" alt="" width={12} height={12} className="h-3 w-3" />
-                      {discordCount}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-medium mb-1">Discord ({discordCount})</p>
-                    {user.discord.map((d) => (
-                      <p key={d.id} className="text-xs opacity-80">{d.name}</p>
-                    ))}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {battleTagCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      className="border-[#148EFF]/30 bg-[#148EFF]/10 text-[#148EFF] hover:bg-[#148EFF]/20 gap-1.5 cursor-default"
-                      variant="outline"
-                    >
-                      <Image src="/battlenet.svg" alt="" width={12} height={12} className="h-3 w-3" />
-                      {battleTagCount}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-medium mb-1">BattleTag ({battleTagCount})</p>
-                    {user.battle_tag.map((bt) => (
-                      <p key={bt.id} className="text-xs opacity-80">{bt.battle_tag}</p>
-                    ))}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {twitchCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      className="border-[#9146FF]/30 bg-[#9146FF]/10 text-[#9146FF] hover:bg-[#9146FF]/20 gap-1.5 cursor-default"
-                      variant="outline"
-                    >
-                      <Image src="/twitch.png" alt="" width={12} height={12} className="h-3 w-3" />
-                      {twitchCount}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-medium mb-1">Twitch ({twitchCount})</p>
-                    {user.twitch.map((tw) => (
-                      <p key={tw.id} className="text-xs opacity-80">{tw.name}</p>
-                    ))}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </TooltipProvider>
-        );
+        return <SocialAccountList accounts={user.social_accounts} linkify={false} />;
       },
     },
     {

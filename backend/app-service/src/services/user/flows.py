@@ -1,6 +1,4 @@
-import asyncio
 import typing
-from datetime import UTC, datetime
 from statistics import mean
 
 from cashews import cache
@@ -17,7 +15,7 @@ from shared.services.division_grid_resolution import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import config, enums, errors, pagination, utils
+from src.core import config, enums, errors, pagination
 from src.core.workspace import get_division_grid_version
 from src.services.hero import flows as hero_flows
 from src.services.map import flows as map_flows
@@ -115,51 +113,26 @@ def _compute_better_worse(
     return "better" if subject < baseline else "worse"
 
 
+_IDENTITY_ENTITIES = ("social_accounts", "battle_tag", "discord", "twitch")
+
+
 async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
+    """Convert a `User` to ``UserRead``. Identities come from the unified
+    ``user.social_accounts`` relationship and are only accessed (and serialized)
+    when an identity entity was requested — and therefore eager-loaded — so this
+    never triggers a lazy load outside the async greenlet. The legacy entity
+    tokens (``battle_tag``/``discord``/``twitch``) are still honored as triggers
+    for backward compatibility with existing callers.
     """
-    Converts a `User` model instance to a Pydantic `UserRead` schema, optionally including related entities.
-
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-        user: The `User` model instance to convert.
-        entities: A list of strings representing the names of related entities to include.
-
-    Returns:
-        A `UserRead` schema instance.
-    """
-    battle_tags = []
-    twitch = []
-    discord = []
-
-    unresolved = datetime(1, 1, 1, tzinfo=UTC)
-    if "battle_tag" in entities:
-        battle_tags = [schemas.UserBattleTagRead.model_validate(tag, from_attributes=True) for tag in user.battle_tag]
-    if "twitch" in entities:
-        twitch = [
-            schemas.UserTwitchRead.model_validate(twitch, from_attributes=True)
-            for twitch in sorted(
-                user.twitch,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
+    social_accounts: list[schemas.SocialAccountRead] = []
+    if any(name in entities for name in _IDENTITY_ENTITIES):
+        social_accounts = [
+            schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+            for account in sorted(
+                user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
             )
         ]
-    if "discord" in entities:
-        discord = [
-            schemas.UserDiscordRead.model_validate(discord, from_attributes=True)
-            for discord in sorted(
-                user.discord,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
-            )
-        ]
-
-    return schemas.UserRead(
-        id=user.id,
-        name=user.name,
-        battle_tag=battle_tags,
-        twitch=twitch,
-        discord=discord,
-    )
+    return schemas.UserRead(id=user.id, name=user.name, social_accounts=social_accounts)
 
 
 async def get(session: AsyncSession, user_id: int, entities: list[str]) -> models.User:
@@ -815,7 +788,7 @@ async def search_by_name(session: AsyncSession, name: str, fields: list[str]) ->
         A `UserSearch` schema instance.
     """
     users = await service.search_by_name(session, name, fields)
-    return [schemas.UserSearch(id=user.user_id, name=user.battle_tag) for user in users]
+    return [schemas.UserSearch(id=user.user_id, name=user.username) for user in users]
 
 
 async def get_read(session: AsyncSession, user_id: int, entities: list[str]) -> schemas.UserRead:

@@ -4,6 +4,7 @@ from shared.models.hero import *
 from shared.models.map import *
 from shared.models.user import *
 from shared.models.workspace import *
+from shared.models.social import *
 from shared.models.division_grid import *
 from shared.models.tournament import *
 from shared.models.stage import *

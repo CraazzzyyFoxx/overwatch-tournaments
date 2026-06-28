@@ -1,9 +1,9 @@
 import csv
 import re
-from datetime import UTC, datetime
 
 from loguru import logger
 from pydantic import ValidationError
+from shared.core.social import SocialProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -11,50 +11,36 @@ from src.core import config, errors
 
 from . import service
 
+
+def _usernames(player: models.User, provider: str) -> list[str]:
+    """Usernames the player already has for a provider (from the unified table)."""
+    return [a.username for a in player.social_accounts if a.provider == provider]
+
 battle_tag_validator = re.compile(config.settings.battle_tag_regex, re.UNICODE)
 
 
+_IDENTITY_ENTITIES = ("social_accounts", "battle_tag", "discord", "twitch")
+
+
 async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
-    battle_tags: list[schemas.UserBattleTagRead] = []
-    twitch: list[schemas.UserTwitchRead] = []
-    discord: list[schemas.UserDiscordRead] = []
-
-    unresolved = datetime(1, 1, 1, tzinfo=UTC)
-    if "battle_tag" in entities:
-        battle_tags = [
-            schemas.UserBattleTagRead.model_validate(tag, from_attributes=True)
-            for tag in user.battle_tag
-        ]
-    if "twitch" in entities:
-        twitch = [
-            schemas.UserTwitchRead.model_validate(twitch_identity, from_attributes=True)
-            for twitch_identity in sorted(
-                user.twitch,
-                key=lambda identity: unresolved
-                if identity.updated_at is None
-                else identity.updated_at,
-                reverse=True,
+    """Convert a ``User`` to ``UserRead``. Identities come from the unified
+    ``user.social_accounts`` relationship and are only accessed when an identity
+    entity was requested (and therefore eager-loaded), so this never triggers a
+    lazy load outside the async greenlet. Legacy entity tokens are still honored.
+    """
+    social_accounts: list[schemas.SocialAccountRead] = []
+    if any(name in entities for name in _IDENTITY_ENTITIES):
+        social_accounts = [
+            schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+            for account in sorted(
+                user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
             )
         ]
-    if "discord" in entities:
-        discord = [
-            schemas.UserDiscordRead.model_validate(discord_identity, from_attributes=True)
-            for discord_identity in sorted(
-                user.discord,
-                key=lambda identity: unresolved
-                if identity.updated_at is None
-                else identity.updated_at,
-                reverse=True,
-            )
-        ]
-
     return schemas.UserRead(
         id=user.id,
         name=user.name,
         avatar_url=user.avatar_url,
-        battle_tag=battle_tags,
-        twitch=twitch,
-        discord=discord,
+        social_accounts=social_accounts,
     )
 
 
@@ -99,32 +85,30 @@ async def find_by_battle_tag(session: AsyncSession, battle_tag: str) -> models.U
 
 
 async def create_or_ignore_battle_tags(session: AsyncSession, player: models.User, in_battle_tags: list[str]) -> None:
-    battle_tags = [tag.battle_tag for tag in player.battle_tag]
+    battle_tags = _usernames(player, SocialProvider.BATTLENET)
 
-    maybe_need_add_battle_tags = list(in_battle_tags)
-    for battle_tag in set(maybe_need_add_battle_tags):
-        if battle_tag and battle_tag not in battle_tags and not await service.get_battle_tag(session, battle_tag):
-            try:
-                name, tag = battle_tag.split("#")
-                await service.create_battle_tag(session, player, battle_tag=battle_tag, name=name, tag=tag)
-            except ValueError:
-                pass
+    for battle_tag in set(in_battle_tags):
+        if (
+            battle_tag
+            and "#" in battle_tag
+            and battle_tag not in battle_tags
+            and not await service.get_battle_tag(session, battle_tag)
+        ):
+            await service.create_battle_tag(session, player, battle_tag=battle_tag)
 
 
 async def create_or_ignore_discords(session: AsyncSession, player: models.User, in_discords: list[str]) -> None:
-    discords = [discord.name for discord in player.discord]
+    discords = _usernames(player, SocialProvider.DISCORD)
 
-    maybe_need_add_discords = list(in_discords)
-    for discord in set(maybe_need_add_discords):
+    for discord in set(in_discords):
         if discord and discord not in discords and not await service.get_discord(session, discord):
             await service.create_discord(session, player, discord=discord)
 
 
 async def create_or_ignore_twitches(session: AsyncSession, player: models.User, in_twitches: list[str]) -> None:
-    twitches = [twitch.name for twitch in player.twitch]
+    twitches = _usernames(player, SocialProvider.TWITCH)
 
-    maybe_need_add_twitches = list(in_twitches)
-    for twitch in set(maybe_need_add_twitches):
+    for twitch in set(in_twitches):
         if twitch and twitch not in twitches and not await service.get_twitch(session, twitch):
             await service.create_twitch(session, player, twitch=twitch)
 
@@ -144,8 +128,12 @@ async def create(session: AsyncSession, data_in: schemas.UserCSV) -> models.User
         await create_or_ignore_battle_tags(session, user, [*data_in.smurfs, data_in.battle_tag])
         await service.update(session, user, name=data_in.battle_tag)
 
-        twitch_names: dict[str, models.UserTwitch] = {twitch.name: twitch for twitch in user.twitch}
-        discord_names: dict[str, models.UserDiscord] = {discord.name: discord for discord in user.discord}
+        twitch_names: dict[str, models.SocialAccount] = {
+            a.username: a for a in user.social_accounts if a.provider == SocialProvider.TWITCH
+        }
+        discord_names: dict[str, models.SocialAccount] = {
+            a.username: a for a in user.social_accounts if a.provider == SocialProvider.DISCORD
+        }
 
         if data_in.twitch:
             if data_in.twitch not in twitch_names.keys():

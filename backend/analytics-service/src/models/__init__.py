@@ -16,6 +16,7 @@ from shared.models.hero import *
 from shared.models.log_processing import *
 from shared.models.map import *
 from shared.models.match import *
+from shared.models.social import *
 from shared.models.stage import *
 from shared.models.standings import *
 from shared.models.team import *

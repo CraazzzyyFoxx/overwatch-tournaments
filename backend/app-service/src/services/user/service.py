@@ -2,6 +2,7 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
 from shared.models import mv_hero_global_stats
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
@@ -40,8 +41,6 @@ away_score_case = sa.case(
 )
 
 winrate_sum = sa.func.sum(home_score_case) / (sa.func.sum(home_score_case) + sa.func.sum(away_score_case))
-
-USER_RELATION_ENTITIES = {"battle_tag", "discord", "twitch"}
 
 OVERVIEW_HERO_METRICS: tuple[enums.LogStatsName, ...] = (
     enums.LogStatsName.Eliminations,
@@ -84,57 +83,12 @@ def user_entities(in_entities: list[str], child: typing.Any | None = None) -> li
         A list of SQLAlchemy load options (`_AbstractLoad`) for the specified entities.
     """
     entities = []
-    if "battle_tag" in in_entities:
-        entities.append(utils.join_entity(child, models.User.battle_tag))
-    if "discord" in in_entities:
-        entities.append(utils.join_entity(child, models.User.discord))
-    if "twitch" in in_entities:
-        entities.append(utils.join_entity(child, models.User.twitch))
+    # Unified identity source consumed by ``to_pydantic``. Loaded whenever any
+    # identity entity token is requested (legacy ``battle_tag``/``discord``/
+    # ``twitch`` tokens are still accepted for caller/API compatibility).
+    if any(name in in_entities for name in ("social_accounts", "battle_tag", "discord", "twitch")):
+        entities.append(utils.join_entity(child, models.User.social_accounts))
     return entities
-
-
-def join_entities(query: sa.Select, in_entities: list[str]) -> sa.Select:
-    """
-    Joins related entities to a SQLAlchemy query based on the provided entity names.
-
-    Args:
-        query: The SQLAlchemy query to modify.
-        in_entities: A list of strings representing the names of related entities to join.
-
-    Returns:
-        The modified SQLAlchemy query with the specified joins.
-    """
-    if "battle_tag" in in_entities:
-        query = query.join(models.UserBattleTag, models.User.id == models.UserBattleTag.user_id)
-    if "discord" in in_entities:
-        query = query.join(models.UserDiscord, models.User.id == models.UserDiscord.user_id)
-    if "twitch" in in_entities:
-        query = query.join(models.UserTwitch, models.User.id == models.UserTwitch.user_id)
-
-    return query
-
-
-def _sort_field_name(sort: str) -> str:
-    if sort.startswith("similarity"):
-        parts = sort.split(":", 1)
-        if len(parts) == 2:
-            return parts[1]
-    return sort
-
-
-def _relation_entities_for_user_query(fields: list[str], sort: str) -> list[str]:
-    relation_entities: set[str] = set()
-
-    for field in fields:
-        top_level_field = field.split(".", 1)[0]
-        if top_level_field in USER_RELATION_ENTITIES:
-            relation_entities.add(top_level_field)
-
-    sort_field = _sort_field_name(sort).split(".", 1)[0]
-    if sort_field in USER_RELATION_ENTITIES:
-        relation_entities.add(sort_field)
-
-    return list(relation_entities)
 
 
 def _hero_direction_score(value_column: sa.ColumnElement[typing.Any], name_column: sa.ColumnElement[typing.Any]):
@@ -859,11 +813,6 @@ async def get_all(
     """
     query = sa.select(models.User).options(*user_entities(params.entities))
     total_query = sa.select(sa.func.count(sa.distinct(models.User.id)))
-
-    relation_entities = _relation_entities_for_user_query(params.fields, params.sort)
-    if relation_entities:
-        query = join_entities(query, relation_entities)
-        total_query = join_entities(total_query, relation_entities)
 
     if params.query:
         query = params.apply_search(query, models.User)
@@ -1866,52 +1815,42 @@ async def get_users_hero_compare_stats(
     return playtime_payload, stats_payload
 
 
-async def search_by_name(session: AsyncSession, query: str, fields: list[str]) -> typing.Sequence[models.UserBattleTag]:
-    """
-    Retrieves a `UserBattleTag` model instance by its name, optionally including related entities.
+async def search_by_name(
+    session: AsyncSession, query: str, fields: list[str]
+) -> typing.Sequence[models.SocialAccount]:
+    """Search battlenet ``social_account`` rows by handle (autocomplete).
 
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-        query: The name of the user to retrieve.
-        fields: A list of strings representing the fields to search by.
-
-    Returns:
-        A `UserBattleTag` model instance if found, otherwise `None`.
+    ``fields`` is accepted for API compatibility; search is always on the unified
+    ``social_account.username`` (battlenet). Returns up to 10 matches ranked by
+    exact / prefix / trigram similarity.
     """
     query = query.strip().replace("-", "#")
     if not query or len(query) < 2:
         return []
 
-    if not fields:
-        fields = ["battle_tag"]
-
-    columns = [models.UserBattleTag.depth_get_column(field.split(".")) for field in fields]
-    if not columns:
-        return []
-
+    column = models.SocialAccount.username
     like_query = f"{query}%" if len(query) < 3 else f"%{query}%"
     query_lower = query.lower()
 
-    exact_scores = [sa.case((sa.func.lower(column) == query_lower, 0), else_=1) for column in columns]
-    prefix_scores = [sa.case((sa.func.lower(column).like(f"{query_lower}%"), 0), else_=1) for column in columns]
-    similarity_scores = [sa.func.word_similarity(column, query) for column in columns]
+    exact_score = sa.case((sa.func.lower(column) == query_lower, 0), else_=1)
+    prefix_score = sa.case((sa.func.lower(column).like(f"{query_lower}%"), 0), else_=1)
+    similarity_score = sa.func.word_similarity(column, query)
 
-    best_exact = sa.func.least(*exact_scores) if len(exact_scores) > 1 else exact_scores[0]
-    best_prefix = sa.func.least(*prefix_scores) if len(prefix_scores) > 1 else prefix_scores[0]
-    best_similarity = sa.func.greatest(*similarity_scores) if len(similarity_scores) > 1 else similarity_scores[0]
-
-    conditions = [column.ilike(like_query) for column in columns]
+    conditions = [column.ilike(like_query)]
     if len(query) >= 3:
-        conditions.extend([column.op("%")(query) for column in columns])
+        conditions.append(column.op("%")(query))
 
     stmt = (
-        sa.select(models.UserBattleTag)
-        .where(sa.or_(*conditions))
+        sa.select(models.SocialAccount)
+        .where(
+            models.SocialAccount.provider == SocialProvider.BATTLENET,
+            sa.or_(*conditions),
+        )
         .order_by(
-            best_exact.asc(),
-            best_prefix.asc(),
-            best_similarity.desc(),
-            models.UserBattleTag.battle_tag.asc(),
+            exact_score.asc(),
+            prefix_score.asc(),
+            similarity_score.desc(),
+            column.asc(),
         )
         .limit(10)
     )
@@ -1937,16 +1876,26 @@ async def find_by_battle_tag(session: AsyncSession, battle_tag: str, entities: l
 
     battle_tag_lower = normalized_battle_tag.lower()
     exact_user_name_match = sa.func.lower(models.User.name) == battle_tag_lower
+    # Battlenet identity now lives in players.social_account; match the full
+    # normalized handle or the in-game name part (before ``#``), case-insensitive.
+    bnet_name_part = sa.func.lower(sa.func.split_part(models.SocialAccount.username, "#", 1))
 
     query = (
         sa.select(models.User)
         .options(*user_entities(entities))
-        .outerjoin(models.UserBattleTag, models.User.id == models.UserBattleTag.user_id)
+        .outerjoin(
+            models.SocialAccount,
+            sa.and_(
+                models.User.id == models.SocialAccount.user_id,
+                models.SocialAccount.provider == SocialProvider.BATTLENET,
+            ),
+        )
         .where(
             sa.or_(
                 exact_user_name_match,
-                sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag_lower,
-                sa.func.lower(models.UserBattleTag.name) == battle_tag_lower,
+                models.SocialAccount.username_normalized
+                == normalize_social_handle(SocialProvider.BATTLENET, normalized_battle_tag),
+                bnet_name_part == battle_tag_lower,
             )
         )
         .order_by(
@@ -1974,8 +1923,12 @@ async def get_by_discord(session: AsyncSession, discord: str, entities: list[str
     query = (
         sa.select(models.User)
         .options(*user_entities(entities))
-        .join(models.UserDiscord, models.User.id == models.UserDiscord.user_id)
-        .where(models.UserDiscord.name == discord)
+        .join(models.SocialAccount, models.User.id == models.SocialAccount.user_id)
+        .where(
+            models.SocialAccount.provider == SocialProvider.DISCORD,
+            models.SocialAccount.username_normalized
+            == normalize_social_handle(SocialProvider.DISCORD, discord),
+        )
     )
     result = await session.scalars(query)
     return result.unique().first()

@@ -93,11 +93,8 @@ async def get_issues(
         models.Tournament.id.not_in(tournaments_with_stages), *ws_filters
     )
 
-    # Users that have no discord, battle_tag, or twitch identities
-    users_with_discord = sa.select(models.UserDiscord.user_id)
-    users_with_btag = sa.select(models.UserBattleTag.user_id)
-    users_with_twitch = sa.select(models.UserTwitch.user_id)
-    users_with_any = users_with_discord.union(users_with_btag, users_with_twitch)
+    # Users that have no social account (battle_tag / discord / twitch / …)
+    users_with_any = sa.select(models.SocialAccount.user_id)
     users_without_identities_q = sa.select(sa.func.count(models.User.id)).where(
         models.User.id.not_in(users_with_any)
     )

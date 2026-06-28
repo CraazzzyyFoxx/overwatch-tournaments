@@ -9,7 +9,7 @@ function historyQuery(params: RankHistoryQuery = {}) {
   return {
     platform: params.platform,
     role: params.role,
-    battle_tag_id: params.battleTagId,
+    social_account_id: params.socialAccountId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
     granularity: params.granularity ?? "raw"

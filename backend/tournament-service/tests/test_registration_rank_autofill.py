@@ -470,7 +470,7 @@ def _snap(
     return SimpleNamespace(
         rank_value=rank_value,
         role=role,
-        battle_tag_id=tag_id,
+        social_account_id=tag_id,
         platform="pc",
         division="master",
         tier=3,

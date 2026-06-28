@@ -27,7 +27,7 @@ class RankSeries(BaseModel):
     and draw a line per role, or fix a role and draw a line per battle tag.
     """
 
-    battle_tag_id: int
+    social_account_id: int
     battle_tag: str
     role: str
     platform: str
@@ -44,7 +44,7 @@ class RankHistoryResponse(BaseModel):
 
 
 class CurrentRank(BaseModel):
-    battle_tag_id: int
+    social_account_id: int
     battle_tag: str
     role: str
     platform: str

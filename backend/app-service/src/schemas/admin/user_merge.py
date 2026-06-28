@@ -32,9 +32,9 @@ class UserMergeFieldPolicy(BaseModel):
 
 
 class UserMergeIdentitySelection(BaseModel):
-    discord_ids: list[int] = Field(default_factory=list)
-    battle_tag_ids: list[int] = Field(default_factory=list)
-    twitch_ids: list[int] = Field(default_factory=list)
+    # social_account ids on the source profile to move to the target (others are
+    # dropped with the deleted source). Replaces the legacy per-provider id lists.
+    social_account_ids: list[int] = Field(default_factory=list)
 
 
 class UserMergeExecuteRequest(UserMergePreviewRequest):
@@ -45,6 +45,7 @@ class UserMergeExecuteRequest(UserMergePreviewRequest):
 
 class UserMergeIdentityOption(BaseModel):
     id: int
+    provider: str
     value: str
     duplicate_on_target: bool = False
 
@@ -53,9 +54,7 @@ class UserMergeUserSummary(BaseModel):
     id: int
     name: str
     avatar_url: str | None = None
-    discord: list[UserMergeIdentityOption]
-    battle_tag: list[UserMergeIdentityOption]
-    twitch: list[UserMergeIdentityOption]
+    social_accounts: list[UserMergeIdentityOption]
     auth_links: int = 0
 
 
@@ -79,8 +78,8 @@ class UserMergePreviewResponse(BaseModel):
 
 
 class UserMergeIdentityResult(BaseModel):
-    moved: dict[str, list[int]]
-    deduped: dict[str, list[int]]
+    moved: list[int]
+    deduped: list[int]
 
 
 class UserMergeExecuteResponse(BaseModel):

@@ -313,6 +313,11 @@ export interface BuiltInFieldConfig {
   validation?: FieldValidationConfig | null;
   /** `top_heroes` field only: max heroes selectable per role (default 5). */
   max_heroes?: number | null;
+  /**
+   * Identity fields (battle_tag/discord_nick/twitch_nick) only: require the
+   * submitted handle to match one of the registrant's OAuth-verified accounts.
+   */
+  require_verified?: boolean;
 }
 
 export interface SubroleOption {

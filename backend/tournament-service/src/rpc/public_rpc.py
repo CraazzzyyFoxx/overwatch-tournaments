@@ -71,7 +71,10 @@ from src.services.encounter import captain as captain_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import map_veto as map_veto_service
 from src.services.registration import service as reg_service
-from src.services.registration.validation import validate_registration_input
+from src.services.registration.validation import (
+    validate_registration_input,
+    validate_verified_identity,
+)
 
 
 # --- helpers -----------------------------------------------------------------
@@ -371,6 +374,15 @@ def register(broker: Any, logger: Any) -> None:
             if primary_link is not None:
                 user_player_id = primary_link.player_id
 
+            # Identity fields flagged ``require_verified`` must match an
+            # OAuth-verified social account on the registrant's player profile.
+            await validate_verified_identity(
+                session,
+                form=form,
+                payload=body,
+                player_id=user_player_id,
+            )
+
             role_entries = reg_service.build_registration_roles(
                 body.roles,
                 hero_catalog=hero_catalog,
@@ -450,6 +462,13 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=400, detail="Cannot update a registration that is not pending")
 
             validate_registration_input(form, body, partial=True)
+            await validate_verified_identity(
+                session,
+                form=form,
+                payload=body,
+                player_id=reg.user_id,
+                partial=True,
+            )
 
             # update_registration commits internally.
             updated = await reg_service.update_registration(

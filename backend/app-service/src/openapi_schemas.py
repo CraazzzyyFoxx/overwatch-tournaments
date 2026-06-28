@@ -25,12 +25,9 @@ from src.schemas.admin.gamemode import GamemodeCreate, GamemodeUpdate
 from src.schemas.admin.hero import HeroCreate, HeroUpdate
 from src.schemas.admin.map import MapCreate, MapUpdate
 from src.schemas.admin.user import (
-    BattleTagIdentityCreate,
-    BattleTagIdentityUpdate,
-    DiscordIdentityCreate,
-    DiscordIdentityUpdate,
-    TwitchIdentityCreate,
-    TwitchIdentityUpdate,
+    SocialAccountCreate,
+    SocialAccountUpdate,
+    SocialVisibilityUpdate,
     UserCreate,
     UserUpdate,
 )
@@ -122,12 +119,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.users.admin_update": Op(request=UserUpdate, response=schemas.UserRead),
     "rpc.app.users.merge_preview": Op(request=UserMergePreviewRequest, response=UserMergePreviewResponse),
     "rpc.app.users.merge_execute": Op(request=UserMergeExecuteRequest, response=UserMergeExecuteResponse),
-    "rpc.app.users.discord_add": Op(request=DiscordIdentityCreate, response=schemas.UserDiscordRead),
-    "rpc.app.users.discord_update": Op(request=DiscordIdentityUpdate, response=schemas.UserDiscordRead),
-    "rpc.app.users.battletag_add": Op(request=BattleTagIdentityCreate, response=schemas.UserBattleTagRead),
-    "rpc.app.users.battletag_update": Op(request=BattleTagIdentityUpdate, response=schemas.UserBattleTagRead),
-    "rpc.app.users.twitch_add": Op(request=TwitchIdentityCreate, response=schemas.UserTwitchRead),
-    "rpc.app.users.twitch_update": Op(request=TwitchIdentityUpdate, response=schemas.UserTwitchRead),
+    "rpc.app.users.social_add": Op(request=SocialAccountCreate, response=schemas.UserRead),
+    "rpc.app.users.social_update": Op(request=SocialAccountUpdate, response=schemas.UserRead),
+    "rpc.app.users.social_delete": Op(response=schemas.UserRead),
+    "rpc.app.users.social_set_primary": Op(response=schemas.UserRead),
+    "rpc.app.users.social_set_visibility": Op(request=SocialVisibilityUpdate, response=schemas.UserRead),
     "rpc.app.users.avatar_delete": Op(response=schemas.UserRead),
     "rpc.app.users.avatar_upload": Op(response=schemas.UserRead),
 }

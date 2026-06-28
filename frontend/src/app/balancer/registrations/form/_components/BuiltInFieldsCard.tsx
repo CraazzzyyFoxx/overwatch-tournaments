@@ -41,6 +41,11 @@ export function BuiltInFieldsCard({
                           Required
                         </span>
                       )}
+                      {cfg.require_verified && cfg.enabled && (
+                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                          Verified
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">{def.description}</p>
                   </div>
@@ -116,6 +121,19 @@ export function BuiltInFieldsCard({
 
                   {/* Column 4: Controls */}
                   <div className="flex items-center justify-end gap-3 justify-self-end">
+                    {cfg.enabled && def.supportsVerified && (
+                      <label
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer"
+                        title="Require an OAuth-verified account; the registrant picks from their verified accounts."
+                      >
+                        <Switch
+                          checked={cfg.require_verified ?? false}
+                          onCheckedChange={(checked) => onUpdate(def.key, { require_verified: checked })}
+                          className="scale-75"
+                        />
+                        Verified
+                      </label>
+                    )}
                     {cfg.enabled && def.supportsRequired !== false && (
                       <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
                         <Switch

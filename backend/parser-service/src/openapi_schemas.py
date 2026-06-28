@@ -23,7 +23,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.parser.logs.retry": Op(response=admin_logs_schemas.LogRecordRead),
     "rpc.parser.logs.upload": Op(response=admin_logs_schemas.LogUploadResponse),
     # ── OverFast rank (public reads) ───────────────────────────────────────
-    "rpc.parser.rank.user_history": Op(response=schemas.RankHistoryResponse, query_params=(QueryParam("granularity"), QueryParam("date_from"), QueryParam("date_to"), QueryParam("battle_tag_id", "integer"), QueryParam("platform"), QueryParam("role"))),
+    "rpc.parser.rank.user_history": Op(response=schemas.RankHistoryResponse, query_params=(QueryParam("granularity"), QueryParam("date_from"), QueryParam("date_to"), QueryParam("social_account_id", "integer"), QueryParam("platform"), QueryParam("role"))),
     "rpc.parser.rank.battle_tag_history": Op(response=schemas.RankHistoryResponse, query_params=(QueryParam("granularity"), QueryParam("date_from"), QueryParam("date_to"), QueryParam("platform"), QueryParam("role"))),
     "rpc.parser.rank.user_current": Op(response=schemas.CurrentRanksResponse, query_params=(QueryParam("platform", required=True),)),
     "rpc.parser.rank.fetch_log": Op(response=rc_schemas.FetchLogRead, response_array=True),

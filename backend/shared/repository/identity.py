@@ -19,20 +19,73 @@ class UserRepository(BaseRepository[models.User]):
         return await self.get_by(session, name=name)
 
 
-class UserIdentityRepository:
-    battle_tags = BaseRepository(models.UserBattleTag)
-    discord = BaseRepository(models.UserDiscord)
-    twitch = BaseRepository(models.UserTwitch)
-    external_accounts = BaseRepository(models.UserExternalAccount)
+class SocialAccountRepository(BaseRepository[models.SocialAccount]):
+    """Unified player social identities (battlenet/discord/twitch/boosty/…)."""
 
-    async def get_battle_tag(self, session: AsyncSession, battle_tag: str) -> models.UserBattleTag | None:
-        return await self.battle_tags.get_by(session, battle_tag=battle_tag)
+    def __init__(self) -> None:
+        super().__init__(models.SocialAccount)
 
-    async def get_discord(self, session: AsyncSession, name: str) -> models.UserDiscord | None:
-        return await self.discord.get_by(session, name=name)
+    async def list_by_user(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        *,
+        providers: Sequence[str] | None = None,
+    ) -> Sequence[models.SocialAccount]:
+        query = self.select().where(models.SocialAccount.user_id == user_id)
+        if providers:
+            query = query.where(models.SocialAccount.provider.in_(list(providers)))
+        query = query.order_by(
+            models.SocialAccount.provider,
+            models.SocialAccount.is_primary.desc(),
+            models.SocialAccount.id,
+        )
+        result = await session.execute(query)
+        return result.unique().scalars().all()
 
-    async def get_twitch(self, session: AsyncSession, name: str) -> models.UserTwitch | None:
-        return await self.twitch.get_by(session, name=name)
+    async def get_by_provider_subject(
+        self,
+        session: AsyncSession,
+        *,
+        provider: str,
+        provider_user_id: str,
+    ) -> models.SocialAccount | None:
+        return await self.get_by(session, provider=provider, provider_user_id=provider_user_id)
+
+    async def find_by_handle(
+        self,
+        session: AsyncSession,
+        *,
+        provider: str,
+        username_normalized: str,
+        user_id: int | None = None,
+    ) -> models.SocialAccount | None:
+        filters: dict[str, object] = {
+            "provider": provider,
+            "username_normalized": username_normalized,
+        }
+        if user_id is not None:
+            filters["user_id"] = user_id
+        return await self.get_by(session, **filters)
+
+
+class SocialAccountVisibilityRepository(BaseRepository[models.SocialAccountVisibility]):
+    def __init__(self) -> None:
+        super().__init__(models.SocialAccountVisibility)
+
+    async def list_for_accounts(
+        self,
+        session: AsyncSession,
+        account_ids: Sequence[int],
+    ) -> Sequence[models.SocialAccountVisibility]:
+        if not account_ids:
+            return []
+        result = await session.execute(
+            sa.select(models.SocialAccountVisibility).where(
+                models.SocialAccountVisibility.account_id.in_(list(account_ids))
+            )
+        )
+        return result.scalars().all()
 
 
 class AuthUserRepository(BaseRepository[models.AuthUser]):

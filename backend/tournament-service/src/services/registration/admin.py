@@ -16,8 +16,10 @@ from shared.core import http_status as status
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.core.social import SocialProvider
 from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, normalize_sub_role
 from shared.hero_catalog import HeroCatalog
+from shared.services import social_identity
 from shared.services.division_grid_normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
@@ -1700,7 +1702,12 @@ async def _load_rank_autofill_registrations(
 async def _load_main_battle_tags_by_key(
     session: AsyncSession,
     registrations: list[models.BalancerRegistration],
-) -> dict[str, models.UserBattleTag]:
+) -> dict[str, models.SocialAccount]:
+    """Map normalized battletag key → the battlenet ``social_account`` it belongs to.
+
+    ``social_account.username_normalized`` (battlenet) is exactly
+    ``normalize_battle_tag_key`` of the handle, so registration keys match directly.
+    """
     tag_keys = {
         key
         for registration in registrations
@@ -1709,28 +1716,33 @@ async def _load_main_battle_tags_by_key(
     if not tag_keys:
         return {}
 
-    tag_key_expr = sa.func.replace(sa.func.lower(models.UserBattleTag.battle_tag), " ", "")
-    result = await session.execute(sa.select(models.UserBattleTag).where(tag_key_expr.in_(tag_keys)))
+    acc = models.SocialAccount
+    result = await session.execute(
+        sa.select(acc).where(
+            acc.provider == SocialProvider.BATTLENET,
+            acc.username_normalized.in_(tag_keys),
+        )
+    )
     return {
-        key: battle_tag
-        for battle_tag in result.scalars().all()
-        if (key := normalize_battle_tag_key(battle_tag.battle_tag))
+        account.username_normalized: account
+        for account in result.scalars().all()
+        if account.username_normalized
     }
 
 
-async def _load_ow_rank_signals_by_battle_tag_id(
+async def _load_ow_rank_signals_by_social_account_id(
     session: AsyncSession,
-    battle_tag_ids: list[int],
+    social_account_ids: list[int],
     now: datetime,
     week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> dict[int, dict[str, _OwRankSignals]]:
-    """Return per (battle_tag_id, rank_role) the weekly OW rank composite + latest snapshot."""
-    if not battle_tag_ids:
+    """Return per (social_account_id, rank_role) the weekly OW rank composite + latest snapshot."""
+    if not social_account_ids:
         return {}
     result = await session.execute(
         sa.select(models.UserRankSnapshot)
         .where(
-            models.UserRankSnapshot.battle_tag_id.in_(battle_tag_ids),
+            models.UserRankSnapshot.social_account_id.in_(social_account_ids),
             models.UserRankSnapshot.role.in_(set(RANK_ROLE_BY_REGISTRATION_ROLE.values())),
             models.UserRankSnapshot.rank_value.is_not(None),
             models.UserRankSnapshot.is_ranked.is_(True),
@@ -1745,7 +1757,7 @@ def _group_ow_rank_signals(
     now: datetime,
     week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> dict[int, dict[str, _OwRankSignals]]:
-    """Group newest-first snapshots into per (battle_tag_id, role) weekly OW signals.
+    """Group newest-first snapshots into per (social_account_id, role) weekly OW signals.
 
     Pure (no DB) so the windowing logic can be unit-tested. For each (tag, role) the composite
     rank is ``round((max + mean) / 2)`` over the ``week_window`` (see ``_compute_ow_week_rank_value``);
@@ -1753,7 +1765,7 @@ def _group_ow_rank_signals(
     """
     grouped: dict[int, dict[str, list[Any]]] = {}
     for snapshot in snapshots_newest_first:
-        grouped.setdefault(snapshot.battle_tag_id, {}).setdefault(snapshot.role, []).append(snapshot)
+        grouped.setdefault(snapshot.social_account_id, {}).setdefault(snapshot.role, []).append(snapshot)
 
     signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
     for tag_id, role_map in grouped.items():
@@ -1949,9 +1961,9 @@ async def autofill_registration_ranks_from_parsed(
     ow_signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
     if "ow" in enabled_sources:
         ow_week_window = timedelta(days=ow_lookback_days) if ow_lookback_days else OW_RANK_WEEK_WINDOW
-        ow_signals_by_tag_id = await _load_ow_rank_signals_by_battle_tag_id(
+        ow_signals_by_tag_id = await _load_ow_rank_signals_by_social_account_id(
             session,
-            [battle_tag.id for battle_tag in battle_tags_by_key.values()],
+            [account.id for account in battle_tags_by_key.values()],
             now,
             ow_week_window,
         )
@@ -2782,51 +2794,20 @@ async def export_active_registrations(
 
 
 async def _find_user_by_battle_tag(session: AsyncSession, battle_tag: str) -> models.User | None:
-    result = await session.execute(
-        sa.select(models.User)
-        .join(models.UserBattleTag, models.User.id == models.UserBattleTag.user_id)
-        .where(
-            sa.or_(
-                models.UserBattleTag.battle_tag == battle_tag,
-                sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower(),
-            )
-        )
-        .limit(1)
+    user_id = await social_identity.find_player_id_by_handle(
+        session, provider=SocialProvider.BATTLENET, username=battle_tag
     )
-    return result.scalar_one_or_none()
+    if user_id is None:
+        return None
+    return await session.get(models.User, user_id)
 
 
 async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, battle_tag: str) -> None:
-    exists = await session.scalar(
-        sa.select(models.UserBattleTag.id).where(
-            sa.or_(
-                models.UserBattleTag.battle_tag == battle_tag,
-                sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower(),
-            )
-        )
+    if "#" not in battle_tag:
+        return
+    await social_identity.upsert_social_account(
+        session, user_id=user.id, provider=SocialProvider.BATTLENET, username=battle_tag
     )
-    if exists is not None:
-        return
-    try:
-        name, tag = battle_tag.split("#", 1)
-    except ValueError:
-        return
-    session.add(
-        models.UserBattleTag(
-            user_id=user.id,
-            battle_tag=battle_tag,
-            name=name,
-            tag=tag,
-        )
-    )
-
-
-async def _ensure_user_identity(session: AsyncSession, user: models.User, model: type, value: str | None) -> None:
-    if not value:
-        return
-    exists = await session.scalar(sa.select(model.id).where(model.name == value))
-    if exists is None:
-        session.add(model(user_id=user.id, name=value))
 
 
 async def _upsert_user_from_registration(
@@ -2845,8 +2826,14 @@ async def _upsert_user_from_registration(
     for smurf in registration.smurf_tags_json or []:
         if BATTLE_TAG_RE.match(smurf):
             await _ensure_user_battle_tag(session, user, smurf)
-    await _ensure_user_identity(session, user, models.UserDiscord, registration.discord_nick)
-    await _ensure_user_identity(session, user, models.UserTwitch, registration.twitch_nick)
+    if registration.discord_nick:
+        await social_identity.upsert_social_account(
+            session, user_id=user.id, provider=SocialProvider.DISCORD, username=registration.discord_nick
+        )
+    if registration.twitch_nick:
+        await social_identity.upsert_social_account(
+            session, user_id=user.id, provider=SocialProvider.TWITCH, username=registration.twitch_nick
+        )
 
 
 async def export_registrations_to_users(

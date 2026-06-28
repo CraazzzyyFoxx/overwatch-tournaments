@@ -13,7 +13,7 @@ export interface RankHistoryPoint {
 }
 
 export interface RankSeries {
-  battle_tag_id: number;
+  social_account_id: number;
   battle_tag: string;
   role: string;
   platform: string;
@@ -30,7 +30,7 @@ export interface RankHistoryResponse {
 }
 
 export interface CurrentRank {
-  battle_tag_id: number;
+  social_account_id: number;
   battle_tag: string;
   role: string;
   platform: string;
@@ -51,7 +51,7 @@ export interface CurrentRanksResponse {
 export interface RankHistoryQuery {
   platform?: RankPlatform;
   role?: RankRoleKey;
-  battleTagId?: number;
+  socialAccountId?: number;
   dateFrom?: string;
   dateTo?: string;
   granularity?: "raw" | "daily" | "hourly";

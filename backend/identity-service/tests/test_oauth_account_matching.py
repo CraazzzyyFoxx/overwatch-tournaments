@@ -41,6 +41,9 @@ class _FakeScalarsResult:
     def all(self):
         return list(self._values)
 
+    def first(self):
+        return self._values[0] if self._values else None
+
     def unique(self):
         seen = set()
         unique_values = []
@@ -100,8 +103,12 @@ def test_find_or_create_oauth_user_reuses_existing_user_by_email() -> None:
     existing_user = SimpleNamespace(id=11, email="player@example.com", username="existing-user")
     session = _FakeSession(
         [
-            {"scalar": None},
-            {"scalar": existing_user},
+            {"scalar": None},  # OAuthConnection lookup → none
+            {"scalar": existing_user},  # email → AuthUser (reused)
+            # _attach_verified_social_account: no player found → no-op
+            {"scalars": []},  # subject match
+            {"scalars": []},  # handle match
+            {"scalars": []},  # AuthUserPlayer link for auth_user
         ]
     )
     oauth_info = schemas.OAuthUserInfo(
@@ -135,10 +142,23 @@ def test_find_or_create_oauth_user_reuses_existing_user_by_email() -> None:
 
 def test_find_or_create_oauth_user_reuses_existing_user_by_linked_battletag() -> None:
     existing_user = SimpleNamespace(id=21, email="existing@local", username="existing-user")
+    player = SimpleNamespace(id=210)
+    player_link = SimpleNamespace(player_id=player.id, auth_user_id=existing_user.id)
     session = _FakeSession(
         [
-            {"scalar": None},
-            {"scalars": [existing_user]},
+            {"scalar": None},  # OAuthConnection lookup → none
+            # _find_player_by_provider_record: subject miss, handle hit
+            {"scalars": []},  # subject (provider_user_id) match
+            {"scalars": [player]},  # normalized handle match → player
+            # _find_auth_user_for_player: link → AuthUser
+            {"scalar": player_link},
+            {"scalar": existing_user},
+            # find_or_create link block: existing AuthUserPlayer present → skip insert
+            {"scalar": player_link},
+            # _attach_verified_social_account: no player found → no-op
+            {"scalars": []},  # subject match
+            {"scalars": []},  # handle match
+            {"scalars": []},  # AuthUserPlayer link for auth_user
         ]
     )
     oauth_info = schemas.OAuthUserInfo(

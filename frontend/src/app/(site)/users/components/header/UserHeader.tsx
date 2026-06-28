@@ -2,6 +2,8 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { User, UserProfile } from "@/types/user.types";
+import { hasVerifiedSocial } from "@/lib/social-providers";
+import { SocialAccountList } from "@/components/social/SocialAccountList";
 import { getPlayerImage } from "@/utils/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -133,8 +135,8 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
           <h1 className="m-0 flex flex-wrap items-baseline gap-2.5 text-[clamp(28px,4vw,48px)] aqt-display font-bold uppercase tracking-[0.02em] leading-none">
             <span>{name}</span>
             {tag ? <span className="text-[22px] font-medium tracking-[0.04em] text-[color:var(--aqt-fg-faint)]">#{tag}</span> : null}
-            {user.battle_tag.length > 0 ? (
-              <span className="text-[18px] text-[color:var(--aqt-teal)]" title="Verified roster">
+            {hasVerifiedSocial(user.social_accounts) ? (
+              <span className="text-[18px] text-[color:var(--aqt-teal)]" title="Verified identity">
                 ✓
               </span>
             ) : null}
@@ -149,50 +151,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
               <span>· {profile.maps_total} maps</span>
             </div>
           ) : null}
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {user.battle_tag.map((bt) => (
-              <span
-                key={bt.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
-                style={{
-                  background: "hsl(210 80% 60% / 0.06)",
-                  borderColor: "hsl(210 80% 60% / 0.25)",
-                  color: "var(--aqt-blue)"
-                }}
-              >
-                <Image src="/battlenet.svg" width={12} height={12} alt="Battle.net" />
-                {bt.battle_tag}
-              </span>
-            ))}
-            {user.twitch.map((tw) => (
-              <span
-                key={tw.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
-                style={{
-                  background: "hsl(270 70% 62% / 0.06)",
-                  borderColor: "hsl(270 70% 62% / 0.25)",
-                  color: "var(--aqt-violet)"
-                }}
-              >
-                <Image src="/twitch.png" width={12} height={12} alt="Twitch" />
-                {tw.name}
-              </span>
-            ))}
-            {user.discord.map((dc) => (
-              <span
-                key={dc.id}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[12.5px] font-medium"
-                style={{
-                  background: "hsl(220 70% 60% / 0.06)",
-                  borderColor: "hsl(220 70% 60% / 0.25)",
-                  color: "hsl(220 70% 70%)"
-                }}
-              >
-                <Image src="/discord.png" width={12} height={12} alt="Discord" />
-                {dc.name}
-              </span>
-            ))}
-          </div>
+          <SocialAccountList accounts={user.social_accounts} className="mt-1 flex flex-wrap gap-1.5" />
         </div>
 
         <div className="grid w-full items-end gap-4 md:w-auto md:min-w-[460px] md:grid-cols-4">
