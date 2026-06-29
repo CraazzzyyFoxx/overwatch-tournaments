@@ -87,7 +87,11 @@ def user_entities(in_entities: list[str], child: typing.Any | None = None) -> li
     # identity entity token is requested (legacy ``battle_tag``/``discord``/
     # ``twitch`` tokens are still accepted for caller/API compatibility).
     if any(name in in_entities for name in ("social_accounts", "battle_tag", "discord", "twitch")):
-        entities.append(utils.join_entity(child, models.User.social_accounts))
+        # Eager-load each account's visibility rows alongside it so to_pydantic can
+        # compute ``visible_global`` and (on public reads) drop hidden accounts
+        # without a lazy load outside the async greenlet.
+        social_load = utils.join_entity(child, models.User.social_accounts)
+        entities.append(social_load.selectinload(models.SocialAccount.visibilities))
     return entities
 
 
@@ -1845,6 +1849,14 @@ async def search_by_name(
         .where(
             models.SocialAccount.provider == SocialProvider.BATTLENET,
             sa.or_(*conditions),
+            # Accounts hidden from the public profile (no global visibility row)
+            # must not surface in search either.
+            sa.select(models.SocialAccountVisibility.id)
+            .where(
+                models.SocialAccountVisibility.account_id == models.SocialAccount.id,
+                models.SocialAccountVisibility.workspace_id.is_(None),
+            )
+            .exists(),
         )
         .order_by(
             exact_score.asc(),

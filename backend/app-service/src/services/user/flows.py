@@ -117,25 +117,39 @@ def _compute_better_worse(
 _IDENTITY_ENTITIES = ("social_accounts", "battle_tag", "discord", "twitch")
 
 
-async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
+async def to_pydantic(
+    session: AsyncSession, user: models.User, entities: list[str], *, visible_only: bool = False
+) -> schemas.UserRead:
     """Convert a `User` to ``UserRead``. Identities come from the unified
     ``user.social_accounts`` relationship and are only accessed (and serialized)
     when an identity entity was requested — and therefore eager-loaded — so this
     never triggers a lazy load outside the async greenlet. The legacy entity
     tokens (``battle_tag``/``discord``/``twitch``) are still honored as triggers
     for backward compatibility with existing callers.
+
+    ``visible_only`` is set by public-facing reads (profile, list): accounts the
+    owner has hidden from the public profile (no global visibility row) are
+    dropped. Admin/self reads leave it False so they see every account.
     """
     social_accounts: list[schemas.SocialAccountRead] = []
     if any(name in entities for name in _IDENTITY_ENTITIES):
-        social_accounts = [
-            _social_account_read(account)
-            for account in sorted(
-                user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
-            )
-        ]
+        accounts = sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id))
+        if visible_only:
+            accounts = [account for account in accounts if _is_globally_visible(account)]
+        social_accounts = [_social_account_read(account) for account in accounts]
     return schemas.UserRead(
         id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts
     )
+
+
+def _is_globally_visible(account: models.SocialAccount) -> bool:
+    """True when the account is shown on the public profile (has a global,
+    workspace-less visibility row). Fail-open when ``visibilities`` isn't
+    eager-loaded so a read path that forgot to load it never silently hides
+    everything — mirrors the ``visible_global=True`` default in the read model."""
+    if "visibilities" in sa.inspect(account).unloaded:
+        return True
+    return any(v.workspace_id is None for v in account.visibilities)
 
 
 def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccountRead:
@@ -201,7 +215,7 @@ async def get_by_battle_tag(session: AsyncSession, battle_tag: str, entities: li
                 )
             ],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_by_discord(session: AsyncSession, discord: str, entities: list[str]) -> schemas.UserRead:
@@ -225,7 +239,7 @@ async def get_by_discord(session: AsyncSession, discord: str, entities: list[str
             status_code=400,
             detail=[errors.ApiExc(code="not_found", msg=f"User with discord {discord} not found.")],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_all(
@@ -246,7 +260,7 @@ async def get_all(
         page=params.page,
         per_page=params.per_page,
         total=total,
-        results=[await to_pydantic(session, user, params.entities) for user in users],
+        results=[await to_pydantic(session, user, params.entities, visible_only=True) for user in users],
     )
 
 
