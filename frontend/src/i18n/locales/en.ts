@@ -169,7 +169,10 @@ export const en = {
         topHeroesRequired: "Select at least one top hero before continuing.",
         notesRequired: "Notes are required.",
         fieldRequired: "Fill in the required field: {label}.",
-        invalidFormat: "{label} format is invalid."
+        invalidFormat: "{label} format is invalid.",
+        verifiedNoAccount: "Link a verified {label} account via OAuth to register.",
+        verifiedRequired: "Select your verified {label} account.",
+        verifiedMismatch: "{label} must match an OAuth-verified account on your profile."
       }
     },
     accounts: {
@@ -180,7 +183,10 @@ export const en = {
       discord: "Discord",
       twitch: "Twitch",
       addSmurfPlaceholder: "Add smurf BattleTag",
-      addSmurfButton: "Add"
+      addSmurfButton: "Add",
+      verifiedHint: "Choose one of your OAuth-verified accounts.",
+      verifiedNone: "No verified {label} account is linked.",
+      verifiedLink: "Link {label} via OAuth"
     },
     roles: {
       title: "Choose Your Role",

@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import sqlalchemy as sa
+from shared.core.social import SocialProvider
 from shared.schemas.events import FetchRankEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,14 +22,14 @@ async def get_user_collection_status(
     session: AsyncSession, user_id: int
 ) -> list[dict[str, Any]]:
     """Per-battle-tag collection state for a user (incl. tags never fetched)."""
-    bt = models.UserBattleTag
+    acc = models.SocialAccount
     state = models.BattleTagRankState
     rows = (
         await session.execute(
-            sa.select(bt, state)
-            .outerjoin(state, state.battle_tag_id == bt.id)
-            .where(bt.user_id == user_id)
-            .order_by(bt.battle_tag.asc())
+            sa.select(acc, state)
+            .outerjoin(state, state.social_account_id == acc.id)
+            .where(acc.user_id == user_id, acc.provider == SocialProvider.BATTLENET)
+            .order_by(acc.username.asc())
         )
     ).all()
 
@@ -36,8 +37,8 @@ async def get_user_collection_status(
     for tag, st in rows:
         result.append(
             {
-                "battle_tag_id": tag.id,
-                "battle_tag": tag.battle_tag,
+                "social_account_id": tag.id,
+                "battle_tag": tag.username,
                 "status": st.status if st is not None else None,
                 "last_checked_at": st.last_checked_at if st is not None else None,
                 "last_success_at": st.last_success_at if st is not None else None,
@@ -75,16 +76,16 @@ async def _resolve_target_tags(
     session: AsyncSession,
     *,
     user_id: int | None,
-    battle_tag_ids: Sequence[int] | None,
-) -> list[models.UserBattleTag]:
-    bt = models.UserBattleTag
-    query = sa.select(bt)
-    if battle_tag_ids:
-        query = query.where(bt.id.in_(list(battle_tag_ids)))
+    social_account_ids: Sequence[int] | None,
+) -> list[models.SocialAccount]:
+    acc = models.SocialAccount
+    query = sa.select(acc).where(acc.provider == SocialProvider.BATTLENET)
+    if social_account_ids:
+        query = query.where(acc.id.in_(list(social_account_ids)))
         if user_id is not None:
-            query = query.where(bt.user_id == user_id)
+            query = query.where(acc.user_id == user_id)
     elif user_id is not None:
-        query = query.where(bt.user_id == user_id)
+        query = query.where(acc.user_id == user_id)
     else:
         return []
     return list((await session.scalars(query)).all())
@@ -94,7 +95,7 @@ async def trigger_collection(
     session: AsyncSession,
     *,
     user_id: int | None = None,
-    battle_tag_ids: Sequence[int] | None = None,
+    social_account_ids: Sequence[int] | None = None,
     broker: Any | None = None,
     redis: Any | None = None,
 ) -> int:
@@ -104,21 +105,21 @@ async def trigger_collection(
     priority fetch (bypassing dedup) so "collect now" always runs. Returns the
     number of fetches enqueued.
     """
-    tags = await _resolve_target_tags(session, user_id=user_id, battle_tag_ids=battle_tag_ids)
+    tags = await _resolve_target_tags(session, user_id=user_id, social_account_ids=social_account_ids)
     if not tags:
         return 0
 
     for tag in tags:
         await service.ensure_state(
-            session, tag.id, tag.battle_tag, priority_tier=_MANUAL_PRIORITY_TIER
+            session, tag.id, tag.username, priority_tier=_MANUAL_PRIORITY_TIER
         )
     await session.commit()
 
     enqueued = 0
     for tag in tags:
         event = FetchRankEvent(
-            battle_tag_id=tag.id,
-            battle_tag=tag.battle_tag,
+            social_account_id=tag.id,
+            battle_tag=tag.username,
             source="manual",
         )
         if await tasks.enqueue_fetch(

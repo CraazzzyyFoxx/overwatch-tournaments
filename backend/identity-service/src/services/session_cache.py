@@ -56,6 +56,7 @@ async def set_rbac(
     roles: list[str],
     permissions: list[dict[str, str]],
     workspace_roles: dict | None = None,
+    denies: list[dict[str, str]] | None = None,
 ) -> None:
     """Store RBAC data with TTL."""
     try:
@@ -67,6 +68,8 @@ async def set_rbac(
     data: dict = {"roles": roles, "permissions": permissions}
     if workspace_roles:
         data["workspace_roles"] = workspace_roles
+    if denies:
+        data["denies"] = denies
     payload = json.dumps(data)
     try:
         await redis.set(_key(user_id), payload, ex=RBAC_TTL_SECONDS)

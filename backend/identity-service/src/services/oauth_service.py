@@ -16,9 +16,11 @@ import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from loguru import logger
+from shared.core.social import OAUTH_TO_SOCIAL, normalize_social_handle
 from shared.models.oauth import OAuthConnection
 from shared.models.rbac import user_roles
-from shared.models.user import UserBattleTag, UserDiscord, UserTwitch
+from shared.models.social import SocialAccount
+from shared.services import social_identity
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,10 +29,6 @@ from src import models, schemas
 from src.core.config import settings
 
 PROXY_CONF = settings.proxy_url
-
-
-def _normalized_non_empty(values: tuple[str | None, ...]) -> set[str]:
-    return {value.strip().casefold() for value in values if value and value.strip()}
 
 
 class OAuthProviderBase(ABC):
@@ -574,64 +572,51 @@ class OAuthService:
         oauth_info: schemas.OAuthUserInfo,
     ) -> models.User | None:
         """
-        Find the player (players.user) in the provider-specific table WITHOUT
-        requiring an AuthUser link. Returns None if ambiguous or not found.
+        Find the player (players.user) via the unified ``social_account`` table
+        WITHOUT requiring an AuthUser link. Returns None if ambiguous or not found.
 
-          - Discord   → players.discord.name  (case-insensitive)
-          - Twitch    → players.twitch.name   (case-insensitive)
-          - BattleNet → players.battle_tag.battle_tag (case-insensitive)
+        A definitive match on the verified ``provider_user_id`` wins; otherwise the
+        player is matched by normalized handle (battletag / discord / twitch login).
         """
-        provider = oauth_info.provider
-
-        if provider == schemas.OAuthProvider.DISCORD:
-            candidates = _normalized_non_empty((oauth_info.username, oauth_info.display_name))
-            if not candidates:
-                return None
-            stmt = (
-                select(models.User)
-                .join(UserDiscord, UserDiscord.user_id == models.User.id)
-                .where(sa.func.lower(UserDiscord.name).in_(candidates))
-            )
-        elif provider == schemas.OAuthProvider.TWITCH:
-            candidates = _normalized_non_empty((oauth_info.username, oauth_info.display_name))
-            if not candidates:
-                return None
-            stmt = (
-                select(models.User)
-                .join(UserTwitch, UserTwitch.user_id == models.User.id)
-                .where(sa.func.lower(UserTwitch.name).in_(candidates))
-            )
-        elif provider == schemas.OAuthProvider.BATTLENET:
-            candidates = _normalized_non_empty((
-                oauth_info.username,
-                oauth_info.display_name,
-                (oauth_info.raw_data or {}).get("battletag"),
-                (oauth_info.raw_data or {}).get("battle_tag"),
-                (oauth_info.raw_data or {}).get("preferred_username"),
-            ))
-            logger.debug(
-                "Battle.net OAuth normalized candidates for player lookup: {}",
-                sorted(candidates),
-                provider_user_id=oauth_info.provider_user_id,
-                raw_battletag=oauth_info.raw_data.get("battletag") if oauth_info.raw_data else None,
-            )
-            if not candidates:
-                return None
-            stmt = (
-                select(models.User)
-                .join(UserBattleTag, UserBattleTag.user_id == models.User.id)
-                .where(sa.func.lower(UserBattleTag.battle_tag).in_(candidates))
-            )
-        else:
+        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        if provider is None:
             return None
 
-        result = await session.execute(stmt)
-        matches = list(result.scalars().unique().all())
+        # 1. Definitive: an account already pinned to this exact OAuth subject.
+        subject_match = (
+            await session.execute(
+                select(models.User)
+                .join(SocialAccount, SocialAccount.user_id == models.User.id)
+                .where(
+                    SocialAccount.provider == provider,
+                    SocialAccount.provider_user_id == oauth_info.provider_user_id,
+                )
+            )
+        ).scalars().first()
+        if subject_match is not None:
+            return subject_match
+
+        # 2. Match by normalized handle(s) from the OAuth profile.
+        raw = oauth_info.raw_data or {}
+        raw_candidates = [oauth_info.username, oauth_info.display_name]
+        if oauth_info.provider == schemas.OAuthProvider.BATTLENET:
+            raw_candidates += [raw.get("battletag"), raw.get("battle_tag"), raw.get("preferred_username")]
+        normalized = {normalize_social_handle(provider, value) for value in raw_candidates if value}
+        normalized.discard("")
+        if not normalized:
+            return None
+
+        stmt = (
+            select(models.User)
+            .join(SocialAccount, SocialAccount.user_id == models.User.id)
+            .where(SocialAccount.provider == provider, SocialAccount.username_normalized.in_(normalized))
+        )
+        matches = list((await session.execute(stmt)).scalars().unique().all())
 
         if len(matches) == 1:
             logger.info(
-                "Found player by provider record",
-                provider=provider.value,
+                "Found player by social account",
+                provider=provider,
                 player_id=matches[0].id,
                 provider_user_id=oauth_info.provider_user_id,
             )
@@ -639,8 +624,8 @@ class OAuthService:
 
         if len(matches) > 1:
             logger.warning(
-                "OAuth player record match is ambiguous; skipping automatic account linking",
-                provider=provider.value,
+                "OAuth player social-account match is ambiguous; skipping automatic account linking",
+                provider=provider,
                 provider_user_id=oauth_info.provider_user_id,
                 matches=[p.id for p in matches],
             )
@@ -684,26 +669,10 @@ class OAuthService:
         record exists yet (e.g. created via legacy code path that omitted the link).
         Returns None if none or more than one distinct AuthUser is found.
         """
-        provider_candidates: list[tuple[str, str]] = []
-
-        discord_rows = (
-            await session.execute(select(UserDiscord).where(UserDiscord.user_id == player.id))
-        ).scalars().all()
-        for row in discord_rows:
-            provider_candidates.append(("discord", row.name.lower()))
-
-        twitch_rows = (
-            await session.execute(select(UserTwitch).where(UserTwitch.user_id == player.id))
-        ).scalars().all()
-        for row in twitch_rows:
-            provider_candidates.append(("twitch", row.name.lower()))
-
-        bt_rows = (
-            await session.execute(select(UserBattleTag).where(UserBattleTag.user_id == player.id))
-        ).scalars().all()
-        for row in bt_rows:
-            provider_candidates.append(("battlenet", row.battle_tag.lower()))
-
+        accounts = await social_identity.list_social_accounts(session, player.id)
+        provider_candidates: list[tuple[str, str]] = [
+            (account.provider, account.username.lower()) for account in accounts
+        ]
         if not provider_candidates:
             return None
 
@@ -740,6 +709,55 @@ class OAuthService:
                 auth_user_ids=sorted(auth_user_ids),
             )
         return None
+
+    @staticmethod
+    def _oauth_handle(oauth_info: schemas.OAuthUserInfo) -> str:
+        """The provider's canonical handle to store as the verified social username."""
+        raw = oauth_info.raw_data or {}
+        if oauth_info.provider == schemas.OAuthProvider.BATTLENET:
+            return raw.get("battletag") or raw.get("battle_tag") or oauth_info.username
+        return oauth_info.username
+
+    @classmethod
+    async def _attach_verified_social_account(
+        cls,
+        session: AsyncSession,
+        auth_user: models.AuthUser,
+        oauth_info: schemas.OAuthUserInfo,
+    ) -> None:
+        """Mark the player's social identity for this provider as OAuth-verified.
+
+        Targets the player owning the handle (or, failing that, the auth user's
+        primary linked player). No-op when the auth user has no linked player yet.
+        """
+        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        if provider is None:
+            return
+
+        player = await cls._find_player_by_provider_record(session, oauth_info)
+        if player is None:
+            link = (
+                await session.execute(
+                    select(models.AuthUserPlayer)
+                    .where(models.AuthUserPlayer.auth_user_id == auth_user.id)
+                    .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id)
+                )
+            ).scalars().first()
+            if link is None:
+                return
+            player = await session.get(models.User, link.player_id)
+            if player is None:
+                return
+
+        await social_identity.upsert_social_account(
+            session,
+            user_id=player.id,
+            provider=provider,
+            username=cls._oauth_handle(oauth_info),
+            provider_user_id=oauth_info.provider_user_id,
+            is_verified=True,
+        )
+        await session.commit()
 
     @classmethod
     async def _find_existing_auth_user(
@@ -821,6 +839,7 @@ class OAuthService:
                 await session.commit()
                 await session.refresh(auth_user)
 
+            await cls._attach_verified_social_account(session, auth_user, oauth_info)
             logger.info(f"Existing {oauth_info.provider} user logged in: {oauth_info.username}")
             return auth_user
 
@@ -949,6 +968,7 @@ class OAuthService:
 
         logger.success(f"{oauth_info.provider.value.title()} account linked to user: {auth_user.username}")
 
+        await cls._attach_verified_social_account(session, auth_user, oauth_info)
         return auth_user
 
     @classmethod
@@ -971,23 +991,9 @@ class OAuthService:
         )
         existing_conn = result.scalar_one_or_none()
 
-        # Enforce one connection per provider per auth user.
-        result = await session.execute(
-            select(OAuthConnection).where(
-                OAuthConnection.auth_user_id == auth_user.id,
-                OAuthConnection.provider == oauth_info.provider.value,
-            )
-        )
-        current_provider_conn = result.scalar_one_or_none()
-
-        if current_provider_conn and current_provider_conn.provider_user_id != oauth_info.provider_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"A different {oauth_info.provider.value} account is already linked. "
-                    "Unlink it first before linking another one."
-                ),
-            )
+        # A user may link MULTIPLE accounts of the same provider (e.g. two
+        # battle.net) — each a distinct verified social identity. We only block
+        # re-linking the *same* external account to a *different* user (below).
 
         if existing_conn:
             if existing_conn.auth_user_id == auth_user.id:
@@ -1030,4 +1036,5 @@ class OAuthService:
 
         logger.success(f"{oauth_info.provider.value.title()} account linked to user {auth_user.username}")
 
+        await cls._attach_verified_social_account(session, auth_user, oauth_info)
         return oauth_conn

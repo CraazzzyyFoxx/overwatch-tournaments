@@ -48,13 +48,20 @@ async def _build_access_token_payload(
         roles = cached["roles"]
         permissions = cached["permissions"]
         workspace_roles_cached = cached.get("workspace_roles")
+        denies = cached.get("denies")
     else:
         roles = None
         permissions = None
         workspace_roles_cached = None
+        denies = None
 
     if roles is None:
         roles, permissions = await auth_service.AuthService.get_user_roles_and_permissions_db(session, current_user.id)
+
+    # Per-user deny overlay (negative RBAC). Loaded on the DB path too, so denies
+    # still apply when Redis is unavailable. ``None`` = not in cache → load fresh.
+    if denies is None:
+        denies = await _load_user_denies(session, current_user.id)
 
     # Fetch workspace memberships
     workspace_rows = await session.execute(
@@ -86,7 +93,7 @@ async def _build_access_token_payload(
         ws_data = ws_rbac.get(ws_id, ([], []))
         ws_cache[str(ws_id)] = {"roles": ws_data[0], "permissions": ws_data[1]}
 
-    await set_rbac(current_user.id, roles, permissions, workspace_roles=ws_cache)
+    await set_rbac(current_user.id, roles, permissions, workspace_roles=ws_cache, denies=denies)
 
     workspaces = []
     for row in ws_memberships:
@@ -110,7 +117,18 @@ async def _build_access_token_payload(
         roles=roles,
         permissions=permissions,
         workspaces=workspaces,
+        denies=denies,
     )
+
+
+async def _load_user_denies(session: AsyncSession, user_id: int) -> list[dict[str, str]]:
+    """Per-user denied (resource, action) pairs from ``auth.user_permission_deny``."""
+    rows = await session.execute(
+        sa.select(models.Permission.resource, models.Permission.action)
+        .join(models.UserPermissionDeny, models.UserPermissionDeny.permission_id == models.Permission.id)
+        .where(models.UserPermissionDeny.user_id == user_id)
+    )
+    return [{"resource": resource, "action": action} for resource, action in rows.all()]
 
 
 async def _resolve_access_token_user(

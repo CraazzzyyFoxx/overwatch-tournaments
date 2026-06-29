@@ -105,15 +105,14 @@ export const sortTeamPlayers = <P extends TeamRosterPlayer>(players: P[]): P[] =
 };
 
 export const getPlayerImage = (profile: UserProfile, user: User) => {
+  // A user-uploaded avatar takes precedence over the derived hero art.
+  if (user.avatar_url) {
+    return user.avatar_url;
+  }
   if (profile.most_played_hero === null) {
     return `/avatar/${user.id % 10}.png`;
   }
-
-  // if (["mauga", "juno", "junker-queen", "kiriko", "lifeweaver", "baptiste", "sojourn", "echo", "ramattra", "wrecking-ball", "venture", "illari", "ashe", "hazard"].includes(slug)) {
-  //   return `/avatar/${profile.user.id % 10}.png`;
-  // }
   return `/avatar/${profile.most_played_hero.slug}.jpg`;
-  // return profile.most_played_hero.image_path
 };
 
 export const getPlayerSlug = (battleTag: string | null | undefined) => {

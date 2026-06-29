@@ -42,7 +42,7 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
         Index("ix_rank_snapshot_user_captured", "user_id", "captured_at"),
         Index(
             "ix_rank_snapshot_series_captured",
-            "battle_tag_id",
+            "social_account_id",
             "role",
             "platform",
             "captured_at",
@@ -55,10 +55,12 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("players.user.id", ondelete="CASCADE")
     )
-    battle_tag_id: Mapped[int] = mapped_column(
-        ForeignKey("players.battle_tag.id", ondelete="CASCADE")
+    # The battle.net ``players.social_account`` row (provider=battlenet) this
+    # rank belongs to. One trackable OW identity = one battlenet social account.
+    social_account_id: Mapped[int] = mapped_column(
+        ForeignKey("players.social_account.id", ondelete="CASCADE")
     )
-    # Denormalized full "Name#1234" so history survives battle-tag deletion.
+    # Denormalized full "Name#1234" so history survives account deletion.
     battle_tag: Mapped[str] = mapped_column(String(255))
 
     platform: Mapped[str] = mapped_column(String(16))  # enums.RankPlatform
@@ -87,11 +89,11 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
 
 
 class BattleTagRankState(db.TimeStampIntegerMixin):
-    """Collection bookkeeping for one battle tag (one row per tag).
+    """Collection bookkeeping for one battle tag (one row per battlenet account).
 
-    Kept separate from ``players.battle_tag`` (identity data) because this row
-    is high-churn — updated on every poll — and drives scheduling, backoff and
-    prioritization without touching the identity table or its indexes.
+    Kept separate from ``players.social_account`` (identity data) because this
+    row is high-churn — updated on every poll — and drives scheduling, backoff
+    and prioritization without touching the identity table or its indexes.
     """
 
     __tablename__ = "battle_tag_state"
@@ -106,8 +108,8 @@ class BattleTagRankState(db.TimeStampIntegerMixin):
         {"schema": RANK_SCHEMA},
     )
 
-    battle_tag_id: Mapped[int] = mapped_column(
-        ForeignKey("players.battle_tag.id", ondelete="CASCADE"), unique=True
+    social_account_id: Mapped[int] = mapped_column(
+        ForeignKey("players.social_account.id", ondelete="CASCADE"), unique=True
     )
     battle_tag: Mapped[str] = mapped_column(String(255))
     # Precomputed OverFast player id ("Name-1234").
@@ -151,8 +153,8 @@ class RankFetchLog(db.TimeStampIntegerMixin):
         {"schema": RANK_SCHEMA},
     )
 
-    battle_tag_id: Mapped[int | None] = mapped_column(
-        ForeignKey("players.battle_tag.id", ondelete="SET NULL"), nullable=True
+    social_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.social_account.id", ondelete="SET NULL"), nullable=True
     )
     battle_tag: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(32))  # enums.RankCollectionStatus

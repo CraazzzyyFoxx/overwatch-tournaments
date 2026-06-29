@@ -5,28 +5,19 @@ import { LogStatsName } from "@/types/stats.types";
 import { UserTournamentStat } from "@/types/statistics.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 
-export interface UserDiscord {
+export type SocialProvider = "battlenet" | "discord" | "twitch" | "boosty" | "vk" | "youtube";
+
+export interface SocialAccount {
   id: number;
   user_id: number;
-  created_at: Date;
-  updated_at: Date | null;
-  name: string;
-}
-
-export interface UserBattleTag {
-  id: number;
-  created_at: Date;
-  updated_at: Date | null;
-  name: string;
-  tag: number;
-  battle_tag: string;
-}
-
-export interface UserTwitch {
-  id: number;
-  created_at: Date;
-  updated_at: Date | null;
-  name: string;
+  provider: SocialProvider;
+  username: string;
+  url: string | null;
+  is_verified: boolean;
+  is_primary: boolean;
+  /** Display visibility (populated by the admin profile dialog read). */
+  visible_global?: boolean;
+  visible_workspace_ids?: number[];
 }
 
 export interface User {
@@ -35,9 +26,7 @@ export interface User {
   updated_at: Date | null;
   name: string;
   avatar_url: string | null;
-  discord: UserDiscord[];
-  battle_tag: UserBattleTag[];
-  twitch: UserTwitch[];
+  social_accounts: SocialAccount[];
 }
 
 export interface UserRole {

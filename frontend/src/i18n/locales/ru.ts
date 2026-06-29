@@ -169,7 +169,10 @@ export const ru = {
         topHeroesRequired: "Выберите хотя бы одного топ-героя перед продолжением.",
         notesRequired: "Обязательное поле.",
         fieldRequired: "Заполните обязательное поле: {label}.",
-        invalidFormat: "Неверный формат: {label}."
+        invalidFormat: "Неверный формат: {label}.",
+        verifiedNoAccount: "Привяжите подтверждённый аккаунт {label} через OAuth, чтобы зарегистрироваться.",
+        verifiedRequired: "Выберите ваш подтверждённый аккаунт {label}.",
+        verifiedMismatch: "{label} должен совпадать с подтверждённым через OAuth аккаунтом в вашем профиле."
       }
     },
     accounts: {
@@ -180,7 +183,10 @@ export const ru = {
       discord: "Discord",
       twitch: "Twitch",
       addSmurfPlaceholder: "Добавить смурф BattleTag",
-      addSmurfButton: "Добавить"
+      addSmurfButton: "Добавить",
+      verifiedHint: "Выберите один из ваших подтверждённых через OAuth аккаунтов.",
+      verifiedNone: "Подтверждённый аккаунт {label} не привязан.",
+      verifiedLink: "Привязать {label} через OAuth"
     },
     roles: {
       title: "Выберите свою роль",

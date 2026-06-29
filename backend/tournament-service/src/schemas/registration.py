@@ -36,6 +36,10 @@ class BuiltInFieldConfig(BaseModel):
     validation: FieldValidationConfig | None = None
     # ``top_heroes`` field only: max heroes a player may select per role (default 5).
     max_heroes: int | None = None
+    # Identity fields (battle_tag/discord_nick/twitch_nick) only: when true the
+    # submitted handle must match one of the registrant's OAuth-verified social
+    # accounts for the field's provider. Implies the field is effectively required.
+    require_verified: bool = False
 
 
 class SubroleOption(BaseModel):

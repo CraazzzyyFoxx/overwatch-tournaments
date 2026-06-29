@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Link2, User as UserIcon, X, MonitorCog, Shield } from "lucide-react";
 import AccountConnectionsSection from "./account-settings/AccountConnectionsSection";
 import AccountSessionsSection from "./account-settings/AccountSessionsSection";
+import MyAccountSection from "./account-settings/MyAccountSection";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const TAB_CONFIG: { id: SettingsTab; label: string; icon: ReactNode }[] = [
@@ -107,12 +108,9 @@ const AccountSettingsModal = () => {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h3 className="text-xl font-semibold tracking-tight text-white">My Account</h3>
-                    <p className="text-sm text-slate-400 mt-1">Manage your public profile and preferences.</p>
+                    <p className="text-sm text-slate-400 mt-1">Manage your avatar and linked accounts.</p>
                   </div>
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 border border-dashed border-white/10 rounded-xl">
-                    <UserIcon className="w-12 h-12 mb-4 opacity-50" />
-                    <p>Profile settings coming soon</p>
-                  </div>
+                  <MyAccountSection />
                 </div>
               )}
 

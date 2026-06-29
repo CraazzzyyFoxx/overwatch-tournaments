@@ -62,6 +62,9 @@ const (
 	queueRbacAssignRole         = "rpc.identity.rbac.assign_role"
 	queueRbacRemoveRole         = "rpc.identity.rbac.remove_role"
 	queueRbacGetUserRoles       = "rpc.identity.rbac.get_user_roles"
+	queueRbacListUserDenies     = "rpc.identity.rbac.list_user_denies"
+	queueRbacAddUserDeny        = "rpc.identity.rbac.add_user_deny"
+	queueRbacRemoveUserDeny     = "rpc.identity.rbac.remove_user_deny"
 	queueRbacListOAuthConns     = "rpc.identity.rbac.list_oauth_connections"
 	queueRbacListSessions       = "rpc.identity.rbac.list_sessions"
 	queueRbacDeleteOAuthConn    = "rpc.identity.rbac.delete_oauth_connection"
@@ -418,6 +421,22 @@ func (h *Handler) RbacAssignRole(w http.ResponseWriter, r *http.Request) {
 // RbacRemoveRole mirrors POST /rbac/users/remove-role -> 204.
 func (h *Handler) RbacRemoveRole(w http.ResponseWriter, r *http.Request) {
 	h.authedMerge(w, r, queueRbacRemoveRole, http.StatusNoContent, nil)
+}
+
+// RbacListUserDenies mirrors GET /rbac/users/{user_id}/denies.
+func (h *Handler) RbacListUserDenies(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacListUserDenies, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacAddUserDeny mirrors POST /rbac/users/{user_id}/denies (body: permission_id, reason?).
+func (h *Handler) RbacAddUserDeny(w http.ResponseWriter, r *http.Request) {
+	h.authedMerge(w, r, queueRbacAddUserDeny, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacRemoveUserDeny mirrors DELETE /rbac/users/{user_id}/denies/{permission_id}.
+func (h *Handler) RbacRemoveUserDeny(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacRemoveUserDeny, http.StatusOK,
+		map[string]any{"user_id": r.PathValue("user_id"), "permission_id": r.PathValue("permission_id")})
 }
 
 // RbacGetUserRoles mirrors GET /rbac/users/{user_id}/roles.

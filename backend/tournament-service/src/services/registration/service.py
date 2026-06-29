@@ -9,8 +9,10 @@ from typing import Any
 import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import enums
+from shared.core.social import SocialProvider
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
+from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -138,27 +140,21 @@ def build_registration_roles(
 
 
 async def _find_user_by_battle_tag(session: AsyncSession, battle_tag: str) -> models.User | None:
-    result = await session.execute(
-        sa.select(models.User)
-        .join(models.UserBattleTag, models.User.id == models.UserBattleTag.user_id)
-        .where(sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower())
-        .limit(1)
+    user_id = await social_identity.find_player_id_by_handle(
+        session, provider=SocialProvider.BATTLENET, username=battle_tag
     )
-    return result.scalar_one_or_none()
+    if user_id is None:
+        return None
+    return await session.get(models.User, user_id)
 
 
 async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, battle_tag: str) -> None:
     if "#" not in battle_tag:
         return
-    exists = await session.scalar(
-        sa.select(models.UserBattleTag.id).where(
-            sa.func.lower(models.UserBattleTag.battle_tag) == battle_tag.lower()
-        )
+    # Idempotent on (user, battlenet, normalized handle); seeds global visibility.
+    await social_identity.upsert_social_account(
+        session, user_id=user.id, provider=SocialProvider.BATTLENET, username=battle_tag
     )
-    if exists is not None:
-        return
-    name, tag = battle_tag.split("#", 1)
-    session.add(models.UserBattleTag(user_id=user.id, battle_tag=battle_tag, name=name, tag=tag))
 
 
 async def ensure_player_identity(
@@ -167,11 +163,11 @@ async def ensure_player_identity(
 ) -> int | None:
     """Find-or-create the domain player (players.user) for a registration's tags.
 
-    Links ``registration.user_id`` and ensures a ``UserBattleTag`` for the main
-    tag and each smurf. This is what lets first-time registrants — who aren't yet
-    in the analytics system — be picked up by rank collection / the open-profile
-    gate. Dedup is by ``UserBattleTag.battle_tag`` (case-insensitive), so a later
-    log/CSV import reconciles to the same player. Flushes only; caller commits.
+    Links ``registration.user_id`` and ensures a battlenet ``social_account`` for
+    the main tag and each smurf. This is what lets first-time registrants — who
+    aren't yet in the analytics system — be picked up by rank collection / the
+    open-profile gate. Dedup is by the normalized handle (case-insensitive), so a
+    later log/CSV import reconciles to the same player. Flushes only; caller commits.
     """
     battle_tag = registration.battle_tag
     if not battle_tag:

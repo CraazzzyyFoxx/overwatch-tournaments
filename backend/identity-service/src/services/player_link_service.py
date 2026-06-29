@@ -5,8 +5,10 @@ from collections.abc import Iterable
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from loguru import logger
+from shared.core.social import SocialProvider
 from shared.models.oauth import OAuthConnection
-from shared.models.user import User, UserBattleTag, UserDiscord
+from shared.models.social import SocialAccount
+from shared.models.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,8 +74,13 @@ class PlayerLinkService:
                 )
             )
 
-            result = await session.execute(select(UserDiscord).where(UserDiscord.user_id == player_id))
-            player_discord_names = _normalized([discord.name for discord in result.scalars().all()])
+            result = await session.execute(
+                select(SocialAccount.username).where(
+                    SocialAccount.user_id == player_id,
+                    SocialAccount.provider == SocialProvider.DISCORD,
+                )
+            )
+            player_discord_names = _normalized(result.scalars().all())
 
             if player_discord_names and not oauth_names.isdisjoint(player_discord_names):
                 discord_match = True
@@ -89,8 +96,13 @@ class PlayerLinkService:
                 )
             )
 
-            result = await session.execute(select(UserBattleTag).where(UserBattleTag.user_id == player_id))
-            player_battletags = _normalized([battle_tag.battle_tag for battle_tag in result.scalars().all()])
+            result = await session.execute(
+                select(SocialAccount.username).where(
+                    SocialAccount.user_id == player_id,
+                    SocialAccount.provider == SocialProvider.BATTLENET,
+                )
+            )
+            player_battletags = _normalized(result.scalars().all())
 
             if oauth_battletags and player_battletags and not oauth_battletags.isdisjoint(player_battletags):
                 battlenet_match = True

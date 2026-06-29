@@ -13,5 +13,6 @@ from shared.models.division_grid import *
 from shared.models.tournament import *
 from shared.models.auth_user import *
 from shared.models.user import *
+from shared.models.social import *
 from shared.models.balancer import *
 from shared.models.draft import *

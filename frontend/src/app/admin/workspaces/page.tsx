@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, CheckCircle, XCircle, Upload, X } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { StatusIcon } from "@/components/admin/StatusIcon";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
@@ -55,7 +56,6 @@ export default function WorkspacesPage() {
   });
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-workspaces"] });
@@ -144,13 +144,7 @@ export default function WorkspacesPage() {
     setEditOpen(true);
   };
 
-  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE) {
-      notify.error("File too large", { description: "Maximum size is 2 MB" });
-      return;
-    }
+  const handleIconSelect = (file: File) => {
     setIconFile(file);
     setIconPreview(URL.createObjectURL(file));
   };
@@ -327,41 +321,24 @@ export default function WorkspacesPage() {
           </div>
           <div>
             <Label>Icon</Label>
-            <div className="mt-1.5 flex items-center gap-4">
-              {iconPreview ? (
-                <div className="relative h-16 w-16 shrink-0">
-                  <img
-                    src={iconPreview}
-                    alt="Icon preview"
-                    className="h-16 w-16 rounded-md border object-cover"
-                  />
-                  <button
-                    type="button"
-                    className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5 hover:bg-accent"
-                    onClick={() => {
-                      setIconFile(null);
-                      setIconPreview(null);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {iconPreview ? "Change" : "Upload"}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
+            <div className="mt-1.5">
+              <EditableAvatar
+                src={iconPreview}
+                name={formData.name}
+                size={64}
+                shape="rounded"
+                onSelectFile={handleIconSelect}
+                onDelete={
+                  iconPreview
+                    ? () => {
+                        setIconFile(null);
+                        setIconPreview(null);
+                      }
+                    : undefined
+                }
                 accept={ACCEPTED_IMAGE_TYPES}
-                className="hidden"
-                onChange={handleIconFileChange}
+                maxSizeBytes={MAX_FILE_SIZE}
+                onError={(message) => notify.error(message)}
               />
             </div>
             <p className="text-xs text-muted-foreground mt-1">PNG, JPEG, WebP or GIF, max 2 MB</p>
@@ -404,45 +381,29 @@ export default function WorkspacesPage() {
           </div>
           <div>
             <Label>Icon</Label>
-            <div className="mt-1.5 flex items-center gap-4">
-              {iconPreview ? (
-                <div className="relative h-16 w-16 shrink-0">
-                  <img
-                    src={iconPreview}
-                    alt="Icon preview"
-                    className="h-16 w-16 rounded-md border object-cover"
-                  />
-                  <button
-                    type="button"
-                    className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5 hover:bg-accent"
-                    onClick={() => {
-                      if (selected?.icon_url && !iconFile) {
-                        deleteIconMutation.mutate(selected.id);
-                      } else {
-                        setIconFile(null);
-                        setIconPreview(selected?.icon_url || null);
+            <div className="mt-1.5">
+              <EditableAvatar
+                src={iconPreview}
+                name={formData.name}
+                size={64}
+                shape="rounded"
+                busy={deleteIconMutation.isPending}
+                onSelectFile={handleIconSelect}
+                onDelete={
+                  iconPreview
+                    ? () => {
+                        if (selected?.icon_url && !iconFile) {
+                          deleteIconMutation.mutate(selected.id);
+                        } else {
+                          setIconFile(null);
+                          setIconPreview(selected?.icon_url || null);
+                        }
                       }
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {iconPreview ? "Change" : "Upload"}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
+                    : undefined
+                }
                 accept={ACCEPTED_IMAGE_TYPES}
-                className="hidden"
-                onChange={handleIconFileChange}
+                maxSizeBytes={MAX_FILE_SIZE}
+                onError={(message) => notify.error(message)}
               />
             </div>
             <p className="text-xs text-muted-foreground mt-1">PNG, JPEG, WebP or GIF, max 2 MB</p>

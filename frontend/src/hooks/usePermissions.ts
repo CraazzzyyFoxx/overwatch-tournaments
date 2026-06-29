@@ -97,6 +97,7 @@ export type PermissionProfile = {
   isSuperuser: boolean;
   roles: string[];
   permissions: string[];
+  denies?: string[];
   workspaces: Array<{
     workspace_id: number;
     memberRole: string;
@@ -221,6 +222,14 @@ export function usePermissions() {
   const hasAnyPermission = (permissions: AppPermission[]): boolean =>
     permissions.some((permission) => hasPermission(permission));
 
+  // Negative RBAC: an allow-by-default capability (e.g. "account.avatar",
+  // "account.social") is usable unless it's in the user's deny list.
+  const isDenied = (capability: string): boolean =>
+    user?.denies?.includes(capability) ?? false;
+
+  const canUseCapability = (capability: string): boolean =>
+    isAuthenticated && !isDenied(capability);
+
   const hasAllPermissions = (permissions: AppPermission[]): boolean =>
     permissions.every((permission) => hasPermission(permission));
 
@@ -318,6 +327,8 @@ export function usePermissions() {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
+    isDenied,
+    canUseCapability,
     hasWorkspacePermission,
     hasAnyWorkspacePermission,
     isWorkspaceAdmin,

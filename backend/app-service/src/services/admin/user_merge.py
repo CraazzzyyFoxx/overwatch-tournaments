@@ -12,14 +12,10 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.social import normalize_social_handle
+
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
-
-IDENTITY_CONFIG: dict[str, tuple[str, str, str]] = {
-    "discord": ("discord", "name", "discord_ids"),
-    "battle_tag": ("battle_tag", "battle_tag", "battle_tag_ids"),
-    "twitch": ("twitch", "name", "twitch_ids"),
-}
 
 REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("tournament.player.user_id", models.Player, "user_id"),
@@ -70,19 +66,19 @@ def _build_preview_from_context(
     context: MergeContext,
     request: merge_schemas.UserMergePreviewRequest,
 ) -> merge_schemas.UserMergePreviewResponse:
-    target_identity_values = {
-        platform: {option.value for option in _build_identity_options(context.target, platform)}
-        for platform in IDENTITY_CONFIG
+    target_dup_keys = {
+        (account.provider, normalize_social_handle(account.provider, account.username))
+        for account in context.target.social_accounts
     }
     source_summary = _build_user_summary(
         context.source,
         auth_links=context.source_auth_links,
-        target_identity_values=target_identity_values,
+        target_dup_keys=target_dup_keys,
     )
     target_summary = _build_user_summary(
         context.target,
         auth_links=context.target_auth_links,
-        target_identity_values=None,
+        target_dup_keys=None,
     )
 
     has_auth_conflict = context.source_auth_links > 0 and context.target_auth_links > 0
@@ -225,29 +221,58 @@ async def apply_identity_selection(
     source: models.User,
     target: models.User,
     identity_selection: merge_schemas.UserMergeIdentitySelection,
-) -> dict[str, dict[str, list[int]]]:
-    target_user_id = _resolve_merge_user_id(target)
-    result = {
-        "moved": {platform: [] for platform in IDENTITY_CONFIG},
-        "deduped": {platform: [] for platform in IDENTITY_CONFIG},
+) -> dict[str, list[int]]:
+    """Move the selected source social accounts to the target, deduping on
+    (provider, normalized handle). Moved accounts arrive non-primary; a single
+    primary per affected provider is then ensured. Unselected source accounts are
+    left on the source (and dropped when it is deleted)."""
+    target_user_id = target.id
+    selected_ids = set(identity_selection.social_account_ids)
+    moved: list[int] = []
+    deduped: list[int] = []
+    target_keys = {
+        (account.provider, normalize_social_handle(account.provider, account.username))
+        for account in target.social_accounts
     }
-    for platform, (attr_name, unique_field, selection_attr) in IDENTITY_CONFIG.items():
-        selected_ids = set(getattr(identity_selection, selection_attr))
-        source_items = list(getattr(source, attr_name))
-        target_items = list(getattr(target, attr_name))
-        target_values = {getattr(item, unique_field) for item in target_items}
-        for identity in source_items:
-            if identity.id not in selected_ids:
-                continue
-            unique_value = getattr(identity, unique_field)
-            if unique_value in target_values:
-                await session.delete(identity)
-                result["deduped"][platform].append(identity.id)
-                continue
-            identity.user_id = target_user_id
-            target_values.add(unique_value)
-            result["moved"][platform].append(identity.id)
-    return result
+    affected_providers: set[str] = set()
+
+    for account in list(source.social_accounts):
+        if account.id not in selected_ids:
+            continue
+        key = (account.provider, normalize_social_handle(account.provider, account.username))
+        if key in target_keys:
+            await session.delete(account)
+            deduped.append(account.id)
+            continue
+        account.user_id = target_user_id
+        account.is_primary = False
+        target_keys.add(key)
+        affected_providers.add(account.provider)
+        moved.append(account.id)
+
+    await session.flush()
+    for provider in affected_providers:
+        await _ensure_single_primary(session, target_user_id, provider)
+    return {"moved": moved, "deduped": deduped}
+
+
+async def _ensure_single_primary(session: AsyncSession, user_id: int, provider: str) -> None:
+    rows = (
+        await session.execute(
+            select(models.SocialAccount)
+            .where(models.SocialAccount.user_id == user_id, models.SocialAccount.provider == provider)
+            .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+        )
+    ).scalars().all()
+    if not rows:
+        return
+    primaries = [row for row in rows if row.is_primary]
+    if len(primaries) == 1:
+        return
+    keep = primaries[0] if primaries else rows[0]
+    for row in rows:
+        row.is_primary = row is keep
+    await session.flush()
 
 
 async def _load_merge_context(
@@ -273,11 +298,7 @@ async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.Use
     result = await session.execute(
         select(models.User)
         .where(models.User.id == user_id)
-        .options(
-            selectinload(models.User.discord),
-            selectinload(models.User.battle_tag),
-            selectinload(models.User.twitch),
-        )
+        .options(selectinload(models.User.social_accounts))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -332,37 +353,30 @@ def _build_user_summary(
     user: models.User,
     *,
     auth_links: int,
-    target_identity_values: dict[str, set[str]] | None,
+    target_dup_keys: set[tuple[str, str]] | None,
 ) -> merge_schemas.UserMergeUserSummary:
-    payload: dict[str, object] = {
-        "id": user.id,
-        "name": user.name,
-        "avatar_url": user.avatar_url,
-        "auth_links": auth_links,
-    }
-    for platform in IDENTITY_CONFIG:
-        payload[platform] = _build_identity_options(
-            user,
-            platform,
-            duplicate_values=None if target_identity_values is None else target_identity_values[platform],
-        )
-    return merge_schemas.UserMergeUserSummary(**payload)
+    return merge_schemas.UserMergeUserSummary(
+        id=user.id,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        social_accounts=_build_identity_options(user, target_dup_keys),
+        auth_links=auth_links,
+    )
 
 
 def _build_identity_options(
     user: models.User,
-    platform: str,
-    duplicate_values: set[str] | None = None,
+    duplicate_keys: set[tuple[str, str]] | None = None,
 ) -> list[merge_schemas.UserMergeIdentityOption]:
-    attr_name, unique_field, _ = IDENTITY_CONFIG[platform]
     items = []
-    for identity in getattr(user, attr_name):
-        value = getattr(identity, unique_field)
+    for account in sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)):
+        key = (account.provider, normalize_social_handle(account.provider, account.username))
         items.append(
             merge_schemas.UserMergeIdentityOption(
-                id=identity.id,
-                value=value,
-                duplicate_on_target=duplicate_values is not None and value in duplicate_values,
+                id=account.id,
+                provider=account.provider,
+                value=account.username,
+                duplicate_on_target=duplicate_keys is not None and key in duplicate_keys,
             )
         )
     return items
@@ -370,18 +384,6 @@ def _build_identity_options(
 
 def _pick_field_value(choice: str, source_value: str | None, target_value: str | None) -> str | None:
     return source_value if choice == "source" else target_value
-
-
-def _resolve_merge_user_id(user: object) -> int:
-    user_id = getattr(user, "id", None)
-    if isinstance(user_id, int):
-        return user_id
-    for attr_name, _, _ in IDENTITY_CONFIG.values():
-        for identity in getattr(user, attr_name, []) or []:
-            identity_user_id = getattr(identity, "user_id", None)
-            if isinstance(identity_user_id, int):
-                return identity_user_id
-    raise ValueError("Could not resolve merge target user id.")
 
 
 def _validate_merge_pair(source_user_id: int, target_user_id: int) -> None:
@@ -502,11 +504,7 @@ async def _invalidate_merge_caches(
                 f"backend:*teammates*{user_id}*",
             }
         )
-    for identity in preview.source.discord + preview.target.discord:
-        patterns.add(f"backend:*{identity.value}*")
-    for identity in preview.source.twitch + preview.target.twitch:
-        patterns.add(f"backend:*{identity.value}*")
-    for identity in preview.source.battle_tag + preview.target.battle_tag:
+    for identity in preview.source.social_accounts + preview.target.social_accounts:
         patterns.add(f"backend:*{identity.value}*")
         patterns.add(f"backend:*{identity.value.replace('#', '-')}*")
     for pattern in patterns:

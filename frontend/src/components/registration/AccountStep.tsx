@@ -1,6 +1,8 @@
 import type { RegistrationForm } from "@/types/registration.types";
+import type { SocialAccount } from "@/types/user.types";
 import { useTranslation } from "@/i18n/LanguageContext";
 import AccountCombobox from "./AccountCombobox";
+import VerifiedAccountSelect from "./VerifiedAccountSelect";
 import SmurfTagsInput from "./SmurfTagsInput";
 import FieldLabel from "./FieldLabel";
 import { UserRound } from "lucide-react";
@@ -18,6 +20,10 @@ interface AccountStepProps {
   mode?: "public" | "admin";
   displayName?: string;
   onDisplayNameChange?: (v: string) => void;
+  /** Registrant's social accounts — drives the verified-account picker. */
+  accounts?: readonly SocialAccount[];
+  /** Per-field `require_verified` errors, computed by the parent. */
+  verifiedErrors?: Record<string, string | null>;
 }
 
 export default function AccountStep({
@@ -33,6 +39,8 @@ export default function AccountStep({
   mode = "public",
   displayName,
   onDisplayNameChange,
+  accounts = [],
+  verifiedErrors = {},
 }: AccountStepProps) {
   const { t } = useTranslation();
   const fields = form.built_in_fields;
@@ -40,6 +48,10 @@ export default function AccountStep({
   const showSmurfTags = fields?.smurf_tags?.enabled !== false;
   const showDiscord = fields?.discord_nick?.enabled !== false;
   const showTwitch = fields?.twitch_nick?.enabled !== false;
+  // ``require_verified`` only applies to public self-registration (it gates on
+  // the registrant's own OAuth-verified accounts); admin editing is unconstrained.
+  const requireVerified = (key: string) =>
+    mode === "public" && fields?.[key]?.require_verified === true;
 
   return (
     <div className="grid gap-4">
@@ -69,18 +81,30 @@ export default function AccountStep({
 
 
       {showBattleTag && (
-        <AccountCombobox
-          label={t("registration.accounts.battleTag")}
-          placeholder="Player#1234"
-          value={values.battle_tag ?? ""}
-          onChange={(v) => onUpdate("battle_tag", v)}
-          suggestions={battleTagSuggestions}
-          icon="/battlenet.svg"
-          required={fields?.battle_tag?.required === true}
-          fieldKey="battle_tag"
-          config={fields?.battle_tag}
-          onValidationChange={(error) => onBuiltInValidationChange("battle_tag", error)}
-        />
+        requireVerified("battle_tag") ? (
+          <VerifiedAccountSelect
+            label={t("registration.accounts.battleTag")}
+            provider="battlenet"
+            accounts={accounts}
+            value={values.battle_tag ?? ""}
+            onChange={(v) => onUpdate("battle_tag", v)}
+            required
+            error={verifiedErrors.battle_tag}
+          />
+        ) : (
+          <AccountCombobox
+            label={t("registration.accounts.battleTag")}
+            placeholder="Player#1234"
+            value={values.battle_tag ?? ""}
+            onChange={(v) => onUpdate("battle_tag", v)}
+            suggestions={battleTagSuggestions}
+            icon="/battlenet.svg"
+            required={fields?.battle_tag?.required === true}
+            fieldKey="battle_tag"
+            config={fields?.battle_tag}
+            onValidationChange={(error) => onBuiltInValidationChange("battle_tag", error)}
+          />
+        )
       )}
 
       {showSmurfTags && (
@@ -96,33 +120,57 @@ export default function AccountStep({
       )}
 
       {showDiscord && (
-        <AccountCombobox
-          label={t("registration.accounts.discord")}
-          placeholder="username"
-          value={values.discord_nick ?? ""}
-          onChange={(v) => onUpdate("discord_nick", v)}
-          suggestions={discordSuggestions}
-          icon="/discord-white.svg"
-          required={fields?.discord_nick?.required === true}
-          fieldKey="discord_nick"
-          config={fields?.discord_nick}
-          onValidationChange={(error) => onBuiltInValidationChange("discord_nick", error)}
-        />
+        requireVerified("discord_nick") ? (
+          <VerifiedAccountSelect
+            label={t("registration.accounts.discord")}
+            provider="discord"
+            accounts={accounts}
+            value={values.discord_nick ?? ""}
+            onChange={(v) => onUpdate("discord_nick", v)}
+            required
+            error={verifiedErrors.discord_nick}
+          />
+        ) : (
+          <AccountCombobox
+            label={t("registration.accounts.discord")}
+            placeholder="username"
+            value={values.discord_nick ?? ""}
+            onChange={(v) => onUpdate("discord_nick", v)}
+            suggestions={discordSuggestions}
+            icon="/discord-white.svg"
+            required={fields?.discord_nick?.required === true}
+            fieldKey="discord_nick"
+            config={fields?.discord_nick}
+            onValidationChange={(error) => onBuiltInValidationChange("discord_nick", error)}
+          />
+        )
       )}
 
       {showTwitch && (
-        <AccountCombobox
-          label={t("registration.accounts.twitch")}
-          placeholder="channel_name"
-          value={values.twitch_nick ?? ""}
-          onChange={(v) => onUpdate("twitch_nick", v)}
-          suggestions={twitchSuggestions}
-          icon="/twitch.png"
-          required={fields?.twitch_nick?.required === true}
-          fieldKey="twitch_nick"
-          config={fields?.twitch_nick}
-          onValidationChange={(error) => onBuiltInValidationChange("twitch_nick", error)}
-        />
+        requireVerified("twitch_nick") ? (
+          <VerifiedAccountSelect
+            label={t("registration.accounts.twitch")}
+            provider="twitch"
+            accounts={accounts}
+            value={values.twitch_nick ?? ""}
+            onChange={(v) => onUpdate("twitch_nick", v)}
+            required
+            error={verifiedErrors.twitch_nick}
+          />
+        ) : (
+          <AccountCombobox
+            label={t("registration.accounts.twitch")}
+            placeholder="channel_name"
+            value={values.twitch_nick ?? ""}
+            onChange={(v) => onUpdate("twitch_nick", v)}
+            suggestions={twitchSuggestions}
+            icon="/twitch.png"
+            required={fields?.twitch_nick?.required === true}
+            fieldKey="twitch_nick"
+            config={fields?.twitch_nick}
+            onValidationChange={(error) => onBuiltInValidationChange("twitch_nick", error)}
+          />
+        )
       )}
     </div>
   );

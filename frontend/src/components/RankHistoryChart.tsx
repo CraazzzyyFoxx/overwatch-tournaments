@@ -91,7 +91,7 @@ export default function RankHistoryChart({
   );
 
   const battleTags = useMemo(
-    () => uniqueBy(platformSeries, (s) => s.battle_tag_id).map((s) => ({ id: s.battle_tag_id, label: s.battle_tag })),
+    () => uniqueBy(platformSeries, (s) => s.social_account_id).map((s) => ({ id: s.social_account_id, label: s.battle_tag })),
     [platformSeries]
   );
   const roles = useMemo(() => uniqueBy(platformSeries.map((s) => s.role), (r) => r), [platformSeries]);
@@ -106,18 +106,18 @@ export default function RankHistoryChart({
   const { lines, data } = useMemo(() => {
     const activeSeries =
       groupBy === "role"
-        ? platformSeries.filter((s) => s.battle_tag_id === effectiveBattleTagId)
+        ? platformSeries.filter((s) => s.social_account_id === effectiveBattleTagId)
         : platformSeries.filter((s) => s.role === effectiveRole);
 
     const lineDefs: LineDef[] = activeSeries.map((s, i) =>
       groupBy === "role"
         ? { key: s.role, label: s.role, color: ROLE_COLORS[s.role] ?? PALETTE[i % PALETTE.length] }
-        : { key: `bt${s.battle_tag_id}`, label: s.battle_tag, color: PALETTE[i % PALETTE.length] }
+        : { key: `bt${s.social_account_id}`, label: s.battle_tag, color: PALETTE[i % PALETTE.length] }
     );
 
     const rows = new Map<string, Record<string, number | string>>();
     for (const s of activeSeries) {
-      const key = groupBy === "role" ? s.role : `bt${s.battle_tag_id}`;
+      const key = groupBy === "role" ? s.role : `bt${s.social_account_id}`;
       for (const p of s.points) {
         if (!p.is_ranked || p.rank_value == null) continue;
         

@@ -1,8 +1,7 @@
-import asyncio
 import typing
-from datetime import UTC, datetime
 from statistics import mean
 
+import sqlalchemy as sa
 from cashews import cache
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
@@ -17,7 +16,7 @@ from shared.services.division_grid_resolution import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
-from src.core import config, enums, errors, pagination, utils
+from src.core import config, enums, errors, pagination
 from src.core.workspace import get_division_grid_version
 from src.services.hero import flows as hero_flows
 from src.services.map import flows as map_flows
@@ -115,51 +114,55 @@ def _compute_better_worse(
     return "better" if subject < baseline else "worse"
 
 
-async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
+_IDENTITY_ENTITIES = ("social_accounts", "battle_tag", "discord", "twitch")
+
+
+async def to_pydantic(
+    session: AsyncSession, user: models.User, entities: list[str], *, visible_only: bool = False
+) -> schemas.UserRead:
+    """Convert a `User` to ``UserRead``. Identities come from the unified
+    ``user.social_accounts`` relationship and are only accessed (and serialized)
+    when an identity entity was requested — and therefore eager-loaded — so this
+    never triggers a lazy load outside the async greenlet. The legacy entity
+    tokens (``battle_tag``/``discord``/``twitch``) are still honored as triggers
+    for backward compatibility with existing callers.
+
+    ``visible_only`` is set by public-facing reads (profile, list): accounts the
+    owner has hidden from the public profile (no global visibility row) are
+    dropped. Admin/self reads leave it False so they see every account.
     """
-    Converts a `User` model instance to a Pydantic `UserRead` schema, optionally including related entities.
-
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-        user: The `User` model instance to convert.
-        entities: A list of strings representing the names of related entities to include.
-
-    Returns:
-        A `UserRead` schema instance.
-    """
-    battle_tags = []
-    twitch = []
-    discord = []
-
-    unresolved = datetime(1, 1, 1, tzinfo=UTC)
-    if "battle_tag" in entities:
-        battle_tags = [schemas.UserBattleTagRead.model_validate(tag, from_attributes=True) for tag in user.battle_tag]
-    if "twitch" in entities:
-        twitch = [
-            schemas.UserTwitchRead.model_validate(twitch, from_attributes=True)
-            for twitch in sorted(
-                user.twitch,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
-            )
-        ]
-    if "discord" in entities:
-        discord = [
-            schemas.UserDiscordRead.model_validate(discord, from_attributes=True)
-            for discord in sorted(
-                user.discord,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
-            )
-        ]
-
+    social_accounts: list[schemas.SocialAccountRead] = []
+    if any(name in entities for name in _IDENTITY_ENTITIES):
+        accounts = sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id))
+        if visible_only:
+            accounts = [account for account in accounts if _is_globally_visible(account)]
+        social_accounts = [_social_account_read(account) for account in accounts]
     return schemas.UserRead(
-        id=user.id,
-        name=user.name,
-        battle_tag=battle_tags,
-        twitch=twitch,
-        discord=discord,
+        id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts
     )
+
+
+def _is_globally_visible(account: models.SocialAccount) -> bool:
+    """True when the account is shown on the public profile (has a global,
+    workspace-less visibility row). Fail-open when ``visibilities`` isn't
+    eager-loaded so a read path that forgot to load it never silently hides
+    everything — mirrors the ``visible_global=True`` default in the read model."""
+    if "visibilities" in sa.inspect(account).unloaded:
+        return True
+    return any(v.workspace_id is None for v in account.visibilities)
+
+
+def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccountRead:
+    """Serialize a social account, including display-visibility scopes when the
+    ``visibilities`` relationship is eager-loaded (admin profile dialog). When it
+    isn't loaded we leave the defaults (``visible_global=True``) and never touch
+    the relationship — avoiding a lazy load outside the async greenlet."""
+    read = schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+    if "visibilities" not in sa.inspect(account).unloaded:
+        scopes = list(account.visibilities)
+        read.visible_global = any(v.workspace_id is None for v in scopes)
+        read.visible_workspace_ids = sorted({v.workspace_id for v in scopes if v.workspace_id is not None})
+    return read
 
 
 async def get(session: AsyncSession, user_id: int, entities: list[str]) -> models.User:
@@ -212,7 +215,7 @@ async def get_by_battle_tag(session: AsyncSession, battle_tag: str, entities: li
                 )
             ],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_by_discord(session: AsyncSession, discord: str, entities: list[str]) -> schemas.UserRead:
@@ -236,7 +239,7 @@ async def get_by_discord(session: AsyncSession, discord: str, entities: list[str
             status_code=400,
             detail=[errors.ApiExc(code="not_found", msg=f"User with discord {discord} not found.")],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_all(
@@ -257,7 +260,7 @@ async def get_all(
         page=params.page,
         per_page=params.per_page,
         total=total,
-        results=[await to_pydantic(session, user, params.entities) for user in users],
+        results=[await to_pydantic(session, user, params.entities, visible_only=True) for user in users],
     )
 
 
@@ -815,7 +818,7 @@ async def search_by_name(session: AsyncSession, name: str, fields: list[str]) ->
         A `UserSearch` schema instance.
     """
     users = await service.search_by_name(session, name, fields)
-    return [schemas.UserSearch(id=user.user_id, name=user.battle_tag) for user in users]
+    return [schemas.UserSearch(id=user.user_id, name=user.username) for user in users]
 
 
 async def get_read(session: AsyncSession, user_id: int, entities: list[str]) -> schemas.UserRead:

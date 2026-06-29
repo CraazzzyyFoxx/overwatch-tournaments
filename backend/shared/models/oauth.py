@@ -20,8 +20,11 @@ class OAuthConnection(db.TimeStampIntegerMixin):
 
     __tablename__ = "oauth_connections"
     __table_args__ = (
+        # A given external account links to at most one auth user.
         UniqueConstraint("provider", "provider_user_id", name="uq_provider_user"),
-        UniqueConstraint("auth_user_id", "provider", name="uq_user_provider"),
+        # NOTE: no (auth_user_id, provider) uniqueness — a user may link several
+        # accounts of the same provider (e.g. two battle.net), each a distinct
+        # verified social identity.
         {"schema": "auth"},
     )
 

@@ -1,13 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.schemas import BaseRead
 
 __all__ = (
     "UserCSV",
     "UserRead",
-    "UserDiscordRead",
-    "UserTwitchRead",
-    "UserBattleTagRead",
+    "SocialAccountRead",
     "UserUpdate",
 )
 
@@ -19,28 +17,26 @@ class UserCSV(BaseModel):
     smurfs: list[str]
 
 
-class UserDiscordRead(BaseRead):
+class SocialAccountRead(BaseRead):
+    """Unified player social identity (battlenet/discord/twitch/boosty/vk/youtube/…)."""
+
     user_id: int
-    name: str
-
-
-class UserBattleTagRead(BaseRead):
-    user_id: int
-    name: str
-    tag: int
-    battle_tag: str
-
-
-class UserTwitchRead(BaseRead):
-    user_id: int
-    name: str
+    provider: str
+    username: str
+    url: str | None = None
+    is_verified: bool = False
+    is_primary: bool = False
+    # Display visibility (populated only when the visibilities relationship is
+    # loaded — e.g. the admin profile dialog). ``visible_global`` = shown on the
+    # public profile; ``visible_workspace_ids`` = workspaces it is shown in.
+    visible_global: bool = True
+    visible_workspace_ids: list[int] = Field(default_factory=list)
 
 
 class UserRead(BaseRead):
     name: str
-    discord: list[UserDiscordRead]
-    battle_tag: list[UserBattleTagRead]
-    twitch: list[UserTwitchRead]
+    avatar_url: str | None = None
+    social_accounts: list[SocialAccountRead] = []
 
 
 class UserUpdate(BaseModel):

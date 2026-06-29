@@ -74,7 +74,7 @@ class EnqueueTests(IsolatedAsyncioTestCase):
         from shared.schemas.events import FetchRankEvent
 
         redis = FakeRedis()
-        event = FetchRankEvent(battle_tag_id=5, battle_tag="A#1", source="scheduled")
+        event = FetchRankEvent(social_account_id=5, battle_tag="A#1", source="scheduled")
         with patch.object(tasks, "publish_message", AsyncMock()) as pub:
             first = await tasks.enqueue_fetch(event, broker=SimpleNamespace(), redis=redis)
             second = await tasks.enqueue_fetch(event, broker=SimpleNamespace(), redis=redis)
@@ -101,7 +101,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 7, "battle_tag": "N#1"},
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(session),
@@ -116,7 +116,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         client = SimpleNamespace(fetch_summary=AsyncMock())
         with patch.object(tasks.service, "record_result", AsyncMock()) as rec:
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 7, "battle_tag": "N#1"},
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(SimpleNamespace(commit=AsyncMock())),
@@ -141,7 +141,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 9, "battle_tag": "N#9"},
+                {"event_type": "fetch_rank", "social_account_id": 9, "battle_tag": "N#9"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(session),

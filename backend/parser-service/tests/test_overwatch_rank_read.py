@@ -28,7 +28,7 @@ read_service = importlib.import_module("src.services.overwatch_rank.read_service
 
 def _snap(**kw):
     base = {
-        "battle_tag_id": 1,
+        "social_account_id": 1,
         "battle_tag": "A#1",
         "role": "tank",
         "platform": "pc",

@@ -12,9 +12,27 @@ from shared.core.errors import BaseAPIException as HTTPException
 from loguru import logger
 from shared.clients.s3 import S3Client
 from shared.clients.s3.upload import upload_avatar
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+
+
+async def _propagate_to_player(session: AsyncSession, auth_user_id: int, avatar_url: str | None) -> None:
+    """Mirror the avatar onto the user's primary linked player (``players.user``)
+    so it shows on ``users/[slug]`` (which renders the player, not the auth user)."""
+    link = (
+        await session.execute(
+            select(models.AuthUserPlayer)
+            .where(models.AuthUserPlayer.auth_user_id == auth_user_id)
+            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id)
+        )
+    ).scalars().first()
+    if link is None:
+        return
+    player = await session.get(models.User, link.player_id)
+    if player is not None:
+        player.avatar_url = avatar_url
 
 
 async def set_avatar(
@@ -36,6 +54,7 @@ async def set_avatar(
         raise HTTPException(status_code=400, detail=result.error)
 
     current_user.avatar_url = result.public_url
+    await _propagate_to_player(session, current_user.id, result.public_url)
     await session.commit()
     await session.refresh(current_user)
 
@@ -51,6 +70,7 @@ async def delete_avatar(
     """Delete the current user's avatar."""
     await s3.delete_prefix(f"avatars/users/{current_user.id}/")
     current_user.avatar_url = None
+    await _propagate_to_player(session, current_user.id, None)
     await session.commit()
     await session.refresh(current_user)
 

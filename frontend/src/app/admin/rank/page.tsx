@@ -227,8 +227,8 @@ function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => v
   const rows = statusQuery.data ?? [];
 
   const triggerMutation = useMutation({
-    mutationFn: (battleTagIds: number[] | null) =>
-      adminService.triggerRankCollection({ user_id: user.id, battle_tag_ids: battleTagIds }),
+    mutationFn: (socialAccountIds: number[] | null) =>
+      adminService.triggerRankCollection({ user_id: user.id, social_account_ids: socialAccountIds }),
     onSuccess: (result) => {
       notify.success(`Queued ${result.enqueued} rank fetch(es)`);
       setSelectedTagIds(new Set());
@@ -302,11 +302,11 @@ function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => v
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
-                    <TableRow key={row.battle_tag_id}>
+                    <TableRow key={row.social_account_id}>
                       <TableCell>
                         <Checkbox
-                          checked={selectedTagIds.has(row.battle_tag_id)}
-                          onCheckedChange={() => toggleTag(row.battle_tag_id)}
+                          checked={selectedTagIds.has(row.social_account_id)}
+                          onCheckedChange={() => toggleTag(row.social_account_id)}
                           aria-label={`Select ${row.battle_tag}`}
                         />
                       </TableCell>
@@ -325,7 +325,7 @@ function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => v
                           variant="ghost"
                           size="sm"
                           disabled={triggerMutation.isPending}
-                          onClick={() => triggerMutation.mutate([row.battle_tag_id])}
+                          onClick={() => triggerMutation.mutate([row.social_account_id])}
                         >
                           <RefreshCw className="mr-1 h-3 w-3" />
                           Collect

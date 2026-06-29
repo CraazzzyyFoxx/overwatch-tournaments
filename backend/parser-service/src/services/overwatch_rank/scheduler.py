@@ -116,7 +116,7 @@ async def run_collection_tick(
                 interval_seconds=cfg.interval_seconds,
                 jitter_fraction=cfg.jitter_fraction,
             )
-            items = [(s.battle_tag_id, s.battle_tag) for s in due]
+            items = [(s.social_account_id, s.battle_tag) for s in due]
             await session.commit()
 
         # Coverage stretches past the configured interval when the population is
@@ -136,9 +136,9 @@ async def run_collection_tick(
                 )
 
         enqueued = 0
-        for battle_tag_id, battle_tag in items:
+        for social_account_id, battle_tag in items:
             event = FetchRankEvent(
-                battle_tag_id=battle_tag_id,
+                social_account_id=social_account_id,
                 battle_tag=battle_tag,
                 source="scheduled",
             )

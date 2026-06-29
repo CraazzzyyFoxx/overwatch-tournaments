@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.oauth import OAuthConnection
-from sqlalchemy import delete, select
+from shared.models.social import SocialAccount
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -99,7 +101,19 @@ async def connections(session: AsyncSession, user: models.AuthUser) -> list[sche
     ]
 
 
-async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) -> None:
+async def unlink(
+    session: AsyncSession,
+    user: models.AuthUser,
+    provider: str,
+    provider_user_id: str | None = None,
+) -> None:
+    """Unlink OAuth connection(s) for a provider.
+
+    When ``provider_user_id`` is given, unlinks only that specific connection
+    (a user may have several of the same provider); otherwise unlinks every
+    connection for the provider. Drops the verified mark from the matching
+    social account(s); the account row itself is kept (re-verify by re-linking).
+    """
     if not user.hashed_password:
         result = await session.execute(select(OAuthConnection).where(OAuthConnection.auth_user_id == user.id))
         if len(result.scalars().all()) <= 1:
@@ -107,13 +121,35 @@ async def unlink(session: AsyncSession, user: models.AuthUser, provider: str) ->
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot unlink last OAuth provider. Set a password first.",
             )
-    result = await session.execute(
-        delete(OAuthConnection).where(
-            OAuthConnection.auth_user_id == user.id, OAuthConnection.provider == provider
-        )
+    del_query = delete(OAuthConnection).where(
+        OAuthConnection.auth_user_id == user.id, OAuthConnection.provider == provider
     )
+    if provider_user_id is not None:
+        del_query = del_query.where(OAuthConnection.provider_user_id == provider_user_id)
+    result = await session.execute(del_query)
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"{provider.title()} account not linked"
         )
+
+    provider_social = OAUTH_TO_SOCIAL.get(provider)
+    if provider_social is not None:
+        links = (
+            await session.execute(
+                select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == user.id)
+            )
+        ).scalars().all()
+        for link in links:
+            unverify = (
+                update(SocialAccount)
+                .where(
+                    SocialAccount.user_id == link.player_id,
+                    SocialAccount.provider == provider_social,
+                    SocialAccount.is_verified.is_(True),
+                )
+            )
+            if provider_user_id is not None:
+                unverify = unverify.where(SocialAccount.provider_user_id == provider_user_id)
+            await session.execute(unverify.values(is_verified=False, provider_user_id=None))
+
     await session.commit()

@@ -14,6 +14,7 @@ from shared.messaging.config import (
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
     UPLOAD_MATCH_LOG_QUEUE,
 )
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.models.log_processing import LogProcessingSource
 from shared.observability import (
     make_rabbit_broker,
@@ -148,13 +149,15 @@ async def process_upload_match_log(data: dict, msg: RabbitMessage) -> None:
             uploader_user_id: int | None = None
             if event.uploader_discord_name:
                 source = LogProcessingSource.discord
-                discord_user = await session.scalar(
-                    sa.select(models.UserDiscord)
-                    .where(models.UserDiscord.name == event.uploader_discord_name)
+                uploader_user_id = await session.scalar(
+                    sa.select(models.SocialAccount.user_id)
+                    .where(
+                        models.SocialAccount.provider == SocialProvider.DISCORD,
+                        models.SocialAccount.username_normalized
+                        == normalize_social_handle(SocialProvider.DISCORD, event.uploader_discord_name),
+                    )
                     .limit(1)
                 )
-                if discord_user is not None:
-                    uploader_user_id = discord_user.user_id
             else:
                 source = LogProcessingSource.manual
 

@@ -17,10 +17,10 @@ from shared.core import http_status as status
 from shared.core import pagination
 from loguru import logger
 from shared.models.oauth import OAuthConnection
-from shared.models.rbac import Permission, Role, role_permissions, user_roles
+from shared.models.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles
 from shared.models.workspace import WorkspaceMember
 from shared.rbac import user_has_only_workspace_owner_role
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -763,3 +763,96 @@ async def delete_oauth_connection(
         f"connection_id={connection.id} provider={connection.provider} auth_user_id={connection.auth_user_id} "
         f"actor_user_id={current_user.id}"
     )
+
+
+# --- Per-user permission denies (negative RBAC) ---
+
+# A deny on these resources could lock RBAC administration out of the system or
+# brick a superuser; never deniable.
+_DENY_PROTECTED_RESOURCES = frozenset({"*", "role", "permission", "auth_user"})
+
+
+def _deny_payload(permission: Permission) -> dict:
+    return {
+        "permission_id": permission.id,
+        "name": permission.name,
+        "resource": permission.resource,
+        "action": permission.action,
+        "description": permission.description,
+    }
+
+
+async def list_user_denies(
+    session: AsyncSession, current_user: models.AuthUser, user_id: int
+) -> list[dict]:
+    """List the permissions explicitly denied for a user."""
+    _require_permission(current_user, "auth_user", "read")
+    result = await session.execute(
+        select(Permission)
+        .join(UserPermissionDeny, UserPermissionDeny.permission_id == Permission.id)
+        .where(UserPermissionDeny.user_id == user_id)
+        .order_by(Permission.name)
+    )
+    return [_deny_payload(p) for p in result.scalars().all()]
+
+
+async def add_user_deny(
+    session: AsyncSession,
+    current_user: models.AuthUser,
+    user_id: int,
+    permission_id: int,
+    reason: str | None = None,
+) -> list[dict]:
+    """Deny a permission to a user (idempotent). Rejects governance permissions."""
+    _require_permission(current_user, "auth_user", "update")
+
+    user = await session.scalar(select(models.AuthUser).where(models.AuthUser.id == user_id))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    permission = await session.scalar(select(Permission).where(Permission.id == permission_id))
+    if permission is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
+    if permission.resource in _DENY_PROTECTED_RESOURCES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot deny governance permission '{permission.name}'",
+        )
+
+    existing = await session.scalar(
+        select(UserPermissionDeny).where(
+            UserPermissionDeny.user_id == user_id,
+            UserPermissionDeny.permission_id == permission_id,
+        )
+    )
+    if existing is None:
+        session.add(
+            UserPermissionDeny(
+                user_id=user_id,
+                permission_id=permission_id,
+                created_by=current_user.id,
+                reason=reason,
+            )
+        )
+        await session.commit()
+        logger.info(
+            f"Permission denied to user: user_id={user_id} permission={permission.name} actor={current_user.id}"
+        )
+    await invalidate_rbac(user_id)
+    return await list_user_denies(session, current_user, user_id)
+
+
+async def remove_user_deny(
+    session: AsyncSession, current_user: models.AuthUser, user_id: int, permission_id: int
+) -> list[dict]:
+    """Remove a permission deny from a user (idempotent)."""
+    _require_permission(current_user, "auth_user", "update")
+    await session.execute(
+        delete(UserPermissionDeny).where(
+            UserPermissionDeny.user_id == user_id,
+            UserPermissionDeny.permission_id == permission_id,
+        )
+    )
+    await session.commit()
+    await invalidate_rbac(user_id)
+    logger.info(f"Permission deny removed: user_id={user_id} permission_id={permission_id} actor={current_user.id}")
+    return await list_user_denies(session, current_user, user_id)

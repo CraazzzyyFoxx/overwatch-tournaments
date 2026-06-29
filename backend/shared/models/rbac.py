@@ -2,7 +2,7 @@
 RBAC (Role-Based Access Control) models
 """
 from typing import TYPE_CHECKING
-from sqlalchemy import Index, String, ForeignKey, Table, Column, Integer, Text, Boolean, text
+from sqlalchemy import Index, String, ForeignKey, Table, Column, Integer, Text, Boolean, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from shared.models.auth_user import AuthUser
     from shared.models.workspace import Workspace
 
-__all__ = ("Role", "Permission", "user_roles", "role_permissions")
+__all__ = ("Role", "Permission", "UserPermissionDeny", "user_roles", "role_permissions")
 
 
 # Association table for many-to-many relationship between users and roles
@@ -77,7 +77,7 @@ class Permission(db.TimeStampIntegerMixin):
     resource: Mapped[str] = mapped_column(String(100), nullable=False, index=True)  # e.g., "tournament", "user", "team"
     action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # e.g., "create", "read", "update", "delete"
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    
+
     # Relations
     roles: Mapped[list["Role"]] = relationship(
         secondary="auth.role_permissions",
@@ -86,6 +86,38 @@ class Permission(db.TimeStampIntegerMixin):
 
     def __repr__(self):
         return f"<Permission id={self.id} name={self.name} resource={self.resource} action={self.action}>"
+
+
+class UserPermissionDeny(db.TimeStampIntegerMixin):
+    """Per-user negative RBAC: an explicit deny of a single permission.
+
+    The grant-only RBAC (roles → permissions) cannot remove a capability from
+    one person. A deny row overrides any grant — including the superuser/admin
+    bypass — for that exact ``(permission.resource, permission.action)`` only
+    (no wildcard expansion). Also used to switch off allow-by-default
+    capabilities such as ``account.avatar`` / ``account.social``.
+    """
+
+    __tablename__ = "user_permission_deny"
+    __table_args__ = (
+        UniqueConstraint("user_id", "permission_id", name="uq_user_permission_deny"),
+        Index("ix_user_permission_deny_user_id", "user_id"),
+        {"schema": "auth"},
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False
+    )
+    permission_id: Mapped[int] = mapped_column(
+        ForeignKey("auth.permissions.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    permission: Mapped["Permission"] = relationship()
+
+    def __repr__(self):
+        return f"<UserPermissionDeny user_id={self.user_id} permission_id={self.permission_id}>"
 
 
 # Association table for many-to-many relationship between roles and permissions

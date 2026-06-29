@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
@@ -27,48 +26,40 @@ user_flows = importlib.import_module("src.services.user.flows")
 
 class UserFlowsTests(IsolatedAsyncioTestCase):
     async def test_to_pydantic_includes_requested_identities(self) -> None:
-        older = datetime(2024, 1, 1, tzinfo=UTC)
-        newer = datetime(2025, 1, 1, tzinfo=UTC)
         user = SimpleNamespace(
             id=7,
             name="Captain",
             avatar_url="https://cdn.example/avatar.png",
-            battle_tag=[
-                SimpleNamespace(id=10, user_id=7, name="Captain", tag=1234, battle_tag="Captain#1234")
-            ],
-            discord=[
-                SimpleNamespace(id=11, user_id=7, name="old", updated_at=older),
-                SimpleNamespace(id=12, user_id=7, name="new", updated_at=newer),
-            ],
-            twitch=[
-                SimpleNamespace(id=13, user_id=7, name="older", updated_at=older),
-                SimpleNamespace(id=14, user_id=7, name="newer", updated_at=newer),
+            social_accounts=[
+                SimpleNamespace(id=10, user_id=7, provider="battlenet", username="Captain#1234", url=None, is_verified=True, is_primary=True),
+                SimpleNamespace(id=12, user_id=7, provider="discord", username="captain", url=None, is_verified=False, is_primary=True),
+                SimpleNamespace(id=14, user_id=7, provider="twitch", username="captaintv", url=None, is_verified=False, is_primary=True),
             ],
         )
 
         result = await user_flows.to_pydantic(
             SimpleNamespace(),
             user,
-            ["battle_tag", "discord", "twitch"],
+            ["social_accounts"],
         )
 
         self.assertEqual(7, result.id)
         self.assertEqual("Captain", result.name)
         self.assertEqual("https://cdn.example/avatar.png", result.avatar_url)
-        self.assertEqual(["Captain#1234"], [tag.battle_tag for tag in result.battle_tag])
-        self.assertEqual(["new", "old"], [discord.name for discord in result.discord])
-        self.assertEqual(["newer", "older"], [twitch.name for twitch in result.twitch])
+        by_provider = {a.provider: a for a in result.social_accounts}
+        self.assertEqual("Captain#1234", by_provider["battlenet"].username)
+        self.assertTrue(by_provider["battlenet"].is_verified)
+        self.assertEqual("captain", by_provider["discord"].username)
+        self.assertEqual("captaintv", by_provider["twitch"].username)
 
     async def test_team_to_pydantic_can_include_captain(self) -> None:
         captain = SimpleNamespace(
             id=7,
             name="Captain",
             avatar_url=None,
-            battle_tag=[
-                SimpleNamespace(id=10, user_id=7, name="Captain", tag=1234, battle_tag="Captain#1234")
+            social_accounts=[
+                SimpleNamespace(id=10, user_id=7, provider="battlenet", username="Captain#1234", url=None, is_verified=False, is_primary=True),
             ],
-            discord=[],
-            twitch=[],
         )
         team = SimpleNamespace(
             id=20,
@@ -86,8 +77,11 @@ class UserFlowsTests(IsolatedAsyncioTestCase):
         result = await team_flows.to_pydantic(
             SimpleNamespace(),
             team,
-            ["captain", "captain.battle_tag"],
+            ["captain", "captain.social_accounts"],
         )
 
         self.assertEqual("Captain", result.captain.name)
-        self.assertEqual(["Captain#1234"], [tag.battle_tag for tag in result.captain.battle_tag])
+        self.assertEqual(
+            ["Captain#1234"],
+            [a.username for a in result.captain.social_accounts if a.provider == "battlenet"],
+        )

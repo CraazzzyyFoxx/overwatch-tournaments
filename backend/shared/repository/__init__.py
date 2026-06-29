@@ -5,7 +5,6 @@ from .identity import (
     AuthUserRepository,
     OAuthConnectionRepository,
     RefreshTokenRepository,
-    UserIdentityRepository,
     UserRepository,
 )
 from .registration import (
@@ -67,7 +66,6 @@ __all__ = (
     "StandingRepository",
     "TeamRepository",
     "TournamentRepository",
-    "UserIdentityRepository",
     "UserRepository",
     "WorkspaceMemberRepository",
     "WorkspaceRepository",

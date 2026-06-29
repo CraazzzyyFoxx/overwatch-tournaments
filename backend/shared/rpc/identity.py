@@ -79,6 +79,7 @@ def rehydrate_user(identity: dict[str, Any] | None) -> AuthUser:
         permissions=identity.get("permissions", []),
         workspaces=workspaces,
         workspace_rbac=workspace_rbac,
+        denies=identity.get("denies", []),
     )
     return user
 

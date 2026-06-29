@@ -32,11 +32,11 @@ COPY discord-service/pyproject.toml /app/discord-service/pyproject.toml
 COPY balancer-service/pyproject.toml /app/balancer-service/pyproject.toml
 COPY analytics-service/pyproject.toml /app/analytics-service/pyproject.toml
 
-# `shared` is a workspace member; its source is required to build its wheel during `uv sync`.
-COPY ./shared /app/shared
-
 ARG APP_PATH
 
+# System build deps are installed BEFORE copying ./shared so that frequent
+# changes to shared source do not invalidate these layers and force a costly
+# re-download/re-install of the Rust/OpenMP toolchain.
 RUN if [ "${APP_PATH}" = "balancer" ]; then \
         set -eux; \
         sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources; \
@@ -72,6 +72,9 @@ RUN if [ "${APP_PATH}" = "analytics" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# `shared` is a workspace member; its source is required to build its wheel during `uv sync`.
+COPY ./shared /app/shared
+
 # Install dependencies for the target service only
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -90,8 +93,16 @@ COPY ./${APP_PATH}-service /app/${APP_PATH}-service
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package ${APP_PATH}-service
 
-RUN if [ "${APP_PATH}" = "balancer" ]; then \
-        uvx --from maturin maturin develop \
+# Build the moo_core Rust extension. Cargo's crate registry/git caches and the
+# build target dir are persisted across builds via BuildKit cache mounts, so
+# crates are downloaded once and compilation is incremental. maturin is already
+# installed into the venv by `uv sync` (it is a Linux dependency of the service),
+# so call it directly instead of bootstrapping a throwaway env via `uvx`.
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/app/balancer-service/native/moo_core/target \
+    if [ "${APP_PATH}" = "balancer" ]; then \
+        maturin develop \
             --release \
             --features extension-module \
             --manifest-path /app/balancer-service/native/moo_core/Cargo.toml; \

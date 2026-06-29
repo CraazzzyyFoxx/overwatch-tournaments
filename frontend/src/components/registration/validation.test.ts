@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { BuiltInFieldConfig } from "@/types/registration.types";
+import type { SocialAccount } from "@/types/user.types";
 import * as registrationValidation from "./validation";
 
 const smurfTagsConfig: BuiltInFieldConfig = {
@@ -11,6 +12,23 @@ const smurfTagsConfig: BuiltInFieldConfig = {
     error_message: "Each smurf BattleTag must match Player#1234.",
   },
 };
+
+const verifiedBattleTagConfig: BuiltInFieldConfig = {
+  enabled: true,
+  required: false,
+  require_verified: true,
+};
+
+function account(partial: Partial<SocialAccount> & Pick<SocialAccount, "provider" | "username">): SocialAccount {
+  return {
+    id: 1,
+    user_id: 1,
+    url: null,
+    is_verified: true,
+    is_primary: false,
+    ...partial,
+  };
+}
 
 describe("registration validation helpers", () => {
   it("returns the first live validation error for the current step", () => {
@@ -82,5 +100,73 @@ describe("registration validation helpers", () => {
         " CrazzzyyFoxx # 2875 ",
       ),
     ).toBe("CrazzzyyFoxx#2875");
+  });
+});
+
+describe("require_verified identity validation", () => {
+  it("returns null when the field is not gated", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "battle_tag",
+        "Player#1234",
+        { enabled: true, required: false },
+        [],
+      ),
+    ).toBeNull();
+  });
+
+  it("requires linking a verified account when the registrant has none", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "battle_tag",
+        "Player#1234",
+        verifiedBattleTagConfig,
+        [account({ provider: "discord", username: "someone" })],
+      ),
+    ).toBe("Link a verified BattleTag account via OAuth to register.");
+  });
+
+  it("accepts a value that matches a verified account (case/format-insensitive)", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "battle_tag",
+        " crazzzyyfoxx # 2875 ",
+        verifiedBattleTagConfig,
+        [account({ provider: "battlenet", username: "CrazzzyyFoxx#2875" })],
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a value that does not match any verified account", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "battle_tag",
+        "Other#9999",
+        verifiedBattleTagConfig,
+        [account({ provider: "battlenet", username: "CrazzzyyFoxx#2875" })],
+      ),
+    ).toBe("BattleTag must match an OAuth-verified account on your profile.");
+  });
+
+  it("ignores unverified accounts of the same provider", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "battle_tag",
+        "Player#1234",
+        verifiedBattleTagConfig,
+        [account({ provider: "battlenet", username: "Player#1234", is_verified: false })],
+      ),
+    ).toBe("Link a verified BattleTag account via OAuth to register.");
+  });
+
+  it("flags an empty value when a verified account exists", () => {
+    expect(
+      registrationValidation.getVerifiedFieldError(
+        "discord_nick",
+        "",
+        { enabled: true, required: false, require_verified: true },
+        [account({ provider: "discord", username: "verified_user" })],
+      ),
+    ).toBe("Select your verified Discord account.");
   });
 });

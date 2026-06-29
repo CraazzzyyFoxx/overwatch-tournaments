@@ -908,9 +908,9 @@ def test_get_user_by_name(rpc: RpcHarness, name: str, entities: list[str]) -> No
     content = env["data"]
     assert content["name"] == name.replace("-", "#")
     if "battle_tag" in entities:
-        assert content["battle_tag"] != []
+        assert any(s["provider"] == "battlenet" for s in content["social_accounts"])
     if "twitch" in entities:
-        assert content["twitch"] != []
+        assert any(s["provider"] == "twitch" for s in content["social_accounts"])
 
 
 @pytest.mark.parametrize(

@@ -44,7 +44,7 @@ async def fetch_latest_ow_ranks_by_account(
             .over(
                 partition_by=[
                     UserRankSnapshot.user_id,
-                    UserRankSnapshot.battle_tag_id,
+                    UserRankSnapshot.social_account_id,
                     UserRankSnapshot.role,
                 ],
                 order_by=UserRankSnapshot.captured_at.desc(),
