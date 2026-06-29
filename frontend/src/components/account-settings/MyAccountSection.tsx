@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { Camera, Check, Eye, EyeOff, Loader2, Plus, Star, Trash2 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,9 @@ export default function MyAccountSection() {
     mutationFn: (id: number) => meService.setSocialPrimary(id),
     onSuccess: writeSocial,
   });
-  const removeAccount = useMutation({
-    mutationFn: (id: number) => meService.deleteSocialAccount(id),
+  const setVisibility = useMutation({
+    mutationFn: ({ id, visible }: { id: number; visible: boolean }) =>
+      meService.setSocialVisibility(id, visible),
     onSuccess: writeSocial,
   });
 
@@ -108,37 +109,44 @@ export default function MyAccountSection() {
               {!socialQuery.isLoading && accounts.length === 0 && (
                 <p className="text-sm text-slate-500">No linked accounts yet — add one via OAuth below.</p>
               )}
-              {accounts.map((account) => (
-                <div key={account.id} className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/3 px-3 py-2">
-                  <SocialIcon provider={account.provider} size={15} />
-                  <span className="flex-1 truncate text-sm text-white">{account.username}</span>
-                  {account.is_verified && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label="Verified" />}
-                  {account.is_primary ? (
-                    <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" aria-label="Primary" />
-                  ) : (
+              {accounts.map((account) => {
+                const visible = account.visible_global !== false;
+                return (
+                  <div
+                    key={account.id}
+                    className={`flex items-center gap-2 rounded-lg border border-white/5 bg-white/3 px-3 py-2 ${visible ? "" : "opacity-50"}`}
+                  >
+                    <SocialIcon provider={account.provider} size={15} />
+                    <span className="flex-1 truncate text-sm text-white">{account.username}</span>
+                    {account.is_verified && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label="Verified" />}
+                    {account.is_primary ? (
+                      <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" aria-label="Primary" />
+                    ) : (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title={account.is_verified ? "Make primary" : "Only OAuth-verified accounts can be primary"}
+                        disabled={!account.is_verified || setPrimary.isPending}
+                        onClick={() => setPrimary.mutate(account.id)}
+                      >
+                        <Star className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
-                      title={account.is_verified ? "Make primary" : "Only OAuth-verified accounts can be primary"}
-                      disabled={!account.is_verified || setPrimary.isPending}
-                      onClick={() => setPrimary.mutate(account.id)}
+                      className="h-7 w-7 text-slate-400 hover:text-white"
+                      title={visible ? "Hide from your public profile" : "Show on your public profile"}
+                      disabled={setVisibility.isPending}
+                      onClick={() => setVisibility.mutate({ id: account.id, visible: !visible })}
+                      aria-label={`${visible ? "Hide" : "Show"} ${account.username}`}
                     >
-                      <Star className="h-3.5 w-3.5" />
+                      {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-red-400/70 hover:text-red-400"
-                    disabled={removeAccount.isPending}
-                    onClick={() => removeAccount.mutate(account.id)}
-                    aria-label={`Remove ${account.username}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
               {OAUTH_ADDABLE.map((provider) => (
@@ -153,7 +161,10 @@ export default function MyAccountSection() {
                 </a>
               ))}
             </div>
-            <p className="text-[11px] text-slate-500">Accounts can only be added through OAuth, which also verifies them.</p>
+            <p className="text-[11px] text-slate-500">
+              Accounts can only be added through OAuth, which also verifies them. Hiding removes an account from
+              your public profile; only an administrator can fully delete it.
+            </p>
           </>
         )}
       </section>

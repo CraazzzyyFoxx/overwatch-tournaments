@@ -7,6 +7,11 @@ merge is superuser-only. Social identities are managed by **superusers only**
 is a lighter capability gated on ``user.read``. CSV import requires the global
 ``admin`` role. Avatar + CSV are binary/multipart (base64 via the gateway binary
 handler).
+
+Self-service (``me_social_*``, capability ``account.social``) lets users manage
+their own player's identities, but is **hide-only**: they can set-primary
+(verified accounts) and toggle global display visibility — full deletion stays
+superuser-only, so the verified identity is never destroyed by its owner.
 """
 
 from __future__ import annotations
@@ -293,20 +298,27 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "users.me_social_set_primary", op, session_factory=_SF)
 
-    @broker.subscriber("rpc.app.users.me_social_delete")
-    async def _me_social_delete(data: dict, msg: RabbitMessage) -> dict:
+    @broker.subscriber("rpc.app.users.me_social_set_visibility")
+    async def _me_social_set_visibility(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _account_gate(data)
             player_id = await _resolve_my_player_id(session, user)
-            account = await social_svc.delete_social_account(
-                session, account_id=int(data["account_id"]), user_id=player_id
-            )
-            if account is None:
+            account = await social_svc.get_social_account(session, int(data["account_id"]))
+            if account is None or account.user_id != player_id:
                 raise HTTPException(status_code=404, detail="Social account not found")
+            # Self-service is hide-only and global-scope: users toggle whether the
+            # account shows on their public profile. Hard delete stays superuser-only
+            # so the verified identity (and its OAuth link) is never destroyed here.
+            await social_svc.set_visibility(
+                session,
+                account_id=account.id,
+                workspace_id=None,
+                visible=bool(data.get("visible", True)),
+            )
             await session.commit()
             return await _refresh_user(session, player_id)
 
-        return await c.envelope(logger, "users.me_social_delete", op, session_factory=_SF)
+        return await c.envelope(logger, "users.me_social_set_visibility", op, session_factory=_SF)
 
     # ── Avatar (binary base64) ────────────────────────────────────────────────
     @broker.subscriber("rpc.app.users.avatar_upload")

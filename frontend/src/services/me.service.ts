@@ -10,7 +10,9 @@ async function fileToBase64(file: File): Promise<string> {
 
 /** Self-service account management for the current user (own player's social
  *  identities + own avatar). Adding social accounts is OAuth-only (start the
- *  link flow), so there is no manual "add" method here. */
+ *  link flow), so there is no manual "add" method here. Management is hide-only:
+ *  users set-primary + toggle global display visibility, but cannot delete an
+ *  account (full deletion is superuser-only). */
 const meService = {
   async getSocialAccounts(): Promise<User> {
     const res = await apiFetch("/api/v1/me/social");
@@ -22,8 +24,11 @@ const meService = {
     return res.json();
   },
 
-  async deleteSocialAccount(accountId: number): Promise<User> {
-    const res = await apiFetch(`/api/v1/me/social/${accountId}`, { method: "DELETE" });
+  async setSocialVisibility(accountId: number, visible: boolean): Promise<User> {
+    const res = await apiFetch(`/api/v1/me/social/${accountId}/visibility`, {
+      method: "POST",
+      body: { visible },
+    });
     return res.json();
   },
 

@@ -29,7 +29,9 @@ var UsersAdminRoutes = []edge.RouteSpec{
 	// Self-service: the current user manages their OWN player's social accounts.
 	// Capability "account.social" (deny-aware) is enforced in the worker; adding
 	// is OAuth-only (identity link flow), so there's no self "add" route here.
+	// Hide-only: users set-primary + toggle global visibility; full delete is
+	// superuser-only (the /admin/users/{id}/social DELETE above).
 	{Method: "GET", Pattern: "/api/v1/me/social", Queue: "rpc.app.users.me_social_list", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/me/social/{account_id}/primary", Queue: "rpc.app.users.me_social_set_primary", Path: []string{"account_id"}, Auth: edge.AuthRequired},
-	{Method: "DELETE", Pattern: "/api/v1/me/social/{account_id}", Queue: "rpc.app.users.me_social_delete", Path: []string{"account_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/me/social/{account_id}/visibility", Queue: "rpc.app.users.me_social_set_visibility", Path: []string{"account_id"}, Body: true, Auth: edge.AuthRequired},
 }
