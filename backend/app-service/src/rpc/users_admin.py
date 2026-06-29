@@ -309,11 +309,14 @@ def register(broker: Any, logger: Any) -> None:
             # Self-service is hide-only and global-scope: users toggle whether the
             # account shows on their public profile. Hard delete stays superuser-only
             # so the verified identity (and its OAuth link) is never destroyed here.
+            # The request body arrives under ``data["payload"]`` (gateway convention),
+            # not the top level — read it via ``c.payload`` like the admin handler.
+            visible = bool(c.payload(data).get("visible", True))
             await social_svc.set_visibility(
                 session,
                 account_id=account.id,
                 workspace_id=None,
-                visible=bool(data.get("visible", True)),
+                visible=visible,
             )
             await session.commit()
             return await _refresh_user(session, player_id)
