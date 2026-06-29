@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Pencil, Check, X, Loader2, Camera, ImageOff, ArrowRightLeft } from "lucide-react";
+import { Pencil, Check, X, Loader2, ArrowRightLeft } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { EditableAvatar } from "@/components/ui/editable-avatar";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,6 @@ interface AvatarSectionProps {
 
 function AvatarSection({ user, canEdit, onUserUpdated }: AvatarSectionProps) {
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => adminService.uploadUserAvatar(user.id, file),
@@ -49,60 +48,20 @@ function AvatarSection({ user, canEdit, onUserUpdated }: AvatarSectionProps) {
     },
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      uploadMutation.mutate(file);
-    }
-    e.target.value = "";
-  };
-
-  const initials = user.name
-    .split(/[#\s]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase())
-    .join("");
-
   const isPending = uploadMutation.isPending || deleteMutation.isPending;
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="relative group">
-        <Avatar className="h-20 w-20 text-xl">
-          <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
-          <AvatarFallback className="bg-muted text-muted-foreground font-medium">
-            {isPending ? <Loader2 className="h-6 w-6 animate-spin" /> : initials || "?"}
-          </AvatarFallback>
-        </Avatar>
-        {canEdit && !isPending && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-            <Camera className="h-5 w-5 text-white" />
-          </div>
-        )}
-        {canEdit && !isPending && (
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-full"
-            onChange={handleFileChange}
-          />
-        )}
-      </div>
-
-      {canEdit && user.avatar_url && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs text-destructive/70 hover:text-destructive hover:bg-destructive/10"
-          onClick={() => deleteMutation.mutate()}
-          disabled={isPending}
-        >
-          <ImageOff className="h-3.5 w-3.5 mr-1.5" />
-          Remove avatar
-        </Button>
-      )}
+      <EditableAvatar
+        src={user.avatar_url}
+        name={user.name}
+        size={80}
+        editable={canEdit}
+        busy={isPending}
+        onSelectFile={(file) => uploadMutation.mutate(file)}
+        onDelete={user.avatar_url ? () => deleteMutation.mutate() : undefined}
+        maxSizeBytes={2 * 1024 * 1024}
+      />
 
       {(uploadMutation.isError || deleteMutation.isError) && (
         <p className="text-xs text-destructive text-center max-w-[200px]">

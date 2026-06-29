@@ -1,17 +1,19 @@
 "use client";
 
-import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, Eye, EyeOff, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Plus, Star } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getSocialProviderConfig, sortSocialAccounts } from "@/lib/social-providers";
+import { notify } from "@/lib/notify";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { usePermissions } from "@/hooks/usePermissions";
 import meService from "@/services/me.service";
 import type { User } from "@/types/user.types";
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
 
 // Providers a user can OAuth-link (and thereby verify).
 const OAUTH_ADDABLE = ["battlenet", "discord", "twitch"] as const;
@@ -22,7 +24,6 @@ export default function MyAccountSection() {
   const { canUseCapability } = usePermissions();
   const canAvatar = canUseCapability("account.avatar");
   const canSocial = canUseCapability("account.social");
-  const fileRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const socialQuery = useQuery({
@@ -64,33 +65,19 @@ export default function MyAccountSection() {
       <section className="space-y-3">
         <h4 className="text-sm font-medium text-slate-300">Avatar</h4>
         <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16">
-            <AvatarImage src={user?.avatarUrl ?? undefined} alt={user?.username} />
-            <AvatarFallback>{user?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-          </Avatar>
+          <EditableAvatar
+            src={user?.avatarUrl}
+            name={user?.username}
+            size={72}
+            editable={canAvatar}
+            busy={avatarUpload.isPending || avatarDelete.isPending}
+            onSelectFile={(file) => avatarUpload.mutate(file)}
+            onDelete={user?.avatarUrl ? () => avatarDelete.mutate() : undefined}
+            maxSizeBytes={MAX_AVATAR_BYTES}
+            onError={(message) => notify.error(message)}
+          />
           {canAvatar ? (
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) avatarUpload.mutate(file);
-                  e.target.value = "";
-                }}
-              />
-              <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={avatarUpload.isPending}>
-                {avatarUpload.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                Upload
-              </Button>
-              {user?.avatarUrl && (
-                <Button size="sm" variant="ghost" onClick={() => avatarDelete.mutate()} disabled={avatarDelete.isPending}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Remove
-                </Button>
-              )}
-            </div>
+            <p className="text-xs text-slate-500">Click or drop an image to change it; hover to edit.</p>
           ) : (
             <p className="text-xs text-slate-500">Changing your avatar has been disabled by an administrator.</p>
           )}
