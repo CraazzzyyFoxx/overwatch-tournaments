@@ -19,6 +19,7 @@ import {
 
 import adminService from "@/services/admin.service";
 import { SocialAccountsEditor } from "@/components/social/SocialAccountsEditor";
+import { revalidateUser } from "@/app/actions/users";
 import type { User } from "@/types/user.types";
 
 // ─── Avatar section ─────────────────────────────────────────────────────────
@@ -222,6 +223,13 @@ export function PlayerProfileDialog({
 }: PlayerProfileDialogProps) {
   const [user, setUser] = useState(initialUser);
 
+  // Every section updates local state through this; also bust the Next Data
+  // Cache so users/[slug], the list and search reflect the change immediately.
+  const handleUserUpdated = (updated: User) => {
+    void revalidateUser(updated.id);
+    setUser(updated);
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
@@ -232,8 +240,8 @@ export function PlayerProfileDialog({
 
         {/* ── Avatar + Name header ──────────────────────── */}
         <div className="flex flex-col items-center gap-3 pb-4 border-b border-border/40">
-          <AvatarSection user={user} canEdit={canEdit} onUserUpdated={setUser} />
-          <NameSection user={user} canEdit={canEdit} onUserUpdated={setUser} />
+          <AvatarSection user={user} canEdit={canEdit} onUserUpdated={handleUserUpdated} />
+          <NameSection user={user} canEdit={canEdit} onUserUpdated={handleUserUpdated} />
           <span className="text-xs text-muted-foreground tabular-nums">ID: {user.id}</span>
           {canMerge && onMergeRequested ? (
             <Button type="button" variant="outline" size="sm" onClick={() => onMergeRequested(user)}>
@@ -257,7 +265,7 @@ export function PlayerProfileDialog({
             canManage={canManageIdentity}
             canSetVisibility={canSetVisibility}
             workspaceId={workspaceId}
-            onUserUpdated={setUser}
+            onUserUpdated={handleUserUpdated}
           />
         </div>
       </DialogContent>

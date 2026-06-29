@@ -11,6 +11,7 @@ import { notify } from "@/lib/notify";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { usePermissions } from "@/hooks/usePermissions";
 import meService from "@/services/me.service";
+import { revalidateUser } from "@/app/actions/users";
 import type { User } from "@/types/user.types";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -33,15 +34,26 @@ export default function MyAccountSection() {
   });
   const accounts = sortSocialAccounts(socialQuery.data?.social_accounts ?? []);
 
-  const writeSocial = (user: User) => queryClient.setQueryData(["me", "social"], user);
+  // Persist the fresh user into the query cache AND bust the Next Data Cache so
+  // the public users/[slug] header / list / search reflect the change at once.
+  const writeSocial = (user: User) => {
+    void revalidateUser(user.id);
+    queryClient.setQueryData(["me", "social"], user);
+  };
 
   const avatarUpload = useMutation({
     mutationFn: (file: File) => meService.setAvatar(file),
-    onSuccess: () => fetchMe({ force: true }),
+    onSuccess: () => {
+      void revalidateUser();
+      fetchMe({ force: true });
+    },
   });
   const avatarDelete = useMutation({
     mutationFn: () => meService.deleteAvatar(),
-    onSuccess: () => fetchMe({ force: true }),
+    onSuccess: () => {
+      void revalidateUser();
+      fetchMe({ force: true });
+    },
   });
   const setPrimary = useMutation({
     mutationFn: (id: number) => meService.setSocialPrimary(id),

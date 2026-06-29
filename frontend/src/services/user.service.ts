@@ -24,9 +24,10 @@ import { LogStatsName } from "@/types/stats.types";
 import { apiFetch } from "@/lib/api-fetch";
 
 // Public, workspace-scoped profile reads are cached in the Next Data Cache for
-// this long (seconds) when fetched server-side. Tagged for future on-demand
-// revalidation (`revalidateTag("user:<id>")`). Client (react-query) fetches
-// ignore the `next` option.
+// this long (seconds) when fetched server-side. Tagged for on-demand
+// revalidation: mutations call the `revalidateUser` server action
+// (src/app/actions/users.ts) to bust "users" / `user:<id>`. Client (react-query)
+// fetches ignore the `next` option.
 const USER_TTL_SECONDS = 300;
 
 export default class userService {
