@@ -1,11 +1,12 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, String
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
 
 if TYPE_CHECKING:
+    from shared.models.auth_user import AuthUser
     from shared.models.social import SocialAccount
 
 __all__ = ("User",)
@@ -27,6 +28,17 @@ class User(db.TimeStampIntegerMixin):
 
     name: Mapped[str] = mapped_column(String(), unique=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # 1:0..1 link to the auth identity (auth.user). Nullable + unique so a
+    # player may exist without an auth account, and an auth account links to
+    # at most one player.
+    auth_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    auth_user: Mapped["AuthUser | None"] = relationship(back_populates="player")
 
     # Unified player identities (battlenet / discord / twitch / boosty / …).
     # Replaced the former battle_tag / discord / twitch / external_account tables.

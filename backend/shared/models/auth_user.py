@@ -54,6 +54,9 @@ class AuthUser(db.TimeStampIntegerMixin):
     player_links: Mapped[list["AuthUserPlayer"]] = relationship(
         back_populates="auth_user", cascade="all, delete-orphan"
     )
+    player: Mapped["User | None"] = relationship(
+        back_populates="auth_user", uselist=False, viewonly=False,
+    )
     roles: Mapped[list["Role"]] = relationship(secondary="auth.user_roles", back_populates="users", lazy="selectin")
     oauth_connections: Mapped[list["OAuthConnection"]] = relationship(
         back_populates="auth_user", cascade="all, delete-orphan", lazy="selectin"
