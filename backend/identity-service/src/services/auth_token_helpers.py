@@ -121,14 +121,27 @@ async def _build_access_token_payload(
     )
 
 
-async def _load_user_denies(session: AsyncSession, user_id: int) -> list[dict[str, str]]:
-    """Per-user denied (resource, action) pairs from ``auth.user_permission_deny``."""
+async def _load_user_denies(session: AsyncSession, user_id: int) -> list[dict[str, object]]:
+    """Per-user denied (resource, action, workspace_id) triples from
+    ``auth.user_permission_deny``.
+
+    ``workspace_id`` is ``None`` for a global deny (blocks everywhere) or a
+    concrete workspace id for a deny scoped to that workspace only. See
+    ``AuthUser.is_denied`` for how the two are distinguished at check time.
+    """
     rows = await session.execute(
-        sa.select(models.Permission.resource, models.Permission.action)
+        sa.select(
+            models.Permission.resource,
+            models.Permission.action,
+            models.UserPermissionDeny.workspace_id,
+        )
         .join(models.UserPermissionDeny, models.UserPermissionDeny.permission_id == models.Permission.id)
         .where(models.UserPermissionDeny.user_id == user_id)
     )
-    return [{"resource": resource, "action": action} for resource, action in rows.all()]
+    return [
+        {"resource": resource, "action": action, "workspace_id": workspace_id}
+        for resource, action, workspace_id in rows.all()
+    ]
 
 
 async def _resolve_access_token_user(

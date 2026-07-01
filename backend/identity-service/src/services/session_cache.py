@@ -7,7 +7,8 @@ from redis.exceptions import RedisError
 
 from src.core.redis import get_redis
 
-RBAC_KEY_PREFIX = "rbac:user:"
+RBAC_CACHE_VERSION = 2  # v2: deny entries carry workspace_id (Phase A, Task 8)
+RBAC_KEY_PREFIX = f"rbac:v{RBAC_CACHE_VERSION}:user:"
 RBAC_TTL_SECONDS = 60
 
 # Idempotency cache for token refresh — prevents concurrent refresh
@@ -56,7 +57,7 @@ async def set_rbac(
     roles: list[str],
     permissions: list[dict[str, str]],
     workspace_roles: dict | None = None,
-    denies: list[dict[str, str]] | None = None,
+    denies: list[dict[str, object]] | None = None,
 ) -> None:
     """Store RBAC data with TTL."""
     try:

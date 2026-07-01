@@ -65,7 +65,7 @@ class AuthUser(db.TimeStampIntegerMixin):
         permissions: list[dict[str, str]],
         workspaces: list[dict] | None = None,
         workspace_rbac: dict[int, dict] | None = None,
-        denies: list[dict[str, str]] | None = None,
+        denies: list[dict[str, object]] | None = None,
     ) -> None:
         """Attach RBAC data from auth-service /validate response.
 
@@ -75,7 +75,10 @@ class AuthUser(db.TimeStampIntegerMixin):
 
         ``denies`` is a per-user deny overlay (negative RBAC): an exact
         (resource, action) deny overrides any grant — including the
-        superuser/admin bypass — for that action only.
+        superuser/admin bypass — for that action only. Each entry may carry
+        an optional ``workspace_id``: ``None``/absent means the deny is
+        global (blocks in every workspace); a concrete id scopes the deny
+        to that workspace only (see ``is_denied``).
 
         Stored as plain instance attributes (not Mapped) so SQLAlchemy
         ignores them.
@@ -86,18 +89,28 @@ class AuthUser(db.TimeStampIntegerMixin):
         object.__setattr__(self, "_cached_workspace_rbac", workspace_rbac or {})
         object.__setattr__(self, "_cached_denies", denies or [])
 
-    def is_denied(self, resource: str, action: str) -> bool:
+    def is_denied(self, resource: str, action: str, workspace_id: int | None = None) -> bool:
         """Per-user deny overlay: True when this exact (resource, action) is
-        explicitly denied for the user. Exact match only — never wildcard."""
+        explicitly denied for the user. Exact match only — never wildcard.
+
+        Each deny entry may carry a ``workspace_id``: ``None`` (or the key
+        missing entirely, for back-compat with pre-workspace-scoped JWTs)
+        means the deny is global and blocks the capability everywhere; a
+        concrete workspace id means the deny only applies within that
+        workspace context.
+        """
         for deny in getattr(self, "_cached_denies", None) or []:
-            if deny.get("resource") == resource and deny.get("action") == action:
+            if deny.get("resource") != resource or deny.get("action") != action:
+                continue
+            ws = deny.get("workspace_id")  # missing/None -> global (back-compat)
+            if ws is None or ws == workspace_id:
                 return True
         return False
 
-    def can_capability(self, resource: str, action: str) -> bool:
+    def can_capability(self, resource: str, action: str, workspace_id: int | None = None) -> bool:
         """Allow-by-default capability (e.g. ``account.avatar``): every
         authenticated user may do it unless an explicit deny removes it."""
-        return not self.is_denied(resource, action)
+        return not self.is_denied(resource, action, workspace_id)
 
     def get_workspace_ids(self) -> list[int]:
         """Return workspace IDs the user is a member of."""
@@ -135,7 +148,7 @@ class AuthUser(db.TimeStampIntegerMixin):
         Checks: superuser -> global admin role -> global permissions
         -> workspace-scoped permissions.
         """
-        if self.is_denied(resource, action):
+        if self.is_denied(resource, action, workspace_id):
             return False
         if self.is_superuser or self._has_admin_equivalent_role():
             return True
@@ -230,7 +243,9 @@ class AuthUser(db.TimeStampIntegerMixin):
         """Check if user has a specific permission"""
         # Negative RBAC: an explicit per-user deny overrides any grant,
         # including the superuser/admin bypass, for this exact action.
-        if self.is_denied(resource, action):
+        # Global check (workspace_id=None): has_permission() is itself the
+        # workspace-agnostic permission check, so only a global deny applies.
+        if self.is_denied(resource, action, workspace_id=None):
             return False
         if self.is_superuser or self._has_admin_equivalent_role():
             return True
