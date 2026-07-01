@@ -11,7 +11,7 @@ class PermissionSpec:
     description: str
 
 
-WORKSPACE_SYSTEM_ROLE_NAMES = ("owner", "admin", "member")
+WORKSPACE_SYSTEM_ROLE_NAMES = ("owner", "admin", "member", "player")
 
 CRUD = ("read", "create", "update", "delete")
 
@@ -104,6 +104,7 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     # exist only so an admin can DENY them per user (negative RBAC).
     _permission("account", "avatar", "Change one's own avatar"),
     _permission("account", "social", "Manage one's own social accounts"),
+    _permission("registration", "self_register", "Self-register for a tournament"),
 )
 
 _ALL_PERMISSION_NAMES = frozenset(permission.name for permission in PERMISSION_CATALOG)
@@ -166,6 +167,8 @@ def permission_names_for_workspace_role(role_name: str) -> tuple[str, ...]:
         return _admin_permission_names()
     if role_name == "member":
         return _member_permission_names()
+    if role_name == "player":
+        return ()
     raise ValueError(f"Unknown workspace system role: {role_name}")
 
 
