@@ -11,6 +11,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.rbac import legacy_workspace_role_name_for_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -63,15 +64,16 @@ async def _build_access_token_payload(
     if denies is None:
         denies = await _load_user_denies(session, current_user.id)
 
-    # Fetch workspace memberships
+    # Fetch workspace memberships. ``workspace_member`` is anchored on
+    # ``player_id``; join through ``players.user.auth_user_id`` to reach it
+    # from the auth identity. The denormalized ``role`` column is gone — each
+    # membership's legacy role name is derived from RBAC below so the token
+    # contract (``WorkspaceMembership.role``) stays populated.
     workspace_rows = await session.execute(
-        sa.select(
-            models.WorkspaceMember.workspace_id,
-            models.Workspace.slug,
-            models.WorkspaceMember.role,
-        )
+        sa.select(models.WorkspaceMember.workspace_id, models.Workspace.slug)
         .join(models.Workspace, models.Workspace.id == models.WorkspaceMember.workspace_id)
-        .where(models.WorkspaceMember.auth_user_id == current_user.id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+        .where(models.User.auth_user_id == current_user.id)
     )
     ws_memberships = workspace_rows.all()
     ws_ids = [row[0] for row in ws_memberships]
@@ -97,8 +99,11 @@ async def _build_access_token_payload(
 
     workspaces = []
     for row in ws_memberships:
-        ws_id, slug, member_role = row
+        ws_id, slug = row
         ws_data = ws_rbac.get(ws_id, ([], []))
+        member_role = await legacy_workspace_role_name_for_user(
+            session, user_id=current_user.id, workspace_id=ws_id
+        )
         workspaces.append(
             schemas.WorkspaceMembership(
                 workspace_id=ws_id,

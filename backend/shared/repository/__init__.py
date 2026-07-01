@@ -33,7 +33,13 @@ from .tournament import (
     TeamRepository,
     TournamentRepository,
 )
-from .workspace import PermissionRepository, RoleRepository, WorkspaceMemberRepository, WorkspaceRepository
+from .workspace import (
+    PermissionRepository,
+    RoleRepository,
+    WorkspaceMemberRepository,
+    WorkspaceRepository,
+    get_or_create_workspace_member,
+)
 
 __all__ = (
     "AchievementOverrideRepository",
@@ -69,4 +75,5 @@ __all__ = (
     "UserRepository",
     "WorkspaceMemberRepository",
     "WorkspaceRepository",
+    "get_or_create_workspace_member",
 )

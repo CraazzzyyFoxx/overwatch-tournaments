@@ -6,8 +6,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from shared.core import db
 
 if TYPE_CHECKING:
-    from shared.models.auth_user import AuthUser
     from shared.models.division_grid import DivisionGridVersion
+    from shared.models.user import User
 
 __all__ = (
     "Workspace",
@@ -40,15 +40,17 @@ class Workspace(db.TimeStampIntegerMixin):
 class WorkspaceMember(db.TimeStampIntegerMixin):
     __tablename__ = "workspace_member"
 
-    __table_args__ = (UniqueConstraint("workspace_id", "auth_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "player_id", name="uq_workspace_member_workspace_player"),
+        UniqueConstraint("id", "workspace_id", name="uq_workspace_member_id_workspace"),
+    )
 
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey("workspace.id", ondelete="CASCADE"), index=True
     )
-    auth_user_id: Mapped[int] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="CASCADE"), index=True
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.user.id", ondelete="CASCADE"), index=True
     )
-    role: Mapped[str] = mapped_column(String(), server_default="member")
 
     workspace: Mapped["Workspace"] = relationship(back_populates="members")
-    auth_user: Mapped["AuthUser"] = relationship()
+    player: Mapped["User"] = relationship()

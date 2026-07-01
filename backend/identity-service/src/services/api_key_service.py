@@ -9,6 +9,7 @@ from typing import Any
 import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.rbac import legacy_workspace_role_name_for_user
 from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,7 +138,10 @@ async def _has_workspace_import_access(
     member = await _get_workspace_member(session, user_id=user.id, workspace_id=workspace_id)
     if member is None:
         return False
-    if member.role in {"admin", "owner"}:
+    # ``workspace_member`` no longer stores a denormalized ``role``; derive the
+    # legacy role name from RBAC (``user_roles``, keyed on ``auth_user_id``).
+    legacy_role = await legacy_workspace_role_name_for_user(session, user_id=user.id, workspace_id=workspace_id)
+    if legacy_role in {"admin", "owner"}:
         return True
 
     workspace_rbac = await AuthService.get_workspace_roles_and_permissions_db(session, user.id, [workspace_id])

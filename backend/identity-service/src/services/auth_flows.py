@@ -13,6 +13,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.rbac import legacy_workspace_role_name_for_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -210,21 +211,26 @@ async def get_me(session: AsyncSession, user_id: int) -> schemas.AuthUser:
     data["roles"] = global_roles
     data["permissions"] = global_permissions
 
+    # ``workspace_member`` is anchored on ``player_id``; join through
+    # ``players.user.auth_user_id`` to reach it from the auth identity. The
+    # denormalized ``role`` column is gone, so each membership's legacy role
+    # name is derived from RBAC (``user_roles``, unchanged) below.
     workspace_rows = await session.execute(
         sa.select(
             models.WorkspaceMember.workspace_id,
             models.Workspace.slug,
-            models.WorkspaceMember.role,
         )
         .join(models.Workspace, models.Workspace.id == models.WorkspaceMember.workspace_id)
-        .where(models.WorkspaceMember.auth_user_id == user.id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+        .where(models.User.auth_user_id == user.id)
     )
     ws_memberships = workspace_rows.all()
     ws_ids = [row[0] for row in ws_memberships]
     ws_rbac = await AuthService.get_workspace_roles_and_permissions_db(session, user.id, ws_ids)
 
     workspaces = []
-    for ws_id, slug, member_role in ws_memberships:
+    for ws_id, slug in ws_memberships:
+        member_role = await legacy_workspace_role_name_for_user(session, user_id=user.id, workspace_id=ws_id)
         ws_data = ws_rbac.get(ws_id, ([], []))
         perm_strings = []
         for perm in ws_data[1]:

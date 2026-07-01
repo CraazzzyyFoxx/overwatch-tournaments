@@ -21,6 +21,7 @@ from shared.rbac import (
     assign_workspace_system_role,
     ensure_workspace_system_roles,
     get_workspace_system_role,
+    legacy_workspace_role_name_for_user,
 )
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission
@@ -56,16 +57,20 @@ async def _invalidate_auth_rbac_cache(auth_user_id: int, logger: Any) -> None:
 
 
 async def _member_payload(session: AsyncSession, member: models.WorkspaceMember) -> schemas.WorkspaceMemberRead:
-    auth_user = await _auth_user_repo.get(session, member.auth_user_id)
-    roles = await workspace_service.get_member_workspace_roles(session, member.workspace_id, member.auth_user_id)
+    auth_user_id = await workspace_service.get_member_auth_user_id(session, member)
+    auth_user = await _auth_user_repo.get(session, auth_user_id)
+    roles = await workspace_service.get_member_workspace_roles(session, member.workspace_id, auth_user_id)
+    legacy_role = await legacy_workspace_role_name_for_user(
+        session, user_id=auth_user_id, workspace_id=member.workspace_id
+    )
     return schemas.WorkspaceMemberRead.model_validate(
         {
             "id": member.id,
             "created_at": member.created_at,
             "updated_at": member.updated_at,
             "workspace_id": member.workspace_id,
-            "auth_user_id": member.auth_user_id,
-            "role": member.role,
+            "auth_user_id": auth_user_id,
+            "role": legacy_role,
             "username": auth_user.username if auth_user else None,
             "email": auth_user.email if auth_user else None,
             "first_name": auth_user.first_name if auth_user else None,
@@ -119,7 +124,7 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=400, detail="Workspace with this slug already exists")
             workspace = await workspace_service.create(session, **body.model_dump())
             await ensure_workspace_system_roles(session, workspace.id)
-            await workspace_service.add_member(session, workspace.id, user.id, role="owner")
+            await workspace_service.add_member(session, workspace.id, user.id)
             await assign_workspace_system_role(session, user_id=user.id, workspace_id=workspace.id, role_name="owner")
             await session.commit()
             await _invalidate_auth_rbac_cache(int(user.id), logger)

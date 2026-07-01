@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,12 +50,34 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         workspace_id: int,
         auth_user_id: int,
     ) -> models.WorkspaceMember | None:
+        """Look up a member by the auth identity, joining through ``players.user``.
+
+        ``workspace_member`` is anchored on ``player_id``; this join is the
+        bridge so RPC/route callers that only know the current auth user's id
+        can still resolve their membership row.
+        """
         result = await session.execute(
             sa.select(models.WorkspaceMember)
-            .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
+            .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+            .options(selectinload(models.WorkspaceMember.player))
             .where(
                 models.WorkspaceMember.workspace_id == workspace_id,
-                models.WorkspaceMember.auth_user_id == auth_user_id,
+                models.User.auth_user_id == auth_user_id,
+            )
+        )
+        return result.scalars().first()
+
+    async def get_by_player(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        player_id: int,
+    ) -> models.WorkspaceMember | None:
+        result = await session.execute(
+            sa.select(models.WorkspaceMember).where(
+                models.WorkspaceMember.workspace_id == workspace_id,
+                models.WorkspaceMember.player_id == player_id,
             )
         )
         return result.scalars().first()
@@ -66,11 +89,49 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
     ) -> Sequence[models.WorkspaceMember]:
         result = await session.execute(
             sa.select(models.WorkspaceMember)
-            .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
+            .options(selectinload(models.WorkspaceMember.player))
             .where(models.WorkspaceMember.workspace_id == workspace_id)
             .order_by(models.WorkspaceMember.id.asc())
         )
         return result.scalars().all()
+
+
+async def get_or_create_workspace_member(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    player_id: int,
+) -> models.WorkspaceMember:
+    """Idempotently create (or fetch) the membership row for ``player_id``.
+
+    Insert-or-select on ``uq_workspace_member_workspace_player``: an
+    ``INSERT ... ON CONFLICT DO NOTHING`` followed by a ``SELECT`` when the
+    row already existed, so concurrent calls never raise
+    ``IntegrityError``/duplicate-key races.
+    """
+    insert_stmt = (
+        pg_insert(models.WorkspaceMember)
+        .values(workspace_id=workspace_id, player_id=player_id)
+        .on_conflict_do_nothing(constraint="uq_workspace_member_workspace_player")
+        .returning(models.WorkspaceMember.id)
+    )
+    result = await session.execute(insert_stmt)
+    member_id = result.scalar_one_or_none()
+    if member_id is not None:
+        await session.flush()
+        member = await session.get(models.WorkspaceMember, member_id)
+        assert member is not None
+        return member
+
+    existing = await WorkspaceMemberRepository().get_by_player(
+        session, workspace_id=workspace_id, player_id=player_id
+    )
+    if existing is None:
+        raise RuntimeError(
+            f"get_or_create_workspace_member: no row after ON CONFLICT DO NOTHING "
+            f"(workspace_id={workspace_id}, player_id={player_id})"
+        )
+    return existing
 
 
 class RoleRepository(BaseRepository[models.Role]):

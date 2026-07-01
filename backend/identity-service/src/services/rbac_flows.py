@@ -516,9 +516,11 @@ async def assign_role_to_user(
                 detail="Permission denied: role.assign required",
             )
         member_result = await session.execute(
-            select(WorkspaceMember).where(
+            select(WorkspaceMember)
+            .join(models.User, models.User.id == WorkspaceMember.player_id)
+            .where(
                 WorkspaceMember.workspace_id == role.workspace_id,
-                WorkspaceMember.auth_user_id == data.user_id,
+                models.User.auth_user_id == data.user_id,
             )
         )
         if not member_result.scalar_one_or_none():
