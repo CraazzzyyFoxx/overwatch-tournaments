@@ -285,9 +285,14 @@ async def get_streaks(
 ) -> typing.Sequence[tuple[models.User, int, str, int]]:
     subquery = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role,
             models.Standing.overall_position,
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Standing, models.Standing.team_id == models.Player.team_id)
         .where(
@@ -305,7 +310,11 @@ async def get_streaks(
             subquery.c.overall_position,
         )
         .select_from(models.Player)
-        .join(subquery, subquery.c.user_id == models.Player.user_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
+        .join(subquery, subquery.c.user_id == models.WorkspaceMember.player_id)
         .join(models.User, models.User.id == subquery.c.user_id)
         .where(
             sa.and_(

@@ -73,12 +73,16 @@ async def _player_rank_history(
     query = (
         sa.select(
             models.Player.id.label("player_id"),
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
             models.Tournament.division_grid_version_id.label("version_id"),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -86,7 +90,7 @@ async def _player_rank_history(
             models.Player.is_substitution.is_(False),
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .order_by(models.Player.user_id, models.Player.role, models.Tournament.id)
+        .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
     )
     result = await session.execute(query)
     df = pd.DataFrame(result.mappings().all())

@@ -84,8 +84,14 @@ async def compute_mvp_dominance(
         .join(
             models.Player,
             sa.and_(
-                models.Player.user_id == models.MatchStatistics.user_id,
                 models.Player.tournament_id == tournament_id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            sa.and_(
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.player_id == models.MatchStatistics.user_id,
             ),
         )
         .where(

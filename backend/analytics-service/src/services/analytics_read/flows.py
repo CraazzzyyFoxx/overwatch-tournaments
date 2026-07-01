@@ -444,7 +444,7 @@ async def change_shift(
     analytics, calculated_shift = await service.change_shift(session, player_id, shift)
     player = await session.scalar(
         sa.select(models.Player)
-        .options(sa.orm.joinedload(models.Player.user))
+        .options(sa.orm.joinedload(models.Player.workspace_member))
         .where(models.Player.id == player_id)
     )
     if player is None:
