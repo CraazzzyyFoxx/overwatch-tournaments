@@ -134,16 +134,12 @@ async def unlink(
 
     provider_social = OAUTH_TO_SOCIAL.get(provider)
     if provider_social is not None:
-        links = (
-            await session.execute(
-                select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == user.id)
-            )
-        ).scalars().all()
-        for link in links:
+        player = await session.scalar(select(models.User).where(models.User.auth_user_id == user.id))
+        if player is not None:
             unverify = (
                 update(SocialAccount)
                 .where(
-                    SocialAccount.user_id == link.player_id,
+                    SocialAccount.user_id == player.id,
                     SocialAccount.provider == provider_social,
                     SocialAccount.is_verified.is_(True),
                 )

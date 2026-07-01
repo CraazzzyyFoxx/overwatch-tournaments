@@ -122,11 +122,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.execute(sa.delete(models.Player).where(models.Player.tournament_id == self.tournament_id))
             await s.execute(sa.delete(models.Team).where(models.Team.tournament_id == self.tournament_id))
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
-            await s.execute(
-                sa.delete(models.AuthUserPlayer).where(
-                    models.AuthUserPlayer.auth_user_id.in_(self.captain_auth_user_ids)
-                )
-            )
+            # players.user.auth_user_id is a plain column on User (no separate
+            # link-table row to clean up); deleting the User rows below is enough.
             await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids)))
             await s.execute(sa.delete(models.AuthUser).where(models.AuthUser.id.in_(self.captain_auth_user_ids)))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))

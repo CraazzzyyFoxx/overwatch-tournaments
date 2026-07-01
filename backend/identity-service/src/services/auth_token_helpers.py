@@ -19,23 +19,23 @@ from src.services.session_cache import get_rbac, set_rbac
 
 
 def _linked_players_payload(user: models.AuthUser) -> list[schemas.AuthLinkedPlayer]:
-    player_links = sorted(
-        user.player_links,
-        key=lambda link: (
-            not link.is_primary,
-            link.created_at,
-            link.player_id,
-        ),
-    )
+    """Return the 0-or-1 player linked to ``user`` via ``players.user.auth_user_id``.
+
+    Kept as a list (rather than an optional single value) for wire-shape
+    compatibility with the historical many-to-many ``auth.user_player`` model;
+    every returned player is, by construction, the single link, so
+    ``is_primary`` is always ``True``.
+    """
+    player = user.player
+    if player is None:
+        return []
     return [
         schemas.AuthLinkedPlayer(
-            player_id=link.player_id,
-            player_name=link.player.name,
-            is_primary=link.is_primary,
-            linked_at=link.created_at.isoformat(),
+            player_id=player.id,
+            player_name=player.name,
+            is_primary=True,
+            linked_at=player.created_at.isoformat(),
         )
-        for link in player_links
-        if link.player is not None
     ]
 
 

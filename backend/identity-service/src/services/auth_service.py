@@ -261,9 +261,7 @@ class AuthService:
             selectinload(models.AuthUser.roles).selectinload(models.Role.permissions)
         )
         if include_player_links:
-            query = query.options(
-                selectinload(models.AuthUser.player_links).selectinload(models.AuthUserPlayer.player)
-            )
+            query = query.options(selectinload(models.AuthUser.player))
         return query
 
     @staticmethod

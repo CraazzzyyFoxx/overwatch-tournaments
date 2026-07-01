@@ -162,7 +162,7 @@ async def _build_tournament_history(
 
     Resolution order to find player user_id (players.user.id):
     1. user_id on the registration itself
-    2. auth_user_id → AuthUserPlayer → player_id
+    2. auth_user_id → players.user.auth_user_id → player_id
 
     Returns a tuple of:
     - ``history_map``: registration_id -> most-recent-first history entries,
@@ -181,11 +181,10 @@ async def _build_tournament_history(
     if auth_ids_to_resolve:
         link_result = await session.execute(
             sa.select(
-                models.AuthUserPlayer.auth_user_id,
-                models.AuthUserPlayer.player_id,
+                models.User.auth_user_id,
+                models.User.id,
             ).where(
-                models.AuthUserPlayer.auth_user_id.in_(auth_ids_to_resolve),
-                models.AuthUserPlayer.is_primary.is_(True),
+                models.User.auth_user_id.in_(auth_ids_to_resolve),
             )
         )
         for auth_id, player_id in link_result:

@@ -49,7 +49,7 @@ class MergeContext:
 
 def empty_affected_counts() -> dict[str, int]:
     counts = {key: 0 for key, _, _ in REFERENCE_CONFIG}
-    counts["auth.user_player.player_id"] = 0
+    counts["players.user.auth_user_id"] = 0
     return counts
 
 
@@ -169,10 +169,10 @@ async def execute_merge(
                 target_user_id=context.target.id,
             )
 
-        affected_counts["auth.user_player.player_id"] = await _merge_auth_user_links(
+        affected_counts["players.user.auth_user_id"] = await _merge_auth_user_links(
             session,
-            source_user_id=context.source.id,
-            target_user_id=context.target.id,
+            source=context.source,
+            target=context.target,
             source_auth_links=context.source_auth_links,
             target_auth_links=context.target_auth_links,
         )
@@ -310,9 +310,11 @@ async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.Use
 
 
 async def _count_auth_links(session: AsyncSession, user_id: int) -> int:
+    """0 or 1 — a player links to at most one auth user via ``auth_user_id``."""
     result = await session.execute(
-        select(func.count(models.AuthUserPlayer.id)).where(
-            models.AuthUserPlayer.player_id == user_id
+        select(func.count()).select_from(models.User).where(
+            models.User.id == user_id,
+            models.User.auth_user_id.is_not(None),
         )
     )
     return int(result.scalar_one())
@@ -326,12 +328,7 @@ async def _count_affected_rows(session: AsyncSession, source_user_id: int) -> di
         column = getattr(model, column_name)
         result = await session.execute(select(func.count()).select_from(model).where(column == source_user_id))
         counts[reference_key] = int(result.scalar_one())
-    result = await session.execute(
-        select(func.count()).select_from(models.AuthUserPlayer).where(
-            models.AuthUserPlayer.player_id == source_user_id
-        )
-    )
-    counts["auth.user_player.player_id"] = int(result.scalar_one())
+    counts["players.user.auth_user_id"] = await _count_auth_links(session, source_user_id)
     return counts
 
 
@@ -462,11 +459,15 @@ async def _merge_achievement_evaluation_results(
 async def _merge_auth_user_links(
     session: AsyncSession,
     *,
-    source_user_id: int,
-    target_user_id: int,
+    source: models.User,
+    target: models.User,
     source_auth_links: int,
     target_auth_links: int,
 ) -> int:
+    """Move ``players.user.auth_user_id`` from the losing (source) player to the
+    surviving (target) player. A player keeps at most one ``auth_user_id`` (the
+    column is unique), so the source must be unlinked before the target can be
+    linked — never both set to the same auth_user_id at once."""
     if source_auth_links == 0:
         return 0
     if target_auth_links > 0:
@@ -474,12 +475,12 @@ async def _merge_auth_user_links(
             status_code=status.HTTP_409_CONFLICT,
             detail="Merge blocked: target profile already has auth links.",
         )
-    result = await session.execute(
-        update(models.AuthUserPlayer)
-        .where(models.AuthUserPlayer.player_id == source_user_id)
-        .values(player_id=target_user_id)
-    )
-    return int(result.rowcount or 0)
+    auth_user_id = source.auth_user_id
+    source.auth_user_id = None
+    await session.flush()
+    target.auth_user_id = auth_user_id
+    await session.flush()
+    return 1
 
 
 async def _invalidate_merge_caches(

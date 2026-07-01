@@ -261,8 +261,8 @@ def _apply_encounter_filters(
         if viewer_auth_user_id is None:
             query = query.where(sa.false())
         else:
-            linked_player_ids = sa.select(models.AuthUserPlayer.player_id).where(
-                models.AuthUserPlayer.auth_user_id == viewer_auth_user_id
+            linked_player_ids = sa.select(models.User.id).where(
+                models.User.auth_user_id == viewer_auth_user_id
             )
             query = query.join(
                 models.Player,

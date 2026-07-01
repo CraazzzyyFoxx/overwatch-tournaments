@@ -60,11 +60,13 @@ def _role(
 
 
 def _linked_player(player_id: int, name: str, *, is_primary: bool = True) -> SimpleNamespace:
+    """A ``players.user`` row as seen through ``AuthUser.player`` (single-link
+    model). ``is_primary`` is accepted for call-site compatibility with the
+    historical many-to-many fixture shape but is always True in practice."""
     now = datetime.now(UTC)
     return SimpleNamespace(
-        player_id=player_id,
-        player=SimpleNamespace(id=player_id, name=name),
-        is_primary=is_primary,
+        id=player_id,
+        name=name,
         created_at=now,
     )
 
@@ -74,7 +76,7 @@ def _user(
     email: str,
     *,
     roles: list[SimpleNamespace],
-    player_links: list[SimpleNamespace] | None = None,
+    player: SimpleNamespace | None = None,
 ) -> SimpleNamespace:
     now = datetime.now(UTC)
     role_names = [role.name for role in roles]
@@ -91,14 +93,14 @@ def _user(
         created_at=now,
         updated_at=None,
         roles=roles,
-        player_links=player_links or [],
+        player=player,
         has_permission=lambda _resource, _action: "admin" in role_names,
     )
 
 
 def test_list_auth_users_route_returns_user_summaries(monkeypatch: pytest.MonkeyPatch) -> None:
     admin_role = _role(1, "admin")
-    users = [_user(7, "ada@example.com", roles=[admin_role], player_links=[_linked_player(12, "AdaPlayer")])]
+    users = [_user(7, "ada@example.com", roles=[admin_role], player=_linked_player(12, "AdaPlayer"))]
 
     async def fake_list_users_with_rbac(session, params, *, include_player_links=False):
         assert params.search == "ada"
@@ -260,7 +262,7 @@ def test_get_auth_user_route_returns_effective_permissions(monkeypatch: pytest.M
     ]
     admin_role = _role(1, "admin", permissions=permissions)
     linked_player = _linked_player(42, "GracePlayer")
-    user = _user(9, "grace@example.com", roles=[admin_role], player_links=[linked_player])
+    user = _user(9, "grace@example.com", roles=[admin_role], player=linked_player)
 
     async def fake_get_user_with_rbac(session, user_id, *, include_player_links=False):
         assert user_id == 9
@@ -316,7 +318,7 @@ def test_get_auth_user_route_raises_not_found(monkeypatch: pytest.MonkeyPatch) -
 def test_get_current_user_info_returns_linked_players(monkeypatch: pytest.MonkeyPatch) -> None:
     admin_role = _role(1, "admin")
     linked_player = _linked_player(42, "GracePlayer")
-    user = _user(9, "grace@example.com", roles=[admin_role], player_links=[linked_player])
+    user = _user(9, "grace@example.com", roles=[admin_role], player=linked_player)
 
     async def fake_get_user_with_rbac(session, user_id, *, include_player_links=False):
         assert user_id == 9

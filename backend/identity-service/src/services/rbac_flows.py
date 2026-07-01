@@ -58,23 +58,18 @@ def _effective_permissions(user: models.AuthUser) -> list[str]:
 
 
 def _linked_players_payload(user: models.AuthUser) -> list[schemas.AuthUserLinkedPlayerRead]:
-    player_links = sorted(
-        user.player_links,
-        key=lambda link: (
-            not link.is_primary,
-            link.created_at,
-            link.player_id,
-        ),
-    )
+    """Return the 0-or-1 player linked to ``user`` via ``players.user.auth_user_id``
+    (see ``auth_token_helpers._linked_players_payload`` for the wire-shape note)."""
+    player = user.player
+    if player is None:
+        return []
     return [
         schemas.AuthUserLinkedPlayerRead(
-            player_id=link.player_id,
-            player_name=link.player.name,
-            is_primary=link.is_primary,
-            linked_at=link.created_at.isoformat(),
+            player_id=player.id,
+            player_name=player.name,
+            is_primary=True,
+            linked_at=player.created_at.isoformat(),
         )
-        for link in player_links
-        if link.player is not None
     ]
 
 

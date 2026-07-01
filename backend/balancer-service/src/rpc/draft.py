@@ -414,9 +414,7 @@ def register(broker: Any, logger: Any) -> None:
             draft, pick = await _load_pick(session, pick_id)
             public_user_ids = list(
                 await session.scalars(
-                    sa.select(models.AuthUserPlayer.player_id)
-                    .where(models.AuthUserPlayer.auth_user_id == user.id)
-                    .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id.asc())
+                    sa.select(models.User.id).where(models.User.auth_user_id == user.id)
                 )
             )
             public_user_id = public_user_ids[0] if public_user_ids else None
@@ -469,7 +467,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = DraftPickOverrideRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             public_user_id = await session.scalar(
-                sa.select(models.AuthUserPlayer.player_id).where(models.AuthUserPlayer.auth_user_id == user.id)
+                sa.select(models.User.id).where(models.User.auth_user_id == user.id)
             )
             result = await selection.override(
                 session,

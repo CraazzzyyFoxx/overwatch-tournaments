@@ -19,18 +19,9 @@ from src import models
 
 
 async def _propagate_to_player(session: AsyncSession, auth_user_id: int, avatar_url: str | None) -> None:
-    """Mirror the avatar onto the user's primary linked player (``players.user``)
+    """Mirror the avatar onto the user's linked player (``players.user``)
     so it shows on ``users/[slug]`` (which renders the player, not the auth user)."""
-    link = (
-        await session.execute(
-            select(models.AuthUserPlayer)
-            .where(models.AuthUserPlayer.auth_user_id == auth_user_id)
-            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id)
-        )
-    ).scalars().first()
-    if link is None:
-        return
-    player = await session.get(models.User, link.player_id)
+    player = await session.scalar(select(models.User).where(models.User.auth_user_id == auth_user_id))
     if player is not None:
         player.avatar_url = avatar_url
 

@@ -62,21 +62,18 @@ async def _resolve_captain_identity(
     Returns side and linked players.user id.
     Raises 403 if user is not a captain of either team.
     """
-    result = await session.execute(
-        select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user.id)
-    )
-    links = result.scalars().all()
-    player_ids = {link.player_id for link in links}
+    result = await session.execute(select(models.User).where(models.User.auth_user_id == auth_user.id))
+    player = result.scalar_one_or_none()
 
-    if not player_ids:
+    if player is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No player profile linked to your account",
         )
 
-    if encounter.home_team and encounter.home_team.captain_id in player_ids:
+    if encounter.home_team and encounter.home_team.captain_id == player.id:
         return "home", encounter.home_team.captain_id
-    if encounter.away_team and encounter.away_team.captain_id in player_ids:
+    if encounter.away_team and encounter.away_team.captain_id == player.id:
         return "away", encounter.away_team.captain_id
 
     raise HTTPException(

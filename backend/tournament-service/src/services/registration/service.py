@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
+from loguru import logger
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import enums
 from shared.core.social import SocialProvider
@@ -148,6 +149,62 @@ async def _find_user_by_battle_tag(session: AsyncSession, battle_tag: str) -> mo
     return await session.get(models.User, user_id)
 
 
+async def _find_owned_user(session: AsyncSession, auth_user_id: int | None) -> models.User | None:
+    """The player already linked to this auth account via ``players.user.auth_user_id``."""
+    if auth_user_id is None:
+        return None
+    return await session.scalar(sa.select(models.User).where(models.User.auth_user_id == auth_user_id))
+
+
+async def _move_battle_tag_identity(
+    session: AsyncSession,
+    *,
+    shadow: models.User,
+    target: models.User,
+) -> None:
+    """Move ``shadow``'s battlenet social accounts onto ``target``.
+
+    This is NOT a full user merge (achievements/match stats/registration history
+    stay attributed to ``shadow``'s id — see ``ensure_player_identity`` docstring
+    for why a full audited merge is out of scope here). It only resolves the
+    narrow collision ``ensure_player_identity`` cares about: two distinct
+    ``players.user`` rows both claiming the same battletag handle. Moving the
+    handle(s) means future lookups (registration, log import, CSV import) all
+    converge on ``target`` instead of re-splitting the identity. Idempotent;
+    flushes only, caller commits.
+    """
+    accounts = await social_identity.list_social_accounts(session, shadow.id, providers=[SocialProvider.BATTLENET])
+    for account in accounts:
+        existing = await social_identity.find_by_handle(
+            session, provider=SocialProvider.BATTLENET, username=account.username, user_id=target.id
+        )
+        if existing is not None:
+            # Target already owns this exact handle — drop the shadow's duplicate.
+            await session.delete(account)
+        else:
+            account.user_id = target.id
+            account.is_primary = False
+    await session.flush()
+    for provider in (SocialProvider.BATTLENET,):
+        rows = (
+            await session.execute(
+                sa.select(models.SocialAccount)
+                .where(models.SocialAccount.user_id == target.id, models.SocialAccount.provider == provider)
+                .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+            )
+        ).scalars().all()
+        if rows and not any(row.is_primary for row in rows):
+            rows[0].is_primary = True
+    await session.flush()
+    logger.warning(
+        "Collapsed colliding shadow player's battletag identity onto account-owned player; "
+        "historical stats/achievements remain attributed to the shadow player id and are "
+        "NOT reassigned — run the admin user-merge tool to fully consolidate if needed",
+        shadow_player_id=shadow.id,
+        target_player_id=target.id,
+    )
+
+
 async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, battle_tag: str) -> None:
     if "#" not in battle_tag:
         return
@@ -168,20 +225,47 @@ async def ensure_player_identity(
     aren't yet in the analytics system — be picked up by rank collection / the
     open-profile gate. Dedup is by the normalized handle (case-insensitive), so a
     later log/CSV import reconciles to the same player. Flushes only; caller commits.
+
+    Identity precedence (registrant may already have an authenticated account):
+    1. An already-linked registration (``registration.user_id`` set, e.g. by a
+       prior save) is respected as-is.
+    2. Else, if the registering auth account already owns a player
+       (``players.user.auth_user_id``), that player is reused — the battletag is
+       attached to it rather than find-or-create-by-battletag. If a *different*
+       shadow player (no auth link) already owns that exact battletag, its
+       battlenet identity is collapsed onto the account-owned player (see
+       ``_move_battle_tag_identity``) rather than silently leaving the handle
+       split across two player rows. This is an identity-only collapse, not a
+       full user merge: non-identity data (stats, achievements, past
+       registrations) stays on the shadow player id.
+    3. Else, fall back to the historical battletag dedup.
+    4. Else, create a new bare player for this battletag (linked to the auth
+       account when present).
     """
     battle_tag = registration.battle_tag
     if not battle_tag:
         return registration.user_id
 
-    # Respect an already-linked player (e.g. resolved via AuthUserPlayer); only
-    # find-or-create when the registration isn't linked yet.
+    # Respect an already-linked registration; only reconcile when unset.
     user: models.User | None = None
     if registration.user_id is not None:
         user = await session.get(models.User, registration.user_id)
+
+    registration_auth_user_id = getattr(registration, "auth_user_id", None)
+
+    if user is None:
+        owned = await _find_owned_user(session, registration_auth_user_id)
+        if owned is not None:
+            user = owned
+            shadow = await _find_user_by_battle_tag(session, battle_tag)
+            if shadow is not None and shadow.id != owned.id:
+                await _move_battle_tag_identity(session, shadow=shadow, target=owned)
+
     if user is None:
         user = await _find_user_by_battle_tag(session, battle_tag)
+
     if user is None:
-        user = models.User(name=battle_tag)
+        user = models.User(name=battle_tag, auth_user_id=registration_auth_user_id)
         session.add(user)
         await session.flush()
 

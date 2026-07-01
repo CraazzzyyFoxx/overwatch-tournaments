@@ -363,16 +363,9 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=409, detail="Already registered for this tournament")
 
             # Resolve player profile from auth_user (explicit query to avoid lazy load)
-            user_player_id: int | None = None
-            link_result = await session.execute(
-                sa.select(models.AuthUserPlayer).where(
-                    models.AuthUserPlayer.auth_user_id == user.id,
-                    models.AuthUserPlayer.is_primary.is_(True),
-                )
+            user_player_id: int | None = await session.scalar(
+                sa.select(models.User.id).where(models.User.auth_user_id == user.id)
             )
-            primary_link = link_result.scalar_one_or_none()
-            if primary_link is not None:
-                user_player_id = primary_link.player_id
 
             # Identity fields flagged ``require_verified`` must match an
             # OAuth-verified social account on the registrant's player profile.

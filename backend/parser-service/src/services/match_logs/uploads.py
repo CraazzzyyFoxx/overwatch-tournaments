@@ -36,13 +36,7 @@ async def resolve_auth_uploader_id(session: AsyncSession, auth_user: models.Auth
     if auth_user is None:
         return None
 
-    player_link = await session.execute(
-        select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user.id).limit(1)
-    )
-    auth_player = player_link.scalar_one_or_none()
-    if auth_player is None:
-        return None
-    return auth_player.player_id
+    return await session.scalar(select(models.User.id).where(models.User.auth_user_id == auth_user.id))
 
 
 async def store_uploaded_log_bytes(

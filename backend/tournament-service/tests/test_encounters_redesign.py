@@ -36,7 +36,7 @@ class EncounterRedesignFilterTests(TestCase):
         compiled = str(query.compile(compile_kwargs={"literal_binds": True}))
 
         self.assertIn("tournament.player", compiled)
-        self.assertIn("auth.user_player", compiled)
+        self.assertIn('players."user"', compiled)
         self.assertIn("auth_user_id = 42", compiled)
 
     def test_my_team_scope_without_user_returns_empty_filter(self) -> None:
