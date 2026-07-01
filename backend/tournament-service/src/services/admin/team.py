@@ -297,7 +297,7 @@ async def add_player_to_team(session: AsyncSession, team_id: int, data: admin_sc
     player_data["workspace_member_id"] = await _resolve_workspace_member_id(
         session,
         tournament_id=team.tournament_id,
-        player_id=player_data["user_id"],
+        player_id=player_data.pop("user_id"),
     )
 
     # Create player
@@ -355,7 +355,7 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
     player_data["workspace_member_id"] = await _resolve_workspace_member_id(
         session,
         tournament_id=team.tournament_id,
-        player_id=player_data["user_id"],
+        player_id=player_data.pop("user_id"),
     )
 
     # Create player

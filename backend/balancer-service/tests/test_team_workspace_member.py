@@ -1,7 +1,7 @@
-"""P5.2c: balancer-service's ``bulk_create_from_balancer`` finalize-roster
-Player-creation site must populate ``workspace_member_id`` (alongside the
-retained ``user_id``) so workspace-scoped analytics readers that INNER-JOIN
-on it don't silently drop newly created roster rows.
+"""P5.3: balancer-service's ``bulk_create_from_balancer`` finalize-roster
+Player-creation site must populate ``workspace_member_id`` (``Player.user_id``
+was dropped in the contract step, iwrefac07) so workspace-scoped analytics
+readers that INNER-JOIN on it don't silently drop newly created roster rows.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def _result(value):
 
 
 class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
-    async def test_new_player_gets_workspace_member_id_and_user_id(self) -> None:
+    async def test_new_player_gets_workspace_member_id(self) -> None:
         tournament = SimpleNamespace(id=88, workspace_id=55)
         captain_user = SimpleNamespace(id=7)
         member_user = SimpleNamespace(id=42)
@@ -120,5 +120,5 @@ class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
         ]
         self.assertEqual(1, len(player_calls))
         created_player = player_calls[0]
-        self.assertEqual(42, created_player.user_id)
+        self.assertFalse(hasattr(created_player, "user_id"))
         self.assertEqual(9001, created_player.workspace_member_id)

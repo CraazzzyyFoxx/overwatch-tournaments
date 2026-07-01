@@ -58,7 +58,6 @@ def to_user_tournament_player(
     player: models.Player, *, grid: DivisionGrid
 ) -> schemas.UserTournamentPlayer:
     """Player card inside UserTournament.players."""
-    member = player.workspace_member
     return schemas.UserTournamentPlayer(
         id=player.id,
         name=player.name,
@@ -66,7 +65,9 @@ def to_user_tournament_player(
         sub_role=player.sub_role,
         rank=player.rank,
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
-        user_id=member.player_id if member is not None else player.user_id,
+        # workspace_member_id is NOT NULL (contract step, iwrefac07): the
+        # identity anchor is always workspace_member.player_id.
+        user_id=player.workspace_member.player_id,
         is_substitution=player.is_substitution,
         is_newcomer=player.is_newcomer,
         is_newcomer_role=player.is_newcomer_role,
@@ -138,10 +139,11 @@ def to_encounter_stage_item_summary(
 def _to_encounter_team_player_ref(
     player: models.Player,
 ) -> schemas.UserEncounterTeamPlayerRef:
-    member = player.workspace_member
+    # workspace_member_id is NOT NULL (contract step, iwrefac07): the identity
+    # anchor is always workspace_member.player_id.
     return schemas.UserEncounterTeamPlayerRef(
         id=player.id,
-        user_id=member.player_id if member is not None else player.user_id,
+        user_id=player.workspace_member.player_id,
         role=player.role,
         name=player.name,
     )

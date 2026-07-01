@@ -55,11 +55,11 @@ class Player(db.TimeStampIntegerMixin):
     __tablename__ = "player"
 
     __table_args__ = (
-        Index("ix_player_user_tournament", "user_id", "tournament_id"),
-        Index("ix_player_team_user", "team_id", "user_id"),
+        Index("ix_player_workspace_member_tournament", "workspace_member_id", "tournament_id"),
+        Index("ix_player_team_workspace_member", "team_id", "workspace_member_id"),
         Index(
-            "ix_player_user_not_sub",
-            "user_id",
+            "ix_player_member_not_sub",
+            "workspace_member_id",
             "tournament_id",
             postgresql_where=text("is_substitution = false"),
         ),
@@ -84,15 +84,13 @@ class Player(db.TimeStampIntegerMixin):
     is_newcomer_role: Mapped[bool] = mapped_column(Boolean(), server_default="false")
 
     tournament: Mapped[Tournament] = relationship()
-    user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"))
-    user: Mapped["User"] = relationship()
-    # Expand step of the workspace-anchoring migration: coexists with ``user_id`` until
-    # readers are migrated and the CONTRACT step (iwrefac06b) drops ``user_id`` and sets
-    # this column NOT NULL. ``workspace_member`` lives in the public schema.
-    workspace_member_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspace_member.id", ondelete="CASCADE"), nullable=True, index=True
+    # Contract step of the workspace-anchoring migration (iwrefac07): ``user_id`` has
+    # been dropped and this column is now the sole, NOT NULL anchor for a roster row's
+    # identity. ``workspace_member`` lives in the public schema.
+    workspace_member_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="CASCADE")
     )
-    workspace_member: Mapped["WorkspaceMember | None"] = relationship()
+    workspace_member: Mapped["WorkspaceMember"] = relationship()
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
     team: Mapped["Team"] = relationship(back_populates="players")
 

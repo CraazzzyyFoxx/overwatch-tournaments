@@ -110,8 +110,14 @@ async def to_pydantic_player(
             fallback_grid=DEFAULT_GRID,
         )
 
+    player_dict = player.to_dict()
+    # Player.user_id was dropped in the contract step (iwrefac07); PlayerRead.user_id
+    # is resolved from workspace_member.player_id instead (workspace_member is always
+    # loaded by team_entities/player_entities regardless of the "user" entity flag).
+    player_dict["user_id"] = player.workspace_member.player_id
+
     return schemas.PlayerRead(
-        **player.to_dict(),
+        **player_dict,
         division=division,
         tournament=tournament,
         team=team,

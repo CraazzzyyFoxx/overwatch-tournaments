@@ -42,14 +42,18 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
         players_entities = utils.prepare_entities(in_entities, "players")
         players_entity = utils.join_entity(child, models.Team.players)
         entities.append(players_entity)
+        # PlayerRead.user_id is a required field (resolved from
+        # workspace_member.player_id, contract step iwrefac07), so
+        # workspace_member itself must always be loaded here -- not just when
+        # "user"/"workspace_member" is requested. The nested
+        # workspace_member.player (+ further user sub-entities) stays gated
+        # behind "user" since that's the expensive/optional part.
+        workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
+        entities.append(workspace_member_entity)
         if "user" in players_entities:
-            workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
-            entities.append(workspace_member_entity)
             user_entity = utils.join_entity(workspace_member_entity, models.WorkspaceMember.player)
             entities.append(user_entity)
             entities.extend(user_service.user_entities(utils.prepare_entities(players_entities, "user"), user_entity))
-        elif "workspace_member" in players_entities:
-            entities.append(utils.join_entity(players_entity, models.Player.workspace_member))
     if "captain" in in_entities:
         captain_entity = utils.join_entity(child, models.Team.captain)
         entities.append(captain_entity)
@@ -63,11 +67,14 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
 def player_entities(entities_in: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
     entities = []
 
-    if "user" in entities_in or "workspace_member" in entities_in:
-        workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
-        entities.append(workspace_member_entity)
-        if "user" in entities_in:
-            entities.append(utils.join_entity(workspace_member_entity, models.WorkspaceMember.player))
+    # PlayerRead.user_id is a required field resolved from
+    # workspace_member.player_id (contract step iwrefac07), so workspace_member
+    # is always loaded here -- the nested .player (full user profile) stays
+    # gated behind "user".
+    workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
+    entities.append(workspace_member_entity)
+    if "user" in entities_in:
+        entities.append(utils.join_entity(workspace_member_entity, models.WorkspaceMember.player))
     if "tournament" in entities_in:
         entities.append(utils.join_entity(child, models.Player.tournament))
     if "team" in entities_in:
@@ -312,7 +319,6 @@ async def create_player(
         sub_role=normalize_sub_role(sub_role),
         rank=rank,
         role=role,
-        user_id=user.id,
         tournament_id=tournament.id,
         team_id=team.id,
         is_substitution=is_substitution,
@@ -393,7 +399,6 @@ def create_player_sync(
         sub_role=normalize_sub_role(sub_role),
         rank=rank,
         role=role,
-        user_id=user.id,
         tournament_id=tournament.id,
         team_id=team.id,
         is_substitution=is_substitution,

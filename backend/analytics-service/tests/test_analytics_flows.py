@@ -73,7 +73,9 @@ def _player(
         rank=rank,
         role="Damage",
         tournament_id=7,
-        user_id=player_id + 1000,
+        # Player.user_id was dropped in the contract step (iwrefac07); the
+        # identity anchor is workspace_member.player_id instead.
+        workspace_member=SimpleNamespace(player_id=player_id + 1000),
         team_id=team_id,
         is_newcomer=is_newcomer,
         is_newcomer_role=is_newcomer_role,

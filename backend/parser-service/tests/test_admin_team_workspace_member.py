@@ -1,7 +1,7 @@
-"""P5.2c: parser-service's admin/team.py Player-creation sites must populate
-``workspace_member_id`` (alongside the retained ``user_id``) so
-workspace-scoped analytics readers that INNER-JOIN on it don't silently
-drop newly created roster rows.
+"""P5.3: parser-service's admin/team.py Player-creation sites must populate
+``workspace_member_id`` (``Player.user_id`` was dropped in the contract step,
+iwrefac07) so workspace-scoped analytics readers that INNER-JOIN on it don't
+silently drop newly created roster rows.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
         self.assertEqual(404, ctx.exception.status_code)
         get_or_create.assert_not_awaited()
 
-    async def test_add_player_to_team_sets_workspace_member_id_and_user_id(self) -> None:
+    async def test_add_player_to_team_sets_workspace_member_id(self) -> None:
         team_result = Mock()
         team_result.scalar_one_or_none.return_value = SimpleNamespace(id=3, tournament_id=88)
         user_result = Mock()
@@ -101,10 +101,10 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
         self.assertEqual("created", result)
         resolve_member.assert_awaited_once_with(session, tournament_id=88, player_id=7)
         created_player = session.add.call_args.args[0]
-        self.assertEqual(7, created_player.user_id)
+        self.assertFalse(hasattr(created_player, "user_id"))
         self.assertEqual(4242, created_player.workspace_member_id)
 
-    async def test_create_player_sets_workspace_member_id_and_user_id(self) -> None:
+    async def test_create_player_sets_workspace_member_id(self) -> None:
         user_result = Mock()
         user_result.scalar_one_or_none.return_value = SimpleNamespace(id=9)
         team_result = Mock()
@@ -134,5 +134,5 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
         self.assertEqual("created", result)
         resolve_member.assert_awaited_once_with(session, tournament_id=101, player_id=9)
         created_player = session.add.call_args.args[0]
-        self.assertEqual(9, created_player.user_id)
+        self.assertFalse(hasattr(created_player, "user_id"))
         self.assertEqual(9001, created_player.workspace_member_id)

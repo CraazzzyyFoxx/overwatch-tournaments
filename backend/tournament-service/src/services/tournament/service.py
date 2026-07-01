@@ -464,7 +464,10 @@ async def get_league_player_stacks(
     stacks = defaultdict(list)
     for (team_id, tournament_id), team_players in team_tournament_players.items():
         for player1, player2 in combinations(team_players, 2):
-            stack_key = tuple(sorted([player1.user_id, player2.user_id]))
+            # Player.user_id was dropped in the contract step (iwrefac07); the
+            # identity anchor is workspace_member.player_id instead (already
+            # eager-loaded above).
+            stack_key = tuple(sorted([player1.workspace_member.player_id, player2.workspace_member.player_id]))
             stacks[stack_key].append((team_id, tournament_id))
 
     team_tournament_ids = {(team_id, tournament_id) for stack in stacks.values() for team_id, tournament_id in stack}

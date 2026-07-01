@@ -265,7 +265,10 @@ def get_plackett_luce():
 
 
 def get_id_role(player: models.Player) -> str:
-    return f"{player.user_id}-{player.role}"
+    # Player.user_id was dropped in the contract step (iwrefac07); the identity
+    # anchor is workspace_member.player_id instead. Callers of this function
+    # (see service.py) already eager-load Player.workspace_member.
+    return f"{player.workspace_member.player_id}-{player.role}"
 
 
 def get_player_rating(pl: PlackettLuce, player: models.Player) -> PlackettLuceRating:

@@ -1,9 +1,10 @@
-"""P5.2c: user_merge must keep ``tournament.player.workspace_member_id`` in
-sync with the ``user_id`` re-point it already performs. When a losing
-player's roster rows move source -> target, their workspace_member_id has
-to follow into the target's membership for each row's own tournament's
-workspace -- otherwise workspace-scoped analytics readers (INNER-JOIN on
-workspace_member_id) silently drop merged rows.
+"""P5.3: user_merge no longer has a plain ``tournament.player.user_id`` column to
+reassign (contract step dropped it). ``_repoint_player_workspace_members`` is now
+the sole mechanism that moves ``Player`` rows during a merge: it finds rows
+anchored on the source's ``workspace_member`` and repoints each at the target's
+membership for that row's own tournament's workspace -- otherwise
+workspace-scoped analytics readers (INNER-JOIN on workspace_member_id) would
+silently drop merged rows.
 """
 
 from __future__ import annotations
@@ -27,15 +28,15 @@ user_merge = importlib.import_module("src.services.admin.user_merge")
 
 class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
     async def test_repoints_each_distinct_tournament_workspace_once(self) -> None:
-        # Two Player rows now owned by target_user_id: one in workspace 1
+        # Two Player rows owned by source_user_id: one in workspace 1
         # (tournament 10), one in workspace 2 (tournament 20).
         rows_result = Mock()
         rows_result.all.return_value = [
             (101, 10, 1),
             (102, 20, 2),
         ]
-        update_result_1 = Mock()
-        update_result_2 = Mock()
+        update_result_1 = Mock(rowcount=1)
+        update_result_2 = Mock(rowcount=1)
         session = SimpleNamespace(
             execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2])
         )
@@ -49,11 +50,14 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
         ) as get_or_create:
-            await user_merge._repoint_player_workspace_members(session, target_user_id=77)
+            moved = await user_merge._repoint_player_workspace_members(
+                session, source_user_id=5, target_user_id=77
+            )
 
         self.assertEqual(2, get_or_create.await_count)
         # First execute() call is the SELECT; the next two are the per-row UPDATEs.
         self.assertEqual(3, session.execute.await_count)
+        self.assertEqual(2, moved)
 
     async def test_repoints_reuses_resolved_member_for_shared_workspace(self) -> None:
         # Two Player rows in different tournaments but the same workspace: the
@@ -65,18 +69,21 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
             (202, 31, 5),
         ]
         session = SimpleNamespace(
-            execute=AsyncMock(side_effect=[rows_result, Mock(), Mock()])
+            execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)])
         )
         member = SimpleNamespace(id=555)
 
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
         ) as get_or_create:
-            await user_merge._repoint_player_workspace_members(session, target_user_id=88)
+            moved = await user_merge._repoint_player_workspace_members(
+                session, source_user_id=8, target_user_id=88
+            )
 
         get_or_create.assert_awaited_once_with(session, workspace_id=5, player_id=88)
+        self.assertEqual(2, moved)
 
-    async def test_repoints_noop_when_target_has_no_player_rows(self) -> None:
+    async def test_repoints_noop_when_source_has_no_player_rows(self) -> None:
         rows_result = Mock()
         rows_result.all.return_value = []
         session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
@@ -84,18 +91,22 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock()
         ) as get_or_create:
-            await user_merge._repoint_player_workspace_members(session, target_user_id=99)
+            moved = await user_merge._repoint_player_workspace_members(
+                session, source_user_id=9, target_user_id=99
+            )
 
         get_or_create.assert_not_awaited()
         session.execute.assert_awaited_once()
+        self.assertEqual(0, moved)
 
 
 class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
-    async def test_execute_merge_repoints_workspace_members_right_after_player_user_id_reassign(self) -> None:
+    async def test_execute_merge_repoints_player_workspace_members_before_reference_config_loop(self) -> None:
         """Real invocation of ``execute_merge`` (not a re-implementation of its
         loop) with every collaborator mocked, asserting the production
-        function itself calls ``_repoint_player_workspace_members`` for
-        ``tournament.player.user_id`` and for no other reference key."""
+        function itself calls ``_repoint_player_workspace_members`` exactly
+        once (it is no longer part of REFERENCE_CONFIG at all -- Player has no
+        plain user-id column left to reassign generically)."""
         merge_schemas = user_merge.merge_schemas
         request = merge_schemas.UserMergeExecuteRequest(
             source_user_id=5,
@@ -136,10 +147,11 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             reference_calls.append(f"reassign:{model.__name__}.{column_name}")
             return 1
 
-        repoint_calls: list[int] = []
+        repoint_calls: list[tuple[int, int]] = []
 
-        async def fake_repoint(_session, *, target_user_id):
-            repoint_calls.append(target_user_id)
+        async def fake_repoint(_session, *, source_user_id, target_user_id):
+            repoint_calls.append((source_user_id, target_user_id))
+            return 3
 
         with (
             patch.object(user_merge, "preview_merge", AsyncMock(return_value=preview)),
@@ -165,10 +177,8 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             response = await user_merge.execute_merge(session, request, operator_auth_user_id=None)
 
         self.assertEqual(6, response.surviving_target_user_id)
-        # The repoint fires exactly once, right after tournament.player.user_id
-        # is reassigned -- not for any other reference in REFERENCE_CONFIG.
-        # tournament.player.user_id is REFERENCE_CONFIG's first entry, so its
-        # reassignment (and the repoint immediately following it) must be first.
-        self.assertEqual([6], repoint_calls)
-        self.assertEqual("reassign:Player.user_id", reference_calls[0])
-        self.assertEqual(1, reference_calls.count("reassign:Player.user_id"))
+        # The repoint fires exactly once, with (source, target) from the request --
+        # and "tournament.player.user_id" is no longer a REFERENCE_CONFIG entry at all.
+        self.assertEqual([(5, 6)], repoint_calls)
+        self.assertNotIn("reassign:Player.user_id", reference_calls)
+        self.assertEqual(3, response.affected_counts[user_merge.PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY])

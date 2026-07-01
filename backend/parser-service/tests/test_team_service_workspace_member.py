@@ -1,8 +1,8 @@
-"""P5.2c: parser-service's ``services.team.service`` Player-creation sites
+"""P5.3: parser-service's ``services.team.service`` Player-creation sites
 (``create_player`` async + ``create_player_sync``) must populate
-``workspace_member_id`` (alongside the retained ``user_id``) so
-workspace-scoped analytics readers that INNER-JOIN on it don't silently
-drop newly created roster rows (e.g. log-import substitution creation).
+``workspace_member_id`` (``Player.user_id`` was dropped in the contract step,
+iwrefac07) so workspace-scoped analytics readers that INNER-JOIN on it don't
+silently drop newly created roster rows (e.g. log-import substitution creation).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
         self.assertEqual(777, member_id)
         get_or_create.assert_awaited_once_with(session, workspace_id=55, player_id=7)
 
-    async def test_create_player_sets_workspace_member_id_and_user_id(self) -> None:
+    async def test_create_player_sets_workspace_member_id(self) -> None:
         session = SimpleNamespace(add=Mock(), commit=AsyncMock())
         user = SimpleNamespace(id=42)
         tournament = SimpleNamespace(id=88)
@@ -78,7 +78,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
             )
 
         resolve_member.assert_awaited_once_with(session, tournament_id=88, player_id=42)
-        self.assertEqual(42, player.user_id)
+        self.assertFalse(hasattr(player, "user_id"))
         self.assertEqual(999, player.workspace_member_id)
         session.add.assert_called_once_with(player)
         session.commit.assert_awaited_once()
@@ -120,7 +120,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(111, member_id)
 
-    def test_create_player_sync_sets_workspace_member_id_and_user_id(self) -> None:
+    def test_create_player_sync_sets_workspace_member_id(self) -> None:
         session = Mock()
         session.add = Mock()
         session.commit = Mock()
@@ -144,7 +144,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
             )
 
         resolve_member.assert_called_once_with(session, tournament_id=88, player_id=42)
-        self.assertEqual(42, player.user_id)
+        self.assertFalse(hasattr(player, "user_id"))
         self.assertEqual(555, player.workspace_member_id)
         session.add.assert_called_once_with(player)
         session.commit.assert_called_once_with()

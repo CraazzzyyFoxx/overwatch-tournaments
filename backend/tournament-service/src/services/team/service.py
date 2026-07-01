@@ -28,9 +28,15 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
         players_entities = utils.prepare_entities(in_entities, "players")
         players_entity = utils.selectin_entity(child, models.Team.players)
         entities.append(players_entity)
+        # PlayerRead.user_id is a required field (resolved from
+        # workspace_member.player_id, contract step iwrefac07), so
+        # workspace_member itself must always be loaded here -- not just when
+        # "user" is requested. The nested workspace_member.player (+ further
+        # user sub-entities) stays gated behind "user" since that's the
+        # expensive/optional part (full user profile, not just its id).
+        workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
+        entities.append(workspace_member_entity)
         if "user" in players_entities:
-            workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
-            entities.append(workspace_member_entity)
             user_entity = utils.join_entity(workspace_member_entity, models.WorkspaceMember.player)
             entities.append(user_entity)
             entities.extend(user_service.user_entities(utils.prepare_entities(players_entities, "user"), user_entity))
@@ -61,9 +67,13 @@ def player_entities(entities_in: list[str], child: typing.Any | None = None) -> 
     """
     entities = []
 
+    # PlayerRead.user_id is a required field resolved from
+    # workspace_member.player_id (contract step iwrefac07), so workspace_member
+    # is always loaded here -- the nested .player (full user profile) stays
+    # gated behind "user".
+    workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
+    entities.append(workspace_member_entity)
     if "user" in entities_in:
-        workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
-        entities.append(workspace_member_entity)
         entities.append(utils.join_entity(workspace_member_entity, models.WorkspaceMember.player))
     if "tournament" in entities_in:
         entities.append(utils.join_entity(child, models.Player.tournament))

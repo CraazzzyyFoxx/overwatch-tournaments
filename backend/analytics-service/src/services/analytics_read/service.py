@@ -78,6 +78,10 @@ async def get_analytics(
             ),
             sa.orm.joinedload(models.Team.standings),
             sa.orm.joinedload(models.Team.standings).joinedload(models.Standing.group),
+            # PlayerRead.user_id (built by _player_to_pydantic) is resolved from
+            # workspace_member.player_id (contract step iwrefac07); eager-load it here
+            # since models.Player is selected as its own entity, not via a relationship.
+            sa.orm.joinedload(models.Player.workspace_member),
         )
         .join(models.Tournament, models.Team.tournament_id == models.Tournament.id)
         .join(models.Player, models.Player.team_id == models.Team.id)

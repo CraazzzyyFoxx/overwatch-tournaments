@@ -506,9 +506,11 @@ async def get_league_player_stacks(
             player1, player2 = None, None
             for players in team_tournament_players.values():
                 for p in players:
-                    if p.user_id == player1_id:
+                    # Player.user_id was dropped in the contract step (iwrefac07); the
+                    # identity anchor is workspace_member.player_id instead.
+                    if p.workspace_member.player_id == player1_id:
                         player1 = p
-                    elif p.user_id == player2_id:
+                    elif p.workspace_member.player_id == player2_id:
                         player2 = p
                     if player1 and player2:
                         break

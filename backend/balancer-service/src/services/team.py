@@ -121,7 +121,6 @@ async def bulk_create_from_balancer(
                 sub_role=normalize_sub_role(member.sub_role),
                 rank=member.rank,
                 role=role,
-                user_id=user.id,
                 tournament_id=tournament.id,
                 team_id=team.id,
                 is_newcomer=is_newcomer,
