@@ -1009,7 +1009,7 @@ class MatchLogProcessor:
                     f"likely changed battle_name to '{new_battle_name_from_log}'."
                 )
 
-                user_to_update = player_who_changed_name.user or await user_service.get(
+                user_to_update = player_who_changed_name.workspace_member.player or await user_service.get(
                     session, player_who_changed_name.workspace_member.player_id, []
                 )
 

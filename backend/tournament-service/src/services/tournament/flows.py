@@ -523,8 +523,8 @@ async def get_league_player_stacks(
 
             stack_results.append(
                 schemas.LeaguePlayerStack(
-                    user_1=await get_user_read(player1_value.user),
-                    user_2=await get_user_read(player2_value.user),
+                    user_1=await get_user_read(player1_value.workspace_member.player),
+                    user_2=await get_user_read(player2_value.workspace_member.player),
                     games=games_together,
                     avg_position=round(avg_position, 2),
                 )

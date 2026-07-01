@@ -446,7 +446,7 @@ async def get_league_player_stacks(
                     )
                 )
                 .options(
-                    sa.orm.joinedload(models.Player.user),
+                    sa.orm.joinedload(models.Player.workspace_member).joinedload(models.WorkspaceMember.player),
                     sa.orm.joinedload(models.Player.team),
                     sa.orm.joinedload(models.Player.tournament),
                 )

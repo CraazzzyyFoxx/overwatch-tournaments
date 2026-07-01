@@ -99,9 +99,9 @@ async def to_pydantic_player(
     tournament: schemas.TournamentRead | None = None
     team: schemas.TeamRead | None = None
 
-    if "user" in entities:
+    if "user" in entities and player.workspace_member is not None:
         user_entities = [e.replace("user.", "") for e in entities if e.startswith("user.")]
-        user = await user_flows.to_pydantic(session, player.user, user_entities)
+        user = await user_flows.to_pydantic(session, player.workspace_member.player, user_entities)
     if "tournament" in entities:
         tournament = await tournament_flows.to_pydantic(session, player.tournament, entities=[])
     if "team" in entities:

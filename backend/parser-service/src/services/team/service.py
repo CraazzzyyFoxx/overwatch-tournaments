@@ -43,10 +43,12 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
         players_entity = utils.join_entity(child, models.Team.players)
         entities.append(players_entity)
         if "user" in players_entities:
-            user_entity = utils.join_entity(players_entity, models.Player.user)
+            workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
+            entities.append(workspace_member_entity)
+            user_entity = utils.join_entity(workspace_member_entity, models.WorkspaceMember.player)
             entities.append(user_entity)
             entities.extend(user_service.user_entities(utils.prepare_entities(players_entities, "user"), user_entity))
-        if "workspace_member" in players_entities:
+        elif "workspace_member" in players_entities:
             entities.append(utils.join_entity(players_entity, models.Player.workspace_member))
     if "captain" in in_entities:
         captain_entity = utils.join_entity(child, models.Team.captain)
@@ -61,10 +63,11 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
 def player_entities(entities_in: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
     entities = []
 
-    if "user" in entities_in:
-        entities.append(utils.join_entity(child, models.Player.user))
-    if "workspace_member" in entities_in:
-        entities.append(utils.join_entity(child, models.Player.workspace_member))
+    if "user" in entities_in or "workspace_member" in entities_in:
+        workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
+        entities.append(workspace_member_entity)
+        if "user" in entities_in:
+            entities.append(utils.join_entity(workspace_member_entity, models.WorkspaceMember.player))
     if "tournament" in entities_in:
         entities.append(utils.join_entity(child, models.Player.tournament))
     if "team" in entities_in:

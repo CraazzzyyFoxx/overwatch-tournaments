@@ -149,7 +149,9 @@ async def get_team(session: AsyncSession, team_id: int) -> models.Team:
         select(models.Team)
         .where(models.Team.id == team_id)
         .options(
-            selectinload(models.Team.players).selectinload(models.Player.user),
+            selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member)
+            .selectinload(models.WorkspaceMember.player),
             selectinload(models.Team.captain),
             selectinload(models.Team.tournament),
         )
@@ -167,7 +169,7 @@ async def get_player(session: AsyncSession, player_id: int) -> models.Player:
         select(models.Player)
         .where(models.Player.id == player_id)
         .options(
-            selectinload(models.Player.user),
+            selectinload(models.Player.workspace_member).selectinload(models.WorkspaceMember.player),
             selectinload(models.Player.tournament),
         )
     )
@@ -367,11 +369,7 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
 
 async def update_player(session: AsyncSession, player_id: int, data: admin_schemas.PlayerUpdate) -> models.Player:
     """Update player fields"""
-    result = await session.execute(
-        select(models.Player)
-        .where(models.Player.id == player_id)
-        .options(selectinload(models.Player.user), selectinload(models.Player.team))
-    )
+    result = await session.execute(select(models.Player).where(models.Player.id == player_id))
     player = result.scalar_one_or_none()
 
     if not player:
