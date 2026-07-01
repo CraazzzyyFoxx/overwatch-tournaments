@@ -397,6 +397,7 @@ def register(broker: Any, logger: Any) -> None:
                     notes=body.notes,
                     custom_fields=body.custom_fields,
                     auto_approve=form.auto_approve,
+                    auth_user=user,
                 )
 
                 # Write normalized roles

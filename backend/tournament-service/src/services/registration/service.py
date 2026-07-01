@@ -13,6 +13,8 @@ from shared.core import enums
 from shared.core.social import SocialProvider
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
+from shared.rbac import assign_workspace_system_role, ensure_workspace_system_roles
+from shared.repository import get_or_create_workspace_member
 from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -294,7 +296,27 @@ async def create_registration(
     notes: str | None,
     custom_fields: dict[str, Any] | None,
     auto_approve: bool = False,
+    auth_user: models.AuthUser | None = None,
 ) -> models.BalancerRegistration:
+    """Create a self-service registration and auto-enroll the registrant.
+
+    ``auth_user`` is the gateway-rehydrated identity (carrying the cached RBAC
+    deny overlay) for the registering account, used to gate on the
+    ``registration.self_register`` capability. It is ``None`` only for
+    non-self-service callers (there are none today — sheet/CSV imports and
+    admin-created rows go through ``create_manual_registration`` instead,
+    which has no auth_user and is intentionally untouched here); when absent,
+    the gate and auto-enroll are both skipped since there's no account to
+    enroll or deny.
+    """
+    if auth_user is not None and not auth_user.can_capability(
+        "registration", "self_register", workspace_id=workspace_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Registration is not allowed for this user in this workspace",
+        )
+
     cleaned_battle_tag = _clean_battle_tag(battle_tag)
     cleaned_smurf_tags = [_clean_battle_tag(tag) for tag in (smurf_tags or [])]
     cleaned_smurf_tags = [tag for tag in cleaned_smurf_tags if tag]
@@ -323,7 +345,30 @@ async def create_registration(
     # Provision the domain player identity so first-time registrants are picked
     # up by rank collection / the open-profile gate. Done before the approval
     # event so it carries the resolved user_id.
-    await ensure_player_identity(session, registration)
+    player_id = await ensure_player_identity(session, registration)
+    if auth_user_id is not None and player_id is not None:
+        # Every self-service registration that resolved a domain player
+        # enrolls it as a workspace_member and grants the baseline "player"
+        # RBAC role. Both helpers are idempotent, so re-registering (e.g. a
+        # second tournament in the same workspace) is a no-op past the first
+        # time.
+        await ensure_workspace_system_roles(session, workspace_id)
+        await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+        await assign_workspace_system_role(
+            session, user_id=auth_user_id, workspace_id=workspace_id, role_name="player"
+        )
+    elif auth_user_id is not None:
+        # ensure_player_identity returns None when the registration has no
+        # battle_tag (see its docstring) — there's no domain player to anchor
+        # a workspace_member on, so auto-enroll is skipped for this
+        # registration. Logged (not raised) since a missing battle_tag is a
+        # form-config choice, not an error.
+        logger.debug(
+            "Skipping workspace_member auto-enroll: no player_id resolved (no battle_tag)",
+            tournament_id=tournament_id,
+            workspace_id=workspace_id,
+            auth_user_id=auth_user_id,
+        )
     if auto_approve:
         await enqueue_registration_approved(session, registration)
     else:
