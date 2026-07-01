@@ -46,6 +46,8 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
             user_entity = utils.join_entity(players_entity, models.Player.user)
             entities.append(user_entity)
             entities.extend(user_service.user_entities(utils.prepare_entities(players_entities, "user"), user_entity))
+        if "workspace_member" in players_entities:
+            entities.append(utils.join_entity(players_entity, models.Player.workspace_member))
     if "captain" in in_entities:
         captain_entity = utils.join_entity(child, models.Team.captain)
         entities.append(captain_entity)
@@ -61,6 +63,8 @@ def player_entities(entities_in: list[str], child: typing.Any | None = None) -> 
 
     if "user" in entities_in:
         entities.append(utils.join_entity(child, models.Player.user))
+    if "workspace_member" in entities_in:
+        entities.append(utils.join_entity(child, models.Player.workspace_member))
     if "tournament" in entities_in:
         entities.append(utils.join_entity(child, models.Player.tournament))
     if "team" in entities_in:
@@ -149,10 +153,14 @@ async def get_by_players_by_ids_tournament(
     query = (
         sa.select(models.Team)
         .join(models.Player, models.Team.id == models.Player.team_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .options(*team_entities(entities))
         .where(
             sa.and_(
-                models.Player.user_id.in_(players_ids),
+                models.WorkspaceMember.player_id.in_(players_ids),
                 models.Team.tournament_id == tournament.id,
                 models.Player.is_substitution.is_(False),
             )
@@ -184,7 +192,7 @@ async def get_player_by_user_and_tournament(
         .options(*player_entities(entities))
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
             )
         )
@@ -199,7 +207,12 @@ async def get_player_by_team_and_user(
     query = (
         sa.select(models.Player)
         .options(*player_entities(entities))
-        .where(sa.and_(models.Player.user_id == user_id, models.Player.team_id == team_id))
+        .where(
+            sa.and_(
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
+                models.Player.team_id == team_id,
+            )
+        )
     )
     result = await session.execute(query)
     return result.unique().scalars().first()
@@ -209,7 +222,9 @@ async def get_player_by_user(
     session: AsyncSession, user_id: int, entities: list[str]
 ) -> typing.Sequence[models.Player]:
     query = (
-        sa.select(models.Player).where(sa.and_(models.Player.user_id == user_id)).options(*player_entities(entities))
+        sa.select(models.Player)
+        .where(sa.and_(models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id)))
+        .options(*player_entities(entities))
     )
     result = await session.execute(query)
     return result.unique().scalars().all()
@@ -221,7 +236,12 @@ async def get_player_by_user_and_role(
     query = (
         sa.select(models.Player)
         .options(*player_entities(entities))
-        .where(sa.and_(models.Player.user_id == user_id, models.Player.role == role))
+        .where(
+            sa.and_(
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
+                models.Player.role == role,
+            )
+        )
     )
     result = await session.execute(query)
     return result.unique().scalars().all()

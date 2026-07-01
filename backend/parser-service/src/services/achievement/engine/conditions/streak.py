@@ -42,8 +42,13 @@ async def execute_consecutive(
         # Only bracket/final standings (buchholz IS NULL) and non-league tournaments
         qualifying = (
             sa.select(
-                models.Player.user_id,
+                models.WorkspaceMember.player_id.label("user_id"),
                 models.Tournament.number.label("t_num"),
+            )
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
             .join(models.Standing, sa.and_(
@@ -71,8 +76,13 @@ async def execute_consecutive(
 
         qualifying = (
             sa.select(
-                models.Player.user_id,
+                models.WorkspaceMember.player_id.label("user_id"),
                 models.Tournament.number.label("t_num"),
+            )
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
             .join(models.Standing, sa.and_(
@@ -96,8 +106,13 @@ async def execute_consecutive(
         # (group→playoff transition visible via the stage system).
         qualifying = (
             sa.select(
-                models.Player.user_id,
+                models.WorkspaceMember.player_id.label("user_id"),
                 models.Tournament.number.label("t_num"),
+            )
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
             .join(models.Standing, sa.and_(
@@ -171,12 +186,17 @@ async def execute_stable_streak(
     # Build player data with tournament ordering (exclude leagues)
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.tournament_id,
             models.Tournament.number.label("t_num"),
             models.Tournament.division_grid_version_id,
             models.Player.role,
             models.Player.rank,
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -185,7 +205,7 @@ async def execute_stable_streak(
             models.Player.is_substitution.is_(False),
             models.Tournament.number.isnot(None),
         )
-        .order_by(models.Player.user_id, models.Tournament.number)
+        .order_by(models.WorkspaceMember.player_id, models.Tournament.number)
     )
 
     result = await session.execute(query)

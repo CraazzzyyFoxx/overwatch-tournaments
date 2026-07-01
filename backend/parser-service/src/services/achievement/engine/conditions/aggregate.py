@@ -87,8 +87,13 @@ async def execute_global_winrate(
     rank_expr = sum_home if metric == "won_maps" else winrate
 
     query = (
-        sa.select(models.Player.user_id)
+        sa.select(models.WorkspaceMember.player_id)
+        .select_from(models.Player)
         .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(
             models.Encounter,
             sa.or_(
@@ -102,7 +107,7 @@ async def execute_global_winrate(
             models.Tournament.workspace_id == context.workspace_id,
             *([] if include_league else [models.Tournament.is_league.is_(False)]),
         )
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     )
 
     if op and value is not None:
@@ -134,12 +139,17 @@ async def execute_distinct_count(
     op_fn = OPERATORS[op]
 
     if field == "role":
-        group_cols = [models.Player.user_id]
+        group_cols = [models.WorkspaceMember.player_id]
         if scope == "tournament":
             group_cols.append(models.Player.tournament_id)
 
         query = (
             sa.select(*group_cols)
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .where(
                 models.Player.is_substitution.is_(False),

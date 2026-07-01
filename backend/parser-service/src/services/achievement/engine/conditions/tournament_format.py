@@ -138,7 +138,12 @@ async def execute(
         return set()
 
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             tournament_filter,

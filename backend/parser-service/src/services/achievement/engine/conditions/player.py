@@ -25,11 +25,16 @@ async def execute_is_captain(
 ) -> ResultSet:
     """Grain: user_tournament."""
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Team, models.Team.id == models.Player.team_id)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
-            models.Team.captain_id == models.Player.user_id,
+            models.Team.captain_id == models.WorkspaceMember.player_id,
             models.Tournament.workspace_id == context.workspace_id,
         )
     )
@@ -59,14 +64,19 @@ async def execute_is_newcomer(
         # Count-based: how many tournaments user was a newcomer in
         op_fn = OPERATORS[op]
         query = (
-            sa.select(models.Player.user_id)
+            sa.select(models.WorkspaceMember.player_id)
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .where(
                 models.Player.is_newcomer.is_(True),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.workspace_id == context.workspace_id,
             )
-            .group_by(models.Player.user_id)
+            .group_by(models.WorkspaceMember.player_id)
             .having(op_fn(sa.func.count(models.Player.tournament_id.distinct()), value))
         )
         if context.tournament:
@@ -77,7 +87,12 @@ async def execute_is_newcomer(
 
     # Simple boolean: user is newcomer in tournament
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.Player.is_newcomer.is_(True),
@@ -105,7 +120,12 @@ async def execute_tournament_type(
     is_league = params.get("is_league")
 
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.Tournament.workspace_id == context.workspace_id,
@@ -156,10 +176,15 @@ async def execute_tournament_count(
         where_clauses.append(models.Tournament.number <= number_max)
 
     query = (
-        sa.select(models.Player.user_id)
+        sa.select(models.WorkspaceMember.player_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(*where_clauses)
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
         .having(op_fn(sa.func.count(models.Player.tournament_id.distinct()), value))
     )
 

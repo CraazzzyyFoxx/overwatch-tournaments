@@ -1,6 +1,7 @@
 import sqlalchemy as sa
 from shared.core.social import SocialProvider
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src import models
 
@@ -40,7 +41,9 @@ async def get_user_by_team_and_battle_name(
         sa.select(models.Player)
         .select_from(models.User)
         .join(models.SocialAccount, models.User.id == models.SocialAccount.user_id)
-        .join(models.Player, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.User.id == models.WorkspaceMember.player_id)
+        .join(models.Player, models.Player.workspace_member_id == models.WorkspaceMember.id)
+        .options(selectinload(models.Player.workspace_member))
         .where(
             models.Player.team_id == team.id,
             models.SocialAccount.provider == SocialProvider.BATTLENET,

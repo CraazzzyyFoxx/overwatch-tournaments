@@ -63,7 +63,7 @@ async def execute_standing_count(
         where_clauses.append(models.Tournament.is_league.is_(is_league))
 
     query = (
-        sa.select(models.Player.user_id)
+        sa.select(models.WorkspaceMember.player_id)
         .select_from(models.Standing)
         .join(models.Tournament, models.Tournament.id == models.Standing.tournament_id)
         .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
@@ -74,8 +74,12 @@ async def execute_standing_count(
                 models.Player.tournament_id == models.Standing.tournament_id,
             ),
         )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(*where_clauses)
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
         .having(op_fn(count_expr, value))
     )
 

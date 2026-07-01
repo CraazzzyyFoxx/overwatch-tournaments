@@ -300,7 +300,7 @@ class MatchLogProcessor:
                     session,
                     current_player_ids_to_search,
                     self.tournament,
-                    ["players", "players.user"],
+                    ["players", "players.user", "players.workspace_member"],
                 )
                 if team_db:
                     return team_db
@@ -415,10 +415,10 @@ class MatchLogProcessor:
                     time=row.time,
                     round=row.round_number,
                     fight=0,
-                    killer_id=killer_player.user_id,
+                    killer_id=killer_player.workspace_member.player_id,
                     killer_hero_id=killer_hero.id,
                     killer_team_id=killer_player.team_id,
-                    victim_id=victim_player.user_id,
+                    victim_id=victim_player.workspace_member.player_id,
                     victim_hero_id=victim_hero.id,
                     victim_team_id=victim_player.team_id,
                     ability=kill.ability,
@@ -485,7 +485,7 @@ class MatchLogProcessor:
                 logger.warning(f"MercyRez target '{evt.related_player}' not in players_map.")
             else:
                 related_player_obj = players_map[evt.related_player]
-                related_player_id = related_player_obj.user_id
+                related_player_id = related_player_obj.workspace_member.player_id
                 related_team_id = related_player_obj.team_id
 
         return models.MatchEvent(
@@ -493,7 +493,7 @@ class MatchLogProcessor:
             time=row["time"],
             round=row["round_number"],
             team_id=player.team_id,
-            user_id=player.user_id,
+            user_id=player.workspace_member.player_id,
             hero_id=hero_id,
             related_hero_id=related_hero_id,
             related_team_id=related_team_id,
@@ -544,7 +544,7 @@ class MatchLogProcessor:
             match_id=match.id,
             round=match_round,
             team_id=player.team_id,
-            user_id=player.user_id,
+            user_id=player.workspace_member.player_id,
             hero_id=hero_id,
             name=name,
             value=value,
@@ -906,6 +906,11 @@ class MatchLogProcessor:
             else not bool(await team_service.get_player_by_user(session, sub_user.id, [])),
             is_newcomer_role=player_data_source.is_newcomer_role if player_data_source else True,
         )
+        # create_player() sets workspace_member_id (a plain FK column) but does not
+        # eagerly load the `workspace_member` relationship; readers downstream (this
+        # module) access `.workspace_member.player_id` in place of the retained
+        # `.user_id`, so it must be loaded before new_player leaves this method.
+        await session.refresh(new_player, attribute_names=["workspace_member"])
         logger.info(f"Created substitution player: {new_player.name} (ID: {new_player.id})")
         return new_player
 
@@ -932,10 +937,12 @@ class MatchLogProcessor:
                 f"Log has {len(users_who_played_map)} users, roster matched {len(players_found_in_roster_map)}."
             )
 
-            roster_player_user_ids_found_in_log = {p.user_id for p in players_found_in_roster_map.values()}
+            roster_player_user_ids_found_in_log = {
+                p.workspace_member.player_id for p in players_found_in_roster_map.values()
+            }
             missing_roster_player: models.Player | None = None
             for rp in roster_players_not_substituted:
-                if rp.user_id not in roster_player_user_ids_found_in_log:
+                if rp.workspace_member.player_id not in roster_player_user_ids_found_in_log:
                     missing_roster_player = rp
                     break
 
@@ -953,7 +960,7 @@ class MatchLogProcessor:
                     f"(log: {substitute_log_name}) for {missing_roster_player.name} in team {team_db.name}."
                 )
                 existing_sub_player = await team_service.get_player_by_team_and_user(
-                    session, team_db.id, substitute_user.id, []
+                    session, team_db.id, substitute_user.id, ["workspace_member"]
                 )
                 if (
                     existing_sub_player
@@ -984,9 +991,13 @@ class MatchLogProcessor:
                 f"unmatched log names: {unmatched_log_names}."
             )
 
-            roster_players_in_log_user_ids = {p.user_id for p in final_players_map.values()}
+            roster_players_in_log_user_ids = {
+                p.workspace_member.player_id for p in final_players_map.values()
+            }
             missing_roster_players_from_log = [
-                rp for rp in roster_players_not_substituted if rp.user_id not in roster_players_in_log_user_ids
+                rp
+                for rp in roster_players_not_substituted
+                if rp.workspace_member.player_id not in roster_players_in_log_user_ids
             ]
 
             if len(missing_roster_players_from_log) == 1 and len(unmatched_log_names) == 1:
@@ -994,12 +1005,12 @@ class MatchLogProcessor:
                 new_battle_name_from_log = unmatched_log_names[0]
                 logger.info(
                     f"Player {player_who_changed_name.name} "
-                    f"(User ID: {player_who_changed_name.user_id}) "
+                    f"(User ID: {player_who_changed_name.workspace_member.player_id}) "
                     f"likely changed battle_name to '{new_battle_name_from_log}'."
                 )
 
                 user_to_update = player_who_changed_name.user or await user_service.get(
-                    session, player_who_changed_name.user_id, []
+                    session, player_who_changed_name.workspace_member.player_id, []
                 )
 
                 if user_to_update:

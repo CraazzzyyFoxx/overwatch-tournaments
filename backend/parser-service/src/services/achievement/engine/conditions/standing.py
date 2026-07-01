@@ -18,7 +18,7 @@ from .stat_threshold import OPERATORS
 def _standing_base_query() -> sa.Select:
     return (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Standing.tournament_id,
         )
         .select_from(models.Standing)
@@ -30,6 +30,10 @@ def _standing_base_query() -> sa.Select:
                 models.Player.team_id == models.Standing.team_id,
                 models.Player.tournament_id == models.Standing.tournament_id,
             ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
     )
 

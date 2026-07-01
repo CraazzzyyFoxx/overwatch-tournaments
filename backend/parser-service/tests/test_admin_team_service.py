@@ -86,7 +86,10 @@ class AdminTeamServiceTests(IsolatedAsyncioTestCase):
             name="Test 1",
             balancer_name="Test 1",
             captain_id=1,
-            players=[SimpleNamespace(user_id=1), SimpleNamespace(user_id=2)],
+            players=[
+                SimpleNamespace(workspace_member=SimpleNamespace(player_id=1)),
+                SimpleNamespace(workspace_member=SimpleNamespace(player_id=2)),
+            ],
         )
         team_result = Mock()
         team_result.scalar_one_or_none.return_value = team

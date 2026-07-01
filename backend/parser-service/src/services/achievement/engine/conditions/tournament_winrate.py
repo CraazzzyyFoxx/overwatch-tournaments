@@ -51,7 +51,12 @@ async def execute_tournament_winrate(
     winrate = sum_home / sa.func.nullif(sum_home + sum_away, 0)
 
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Team, models.Team.id == models.Player.team_id)
         .join(
             models.Encounter,
@@ -65,7 +70,7 @@ async def execute_tournament_winrate(
             models.Player.is_substitution.is_(False),
             models.Tournament.workspace_id == context.workspace_id,
         )
-        .group_by(models.Player.user_id, models.Player.tournament_id)
+        .group_by(models.WorkspaceMember.player_id, models.Player.tournament_id)
         .having(op_fn(winrate, value))
     )
 
