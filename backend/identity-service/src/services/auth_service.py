@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from src import models, schemas
 from src.core import config
+from src.services.player_link_service import ensure_player_for_auth_user
 
 __all__ = [
     "AuthService",
@@ -371,6 +372,10 @@ class AuthService:
         if default_role is not None:
             # Avoid ORM relationship lazy-loads with AsyncSession.
             await session.execute(insert(user_roles).values(user_id=user.id, role_id=default_role.id))
+
+        # Provision the players.user identity backbone for the new auth user.
+        # No battletag yet — reconciled later at registration.
+        await ensure_player_for_auth_user(session, user)
 
         await session.commit()
         await session.refresh(user)

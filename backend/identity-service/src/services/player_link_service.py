@@ -6,6 +6,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from loguru import logger
 from shared.core.social import SocialProvider
+from shared.models.auth_user import AuthUser
 from shared.models.oauth import OAuthConnection
 from shared.models.social import SocialAccount
 from shared.models.user import User
@@ -17,6 +18,29 @@ from src import models
 
 def _normalized(values: Iterable[str | None]) -> set[str]:
     return {value.strip().casefold() for value in values if value and value.strip()}
+
+
+async def ensure_player_for_auth_user(session: AsyncSession, auth_user: AuthUser) -> User:
+    """Idempotently provision the ``players.user`` identity backbone.
+
+    Returns the existing linked player (via ``User.auth_user_id``) if one
+    already exists, else creates a new bare player (name = username/email,
+    no battletag yet — that is reconciled later at registration) and flushes
+    it so the caller can rely on ``player.id`` before commit.
+
+    Call this on every signup path (password + OAuth) right after the new
+    ``auth.user`` row is flushed. Idempotency covers "OAuth existing user
+    logs in again" — calling this more than once for the same auth_user is
+    always safe and never creates a duplicate player.
+    """
+    existing = await session.scalar(select(User).where(User.auth_user_id == auth_user.id))
+    if existing is not None:
+        return existing
+
+    player = User(name=auth_user.username or auth_user.email, auth_user_id=auth_user.id)
+    session.add(player)
+    await session.flush()
+    return player
 
 
 class PlayerLinkService:

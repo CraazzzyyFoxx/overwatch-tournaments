@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
 from src.core.config import settings
+from src.services.player_link_service import ensure_player_for_auth_user
 
 PROXY_CONF = settings.proxy_url
 
@@ -926,6 +927,11 @@ class OAuthService:
                         auth_user_id=auth_user.id,
                         player_id=matched_player.id,
                     )
+                else:
+                    # No existing player matched by social account — provision a
+                    # bare players.user identity backbone for this brand-new auth
+                    # user. No battletag yet; reconciled later at registration.
+                    await ensure_player_for_auth_user(session, auth_user)
             except IntegrityError as exc:
                 await session.rollback()
                 raise HTTPException(
