@@ -26,6 +26,8 @@ export type RbacUserDeny = {
   resource: string;
   action: string;
   description?: string | null;
+  /** Scope this deny to a single workspace; null/absent = global deny. */
+  workspace_id?: number | null;
 };
 
 function normalizeAuthAdminUser(user: AuthAdminUser): AuthAdminUser {
