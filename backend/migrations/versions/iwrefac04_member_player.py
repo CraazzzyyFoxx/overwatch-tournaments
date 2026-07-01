@@ -1,6 +1,6 @@
 """identity refactor: workspace_member on player_id (drop auth_user_id + role)
 
-Re-bases ``workspace.workspace_member`` onto ``player_id`` (FK
+Re-bases ``workspace_member`` onto ``player_id`` (FK
 ``players.user.id`` CASCADE) instead of ``auth_user_id``. Backfills
 ``player_id`` from ``players.user.auth_user_id`` (Phase A). Any member whose
 auth_user has no linked player yet gets a shadow player created so the
@@ -31,11 +31,10 @@ def upgrade() -> None:
     op.add_column(
         "workspace_member",
         sa.Column("player_id", sa.Integer(), nullable=True),
-        schema="workspace",
     )
     op.execute(
         """
-        UPDATE workspace.workspace_member wm
+        UPDATE workspace_member wm
         SET player_id = pu.id
         FROM players."user" pu
         WHERE pu.auth_user_id = wm.auth_user_id
@@ -47,7 +46,7 @@ def upgrade() -> None:
         """
         INSERT INTO players."user" (name, auth_user_id, created_at)
         SELECT au.username, au.id, now()
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         JOIN auth."user" au ON au.id = wm.auth_user_id
         WHERE wm.player_id IS NULL
           AND NOT EXISTS (SELECT 1 FROM players."user" p WHERE p.auth_user_id = au.id)
@@ -55,20 +54,19 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        UPDATE workspace.workspace_member wm
+        UPDATE workspace_member wm
         SET player_id = pu.id
         FROM players."user" pu
         WHERE pu.auth_user_id = wm.auth_user_id AND wm.player_id IS NULL
         """
     )
-    op.alter_column("workspace_member", "player_id", nullable=False, schema="workspace")
+    op.alter_column("workspace_member", "player_id", nullable=False)
     op.create_foreign_key(
         "fk_workspace_member_player",
         "workspace_member",
         "user",
         ["player_id"],
         ["id"],
-        source_schema="workspace",
         referent_schema="players",
         ondelete="CASCADE",
     )
@@ -76,22 +74,19 @@ def upgrade() -> None:
         "uq_workspace_member_workspace_player",
         "workspace_member",
         ["workspace_id", "player_id"],
-        schema="workspace",
     )
     op.create_unique_constraint(
         "uq_workspace_member_id_workspace",
         "workspace_member",
         ["id", "workspace_id"],
-        schema="workspace",
     )
     op.drop_constraint(
         "workspace_member_workspace_id_auth_user_id_key",
         "workspace_member",
-        schema="workspace",
         type_="unique",
     )
-    op.drop_column("workspace_member", "auth_user_id", schema="workspace")
-    op.drop_column("workspace_member", "role", schema="workspace")
+    op.drop_column("workspace_member", "auth_user_id")
+    op.drop_column("workspace_member", "role")
 
 
 def downgrade() -> None:
@@ -101,29 +96,26 @@ def downgrade() -> None:
     op.add_column(
         "workspace_member",
         sa.Column("role", sa.String(), server_default="member", nullable=False),
-        schema="workspace",
     )
     op.add_column(
         "workspace_member",
         sa.Column("auth_user_id", sa.Integer(), nullable=True),
-        schema="workspace",
     )
     op.execute(
         """
-        UPDATE workspace.workspace_member wm
+        UPDATE workspace_member wm
         SET auth_user_id = pu.auth_user_id
         FROM players."user" pu
         WHERE pu.id = wm.player_id
         """
     )
-    op.alter_column("workspace_member", "auth_user_id", nullable=False, schema="workspace")
+    op.alter_column("workspace_member", "auth_user_id", nullable=False)
     op.create_foreign_key(
         "workspace_member_auth_user_id_fkey",
         "workspace_member",
         "user",
         ["auth_user_id"],
         ["id"],
-        source_schema="workspace",
         referent_schema="auth",
         ondelete="CASCADE",
     )
@@ -131,24 +123,20 @@ def downgrade() -> None:
         "workspace_member_workspace_id_auth_user_id_key",
         "workspace_member",
         ["workspace_id", "auth_user_id"],
-        schema="workspace",
     )
     op.drop_constraint(
         "uq_workspace_member_id_workspace",
         "workspace_member",
-        schema="workspace",
         type_="unique",
     )
     op.drop_constraint(
         "uq_workspace_member_workspace_player",
         "workspace_member",
-        schema="workspace",
         type_="unique",
     )
     op.drop_constraint(
         "fk_workspace_member_player",
         "workspace_member",
-        schema="workspace",
         type_="foreignkey",
     )
-    op.drop_column("workspace_member", "player_id", schema="workspace")
+    op.drop_column("workspace_member", "player_id")
