@@ -31,6 +31,8 @@ _ensure_test_env()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from shared.models.user import User  # noqa: E402
+
 from src import schemas  # noqa: E402
 from src.services.oauth_service import OAuthService  # noqa: E402
 
@@ -86,6 +88,11 @@ class _FakeSession:
         if not self._results:
             raise AssertionError("Unexpected execute() call")
         return _FakeExecuteResult(**self._results.pop(0))
+
+    async def scalar(self, stmt):
+        if not self._results:
+            raise AssertionError("Unexpected scalar() call")
+        return _FakeExecuteResult(**self._results.pop(0)).scalar_one_or_none()
 
     def add(self, obj) -> None:
         self.added.append(obj)
@@ -223,6 +230,70 @@ def test_link_player_if_unowned_never_overwrites_a_different_owner() -> None:
 
     assert linked is False
     assert player.auth_user_id == 7
+
+
+def test_find_or_create_oauth_user_provisions_own_player_when_matched_player_is_foreign_owned() -> None:
+    """A brand-new OAuth signup whose provider-record match (e.g. battletag)
+    belongs to a *different*, already-linked auth user must still end up with
+    its own provisioned ``players.user`` row.
+
+    Before the fix: ``_link_player_if_unowned`` correctly refused to steal the
+    foreign player's link (returning False), but the surrounding branch only
+    called ``ensure_player_for_auth_user`` in the `else` of `matched_player is
+    not None`, so this new auth user silently ended up with NO player at all
+    — violating the "every signup path provisions a players.user" invariant.
+    """
+    other_owner_id = 888
+    foreign_player = SimpleNamespace(id=420, auth_user_id=other_owner_id)
+
+    session = _FakeSession(
+        [
+            {"scalar": None},  # OAuthConnection lookup → none
+            # _find_existing_auth_user is patched below (returns no auth_user,
+            # but the foreign-owned player as matched_player)
+            {"scalar": None},  # username-uniqueness check → free
+            {"scalar": None},  # default "user" Role lookup → none present
+            # (no user_roles insert query — it's skipped since default_role is None)
+            # ensure_player_for_auth_user: existing-by-auth_user_id lookup → none
+            {"scalar": None},
+            # _attach_verified_social_account: no player found by provider record
+            {"scalars": []},  # subject match
+            {"scalars": []},  # handle match
+            # falls back to players.user.auth_user_id lookup for the NEW auth_user
+            # → the player we just provisioned via ensure_player_for_auth_user
+            {"scalar": None},
+        ]
+    )
+    oauth_info = schemas.OAuthUserInfo(
+        provider=schemas.OAuthProvider.BATTLENET,
+        provider_user_id="bnet-foreign",
+        email=None,
+        username="Foreign#1234",
+        display_name="Foreign#1234",
+        raw_data={"battletag": "Foreign#1234"},
+    )
+
+    async def _fake_find_existing(_session, _oauth_info):
+        return None, foreign_player
+
+    with patch.object(OAuthService, "_find_existing_auth_user", staticmethod(_fake_find_existing)):
+        auth_user = asyncio.run(
+            OAuthService.find_or_create_oauth_user(
+                session,
+                oauth_info,
+                {"access_token": "access-token", "expires_in": 3600},
+            )
+        )
+
+    # The foreign player's link must be left untouched.
+    assert foreign_player.auth_user_id == other_owner_id
+
+    # A players.user row was provisioned for the new auth user (added to the
+    # session, distinct from the foreign player, and owned by the new user).
+    provisioned_players = [obj for obj in session.added if isinstance(obj, User) and obj is not foreign_player]
+    assert len(provisioned_players) == 1
+    assert provisioned_players[0].auth_user_id == auth_user.id
+    assert provisioned_players[0] is not foreign_player
 
 
 def test_find_or_create_oauth_user_never_overwrites_conflicting_player_link() -> None:

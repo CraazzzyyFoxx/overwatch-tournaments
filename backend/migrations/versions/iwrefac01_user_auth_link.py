@@ -3,7 +3,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "iwrefac01"
-down_revision = "oauthmulti0001"  # confirm via `alembic heads`
+down_revision = "oauthmulti0001"
 branch_labels = None
 depends_on = None
 

@@ -911,17 +911,23 @@ class OAuthService:
                 # If the player record was found but had no auth_user_id link yet,
                 # set the link now so future OAuth logins (via other providers)
                 # can find this AuthUser through the same player.
+                linked = False
                 if matched_player is not None:
-                    if cls._link_player_if_unowned(matched_player, auth_user):
+                    linked = cls._link_player_if_unowned(matched_player, auth_user)
+                    if linked:
                         logger.info(
                             "Linked new auth user to existing player",
                             auth_user_id=auth_user.id,
                             player_id=matched_player.id,
                         )
-                else:
-                    # No existing player matched by social account — provision a
-                    # bare players.user identity backbone for this brand-new auth
-                    # user. No battletag yet; reconciled later at registration.
+
+                if not linked:
+                    # Either no existing player matched by social account, or the
+                    # matched player is already owned by a different auth user
+                    # (never steal that link — see `_link_player_if_unowned`).
+                    # Either way this brand-new auth user still needs its own
+                    # bare players.user identity backbone. No battletag yet;
+                    # reconciled later at registration.
                     await ensure_player_for_auth_user(session, auth_user)
             except IntegrityError as exc:
                 await session.rollback()
