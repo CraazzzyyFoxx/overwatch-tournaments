@@ -1578,7 +1578,7 @@ async def _load_latest_ranks_from_tournament_history(
 
     stmt = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
@@ -1587,8 +1587,12 @@ async def _load_latest_ranks_from_tournament_history(
             models.Tournament,
             models.Tournament.id == models.Player.tournament_id,
         )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Tournament.workspace_id == workspace_id,
             models.Player.tournament_id != current_tournament_id,
             models.Player.role.is_not(None),
@@ -1596,7 +1600,7 @@ async def _load_latest_ranks_from_tournament_history(
             models.Player.rank > 0,
         )
         .order_by(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.role,
             models.Tournament.number.desc().nullslast(),
             models.Player.tournament_id.desc(),

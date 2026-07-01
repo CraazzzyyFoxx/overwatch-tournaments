@@ -107,8 +107,12 @@ async def get_user_encounter_matches_unpaginated(
             joinedload(models.Encounter.tournament),
             joinedload(models.Encounter.stage),
             joinedload(models.Encounter.stage_item),
-            selectinload(models.Encounter.home_team).selectinload(models.Team.players),
-            selectinload(models.Encounter.away_team).selectinload(models.Team.players),
+            selectinload(models.Encounter.home_team)
+            .selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member),
+            selectinload(models.Encounter.away_team)
+            .selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member),
         )
         .join(
             models.Encounter,
@@ -121,9 +125,10 @@ async def get_user_encounter_matches_unpaginated(
         .join(models.Match, models.Encounter.id == models.Match.encounter_id, isouter=True)
         .outerjoin(performance_cte, performance_cte.c.match_id == models.Match.id)
         .outerjoin(heroes_cte, heroes_cte.c.match_id == models.Match.id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
         )
@@ -156,7 +161,7 @@ async def get_user_encounters_paginated(
     shape without any further round-trips.
     """
     user_player_filter = sa.and_(
-        models.Player.user_id == user_id,
+        models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
         models.Player.is_substitution.is_(False),
     )
 
@@ -324,8 +329,12 @@ async def get_user_encounters_paginated(
             joinedload(models.Encounter.tournament),
             joinedload(models.Encounter.stage),
             joinedload(models.Encounter.stage_item),
-            selectinload(models.Encounter.home_team).selectinload(models.Team.players),
-            selectinload(models.Encounter.away_team).selectinload(models.Team.players),
+            selectinload(models.Encounter.home_team)
+            .selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member),
+            selectinload(models.Encounter.away_team)
+            .selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member),
             joinedload(models.Match.map).joinedload(models.Map.gamemode),
         )
         .join(models.Encounter, encounters_query.c.id == models.Encounter.id)
@@ -382,7 +391,7 @@ _USER_ENCOUNTER_JOIN = sa.or_(
 
 def _user_player_where(user_id: int):
     return (
-        models.Player.user_id == user_id,
+        models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
         models.Player.is_substitution.is_(False),
     )
 
@@ -500,7 +509,7 @@ async def get_player_by_user_and_tournament(
         )
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
             )
         )

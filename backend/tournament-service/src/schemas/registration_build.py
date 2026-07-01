@@ -201,7 +201,7 @@ async def _build_tournament_history(
     result = await session.execute(
         sa.select(
             models.Player.tournament_id,
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.role,
             models.Player.rank,
             models.Tournament.name.label("tournament_name"),
@@ -210,8 +210,12 @@ async def _build_tournament_history(
             models.Tournament,
             models.Player.tournament_id == models.Tournament.id,
         )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
-            models.Player.user_id.in_(player_ids),
+            models.WorkspaceMember.player_id.in_(player_ids),
             models.Player.tournament_id != current_tournament_id,
             models.Tournament.workspace_id == workspace_id,
         )

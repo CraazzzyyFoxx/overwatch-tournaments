@@ -53,9 +53,10 @@ async def get_top_maps(
             ),
         )
         .join(models.Player, models.Player.team_id == models.Team.id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
         )

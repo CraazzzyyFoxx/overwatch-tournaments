@@ -254,7 +254,7 @@ async def get_player_by_user_and_tournament(
         .options(*player_entities(entities))
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
             )
         )

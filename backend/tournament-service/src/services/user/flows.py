@@ -874,7 +874,7 @@ async def get_tournaments(
         )
 
         for player in team.players:
-            if player.user_id == user.id:
+            if player.workspace_member is not None and player.workspace_member.player_id == user.id:
                 user_role = player.role
                 user_division = resolve_tournament_division(
                     player.rank,

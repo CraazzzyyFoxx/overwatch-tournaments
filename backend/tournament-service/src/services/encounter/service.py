@@ -268,7 +268,9 @@ def _apply_encounter_filters(
                 models.Player,
                 sa.and_(
                     models.Player.tournament_id == models.Encounter.tournament_id,
-                    models.Player.user_id.in_(linked_player_ids),
+                    models.Player.workspace_member.has(
+                        models.WorkspaceMember.player_id.in_(linked_player_ids)
+                    ),
                     sa.or_(
                         models.Player.team_id == models.Encounter.home_team_id,
                         models.Player.team_id == models.Encounter.away_team_id,
@@ -424,7 +426,7 @@ async def get_by_user_with_teams(
         .outerjoin(heroes_cte, heroes_cte.c.match_id == models.Match.id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.is_substitution.is_(False),
             )
         )
@@ -460,7 +462,8 @@ async def get_by_user(
                 models.Encounter.away_team_id == models.Player.team_id,
             ),
         )
-        .where(sa.and_(models.Player.user_id == user_id))
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .where(sa.and_(models.WorkspaceMember.player_id == user_id))
     )
 
     encounters_query = (
@@ -476,7 +479,8 @@ async def get_by_user(
                 models.Encounter.away_team_id == models.Player.team_id,
             ),
         )
-        .where(sa.and_(models.Player.user_id == user_id))
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .where(sa.and_(models.WorkspaceMember.player_id == user_id))
     )
 
     if workspace_id is not None:

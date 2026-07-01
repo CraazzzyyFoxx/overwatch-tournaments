@@ -156,7 +156,8 @@ async def get_top_maps(
             ),
         )
         .join(models.Player, models.Player.team_id == models.Team.id)
-        .where(sa.and_(models.Player.user_id == user_id))
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .where(sa.and_(models.WorkspaceMember.player_id == user_id))
         .group_by(models.Map.id)
     )
 

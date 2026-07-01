@@ -172,7 +172,7 @@ def _apply_overview_role_filters(
     grid: DivisionGrid,
 ) -> sa.Select:
     role_filters: list[typing.Any] = [
-        models.Player.user_id == models.User.id,
+        models.Player.workspace_member.has(models.WorkspaceMember.player_id == models.User.id),
         models.Player.is_substitution.is_(False),
     ]
 
@@ -195,7 +195,7 @@ def _compare_player_scope_filters(
     grid: DivisionGrid,
 ) -> list[typing.Any]:
     filters: list[typing.Any] = [
-        player_model.user_id == user_id_column,
+        player_model.workspace_member.has(models.WorkspaceMember.player_id == user_id_column),
         player_model.is_substitution.is_(False),
     ]
 
@@ -873,19 +873,20 @@ async def get_overview_role_divisions(
 
     latest_roles_subquery = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.rank.label("rank"),
             models.Player.tournament_id.label("tournament_id"),
             sa.func.row_number()
             .over(
-                partition_by=[models.Player.user_id, models.Player.role],
+                partition_by=[models.WorkspaceMember.player_id, models.Player.role],
                 order_by=[models.Player.tournament_id.desc(), models.Player.id.desc()],
             )
             .label("row_num"),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Player.is_substitution.is_(False),
             models.Player.role.isnot(None),
         )
@@ -933,19 +934,20 @@ async def get_overview_tournaments_count(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             sa.func.count(sa.distinct(models.Team.tournament_id)).label("tournaments_count"),
         )
         .select_from(models.Player)
         .join(models.Team, models.Team.id == models.Player.team_id)
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
         )
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     )
 
     if workspace_id is not None:
@@ -984,7 +986,7 @@ async def get_overview_averages(
 
     team_overall_subquery = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.team_id.label("team_id"),
             sa.func.min(models.Standing.overall_position).label("overall_position"),
         )
@@ -998,13 +1000,14 @@ async def get_overview_averages(
                 models.Standing.tournament_id == models.Player.tournament_id,
             ),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
         )
-        .group_by(models.Player.user_id, models.Player.team_id)
+        .group_by(models.WorkspaceMember.player_id, models.Player.team_id)
         .cte("overview_team_overall")
     )
 
@@ -1015,7 +1018,7 @@ async def get_overview_averages(
 
     placement_stage_query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             sa.func.avg(sa.case((models.Standing.buchholz.isnot(None), models.Standing.position), else_=None)).label(
                 "avg_group_placement"
             ),
@@ -1033,18 +1036,19 @@ async def get_overview_averages(
                 models.Standing.tournament_id == models.Player.tournament_id,
             ),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
         )
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     )
 
     closeness_query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             sa.func.avg(models.Encounter.closeness).label("avg_closeness"),
         )
         .select_from(models.Player)
@@ -1057,14 +1061,15 @@ async def get_overview_averages(
             ),
         )
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
             models.Encounter.closeness.isnot(None),
         )
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     )
 
     placement_result = await session.execute(placement_query)
@@ -1726,13 +1731,14 @@ async def get_overall_statistics(
                 models.Encounter.away_team_id == models.Team.id,
             ),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
                 models.Player.is_substitution.is_(False),
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
             )
         )
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     )
 
     if workspace_id is not None:
@@ -1767,9 +1773,10 @@ async def get_teams(
         sa.select(sa.func.count(sa.distinct(models.Team.id)))
         .join(models.Player, models.Player.team_id == models.Team.id)
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
             )
@@ -1781,9 +1788,10 @@ async def get_teams(
         .options(*team_service.team_entities(params.entities))
         .join(models.Player, models.Player.team_id == models.Team.id)
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
             )
@@ -1841,10 +1849,11 @@ async def get_roles(
                 models.Encounter.away_team_id == models.Team.id,
             ),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
                 models.Player.is_substitution.is_(False),
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
             )
         )
         .group_by(models.Player.role)
@@ -1875,10 +1884,11 @@ async def get_tournament_role(
         sa.select(models.Player.role, division_case_expr(models.Player.rank, grid).label("div"))
         .select_from(models.Player)
         .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
                 models.Team.tournament_id == tournament.id,
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
         )
@@ -1915,7 +1925,7 @@ async def get_tournaments_with_stats(
         )
         .select_from(models.Player)
         .options(
-            selectinload(models.Team.players).selectinload(models.Player.user),
+            selectinload(models.Team.players).selectinload(models.Player.workspace_member),
             selectinload(models.Team.tournament).selectinload(models.Tournament.standings),
             selectinload(models.Team.tournament).selectinload(models.Tournament.division_grid_version),
             selectinload(models.Team.standings).selectinload(models.Standing.group),
@@ -1929,9 +1939,10 @@ async def get_tournaments_with_stats(
             ),
         )
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
         )
@@ -1976,11 +1987,12 @@ async def get_tournament_stats_overall(
         )
         .join(models.Match, models.Match.encounter_id == models.Encounter.id)
         .join(models.MatchStatistics, models.MatchStatistics.match_id == models.Match.id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id == user_id,
+            models.WorkspaceMember.player_id == user_id,
             models.Player.is_substitution.is_(False),
             models.Team.tournament_id == tournament.id,
-            models.MatchStatistics.user_id == models.Player.user_id,
+            models.MatchStatistics.user_id == models.WorkspaceMember.player_id,
             models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
             models.MatchStatistics.hero_id.is_(None),
             models.MatchStatistics.round == 0,
@@ -2004,8 +2016,9 @@ async def get_tournament_stats_overall(
                 models.Encounter.away_team_id == models.Team.id,
             ),
         )
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
-            models.Player.user_id == user_id,
+            models.WorkspaceMember.player_id == user_id,
             models.Player.is_substitution.is_(False),
             models.Team.tournament_id == tournament.id,
         )
@@ -2193,20 +2206,24 @@ async def get_best_teammates(
     """
     self_player = sa.orm.aliased(models.Player, name="self_player")
     teammate_player = sa.orm.aliased(models.Player, name="teammate_player")
+    self_member = sa.orm.aliased(models.WorkspaceMember, name="self_member")
+    teammate_member = sa.orm.aliased(models.WorkspaceMember, name="teammate_member")
 
     shared_teams_select = (
         sa.select(
-            teammate_player.user_id.label("teammate_id"),
+            teammate_member.player_id.label("teammate_id"),
             teammate_player.team_id.label("team_id"),
             teammate_player.tournament_id.label("tournament_id"),
         )
         .select_from(self_player)
         .join(teammate_player, teammate_player.team_id == self_player.team_id)
+        .join(self_member, self_member.id == self_player.workspace_member_id)
+        .join(teammate_member, teammate_member.id == teammate_player.workspace_member_id)
         .where(
-            self_player.user_id == user_id,
+            self_member.player_id == user_id,
             self_player.is_substitution.is_(False),
             teammate_player.is_substitution.is_(False),
-            teammate_player.user_id != user_id,
+            teammate_member.player_id != user_id,
         )
         .distinct()
     )

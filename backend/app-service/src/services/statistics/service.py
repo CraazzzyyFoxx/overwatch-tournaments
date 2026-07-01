@@ -55,7 +55,8 @@ async def get_top_champions(
     query = (
         sa.select(models.User, sa.func.count("*").label("value"))
         .select_from(models.Player)
-        .join(models.User, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .join(models.Team, models.Team.id == models.Player.team_id)
         .join(models.Standing, models.Standing.team_id == models.Team.id)
         .join(
@@ -110,7 +111,8 @@ async def get_top_winrate_players(
             ).label("value"),
         )
         .select_from(models.Player)
-        .join(models.User, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .join(encounter_query, encounter_query.c.id == models.Player.id)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -148,7 +150,8 @@ async def get_top_won_players(
     query = (
         sa.select(models.User, sa.func.sum(encounter_query.c.home_score).label("value"))
         .select_from(models.Player)
-        .join(models.User, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .join(encounter_query, encounter_query.c.id == models.Player.id)
         .where(
             models.Player.is_substitution.is_(False),
@@ -314,7 +317,7 @@ async def get_tournament_winrate(
 
     stats_query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             winrate.cast(sa.Numeric(10, 2)).label("winrate"),
             sa.func.dense_rank().over(order_by=(sa.desc(winrate))).label("rank"),
         )
@@ -327,8 +330,9 @@ async def get_tournament_winrate(
             ),
         )
         .join(models.Player, models.Player.team_id == models.Team.id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(sa.and_(models.Encounter.tournament_id == tournament.id))
-        .group_by(models.Player.user_id)
+        .group_by(models.WorkspaceMember.player_id)
     ).subquery()
 
     query = sa.select(

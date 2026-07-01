@@ -162,7 +162,7 @@ async def get_history_tournaments(
     """
     players_count = (
         (
-            sa.select(sa.func.count(models.Player.user_id)).where(
+            sa.select(sa.func.count(models.Player.id)).where(
                 models.Player.tournament_id == models.Tournament.id,
                 models.Tournament.number.isnot(None),
             )
@@ -265,14 +265,16 @@ async def get_tournaments_overall(session: AsyncSession, workspace_id: int | Non
     )
 
     players_count_query = (
-        sa.select(sa.func.count(sa.distinct(models.Player.user_id)))
+        sa.select(sa.func.count(sa.distinct(models.WorkspaceMember.player_id)))
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Tournament.is_league.is_(False), *ws_filters)
     )
 
     champions_count_query = (
-        sa.select(sa.func.count(models.Player.user_id.distinct()))
+        sa.select(sa.func.count(models.WorkspaceMember.player_id.distinct()))
         .select_from(models.Player)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .join(models.Standing, models.Standing.team_id == models.Player.team_id)
         .join(
             models.TournamentGroup,
@@ -327,7 +329,8 @@ async def get_owal_standings(
         .select_from(models.Player)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .join(models.Team, models.Team.id == models.Player.team_id)
-        .join(models.User, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(
             sa.and_(
                 models.Tournament.is_league.is_(True),

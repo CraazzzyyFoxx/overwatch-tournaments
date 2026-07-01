@@ -16,7 +16,12 @@ from src import models
 from src.core import pagination, utils
 
 # Subquery to count distinct users (players) in a workspace
-_player_count_subq = sa.select(sa.func.count(models.Player.user_id.distinct())).scalar_subquery()
+_player_count_subq = (
+    sa.select(sa.func.count(models.WorkspaceMember.player_id.distinct()))
+    .select_from(models.Player)
+    .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+    .scalar_subquery()
+)
 
 
 @dataclass(slots=True)
@@ -31,8 +36,10 @@ class UserAchievementRow:
 def _player_count_for_workspace(workspace_id: int) -> sa.ScalarSelect:
     """Count distinct players within a specific workspace."""
     return (
-        sa.select(sa.func.count(models.Player.user_id.distinct()))
+        sa.select(sa.func.count(models.WorkspaceMember.player_id.distinct()))
+        .select_from(models.Player)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Tournament.workspace_id == workspace_id)
     ).scalar_subquery()
 
