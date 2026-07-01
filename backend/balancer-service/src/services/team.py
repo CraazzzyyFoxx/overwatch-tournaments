@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.domain.player_sub_roles import normalize_sub_role
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.core.enums import HeroClass
 from src.schemas.team import BalancerTeam
@@ -109,6 +110,10 @@ async def bulk_create_from_balancer(
             )
             is_newcomer_role = existing_role_result.scalar_one_or_none() is None
 
+            workspace_member = await get_or_create_workspace_member(
+                session, workspace_id=tournament.workspace_id, player_id=user.id
+            )
+
             player = models.Player(
                 name=member.name,
                 sub_role=normalize_sub_role(member.sub_role),
@@ -119,6 +124,7 @@ async def bulk_create_from_balancer(
                 team_id=team.id,
                 is_newcomer=is_newcomer,
                 is_newcomer_role=is_newcomer_role,
+                workspace_member_id=workspace_member.id,
             )
             session.add(player)
             logger.info("Player %s added to team %s", member.name, team.name)

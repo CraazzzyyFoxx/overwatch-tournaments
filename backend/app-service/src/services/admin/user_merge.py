@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core.social import normalize_social_handle
+from shared.repository import get_or_create_workspace_member
 
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
@@ -168,6 +169,17 @@ async def execute_merge(
                 source_user_id=context.source.id,
                 target_user_id=context.target.id,
             )
+            if reference_key == "tournament.player.user_id":
+                # tournament.player rows just moved from source -> target via
+                # user_id above. Each row's workspace_member_id must follow: it
+                # has to point at the target's member row in that row's own
+                # tournament's workspace (source and target may resolve to
+                # different / not-yet-existing members there), never left
+                # pointing at the source's now-stale membership.
+                await _repoint_player_workspace_members(
+                    session,
+                    target_user_id=context.target.id,
+                )
 
         affected_counts["players.user.auth_user_id"] = await _merge_auth_user_links(
             session,
@@ -413,6 +425,46 @@ async def _reassign_reference(
         .values({column_name: target_user_id})
     )
     return int(result.rowcount or 0)
+
+
+async def _repoint_player_workspace_members(
+    session: AsyncSession,
+    *,
+    target_user_id: int,
+) -> None:
+    """Recompute ``tournament.player.workspace_member_id`` for every roster row
+    now owned by ``target_user_id`` (just re-pointed there by ``_reassign_reference``
+    on ``user_id``).
+
+    Each row's workspace is derived the same way as migration ``iwrefac06``
+    (``tournament.workspace_id`` for the row's own ``tournament_id``), then
+    anchored on the target's ``workspace_member`` in that workspace —
+    idempotently created if it doesn't exist yet. A row is skipped only if its
+    ``workspace_member_id`` already points at a member for the correct
+    (workspace, target) pair (e.g. target already had a roster spot in that
+    tournament's workspace under a shared membership).
+    """
+    rows = (
+        await session.execute(
+            select(models.Player.id, models.Player.tournament_id, models.Tournament.workspace_id)
+            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .where(models.Player.user_id == target_user_id)
+        )
+    ).all()
+
+    workspace_member_id_by_workspace: dict[int, int] = {}
+    for player_id, _tournament_id, workspace_id in rows:
+        if workspace_id not in workspace_member_id_by_workspace:
+            member = await get_or_create_workspace_member(
+                session, workspace_id=workspace_id, player_id=target_user_id
+            )
+            workspace_member_id_by_workspace[workspace_id] = member.id
+
+        await session.execute(
+            update(models.Player)
+            .where(models.Player.id == player_id)
+            .values(workspace_member_id=workspace_member_id_by_workspace[workspace_id])
+        )
 
 
 async def _delete_source_user_row(session: AsyncSession, source_user_id: int) -> None:
