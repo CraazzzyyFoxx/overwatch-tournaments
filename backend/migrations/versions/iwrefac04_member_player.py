@@ -45,11 +45,12 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO players."user" (name, auth_user_id, created_at)
-        SELECT au.username, au.id, now()
+        SELECT DISTINCT ON (au.id) au.username, au.id, now()
         FROM workspace_member wm
         JOIN auth."user" au ON au.id = wm.auth_user_id
         WHERE wm.player_id IS NULL
           AND NOT EXISTS (SELECT 1 FROM players."user" p WHERE p.auth_user_id = au.id)
+        ORDER BY au.id
         """
     )
     op.execute(
