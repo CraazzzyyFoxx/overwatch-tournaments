@@ -20,6 +20,7 @@ from shared.models.user import User
 
 if typing.TYPE_CHECKING:
     from shared.models.standings import Standing
+    from shared.models.workspace import WorkspaceMember
 
 __all__ = ("Team", "ChallongeTeam", "Player", "PlayerSubRole")
 
@@ -85,6 +86,13 @@ class Player(db.TimeStampIntegerMixin):
     tournament: Mapped[Tournament] = relationship()
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"))
     user: Mapped["User"] = relationship()
+    # Expand step of the workspace-anchoring migration: coexists with ``user_id`` until
+    # readers are migrated and the CONTRACT step (iwrefac06b) drops ``user_id`` and sets
+    # this column NOT NULL. ``workspace_member`` lives in the public schema.
+    workspace_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    workspace_member: Mapped["WorkspaceMember | None"] = relationship()
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
     team: Mapped["Team"] = relationship(back_populates="players")
 
