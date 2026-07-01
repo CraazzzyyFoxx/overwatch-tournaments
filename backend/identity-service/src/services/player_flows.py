@@ -27,16 +27,15 @@ async def link_player(
     """Link a game player to the current auth user."""
     logger.info(f"Linking player {link_data.player_id} to user {current_user.username}")
 
-    player_link = await PlayerLinkService.link_player(session, current_user, link_data.player_id, link_data.is_primary)
-
-    result = await session.execute(select(User).where(User.id == link_data.player_id))
-    player = result.scalar_one()
+    # Single-link model: ``link_player`` returns the linked ``players.user`` row.
+    # ``is_primary`` is always True (one link per auth user).
+    player = await PlayerLinkService.link_player(session, current_user, link_data.player_id, link_data.is_primary)
 
     linked_player = schemas.LinkedPlayer(
         player_id=player.id,
         player_name=player.name,
-        is_primary=player_link.is_primary,
-        linked_at=player_link.created_at.isoformat(),
+        is_primary=True,
+        linked_at=player.created_at.isoformat(),
     )
 
     return schemas.PlayerLinkResponse(message="Player linked successfully", player=linked_player)
@@ -57,23 +56,19 @@ async def get_linked_players(
     current_user: models.AuthUser,
 ) -> list[schemas.LinkedPlayer]:
     """Get all linked players for the current auth user."""
-    player_links = await PlayerLinkService.get_linked_players(session, current_user)
+    # Single-link model: ``get_linked_players`` returns the 0-or-1
+    # ``players.user`` row(s) linked via ``auth_user_id``.
+    players = await PlayerLinkService.get_linked_players(session, current_user)
 
-    result: list[schemas.LinkedPlayer] = []
-    for link in player_links:
-        player_result = await session.execute(select(User).where(User.id == link.player_id))
-        player = player_result.scalar_one()
-
-        result.append(
-            schemas.LinkedPlayer(
-                player_id=player.id,
-                player_name=player.name,
-                is_primary=link.is_primary,
-                linked_at=link.created_at.isoformat(),
-            )
+    return [
+        schemas.LinkedPlayer(
+            player_id=player.id,
+            player_name=player.name,
+            is_primary=True,
+            linked_at=player.created_at.isoformat(),
         )
-
-    return result
+        for player in players
+    ]
 
 
 async def set_primary_player(
@@ -81,32 +76,22 @@ async def set_primary_player(
     current_user: models.AuthUser,
     player_id: int,
 ) -> dict:
-    """Set a linked player as primary for the current auth user."""
+    """Set a linked player as primary for the current auth user.
+
+    Single-link model (identity/workspace refactor): an auth user has at most
+    one linked player (``players.user.auth_user_id``), so there is nothing to
+    reassign. This is now validate-only — it confirms ``player_id`` is the
+    caller's single linked player and returns success without any mutation. The
+    endpoint is retained (no route/gateway churn); the wire response is
+    unchanged.
+    """
     logger.info(f"Setting player {player_id} as primary for user {current_user.username}")
 
-    result = await session.execute(
-        select(models.AuthUserPlayer).where(
-            models.AuthUserPlayer.auth_user_id == current_user.id, models.AuthUserPlayer.player_id == player_id
-        )
-    )
-    target_link = result.scalar_one_or_none()
-    if target_link is None:
+    player = await session.scalar(select(User).where(User.auth_user_id == current_user.id))
+    if player is None or player.id != player_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Player link not found",
         )
-
-    result = await session.execute(
-        select(models.AuthUserPlayer).where(
-            models.AuthUserPlayer.auth_user_id == current_user.id,
-            models.AuthUserPlayer.is_primary.is_(True),
-        )
-    )
-    for link in result.scalars():
-        link.is_primary = False
-
-    target_link.is_primary = True
-
-    await session.commit()
 
     return {"message": "Primary player updated successfully"}
