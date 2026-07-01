@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from shared.models.rbac import Role
     from shared.models.user import User
 
-__all__ = ("AuthUser", "RefreshToken", "AuthUserPlayer")
+__all__ = ("AuthUser", "RefreshToken")
 
 ADMIN_EQUIVALENT_ROLE_NAMES = {"admin"}
 ADMIN_PANEL_ROLE_NAMES = {"admin", "tournament_organizer", "moderator"}
@@ -51,9 +51,6 @@ class AuthUser(db.TimeStampIntegerMixin):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    player_links: Mapped[list["AuthUserPlayer"]] = relationship(
-        back_populates="auth_user", cascade="all, delete-orphan"
-    )
     player: Mapped["User | None"] = relationship(
         back_populates="auth_user", uselist=False, viewonly=False,
     )
@@ -294,21 +291,3 @@ class RefreshToken(db.TimeStampIntegerMixin):
 
     def __repr__(self):
         return f"<RefreshToken id={self.id} user_id={self.user_id}>"
-
-
-class AuthUserPlayer(db.TimeStampIntegerMixin):
-    """Link between auth user and game player"""
-
-    __tablename__ = "user_player"
-    __table_args__ = ({"schema": "auth"},)
-
-    auth_user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False)
-    player_id: Mapped[int] = mapped_column(ForeignKey("players.user.id", ondelete="CASCADE"), nullable=False, unique=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean(), default=True, nullable=False)
-
-    # Relations
-    auth_user: Mapped["AuthUser"] = relationship(back_populates="player_links")
-    player: Mapped["User"] = relationship()
-
-    def __repr__(self):
-        return f"<AuthUserPlayer auth_user_id={self.auth_user_id} player_id={self.player_id}>"
