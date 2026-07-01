@@ -88,7 +88,7 @@ async def bulk_create_from_balancer(
 
             existing_player_result = await session.execute(
                 sa.select(models.Player).where(
-                    models.Player.user_id == user.id,
+                    models.Player.workspace_member.has(models.WorkspaceMember.player_id == user.id),
                     models.Player.tournament_id == tournament_id,
                 )
             )
@@ -97,14 +97,16 @@ async def bulk_create_from_balancer(
                 continue
 
             existing_globally_result = await session.execute(
-                sa.select(models.Player).where(models.Player.user_id == user.id).limit(1)
+                sa.select(models.Player)
+                .where(models.Player.workspace_member.has(models.WorkspaceMember.player_id == user.id))
+                .limit(1)
             )
             is_newcomer = existing_globally_result.scalar_one_or_none() is None
 
             role = _resolve_hero_role(member.role)
             existing_role_result = await session.execute(
                 sa.select(models.Player).where(
-                    models.Player.user_id == user.id,
+                    models.Player.workspace_member.has(models.WorkspaceMember.player_id == user.id),
                     models.Player.role == role,
                 ).limit(1)
             )
