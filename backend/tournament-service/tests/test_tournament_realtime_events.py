@@ -61,12 +61,12 @@ class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
         self.assertEqual(updates, [(42, "bracket_changed")])
 
     async def test_registration_outbox_event_registers_structure_realtime_update(self) -> None:
-        session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock())
+        # BalancerRegistration has no denormalized workspace_id column anymore —
+        # enqueue_registration_approved derives it via a tournament lookup.
+        session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock(), scalar=AsyncMock(return_value=3))
         registration = SimpleNamespace(
             id=7,
             tournament_id=42,
-            workspace_id=3,
-            auth_user_id=11,
             user_id=None,
             battle_tag="Player#1234",
         )

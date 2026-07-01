@@ -1106,7 +1106,6 @@ async def list_registrations(
             selectinload(models.BalancerRegistration.roles)
             .selectinload(models.BalancerRegistrationRole.hero_entries)
             .selectinload(models.BalancerRegistrationRoleHero.hero),
-            selectinload(models.BalancerRegistration.auth_user),
             selectinload(models.BalancerRegistration.reviewer),
             selectinload(models.BalancerRegistration.deleted_by_user),
             selectinload(models.BalancerRegistration.checked_in_by_user),
@@ -2153,9 +2152,12 @@ async def create_manual_registration(
         raw_max = config.get("max_heroes")
         max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
 
+    # Manual (admin-created) registrations have no registering auth account, so
+    # they are intentionally left with workspace_member_id=None — mirrors the
+    # sheet-sync creation path below. Workspace is derived from
+    # tournament_id -> Tournament.workspace_id when needed, not stored here.
     registration = models.BalancerRegistration(
         tournament_id=tournament_id,
-        workspace_id=workspace_id,
         display_name=display_name or battle_tag,
         battle_tag=battle_tag,
         battle_tag_normalized=normalize_battle_tag_key(battle_tag),
@@ -2221,7 +2223,7 @@ async def update_registration_profile(
     if status_value is not None:
         await validate_registration_status_value(
             session,
-            workspace_id=registration.workspace_id,
+            workspace_id=registration.tournament.workspace_id,
             scope="registration",
             value=status_value,
         )
@@ -2229,7 +2231,7 @@ async def update_registration_profile(
     if balancer_status_value is not None:
         await validate_registration_status_value(
             session,
-            workspace_id=registration.workspace_id,
+            workspace_id=registration.tournament.workspace_id,
             scope="balancer",
             value=balancer_status_value,
         )
@@ -2404,7 +2406,7 @@ async def set_balancer_status(
     registration = await get_registration_by_id(session, registration_id)
     await validate_registration_status_value(
         session,
-        workspace_id=registration.workspace_id,
+        workspace_id=registration.tournament.workspace_id,
         scope="balancer",
         value=balancer_status,
     )
@@ -2612,9 +2614,10 @@ async def sync_google_sheet_feed(
                     registration = reuse_result.scalar_one_or_none()
 
             if registration is None:
+                # Sheet-sync-created registrations have no registering auth account,
+                # so workspace_member_id is left None (mirrors create_manual_registration).
                 registration = models.BalancerRegistration(
                     tournament_id=tournament_id,
-                    workspace_id=tournament.workspace_id,
                     display_name=parsed_fields.get("display_name") or parsed_fields.get("battle_tag"),
                     battle_tag=parsed_fields.get("battle_tag"),
                     battle_tag_normalized=normalize_battle_tag_key(parsed_fields.get("battle_tag")),

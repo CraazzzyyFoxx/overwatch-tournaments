@@ -245,9 +245,13 @@ async def delete_custom_status(
         if status_row.scope == "registration"
         else models.BalancerRegistration.balancer_status
     )
+    # BalancerRegistration has no denormalized workspace_id column — scope via the
+    # owning tournament (registrations are always tournament-scoped).
     in_use = await session.scalar(
-        sa.select(sa.func.count(models.BalancerRegistration.id)).where(
-            models.BalancerRegistration.workspace_id == workspace_id,
+        sa.select(sa.func.count(models.BalancerRegistration.id))
+        .join(models.Tournament, models.Tournament.id == models.BalancerRegistration.tournament_id)
+        .where(
+            models.Tournament.workspace_id == workspace_id,
             registration_column == status_row.slug,
         )
     )

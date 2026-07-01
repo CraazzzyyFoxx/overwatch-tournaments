@@ -29,6 +29,7 @@ from shared.core.enums import (
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole, BalancerRegistrationRoleHero
 from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.models.workspace import WorkspaceMember
 
 from src.services.draft.snake_order import generate_pick_order
 
@@ -285,6 +286,20 @@ def _to_draft_role(role: str | None) -> DraftRole | None:
     return None
 
 
+def _registration_auth_user_id(reg: BalancerRegistration) -> int | None:
+    """Resolve the registering account's auth identity for a pool registration.
+
+    ``BalancerRegistration`` no longer carries ``auth_user_id`` directly — identity
+    is anchored via ``workspace_member`` (self-service registrations only; manual/
+    sheet-synced registrations have no ``workspace_member`` and resolve to ``None``,
+    same as before this column existed for them).
+    """
+    member = reg.workspace_member
+    if member is None or member.player is None:
+        return None
+    return member.player.auth_user_id
+
+
 def _map_registration(reg: BalancerRegistration) -> dict:
     """Derive draft role/rank fields from a tournament registration's roles.
 
@@ -363,7 +378,9 @@ async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerR
             .options(
                 selectinload(BalancerRegistration.roles)
                 .selectinload(BalancerRegistrationRole.hero_entries)
-                .selectinload(BalancerRegistrationRoleHero.hero)
+                .selectinload(BalancerRegistrationRoleHero.hero),
+                # Needed by _registration_auth_user_id (captain identity resolution).
+                selectinload(BalancerRegistration.workspace_member).selectinload(WorkspaceMember.player),
             )
             .order_by(BalancerRegistration.battle_tag_normalized.asc())
         )
@@ -447,7 +464,7 @@ async def seed_from_pool(
                 name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",
                 draft_position=position,
                 user_id=reg.user_id,
-                auth_user_id=reg.auth_user_id,
+                auth_user_id=_registration_auth_user_id(reg),
                 battle_tag=reg.battle_tag,
                 primary_role=mapped["primary_role"],
                 sub_role=mapped["sub_role"],

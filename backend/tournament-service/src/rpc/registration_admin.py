@@ -253,7 +253,7 @@ def register(broker: Any, logger: Any) -> None:
                 include_deleted=include_deleted,
             )
             status_meta_map = (
-                await get_status_metas_map(session, workspace_id=registrations[0].workspace_id)
+                await get_status_metas_map(session, workspace_id=ws_id)
                 if registrations
                 else None
             )
@@ -274,6 +274,7 @@ def register(broker: Any, logger: Any) -> None:
                 _dump(
                     serialize_registration(
                         registration,
+                        workspace_id=ws_id,
                         status_meta_map=status_meta_map,
                         ow_ranks_for_user=ow_ranks.get(registration.id),
                     )
@@ -309,13 +310,13 @@ def register(broker: Any, logger: Any) -> None:
                 admin_notes=body.admin_notes,
                 roles=[role.model_dump() for role in body.roles],
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -345,13 +346,13 @@ def register(broker: Any, logger: Any) -> None:
                 balancer_status_value=body.balancer_status,
                 roles=[role.model_dump() for role in body.roles] if body.roles is not None else None,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -369,13 +370,13 @@ def register(broker: Any, logger: Any) -> None:
                 registration_id,
                 reviewed_by=user.id,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -393,13 +394,13 @@ def register(broker: Any, logger: Any) -> None:
                 registration_id,
                 reviewed_by=user.id,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -419,13 +420,13 @@ def register(broker: Any, logger: Any) -> None:
                 exclude_from_balancer=body.exclude_from_balancer,
                 exclude_reason=body.exclude_reason,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -439,13 +440,13 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await auth._get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             registration = await registration_service.withdraw_registration(session, registration_id)
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -459,13 +460,13 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await auth._get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             registration = await registration_service.restore_registration(session, registration_id)
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -534,13 +535,13 @@ def register(broker: Any, logger: Any) -> None:
                 registration_id,
                 balancer_status=body.balancer_status,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 
@@ -673,13 +674,13 @@ def register(broker: Any, logger: Any) -> None:
                 )
             else:
                 registration = await registration_service.uncheck_in_registration(session, registration_id)
-            status_meta_map = await get_status_metas_map(session, workspace_id=registration.workspace_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
                 registration.tournament_id,
-                workspace_id=registration.workspace_id,
+                workspace_id=ws_id,
                 actor_user_id=user.id,
             )
-            return _dump(serialize_registration(registration, status_meta_map=status_meta_map))
+            return _dump(serialize_registration(registration, workspace_id=ws_id, status_meta_map=status_meta_map))
 
         return await _run(logger, op)
 

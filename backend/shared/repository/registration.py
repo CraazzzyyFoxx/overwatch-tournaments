@@ -26,7 +26,9 @@ class BalancerRegistrationRepository(BaseRepository[models.BalancerRegistration]
             .options(selectinload(models.BalancerRegistration.roles))
             .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
-                models.BalancerRegistration.auth_user_id == auth_user_id,
+                models.BalancerRegistration.workspace_member.has(
+                    models.WorkspaceMember.player.has(models.User.auth_user_id == auth_user_id)
+                ),
                 models.BalancerRegistration.deleted_at.is_(None),
             )
         )

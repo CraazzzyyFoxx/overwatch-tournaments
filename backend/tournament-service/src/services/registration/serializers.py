@@ -47,6 +47,7 @@ def serialize_registration_role(
 def serialize_registration(
     registration: models.BalancerRegistration,
     *,
+    workspace_id: int,
     status_meta_map: dict[str, dict[str, StatusMeta]] | None = None,
     ow_ranks_for_user: dict[str, int] | None = None,
 ) -> admin_schemas.BalancerRegistrationRead:
@@ -64,8 +65,11 @@ def serialize_registration(
     return admin_schemas.BalancerRegistrationRead(
         id=registration.id,
         tournament_id=registration.tournament_id,
-        workspace_id=registration.workspace_id,
-        auth_user_id=registration.auth_user_id,
+        workspace_id=workspace_id,
+        # BalancerRegistration no longer carries auth_user_id directly (identity is
+        # anchored via workspace_member); unused downstream, left unset rather than
+        # adding a per-row join to resolve it.
+        auth_user_id=None,
         user_id=registration.user_id,
         display_name=registration.display_name,
         battle_tag=registration.battle_tag,

@@ -419,7 +419,14 @@ def register(broker: Any, logger: Any) -> None:
             )
             registration = result.scalar_one()
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-            return _dump(_reg_to_read(registration, status_meta_map=status_meta_map, show_ranks=form.show_ranks))
+            return _dump(
+                _reg_to_read(
+                    registration,
+                    workspace_id=workspace_id,
+                    status_meta_map=status_meta_map,
+                    show_ranks=form.show_ranks,
+                )
+            )
 
         return await _run(logger, op)
 
@@ -433,8 +440,13 @@ def register(broker: Any, logger: Any) -> None:
                 return None
             form = await reg_service.get_registration_form(session, tournament_id)
             show_ranks = form.show_ranks if form is not None else False
-            status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
-            return _dump(_reg_to_read(reg, status_meta_map=status_meta_map, show_ranks=show_ranks))
+            workspace_id = form.workspace_id if form is not None else await _resolve_tournament_workspace(
+                session, tournament_id
+            )
+            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+            return _dump(
+                _reg_to_read(reg, workspace_id=workspace_id, status_meta_map=status_meta_map, show_ranks=show_ranks)
+            )
 
         return await _run(logger, op)
 
@@ -471,7 +483,14 @@ def register(broker: Any, logger: Any) -> None:
                 **body.model_dump(exclude_unset=True),
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
-            return _dump(_reg_to_read(updated, status_meta_map=status_meta_map, show_ranks=form.show_ranks))
+            return _dump(
+                _reg_to_read(
+                    updated,
+                    workspace_id=form.workspace_id,
+                    status_meta_map=status_meta_map,
+                    show_ranks=form.show_ranks,
+                )
+            )
 
         return await _run(logger, op)
 
@@ -517,10 +536,12 @@ def register(broker: Any, logger: Any) -> None:
                 reg,
                 checked_in_by=user.id,
             )
-            status_meta_map = await get_status_metas_map(session, workspace_id=reg.workspace_id)
+            workspace_id = await _resolve_tournament_workspace(session, tournament_id)
+            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
             return _dump(
                 _reg_to_read(
                     checked_in,
+                    workspace_id=workspace_id,
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks if form else False,
                 )
@@ -543,14 +564,17 @@ def register(broker: Any, logger: Any) -> None:
                 result = await session.execute(
                     sa.select(models.BalancerRegistration)
                     .where(
+                        # tournament_id already pins this to a single workspace
+                        # (BalancerRegistration has no denormalized workspace_id).
                         models.BalancerRegistration.tournament_id == tournament_id,
-                        models.BalancerRegistration.workspace_id == workspace_id,
                         models.BalancerRegistration.deleted_at.is_(None),
                     )
                     .options(
                         selectinload(models.BalancerRegistration.roles)
                         .selectinload(models.BalancerRegistrationRole.hero_entries)
-                        .selectinload(models.BalancerRegistrationRoleHero.hero)
+                        .selectinload(models.BalancerRegistrationRoleHero.hero),
+                        # Needed by _build_tournament_history's user_id fallback below.
+                        selectinload(models.BalancerRegistration.workspace_member),
                     )
                     .order_by(models.BalancerRegistration.submitted_at.asc())
                 )
@@ -574,7 +598,9 @@ def register(broker: Any, logger: Any) -> None:
 
             registrations_read = [
                 RegistrationListRead(
-                    **_reg_to_read(r, status_meta_map=status_meta_map, show_ranks=show_ranks).model_dump(),
+                    **_reg_to_read(
+                        r, workspace_id=workspace_id, status_meta_map=status_meta_map, show_ranks=show_ranks
+                    ).model_dump(),
                     balancer_status=r.balancer_status,
                     balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
                     or build_unknown_status_meta("balancer", r.balancer_status),

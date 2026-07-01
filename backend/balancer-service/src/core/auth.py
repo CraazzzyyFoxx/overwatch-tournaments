@@ -173,8 +173,12 @@ async def _get_tournament_workspace_id(session: AsyncSession, tournament_id: int
 
 
 async def _get_registration_workspace_id(session: AsyncSession, registration_id: int) -> int:
+    # BalancerRegistration has no denormalized workspace_id column — derive it via
+    # the owning tournament (registrations are always tournament-scoped).
     workspace_id = await session.scalar(
-        sa.select(models.BalancerRegistration.workspace_id).where(models.BalancerRegistration.id == registration_id)
+        sa.select(models.Tournament.workspace_id)
+        .join(models.BalancerRegistration, models.BalancerRegistration.tournament_id == models.Tournament.id)
+        .where(models.BalancerRegistration.id == registration_id)
     )
     if workspace_id is None:
         raise HTTPException(

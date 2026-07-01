@@ -78,7 +78,9 @@ async def get_registration(
         sa.select(models.BalancerRegistration)
         .where(
             models.BalancerRegistration.tournament_id == tournament_id,
-            models.BalancerRegistration.auth_user_id == auth_user_id,
+            models.BalancerRegistration.workspace_member.has(
+                models.WorkspaceMember.player.has(models.User.auth_user_id == auth_user_id)
+            ),
             models.BalancerRegistration.deleted_at.is_(None),
         )
         .options(
@@ -219,6 +221,8 @@ async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, batt
 async def ensure_player_identity(
     session: AsyncSession,
     registration: models.BalancerRegistration,
+    *,
+    auth_user_id: int | None = None,
 ) -> int | None:
     """Find-or-create the domain player (players.user) for a registration's tags.
 
@@ -227,6 +231,12 @@ async def ensure_player_identity(
     aren't yet in the analytics system — be picked up by rank collection / the
     open-profile gate. Dedup is by the normalized handle (case-insensitive), so a
     later log/CSV import reconciles to the same player. Flushes only; caller commits.
+
+    ``auth_user_id`` is the *registering* account's auth identity, passed explicitly
+    by self-service callers (``create_registration``); manual/sheet-sync callers have
+    no auth identity to offer and leave it ``None``. It is no longer read off the
+    registration row — ``BalancerRegistration`` has no ``auth_user_id`` column
+    (identity is anchored via ``workspace_member`` instead).
 
     Identity precedence (registrant may already have an authenticated account):
     1. An already-linked registration (``registration.user_id`` set, e.g. by a
@@ -253,10 +263,8 @@ async def ensure_player_identity(
     if registration.user_id is not None:
         user = await session.get(models.User, registration.user_id)
 
-    registration_auth_user_id = getattr(registration, "auth_user_id", None)
-
     if user is None:
-        owned = await _find_owned_user(session, registration_auth_user_id)
+        owned = await _find_owned_user(session, auth_user_id)
         if owned is not None:
             user = owned
             shadow = await _find_user_by_battle_tag(session, battle_tag)
@@ -267,7 +275,7 @@ async def ensure_player_identity(
         user = await _find_user_by_battle_tag(session, battle_tag)
 
     if user is None:
-        user = models.User(name=battle_tag, auth_user_id=registration_auth_user_id)
+        user = models.User(name=battle_tag, auth_user_id=auth_user_id)
         session.add(user)
         await session.flush()
 
@@ -323,8 +331,6 @@ async def create_registration(
 
     registration = models.BalancerRegistration(
         tournament_id=tournament_id,
-        workspace_id=workspace_id,
-        auth_user_id=auth_user_id,
         user_id=user_id,
         display_name=cleaned_battle_tag,
         battle_tag=cleaned_battle_tag,
@@ -345,15 +351,19 @@ async def create_registration(
     # Provision the domain player identity so first-time registrants are picked
     # up by rank collection / the open-profile gate. Done before the approval
     # event so it carries the resolved user_id.
-    player_id = await ensure_player_identity(session, registration)
+    player_id = await ensure_player_identity(session, registration, auth_user_id=auth_user_id)
     if auth_user_id is not None and player_id is not None:
         # Every self-service registration that resolved a domain player
         # enrolls it as a workspace_member and grants the baseline "player"
         # RBAC role. Both helpers are idempotent, so re-registering (e.g. a
         # second tournament in the same workspace) is a no-op past the first
-        # time.
+        # time. The registration's own workspace_member_id anchor is set from
+        # this same resolved member (registration.workspace_id no longer
+        # exists; workspace is derived from workspace_member -> workspace, or
+        # from tournament_id when unset/manual).
         await ensure_workspace_system_roles(session, workspace_id)
-        await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+        member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+        registration.workspace_member_id = member.id
         await assign_workspace_system_role(
             session, user_id=auth_user_id, workspace_id=workspace_id, role_name="player"
         )

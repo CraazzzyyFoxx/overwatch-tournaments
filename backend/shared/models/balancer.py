@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from shared.models.hero import Hero
     from shared.models.tournament import Tournament
     from shared.models.user import User
-    from shared.models.workspace import Workspace
+    from shared.models.workspace import Workspace, WorkspaceMember
 
 __all__ = (
     "BalancerBalance",
@@ -245,7 +245,7 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         Index(
             "uq_balancer_registration_user",
             "tournament_id",
-            "auth_user_id",
+            "workspace_member_id",
             unique=True,
             postgresql_where="deleted_at IS NULL",
         ),
@@ -276,11 +276,8 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True
     )
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
-    )
-    auth_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, index=True
+    workspace_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
@@ -324,8 +321,7 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     )
 
     tournament: Mapped["Tournament"] = relationship()
-    workspace: Mapped["Workspace"] = relationship()
-    auth_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[auth_user_id])
+    workspace_member: Mapped["WorkspaceMember | None"] = relationship()
     user: Mapped["User | None"] = relationship()
     reviewer: Mapped["AuthUser | None"] = relationship(foreign_keys=[reviewed_by])
     deleted_by_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[deleted_by])

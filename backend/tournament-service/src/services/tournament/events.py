@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -71,17 +72,32 @@ async def enqueue_encounter_completed(
     )
 
 
+async def _get_registration_workspace_id(session: AsyncSession, tournament_id: int) -> int:
+    # BalancerRegistration has no denormalized workspace_id column — derive it via
+    # the owning tournament (registrations are always tournament-scoped).
+    workspace_id = await session.scalar(
+        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
+    )
+    assert workspace_id is not None, f"Tournament {tournament_id} has no workspace_id"
+    return int(workspace_id)
+
+
 async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
+    workspace_id = await _get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationApprovedEvent(
             tournament_id=registration.tournament_id,
-            workspace_id=registration.workspace_id,
+            workspace_id=workspace_id,
             registration_id=registration.id,
-            auth_user_id=registration.auth_user_id,
+            # BalancerRegistration no longer carries auth_user_id directly (identity
+            # is anchored via workspace_member); no known consumer reads this field
+            # (parser-service's handler only uses user_id/registration_id/tournament_id
+            # /battle_tag), so it is left unset rather than adding a join to resolve it.
+            auth_user_id=None,
             user_id=registration.user_id,
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
@@ -96,13 +112,15 @@ async def enqueue_registration_rejected(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
+    workspace_id = await _get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationRejectedEvent(
             tournament_id=registration.tournament_id,
-            workspace_id=registration.workspace_id,
+            workspace_id=workspace_id,
             registration_id=registration.id,
-            auth_user_id=registration.auth_user_id,
+            # See enqueue_registration_approved — unused downstream, left unset.
+            auth_user_id=None,
             user_id=registration.user_id,
             battle_tag=registration.battle_tag,
             source_service="tournament-service",

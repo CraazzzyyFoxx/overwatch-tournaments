@@ -608,7 +608,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             tag = f"Pool{self._suffix}-{i}#1"
             reg = BalancerRegistration(
                 tournament_id=self.tournament_id,
-                workspace_id=self.workspace_id,
                 battle_tag=tag,
                 battle_tag_normalized=tag.lower(),
                 display_name=tag,

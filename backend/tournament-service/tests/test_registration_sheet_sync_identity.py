@@ -163,8 +163,9 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
 
     async def test_creates_new_player_when_no_match_without_auth_user_id_attr(self) -> None:
         """Legacy/sheet-import callers may build a registration stub with no
-        ``auth_user_id`` attribute at all; ``ensure_player_identity`` must not
-        blow up on ``getattr`` fallback."""
+        ``auth_user_id`` attribute at all (mirrors the ORM row, which no longer has
+        this column); ``ensure_player_identity`` must not blow up when the caller
+        also omits the explicit ``auth_user_id`` argument (defaults to ``None``)."""
         registration = SimpleNamespace(battle_tag="Newbie#333", smurf_tags_json=None, user_id=None)
         self.assertFalse(hasattr(registration, "auth_user_id"))
         added: list[object] = []
@@ -191,9 +192,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
     async def test_reuses_account_owned_player_over_battle_tag_dedup(self) -> None:
         """Case (a): the auth account already owns a player and the battletag has
         no distinct shadow owner — the account-owned player wins, no collapse."""
-        registration = SimpleNamespace(
-            battle_tag="AccountOwner#111", smurf_tags_json=None, user_id=None, auth_user_id=42
-        )
+        registration = SimpleNamespace(battle_tag="AccountOwner#111", smurf_tags_json=None, user_id=None)
         owned_user = SimpleNamespace(id=7)
         session = SimpleNamespace(get=AsyncMock(return_value=None), add=Mock(), flush=AsyncMock())
 
@@ -203,7 +202,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
             patch.object(reg_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
             patch.object(reg_service, "_ensure_user_battle_tag", AsyncMock()),
         ):
-            resolved = await reg_service.ensure_player_identity(session, registration)
+            resolved = await reg_service.ensure_player_identity(session, registration, auth_user_id=42)
 
         self.assertEqual(resolved, 7)
         self.assertEqual(registration.user_id, 7)
@@ -213,9 +212,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
         """Case (b): the auth account owns a player, but a DIFFERENT shadow
         player already holds the battletag — collapse the shadow's battlenet
         identity onto the account-owned player instead of splitting it."""
-        registration = SimpleNamespace(
-            battle_tag="Shadow#222", smurf_tags_json=None, user_id=None, auth_user_id=42
-        )
+        registration = SimpleNamespace(battle_tag="Shadow#222", smurf_tags_json=None, user_id=None)
         owned_user = SimpleNamespace(id=7)
         shadow_user = SimpleNamespace(id=13)
         session = SimpleNamespace(get=AsyncMock(return_value=None), add=Mock(), flush=AsyncMock())
@@ -226,7 +223,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
             patch.object(reg_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
             patch.object(reg_service, "_ensure_user_battle_tag", AsyncMock()),
         ):
-            resolved = await reg_service.ensure_player_identity(session, registration)
+            resolved = await reg_service.ensure_player_identity(session, registration, auth_user_id=42)
 
         self.assertEqual(resolved, 7)
         self.assertEqual(registration.user_id, 7)
@@ -235,9 +232,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
     async def test_shadow_only_no_account_unchanged(self) -> None:
         """Case (c): no auth account owns a player (anonymous/sheet import) —
         behaviour is exactly the pre-existing battletag dedup, unchanged."""
-        registration = SimpleNamespace(
-            battle_tag="ShadowOnly#333", smurf_tags_json=None, user_id=None, auth_user_id=None
-        )
+        registration = SimpleNamespace(battle_tag="ShadowOnly#333", smurf_tags_json=None, user_id=None)
         shadow_user = SimpleNamespace(id=21)
         session = SimpleNamespace(get=AsyncMock(return_value=None), add=Mock(), flush=AsyncMock())
 
@@ -247,7 +242,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
             patch.object(reg_service, "_move_battle_tag_identity", AsyncMock()) as move_mock,
             patch.object(reg_service, "_ensure_user_battle_tag", AsyncMock()),
         ):
-            resolved = await reg_service.ensure_player_identity(session, registration)
+            resolved = await reg_service.ensure_player_identity(session, registration, auth_user_id=None)
 
         self.assertEqual(resolved, 21)
         self.assertEqual(registration.user_id, 21)
@@ -257,9 +252,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
     async def test_creates_new_player_linked_to_auth_account_when_no_match(self) -> None:
         """When neither an owned player nor a battletag match exists, the new
         player is created pre-linked to the registering auth account."""
-        registration = SimpleNamespace(
-            battle_tag="BrandNew#444", smurf_tags_json=None, user_id=None, auth_user_id=99
-        )
+        registration = SimpleNamespace(battle_tag="BrandNew#444", smurf_tags_json=None, user_id=None)
         added: list[object] = []
 
         async def _flush() -> None:
@@ -278,7 +271,7 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
             patch.object(reg_service, "_find_user_by_battle_tag", AsyncMock(return_value=None)),
             patch.object(reg_service, "_ensure_user_battle_tag", AsyncMock()),
         ):
-            resolved = await reg_service.ensure_player_identity(session, registration)
+            resolved = await reg_service.ensure_player_identity(session, registration, auth_user_id=99)
 
         self.assertEqual(resolved, 555)
         self.assertEqual(len(added), 1)

@@ -112,12 +112,14 @@ async def _battle_tag_account(session, *, user_id: int, battle_tag: str) -> Soci
     )
 
 
-def _registration(*, battle_tag: str, auth_user_id: int | None, user_id: int | None = None):
+def _registration(*, battle_tag: str, user_id: int | None = None):
+    # BalancerRegistration no longer carries auth_user_id (identity is anchored via
+    # workspace_member); ensure_player_identity now takes the registering account's
+    # auth_user_id as an explicit keyword argument instead of reading it off the row.
     return SimpleNamespace(
         battle_tag=battle_tag,
         smurf_tags_json=None,
         user_id=user_id,
-        auth_user_id=auth_user_id,
     )
 
 
@@ -132,8 +134,8 @@ def test_reuses_account_owned_player_and_attaches_new_battle_tag(db_session) -> 
         await db_session.commit()
 
         battle_tag = f"Acct{suffix}#111"
-        registration = _registration(battle_tag=battle_tag, auth_user_id=auth_user.id)
-        resolved = await reg_service.ensure_player_identity(db_session, registration)
+        registration = _registration(battle_tag=battle_tag)
+        resolved = await reg_service.ensure_player_identity(db_session, registration, auth_user_id=auth_user.id)
         await db_session.commit()
         return player.id, resolved, battle_tag
 
@@ -167,8 +169,8 @@ def test_colliding_shadow_battle_tag_collapses_onto_account_owned_player(db_sess
         await _battle_tag_account(db_session, user_id=shadow_player.id, battle_tag=battle_tag)
         await db_session.commit()
 
-        registration = _registration(battle_tag=battle_tag, auth_user_id=auth_user.id)
-        resolved = await reg_service.ensure_player_identity(db_session, registration)
+        registration = _registration(battle_tag=battle_tag)
+        resolved = await reg_service.ensure_player_identity(db_session, registration, auth_user_id=auth_user.id)
         await db_session.commit()
         return owned_player.id, shadow_player.id, resolved, battle_tag
 
@@ -205,8 +207,8 @@ def test_shadow_only_no_account_falls_back_to_battle_tag_dedup(db_session) -> No
         await _battle_tag_account(db_session, user_id=shadow_player.id, battle_tag=battle_tag)
         await db_session.commit()
 
-        registration = _registration(battle_tag=battle_tag, auth_user_id=None)
-        resolved = await reg_service.ensure_player_identity(db_session, registration)
+        registration = _registration(battle_tag=battle_tag)
+        resolved = await reg_service.ensure_player_identity(db_session, registration, auth_user_id=None)
         await db_session.commit()
         return shadow_player.id, resolved
 

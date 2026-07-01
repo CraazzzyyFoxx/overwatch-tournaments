@@ -103,6 +103,7 @@ def _form_to_read(
 def _reg_to_read(
     reg: models.BalancerRegistration,
     *,
+    workspace_id: int,
     status_meta_map: dict[str, dict[str, dict[str, object]]] | None = None,
     show_ranks: bool = False,
 ) -> RegistrationRead:
@@ -125,8 +126,12 @@ def _reg_to_read(
     return RegistrationRead(
         id=reg.id,
         tournament_id=reg.tournament_id,
-        workspace_id=reg.workspace_id,
-        auth_user_id=reg.auth_user_id,
+        workspace_id=workspace_id,
+        # BalancerRegistration no longer carries auth_user_id directly (identity is
+        # anchored via workspace_member); this field is unused downstream (frontend
+        # never reads it off a registration) so it is left unset rather than adding
+        # a per-row join to resolve it.
+        auth_user_id=None,
         user_id=reg.user_id,
         battle_tag=reg.battle_tag,
         smurf_tags_json=reg.smurf_tags_json,
@@ -162,7 +167,12 @@ async def _build_tournament_history(
 
     Resolution order to find player user_id (players.user.id):
     1. user_id on the registration itself
-    2. auth_user_id → players.user.auth_user_id → player_id
+    2. workspace_member -> player_id (self-service registrations are anchored
+       on workspace_member, whose player_id IS players.user.id — no more
+       auth_user_id indirection needed)
+
+    Callers must eager-load ``BalancerRegistration.workspace_member`` for step 2
+    to see anything (a lazy load here would run outside the request's greenlet).
 
     Returns a tuple of:
     - ``history_map``: registration_id -> most-recent-first history entries,
@@ -171,31 +181,12 @@ async def _build_tournament_history(
     - ``division_grids``: stringified version_id -> ``DivisionGridVersionRead``,
       containing only the versions actually referenced by the returned entries.
     """
-    # --- Step 1: resolve analytics user_id for every registration ---
-    auth_ids_to_resolve: list[int] = []
-    for r in registrations:
-        if r.user_id is None and r.auth_user_id is not None:
-            auth_ids_to_resolve.append(r.auth_user_id)
-
-    auth_to_player: dict[int, int] = {}
-    if auth_ids_to_resolve:
-        link_result = await session.execute(
-            sa.select(
-                models.User.auth_user_id,
-                models.User.id,
-            ).where(
-                models.User.auth_user_id.in_(auth_ids_to_resolve),
-            )
-        )
-        for auth_id, player_id in link_result:
-            auth_to_player[auth_id] = player_id
-
     # Build reverse map: analytics_user_id -> list of registration ids
     player_to_reg_ids: dict[int, list[int]] = {}
     for r in registrations:
         uid = r.user_id
-        if uid is None and r.auth_user_id is not None:
-            uid = auth_to_player.get(r.auth_user_id)
+        if uid is None and r.workspace_member is not None:
+            uid = r.workspace_member.player_id
         if uid is not None:
             player_to_reg_ids.setdefault(uid, []).append(r.id)
 
