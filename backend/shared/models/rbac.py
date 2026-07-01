@@ -2,6 +2,7 @@
 RBAC (Role-Based Access Control) models
 """
 from typing import TYPE_CHECKING
+import sqlalchemy as sa
 from sqlalchemy import Index, String, ForeignKey, Table, Column, Integer, Text, Boolean, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -100,7 +101,13 @@ class UserPermissionDeny(db.TimeStampIntegerMixin):
 
     __tablename__ = "user_permission_deny"
     __table_args__ = (
-        UniqueConstraint("user_id", "permission_id", name="uq_user_permission_deny"),
+        Index(
+            "uq_user_permission_deny_user_perm_workspace",
+            "user_id",
+            "permission_id",
+            sa.text("COALESCE(workspace_id, 0)"),
+            unique=True,
+        ),
         Index("ix_user_permission_deny_user_id", "user_id"),
         {"schema": "auth"},
     )
@@ -110,6 +117,9 @@ class UserPermissionDeny(db.TimeStampIntegerMixin):
     )
     permission_id: Mapped[int] = mapped_column(
         ForeignKey("auth.permissions.id", ondelete="CASCADE"), nullable=False
+    )
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
     )
     created_by: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
