@@ -51,9 +51,9 @@ def upgrade() -> None:
         """
         UPDATE tournament.player p
         SET workspace_member_id = wm.id
-        FROM workspace_member wm
-        JOIN tournament.tournament t ON t.id = p.tournament_id
-        WHERE wm.workspace_id = t.workspace_id
+        FROM workspace_member wm, tournament.tournament t
+        WHERE t.id = p.tournament_id
+          AND wm.workspace_id = t.workspace_id
           AND wm.player_id = p.user_id
         """
     )
@@ -77,9 +77,9 @@ def upgrade() -> None:
         """
         UPDATE tournament.player p
         SET workspace_member_id = wm.id
-        FROM workspace_member wm
-        JOIN tournament.tournament t ON t.id = p.tournament_id
-        WHERE wm.workspace_id = t.workspace_id
+        FROM workspace_member wm, tournament.tournament t
+        WHERE t.id = p.tournament_id
+          AND wm.workspace_id = t.workspace_id
           AND wm.player_id = p.user_id
           AND p.workspace_member_id IS NULL
         """
