@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.rbac import legacy_workspace_role_name_for_user
+from shared.rbac import WORKSPACE_SYSTEM_ROLE_NAMES
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -101,8 +101,15 @@ async def _build_access_token_payload(
     for row in ws_memberships:
         ws_id, slug = row
         ws_data = ws_rbac.get(ws_id, ([], []))
-        member_role = await legacy_workspace_role_name_for_user(
-            session, user_id=current_user.id, workspace_id=ws_id
+        # Derive the legacy role name from the RBAC role names we already
+        # fetched (ws_data[0]) instead of a per-membership DB round-trip. This
+        # mirrors legacy_workspace_role_name_for_user (first matching system
+        # role by priority, else "member") and keeps ``role`` consistent with
+        # the sibling ``rbac_roles`` field, which can come from the RBAC cache.
+        ws_role_names = ws_data[0]
+        member_role = next(
+            (name for name in WORKSPACE_SYSTEM_ROLE_NAMES if name in ws_role_names),
+            "member",
         )
         workspaces.append(
             schemas.WorkspaceMembership(

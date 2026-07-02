@@ -92,7 +92,11 @@ async def to_pydantic_player(
     tournament: schemas.TournamentRead | None = None
     team: schemas.TeamRead | None = None
 
-    if "user" in entities and player.workspace_member is not None and player.workspace_member.player is not None:
+    if "user" in entities:
+        # workspace_member_id is NOT NULL (contract step, iwrefac07) and is always
+        # eager-loaded regardless of the "user" entity flag (see the workspace_member
+        # dereference below), so the old "workspace_member is not None" guard here was
+        # dead — dropped to match tournament-service's to_pydantic_player.
         user = await user_flows.to_pydantic(
             session, player.workspace_member.player, utils.prepare_entities(entities, "user")
         )

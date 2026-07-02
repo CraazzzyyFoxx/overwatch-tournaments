@@ -13,7 +13,7 @@ from shared.core import enums
 from shared.core.social import SocialProvider
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
-from shared.rbac import assign_workspace_system_role, ensure_workspace_system_roles
+from shared.rbac import assign_workspace_system_role
 from shared.repository import get_or_create_workspace_member
 from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -361,7 +361,11 @@ async def create_registration(
         # this same resolved member (registration.workspace_id no longer
         # exists; workspace is derived from workspace_member -> workspace, or
         # from tournament_id when unset/manual).
-        await ensure_workspace_system_roles(session, workspace_id)
+        #
+        # assign_workspace_system_role() calls ensure_workspace_system_roles()
+        # internally, so we don't seed the catalog explicitly here — doing so
+        # would re-upsert the whole permission catalog twice per registration
+        # on this hot path for no behavioural gain.
         member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
         registration.workspace_member_id = member.id
         await assign_workspace_system_role(
