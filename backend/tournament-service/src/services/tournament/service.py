@@ -266,6 +266,7 @@ async def get_tournaments_overall(session: AsyncSession, workspace_id: int | Non
 
     players_count_query = (
         sa.select(sa.func.count(sa.distinct(models.WorkspaceMember.player_id)))
+        .select_from(models.Player)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Tournament.is_league.is_(False), *ws_filters)
