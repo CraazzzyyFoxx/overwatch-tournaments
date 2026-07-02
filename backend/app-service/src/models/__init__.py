@@ -20,3 +20,4 @@ from shared.models.rbac import *
 from shared.models.api_key import *
 from shared.models.balancer import *
 from shared.models.log_processing import *
+from shared.models.user_merge_audit import *

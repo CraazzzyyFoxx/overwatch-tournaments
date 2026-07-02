@@ -314,11 +314,6 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             patch.object(user_merge, "_merge_auth_user_links", AsyncMock(return_value=0)),
             patch.object(user_merge, "_delete_source_user_row", AsyncMock()),
             patch.object(user_merge, "_invalidate_merge_caches", AsyncMock()),
-            # NOTE: app-service's `src.models` package does not currently
-            # re-export `UserMergeAudit` from `shared.models.user_merge_audit`
-            # (pre-existing gap, unrelated to P5.2c) -- stub it so this test can
-            # exercise execute_merge() without tripping over that separate bug.
-            patch.object(user_merge.models, "UserMergeAudit", Mock(side_effect=lambda **kw: SimpleNamespace(**kw)), create=True),
         ):
             response = await user_merge.execute_merge(session, request, operator_auth_user_id=None)
 
