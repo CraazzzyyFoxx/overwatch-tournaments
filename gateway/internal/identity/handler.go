@@ -428,15 +428,20 @@ func (h *Handler) RbacListUserDenies(w http.ResponseWriter, r *http.Request) {
 	h.authedFields(w, r, queueRbacListUserDenies, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
 }
 
-// RbacAddUserDeny mirrors POST /rbac/users/{user_id}/denies (body: permission_id, reason?).
+// RbacAddUserDeny mirrors POST /rbac/users/{user_id}/denies
+// (body: permission_id, reason?, workspace_id? — omitted/null = global deny).
 func (h *Handler) RbacAddUserDeny(w http.ResponseWriter, r *http.Request) {
 	h.authedMerge(w, r, queueRbacAddUserDeny, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
 }
 
-// RbacRemoveUserDeny mirrors DELETE /rbac/users/{user_id}/denies/{permission_id}.
+// RbacRemoveUserDeny mirrors DELETE /rbac/users/{user_id}/denies/{permission_id}?workspace_id=
+// (query param optional; omitted = matches the global deny, not a workspace-scoped one).
 func (h *Handler) RbacRemoveUserDeny(w http.ResponseWriter, r *http.Request) {
-	h.authedFields(w, r, queueRbacRemoveUserDeny, http.StatusOK,
-		map[string]any{"user_id": r.PathValue("user_id"), "permission_id": r.PathValue("permission_id")})
+	extra := map[string]any{"user_id": r.PathValue("user_id"), "permission_id": r.PathValue("permission_id")}
+	if v := r.URL.Query().Get("workspace_id"); v != "" {
+		extra["workspace_id"] = v
+	}
+	h.authedFields(w, r, queueRbacRemoveUserDeny, http.StatusOK, extra)
 }
 
 // RbacGetUserRoles mirrors GET /rbac/users/{user_id}/roles.

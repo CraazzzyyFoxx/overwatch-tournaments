@@ -769,28 +769,42 @@ async def delete_oauth_connection(
 _DENY_PROTECTED_RESOURCES = frozenset({"*", "role", "permission", "auth_user"})
 
 
-def _deny_payload(permission: Permission) -> dict:
+def _deny_payload(permission: Permission, workspace_id: int | None) -> dict:
     return {
         "permission_id": permission.id,
         "name": permission.name,
         "resource": permission.resource,
         "action": permission.action,
         "description": permission.description,
+        "workspace_id": workspace_id,
     }
+
+
+def _workspace_scope_filter(workspace_id: int | None):
+    """NULL-safe equality filter for ``UserPermissionDeny.workspace_id``.
+
+    Mirrors the ``COALESCE(workspace_id, 0)`` unique-index semantics: a global
+    deny (``workspace_id IS NULL``) and a deny scoped to a concrete workspace
+    are distinct scopes and must never be conflated by a plain ``==`` (which
+    never matches NULL).
+    """
+    if workspace_id is None:
+        return UserPermissionDeny.workspace_id.is_(None)
+    return UserPermissionDeny.workspace_id == workspace_id
 
 
 async def list_user_denies(
     session: AsyncSession, current_user: models.AuthUser, user_id: int
 ) -> list[dict]:
-    """List the permissions explicitly denied for a user."""
+    """List the permissions explicitly denied for a user (global + per-workspace)."""
     _require_permission(current_user, "auth_user", "read")
     result = await session.execute(
-        select(Permission)
+        select(Permission, UserPermissionDeny.workspace_id)
         .join(UserPermissionDeny, UserPermissionDeny.permission_id == Permission.id)
         .where(UserPermissionDeny.user_id == user_id)
-        .order_by(Permission.name)
+        .order_by(Permission.name, UserPermissionDeny.workspace_id)
     )
-    return [_deny_payload(p) for p in result.scalars().all()]
+    return [_deny_payload(permission, workspace_id) for permission, workspace_id in result.all()]
 
 
 async def add_user_deny(
@@ -799,8 +813,15 @@ async def add_user_deny(
     user_id: int,
     permission_id: int,
     reason: str | None = None,
+    workspace_id: int | None = None,
 ) -> list[dict]:
-    """Deny a permission to a user (idempotent). Rejects governance permissions."""
+    """Deny a permission to a user (idempotent). Rejects governance permissions.
+
+    ``workspace_id=None`` denies the permission globally (everywhere); a
+    concrete ``workspace_id`` scopes the deny to that workspace only. A user
+    can hold both a global and a workspace-scoped deny for the same
+    permission at once (distinct rows per the partial-unique index).
+    """
     _require_permission(current_user, "auth_user", "update")
 
     user = await session.scalar(select(models.AuthUser).where(models.AuthUser.id == user_id))
@@ -815,10 +836,16 @@ async def add_user_deny(
             detail=f"Cannot deny governance permission '{permission.name}'",
         )
 
+    if workspace_id is not None:
+        workspace = await session.scalar(select(models.Workspace).where(models.Workspace.id == workspace_id))
+        if workspace is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+
     existing = await session.scalar(
         select(UserPermissionDeny).where(
             UserPermissionDeny.user_id == user_id,
             UserPermissionDeny.permission_id == permission_id,
+            _workspace_scope_filter(workspace_id),
         )
     )
     if existing is None:
@@ -826,30 +853,45 @@ async def add_user_deny(
             UserPermissionDeny(
                 user_id=user_id,
                 permission_id=permission_id,
+                workspace_id=workspace_id,
                 created_by=current_user.id,
                 reason=reason,
             )
         )
         await session.commit()
         logger.info(
-            f"Permission denied to user: user_id={user_id} permission={permission.name} actor={current_user.id}"
+            f"Permission denied to user: user_id={user_id} permission={permission.name} "
+            f"workspace_id={workspace_id} actor={current_user.id}"
         )
     await invalidate_rbac(user_id)
     return await list_user_denies(session, current_user, user_id)
 
 
 async def remove_user_deny(
-    session: AsyncSession, current_user: models.AuthUser, user_id: int, permission_id: int
+    session: AsyncSession,
+    current_user: models.AuthUser,
+    user_id: int,
+    permission_id: int,
+    workspace_id: int | None = None,
 ) -> list[dict]:
-    """Remove a permission deny from a user (idempotent)."""
+    """Remove a permission deny from a user (idempotent).
+
+    Matches the exact ``(user_id, permission_id, workspace_id)`` scope (see
+    ``_workspace_scope_filter``) so removing a global deny never removes a
+    workspace-scoped deny for the same permission, and vice-versa.
+    """
     _require_permission(current_user, "auth_user", "update")
     await session.execute(
         delete(UserPermissionDeny).where(
             UserPermissionDeny.user_id == user_id,
             UserPermissionDeny.permission_id == permission_id,
+            _workspace_scope_filter(workspace_id),
         )
     )
     await session.commit()
     await invalidate_rbac(user_id)
-    logger.info(f"Permission deny removed: user_id={user_id} permission_id={permission_id} actor={current_user.id}")
+    logger.info(
+        f"Permission deny removed: user_id={user_id} permission_id={permission_id} "
+        f"workspace_id={workspace_id} actor={current_user.id}"
+    )
     return await list_user_denies(session, current_user, user_id)
