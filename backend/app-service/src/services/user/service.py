@@ -1402,17 +1402,15 @@ async def get_overview_stats(
     # the workspace-scoped candidate set (total_players).
     ws_filter = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []
 
+    # NB: "has any parsed logs" is intentionally NOT workspace-scoped — reaching
+    # the workspace from match_statistics requires a Match->Encounter->Tournament
+    # join over that (very large) table, which times out for big workspaces. The
+    # candidate set is already workspace-scoped, so this counts scoped players who
+    # have parsed logs anywhere; the slight cross-workspace leniency is acceptable.
     with_logs_query = (
         sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id)))
         .where(models.MatchStatistics.user_id.in_(candidate_user_ids))
     )
-    if workspace_id is not None:
-        with_logs_query = (
-            with_logs_query.join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
-            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-            .where(models.Tournament.workspace_id == workspace_id)
-        )
     with_logs_count = (await session.execute(with_logs_query)).scalar_one() or 0
 
     tournaments_query = (
