@@ -6,9 +6,12 @@ matching schema change for both ``achievements.evaluation_result`` and
 ``achievements.override``:
 
 - adds ``workspace_member_id`` (FK ``public.workspace_member.id``, CASCADE);
-- backfills it from each row's ``(workspace_id, user_id)`` pair by joining to
-  the ``workspace_member`` row for that player in that workspace;
-- safety net: for any row whose ``(workspace_id, user_id)`` has no
+- backfills it from each row's ``user_id``, resolving the workspace
+  transitively via ``achievement_rule_id -> achievements.rule.workspace_id``
+  (neither ``evaluation_result`` nor ``override`` carries its own
+  ``workspace_id`` column) and joining to the ``workspace_member`` row for
+  that player in that workspace;
+- safety net: for any row whose ``(rule.workspace_id, user_id)`` has no
   ``workspace_member`` yet (unlikely post-Part5, but not guaranteed), creates
   one — deduped via ``ON CONFLICT (workspace_id, player_id) DO NOTHING`` — and
   re-backfills only the still-NULL rows;
@@ -17,16 +20,17 @@ matching schema change for both ``achievements.evaluation_result`` and
   user_id, tournament_id, match_id``) so the same name can be reused for the
   new constraint over ``workspace_member_id`` — the model kept the historical
   constraint name unchanged, it just repoints the second column;
-- sets ``workspace_member_id`` NOT NULL, creates its FK and index, and (for
-  ``evaluation_result``) the new unique constraint;
+- sets ``workspace_member_id`` NOT NULL, creates its FK and index;
 - drops the old ``user_id`` column (and its now-orphaned single-column index)
   — dropping the column also drops its own FK automatically. ``workspace_id``
-  is NOT touched; the model still carries it.
+  is NOT touched; the model still carries it;
+- for ``evaluation_result`` only: creates the new unique constraint over
+  ``workspace_member_id`` under the freed name, after ``user_id`` is gone.
 
-All backfill UPDATEs put ``workspace_member`` in the ``FROM`` clause and only
-ever reference the UPDATE target (``a``/``p``) in the ``WHERE`` clause, never
-inside a ``JOIN ... ON`` — the pattern that broke ``iwrefac06``'s first cut
-(see ``9b84a103``).
+All backfill UPDATEs put ``workspace_member`` and ``achievements.rule`` in the
+``FROM`` clause and only ever reference the UPDATE target (``a``/``p``) in the
+``WHERE`` clause, never inside a ``JOIN ... ON`` — the pattern that broke
+``iwrefac06``'s first cut (see ``9b84a103``).
 
 Downgrade reverses both tables: re-adds ``user_id`` (nullable Integer, FK
 ``players.user.id`` CASCADE, matching the column's original physical type),
@@ -57,7 +61,9 @@ depends_on = None
 
 
 def _expand_and_backfill(table: str) -> None:
-    """Add ``workspace_member_id`` and backfill it from ``(workspace_id, user_id)``."""
+    """Add ``workspace_member_id`` and backfill it from ``user_id``, resolving the
+    workspace transitively via ``achievement_rule_id -> achievements.rule.workspace_id``.
+    """
     op.add_column(
         table,
         sa.Column("workspace_member_id", sa.BigInteger(), nullable=True),
@@ -68,21 +74,25 @@ def _expand_and_backfill(table: str) -> None:
         f"""
         UPDATE achievements.{table} a
         SET workspace_member_id = wm.id
-        FROM workspace_member wm
-        WHERE wm.player_id = a.user_id
-          AND wm.workspace_id = a.workspace_id
+        FROM workspace_member wm, achievements.rule r
+        WHERE r.id = a.achievement_rule_id
+          AND wm.workspace_id = r.workspace_id
+          AND wm.player_id = a.user_id
         """
     )
 
     # Safety net: create workspace_member rows for any (workspace, player) pairing
-    # that doesn't have one yet, deduped per (workspace_id, player_id).
+    # that doesn't have one yet, deduped per (workspace_id, player_id). Workspace is
+    # resolved transitively via achievements.rule (neither evaluation_result nor
+    # override carries its own workspace_id column).
     op.execute(
         f"""
         INSERT INTO workspace_member (workspace_id, player_id, created_at)
-        SELECT DISTINCT a.workspace_id, a.user_id, now()
+        SELECT DISTINCT r.workspace_id, a.user_id, now()
         FROM achievements.{table} a
+        JOIN achievements.rule r ON r.id = a.achievement_rule_id
         LEFT JOIN workspace_member wm
-            ON wm.workspace_id = a.workspace_id AND wm.player_id = a.user_id
+            ON wm.workspace_id = r.workspace_id AND wm.player_id = a.user_id
         WHERE wm.id IS NULL
         ON CONFLICT (workspace_id, player_id) DO NOTHING
         """
@@ -92,9 +102,10 @@ def _expand_and_backfill(table: str) -> None:
         f"""
         UPDATE achievements.{table} a
         SET workspace_member_id = wm.id
-        FROM workspace_member wm
-        WHERE wm.player_id = a.user_id
-          AND wm.workspace_id = a.workspace_id
+        FROM workspace_member wm, achievements.rule r
+        WHERE r.id = a.achievement_rule_id
+          AND wm.workspace_id = r.workspace_id
+          AND wm.player_id = a.user_id
           AND a.workspace_member_id IS NULL
         """
     )
