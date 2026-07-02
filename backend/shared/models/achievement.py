@@ -11,7 +11,7 @@ from shared.models.user import User
 
 if typing.TYPE_CHECKING:
     from shared.models.match import Match
-    from shared.models.workspace import Workspace
+    from shared.models.workspace import Workspace, WorkspaceMember
 
 __all__ = (
     "AchievementCategory",
@@ -129,7 +129,7 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     __table_args__ = (
         UniqueConstraint(
             "achievement_rule_id",
-            "user_id",
+            "workspace_member_id",
             "tournament_id",
             "match_id",
             name="uq_eval_result_rule_user_tournament_match",
@@ -140,8 +140,8 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     achievement_rule_id: Mapped[int] = mapped_column(
         ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("players.user.id", ondelete="CASCADE"), index=True
+    workspace_member_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True
     )
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True, index=True
@@ -157,7 +157,7 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     run_id: Mapped[str | None] = mapped_column(Uuid(), nullable=True, index=True)
 
     rule: Mapped[AchievementRule] = relationship(back_populates="evaluation_results")
-    user: Mapped[User] = relationship()
+    workspace_member: Mapped["WorkspaceMember"] = relationship()
     tournament: Mapped[Tournament | None] = relationship()
     match: Mapped[typing.Optional["Match"]] = relationship()
 
@@ -174,8 +174,8 @@ class AchievementOverride(db.TimeStampIntegerMixin):
     achievement_rule_id: Mapped[int] = mapped_column(
         ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("players.user.id", ondelete="CASCADE"), index=True
+    workspace_member_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True
     )
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True
@@ -190,7 +190,7 @@ class AchievementOverride(db.TimeStampIntegerMixin):
     )
 
     rule: Mapped[AchievementRule] = relationship()
-    user: Mapped[User] = relationship()
+    workspace_member: Mapped["WorkspaceMember"] = relationship()
 
 
 class EvaluationRun(db.TimeStampUUIDMixin):

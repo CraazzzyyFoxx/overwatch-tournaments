@@ -100,6 +100,149 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, moved)
 
 
+class MergeAchievementEvaluationResultsTests(IsolatedAsyncioTestCase):
+    """P6: ``achievements.evaluation_result`` moved to ``workspace_member_id``.
+
+    Mirrors ``_repoint_player_workspace_members``: each row's workspace comes
+    from its own rule (``AchievementRule.workspace_id``), so the target's
+    workspace_member is resolved/created per workspace, and rows colliding
+    with an existing target row (same rule/tournament/match) are dropped
+    instead of updated.
+    """
+
+    async def test_repoints_row_with_no_target_collision(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [(101, 7, 10, None, 1)]
+        duplicate_scalar = False
+        update_result = Mock(rowcount=1)
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, update_result]),
+            scalar=AsyncMock(return_value=duplicate_scalar),
+        )
+        member = SimpleNamespace(id=901)
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
+        ) as get_or_create:
+            moved = await user_merge._merge_achievement_evaluation_results(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        get_or_create.assert_awaited_once_with(session, workspace_id=1, player_id=77)
+        self.assertEqual(1, moved)
+
+    async def test_drops_row_that_collides_with_existing_target_row(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [(101, 7, 10, None, 1)]
+        delete_result = Mock(rowcount=1)
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, delete_result]),
+            scalar=AsyncMock(return_value=True),
+        )
+        member = SimpleNamespace(id=901)
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
+        ):
+            moved = await user_merge._merge_achievement_evaluation_results(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        # Second execute() call must be a DELETE, not an UPDATE.
+        second_call_sql = str(session.execute.await_args_list[1].args[0])
+        self.assertIn("DELETE", second_call_sql.upper())
+        self.assertEqual(1, moved)
+
+    async def test_resolves_workspace_member_once_per_distinct_workspace(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [
+            (101, 7, 10, None, 1),
+            (102, 8, None, None, 2),
+        ]
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)]),
+            scalar=AsyncMock(return_value=False),
+        )
+        members_by_workspace = {1: SimpleNamespace(id=901), 2: SimpleNamespace(id=902)}
+
+        async def fake_get_or_create(_session, *, workspace_id, player_id):
+            self.assertEqual(77, player_id)
+            return members_by_workspace[workspace_id]
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
+        ) as get_or_create:
+            moved = await user_merge._merge_achievement_evaluation_results(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        self.assertEqual(2, get_or_create.await_count)
+        self.assertEqual(2, moved)
+
+    async def test_noop_when_source_has_no_evaluation_result_rows(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = []
+        session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock()
+        ) as get_or_create:
+            moved = await user_merge._merge_achievement_evaluation_results(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        get_or_create.assert_not_awaited()
+        self.assertEqual(0, moved)
+
+
+class RepointAchievementOverrideWorkspaceMembersTests(IsolatedAsyncioTestCase):
+    """P6: ``achievements.override`` moved to ``workspace_member_id``; unlike
+    evaluation results it has no unique constraint to dedupe against, so rows
+    are simply repointed."""
+
+    async def test_repoints_each_distinct_rule_workspace_once(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [
+            (201, 1),
+            (202, 2),
+        ]
+        update_result_1 = Mock(rowcount=1)
+        update_result_2 = Mock(rowcount=1)
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2])
+        )
+        members_by_workspace = {1: SimpleNamespace(id=501), 2: SimpleNamespace(id=502)}
+
+        async def fake_get_or_create(_session, *, workspace_id, player_id):
+            self.assertEqual(77, player_id)
+            return members_by_workspace[workspace_id]
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
+        ) as get_or_create:
+            moved = await user_merge._repoint_achievement_override_workspace_members(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        self.assertEqual(2, get_or_create.await_count)
+        self.assertEqual(2, moved)
+
+    async def test_noop_when_source_has_no_override_rows(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = []
+        session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock()
+        ) as get_or_create:
+            moved = await user_merge._repoint_achievement_override_workspace_members(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        get_or_create.assert_not_awaited()
+        self.assertEqual(0, moved)
+
+
 class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
     async def test_execute_merge_repoints_player_workspace_members_before_reference_config_loop(self) -> None:
         """Real invocation of ``execute_merge`` (not a re-implementation of its
@@ -165,6 +308,9 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
                 user_merge, "_repoint_player_workspace_members", AsyncMock(side_effect=fake_repoint)
             ),
             patch.object(user_merge, "_merge_achievement_evaluation_results", AsyncMock(return_value=0)),
+            patch.object(
+                user_merge, "_repoint_achievement_override_workspace_members", AsyncMock(return_value=0)
+            ),
             patch.object(user_merge, "_merge_auth_user_links", AsyncMock(return_value=0)),
             patch.object(user_merge, "_delete_source_user_row", AsyncMock()),
             patch.object(user_merge, "_invalidate_merge_caches", AsyncMock()),

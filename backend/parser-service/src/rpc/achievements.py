@@ -33,6 +33,7 @@ from shared.models.achievement import (
     EvaluationRun,
     EvaluationRunTrigger,
 )
+from shared.repository.workspace import get_or_create_workspace_member
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 
@@ -591,14 +592,36 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
     async def _overrides_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             _user, workspace_id = _require_ws(data, "read")
+            # ``AchievementOverride`` is anchored on workspace_member_id; the
+            # RPC/frontend contract (``OverrideRead.user_id``) still expects
+            # the player identity, so resolve it via WorkspaceMember here
+            # rather than exposing the raw FK.
             query = (
-                sa.select(AchievementOverride)
+                sa.select(AchievementOverride, models.WorkspaceMember.player_id)
+                .select_from(AchievementOverride)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == AchievementOverride.workspace_member_id,
+                )
                 .join(AchievementRule, AchievementRule.id == AchievementOverride.achievement_rule_id)
                 .where(AchievementRule.workspace_id == workspace_id)
                 .order_by(AchievementOverride.created_at.desc())
             )
             result = await session.execute(query)
-            return [OverrideRead.model_validate(r, from_attributes=True) for r in result.scalars()]
+            return [
+                OverrideRead(
+                    id=override.id,
+                    achievement_rule_id=override.achievement_rule_id,
+                    user_id=player_id,
+                    tournament_id=override.tournament_id,
+                    match_id=override.match_id,
+                    action=override.action,
+                    reason=override.reason,
+                    granted_by=override.granted_by,
+                    created_at=override.created_at,
+                )
+                for override, player_id in result.all()
+            ]
 
         return await c.envelope(logger, "ach.overrides_list", op, session_factory=_SF)
 
@@ -610,9 +633,12 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             rule = await session.get(AchievementRule, body.achievement_rule_id)
             if not rule or rule.workspace_id != workspace_id:
                 raise HTTPException(status_code=404, detail="Rule not found in workspace")
+            member = await get_or_create_workspace_member(
+                session, workspace_id=workspace_id, player_id=body.user_id
+            )
             override = AchievementOverride(
                 achievement_rule_id=body.achievement_rule_id,
-                user_id=body.user_id,
+                workspace_member_id=member.id,
                 tournament_id=body.tournament_id,
                 match_id=body.match_id,
                 action=AchievementOverrideAction(body.action),
@@ -622,7 +648,17 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             session.add(override)
             await session.commit()
             await session.refresh(override)
-            return OverrideRead.model_validate(override, from_attributes=True)
+            return OverrideRead(
+                id=override.id,
+                achievement_rule_id=override.achievement_rule_id,
+                user_id=body.user_id,
+                tournament_id=override.tournament_id,
+                match_id=override.match_id,
+                action=override.action,
+                reason=override.reason,
+                granted_by=override.granted_by,
+                created_at=override.created_at,
+            )
 
         return await c.envelope(logger, "ach.override_create", op, session_factory=_SF)
 
