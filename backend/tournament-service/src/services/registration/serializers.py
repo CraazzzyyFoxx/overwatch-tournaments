@@ -66,10 +66,6 @@ def serialize_registration(
         id=registration.id,
         tournament_id=registration.tournament_id,
         workspace_id=workspace_id,
-        # BalancerRegistration no longer carries auth_user_id directly (identity is
-        # anchored via workspace_member); unused downstream, left unset rather than
-        # adding a per-row join to resolve it.
-        auth_user_id=None,
         user_id=registration.user_id,
         display_name=registration.display_name,
         battle_tag=registration.battle_tag,

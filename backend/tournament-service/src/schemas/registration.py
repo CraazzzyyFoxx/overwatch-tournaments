@@ -125,7 +125,6 @@ class RegistrationRead(BaseModel):
     id: int
     tournament_id: int
     workspace_id: int
-    auth_user_id: int | None = None
     user_id: int | None = None
     battle_tag: str | None = None
     smurf_tags_json: list[str] | None = None

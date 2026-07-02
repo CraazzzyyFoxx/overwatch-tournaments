@@ -167,7 +167,6 @@ class RegistrationApprovedEvent(BaseEvent):
     tournament_id: int = Field(..., description="Tournament ID")
     workspace_id: int = Field(..., description="Workspace ID")
     registration_id: int = Field(..., description="Registration ID")
-    auth_user_id: int | None = Field(default=None, description="Auth user ID when linked")
     user_id: int | None = Field(default=None, description="Player user ID when linked")
     battle_tag: str | None = Field(default=None, description="Approved registration battle tag")
 
@@ -179,7 +178,6 @@ class RegistrationRejectedEvent(BaseEvent):
     tournament_id: int = Field(..., description="Tournament ID")
     workspace_id: int = Field(..., description="Workspace ID")
     registration_id: int = Field(..., description="Registration ID")
-    auth_user_id: int | None = Field(default=None, description="Auth user ID when linked")
     user_id: int | None = Field(default=None, description="Player user ID when linked")
     battle_tag: str | None = Field(default=None, description="Rejected registration battle tag")
 

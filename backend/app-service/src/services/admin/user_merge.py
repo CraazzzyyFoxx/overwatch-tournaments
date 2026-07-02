@@ -21,6 +21,7 @@ from src.schemas.admin import user_merge as merge_schemas
 PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY = "tournament.player.workspace_member_id"
 EVALUATION_RESULT_MEMBER_REFERENCE_KEY = "achievements.evaluation_result.workspace_member_id"
 OVERRIDE_MEMBER_REFERENCE_KEY = "achievements.override.workspace_member_id"
+REGISTRATION_MEMBER_REFERENCE_KEY = "balancer.registration.workspace_member_id"
 
 # achievements.evaluation_result / achievements.override moved to
 # workspace_member_id (P6): they are no longer generic user_id columns, so
@@ -60,6 +61,7 @@ def empty_affected_counts() -> dict[str, int]:
     counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = 0
     counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = 0
     counts[OVERRIDE_MEMBER_REFERENCE_KEY] = 0
+    counts[REGISTRATION_MEMBER_REFERENCE_KEY] = 0
     counts["players.user.auth_user_id"] = 0
     return counts
 
@@ -204,6 +206,21 @@ async def execute_merge(
                 source_user_id=context.source.id,
                 target_user_id=context.target.id,
             )
+
+        # balancer.registration.workspace_member_id is ON DELETE SET NULL, and
+        # every registration still anchored on the source's workspace_member would
+        # otherwise be silently nulled out by the CASCADE from
+        # workspace_member.player_id once the source User row is deleted below --
+        # the generic REFERENCE_CONFIG reassign above only moved user_id, not this
+        # workspace-scoped anchor. Run right after that reassign, same repoint
+        # pattern as Player/achievements above.
+        affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = (
+            await _repoint_registration_workspace_members(
+                session,
+                source_user_id=context.source.id,
+                target_user_id=context.target.id,
+            )
+        )
 
         affected_counts["players.user.auth_user_id"] = await _merge_auth_user_links(
             session,
@@ -366,6 +383,9 @@ async def _count_affected_rows(session: AsyncSession, source_user_id: int) -> di
     )
     counts[OVERRIDE_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
         session, models.AchievementOverride, source_user_id
+    )
+    counts[REGISTRATION_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
+        session, models.BalancerRegistration, source_user_id
     )
     for reference_key, model, column_name in REFERENCE_CONFIG:
         if not await _reference_is_available(session, reference_key):
@@ -678,6 +698,86 @@ async def _repoint_achievement_override_workspace_members(
             update(models.AchievementOverride)
             .where(models.AchievementOverride.id == row_id)
             .values(workspace_member_id=target_member_id_by_workspace[workspace_id])
+        )
+        moved += int(result.rowcount or 0)
+
+    return moved
+
+
+async def _repoint_registration_workspace_members(
+    session: AsyncSession,
+    *,
+    source_user_id: int,
+    target_user_id: int,
+) -> int:
+    """Move every ``balancer.registration`` row anchored on ``source_user_id``'s
+    ``workspace_member`` onto the target's ``workspace_member`` and return the
+    number of rows moved.
+
+    Mirrors ``_repoint_player_workspace_members`` (each row's workspace comes
+    from its own tournament, via ``Tournament.workspace_id``, so the target's
+    member is resolved/created per workspace). Registrations that are not
+    member-anchored (``workspace_member_id IS NULL`` -- sheet-import rows) are
+    excluded by the join and are correctly left untouched/NULL.
+
+    ``balancer.registration.workspace_member_id`` has a live unique constraint
+    on ``(tournament_id, workspace_member_id)``, so a row is skipped (left
+    pointed at the source's member) if the target already has a live
+    registration in that same tournament -- repointing it would collide. Such
+    a row loses its member anchor when the source's ``User`` row is deleted
+    afterwards (``workspace_member`` cascades, and this FK is
+    ``ON DELETE SET NULL``), degrading to an unlinked registration rather than
+    raising an ``IntegrityError`` or silently dropping the target's row.
+    """
+    rows = (
+        await session.execute(
+            select(
+                models.BalancerRegistration.id,
+                models.BalancerRegistration.tournament_id,
+                models.Tournament.workspace_id,
+            )
+            .select_from(models.BalancerRegistration)
+            .join(
+                models.Tournament,
+                models.Tournament.id == models.BalancerRegistration.tournament_id,
+            )
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id,
+            )
+            .where(models.WorkspaceMember.player_id == source_user_id)
+        )
+    ).all()
+
+    target_member_id_by_workspace: dict[int, int] = {}
+    moved = 0
+    for registration_id, tournament_id, workspace_id in rows:
+        if workspace_id not in target_member_id_by_workspace:
+            member = await get_or_create_workspace_member(
+                session, workspace_id=workspace_id, player_id=target_user_id
+            )
+            target_member_id_by_workspace[workspace_id] = member.id
+        target_member_id = target_member_id_by_workspace[workspace_id]
+
+        collides_with_target = await session.scalar(
+            select(
+                sa.exists(
+                    select(models.BalancerRegistration.id).where(
+                        models.BalancerRegistration.tournament_id == tournament_id,
+                        models.BalancerRegistration.workspace_member_id == target_member_id,
+                        models.BalancerRegistration.deleted_at.is_(None),
+                        models.BalancerRegistration.id != registration_id,
+                    )
+                )
+            )
+        )
+        if collides_with_target:
+            continue
+
+        result = await session.execute(
+            update(models.BalancerRegistration)
+            .where(models.BalancerRegistration.id == registration_id)
+            .values(workspace_member_id=target_member_id)
         )
         moved += int(result.rowcount or 0)
 

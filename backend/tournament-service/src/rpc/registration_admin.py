@@ -295,11 +295,10 @@ def register(broker: Any, logger: Any) -> None:
             ensure_workspace_permission(user, ws_id, "team", "import")
             body = admin_schemas.BalancerRegistrationCreateRequest.model_validate(_payload(data))
 
-            tournament = await registration_service.ensure_tournament_exists(session, tournament_id)
+            await registration_service.ensure_tournament_exists(session, tournament_id)
             registration = await registration_service.create_manual_registration(
                 session,
                 tournament_id=tournament_id,
-                workspace_id=tournament.workspace_id,
                 display_name=body.display_name,
                 battle_tag=body.battle_tag,
                 smurf_tags_json=body.smurf_tags_json,

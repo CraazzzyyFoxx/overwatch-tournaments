@@ -86,11 +86,10 @@ class CreateRegistration:
         self._registration_service = registration_service
 
     async def execute(self, *, session, tournament_id: int, payload):
-        tournament = await self._registration_service.ensure_tournament_exists(session, tournament_id)
+        await self._registration_service.ensure_tournament_exists(session, tournament_id)
         return await self._registration_service.create_manual_registration(
             session,
             tournament_id=tournament_id,
-            workspace_id=tournament.workspace_id,
             display_name=payload.display_name,
             battle_tag=payload.battle_tag,
             smurf_tags_json=payload.smurf_tags_json,

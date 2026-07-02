@@ -92,7 +92,6 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
     id: 10,
     tournament_id: 60,
     workspace_id: 3,
-    auth_user_id: null,
     user_id: 1,
     display_name: "Player",
     battle_tag: "player#1234",

@@ -93,11 +93,6 @@ async def enqueue_registration_approved(
             tournament_id=registration.tournament_id,
             workspace_id=workspace_id,
             registration_id=registration.id,
-            # BalancerRegistration no longer carries auth_user_id directly (identity
-            # is anchored via workspace_member); no known consumer reads this field
-            # (parser-service's handler only uses user_id/registration_id/tournament_id
-            # /battle_tag), so it is left unset rather than adding a join to resolve it.
-            auth_user_id=None,
             user_id=registration.user_id,
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
@@ -119,8 +114,6 @@ async def enqueue_registration_rejected(
             tournament_id=registration.tournament_id,
             workspace_id=workspace_id,
             registration_id=registration.id,
-            # See enqueue_registration_approved — unused downstream, left unset.
-            auth_user_id=None,
             user_id=registration.user_id,
             battle_tag=registration.battle_tag,
             source_service="tournament-service",

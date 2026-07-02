@@ -2132,7 +2132,6 @@ async def create_manual_registration(
     session: AsyncSession,
     *,
     tournament_id: int,
-    workspace_id: int,
     display_name: str | None,
     battle_tag: str | None,
     smurf_tags_json: list[str] | None,
@@ -2158,8 +2157,9 @@ async def create_manual_registration(
 
     # Manual (admin-created) registrations have no registering auth account, so
     # they are intentionally left with workspace_member_id=None — mirrors the
-    # sheet-sync creation path below. Workspace is derived from
-    # tournament_id -> Tournament.workspace_id when needed, not stored here.
+    # sheet-sync creation path below. BalancerRegistration has no workspace_id
+    # column (derived from tournament_id -> Tournament.workspace_id when needed),
+    # so this function takes no workspace_id param either.
     registration = models.BalancerRegistration(
         tournament_id=tournament_id,
         display_name=display_name or battle_tag,

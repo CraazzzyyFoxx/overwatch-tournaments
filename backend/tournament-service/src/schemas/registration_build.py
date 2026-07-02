@@ -127,11 +127,6 @@ def _reg_to_read(
         id=reg.id,
         tournament_id=reg.tournament_id,
         workspace_id=workspace_id,
-        # BalancerRegistration no longer carries auth_user_id directly (identity is
-        # anchored via workspace_member); this field is unused downstream (frontend
-        # never reads it off a registration) so it is left unset rather than adding
-        # a per-row join to resolve it.
-        auth_user_id=None,
         user_id=reg.user_id,
         battle_tag=reg.battle_tag,
         smurf_tags_json=reg.smurf_tags_json,

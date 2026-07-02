@@ -423,7 +423,6 @@ export interface AdminRegistration {
   id: number;
   tournament_id: number;
   workspace_id: number;
-  auth_user_id: number | null;
   user_id: number | null;
   display_name: string | null;
   battle_tag: string | null;

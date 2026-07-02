@@ -359,7 +359,6 @@ class BalancerRegistrationStatusUpdate(BaseModel):
 class BalancerRegistrationRead(BaseRead):
     tournament_id: int
     workspace_id: int
-    auth_user_id: int | None = None
     user_id: int | None = None
     display_name: str | None = None
     battle_tag: str | None = None

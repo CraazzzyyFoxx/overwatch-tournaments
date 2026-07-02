@@ -243,6 +243,102 @@ class RepointAchievementOverrideWorkspaceMembersTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, moved)
 
 
+class RepointRegistrationWorkspaceMembersTests(IsolatedAsyncioTestCase):
+    """``balancer.registration.workspace_member_id`` is ``ON DELETE SET NULL``:
+    a registration still anchored on the source's ``workspace_member`` would
+    otherwise be silently nulled out once the source ``User`` row is deleted
+    (the ``workspace_member`` cascades). Mirrors ``_repoint_player_workspace_members``,
+    plus a collision guard against the ``(tournament_id, workspace_member_id)``
+    unique constraint."""
+
+    async def test_repoints_each_distinct_tournament_workspace_once(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [
+            (101, 10, 1),
+            (102, 20, 2),
+        ]
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)]),
+            scalar=AsyncMock(return_value=False),
+        )
+        members_by_workspace = {1: SimpleNamespace(id=901), 2: SimpleNamespace(id=902)}
+
+        async def fake_get_or_create(_session, *, workspace_id, player_id):
+            self.assertEqual(77, player_id)
+            return members_by_workspace[workspace_id]
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
+        ) as get_or_create:
+            moved = await user_merge._repoint_registration_workspace_members(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        self.assertEqual(2, get_or_create.await_count)
+        self.assertEqual(2, moved)
+
+    async def test_repoints_reuses_resolved_member_for_shared_workspace(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = [
+            (201, 30, 5),
+            (202, 31, 5),
+        ]
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)]),
+            scalar=AsyncMock(return_value=False),
+        )
+        member = SimpleNamespace(id=555)
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
+        ) as get_or_create:
+            moved = await user_merge._repoint_registration_workspace_members(
+                session, source_user_id=8, target_user_id=88
+            )
+
+        get_or_create.assert_awaited_once_with(session, workspace_id=5, player_id=88)
+        self.assertEqual(2, moved)
+
+    async def test_skips_row_that_would_collide_with_existing_target_registration(self) -> None:
+        """Target already has a live registration in the same tournament: the
+        unique constraint on (tournament_id, workspace_member_id) would be
+        violated by repointing, so the row is left alone (no UPDATE issued)."""
+        rows_result = Mock()
+        rows_result.all.return_value = [(101, 10, 1)]
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=[rows_result]),
+            scalar=AsyncMock(return_value=True),
+        )
+        member = SimpleNamespace(id=901)
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
+        ):
+            moved = await user_merge._repoint_registration_workspace_members(
+                session, source_user_id=5, target_user_id=77
+            )
+
+        # Only the initial SELECT + the collision-check scalar() ran; no UPDATE.
+        self.assertEqual(1, session.execute.await_count)
+        self.assertEqual(0, moved)
+
+    async def test_noop_when_source_has_no_registration_rows(self) -> None:
+        rows_result = Mock()
+        rows_result.all.return_value = []
+        session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
+
+        with patch.object(
+            user_merge, "get_or_create_workspace_member", AsyncMock()
+        ) as get_or_create:
+            moved = await user_merge._repoint_registration_workspace_members(
+                session, source_user_id=9, target_user_id=99
+            )
+
+        get_or_create.assert_not_awaited()
+        session.execute.assert_awaited_once()
+        self.assertEqual(0, moved)
+
+
 class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
     async def test_execute_merge_repoints_player_workspace_members_before_reference_config_loop(self) -> None:
         """Real invocation of ``execute_merge`` (not a re-implementation of its
@@ -296,6 +392,12 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             repoint_calls.append((source_user_id, target_user_id))
             return 3
 
+        registration_repoint_calls: list[tuple[int, int]] = []
+
+        async def fake_registration_repoint(_session, *, source_user_id, target_user_id):
+            registration_repoint_calls.append((source_user_id, target_user_id))
+            return 2
+
         with (
             patch.object(user_merge, "preview_merge", AsyncMock(return_value=preview)),
             patch.object(user_merge, "_load_merge_context", AsyncMock(return_value=context)),
@@ -311,6 +413,11 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             patch.object(
                 user_merge, "_repoint_achievement_override_workspace_members", AsyncMock(return_value=0)
             ),
+            patch.object(
+                user_merge,
+                "_repoint_registration_workspace_members",
+                AsyncMock(side_effect=fake_registration_repoint),
+            ),
             patch.object(user_merge, "_merge_auth_user_links", AsyncMock(return_value=0)),
             patch.object(user_merge, "_delete_source_user_row", AsyncMock()),
             patch.object(user_merge, "_invalidate_merge_caches", AsyncMock()),
@@ -323,3 +430,8 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
         self.assertEqual([(5, 6)], repoint_calls)
         self.assertNotIn("reassign:Player.user_id", reference_calls)
         self.assertEqual(3, response.affected_counts[user_merge.PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY])
+        # Registration workspace_member repoint fires once, right after the
+        # generic REFERENCE_CONFIG loop (which still reassigns registration.user_id).
+        self.assertEqual([(5, 6)], registration_repoint_calls)
+        self.assertIn("reassign:BalancerRegistration.user_id", reference_calls)
+        self.assertEqual(2, response.affected_counts[user_merge.REGISTRATION_MEMBER_REFERENCE_KEY])

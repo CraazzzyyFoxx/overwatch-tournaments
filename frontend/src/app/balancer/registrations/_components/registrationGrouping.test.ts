@@ -26,7 +26,6 @@ const createRegistration = (
     id,
     tournament_id: 64,
     workspace_id: 1,
-    auth_user_id: null,
     user_id: null,
     display_name: `Player ${id}`,
     battle_tag: `Player#${id}`,
