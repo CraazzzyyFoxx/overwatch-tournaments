@@ -293,12 +293,12 @@ async def get_overview(
         )
 
     user_ids = [user.id for user in users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
     tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     rows: list[schemas.UserOverviewRow] = []
     for user in users:
@@ -441,12 +441,12 @@ async def get_catalog(
         )
 
     user_ids = [user.id for user in flat_users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
-    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
+    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     catalog_letters: list[schemas.UserCatalogLetter] = []
     for letter_label, users in letters_with_users:

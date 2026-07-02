@@ -908,17 +908,20 @@ async def get_overview_users(
 async def get_overview_role_divisions(
     session: AsyncSession,
     user_ids: list[int],
+    workspace_id: int | None = None,
 ) -> dict[int, list[tuple[enums.HeroClass, int, int | None]]]:
     """Return (role, rank, division_grid_version_id) for each user's most recent entry per role.
 
     Division computation is intentionally deferred to the caller so that each
     player's rank can be normalised through the tournament's own grid version
-    rather than a single global grid.
+    rather than a single global grid. When ``workspace_id`` is given, only that
+    workspace's tournaments are considered (so the "latest" rank per role is the
+    latest *within the workspace*), matching the scoped user list.
     """
     if not user_ids:
         return {}
 
-    latest_roles_subquery = (
+    latest_roles_select = (
         sa.select(
             models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
@@ -937,8 +940,12 @@ async def get_overview_role_divisions(
             models.Player.is_substitution.is_(False),
             models.Player.role.isnot(None),
         )
-        .subquery()
     )
+    if workspace_id is not None:
+        latest_roles_select = latest_roles_select.join(
+            models.Tournament, models.Tournament.id == models.Player.tournament_id
+        ).where(models.Tournament.workspace_id == workspace_id)
+    latest_roles_subquery = latest_roles_select.subquery()
 
     query = (
         sa.select(
@@ -1007,12 +1014,14 @@ async def get_overview_tournaments_count(
 async def get_overview_achievements_count(
     session: AsyncSession,
     user_ids: list[int],
+    workspace_id: int | None = None,
 ) -> dict[int, int]:
     if not user_ids:
         return {}
 
     effective_rows = build_effective_achievement_rows_subquery(
         user_ids=user_ids,
+        workspace_id=workspace_id,
         name="overview_achievement_count_rows",
     )
     query = (
@@ -1030,9 +1039,12 @@ async def get_overview_achievements_count(
 async def get_overview_averages(
     session: AsyncSession,
     user_ids: list[int],
+    workspace_id: int | None = None,
 ) -> dict[int, tuple[float | None, float | None, float | None, float | None]]:
     if not user_ids:
         return {}
+
+    ws_filter = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []
 
     team_overall_subquery = (
         sa.select(
@@ -1056,6 +1068,7 @@ async def get_overview_averages(
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
+            *ws_filter,
         )
         .group_by(models.WorkspaceMember.player_id, models.Player.team_id)
         .cte("overview_team_overall")
@@ -1092,6 +1105,7 @@ async def get_overview_averages(
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
+            *ws_filter,
         )
         .group_by(models.WorkspaceMember.player_id)
     )
@@ -1118,6 +1132,7 @@ async def get_overview_averages(
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
             models.Encounter.closeness.isnot(None),
+            *ws_filter,
         )
         .group_by(models.WorkspaceMember.player_id)
     )
@@ -1148,11 +1163,12 @@ async def get_overview_top_heroes(
     user_ids: list[int],
     *,
     limit: int = 5,
+    workspace_id: int | None = None,
 ) -> dict[int, list[tuple[models.Hero, float]]]:
     if not user_ids:
         return {}
 
-    playtime_subquery = (
+    playtime_select = (
         sa.select(
             models.MatchStatistics.user_id.label("user_id"),
             models.MatchStatistics.hero_id.label("hero_id"),
@@ -1175,8 +1191,17 @@ async def get_overview_top_heroes(
             models.MatchStatistics.value > 0,
         )
         .group_by(models.MatchStatistics.user_id, models.MatchStatistics.hero_id)
-        .cte("overview_user_hero_playtime")
     )
+    if workspace_id is not None:
+        # MatchStatistics -> Match -> Encounter -> Tournament (all 1:1 per stat
+        # row, so the playtime sum is unchanged) to scope heroes to the workspace.
+        playtime_select = (
+            playtime_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(models.Tournament.workspace_id == workspace_id)
+        )
+    playtime_subquery = playtime_select.cte("overview_user_hero_playtime")
 
     query = (
         sa.select(
@@ -1201,6 +1226,7 @@ async def get_overview_top_heroes(
 async def get_overview_top_hero_metrics(
     session: AsyncSession,
     top_heroes: dict[int, list[tuple[models.Hero, float]]],
+    workspace_id: int | None = None,
 ) -> dict[tuple[int, int], dict[enums.LogStatsName, float]]:
     if not top_heroes:
         return {}
@@ -1251,6 +1277,15 @@ async def get_overview_top_hero_metrics(
         .join(models.Match, models.Match.id == eligible_stats.c.match_id)
         .group_by(eligible_stats.c.user_id, eligible_stats.c.hero_id, eligible_stats.c.name)
     )
+    if workspace_id is not None:
+        # Scope the per-metric aggregation to the workspace's matches
+        # (Match -> Encounter -> Tournament, all 1:1) so avg_10 reflects
+        # workspace-only performance, consistent with the scoped hero list.
+        query = (
+            query.join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(models.Tournament.workspace_id == workspace_id)
+        )
 
     result = await session.execute(query)
 
@@ -1363,10 +1398,21 @@ async def get_overview_stats(
             "flex_count": 0,
         }
 
+    # Scope the KPI sub-aggregates to the workspace so they stay consistent with
+    # the workspace-scoped candidate set (total_players).
+    ws_filter = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []
+
     with_logs_query = (
         sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id)))
         .where(models.MatchStatistics.user_id.in_(candidate_user_ids))
     )
+    if workspace_id is not None:
+        with_logs_query = (
+            with_logs_query.join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .where(models.Tournament.workspace_id == workspace_id)
+        )
     with_logs_count = (await session.execute(with_logs_query)).scalar_one() or 0
 
     tournaments_query = (
@@ -1383,6 +1429,7 @@ async def get_overview_stats(
             models.Player.is_substitution.is_(False),
             models.Tournament.is_finished.is_(True),
             models.Tournament.is_league.is_(False),
+            *ws_filter,
         )
         .group_by(models.WorkspaceMember.player_id)
     )
@@ -1414,6 +1461,7 @@ async def get_overview_stats(
                 sa.and_(models.Tournament.end_date.isnot(None), models.Tournament.end_date >= cutoff),
                 sa.and_(models.Tournament.start_date.isnot(None), models.Tournament.start_date >= cutoff),
             ),
+            *ws_filter,
         )
     )
     active_last_30d = (await session.execute(active_query)).scalar_one() or 0
@@ -1429,6 +1477,10 @@ async def get_overview_stats(
         )
         .distinct()
     )
+    if workspace_id is not None:
+        roles_query = roles_query.join(
+            models.Tournament, models.Tournament.id == models.Player.tournament_id
+        ).where(models.Tournament.workspace_id == workspace_id)
     user_roles: dict[int, set[enums.HeroClass]] = defaultdict(set)
     for user_id, player_role in (await session.execute(roles_query)).all():
         user_roles[user_id].add(player_role)
