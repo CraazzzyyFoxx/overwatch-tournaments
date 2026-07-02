@@ -206,6 +206,27 @@ def _apply_overview_role_filters(
     return query.where(role_exists)
 
 
+def _apply_workspace_member_filter(query: sa.Select, workspace_id: int | None) -> sa.Select:
+    """Scope a ``User``-selecting query to members of the given workspace.
+
+    Post identity/workspace refactor, workspace membership is anchored on
+    ``workspace_member.player_id -> players.user.id``. When ``workspace_id`` is
+    ``None`` the query is returned unchanged (no scoping), mirroring the
+    ``workspace_filter`` contract in ``core.workspace``.
+    """
+    if workspace_id is None:
+        return query
+    member_exists = sa.exists(
+        sa.select(1)
+        .select_from(models.WorkspaceMember)
+        .where(
+            models.WorkspaceMember.player_id == models.User.id,
+            models.WorkspaceMember.workspace_id == workspace_id,
+        )
+    )
+    return query.where(member_exists)
+
+
 def _compare_player_scope_filters(
     player_model: type[models.Player],
     user_id_column: sa.ColumnElement[typing.Any] | int,
@@ -833,9 +854,13 @@ async def get_overview_users(
     session: AsyncSession,
     params: "app_schemas.UserOverviewParams",
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[models.User], int]:
     query = sa.select(models.User)
     total_query = sa.select(sa.func.count(sa.distinct(models.User.id)))
+
+    query = _apply_workspace_member_filter(query, workspace_id)
+    total_query = _apply_workspace_member_filter(total_query, workspace_id)
 
     if params.query:
         query = params.apply_search(query, models.User)
@@ -1290,6 +1315,7 @@ async def get_overview_stats(
     div_max: int | None,
     query: str | None,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> dict[str, typing.Any]:
     """Compute KPI numbers for the users hero header.
 
@@ -1303,6 +1329,7 @@ async def get_overview_stats(
       - tank / damage / support / flex counts (distinct roles per user)
     """
     base_query = sa.select(models.User.id).select_from(models.User)
+    base_query = _apply_workspace_member_filter(base_query, workspace_id)
 
     if query:
         base_query = pagination.apply_search(models.User, base_query, query, ["name"])
@@ -1453,6 +1480,7 @@ async def get_catalog_users(
     per_letter: int,
     max_letters: int,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> tuple[list[tuple[str, list[models.User]]], int, list[str]]:
     """Return (letters_with_users, total_users, available_letters).
 
@@ -1467,6 +1495,7 @@ async def get_catalog_users(
         .select_from(models.User)
         .order_by(sa.func.lower(models.User.name).asc(), models.User.id.asc())
     )
+    base_query = _apply_workspace_member_filter(base_query, workspace_id)
 
     if query:
         base_query = pagination.apply_search(models.User, base_query, query, ["name"])

@@ -74,7 +74,7 @@ def register(broker: Any, logger: Any) -> None:
             ws = await resolve_workspace_context(session, _ws_id(data))
             # Route passes the QueryParams model straight to the flow (no from_query_params).
             params = build_query_model(schemas.UserOverviewStatsQueryParams, data.get("query"))
-            return await user_flows.get_overview_stats(session, params, grid=ws.grid)
+            return await user_flows.get_overview_stats(session, params, grid=ws.grid, workspace_id=ws.id)
 
         return await c.envelope(logger, "users.overview_stats", op, session_factory=_SF)
 
@@ -88,6 +88,7 @@ def register(broker: Any, logger: Any) -> None:
                 schemas.UserCatalogParams.from_query_params(qp),
                 grid=ws.grid,
                 normalizer=ws.normalizer,
+                workspace_id=ws.id,
             )
 
         return await c.envelope(logger, "users.overview_catalog", op, session_factory=_SF)

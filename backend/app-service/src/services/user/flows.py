@@ -283,7 +283,7 @@ async def get_overview(
             ],
         )
 
-    users, total = await service.get_overview_users(session, params, grid)
+    users, total = await service.get_overview_users(session, params, grid, workspace_id=workspace_id)
     if not users:
         return pagination.Paginated(
             page=params.page,
@@ -375,6 +375,7 @@ async def get_overview_stats(
     params: "schemas.UserOverviewStatsQueryParams",
     *,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> "schemas.UserOverviewStats":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -394,6 +395,7 @@ async def get_overview_stats(
         div_max=params.div_max,
         query=params.query,
         grid=grid,
+        workspace_id=workspace_id,
     )
     return schemas.UserOverviewStats(**payload)
 
@@ -404,6 +406,7 @@ async def get_catalog(
     *,
     grid: DivisionGrid,
     normalizer: DivisionGridNormalizer | None = None,
+    workspace_id: int | None = None,
 ) -> "schemas.UserCatalogResponse":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -426,6 +429,7 @@ async def get_catalog(
         per_letter=params.per_letter,
         max_letters=params.max_letters,
         grid=grid,
+        workspace_id=workspace_id,
     )
 
     flat_users = [user for _letter, bucket in letters_with_users for user in bucket]
