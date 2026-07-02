@@ -50,8 +50,6 @@ async def get_top_champions(
             - A sequence of tuples, each containing a Player object and their championship count.
             - The total count of players.
     """
-    total_query = sa.select(sa.func.count(models.User.id))
-
     query = (
         sa.select(models.User, sa.func.count("*").label("value"))
         .select_from(models.Player)
@@ -75,6 +73,7 @@ async def get_top_champions(
         )
         .group_by(models.User.id)
     )
+    total_query = sa.select(sa.func.count()).select_from(query.order_by(None).subquery())
     query = params.apply_pagination_sort(query)
     result = await session.execute(query)
     total = await session.execute(total_query)
@@ -97,8 +96,6 @@ async def get_top_winrate_players(
             - A sequence of tuples, each containing a Player object and their win rate.
             - The total count of players.
     """
-    total_query = sa.select(sa.func.count(models.User.id))
-
     query = (
         sa.select(
             models.User,
@@ -123,6 +120,7 @@ async def get_top_winrate_players(
         .group_by(models.User.id)
         .having(sa.func.count(models.Tournament.id.distinct()) > 3)
     )
+    total_query = sa.select(sa.func.count()).select_from(query.order_by(None).subquery())
     query = params.apply_pagination_sort(query)
     result = await session.execute(query)
     total = await session.execute(total_query)
@@ -145,14 +143,13 @@ async def get_top_won_players(
             - A sequence of tuples, each containing a Player object and their win count.
             - The total count of players.
     """
-    total_query = sa.select(sa.func.count(models.User.id))
-
     query = (
         sa.select(models.User, sa.func.sum(encounter_query.c.home_score).label("value"))
         .select_from(models.Player)
         .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .join(encounter_query, encounter_query.c.id == models.Player.id)
+        .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.Player.is_substitution.is_(False),
             *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
@@ -160,6 +157,7 @@ async def get_top_won_players(
         .group_by(models.User.id)
         .having(sa.func.count(models.Tournament.id.distinct()) > 3)
     )
+    total_query = sa.select(sa.func.count()).select_from(query.order_by(None).subquery())
     query = params.apply_pagination_sort(query)
     result = await session.execute(query)
     total = await session.execute(total_query)
