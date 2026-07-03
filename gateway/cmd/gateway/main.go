@@ -86,9 +86,20 @@ func run() error {
 	rdb := redis.NewClient(redisOpts)
 	defer func() { _ = rdb.Close() }()
 
+	// Usage metrics (Prometheus): per-route request stats + active users. The
+	// recorder buffers active-user IDs and flushes them to Redis (HyperLogLog).
+	// Created before the RPC client so the bulkhead can report shed requests.
+	mtr := metrics.New()
+	activeUsers := metrics.NewRecorder(rdb, logger)
+
 	// RPC client for calling identity-svc (and future headless domain services)
 	// over RabbitMQ request-reply. Non-blocking: reconnects in the background.
-	rpcClient := rpc.New(cfg.RabbitMQURL, logger)
+	// Per-queue in-flight cap sheds overload with an immediate 503 (see
+	// GATEWAY_RPC_MAX_INFLIGHT); every publish carries a TTL + x-deadline-ms.
+	rpcClient := rpc.New(cfg.RabbitMQURL, logger,
+		rpc.WithMaxInFlight(cfg.RPCMaxInFlight),
+		rpc.WithShedHook(mtr.RPCShed),
+	)
 	defer func() { _ = rpcClient.Close() }()
 	identityHandler := identity.NewHandler(rpcClient, logger)
 	// Tournament-service routes served via typed RPC through the shared edge
@@ -97,10 +108,6 @@ func run() error {
 	resolver := principal.New(rpcClient)
 	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
 
-	// Usage metrics (Prometheus): per-route request stats + active users. The
-	// recorder buffers active-user IDs and flushes them to Redis (HyperLogLog).
-	mtr := metrics.New()
-	activeUsers := metrics.NewRecorder(rdb, logger)
 	authn := auth.New(cfg.JWTSecret)
 
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).

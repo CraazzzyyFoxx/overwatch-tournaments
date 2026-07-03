@@ -26,10 +26,14 @@ type Config struct {
 	DBPgBouncer   bool
 	WSIdleTimeout time.Duration
 	WSReplayLimit int
-	Upstreams     Upstreams
-	Sentry        Sentry
-	Log           Log
-	Docs          Docs
+	// RPCMaxInFlight caps concurrent in-flight RPC calls per queue (bulkhead).
+	// When a queue is saturated the gateway sheds the request with an immediate
+	// 503 instead of queueing it for up to the full RPC timeout. 0 disables.
+	RPCMaxInFlight int
+	Upstreams      Upstreams
+	Sentry         Sentry
+	Log            Log
+	Docs           Docs
 }
 
 // Docs holds the Scalar API-documentation settings. Two pages are served from
@@ -85,16 +89,17 @@ func Load() (*Config, error) {
 	env := getenv("GATEWAY_ENV", getenv("SENTRY_ENVIRONMENT", "development"))
 
 	return &Config{
-		Port:          getenv("GATEWAY_PORT", "8080"),
-		MetricsPort:   getenv("GATEWAY_METRICS_PORT", "9110"),
-		Environment:   env,
-		JWTSecret:     secret,
-		RedisURL:      getenv("REDIS_URL", "redis://redis:6379"),
-		RabbitMQURL:   getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672"),
-		DatabaseURL:   dbURL,
-		DBPgBouncer:   getenvBool("DB_PGBOUNCER", false),
-		WSIdleTimeout: time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
-		WSReplayLimit: getenvInt("WS_REPLAY_LIMIT", 500),
+		Port:           getenv("GATEWAY_PORT", "8080"),
+		MetricsPort:    getenv("GATEWAY_METRICS_PORT", "9110"),
+		Environment:    env,
+		JWTSecret:      secret,
+		RedisURL:       getenv("REDIS_URL", "redis://redis:6379"),
+		RabbitMQURL:    getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672"),
+		DatabaseURL:    dbURL,
+		DBPgBouncer:    getenvBool("DB_PGBOUNCER", false),
+		WSIdleTimeout:  time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
+		WSReplayLimit:  getenvInt("WS_REPLAY_LIMIT", 500),
+		RPCMaxInFlight: getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),
