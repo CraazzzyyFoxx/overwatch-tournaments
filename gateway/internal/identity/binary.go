@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -92,8 +91,9 @@ func (b *Binary) relayAvatar(w http.ResponseWriter, r *http.Request, queue strin
 
 	raw, err := b.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			b.log.Error("identity rpc unavailable", "method", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "identity service unavailable")
 			return
 		}

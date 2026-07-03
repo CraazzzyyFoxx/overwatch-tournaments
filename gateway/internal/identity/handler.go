@@ -572,8 +572,9 @@ func (h *Handler) callIdentity(w http.ResponseWriter, r *http.Request, queue str
 	log := httplog.From(r.Context())
 	raw, err := h.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			log.Error("identity rpc unavailable", "method", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "identity service unavailable")
 			return
 		}

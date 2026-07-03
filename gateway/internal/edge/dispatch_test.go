@@ -3,6 +3,7 @@ package edge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -183,5 +184,31 @@ func TestDispatch_NullData_WritesLiteralNull(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("content-type=%q", ct)
+	}
+}
+
+func TestDispatch_Overloaded_503WithRetryAfter(t *testing.T) {
+	m := &mockCaller{err: fmt.Errorf("rpc to %q: %w", "q", rpc.ErrOverloaded)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+}
+
+func TestDispatch_Unavailable_HasRetryAfter(t *testing.T) {
+	m := &mockCaller{err: rpc.ErrNotConnected}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
 	}
 }

@@ -205,8 +205,9 @@ func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, 
 	log := httplog.From(r.Context())
 	raw, err := d.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			log.Error("rpc unavailable", "queue", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
 			return
 		}
