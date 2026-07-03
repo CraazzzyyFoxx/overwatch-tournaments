@@ -11,6 +11,16 @@ from sqlalchemy.pool import NullPool
 
 from shared.core import errors
 
+# Explicit public surface so ``from .db import *`` (in ``shared/core/__init__.py``)
+# exports only these names and never leaks re-imported SQLAlchemy/stdlib helpers.
+__all__ = [
+    "Base",
+    "TimeStampIntegerMixin",
+    "TimeStampUUIDMixin",
+    "DatabaseEngines",
+    "create_database",
+]
+
 
 class Base(DeclarativeBase):
     entity_name: str = "unknown"

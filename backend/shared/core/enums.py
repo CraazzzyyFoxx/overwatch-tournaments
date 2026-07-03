@@ -151,7 +151,6 @@ _log_stats_default_direction.update(
         LogStatsName.ShotsMissed: "asc",
         LogStatsName.DamageFB: "asc",
         LogStatsName.Performance: "asc",
-        LogStatsName.ShotsMissed: "asc",
     }
 )
 
@@ -317,3 +316,42 @@ class AbilityEvent(StrEnum):
     Ultimate = "Ultimate"
     Melee = "Melee"
     Crouch = "Crouch"
+
+
+# Explicit public surface so ``from shared.core.enums import *`` (used by every
+# service's ``core/enums.py`` and by ``shared/core/__init__.py``) exports only
+# these names and never leaks re-imported stdlib/typing helpers.
+__all__ = [
+    "HeroClass",
+    "RankPlatform",
+    "RankRole",
+    "RankDivision",
+    "RankCollectionStatus",
+    "RankCollectionSource",
+    "LogEventType",
+    "LogStatsName",
+    "StatDirection",
+    "LOG_STATS_DEFAULT_DIRECTION",
+    "is_ascending_stat",
+    "TournamentStatus",
+    "DraftStatus",
+    "DraftFormat",
+    "DraftRoundRule",
+    "DraftCaptainOrder",
+    "DraftPoolSource",
+    "DraftAutopickStrategy",
+    "DraftRole",
+    "DraftPlayerStatus",
+    "DraftPickStatus",
+    "StageType",
+    "StageItemType",
+    "StageItemInputType",
+    "EncounterResultStatus",
+    "MapPoolEntryStatus",
+    "MapPickSide",
+    "EncounterStatus",
+    "EncounterLinkRole",
+    "EncounterLinkSlot",
+    "MatchEvent",
+    "AbilityEvent",
+]

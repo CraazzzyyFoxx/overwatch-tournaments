@@ -12,6 +12,23 @@ ALLOWED_IMAGE_TYPES = {"image/webp", "image/png", "image/jpeg", "image/gif"}
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
 MAX_ASSET_SIZE = 5 * 1024 * 1024  # 5 MB
 
+# Leading magic bytes per MIME type. The client-supplied ``content_type`` is
+# untrusted, so the real file signature is verified against it before upload.
+# WEBP is handled separately (RIFF container: "RIFF" at 0..4, "WEBP" at 8..12).
+_MAGIC_SIGNATURES: dict[str, tuple[bytes, ...]] = {
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/gif": (b"GIF87a", b"GIF89a"),
+}
+
+
+def _matches_signature(data: bytes, content_type: str) -> bool:
+    """Check the file's leading bytes against the declared ``content_type``."""
+    if content_type == "image/webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    signatures = _MAGIC_SIGNATURES.get(content_type, ())
+    return any(data.startswith(sig) for sig in signatures)
+
 
 def _content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:12]
@@ -33,6 +50,8 @@ def _validate_image(data: bytes, content_type: str, max_size: int) -> str | None
         return f"Unsupported content type: {content_type}. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}"
     if len(data) > max_size:
         return f"File too large: {len(data)} bytes (max {max_size})"
+    if not _matches_signature(data, content_type):
+        return f"File content does not match declared content type: {content_type}"
     return None
 
 

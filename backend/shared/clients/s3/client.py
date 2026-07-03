@@ -67,15 +67,21 @@ class S3Client:
     # ── Core operations ──────────────────────────────────────────────────
 
     async def get_object(self, key: str) -> bytes | None:
+        """Fetch an object's bytes, or ``None`` if it does not exist.
+
+        Only a genuine "not found" (``NoSuchKey``/404) maps to ``None``; any other
+        ``ClientError`` (access denied, network/config failure) is re-raised so it
+        is never mistaken for a missing object.
+        """
         try:
             async with self._client() as client:
                 response = await client.get_object(Bucket=self.bucket_name, Key=key)
                 return await response["Body"].read()
         except ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchKey":
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404", "NotFound"):
                 return None
             logger.exception(f"Error getting object '{key}'")
-            return None
+            raise
 
     async def put_object(
         self,
@@ -128,14 +134,20 @@ class S3Client:
         return keys
 
     async def head_object(self, key: str) -> dict | None:
+        """Return object metadata, or ``None`` if it does not exist.
+
+        Only a genuine "not found" (404/``NoSuchKey``) maps to ``None``; any other
+        ``ClientError`` (access denied, network/config failure) is re-raised so it
+        is never mistaken for a missing object.
+        """
         try:
             async with self._client() as client:
                 return await client.head_object(Bucket=self.bucket_name, Key=key)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return None
             logger.exception(f"Error heading object '{key}'")
-            return None
+            raise
 
     async def object_exists(self, key: str) -> bool:
         return await self.head_object(key) is not None
@@ -185,10 +197,29 @@ class S3Client:
     # ── Batch operations ─────────────────────────────────────────────────
 
     async def delete_prefix(self, prefix: str) -> int:
-        """Delete all objects under a prefix. Returns count of deleted objects."""
+        """Delete all objects under a prefix. Returns count of deleted objects.
+
+        Uses the batch ``delete_objects`` API (up to 1000 keys per call) instead
+        of one request per key.
+        """
         keys = await self.list_objects(prefix)
+        if not keys:
+            return 0
         deleted = 0
-        for key in keys:
-            if await self.delete_object(key):
-                deleted += 1
+        try:
+            async with self._client() as client:
+                for start in range(0, len(keys), 1000):
+                    chunk = keys[start : start + 1000]
+                    response = await client.delete_objects(
+                        Bucket=self.bucket_name,
+                        Delete={"Objects": [{"Key": key} for key in chunk], "Quiet": True},
+                    )
+                    errors = response.get("Errors", [])
+                    deleted += len(chunk) - len(errors)
+                    for err in errors:
+                        logger.warning(
+                            f"Failed to delete object '{err.get('Key')}': {err.get('Message')}"
+                        )
+        except ClientError:
+            logger.exception(f"Error deleting objects with prefix '{prefix}'")
         return deleted
