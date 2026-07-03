@@ -499,12 +499,17 @@ async def get_player_by_user_and_tournament(
 ) -> models.Player | None:
     """Look up a user's Player row for a specific tournament.
 
-    Loads `team` + `team.tournament` + `team.standings` for the stats page.
+    Loads `team` + `team.tournament` (+ its `division_grid_version`) +
+    `team.standings` for the stats page. The grid version is eager-loaded so the
+    last-tournament card can render the division on the tournament's own grid
+    without triggering a lazy load outside the async greenlet.
     """
     query = (
         sa.select(models.Player)
         .options(
-            joinedload(models.Player.team).joinedload(models.Team.tournament),
+            joinedload(models.Player.team)
+            .joinedload(models.Team.tournament)
+            .joinedload(models.Tournament.division_grid_version),
             joinedload(models.Player.team).selectinload(models.Team.standings),
         )
         .where(

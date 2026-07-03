@@ -229,6 +229,11 @@ class UserTournamentWithStats(BaseModel):
     number: int | None
     name: str
     division: int
+    # `division` is resolved against the tournament's own grid (see
+    # get_tournament_with_stats). Ship the grid version too so the frontend
+    # renders the division icon on that same grid instead of falling back to
+    # the workspace default.
+    division_grid_version: DivisionGridVersionRead | None = None
     closeness: float
     role: enums.HeroClass
     group_placement: float | None

@@ -1188,6 +1188,7 @@ async def get_tournament_with_stats(
             player.rank,
             tournament_grid=grid,
         ),
+        division_grid_version=_mappers._division_grid_version(team.tournament),
         closeness=round(statistics[2], 2) if statistics[2] else 0,
         role=player.role,
         maps=statistics[0] + statistics[1] if statistics[0] else 0,
