@@ -10,7 +10,12 @@
  * otherwise be treated as fatal by Node (>=15) and crash the whole server,
  * taking the entire site down and triggering a restart loop. Log it and keep
  * serving instead — a single bad upstream request must not be fatal.
+ *
+ * `export {}` marks this as a module (no top-level import/export otherwise), so
+ * the `await import("./instrumentation.node")` in instrumentation.ts type-checks.
  */
+export {};
+
 process.on("unhandledRejection", (reason) => {
   console.error("[instrumentation] unhandledRejection:", reason);
 });
