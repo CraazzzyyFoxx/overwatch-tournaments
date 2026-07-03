@@ -21,8 +21,10 @@ Usage in services:
 """
 
 from dataclasses import dataclass
+from enum import Enum
 
 import sqlalchemy as sa
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
@@ -37,6 +39,49 @@ from shared.services.division_grid_normalization import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
+
+
+class _AllWorkspaces(Enum):
+    """Typed sentinel for an *intentional* cross-workspace (all-workspaces) read.
+
+    Domain reads are workspace-scoped: they must thread a concrete ``workspace_id``.
+    A missing scope (``None``) is treated as a bug and fails closed (see
+    ``require_workspace_scope``) rather than silently returning rows from every
+    workspace. A caller that genuinely needs to read across all workspaces opts in
+    explicitly by passing ``ALL_WORKSPACES`` — never ``None``.
+    """
+
+    token = "all"
+
+
+ALL_WORKSPACES = _AllWorkspaces.token
+"""Sentinel value meaning "read across every workspace, on purpose"."""
+
+# A domain read's workspace scope: a concrete id, or the explicit all-workspaces opt-in.
+WorkspaceScope = int | _AllWorkspaces
+
+
+def require_workspace_scope(workspace_id: int | _AllWorkspaces | None) -> int | None:
+    """Fail-closed resolution of a domain read's workspace scope.
+
+    - concrete ``int``    -> that workspace id (scoped read).
+    - ``ALL_WORKSPACES``  -> ``None`` (deliberate, explicit cross-workspace read).
+    - ``None``            -> raise ``400``. A domain read reached here without a
+      workspace id; returning unfiltered rows from every workspace would be a
+      cross-tenant data leak, so we fail loudly instead. Legitimate global reads
+      must pass ``ALL_WORKSPACES``.
+    """
+    if workspace_id is ALL_WORKSPACES:
+        return None
+    if workspace_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "workspace_id is required for this read; pass ALL_WORKSPACES to opt "
+                "into a deliberate cross-workspace read."
+            ),
+        )
+    return workspace_id
 
 
 @dataclass(frozen=True)
@@ -57,26 +102,30 @@ class WorkspaceContext:
 
 async def resolve_workspace_context(
     session: AsyncSession,
-    workspace_id: int | None,
+    workspace_id: int | _AllWorkspaces | None,
     *,
     tournament_id: int | None = None,
 ) -> WorkspaceContext:
     """Build a `WorkspaceContext` from a plain `workspace_id` (no FastAPI DI).
 
-    Single source of truth for the typed-RPC read handlers.
+    Single source of truth for the typed-RPC read handlers. **Fail-closed**: a
+    domain read must pass a concrete ``workspace_id`` (or the explicit
+    ``ALL_WORKSPACES`` sentinel for a deliberate cross-workspace read). A missing
+    scope (``None``) raises ``400`` instead of silently spanning every workspace.
     """
-    grid = await get_effective_division_grid(session, workspace_id, tournament_id=tournament_id)
+    resolved_id = require_workspace_scope(workspace_id)
+    grid = await get_effective_division_grid(session, resolved_id, tournament_id=tournament_id)
     normalizer: DivisionGridNormalizer | None = None
-    if workspace_id is not None:
+    if resolved_id is not None:
         try:
             normalizer = await build_workspace_division_grid_normalizer(
                 session,
-                workspace_id,
+                resolved_id,
                 require_complete=False,
             )
         except DivisionGridNormalizationError:
             normalizer = None
-    return WorkspaceContext(id=workspace_id, grid=grid, normalizer=normalizer)
+    return WorkspaceContext(id=resolved_id, grid=grid, normalizer=normalizer)
 
 
 def workspace_filter(workspace_id: int | None) -> list:

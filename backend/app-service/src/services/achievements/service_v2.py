@@ -7,13 +7,19 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import sqlalchemy as sa
+from cashews import cache
 from shared.models.achievement import AchievementRule
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from src import models
-from src.core import pagination, utils
+from src.core import config, pagination, utils
+
+# Cache-key prefix for the per-workspace rarity aggregate. Invalidated broadly on
+# ``TournamentChangedEvent`` (see ``services.tournament_events``) — earned
+# achievements and the player denominator both move with tournament/match data.
+_RARITY_MAP_CACHE_KEY = "backend:achievement_rarity_map:{workspace_id}"
 
 # Subquery to count distinct users (players) in a workspace
 _player_count_subq = (
@@ -152,25 +158,45 @@ async def get_all(
     return results.all(), count.scalar()
 
 
+@cache(ttl=config.settings.achievements_cache_ttl, key=_RARITY_MAP_CACHE_KEY)
+async def _get_rarity_map(
+    session: AsyncSession,
+    *,
+    workspace_id: int | None = None,
+) -> dict[int, float]:
+    """Rarity per achievement rule for a workspace: ``{rule_id: rarity}``.
+
+    This is the expensive, profile-independent aggregate (UNION ALL + correlated
+    EXISTS + GROUP BY over the *whole* workspace history, plus the player-count
+    denominator). It does not depend on whose profile is being viewed, so it is
+    cached per ``workspace_id`` (TTL ``achievements_cache_ttl``) instead of being
+    recomputed on every "Achievements" tab open. Invalidated on
+    ``TournamentChangedEvent`` (services.tournament_events).
+    """
+    rarity_subq = get_rarity_subq(workspace_id=workspace_id)
+    result = await session.execute(
+        sa.select(rarity_subq.c.achievement_rule_id, rarity_subq.c.rarity)
+    )
+    return {rule_id: float(rarity) for rule_id, rarity in result.all() if rarity is not None}
+
+
 async def get_all_rules_with_rarity(
     session: AsyncSession,
     workspace_id: int | None = None,
 ) -> typing.Sequence[tuple[AchievementRule, float | None]]:
-    """All enabled rules with rarity, unpaginated — used to derive locked achievements."""
-    rarity_subq = get_rarity_subq(workspace_id=workspace_id)
-    query = (
-        sa.select(AchievementRule, rarity_subq.c.rarity.label("rarity"))
-        .outerjoin(
-            rarity_subq,
-            AchievementRule.id == rarity_subq.c.achievement_rule_id,
-        )
-        .where(AchievementRule.enabled.is_(True))
-    )
+    """All enabled rules with rarity, unpaginated — used to derive locked achievements.
+
+    Rarity comes from the cached per-workspace map (``_get_rarity_map``); only the
+    cheap enabled-rules lookup runs per call.
+    """
+    rarity_map = await _get_rarity_map(session, workspace_id=workspace_id)
+
+    query = sa.select(AchievementRule).where(AchievementRule.enabled.is_(True))
     if workspace_id:
         query = query.where(AchievementRule.workspace_id == workspace_id)
 
-    result = await session.execute(query)
-    return result.all()
+    rules = (await session.execute(query)).scalars().all()
+    return [(rule, rarity_map.get(rule.id)) for rule in rules]
 
 
 async def get_count_users(

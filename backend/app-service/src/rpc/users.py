@@ -31,8 +31,20 @@ _MAPS_SORT = typing.Literal["id", "count", "win", "loss", "draw", "winrate", "ga
 _TEAMMATES_SORT = typing.Literal["id", "name", "winrate", "tournaments"]
 
 
-def _ws_id(data: dict[str, Any]) -> int | None:
-    return c.q1(data, "workspace_id", int)
+def _ws_id(data: dict[str, Any]) -> int:
+    """Fail-closed workspace scope for the ``/users/*`` domain reads.
+
+    Every ``/users/*`` read is workspace-scoped and the frontend always sends
+    ``workspace_id``. A missing scope is treated as a bug: returning unfiltered
+    rows would span every workspace (cross-tenant leak — see H8), so raise 400
+    instead of defaulting to ``None``. A deliberate cross-workspace read must go
+    through ``resolve_workspace_context(..., ALL_WORKSPACES)`` explicitly, not
+    this helper.
+    """
+    workspace_id = c.q1(data, "workspace_id", int)
+    if workspace_id is None:
+        raise HTTPException(status_code=400, detail="workspace_id query parameter is required")
+    return workspace_id
 
 
 def register(broker: Any, logger: Any) -> None:

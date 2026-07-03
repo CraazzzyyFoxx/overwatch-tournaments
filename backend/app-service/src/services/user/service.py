@@ -2,6 +2,7 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
+from cashews import cache
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
 from shared.models import mv_hero_global_stats
@@ -11,7 +12,11 @@ from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from src import models
-from src.core import enums, pagination, utils
+from src.core import config, enums, pagination, utils
+
+# Overview sorts whose ORDER BY is a correlated scalar subquery evaluated over the
+# whole filtered population (not just the page). Cached id-order applies to these.
+_EXPENSIVE_OVERVIEW_SORTS = frozenset({"tournaments_count", "achievements_count", "avg_placement"})
 
 
 def _team_load_options(entities: list[str]) -> list[_AbstractLoad]:
@@ -850,12 +855,90 @@ async def get_all(
     return result.unique().scalars().all(), result_total.scalar_one()
 
 
+def _overview_sort_expr(sort_key: str, grid: DivisionGrid) -> sa.ColumnElement[typing.Any]:
+    if sort_key == "tournaments_count":
+        return _overview_tournaments_count_expr(models.User.id, grid=grid)
+    if sort_key == "achievements_count":
+        return _overview_achievements_count_expr(models.User.id, grid=grid)
+    if sort_key == "avg_placement":
+        return _overview_avg_placement_expr(models.User.id, grid=grid)
+    return models.User.depth_get_column(sort_key.split("."))
+
+
+# Cache key intentionally omits `session`/`grid` (see get_profile). For the sorts
+# this path serves — the correlated aggregates with *no* role/division/search
+# filter — the ordering depends only on (workspace, sort, direction); `grid` only
+# feeds the division predicates, which are absent here. Short TTL + invalidation
+# on TournamentChangedEvent (services.tournament_events) bound staleness.
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_overview_order:{workspace_id}:{sort_key}:{descending}",
+    prefix="backend:",
+)
+async def _overview_ordered_ids(
+    session: AsyncSession,
+    *,
+    workspace_id: int | None,
+    sort_key: str,
+    descending: bool,
+    grid: DivisionGrid,
+) -> tuple[list[int], int]:
+    """Full workspace-scoped user-id order + total for an expensive overview sort.
+
+    The correlated aggregate in ORDER BY is evaluated over the whole population,
+    so this whole-population sort is cached per (workspace, sort, direction)
+    instead of being recomputed for every page and every concurrent viewer.
+    """
+    id_query = _apply_workspace_member_filter(sa.select(models.User.id), workspace_id)
+    total_query = _apply_workspace_member_filter(
+        sa.select(sa.func.count(sa.distinct(models.User.id))), workspace_id
+    )
+    sort_expr = _overview_sort_expr(sort_key, grid)
+    if descending:
+        id_query = id_query.order_by(sort_expr.desc(), models.User.id.asc())
+    else:
+        id_query = id_query.order_by(sort_expr.asc(), models.User.id.asc())
+    ids = (await session.execute(id_query)).scalars().all()
+    total = (await session.execute(total_query)).scalar_one()
+    return list(ids), total
+
+
 async def get_overview_users(
     session: AsyncSession,
     params: "app_schemas.UserOverviewParams",
     grid: DivisionGrid,
     workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[models.User], int]:
+    is_desc = params.order == pagination.SortOrder.DESC or params.order == "desc"
+    sort_key = params.sort
+
+    # Fast path (H13): an expensive correlated sort with no search/role/division
+    # filter has a population-wide ORDER BY that depends only on
+    # (workspace, sort, direction). Reuse a short-TTL cached id order and fetch
+    # only the page, instead of re-sorting the whole population on every request.
+    if (
+        sort_key in _EXPENSIVE_OVERVIEW_SORTS
+        and not params.query
+        and params.role is None
+        and params.div_min is None
+        and params.div_max is None
+    ):
+        ordered_ids, total = await _overview_ordered_ids(
+            session,
+            workspace_id=workspace_id,
+            sort_key=sort_key,
+            descending=is_desc,
+            grid=grid,
+        )
+        offset = (params.page - 1) * params.per_page
+        page_ids = ordered_ids[offset : offset + params.per_page]
+        if not page_ids:
+            return [], total
+        rows = await session.execute(sa.select(models.User).where(models.User.id.in_(page_ids)))
+        by_id = {user.id: user for user in rows.unique().scalars().all()}
+        # Preserve the cached ORDER BY sequence (IN (...) is unordered).
+        return [by_id[uid] for uid in page_ids if uid in by_id], total
+
     query = sa.select(models.User)
     total_query = sa.select(sa.func.count(sa.distinct(models.User.id)))
 
@@ -882,17 +965,8 @@ async def get_overview_users(
             grid=grid,
         )
 
-    sort_key = params.sort
-    if sort_key == "tournaments_count":
-        sort_expr = _overview_tournaments_count_expr(models.User.id, grid=grid)
-    elif sort_key == "achievements_count":
-        sort_expr = _overview_achievements_count_expr(models.User.id, grid=grid)
-    elif sort_key == "avg_placement":
-        sort_expr = _overview_avg_placement_expr(models.User.id, grid=grid)
-    else:
-        sort_expr = models.User.depth_get_column(sort_key.split("."))
+    sort_expr = _overview_sort_expr(sort_key, grid)
 
-    is_desc = params.order == pagination.SortOrder.DESC or params.order == "desc"
     if is_desc:
         query = query.order_by(sort_expr.desc(), models.User.id.asc())
     else:

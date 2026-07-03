@@ -32,12 +32,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import sqlalchemy as sa
-from cashews import Command, cache
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import MissingIdentityError, rehydrate_user
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from shared.services.profile_visibility import resolve_profiles_open
@@ -53,19 +52,19 @@ from src.schemas.captain import (
     VetoAction,
     resolve_optional_viewer_side,
 )
-from src.schemas.registration_build import (
-    _build_tournament_history,
-    _form_to_read,
-    _reg_to_read,
-    _resolve_tournament_workspace,
-    _resolve_top_heroes_config,
-)
 from src.schemas.registration import (
     RegistrationCreate,
     RegistrationListRead,
     RegistrationListResponse,
     RegistrationStatusResponse,
     RegistrationUpdate,
+)
+from src.schemas.registration_build import (
+    _build_tournament_history,
+    _form_to_read,
+    _reg_to_read,
+    _resolve_top_heroes_config,
+    _resolve_tournament_workspace,
 )
 from src.services.encounter import captain as captain_service
 from src.services.encounter import flows as encounter_flows
@@ -75,7 +74,6 @@ from src.services.registration.validation import (
     validate_registration_input,
     validate_verified_identity,
 )
-
 
 # --- helpers -----------------------------------------------------------------
 
@@ -556,38 +554,40 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = _path_int(data, "tournament_id")
             workspace_id = await _resolve_tournament_workspace(session, tournament_id)
 
-            # The registration list must always reflect live data; run the query (and
-            # the workspace-config reads riding along) with the query cache disabled.
-            # Tournament-history building is deliberately kept OUTSIDE this block: it
-            # relies on the Redis-cached division-grid snapshots on this global cache.
-            with cache.disabling(Command.GET, Command.SET):
-                result = await session.execute(
-                    sa.select(models.BalancerRegistration)
-                    .where(
-                        # tournament_id already pins this to a single workspace
-                        # (BalancerRegistration has no denormalized workspace_id).
-                        models.BalancerRegistration.tournament_id == tournament_id,
-                        models.BalancerRegistration.deleted_at.is_(None),
-                    )
-                    .options(
-                        selectinload(models.BalancerRegistration.roles)
-                        .selectinload(models.BalancerRegistrationRole.hero_entries)
-                        .selectinload(models.BalancerRegistrationRoleHero.hero),
-                        # Needed by _build_tournament_history's user_id fallback below.
-                        selectinload(models.BalancerRegistration.workspace_member),
-                    )
-                    .order_by(models.BalancerRegistration.submitted_at.asc())
+            # The registration list must always reflect live data. Every read below is a
+            # plain ``session.execute`` (or a helper that itself only runs raw ORM reads:
+            # get_status_metas_map / get_registration_form / resolve_profiles_open) — none
+            # of them go through the cashews cache, so no cache bypass is needed here.
+            # NB: do NOT reintroduce ``cache.disabling(...)`` — it flips a *process-global*
+            # flag on the shared cashews backend and races with every concurrent request
+            # on this worker (see lesson_cashews_disabling_shared_cache).
+            result = await session.execute(
+                sa.select(models.BalancerRegistration)
+                .where(
+                    # tournament_id already pins this to a single workspace
+                    # (BalancerRegistration has no denormalized workspace_id).
+                    models.BalancerRegistration.tournament_id == tournament_id,
+                    models.BalancerRegistration.deleted_at.is_(None),
                 )
-                registrations = result.scalars().all()
-                status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+                .options(
+                    selectinload(models.BalancerRegistration.roles)
+                    .selectinload(models.BalancerRegistrationRole.hero_entries)
+                    .selectinload(models.BalancerRegistrationRoleHero.hero),
+                    # Needed by _build_tournament_history's user_id fallback below.
+                    selectinload(models.BalancerRegistration.workspace_member),
+                )
+                .order_by(models.BalancerRegistration.submitted_at.asc())
+            )
+            registrations = result.scalars().all()
+            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
 
-                form = await reg_service.get_registration_form(session, tournament_id)
-                profiles_open_map: dict[int, bool | None] = (
-                    await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
-                    if form is not None and form.require_open_profile
-                    else {}
-                )
-                show_ranks = form.show_ranks if form is not None else False
+            form = await reg_service.get_registration_form(session, tournament_id)
+            profiles_open_map: dict[int, bool | None] = (
+                await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
+                if form is not None and form.require_open_profile
+                else {}
+            )
+            show_ranks = form.show_ranks if form is not None else False
 
             history_map, history_count_map, division_grids = await _build_tournament_history(
                 session,
