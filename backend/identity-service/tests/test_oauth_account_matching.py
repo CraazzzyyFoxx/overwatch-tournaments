@@ -107,64 +107,57 @@ class _FakeSession:
         self.refresh_calls.append(obj)
 
 
-def test_find_or_create_oauth_user_reuses_existing_user_by_email() -> None:
-    existing_user = SimpleNamespace(id=11, email="player@example.com", username="existing-user")
+def test_find_existing_auth_user_ignores_email_only_match() -> None:
+    """Fail-closed (review C1/C2): a matching email must NOT reuse an existing
+    account. Reuse is anchored solely on a cryptographically-confirmed
+    provider_user_id, so an email-only collision resolves to (None, None) and the
+    caller provisions a brand-new user instead of silently taking over the
+    account. (Previously an email match logged the caller straight into the
+    victim's AuthUser — the core account-takeover primitive.)"""
     session = _FakeSession(
         [
-            {"scalar": None},  # OAuthConnection lookup → none
-            {"scalar": existing_user},  # email → AuthUser (reused)
-            # _attach_verified_social_account: no player found by provider record → no-op
-            {"scalars": []},  # subject match
-            {"scalars": []},  # handle match
-            {"scalar": None},  # players.user.auth_user_id lookup for auth_user → none
+            # _find_player_by_provider_record: provider_user_id subject match → none.
+            # NOTE: there is deliberately NO email query anymore.
+            {"scalars": []},
         ]
     )
     oauth_info = schemas.OAuthUserInfo(
         provider=schemas.OAuthProvider.DISCORD,
         provider_user_id="discord-123",
-        email="player@example.com",
-        username="discord-player",
-        display_name="Discord Player",
+        email="victim@example.com",  # collides with an existing account's email
+        username="attacker",
+        display_name="Attacker",
         avatar_url="https://cdn.example/avatar.png",
         raw_data={"verified": True},
     )
 
-    auth_user = asyncio.run(
-        OAuthService.find_or_create_oauth_user(
-            session,
-            oauth_info,
-            {"access_token": "access-token", "expires_in": 3600},
-        )
+    auth_user, matched_player = asyncio.run(
+        OAuthService._find_existing_auth_user(session, oauth_info)
     )
 
-    assert auth_user is existing_user
-    assert session.flush_calls == 0
-    assert len(session.added) == 1
-    oauth_connection = session.added[0]
-    assert oauth_connection.auth_user_id == existing_user.id
-    assert oauth_connection.provider == "discord"
-    assert oauth_connection.provider_user_id == "discord-123"
-    assert session.commit_calls == 1
-    assert session.refresh_calls == [existing_user]
+    assert auth_user is None
+    assert matched_player is None
 
 
-def test_find_or_create_oauth_user_reuses_existing_user_by_linked_battletag() -> None:
+def test_find_or_create_oauth_user_reuses_existing_user_by_provider_user_id() -> None:
+    """The legit repeat path: a player already pinned to this exact
+    provider_user_id (a verified social account) resolves to its linked auth
+    user, and a fresh OAuthConnection is attached — no new user, no takeover."""
     existing_user = SimpleNamespace(id=21, email="existing@local", username="existing-user")
-    # Player already linked to existing_user via players.user.auth_user_id.
+    # Player already linked to existing_user via players.user.auth_user_id and
+    # pinned to this OAuth subject via a verified social account.
     player = SimpleNamespace(id=210, auth_user_id=existing_user.id)
     session = _FakeSession(
         [
             {"scalar": None},  # OAuthConnection lookup → none
-            # _find_player_by_provider_record: subject miss, handle hit
-            {"scalars": []},  # subject (provider_user_id) match
-            {"scalars": [player]},  # normalized handle match → player
+            # _find_player_by_provider_record: provider_user_id subject match → player
+            {"scalars": [player]},
             # _find_auth_user_for_player: player.auth_user_id set → AuthUser lookup
             {"scalar": existing_user},
             # matched_player.auth_user_id already == auth_user.id → no backfill query
-            # _attach_verified_social_account: no player found by provider record → no-op
-            {"scalars": []},  # subject match
-            {"scalars": []},  # handle match
-            {"scalar": None},  # players.user.auth_user_id lookup for auth_user → none
+            # _attach_verified_social_account: subject miss then fallback miss → no-op
+            {"scalars": []},  # subject match → none
+            {"scalar": None},  # players.user.auth_user_id fallback → none
         ]
     )
     oauth_info = schemas.OAuthUserInfo(

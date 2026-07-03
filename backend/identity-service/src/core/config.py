@@ -51,9 +51,6 @@ class Settings(BaseServiceSettings):
             return json.loads(v)
         return v
 
-    # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
-
     # Discord OAuth
     DISCORD_OAUTH_ENABLED: bool = True
     DISCORD_CLIENT_ID: str | None = None

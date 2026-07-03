@@ -3,7 +3,6 @@ Generic OAuth service for multiple providers
 """
 
 import base64
-import hashlib
 import hmac
 import secrets
 from abc import ABC, abstractmethod
@@ -16,7 +15,7 @@ import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from loguru import logger
-from shared.core.social import OAUTH_TO_SOCIAL, normalize_social_handle
+from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.oauth import OAuthConnection
 from shared.models.rbac import user_roles
 from shared.models.social import SocialAccount
@@ -26,10 +25,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
+from src.core import key_derivation
 from src.core.config import settings
 from src.services.player_link_service import ensure_player_for_auth_user
 
 PROXY_CONF = settings.proxy_url
+
+# Domain-separated subkey for signing OAuth ``state`` (never the raw JWT secret).
+# State is short-lived (minutes), so switching its derivation is safe with no
+# migration — any state signed under the old key simply fails validation and
+# the user retries the redirect.
+_OAUTH_STATE_KEY = key_derivation.oauth_state_key(settings.JWT_SECRET_KEY)
 
 
 class OAuthProviderBase(ABC):
@@ -457,12 +463,8 @@ class OAuthService:
 
     @classmethod
     def _build_state_signature(cls, provider_name: str, issued_at: int, nonce: str) -> str:
-        payload = f"oauth-state:{provider_name}:{issued_at}:{nonce}".encode()
-        digest = hmac.new(
-            settings.JWT_SECRET_KEY.encode("utf-8"),
-            payload,
-            hashlib.sha256,
-        ).digest()
+        payload = f"oauth-state:{provider_name}:{issued_at}:{nonce}"
+        digest = bytes.fromhex(key_derivation.hmac_sha256_hex(_OAUTH_STATE_KEY, payload))
         return cls._encode_state_part(digest)
 
     @classmethod
@@ -544,29 +546,6 @@ class OAuthService:
         return auth_user, token_data
 
     @classmethod
-    async def _find_existing_auth_user_by_email(
-        cls,
-        session: AsyncSession,
-        oauth_info: schemas.OAuthUserInfo,
-    ) -> models.AuthUser | None:
-        if not oauth_info.email:
-            return None
-
-        raw_data = oauth_info.raw_data or {}
-        if raw_data.get("verified") is False or raw_data.get("email_verified") is False:
-            return None
-
-        result = await session.execute(select(models.AuthUser).where(models.AuthUser.email == oauth_info.email))
-        auth_user = result.scalar_one_or_none()
-        if auth_user is not None:
-            logger.info(
-                "Matched existing auth user by OAuth email",
-                provider=oauth_info.provider.value,
-                auth_user_id=auth_user.id,
-            )
-        return auth_user
-
-    @classmethod
     async def _find_player_by_provider_record(
         cls,
         session: AsyncSession,
@@ -574,63 +553,45 @@ class OAuthService:
     ) -> models.User | None:
         """
         Find the player (players.user) via the unified ``social_account`` table
-        WITHOUT requiring an AuthUser link. Returns None if ambiguous or not found.
+        WITHOUT requiring an AuthUser link. Returns None if not found.
 
-        A definitive match on the verified ``provider_user_id`` wins; otherwise the
-        player is matched by normalized handle (battletag / discord / twitch login).
+        FAIL-CLOSED (review H3): only a cryptographically-confirmed match on the
+        provider's ``provider_user_id`` links a player automatically. Matching by
+        a free-text handle (Discord ``global_name`` / battletag / twitch login) is
+        deliberately NOT done here — those fields are attacker-controllable, so a
+        handle collision must never auto-assign someone else's turnier identity
+        (``player.auth_user_id``) or mark a social account verified. Handle-based
+        association is only available through the explicit, ownership-checked
+        player-link flow (``player_link_service``).
         """
         provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
         if provider is None:
             return None
 
-        # 1. Definitive: an account already pinned to this exact OAuth subject.
+        # Definitive: a social account already pinned to this exact OAuth subject
+        # (provider_user_id proven by a completed OAuth exchange).
         subject_match = (
-            await session.execute(
-                select(models.User)
-                .join(SocialAccount, SocialAccount.user_id == models.User.id)
-                .where(
-                    SocialAccount.provider == provider,
-                    SocialAccount.provider_user_id == oauth_info.provider_user_id,
+            (
+                await session.execute(
+                    select(models.User)
+                    .join(SocialAccount, SocialAccount.user_id == models.User.id)
+                    .where(
+                        SocialAccount.provider == provider,
+                        SocialAccount.provider_user_id == oauth_info.provider_user_id,
+                    )
                 )
             )
-        ).scalars().first()
-        if subject_match is not None:
-            return subject_match
-
-        # 2. Match by normalized handle(s) from the OAuth profile.
-        raw = oauth_info.raw_data or {}
-        raw_candidates = [oauth_info.username, oauth_info.display_name]
-        if oauth_info.provider == schemas.OAuthProvider.BATTLENET:
-            raw_candidates += [raw.get("battletag"), raw.get("battle_tag"), raw.get("preferred_username")]
-        normalized = {normalize_social_handle(provider, value) for value in raw_candidates if value}
-        normalized.discard("")
-        if not normalized:
-            return None
-
-        stmt = (
-            select(models.User)
-            .join(SocialAccount, SocialAccount.user_id == models.User.id)
-            .where(SocialAccount.provider == provider, SocialAccount.username_normalized.in_(normalized))
+            .scalars()
+            .first()
         )
-        matches = list((await session.execute(stmt)).scalars().unique().all())
-
-        if len(matches) == 1:
+        if subject_match is not None:
             logger.info(
-                "Found player by social account",
+                "Found player by verified provider_user_id",
                 provider=provider,
-                player_id=matches[0].id,
+                player_id=subject_match.id,
                 provider_user_id=oauth_info.provider_user_id,
             )
-            return matches[0]
-
-        if len(matches) > 1:
-            logger.warning(
-                "OAuth player social-account match is ambiguous; skipping automatic account linking",
-                provider=provider,
-                provider_user_id=oauth_info.provider_user_id,
-                matches=[p.id for p in matches],
-            )
-        return None
+        return subject_match
 
     @classmethod
     async def _find_auth_user_for_player(
@@ -782,25 +743,31 @@ class OAuthService:
 
         If matched_player is returned without auth_user, the caller should create
         a new AuthUser and set ``matched_player.auth_user_id`` to link them.
-        """
-        # 1. Email match (always first, provider-independent)
-        auth_user = await cls._find_existing_auth_user_by_email(session, oauth_info)
-        if auth_user is not None:
-            return auth_user, None
 
-        # 2. Provider-specific player table lookup
+        FAIL-CLOSED (review C1/C2): a matching email is NEVER used to reuse an
+        existing account. Email is not proof that the OAuth caller owns the
+        account (emails can be changed without verification, and some providers
+        return an email with no verified flag), so reusing an account by email
+        enabled full account takeover. Reuse is therefore anchored only on the
+        cryptographically-confirmed ``provider_user_id`` — either an existing
+        ``OAuthConnection`` (handled by the caller) or a player already pinned to
+        this exact provider subject. Anything else is treated as a NEW user; a
+        real owner links additional providers via the authenticated link flow.
+        """
+        # Provider-subject player lookup (provider_user_id only — see method doc).
         player = await cls._find_player_by_provider_record(session, oauth_info)
         if player is None:
             return None, None
 
-        # 3. Primary lookup: players.user.auth_user_id direct link
+        # Primary: players.user.auth_user_id direct link.
         auth_user = await cls._find_auth_user_for_player(session, player)
         if auth_user is not None:
             return auth_user, player
 
-        # 4. Fallback: scan OAuthConnections for the player's other social accounts.
-        #    This handles legacy accounts that were created before auth_user_id
-        #    was automatically populated on first login.
+        # Fallback: scan OAuthConnections for the player's other social accounts.
+        # Safe because the anchor `player` is itself confirmed by provider_user_id
+        # above; this only backfills the auth_user_id link for legacy players
+        # created before the link was auto-populated on first login.
         auth_user = await cls._find_auth_user_via_oauth_connections(session, player)
         # Return player regardless of whether auth_user is found, so the caller
         # can set matched_player.auth_user_id when building a new AuthUser.

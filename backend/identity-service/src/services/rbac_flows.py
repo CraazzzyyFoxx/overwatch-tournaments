@@ -32,11 +32,52 @@ from src.services.session_service import SessionService
 
 ADMIN_EQUIVALENT_ROLE_NAMES = {"admin"}
 
+# Names an operator may never mint a new role under. ``admin`` is a hardcoded
+# trust marker in the shared AuthUser model (``_has_admin_equivalent_role`` ->
+# full bypass); ``owner``/``member``/``player`` are system/trusted role names.
+# Allowing a self-service role with any of these names would be an escalation
+# path, so ``create_role`` rejects them (case-insensitive).
+_RESERVED_ROLE_NAMES = frozenset({"admin", "owner", "member", "player"})
+
 
 def _permission_key(resource: str, action: str) -> str:
     if resource == "*" and action == "*":
         return "admin.*"
     return f"{resource}.{action}"
+
+
+def _ensure_actor_can_grant_permissions(
+    current_user: models.AuthUser,
+    permissions: Sequence[Permission],
+    workspace_id: int | None,
+) -> None:
+    """Privilege-ceiling guard (review M / RBAC): an actor may only
+    create/update/assign a role whose permission set is a SUBSET of the
+    permissions the actor themselves effectively holds.
+
+    Without this, ``role.create`` + ``role.assign`` (or a workspace ``role.*``)
+    would let a limited operator mint or hand out a role more powerful than
+    their own — a straightforward privilege escalation. Superusers (and, via
+    ``has_*_permission``, global-admin-equivalent holders / workspace wildcard
+    owners) bypass, since they already hold everything.
+    """
+    if getattr(current_user, "is_superuser", False):
+        return
+    for permission in permissions:
+        if workspace_id is None:
+            allowed = current_user.has_permission(permission.resource, permission.action)
+        else:
+            allowed = current_user.has_workspace_permission(
+                workspace_id, permission.resource, permission.action
+            )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Permission denied: cannot grant a role carrying a permission you do not "
+                    f"hold ({_permission_key(permission.resource, permission.action)})"
+                ),
+            )
 
 
 def _has_global_permission(user: models.AuthUser, resource: str, action: str) -> bool:
@@ -304,6 +345,14 @@ async def create_role(
                 detail="Permission denied: role.create required",
             )
 
+    # Never let an operator mint a role under a reserved/trusted name (esp.
+    # ``admin``, a hardcoded full-bypass marker in the shared model).
+    if role_data.name.strip().lower() in _RESERVED_ROLE_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role name '{role_data.name}' is reserved",
+        )
+
     uniqueness_query = select(Role).where(Role.name == role_data.name)
     if role_data.workspace_id is not None:
         uniqueness_query = uniqueness_query.where(Role.workspace_id == role_data.workspace_id)
@@ -314,17 +363,20 @@ async def create_role(
     if result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role with this name already exists")
 
+    permissions: list[Permission] = []
+    if role_data.permission_ids:
+        result = await session.execute(select(Permission).where(Permission.id.in_(role_data.permission_ids)))
+        permissions = list(result.scalars().all())
+        # Privilege ceiling: cannot mint a role more powerful than the actor.
+        _ensure_actor_can_grant_permissions(current_user, permissions, role_data.workspace_id)
+
     role = Role(
         name=role_data.name,
         description=role_data.description,
         is_system=False,
         workspace_id=role_data.workspace_id,
     )
-
-    if role_data.permission_ids:
-        result = await session.execute(select(Permission).where(Permission.id.in_(role_data.permission_ids)))
-        permissions = result.scalars().all()
-        role.permissions = list(permissions)
+    role.permissions = permissions
 
     session.add(role)
     await session.commit()
@@ -370,7 +422,9 @@ async def update_role(
     permissions_changed = False
     if role_data.permission_ids is not None:
         result = await session.execute(select(Permission).where(Permission.id.in_(role_data.permission_ids)))
-        permissions = result.scalars().all()
+        permissions = list(result.scalars().all())
+        # Privilege ceiling: cannot raise a role above the actor's own permissions.
+        _ensure_actor_can_grant_permissions(current_user, permissions, role.workspace_id)
         role.permissions = list(permissions)
         permissions_changed = True
 
@@ -504,7 +558,9 @@ async def assign_role_to_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    result = await session.execute(select(Role).where(Role.id == data.role_id))
+    result = await session.execute(
+        select(Role).where(Role.id == data.role_id).options(selectinload(Role.permissions))
+    )
     role = result.scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
@@ -534,6 +590,10 @@ async def assign_role_to_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Permission denied: role.assign required",
             )
+
+    # Privilege ceiling: never hand out a role carrying permissions the actor
+    # does not themselves hold (review M / RBAC escalation).
+    _ensure_actor_can_grant_permissions(current_user, role.permissions, role.workspace_id)
 
     if role in user.roles:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already has this role")

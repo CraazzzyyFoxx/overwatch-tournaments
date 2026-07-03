@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime
@@ -14,8 +13,12 @@ from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, Works
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
+from src.core import key_derivation
 from src.core.config import settings
 from src.services.auth_service import AuthService
+
+# Domain-separated subkey for hashing API-key secrets (never the raw JWT secret).
+_API_KEY_SECRET_KEY = key_derivation.api_key_secret_key(settings.JWT_SECRET_KEY)
 
 API_KEY_PREFIX = "aqt_sk"
 DEFAULT_API_KEY_SCOPES = ["balancer.jobs"]
@@ -53,11 +56,18 @@ def _now() -> datetime:
 
 
 def _hash_secret(secret: str) -> str:
-    return hmac.new(
-        settings.JWT_SECRET_KEY.encode("utf-8"),
-        secret.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    """Hash an API-key secret for storage (domain-separated subkey, new writes)."""
+    return key_derivation.hmac_sha256_hex(_API_KEY_SECRET_KEY, secret)
+
+
+def _verify_secret(secret: str, stored_hash: str) -> bool:
+    """Constant-time verify against the derived hash, then the legacy raw-secret
+    hash — so API keys created before domain separation keep validating without
+    a re-issue. New keys are always stored with the derived hash."""
+    if hmac.compare_digest(stored_hash, _hash_secret(secret)):
+        return True
+    legacy = key_derivation.legacy_hmac_sha256_hex(settings.JWT_SECRET_KEY, secret)
+    return hmac.compare_digest(stored_hash, legacy)
 
 
 def _split_key(raw_key: str) -> tuple[str, str] | None:
@@ -308,7 +318,7 @@ async def validate_api_key(session: AsyncSession, raw_key: str) -> schemas.Token
     api_key = await _api_key_repo.get_by_public_id(session, public_id)
     if api_key is None:
         return None
-    if not hmac.compare_digest(api_key.secret_hash, _hash_secret(secret)):
+    if not _verify_secret(secret, api_key.secret_hash):
         return None
     if api_key.revoked_at is not None:
         return None

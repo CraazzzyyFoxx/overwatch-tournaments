@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import models, schemas
 from src.services.auth_service import AuthService
 from src.services.auth_token_helpers import _linked_players_payload, _load_user_denies
-from src.services.session_cache import get_refresh_idem, set_refresh_idem
+from src.services.session_cache import get_refresh_idem, is_session_blacklisted, set_refresh_idem
 from src.services.session_service import SessionService
 
 
@@ -151,6 +151,11 @@ async def resolve_active_user(session: AsyncSession, raw_token: str) -> models.A
     except (TypeError, ValueError):
         raise credentials_exception
 
+    # A revoked session (logout / revoke / reuse-detection) blacklists its sid;
+    # reject the still-unexpired access token that carries it.
+    if isinstance(session_id, str) and await is_session_blacklisted(session_id):
+        raise credentials_exception
+
     user = await AuthService.get_user_with_rbac(session, user_id)
     if user is None:
         raise credentials_exception
@@ -265,6 +270,12 @@ async def update_me(
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
         user.email = payload.email
+        # Changing the email invalidates any prior verification of the old
+        # address (review C1). Ownership of the new address is unproven until a
+        # verification flow confirms it, so drop the verified flag. Combined
+        # with fail-closed OAuth email-matching (oauth_service), this breaks the
+        # "swap email -> take over via OAuth" chain.
+        user.is_verified = False
 
     await session.commit()
     await session.refresh(user)

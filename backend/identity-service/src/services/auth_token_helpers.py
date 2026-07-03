@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
 from src.services import auth_service
-from src.services.session_cache import get_rbac, set_rbac
+from src.services.session_cache import get_rbac, is_session_blacklisted, set_rbac
 
 
 def _linked_players_payload(user: models.AuthUser) -> list[schemas.AuthLinkedPlayer]:
@@ -169,10 +169,18 @@ async def _resolve_access_token_user(
         payload = auth_service.AuthService.decode_token(raw_token)
         user_id_str = payload.get("sub")
         token_type = payload.get("type")
+        session_id = payload.get("sid")
         if not user_id_str or token_type != "access":
             raise credentials_exception
         user_id = int(user_id_str)
     except (HTTPException, ValueError):
+        raise credentials_exception
+
+    # Revoked-session blacklist: an access token whose sid was revoked (logout /
+    # revoke / reuse-detection) must stop validating before its natural expiry.
+    # This is the path the gateway hits on every request via validate_token, so
+    # the check propagates globally (bounded by the gateway's short token cache).
+    if isinstance(session_id, str) and await is_session_blacklisted(session_id):
         raise credentials_exception
 
     user = await auth_service.AuthService.get_user_with_rbac(session, user_id)
