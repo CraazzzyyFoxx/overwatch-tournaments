@@ -1,5 +1,16 @@
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Pin the Turbopack workspace root to this directory. Otherwise Next infers the
+  // root from lockfiles and can pick a stray parent (e.g. ~/package-lock.json),
+  // which breaks module resolution (tailwindcss not found) and prints a warning.
+  turbopack: {
+    root: __dirname,
+  },
   // Only use standalone output in production builds
   ...(process.env.NODE_ENV === 'production' && { output: "standalone" }),
   // Enable polling only inside Docker (native fs watcher doesn't work with bind mounts)
