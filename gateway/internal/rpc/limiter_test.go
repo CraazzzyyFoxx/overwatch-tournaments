@@ -4,8 +4,11 @@ import "testing"
 
 func TestLimiter_CapsPerQueue(t *testing.T) {
 	l := newLimiter(2)
-	if !l.acquire("q1") || !l.acquire("q1") {
-		t.Fatal("first two acquires must succeed")
+	if !l.acquire("q1") {
+		t.Fatal("first acquire must succeed")
+	}
+	if !l.acquire("q1") {
+		t.Fatal("second acquire must succeed")
 	}
 	if l.acquire("q1") {
 		t.Fatal("third acquire must be rejected at cap 2")
