@@ -60,8 +60,14 @@ class DeadlineDropMiddleware(BaseMiddleware):
                     "Dropping stale RPC request: gateway deadline passed before processing"
                 )
                 # Ack explicitly: the short-circuit skips the subscriber's own
-                # acknowledgement path. StreamMessage tracks committed state, so
-                # a downstream double-ack is a no-op.
-                await msg.ack()
+                # acknowledgement path. A later framework double-ack is safe
+                # (RabbitMessage.ack() short-circuits on the already-locked
+                # aio-pika message). Guard the ack itself: under overload the
+                # channel may already be closed, and a raise here would hand
+                # the message to FastStream's generic error-ack fallback.
+                try:
+                    await msg.ack()
+                except Exception as exc:  # noqa: BLE001 - broker hiccup must not escape the drop path
+                    logger.bind(queue=queue).warning(f"Failed to ack stale RPC request: {exc}")
                 return None
         return await call_next(msg)
