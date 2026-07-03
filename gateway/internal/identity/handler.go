@@ -9,11 +9,11 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/clientip"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
@@ -75,6 +75,10 @@ const (
 	queuePlayerSetPrimary = "rpc.identity.player.set_primary"
 
 	rpcTimeout = 5 * time.Second
+	// maxJSONBody caps the request body before it is buffered into an RPC
+	// message, matching edge.maxBody. Without it a slowloris/oversized body could
+	// exhaust the container's memory (nginx's own cap is the only other guard).
+	maxJSONBody = 12 << 20 // 12 MiB
 )
 
 // RPCCaller is the subset of rpc.Client the handlers need (eases testing).
@@ -618,7 +622,7 @@ func (h *Handler) callIdentity(w http.ResponseWriter, r *http.Request, queue str
 // decodeRawBody returns the request body bytes, rejecting invalid JSON.
 func decodeRawBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	var probe map[string]any
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err := dec.Decode(&probe); err != nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
@@ -631,7 +635,7 @@ func decodeRawBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 // fields), and re-marshals it for the RPC request.
 func bodyWithMeta(w http.ResponseWriter, r *http.Request, extra map[string]any) ([]byte, bool) {
 	body := map[string]any{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
 	}
@@ -649,7 +653,7 @@ func bodyWithMeta(w http.ResponseWriter, r *http.Request, extra map[string]any) 
 // fields, for authenticated endpoints that don't need client metadata.
 func mergeBody(w http.ResponseWriter, r *http.Request, extra map[string]any) ([]byte, bool) {
 	body := map[string]any{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBody)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		writeDetail(w, http.StatusBadRequest, "Invalid request body")
 		return nil, false
 	}
@@ -669,34 +673,13 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// clientMeta extracts the original user-agent and client IP, preferring
-// proxy-forwarded headers — a port of auth_service.get_request_client_metadata.
+// clientMeta extracts the original user-agent and the trusted client IP written
+// to the session/audit record. The IP comes from clientip.From, which trusts the
+// nginx-set X-Real-IP (and the right-most, non-spoofable X-Forwarded-For hop) —
+// never the left-most, client-controlled X-Forwarded-For entry.
 func clientMeta(r *http.Request) (userAgent, ip string) {
 	userAgent = firstNonEmpty(r.Header.Get("X-Original-User-Agent"), r.Header.Get("User-Agent"))
-
-	forwarded := firstNonEmpty(r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Vercel-Forwarded-For"))
-	if forwarded != "" {
-		for _, candidate := range strings.Split(forwarded, ",") {
-			candidate = strings.TrimSpace(candidate)
-			if candidate != "" && !strings.EqualFold(candidate, "unknown") {
-				ip = candidate
-				break
-			}
-		}
-	}
-	if ip == "" {
-		ip = firstNonEmpty(
-			r.Header.Get("X-Real-IP"),
-			r.Header.Get("CF-Connecting-IP"),
-			r.Header.Get("True-Client-IP"),
-			r.Header.Get("X-Client-IP"),
-		)
-	}
-	if ip == "" {
-		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			ip = host
-		}
-	}
+	ip = clientip.From(r)
 	return userAgent, ip
 }
 

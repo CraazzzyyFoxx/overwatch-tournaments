@@ -50,6 +50,7 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
@@ -101,6 +102,7 @@ func (b *Binary) TeamsBalancerUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return

@@ -143,6 +143,7 @@ func (b *Binary) UsersCsvImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err == nil && r.MultipartForm != nil {
 		if files := r.MultipartForm.File["data"]; len(files) > 0 {
 			f, err := files[0].Open()
@@ -181,6 +182,7 @@ func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[s
 
 // attachFile parses the multipart "file" part and base64-encodes it into data.
 func (b *Binary) attachFile(w http.ResponseWriter, r *http.Request, data map[string]any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return false

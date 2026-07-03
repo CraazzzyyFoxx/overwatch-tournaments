@@ -41,8 +41,21 @@ type Handler struct {
 
 // NewHandler wires the WebSocket handler. recordActive may be nil; when set it
 // is called with the user ID of each authenticated connection so WS users count
-// toward the active-user metrics.
-func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, recordActive func(userID int64)) *Handler {
+// toward the active-user metrics. allowedOrigins, when non-empty, enforces the
+// browser Origin against that allowlist (CSWSH protection); when empty the
+// previous permissive behaviour is kept (see accept setup below).
+func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, recordActive func(userID int64)) *Handler {
+	accept := &websocket.AcceptOptions{}
+	if len(allowedOrigins) > 0 {
+		// Enforce the Origin header against the configured allowlist so a hostile
+		// page cannot open an authenticated cross-site WebSocket (CSWSH).
+		accept.OriginPatterns = allowedOrigins
+	} else {
+		// No allowlist configured: preserve the previous behaviour (the gateway
+		// runs behind nginx and is not exposed directly to untrusted browsers).
+		// Set GATEWAY_WS_ALLOWED_ORIGINS to the frontend domain(s) to tighten this.
+		accept.InsecureSkipVerify = true
+	}
 	return &Handler{
 		hub:          hub,
 		auth:         a,
@@ -51,10 +64,7 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 		idleTimeout:  idleTimeout,
 		log:          log,
 		recordActive: recordActive,
-		// Origin is not enforced (matching the previous realtime-service, which
-		// runs behind nginx -> the gateway). Tighten with OriginPatterns if the
-		// gateway is ever exposed directly to untrusted browsers.
-		accept: &websocket.AcceptOptions{InsecureSkipVerify: true},
+		accept:       accept,
 	}
 }
 

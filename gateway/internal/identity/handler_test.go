@@ -217,11 +217,30 @@ func TestRbacListSessions_NoBearer(t *testing.T) {
 }
 
 func TestClientMeta(t *testing.T) {
+	// The trusted hop is the RIGHT-most X-Forwarded-For entry (nginx appends the
+	// real peer via $proxy_add_x_forwarded_for); the left-most "9.9.9.9" is
+	// client-supplied and must NOT be trusted.
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
 	r.Header.Set("User-Agent", "Mozilla")
 	ua, ip := clientMeta(r)
-	if ua != "Mozilla" || ip != "9.9.9.9" {
-		t.Fatalf("clientMeta = %q, %q", ua, ip)
+	if ua != "Mozilla" || ip != "10.0.0.1" {
+		t.Fatalf("clientMeta = %q, %q, want \"Mozilla\", \"10.0.0.1\"", ua, ip)
+	}
+
+	// X-Real-IP (set by nginx to $remote_addr) wins over X-Forwarded-For.
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Real-IP", "203.0.113.7")
+	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")
+	if _, ip = clientMeta(r); ip != "203.0.113.7" {
+		t.Fatalf("clientMeta ip = %q, want \"203.0.113.7\"", ip)
+	}
+
+	// Spoofable vendor CDN headers are ignored (Cloudflare is not used).
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("CF-Connecting-IP", "6.6.6.6")
+	r.RemoteAddr = "192.0.2.5:5555"
+	if _, ip = clientMeta(r); ip != "192.0.2.5" {
+		t.Fatalf("clientMeta ip = %q, want \"192.0.2.5\"", ip)
 	}
 }

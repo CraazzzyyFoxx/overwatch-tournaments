@@ -20,6 +20,8 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 )
 
 const (
@@ -68,7 +70,7 @@ func New(url string, log *slog.Logger) *Client {
 		disconnect: make(chan struct{}),
 	}
 	close(c.disconnect) // start in the disconnected state
-	go c.run()
+	safego.Go(c.run)    // recover panics so a bad reply can't crash the process
 	return c
 }
 
@@ -167,7 +169,7 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 	c.disconnect = make(chan struct{})
 	c.mu.Unlock()
 
-	go c.dispatchReplies(deliveries)
+	safego.Go(func() { c.dispatchReplies(deliveries) })
 	return notify, nil
 }
 
