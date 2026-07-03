@@ -34,6 +34,18 @@ var ErrNotConnected = errors.New("rpc: not connected")
 // ErrDisconnected is returned when the connection drops while a call is in flight.
 var ErrDisconnected = errors.New("rpc: connection lost during call")
 
+// ErrOverloaded is returned when the per-queue in-flight cap is reached. The
+// caller should shed the request immediately (HTTP 503) instead of adding it
+// to the broker backlog — that backlog growth is what feeds the avalanche.
+var ErrOverloaded = errors.New("rpc: queue overloaded")
+
+// IsUnavailable reports whether err should map to an immediate 503: the client
+// is not connected, the connection dropped mid-call, or the request was shed
+// by the per-queue in-flight cap.
+func IsUnavailable(err error) bool {
+	return errors.Is(err, ErrNotConnected) || errors.Is(err, ErrDisconnected) || errors.Is(err, ErrOverloaded)
+}
+
 // Client owns an AMQP connection, a reply queue, and correlates replies back to
 // in-flight calls by correlation_id. It is safe for concurrent use.
 type Client struct {
@@ -50,13 +62,27 @@ type Client struct {
 	pendingMu sync.Mutex
 	pending   map[string]chan amqp.Delivery
 
+	limiter *limiter
+	onShed  func(queue string)
+
 	closeCh   chan struct{}
 	closeOnce sync.Once
 }
 
+// Option configures a Client at construction time.
+type Option func(*Client)
+
+// WithMaxInFlight caps concurrent in-flight calls per queue (bulkhead).
+// n <= 0 disables the cap.
+func WithMaxInFlight(n int) Option { return func(c *Client) { c.limiter = newLimiter(n) } }
+
+// WithShedHook registers a callback invoked with the queue name every time a
+// call is rejected by the in-flight cap — used to feed metrics.
+func WithShedHook(fn func(queue string)) Option { return func(c *Client) { c.onShed = fn } }
+
 // New creates a client and starts its background connect/reconnect loop. It
 // never blocks: calls made before the first connection return ErrNotConnected.
-func New(url string, log *slog.Logger) *Client {
+func New(url string, log *slog.Logger, opts ...Option) *Client {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -66,6 +92,10 @@ func New(url string, log *slog.Logger) *Client {
 		pending:    make(map[string]chan amqp.Delivery),
 		closeCh:    make(chan struct{}),
 		disconnect: make(chan struct{}),
+		limiter:    newLimiter(0),
+	}
+	for _, opt := range opts {
+		opt(c)
 	}
 	close(c.disconnect) // start in the disconnected state
 	go c.run()
@@ -219,6 +249,14 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 		return nil, ErrNotConnected
 	}
 
+	if !c.limiter.acquire(queue) {
+		if c.onShed != nil {
+			c.onShed(queue)
+		}
+		return nil, fmt.Errorf("rpc to %q: %w", queue, ErrOverloaded)
+	}
+	defer c.limiter.release(queue)
+
 	id, err := newCorrelationID()
 	if err != nil {
 		return nil, err
@@ -234,12 +272,7 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 		c.pendingMu.Unlock()
 	}()
 
-	if err := ch.PublishWithContext(ctx, "", queue, false, false, amqp.Publishing{
-		ContentType:   contentTypeJSON,
-		CorrelationId: id,
-		ReplyTo:       replyQ,
-		Body:          body,
-	}); err != nil {
+	if err := ch.PublishWithContext(ctx, "", queue, false, false, buildPublishing(ctx, id, replyQ, body)); err != nil {
 		return nil, fmt.Errorf("publish rpc request to %q: %w", queue, err)
 	}
 
