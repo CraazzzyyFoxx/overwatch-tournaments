@@ -40,33 +40,45 @@ from src.services import team as team_service  # noqa: E402
 from src.schemas.team import BalancerTeam, BalancerTeamMember  # noqa: E402
 
 
-def _result(value):
+def _scalar_result(value):
     result = Mock()
     result.scalar_one_or_none.return_value = value
+    return result
+
+
+def _scalars_all_result(items):
+    scalars = Mock()
+    scalars.all.return_value = items
+    result = Mock()
+    result.scalars.return_value = scalars
+    return result
+
+
+def _rows_result(rows):
+    result = Mock()
+    result.all.return_value = rows
     return result
 
 
 class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
     async def test_new_player_gets_workspace_member_id(self) -> None:
         tournament = SimpleNamespace(id=88, workspace_id=55)
-        captain_user = SimpleNamespace(id=7)
         member_user = SimpleNamespace(id=42)
         created_team = SimpleNamespace(id=3, name="Roster", tournament_id=88)
         created_member = SimpleNamespace(id=9001)
 
-        # execute() call order inside bulk_create_from_balancer:
-        # 1) load tournament, 2) find existing team by name -> None,
-        # 3) player-already-in-tournament check -> None,
-        # 4) player-exists-globally check -> None (newcomer),
-        # 5) player-exists-for-role check -> None (newcomer role)
+        # Batched execute() call order inside bulk_create_from_balancer:
+        # 1) load tournament (scalar),
+        # 2) existing teams by name (scalars.all -> []),
+        # 3) player facts over workspace_member join (rows.all -> [] newcomer),
+        # 4) existing workspace members (scalars.all -> []).
         session = SimpleNamespace(
             execute=AsyncMock(
                 side_effect=[
-                    _result(tournament),
-                    _result(None),
-                    _result(None),
-                    _result(None),
-                    _result(None),
+                    _scalar_result(tournament),
+                    _scalars_all_result([]),
+                    _rows_result([]),
+                    _scalars_all_result([]),
                 ]
             ),
             add=Mock(),
@@ -101,8 +113,8 @@ class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
         with (
             patch.object(
                 team_service.user_svc,
-                "find_by_battle_tag",
-                AsyncMock(side_effect=[captain_user, member_user]),
+                "find_users_by_battle_tags",
+                AsyncMock(return_value={"Roster#0000": member_user}),
             ),
             patch.object(
                 team_service,
@@ -122,3 +134,5 @@ class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
         created_player = player_calls[0]
         self.assertFalse(hasattr(created_player, "user_id"))
         self.assertEqual(9001, created_player.workspace_member_id)
+        self.assertTrue(created_player.is_newcomer)
+        self.assertTrue(created_player.is_newcomer_role)

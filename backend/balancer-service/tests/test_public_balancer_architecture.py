@@ -329,6 +329,31 @@ class BalancerJobStoreTests(IsolatedAsyncioTestCase):
         async def expire(self, key, ttl):
             return True
 
+        async def sadd(self, key, *members):
+            existing = self.values.setdefault(key, set())
+            before = len(existing)
+            existing.update(members)
+            return len(existing) - before
+
+        async def srem(self, key, *members):
+            existing = self.values.get(key)
+            if not isinstance(existing, set):
+                return 0
+            removed = 0
+            for member in members:
+                if member in existing:
+                    existing.discard(member)
+                    removed += 1
+            return removed
+
+        async def scard(self, key):
+            existing = self.values.get(key)
+            return len(existing) if isinstance(existing, set) else 0
+
+        async def smembers(self, key):
+            existing = self.values.get(key)
+            return set(existing) if isinstance(existing, set) else set()
+
     async def test_persists_canonical_payload_keys_only(self) -> None:
         store = BalancerJobStore.__new__(BalancerJobStore)
         store._redis = self.FakeRedis()

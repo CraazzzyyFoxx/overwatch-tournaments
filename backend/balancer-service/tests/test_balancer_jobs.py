@@ -202,7 +202,7 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             patch(f"{JOBS}._payload_parser", FakeParser()),
             patch(f"{JOBS}.is_api_key_principal", return_value=True),
             patch(f"{JOBS}.get_api_key_id", return_value=42),
-            patch(f"{JOBS}.get_api_key_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}),
+            patch(f"{JOBS}.get_effective_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}),
             patch(f"{JOBS}.validate_api_key_config_policy"),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
         ):

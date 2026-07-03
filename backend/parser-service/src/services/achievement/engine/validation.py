@@ -70,11 +70,21 @@ GRAIN_ORDER = {
     AchievementGrain.user_match: 2,
 }
 
+# Structural limits on a condition tree, enforced at validation time (before a
+# rule is ever saved). A pathologically deep or huge tree would otherwise blow
+# the recursion limit in the evaluator on every evaluation run (review L13);
+# capping here turns that into a clean validation error instead.
+MAX_CONDITION_TREE_DEPTH = 40
+MAX_CONDITION_TREE_NODES = 500
+
 
 def validate_condition_tree(condition: dict[str, Any]) -> list[str]:
     """Validate a condition tree. Returns a list of error strings (empty = valid)."""
     errors: list[str] = []
-    _validate_node(condition, errors, path="root")
+    # ``budget`` is a single-element mutable cell tracking the remaining node
+    # allowance across the whole recursion; when it hits zero we record one error
+    # and stop descending.
+    _validate_node(condition, errors, path="root", depth=0, budget=[MAX_CONDITION_TREE_NODES])
     return errors
 
 
@@ -107,7 +117,23 @@ def _validate_node(
     path: str,
     *,
     in_player_subcondition: bool = False,
+    depth: int = 0,
+    budget: list[int] | None = None,
 ) -> None:
+    if budget is None:
+        budget = [MAX_CONDITION_TREE_NODES]
+
+    if depth > MAX_CONDITION_TREE_DEPTH:
+        errors.append(f"{path}: condition tree exceeds maximum nesting depth of {MAX_CONDITION_TREE_DEPTH}")
+        return
+    if budget[0] <= 0:
+        # A previous node already exhausted the allowance and recorded the error.
+        return
+    budget[0] -= 1
+    if budget[0] == 0:
+        errors.append(f"condition tree exceeds maximum size of {MAX_CONDITION_TREE_NODES} nodes")
+        return
+
     if not isinstance(node, dict):
         errors.append(f"{path}: expected dict, got {type(node).__name__}")
         return
@@ -129,6 +155,8 @@ def _validate_node(
                     errors,
                     f"{path}.{op}[{i}]",
                     in_player_subcondition=in_player_subcondition,
+                    depth=depth + 1,
+                    budget=budget,
                 )
             return
 
@@ -136,7 +164,7 @@ def _validate_node(
         if in_player_subcondition:
             errors.append(f"{path}.NOT: NOT is not supported inside player sub-conditions")
             return
-        _validate_node(node["NOT"], errors, f"{path}.NOT")
+        _validate_node(node["NOT"], errors, f"{path}.NOT", depth=depth + 1, budget=budget)
         return
 
     # Leaf node
@@ -166,7 +194,7 @@ def _validate_node(
         return
 
     # Type-specific param validation
-    _validate_leaf_params(ctype, params, errors, path)
+    _validate_leaf_params(ctype, params, errors, path, depth=depth, budget=budget)
 
 
 def _validate_leaf_params(
@@ -174,6 +202,9 @@ def _validate_leaf_params(
     params: dict[str, Any],
     errors: list[str],
     path: str,
+    *,
+    depth: int = 0,
+    budget: list[int] | None = None,
 ) -> None:
     """Validate params for a specific leaf type."""
     if ctype == "stat_threshold":
@@ -209,6 +240,8 @@ def _validate_leaf_params(
                 errors,
                 f"{path}.params.condition",
                 in_player_subcondition=True,
+                depth=depth + 1,
+                budget=budget,
             )
     elif ctype == "captain_property":
         _require_keys(params, ["condition"], errors, path)
@@ -219,6 +252,8 @@ def _validate_leaf_params(
                 errors,
                 f"{path}.params.condition",
                 in_player_subcondition=True,
+                depth=depth + 1,
+                budget=budget,
             )
     elif ctype == "hero_kd_best":
         pass  # all params optional

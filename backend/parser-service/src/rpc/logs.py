@@ -29,6 +29,7 @@ from sqlalchemy import desc, select
 
 from src import models
 from src.core import auth, db
+from src.core.config import settings
 from src.schemas.admin.logs import (
     LogRecordRead,
     LogUploadError,
@@ -192,9 +193,23 @@ def register(broker: Any, logger: Any) -> None:
             errors: list[LogUploadError] = []
             attached_encounter_id = attached_encounter.id if attached_encounter else None
 
+            max_log_bytes = settings.max_match_log_bytes
             for file_obj, filename in zip(files, filenames, strict=True):
                 try:
-                    content = base64.b64decode(file_obj.get("content_b64") or "")
+                    raw_b64 = file_obj.get("content_b64") or ""
+                    # Reject before decoding: base64 inflates ~4/3, so cap the
+                    # encoded length first to avoid materializing a huge buffer.
+                    if len(raw_b64) > (max_log_bytes // 3 + 1) * 4:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Log file exceeds the maximum size of {max_log_bytes} bytes",
+                        )
+                    content = base64.b64decode(raw_b64)
+                    if len(content) > max_log_bytes:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Log file exceeds the maximum size of {max_log_bytes} bytes",
+                        )
                     record = await upload_service.store_uploaded_log_bytes(
                         session,
                         s3=_clients.s3_client,

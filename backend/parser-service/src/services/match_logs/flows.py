@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core import enums, errors, pagination
+from src.core.config import settings
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import service as encounter_service
 from src.services.hero import service as hero_service
@@ -99,6 +100,20 @@ class MatchLogProcessor:
         self._s3 = s3
 
     def _load_and_format_data(self, data_in: list[str]) -> pd.DataFrame:
+        # Cap the number of lines before building the DataFrame — an oversized or
+        # adversarial log would otherwise be parsed in full (review MEDIUM).
+        max_lines = settings.max_match_log_lines
+        if len(data_in) > max_lines:
+            raise errors.ApiHTTPException(
+                status_code=413,
+                detail=[
+                    errors.ApiExc(
+                        code="match_log_too_large",
+                        msg=f"Match log {self.filename} exceeds the maximum of {max_lines} lines",
+                    )
+                ],
+            )
+
         valid_lines = [line for line in data_in if line.strip()]
         if not valid_lines:
             logger.warning(f"Match log {self.filename} has no valid lines.")
@@ -263,14 +278,15 @@ class MatchLogProcessor:
             team_name_1: [],
             team_name_2: [],
         }
+
+        # Resolve every log name across both teams in a single query rather than
+        # one (or two) SELECTs per player (review L14).
+        all_battle_names = [player for players in teams_raw.values() for player in players]
+        users_by_name = await service.get_users_by_battle_names(session, all_battle_names)
+
         for team_name, players in teams_raw.items():
             for player in players:
-                logger.info(f"Trying to get user by battle name {player} in team {team_name}")
-                for verbose in [True, False]:
-                    user_found = await service.get_user_by_battle_name(session, player, verbose)
-                    if user_found:
-                        break
-
+                user_found = users_by_name.get(player)
                 teams[team_name].append((player, user_found))
 
                 if user_found:
@@ -351,16 +367,14 @@ class MatchLogProcessor:
         team: models.Team,
         players_from_log: list[tuple[str, models.User | None]],
     ) -> list[tuple[str, models.Player | None]]:
+        # Resolve all roster players for the team in a single query instead of
+        # one (or two) SELECTs per log name (review L14).
+        battle_names = [battle_name_log for battle_name_log, _ in players_from_log]
+        players_by_name = await service.get_players_by_team_and_battle_names(session, team, battle_names)
+
         players_out: list[tuple[str, models.Player | None]] = []
         for battle_name_log, _ in players_from_log:
-            logger.info(f"Trying to get Player object for battle name '{battle_name_log}' in team '{team.name}'")
-            for verbose in [True, False]:
-                resolved_player_in_team = await service.get_user_by_team_and_battle_name(
-                    session, team, battle_name_log, verbose
-                )
-                if resolved_player_in_team:
-                    break
-
+            resolved_player_in_team = players_by_name.get(battle_name_log)
             players_out.append((battle_name_log, resolved_player_in_team))
 
             if resolved_player_in_team:
@@ -1102,6 +1116,17 @@ async def process_match_log(
             raise errors.ApiHTTPException(
                 status_code=404,
                 detail=[errors.ApiExc(code="log_not_found", msg=msg)],
+            )
+        return
+
+    max_log_bytes = settings.max_match_log_bytes
+    if len(raw_bytes) > max_log_bytes:
+        msg = f"Log file {filename} exceeds the maximum size of {max_log_bytes} bytes"
+        logger.error(msg)
+        if is_raise:
+            raise errors.ApiHTTPException(
+                status_code=413,
+                detail=[errors.ApiExc(code="match_log_too_large", msg=msg)],
             )
         return
 

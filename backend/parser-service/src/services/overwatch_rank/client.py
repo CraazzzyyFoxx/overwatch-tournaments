@@ -10,15 +10,30 @@ can back off and RabbitMQ can retry.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from shared.clients.http_client import ResilientHttpClient
 from shared.core import enums
 
+from src.core.config import settings
+
 from .schemas import ParsedRank, RankFetchResult
 
 logger = logging.getLogger(__name__)
+
+# Reuse the project's canonical battletag shape (``Name#1234``) as the source of
+# truth. Anchored with ``fullmatch`` so no extra path characters (``/``, ``..``,
+# whitespace, query separators) can survive validation and be spliced into the
+# outbound OverFast request path (review MEDIUM: BattleTag not validated before
+# URL interpolation).
+_BATTLE_TAG_RE = re.compile(settings.battle_tag_regex)
+
+
+def _is_valid_battle_tag(battle_tag: str) -> bool:
+    return bool(battle_tag) and _BATTLE_TAG_RE.fullmatch(battle_tag) is not None
 
 
 class OverFastRateLimited(Exception):
@@ -106,7 +121,15 @@ class OverFastRankClient:
 
     async def fetch_summary(self, battle_tag: str) -> RankFetchResult:
         """Fetch and classify one battle tag's competitive summary."""
-        player_id = to_player_id(battle_tag)
+        if not _is_valid_battle_tag(battle_tag):
+            logger.warning("Rejecting rank fetch for malformed battle tag %r", battle_tag)
+            return RankFetchResult(
+                status=enums.RankCollectionStatus.error,
+                error="invalid battle tag",
+            )
+        # Validated to the battletag shape above; ``quote`` is belt-and-suspenders
+        # so a stray character can never alter the request path.
+        player_id = quote(to_player_id(battle_tag), safe="")
         try:
             response = await self._http.get(f"/players/{player_id}/summary")
         except httpx.HTTPError as exc:  # timeouts/connect after retries, etc.
