@@ -1,0 +1,186 @@
+erDiagram
+    %% ─── AUTH LAYER ───────────────────────────────────────────────────────────
+    AUTH_USER {
+        int id PK
+        string email UK
+        string username UK
+        bool is_superuser
+        bool is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    OAUTH_CONNECTIONS {
+        int id PK
+        int auth_user_id FK
+        string provider
+        string provider_user_id
+        string access_token
+        string refresh_token
+    }
+
+    %% ─── IDENTITY LAYER ───────────────────────────────────────────────────────
+    PLAYERS_USER {
+        int id PK
+        string name UK
+        int auth_user_id FK "UNIQUE, nullable — NULL = shadow player (logs/CSV)"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SOCIAL_ACCOUNT {
+        int id PK
+        int user_id FK
+        string provider
+        string username
+        string provider_user_id "nullable"
+        bool is_verified
+        int verified_via_connection_id FK "nullable, ON DELETE SET NULL — forensic only"
+    }
+
+    SOCIAL_ACCOUNT_VISIBILITY {
+        int id PK
+        int account_id FK
+        int workspace_id FK "nullable: NULL = global"
+    }
+
+    %% ─── RBAC LAYER ───────────────────────────────────────────────────────────
+    ROLES {
+        int id PK
+        string name
+        int workspace_id FK "nullable: NULL = global role"
+        bool is_system
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PERMISSIONS {
+        int id PK
+        string name UK
+        string resource
+        string action
+    }
+
+    ROLE_PERMISSIONS {
+        int role_id FK
+        int permission_id FK
+    }
+
+    USER_ROLES {
+        int auth_user_id FK
+        int role_id FK
+    }
+
+    USER_PERMISSION_DENY {
+        int id PK
+        int auth_user_id FK
+        int permission_id FK
+        int workspace_id FK "nullable: NULL = global deny"
+        string reason
+    }
+
+    %% ─── WORKSPACE LAYER ──────────────────────────────────────────────────────
+    WORKSPACE {
+        int id PK
+        string slug UK
+        string name
+        bool is_active
+    }
+
+    WORKSPACE_MEMBER {
+        int id PK
+        int workspace_id FK
+        int player_id FK "players_user.id — identity anchor"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    %% ─── TOURNAMENT LAYER ─────────────────────────────────────────────────────
+    TOURNAMENT {
+        int id PK
+        int workspace_id FK
+        string name
+        int number
+    }
+
+    REGISTRATION {
+        int id PK
+        int tournament_id FK
+        int workspace_member_id FK "nullable: NULL = sheet/CSV import (no account)"
+        int user_id FK "players_user.id — independent battletag dedup"
+        string battle_tag
+        string status
+        string balancer_status
+        bool checked_in
+        timestamp submitted_at
+    }
+
+    TOURNAMENT_PLAYER {
+        int id PK
+        int tournament_id FK
+        int workspace_member_id FK
+        int team_id FK
+        string role
+        int rank
+        bool is_substitution
+    }
+
+    %% ─── ACHIEVEMENTS LAYER ───────────────────────────────────────────────────
+    ACHIEVEMENT_RULE {
+        int id PK
+        int workspace_id FK
+        string slug
+        string name
+    }
+
+    ACHIEVEMENT_EVALUATION_RESULT {
+        int id PK
+        int workspace_member_id FK "was: user_id → players.user"
+        int rule_id FK
+        int workspace_id FK
+    }
+
+    ACHIEVEMENT_USER {
+        int id PK
+        int workspace_member_id FK "was: user_id → players.user"
+        int achievement_id FK
+    }
+
+    %% ─── RELATIONS ────────────────────────────────────────────────────────────
+
+    %% Auth
+    AUTH_USER ||--o{ OAUTH_CONNECTIONS : "logs in via"
+    AUTH_USER ||--o{ USER_ROLES : "granted"
+    AUTH_USER ||--o{ USER_PERMISSION_DENY : "denied"
+
+    %% Identity
+    AUTH_USER |o--o| PLAYERS_USER : "owns (UNIQUE nullable — 1:0..1)"
+    PLAYERS_USER ||--o{ SOCIAL_ACCOUNT : "has handles + smurfs"
+    SOCIAL_ACCOUNT ||--o{ SOCIAL_ACCOUNT_VISIBILITY : "scoped by workspace"
+    OAUTH_CONNECTIONS |o--o{ SOCIAL_ACCOUNT : "verifies (forensic FK, ON DELETE SET NULL)"
+
+    %% RBAC
+    ROLES ||--o{ USER_ROLES : "assigned to user"
+    ROLES ||--o{ ROLE_PERMISSIONS : "grants"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted by role"
+    WORKSPACE ||--o{ ROLES : "scopes (nullable = global)"
+    WORKSPACE ||--o{ USER_PERMISSION_DENY : "scopes (nullable = global deny)"
+    PERMISSIONS ||--o{ USER_PERMISSION_DENY : "denied"
+
+    %% Workspace membership
+    WORKSPACE ||--o{ WORKSPACE_MEMBER : "has members"
+    PLAYERS_USER ||--o{ WORKSPACE_MEMBER : "is member (identity anchor)"
+
+    %% Tournament
+    WORKSPACE ||--o{ TOURNAMENT : "hosts"
+    TOURNAMENT ||--o{ REGISTRATION : "receives"
+    WORKSPACE_MEMBER |o--o{ REGISTRATION : "submits (nullable — sheet/CSV imports have no member)"
+    PLAYERS_USER ||--o{ REGISTRATION : "identified by battletag dedup (independent of submitter)"
+    WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "plays in"
+    TOURNAMENT ||--o{ TOURNAMENT_PLAYER : "roster"
+
+    %% Achievements (workspace-isolated, cross-workspace via player_id join)
+    WORKSPACE ||--o{ ACHIEVEMENT_RULE : "defines"
+    WORKSPACE_MEMBER ||--o{ ACHIEVEMENT_EVALUATION_RESULT : "evaluated"
+    ACHIEVEMENT_RULE ||--o{ ACHIEVEMENT_EVALUATION_RESULT : "produced by"
+    WORKSPACE_MEMBER ||--o{ ACHIEVEMENT_USER : "earned by"

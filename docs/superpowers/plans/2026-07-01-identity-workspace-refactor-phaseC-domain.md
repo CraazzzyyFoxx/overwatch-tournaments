@@ -6,7 +6,7 @@
 `tournament.player` (Part 5), and achievements (Part 6) — onto `workspace_member_id`, and
 update the dependent backend queries and frontend reads.
 
-**Architecture:** Each domain table gains a FK to `workspace.workspace_member.id`. Workspace
+**Architecture:** Each domain table gains a FK to `workspace_member.id`. Workspace
 becomes derivable (`tournament_id → Tournament.workspace_id`) instead of denormalized.
 Player-centric reads (public profiles, analytics, rank history) re-derive `player_id` via
 `JOIN workspace_member ON workspace_member.id = <table>.workspace_member_id`.
@@ -22,6 +22,13 @@ of each other and may be done in parallel. Design spec:
   Phase B's last migration (`iwrefac04`); set `down_revision` from `alembic heads` at execution.
 - New `workspace_member_id` columns use `sa.BigInteger()` to match `workspace_member.id`
   (`db.TimeStampIntegerMixin` id is BigInteger); verify FK type compatibility on apply.
+- **SCHEMA FACT (verified on anak_dev):** `workspace` and `workspace_member` live in the
+  **`public`** schema — there is NO `workspace` schema. Model FKs to it are
+  `ForeignKey("workspace_member.id")` (table-qualified, public); migration `create_foreign_key`
+  uses `referent_schema="public"` (NOT `"workspace"`); raw SQL uses `workspace_member` (unqualified).
+  The domain tables' OWN schemas (`balancer`, `tournament`, `achievements`) are real and correct.
+  `players`/`auth` are also real schemas. anak_dev is currently at head `iwrefac04`;
+  chain new migrations from there (`iwrefac05` …).
 - Workspace is derived via `tournament_id → Tournament.workspace_id` (no denormalized copy).
 - Player-centric reads MUST join back through `workspace_member` to `player_id` — do not assume
   `workspace_member_id == player_id`.
@@ -40,11 +47,11 @@ of each other and may be done in parallel. Design spec:
 
 **Interfaces:**
 - Produces: `BalancerRegistration.workspace_member_id: Mapped[int | None]` (FK
-  `workspace.workspace_member.id` `ON DELETE SET NULL`, nullable, indexed) + `workspace_member`
+  `workspace_member.id` `ON DELETE SET NULL`, nullable, indexed) + `workspace_member`
   rel. Keeps `user_id`→players. Removes `auth_user_id`, `workspace_id`, their relationships.
 
 - [ ] **Step 1: Write the failing test** — `workspace_member_id` present (nullable, FK to
-  `workspace.workspace_member`); `auth_user_id`/`workspace_id` absent; `user_id` still present.
+  `workspace_member`); `auth_user_id`/`workspace_id` absent; `user_id` still present.
 
 - [ ] **Step 2: Run → FAIL.**
 
@@ -54,7 +61,7 @@ Run: `cd backend && uv run --package shared pytest shared/tests/test_balancer_re
 
 ```python
 workspace_member_id: Mapped[int | None] = mapped_column(
-    ForeignKey("workspace.workspace_member.id", ondelete="SET NULL"),
+    ForeignKey("workspace_member.id", ondelete="SET NULL"),
     nullable=True, index=True,
 )
 workspace_member: Mapped["WorkspaceMember | None"] = relationship()
@@ -83,7 +90,7 @@ def upgrade() -> None:
         """
         UPDATE balancer.registration r
         SET workspace_member_id = wm.id
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         JOIN players."user" pu ON pu.id = wm.player_id
         WHERE pu.auth_user_id = r.auth_user_id
           AND wm.workspace_id = r.workspace_id
@@ -91,7 +98,7 @@ def upgrade() -> None:
     )
     op.create_foreign_key("fk_registration_workspace_member", "registration",
                           "workspace_member", ["workspace_member_id"], ["id"],
-                          source_schema="balancer", referent_schema="workspace",
+                          source_schema="balancer", referent_schema="public",
                           ondelete="SET NULL")
     op.create_index("ix_balancer_registration_workspace_member_id", "registration",
                     ["workspace_member_id"], schema="balancer")
@@ -114,7 +121,7 @@ old unique index).
 - [ ] **Step 3: Verify** — no orphan member FK:
 ```sql
 SELECT COUNT(*) FROM balancer.registration r
-LEFT JOIN workspace.workspace_member wm ON wm.id = r.workspace_member_id
+LEFT JOIN workspace_member wm ON wm.id = r.workspace_member_id
 WHERE r.workspace_member_id IS NOT NULL AND wm.id IS NULL;  -- 0
 ```
 
@@ -182,7 +189,7 @@ WHERE r.workspace_member_id IS NOT NULL AND wm.id IS NULL;  -- 0
 - Test: `backend/shared/tests/test_tournament_player_member.py`
 
 **Interfaces:**
-- Produces: `Player.workspace_member_id: Mapped[int]` (FK `workspace.workspace_member.id`
+- Produces: `Player.workspace_member_id: Mapped[int]` (FK `workspace_member.id`
   CASCADE, NOT NULL) + `workspace_member` rel; removes `user_id`/`user`. Indexes swapped to
   `ix_player_workspace_member_tournament`, `ix_player_team_workspace_member`, and the partial
   `is_substitution=false` variant on `(workspace_member_id, tournament_id)`.
@@ -217,7 +224,7 @@ def upgrade() -> None:
         """
         UPDATE tournament.player tp
         SET workspace_member_id = wm.id
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         JOIN tournament.tournament t ON t.id = tp.tournament_id
         WHERE wm.workspace_id = t.workspace_id
           AND wm.player_id = tp.user_id
@@ -227,11 +234,11 @@ def upgrade() -> None:
     # include shadow players not yet enrolled via self-registration).
     op.execute(
         """
-        INSERT INTO workspace.workspace_member (workspace_id, player_id, created_at)
+        INSERT INTO workspace_member (workspace_id, player_id, created_at)
         SELECT DISTINCT t.workspace_id, tp.user_id, now()
         FROM tournament.player tp
         JOIN tournament.tournament t ON t.id = tp.tournament_id
-        LEFT JOIN workspace.workspace_member wm
+        LEFT JOIN workspace_member wm
           ON wm.workspace_id = t.workspace_id AND wm.player_id = tp.user_id
         WHERE wm.id IS NULL
         ON CONFLICT (workspace_id, player_id) DO NOTHING
@@ -241,7 +248,7 @@ def upgrade() -> None:
         """
         UPDATE tournament.player tp
         SET workspace_member_id = wm.id
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         JOIN tournament.tournament t ON t.id = tp.tournament_id
         WHERE wm.workspace_id = t.workspace_id AND wm.player_id = tp.user_id
           AND tp.workspace_member_id IS NULL
@@ -250,7 +257,7 @@ def upgrade() -> None:
     op.alter_column("player", "workspace_member_id", nullable=False, schema="tournament")
     op.create_foreign_key("fk_player_workspace_member", "player", "workspace_member",
                           ["workspace_member_id"], ["id"], source_schema="tournament",
-                          referent_schema="workspace", ondelete="CASCADE")
+                          referent_schema="public", ondelete="CASCADE")
     op.drop_index("ix_player_user_tournament", table_name="player", schema="tournament")
     op.drop_index("ix_player_team_user", table_name="player", schema="tournament")
     op.drop_index("ix_player_user_not_sub", table_name="player", schema="tournament")
@@ -313,11 +320,11 @@ Downgrade reverses (re-add `user_id`, backfill via member→player, restore old 
 
 **Interfaces:**
 - Produces: `AchievementEvaluationResult.workspace_member_id` and
-  `AchievementOverride.workspace_member_id` (FK `workspace.workspace_member.id` CASCADE, NOT
+  `AchievementOverride.workspace_member_id` (FK `workspace_member.id` CASCADE, NOT
   NULL) replacing `user_id`. Legacy `AchievementUser`/`Achievement` left untouched.
 
 - [ ] **Step 1: Write the failing test** — both active models have `workspace_member_id` (FK to
-  `workspace.workspace_member`), not `user_id`; the unique constraint on
+  `workspace_member`), not `user_id`; the unique constraint on
   `AchievementEvaluationResult` uses `workspace_member_id` instead of `user_id`.
 
 - [ ] **Step 2: Run → FAIL.**
@@ -346,16 +353,16 @@ def _migrate(table: str) -> None:
         f"""
         UPDATE achievements.{table} a
         SET workspace_member_id = wm.id
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         WHERE wm.player_id = a.user_id AND wm.workspace_id = a.workspace_id
         """
     )
     op.execute(
         f"""
-        INSERT INTO workspace.workspace_member (workspace_id, player_id, created_at)
+        INSERT INTO workspace_member (workspace_id, player_id, created_at)
         SELECT DISTINCT a.workspace_id, a.user_id, now()
         FROM achievements.{table} a
-        LEFT JOIN workspace.workspace_member wm
+        LEFT JOIN workspace_member wm
           ON wm.workspace_id = a.workspace_id AND wm.player_id = a.user_id
         WHERE wm.id IS NULL
         ON CONFLICT (workspace_id, player_id) DO NOTHING
@@ -365,7 +372,7 @@ def _migrate(table: str) -> None:
         f"""
         UPDATE achievements.{table} a
         SET workspace_member_id = wm.id
-        FROM workspace.workspace_member wm
+        FROM workspace_member wm
         WHERE wm.player_id = a.user_id AND wm.workspace_id = a.workspace_id
           AND a.workspace_member_id IS NULL
         """
@@ -373,7 +380,7 @@ def _migrate(table: str) -> None:
     op.alter_column(table, "workspace_member_id", nullable=False, schema="achievements")
     op.create_foreign_key(f"fk_{table}_workspace_member", table, "workspace_member",
                           ["workspace_member_id"], ["id"], source_schema="achievements",
-                          referent_schema="workspace", ondelete="CASCADE")
+                          referent_schema="public", ondelete="CASCADE")
     op.drop_column(table, "user_id", schema="achievements")
 
 
@@ -475,7 +482,7 @@ Downgrade reverses for both. Update the `evaluation_result` unique constraint to
   migration (T8), readers + merge (T9, correction #8); frontend (T10); E2E + invariants (T11).
 - **Placeholder scan:** discovery points (`balance.workspace_id` scope, `differ.py` helper
   import, roster auto-enroll decision) name the exact file/decision — concrete, not "TBD".
-- **Type consistency:** `workspace_member_id` (BigInteger, FK `workspace.workspace_member.id`)
+- **Type consistency:** `workspace_member_id` (BigInteger, FK `workspace_member.id`)
   used identically across registration/player/achievements; player-centric reads always
   re-derive `player_id` via the member join (never assume `workspace_member_id == player_id`);
   `get_or_create_workspace_member` reused from Phase B.
