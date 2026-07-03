@@ -54,7 +54,7 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
           <Skeleton className="h-28 w-full rounded-xl" />
           <Skeleton className="h-28 w-full rounded-xl" />
         </div>
-        <Skeleton className="h-[600px] w-full rounded-xl" />
+        <Skeleton className="h-150 w-full rounded-xl" />
       </div>
     );
   }

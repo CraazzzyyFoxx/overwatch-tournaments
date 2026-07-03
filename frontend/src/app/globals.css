@@ -581,9 +581,9 @@ body, html {
   gap: 8px;
   align-items: center;
   background: var(--aqt-card);
-  border: 1px solid var(--aqt-border);
-  border-radius: 12px;
-  padding: 10px;
+  /* border: 1px solid var(--aqt-border); */
+  /* border-radius: 12px; */
+  /* padding: 10px; */
 }
 .aqt-filter-chip {
   display: inline-flex;

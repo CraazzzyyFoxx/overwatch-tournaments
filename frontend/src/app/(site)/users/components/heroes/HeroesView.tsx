@@ -271,7 +271,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
     return (
       <div className="aqt-player">
         <CardSurface>
-          <div className="py-10 text-center text-[color:var(--aqt-fg-dim)]">No hero stats available yet.</div>
+          <div className="py-10 text-center text-(--aqt-fg-dim)">No hero stats available yet.</div>
         </CardSurface>
       </div>
     );
@@ -281,44 +281,42 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
 
   return (
     <div className="aqt-player flex flex-col gap-3.5">
-      {filterSlot ? <div className="flex justify-end">{filterSlot}</div> : null}
+
 
       {/* Summary strip (one compact row; no duplicate "Hero pool") */}
-      <div className="aqt-card-surface flex flex-wrap items-center gap-x-8 gap-y-3 px-[18px] py-3.5">
+      {/* <div className="aqt-card-surface flex flex-wrap items-center gap-x-8 gap-y-3 px-4.5 py-3.5">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Hero pool</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-(--aqt-fg-faint)">Hero pool</div>
           <div className="aqt-display text-[22px] font-bold leading-[1.1]">
-            {items.length} <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">heroes</span>
+            {items.length} <span className="aqt-mono text-[13px] text-(--aqt-fg-muted)">heroes</span>
           </div>
-          <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+          <div className="aqt-mono text-[12px] text-(--aqt-fg-dim)">
             {roleSplit.tank}T · {roleSplit.damage}D · {roleSplit.support}S
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Total playtime</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-(--aqt-fg-faint)">Total playtime</div>
           <div className="aqt-display text-[22px] font-bold leading-[1.1]" style={{ color: "var(--aqt-amber)" }}>
             {Math.floor(totalSeconds / 3600)}
-            <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">h</span>
+            <span className="aqt-mono text-[13px] text-(--aqt-fg-muted)">h</span>
           </div>
-          <div className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{formatSeconds(totalSeconds)}</div>
+          <div className="aqt-mono text-[12px] text-(--aqt-fg-dim)">{formatSeconds(totalSeconds)}</div>
         </div>
         {mostEffective ? (
           <div className="flex items-center gap-2.5">
             <HeroImage hero={mostEffective.hero.hero} size="md" />
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">Most effective</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-(--aqt-fg-faint)">Most effective</div>
               <div className="aqt-display text-[18px] font-bold leading-[1.1]">{mostEffective.hero.hero.name}</div>
-              <div className="aqt-mono text-[12px] text-[color:var(--aqt-emerald)]">{formatSeconds(mostEffective.playtime)}</div>
+              <div className="aqt-mono text-[12px] text-(--aqt-emerald)">{formatSeconds(mostEffective.playtime)}</div>
             </div>
           </div>
         ) : null}
-      </div>
+      </div> */}
 
       {/* Sticky hero rail (cross-hero compare) + detail, side by side so
           switching heroes never requires a long scroll up/down. */}
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[340px_1fr] xl:items-start">
-        <HeroRail rows={overviewRows} selectedId={selected.hero.hero.id} onSelect={setSelectedId} />
-
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_340px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
           {/* Spotlight */}
           <HeroSpotlight selected={selected} heroVariant={heroVariant} quickStats={quickStats} />
@@ -329,7 +327,10 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
             icon={<Activity size={15} />}
             subtitle={`${selected.hero.hero.name} · vs global avg/10`}
             action={
-              <div className="aqt-filters !mb-0">
+              <div className="aqt-filters mb-0!">
+                <>
+                  {filterSlot ? <div className="flex justify-end">{filterSlot}</div> : null}
+                </>
                 <span
                   className={cn("aqt-filter-chip", insightsMode === "highlights" && "active")}
                   role="button"
@@ -356,7 +357,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 <HeroRadar radarData={radarData} />
                 {radarCandidates.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+                    <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-(--aqt-fg-faint)">
                       Radar axes · 3–8
                     </span>
                     <RadarAxisPicker selected={radarStats} candidates={radarCandidates} onToggle={toggleRadarStat} />
@@ -367,10 +368,10 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 {insightsRows.map((row) => (
                   <div
                     key={row.name}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-(--aqt-border) bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5"
                   >
-                    <span className="text-[12px] text-[color:var(--aqt-fg-muted)]">{row.label}</span>
-                    <span className="aqt-mono text-[14px] font-semibold text-[color:var(--aqt-fg)]">{row.value}</span>
+                    <span className="text-[12px] text-(--aqt-fg-muted)">{row.label}</span>
+                    <span className="aqt-mono text-[14px] font-semibold text-(--aqt-fg)">{row.value}</span>
                     <span
                       className="aqt-mono text-[11.5px] font-bold"
                       style={{ color: row.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
@@ -380,7 +381,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                   </div>
                 ))}
                 {insightsRows.length === 0 ? (
-                  <div className="col-span-2 py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
+                  <div className="col-span-2 py-6 text-center text-[13px] text-(--aqt-fg-dim)">
                     Not enough data for comparisons
                   </div>
                 ) : null}
@@ -403,6 +404,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           {/* Maps the selected hero was played on (best → worst) */}
           <MapsForHero heroName={selected.hero.hero.name} heroMaps={heroMaps} />
         </div>
+        <HeroRail rows={overviewRows} selectedId={selected.hero.hero.id} onSelect={setSelectedId} />
       </div>
     </div>
   );

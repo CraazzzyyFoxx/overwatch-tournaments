@@ -38,13 +38,13 @@ const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
   return (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
       {selected.map((name) => (
-        <span key={name} className="aqt-filter-chip active inline-flex items-center gap-1" title={getHumanizedStats(name)}>
+        <span key={name} className="aqt-filter-chip active inline-flex items-center" title={getHumanizedStats(name)}>
           {getHumanizedStats(name)}
           {canRemove ? (
             <button
               type="button"
               onClick={() => onToggle(name)}
-              className="-mr-0.5 inline-flex items-center justify-center rounded-sm text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]"
+              className="-mr-0.5 inline-flex items-center justify-center rounded-sm text-(--aqt-fg-muted) hover:text-[color:var(--aqt-fg)]"
               aria-label={`Remove ${getHumanizedStats(name)}`}
             >
               <X className="h-3 w-3" />
