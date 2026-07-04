@@ -65,6 +65,9 @@ class Player(db.TimeStampIntegerMixin):
             postgresql_where=text("is_substitution = false"),
         ),
         Index("ix_player_tournament_role_sub_role", "tournament_id", "role", "sub_role"),
+        # Self-referencing FK (ondelete=SET NULL); index created CONCURRENTLY
+        # by dbarch01.
+        Index("ix_player_related_player_id", "related_player_id"),
         {"schema": "tournament"},
     )
 

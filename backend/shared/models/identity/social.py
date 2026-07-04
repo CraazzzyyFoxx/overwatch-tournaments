@@ -43,6 +43,19 @@ class SocialAccount(db.TimeStampIntegerMixin):
         Index("ix_social_account_provider", "provider"),
         Index("ix_social_account_username_normalized", "username_normalized"),
         Index("ix_social_account_provider_user_id", "provider_user_id"),
+        # dbarch01: uq_social_account_user_provider_handle does not dedupe rows
+        # with NULL username_normalized (every NULL is distinct), so this
+        # partial unique index closes the bypass, keyed on the raw handle.
+        # NB: dbarch01 only creates it after verifying no duplicate NULL-case
+        # rows exist (otherwise it warns and defers to manual cleanup).
+        Index(
+            "uq_social_account_user_provider_handle_nullnorm",
+            "user_id",
+            "provider",
+            text("lower(btrim(username))"),
+            unique=True,
+            postgresql_where=text("username_normalized IS NULL"),
+        ),
         {"schema": "players"},
     )
 

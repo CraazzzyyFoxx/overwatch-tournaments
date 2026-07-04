@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -103,7 +103,16 @@ class ChallongeMatchMapping(db.TimeStampIntegerMixin):
 
 class ChallongeSyncLog(db.TimeStampIntegerMixin):
     __tablename__ = "challonge_sync_log"
-    __table_args__ = ({"schema": "tournament"},)
+    __table_args__ = (
+        # Created CONCURRENTLY by dbarch01: serves the sync-log feed
+        # (WHERE tournament_id = ? ORDER BY created_at DESC LIMIT 50) directly.
+        Index(
+            "ix_challonge_sync_log_tournament_created",
+            "tournament_id",
+            text("created_at DESC"),
+        ),
+        {"schema": "tournament"},
+    )
 
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), index=True

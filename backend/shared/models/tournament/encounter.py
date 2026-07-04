@@ -24,6 +24,17 @@ ENCOUNTER_RESULT_STATUS_ENUM = Enum(
     create_type=False,
 )
 
+# NB: deliberately NO values_callable — this type has always persisted the
+# member NAMEs (COMPLETED/PENDING/OPEN), not the lowercase .value (see the
+# status column comment below). Lives in the tournament schema since dbarch01
+# moved it out of public (where a7634c02717d originally created it).
+ENCOUNTER_STATUS_ENUM = Enum(
+    enums.EncounterStatus,
+    name="encounterstatus",
+    schema="tournament",
+    create_type=False,
+)
+
 
 class Encounter(db.TimeStampIntegerMixin):
     __tablename__ = "encounter"
@@ -37,10 +48,13 @@ class Encounter(db.TimeStampIntegerMixin):
             "ix_encounter_status_live_upcoming",
             "tournament_id",
             "status",
-            # NB: predicate uses uppercase enum NAMEs and the public-schema type
-            # (see the status column comment below).
+            # NB: predicate uses uppercase enum NAMEs; the type lives in the
+            # tournament schema since dbarch01 (see the status column comment
+            # below). The DB index created by perfidx04 with a
+            # public.encounterstatus cast keeps working after the move — pg
+            # stores type OIDs, not names, in index predicates.
             postgresql_where=text(
-                "status IN ('PENDING'::public.encounterstatus, 'OPEN'::public.encounterstatus)"
+                "status IN ('PENDING'::tournament.encounterstatus, 'OPEN'::tournament.encounterstatus)"
             ),
         ),
         {"schema": "tournament"},
@@ -78,16 +92,16 @@ class Encounter(db.TimeStampIntegerMixin):
     )
 
     challonge_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Enum(EncounterStatus) persists the member NAME (COMPLETED/PENDING/OPEN), not
-    # its .value (completed/pending/open) — there is no values_callable here, so any
+    # ENCOUNTER_STATUS_ENUM persists the member NAME (COMPLETED/PENDING/OPEN), not
+    # its .value (completed/pending/open) — there is no values_callable, so any
     # raw SQL/partial-index predicate against `status` must use the uppercase NAME
     # labels (see migrations/versions/perfidx04_encounter_status_indexes.py). The
-    # underlying `encounterstatus` type also still lives in the default/public
-    # schema (created by a7634c02717d before `encounter` was moved to `tournament`
-    # by b8e2f4a1c903_split_domain_schemas — ALTER TABLE ... SET SCHEMA does not
-    # move the type along with the table).
+    # underlying `encounterstatus` type was created in public by a7634c02717d and
+    # stranded there when b8e2f4a1c903 moved `encounter` to `tournament` (ALTER
+    # TABLE ... SET SCHEMA does not move dependent types); dbarch01 finally moved
+    # it into the tournament schema.
     status: Mapped[enums.EncounterStatus] = mapped_column(
-        Enum(enums.EncounterStatus), default=enums.EncounterStatus.OPEN
+        ENCOUNTER_STATUS_ENUM, default=enums.EncounterStatus.OPEN
     )
     has_logs: Mapped[bool] = mapped_column(Boolean(), default=False)
 

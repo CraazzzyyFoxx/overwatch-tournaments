@@ -24,6 +24,10 @@ user_roles = Table(
     Column("user_id", Integer, ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False),
     Column("role_id", Integer, ForeignKey("auth.roles.id", ondelete="CASCADE"), nullable=False),
     Column("created_at", db.DateTime(timezone=True), server_default=text("now()"), nullable=False),
+    # FK indexes created CONCURRENTLY by dbarch01 (permission resolution and
+    # user/role CASCADE deletes previously seq-scanned this table).
+    Index("ix_user_roles_user_id", "user_id"),
+    Index("ix_user_roles_role_id", "role_id"),
     schema="auth",
 )
 
@@ -122,7 +126,11 @@ class UserPermissionDeny(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    created_by: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # FK added by dbarch01 (NOT VALID + VALIDATE); SET NULL keeps the deny row
+    # alive when the operator's auth user is deleted.
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
+    )
     reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     permission: Mapped["Permission"] = relationship()
@@ -139,5 +147,8 @@ role_permissions = Table(
     Column("role_id", Integer, ForeignKey("auth.roles.id", ondelete="CASCADE"), nullable=False),
     Column("permission_id", Integer, ForeignKey("auth.permissions.id", ondelete="CASCADE"), nullable=False),
     Column("created_at", db.DateTime(timezone=True), server_default=text("now()"), nullable=False),
+    # FK indexes created CONCURRENTLY by dbarch01.
+    Index("ix_role_permissions_role_id", "role_id"),
+    Index("ix_role_permissions_permission_id", "permission_id"),
     schema="auth",
 )

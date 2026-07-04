@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -32,7 +32,14 @@ class LogProcessingRecord(db.TimeStampIntegerMixin):
     """Tracks the processing state and uploader info for each match log file."""
 
     __tablename__ = "record"
-    __table_args__ = ({"schema": "log_processing"},)
+    __table_args__ = (
+        # Created CONCURRENTLY by dbarch01: queue scans filter on status
+        # (Postgres enum log_processing_status) ordered by created_at;
+        # uploader_id is an FK that previously had no index.
+        Index("ix_log_processing_record_status_created", "status", "created_at"),
+        Index("ix_log_processing_record_uploader_id", "uploader_id"),
+        {"schema": "log_processing"},
+    )
 
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey("tournament.tournament.id", ondelete="CASCADE"),

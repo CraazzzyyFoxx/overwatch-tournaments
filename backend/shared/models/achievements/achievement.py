@@ -1,7 +1,18 @@
 import typing
 from enum import StrEnum
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -134,6 +145,13 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
             "match_id",
             name="uq_eval_result_rule_user_tournament_match",
         ),
+        # Created CONCURRENTLY by dbarch01: match_id was the only unindexed FK
+        # column; partial because tournament/global-grain rows keep it NULL.
+        Index(
+            "ix_achievements_evaluation_result_match_id",
+            "match_id",
+            postgresql_where=text("match_id IS NOT NULL"),
+        ),
         {"schema": "achievements"},
     )
 
@@ -154,7 +172,14 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     )
     evidence_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     rule_version: Mapped[int] = mapped_column(Integer())
-    run_id: Mapped[str | None] = mapped_column(Uuid(), nullable=True, index=True)
+    # FK added by dbarch01 (NOT VALID + VALIDATE); SET NULL so deleting an
+    # evaluation run keeps its results.
+    run_id: Mapped[str | None] = mapped_column(
+        Uuid(),
+        ForeignKey("achievements.evaluation_run.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     rule: Mapped[AchievementRule] = relationship(back_populates="evaluation_results")
     workspace_member: Mapped["WorkspaceMember"] = relationship()
@@ -169,7 +194,12 @@ class AchievementOverride(db.TimeStampIntegerMixin):
     """
 
     __tablename__ = "override"
-    __table_args__ = ({"schema": "achievements"},)
+    __table_args__ = (
+        # FK indexes created CONCURRENTLY by dbarch01.
+        Index("ix_achievements_override_tournament_id", "tournament_id"),
+        Index("ix_achievements_override_match_id", "match_id"),
+        {"schema": "achievements"},
+    )
 
     achievement_rule_id: Mapped[int] = mapped_column(
         ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True

@@ -156,7 +156,11 @@ class AnalyticsBalancePlayerSnapshot(db.TimeStampIntegerMixin):
     """Per-player snapshot of their balance assignment at export time."""
 
     __tablename__ = "balance_player_snapshot"
-    __table_args__ = ({"schema": "analytics"},)
+    __table_args__ = (
+        # FK index created CONCURRENTLY by dbarch01.
+        Index("ix_balance_player_snapshot_team_id", "team_id"),
+        {"schema": "analytics"},
+    )
 
     balance_snapshot_id: Mapped[int] = mapped_column(
         ForeignKey("analytics.balance_snapshot.id", ondelete="CASCADE"), index=True

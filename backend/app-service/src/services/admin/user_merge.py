@@ -6,14 +6,13 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import normalize_social_handle
+from shared.repository import get_or_create_workspace_member
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from shared.core.social import normalize_social_handle
-from shared.repository import get_or_create_workspace_member
 
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
@@ -238,7 +237,13 @@ async def execute_merge(
         await session.flush()
 
         audit = models.UserMergeAudit(
-            source_user_id=request.source_user_id,
+            # dbarch01 put an FK (players.user.id, ON DELETE SET NULL) on
+            # source_user_id, and the source row was hard-deleted above in
+            # this same transaction — referencing it here would violate the
+            # FK. The deleted id survives in
+            # preview_snapshot_json["source"]["id"] and is returned to the
+            # caller as deleted_source_user_id.
+            source_user_id=None,
             target_user_id=request.target_user_id,
             operator_auth_user_id=operator_auth_user_id,
             field_policy_json=request.field_policy.model_dump(mode="json"),
