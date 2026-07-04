@@ -6,6 +6,7 @@ from .bootstrap import (
     legacy_workspace_role_name_for_user,
     replace_user_workspace_roles,
     user_has_only_workspace_owner_role,
+    user_has_workspace_membership_role,
 )
 from .catalog import (
     PERMISSION_CATALOG,
@@ -26,4 +27,5 @@ __all__ = (
     "permission_names_for_workspace_role",
     "replace_user_workspace_roles",
     "user_has_only_workspace_owner_role",
+    "user_has_workspace_membership_role",
 )

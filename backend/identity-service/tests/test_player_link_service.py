@@ -19,6 +19,7 @@ import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import sqlalchemy as sa
@@ -53,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
 
+from src.services import player_link_service as pls_module  # noqa: E402
 from src.services.player_link_service import PlayerLinkService  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -93,6 +95,78 @@ def test_link_player_requires_oauth_ownership_gate() -> None:
         )
 
     assert exc_info.value.status_code == 400
+
+
+class _UnlinkFakeSession:
+    """Minimal async session for the guard unit tests: ``get`` returns a fixed
+    player, ``commit`` records that it happened."""
+
+    def __init__(self, player: SimpleNamespace) -> None:
+        self._player = player
+        self.committed = False
+
+    async def get(self, _model, _pk):
+        return self._player
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
+def test_unlink_blocked_when_workspace_membership_role_present() -> None:
+    """Unlink must be refused (409) when the auth user still holds a real
+    workspace membership role. ``workspace_member`` is anchored on this player,
+    so clearing the link would strand that membership row auth-less. The link
+    must be left intact and no commit issued.
+    """
+    player = SimpleNamespace(id=99, auth_user_id=7)
+    session = _UnlinkFakeSession(player)
+
+    with patch.object(
+        pls_module, "user_has_workspace_membership_role", AsyncMock(return_value=True)
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                PlayerLinkService._unlink_player_from_auth_user(session, player_id=99)
+            )
+
+    assert exc_info.value.status_code == 409
+    assert player.auth_user_id == 7  # link untouched
+    assert session.committed is False
+
+
+def test_unlink_allowed_when_no_workspace_membership_role() -> None:
+    """A pure participant (no workspace membership role) can still unlink: the
+    link is nulled and the change committed."""
+    player = SimpleNamespace(id=99, auth_user_id=7)
+    session = _UnlinkFakeSession(player)
+
+    with patch.object(
+        pls_module, "user_has_workspace_membership_role", AsyncMock(return_value=False)
+    ):
+        asyncio.run(
+            PlayerLinkService._unlink_player_from_auth_user(session, player_id=99)
+        )
+
+    assert player.auth_user_id is None
+    assert session.committed is True
+
+
+def test_unlink_already_unlinked_is_noop() -> None:
+    """Idempotent: unlinking a player whose link is already NULL neither checks
+    membership nor commits."""
+    player = SimpleNamespace(id=99, auth_user_id=None)
+    session = _UnlinkFakeSession(player)
+
+    with patch.object(
+        pls_module, "user_has_workspace_membership_role", AsyncMock()
+    ) as guard:
+        asyncio.run(
+            PlayerLinkService._unlink_player_from_auth_user(session, player_id=99)
+        )
+
+    guard.assert_not_awaited()
+    assert player.auth_user_id is None
+    assert session.committed is False
 
 
 # ---------------------------------------------------------------------------
