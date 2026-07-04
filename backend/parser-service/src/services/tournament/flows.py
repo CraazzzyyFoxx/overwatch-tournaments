@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 
 from loguru import logger
@@ -152,26 +153,32 @@ async def create_groups(
     tournament: models.Tournament,
     challonge_tournament: schemas.ChallongeTournament,
 ) -> models.Tournament:
+    # Release the DB connection before the Challonge round-trip: under
+    # pgBouncer/NullPool an open transaction pins a backend slot for the whole
+    # network wait. expire_on_commit=False keeps ``tournament`` usable.
+    await session.commit()
     matches = await challonge_service.fetch_matches(challonge_tournament.id)
     for match in matches:
         logger.info(match)
     groups = get_groups_from_matches(matches)
-    for group_id, name in groups:
-        await service.create_group(
-            session,
-            tournament,
+
+    specs = [
+        service.GroupSpec(
             name=name,
             is_groups=True,
             challonge_id=group_id,
             challonge_slug=challonge_tournament.url,
         )
-    await service.create_group(
-        session,
-        tournament,
-        name="Playoffs",
-        is_groups=False,
-        challonge_slug=challonge_tournament.url,
+        for group_id, name in groups
+    ]
+    specs.append(
+        service.GroupSpec(
+            name="Playoffs",
+            is_groups=False,
+            challonge_slug=challonge_tournament.url,
+        )
     )
+    await service.create_groups(session, tournament, specs)
 
     return tournament
 
@@ -213,6 +220,9 @@ async def create_with_groups(
             ],
         )
 
+    # Commit before the Challonge round-trip so no transaction (opened by the
+    # reads above) stays pinned to a pgBouncer slot during the network wait.
+    await session.commit()
     challonge_tournament = await challonge_service.fetch_tournament(challonge_slug)
     if challonge_tournament.grand_finals_modifier is None:
         raise errors.ApiHTTPException(
@@ -261,6 +271,22 @@ async def create(
             ],
         )
 
+    # Commit before the Challonge round-trips (the existence check above opened
+    # a transaction), then fetch every group/playoff bracket concurrently
+    # instead of one serial HTTP call per slug under an open session.
+    await session.commit()
+
+    semaphore = asyncio.Semaphore(4)
+
+    async def _fetch_tournament(slug: str) -> schemas.ChallongeTournament:
+        async with semaphore:
+            return await challonge_service.fetch_tournament(slug)
+
+    fetched = await asyncio.gather(
+        *(_fetch_tournament(slug) for slug in [*groups_challonge_slugs, playoffs_challonge_slug])
+    )
+    group_tournaments, playoffs_tournament = fetched[:-1], fetched[-1]
+
     tournament = await service.create(
         session,
         workspace_id=1,
@@ -271,24 +297,22 @@ async def create(
         end_date=end_date,
     )
 
-    for sym_index, slug in enumerate(groups_challonge_slugs, start=65):
-        challonge_tournament = await challonge_service.fetch_tournament(slug)
-        await service.create_group(
-            session,
-            tournament,
+    specs = [
+        service.GroupSpec(
             name=chr(sym_index),
             is_groups=True,
             challonge_slug=challonge_tournament.url,
             challonge_id=challonge_tournament.id,
         )
-
-    challonge_tournament = await challonge_service.fetch_tournament(playoffs_challonge_slug)
-    await service.create_group(
-        session,
-        tournament,
-        name="Playoffs",
-        is_groups=False,
-        challonge_slug=challonge_tournament.url,
-        challonge_id=challonge_tournament.id,
+        for sym_index, challonge_tournament in enumerate(group_tournaments, start=65)
+    ]
+    specs.append(
+        service.GroupSpec(
+            name="Playoffs",
+            is_groups=False,
+            challonge_slug=playoffs_tournament.url,
+            challonge_id=playoffs_tournament.id,
+        )
     )
+    await service.create_groups(session, tournament, specs)
     return tournament

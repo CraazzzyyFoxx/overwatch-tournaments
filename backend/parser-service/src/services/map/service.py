@@ -32,6 +32,21 @@ async def get_by_name(session: AsyncSession, name: str) -> models.Map | None:
     return result.scalar_one_or_none()
 
 
+async def get_by_names(session: AsyncSession, names: list[str]) -> dict[str, models.Map]:
+    """All maps whose name is in ``names``, indexed by name, in one query
+    (batch counterpart of the per-item ``get_by_name`` probes in
+    ``initial_create``). On duplicate names the first row wins."""
+    if not names:
+        return {}
+    result = await session.execute(
+        sa.select(models.Map).where(models.Map.name.in_(list(set(names))))
+    )
+    maps: dict[str, models.Map] = {}
+    for map in result.scalars().all():
+        maps.setdefault(map.name, map)
+    return maps
+
+
 async def get_by_name_and_gamemode(session: AsyncSession, name: str, gamemode: str) -> models.Map | None:
     query = (
         sa.select(models.Map)

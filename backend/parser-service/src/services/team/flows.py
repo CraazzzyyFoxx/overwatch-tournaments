@@ -1,9 +1,11 @@
+import asyncio
 import re
 from dataclasses import dataclass
 
 import sqlalchemy as sa
 from loguru import logger
 from shared.division_grid import DEFAULT_GRID
+from shared.domain.player_sub_roles import normalize_sub_role
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +14,7 @@ from src.core import enums, errors, utils
 from src.services.challonge import service as challonge_service
 from src.services.tournament import flows as tournament_flows
 from src.services.user import flows as user_flows
+from src.services.user import service as user_service
 
 from . import service
 
@@ -284,59 +287,158 @@ async def create(
     )
 
 
+async def _bulk_resolve_users_by_battle_tags(
+    session: AsyncSession, battle_tags: list[str]
+) -> dict[str, models.User]:
+    """Resolve every tag in 1-2 queries and fail like ``find_by_battle_tag``.
+
+    Raises the same 400 ``not_found`` error as ``user_flows.find_by_battle_tag``
+    for the first unresolvable tag in input order, so callers keep the exact
+    per-item error contract of the old N+1 implementation.
+    """
+    users_by_tag = await user_service.find_users_by_battle_tags(session, battle_tags)
+    for battle_tag in battle_tags:
+        if battle_tag not in users_by_tag:
+            raise errors.ApiHTTPException(
+                status_code=400,
+                detail=[
+                    errors.ApiExc(
+                        code="not_found",
+                        msg=f"User with battle tag {battle_tag} not found.",
+                    )
+                ],
+            )
+    return users_by_tag
+
+
 async def bulk_create_from_balancer(
     session: AsyncSession, tournament_id: int, payload: list[schemas.BalancerTeam]
 ) -> None:
     tournament = await tournament_flows.get(session, tournament_id, [])
+
+    # Resolve every battle tag (captains + members) up front: 1-2 queries for
+    # the whole import instead of 2-4 SELECTs per name. Tags are validated in
+    # payload order so the first missing tag raises the same error as before.
+    all_tags: list[str] = []
+    for team_data in payload:
+        all_tags.append(team_data.name)
+        all_tags.extend(member.name for member in team_data.members)
+    users_by_tag = await _bulk_resolve_users_by_battle_tags(session, all_tags)
+
+    # Prefetch existing teams and roster rows for this tournament (one query
+    # each) plus the resolved users' whole player history (one query) so the
+    # per-team/per-player loops below never touch the database for lookups.
+    teams_by_name: dict[str, models.Team] = {}
+    for existing_team in await service.get_by_tournament(session, tournament.id, []):
+        teams_by_name.setdefault(existing_team.name.lower(), existing_team)
+
+    tournament_user_ids: set[int] = set(
+        (
+            await session.execute(
+                sa.select(models.WorkspaceMember.player_id)
+                .select_from(models.Player)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == models.Player.workspace_member_id,
+                )
+                .where(models.Player.tournament_id == tournament.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    experienced_user_ids: set[int] = set()
+    experienced_user_roles: set[tuple[int, enums.HeroClass | None]] = set()
+    resolved_user_ids = {user.id for user in users_by_tag.values()}
+    if resolved_user_ids:
+        history_rows = await session.execute(
+            sa.select(models.WorkspaceMember.player_id, models.Player.role)
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
+            .where(models.WorkspaceMember.player_id.in_(resolved_user_ids))
+        )
+        for user_id, existing_role in history_rows.all():
+            experienced_user_ids.add(user_id)
+            experienced_user_roles.add((user_id, existing_role))
+
+    pending_players: list[
+        tuple[schemas.BalancerTeamMember, models.Team, models.User, enums.HeroClass | None, bool, bool]
+    ] = []
+
     for team_data in payload:
         try:
             name = team_data.name.split("#")[0]
         except ValueError:
             name = team_data.name
 
-        captain = await user_flows.find_by_battle_tag(session, team_data.name)
-        team = await service.get_by_name_and_tournament(session, tournament.id, name, [])
+        captain = users_by_tag[team_data.name]
+        team = teams_by_name.get(name.lower())
         if not team:
-            team = await create(
-                session,
+            team = models.Team(
                 name=name,
                 balancer_name=team_data.name,
                 avg_sr=team_data.avg_sr,
                 total_sr=team_data.total_sr,
-                tournament=tournament,
-                captain=captain,
+                tournament_id=tournament.id,
+                captain_id=captain.id,
             )
+            session.add(team)
+            # Flush per new team only (a dozen INSERTs, not hundreds of
+            # SELECTs) so ``team.id`` is available for the roster rows below.
+            await session.flush()
+            teams_by_name[name.lower()] = team
         else:
             logger.info(f"Team {name} already exists in tournament {tournament.name}. Skipping...")
 
         for player in team_data.members:
             logger.info(f"Trying to add player {player.name} to team {team.name} in tournament {tournament.name}")
-            user = await user_flows.find_by_battle_tag(session, player.name)
-            player_db = await service.get_player_by_user_and_tournament(session, user.id, tournament.id, [])
-            if player_db:
+            user = users_by_tag[player.name]
+            if user.id in tournament_user_ids:
                 logger.info(
                     f"Player {player.name} already exists in team [name={team.name} tournament={tournament.name}]."
                 )
                 continue
 
-            is_newcomer = not bool(await service.get_player_by_user(session, user.id, []))
+            is_newcomer = user.id not in experienced_user_ids
             role = resolve_hero_role_from_balancer(player.role)
-            is_newcomer_role = not bool(await service.get_player_by_user_and_role(session, user.id, role, []))
+            is_newcomer_role = (user.id, role) not in experienced_user_roles
 
-            await create_player(
-                session,
-                name=player.name,
-                sub_role=player.sub_role,
-                rank=player.rank,
-                role=role,
-                user=user,
-                tournament=tournament,
-                team=team,
-                is_newcomer=is_newcomer,
-                is_newcomer_role=is_newcomer_role,
+            # In-payload dedupe: the old per-item re-SELECT would find the row
+            # committed for a duplicate occurrence and skip it.
+            tournament_user_ids.add(user.id)
+            pending_players.append((player, team, user, role, is_newcomer, is_newcomer_role))
+
+    if pending_players:
+        member_ids = await service.resolve_workspace_member_ids(
+            session,
+            workspace_id=tournament.workspace_id,
+            player_ids={user.id for _, _, user, _, _, _ in pending_players},
+        )
+        for player, team, user, role, is_newcomer, is_newcomer_role in pending_players:
+            session.add(
+                models.Player(
+                    name=player.name,
+                    sub_role=normalize_sub_role(player.sub_role),
+                    rank=player.rank,
+                    role=role,
+                    tournament_id=tournament.id,
+                    team_id=team.id,
+                    is_substitution=False,
+                    related_player_id=None,
+                    is_newcomer=is_newcomer,
+                    is_newcomer_role=is_newcomer_role,
+                    workspace_member_id=member_ids[user.id],
+                )
             )
+        await session.flush()
+        for player, team, _, _, _, _ in pending_players:
             logger.info(f"Player {player.name} added to team {team.name} in tournament {tournament.id}")
 
+    await session.commit()
     return None
 
 
@@ -455,13 +557,32 @@ async def _get_or_create_challonge_source_id(
     return source.id
 
 
-async def _fetch_challonge_participant_rows(
+_CHALLONGE_FETCH_CONCURRENCY = 4
+
+
+@dataclass(frozen=True)
+class _ParticipantGroupContext:
+    group_id: int | None
+    group_name: str | None
+    is_playoff: bool
+
+
+@dataclass(frozen=True)
+class _ParticipantFetchPlan:
+    challonge_tournament_id: int
+    source_id: int | None
+    group_contexts: tuple[_ParticipantGroupContext, ...]
+
+
+async def _build_participant_fetch_plans(
     session: AsyncSession,
     tournament: models.Tournament,
     *,
-    create_sources: bool = False,
-) -> list[_ChallongeParticipantRow]:
-    rows: list[_ChallongeParticipantRow] = []
+    create_sources: bool,
+) -> list[_ParticipantFetchPlan]:
+    """Do all the DB work for a participant sync (source get-or-create, group
+    context capture) and return plain-value fetch plans, so the Challonge HTTP
+    round-trips can run outside any open transaction."""
     groups = list(tournament.groups or [])
 
     if tournament.challonge_id:
@@ -472,30 +593,22 @@ async def _fetch_challonge_participant_rows(
             slug=tournament.challonge_slug,
             create=create_sources,
         )
-        participants = await challonge_service.fetch_participants(tournament.challonge_id)
-        if not groups:
-            groups = [None]
-
-        for group in groups:
-            is_playoff = bool(group is not None and not group.is_groups)
-            for participant in participants:
-                rows.append(
-                    _ChallongeParticipantRow(
-                        participant_id=participant.id,
-                        challonge_id=_effective_challonge_id(
-                            participant,
-                            is_playoff=is_playoff,
-                        ),
-                        source_id=source_id,
+        return [
+            _ParticipantFetchPlan(
+                challonge_tournament_id=tournament.challonge_id,
+                source_id=source_id,
+                group_contexts=tuple(
+                    _ParticipantGroupContext(
                         group_id=getattr(group, "id", None),
                         group_name=getattr(group, "name", None),
-                        challonge_tournament_id=tournament.challonge_id,
-                        name=participant.name,
-                        active=participant.active,
+                        is_playoff=bool(group is not None and not group.is_groups),
                     )
-                )
-        return rows
+                    for group in (groups or [None])
+                ),
+            )
+        ]
 
+    plans: list[_ParticipantFetchPlan] = []
     for group in groups:
         if group.challonge_id is None:
             continue
@@ -508,24 +621,70 @@ async def _fetch_challonge_participant_rows(
             group=group,
             create=create_sources,
         )
-        participants = await challonge_service.fetch_participants(group.challonge_id)
-        is_playoff = not group.is_groups
-        for participant in participants:
-            rows.append(
-                _ChallongeParticipantRow(
-                    participant_id=participant.id,
-                    challonge_id=_effective_challonge_id(
-                        participant,
-                        is_playoff=is_playoff,
+        plans.append(
+            _ParticipantFetchPlan(
+                challonge_tournament_id=group.challonge_id,
+                source_id=source_id,
+                group_contexts=(
+                    _ParticipantGroupContext(
+                        group_id=group.id,
+                        group_name=group.name,
+                        is_playoff=not group.is_groups,
                     ),
-                    source_id=source_id,
-                    group_id=group.id,
-                    group_name=group.name,
-                    challonge_tournament_id=group.challonge_id,
-                    name=participant.name,
-                    active=participant.active,
-                )
+                ),
             )
+        )
+    return plans
+
+
+async def _fetch_challonge_participant_rows(
+    session: AsyncSession,
+    tournament: models.Tournament,
+    *,
+    create_sources: bool = False,
+) -> list[_ChallongeParticipantRow]:
+    plans = await _build_participant_fetch_plans(session, tournament, create_sources=create_sources)
+    if not plans:
+        return []
+
+    # Commit (and thereby release the pgBouncer/NullPool-backed connection)
+    # before the rate-limited Challonge round-trips: holding a transaction open
+    # across third-party HTTP pins a scarce backend slot for the whole network
+    # wait. expire_on_commit=False keeps the already-loaded tournament/teams
+    # usable; callers resume their writes in a fresh, short transaction.
+    await session.commit()
+
+    semaphore = asyncio.Semaphore(_CHALLONGE_FETCH_CONCURRENCY)
+
+    async def _fetch_participants(challonge_tournament_id: int) -> list[schemas.ChallongeParticipant]:
+        async with semaphore:
+            return await challonge_service.fetch_participants(challonge_tournament_id)
+
+    # No return_exceptions: a failed source aborts the whole sync, exactly like
+    # the old serial loop did.
+    participants_per_plan = await asyncio.gather(
+        *(_fetch_participants(plan.challonge_tournament_id) for plan in plans)
+    )
+
+    rows: list[_ChallongeParticipantRow] = []
+    for plan, participants in zip(plans, participants_per_plan, strict=True):
+        for context in plan.group_contexts:
+            for participant in participants:
+                rows.append(
+                    _ChallongeParticipantRow(
+                        participant_id=participant.id,
+                        challonge_id=_effective_challonge_id(
+                            participant,
+                            is_playoff=context.is_playoff,
+                        ),
+                        source_id=plan.source_id,
+                        group_id=context.group_id,
+                        group_name=context.group_name,
+                        challonge_tournament_id=plan.challonge_tournament_id,
+                        name=participant.name,
+                        active=participant.active,
+                    )
+                )
 
     return rows
 

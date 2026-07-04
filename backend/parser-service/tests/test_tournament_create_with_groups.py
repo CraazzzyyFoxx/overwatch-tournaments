@@ -30,7 +30,7 @@ tournament_flows = importlib.import_module("src.services.tournament.flows")
 
 class TournamentCreateWithGroupsTests(IsolatedAsyncioTestCase):
     async def test_create_with_groups_uses_workspace_default_division_grid_when_missing(self) -> None:
-        session = SimpleNamespace()
+        session = SimpleNamespace(commit=AsyncMock())
         created_tournament = SimpleNamespace(id=123)
         loaded_tournament = SimpleNamespace(id=123)
         challonge_tournament = SimpleNamespace(
@@ -97,7 +97,7 @@ class TournamentCreateWithGroupsTests(IsolatedAsyncioTestCase):
         create_groups.assert_awaited_once_with(session, loaded_tournament, challonge_tournament)
 
     async def test_create_with_groups_uses_explicit_division_grid_when_provided(self) -> None:
-        session = SimpleNamespace()
+        session = SimpleNamespace(commit=AsyncMock())
         created_tournament = SimpleNamespace(id=123)
         loaded_tournament = SimpleNamespace(id=123)
         challonge_tournament = SimpleNamespace(

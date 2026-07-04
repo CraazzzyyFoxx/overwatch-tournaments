@@ -7,6 +7,17 @@ from src import models
 from src.core import enums, pagination
 
 
+async def get_existing_slugs(session: AsyncSession, slugs: list[str]) -> set[str]:
+    """Slugs among ``slugs`` that already exist, in one query (batch counterpart
+    of the per-item ``get_by_slug`` probes in ``initial_create``)."""
+    if not slugs:
+        return set()
+    result = await session.execute(
+        sa.select(models.Hero.slug).where(models.Hero.slug.in_(list(set(slugs))))
+    )
+    return set(result.scalars().all())
+
+
 async def get_by_slug(session: AsyncSession, slug: str) -> models.Hero | None:
     query = sa.select(
         models.Hero,

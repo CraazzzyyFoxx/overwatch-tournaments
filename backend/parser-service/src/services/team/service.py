@@ -33,6 +33,46 @@ async def _resolve_workspace_member_id(
     return member.id
 
 
+async def resolve_workspace_member_ids(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    player_ids: set[int],
+) -> dict[int, int]:
+    """Batch counterpart of ``_resolve_workspace_member_id``: resolve (or create)
+    the ``workspace_member`` anchors for a whole roster in two statements.
+
+    Mirrors ``get_or_create_workspace_member``'s insert-or-select idempotency
+    (``INSERT ... ON CONFLICT DO NOTHING`` on
+    ``uq_workspace_member_workspace_player``, then one ``SELECT``), so concurrent
+    imports never raise duplicate-key errors. Returns ``player_id -> member.id``.
+    """
+    if not player_ids:
+        return {}
+
+    insert_stmt = (
+        pg_insert(models.WorkspaceMember)
+        .values(
+            [
+                {"workspace_id": workspace_id, "player_id": player_id}
+                # Sorted for a deterministic insert order (avoids deadlocks
+                # between concurrent bulk imports).
+                for player_id in sorted(player_ids)
+            ]
+        )
+        .on_conflict_do_nothing(constraint="uq_workspace_member_workspace_player")
+    )
+    await session.execute(insert_stmt)
+
+    result = await session.execute(
+        sa.select(models.WorkspaceMember.player_id, models.WorkspaceMember.id).where(
+            models.WorkspaceMember.workspace_id == workspace_id,
+            models.WorkspaceMember.player_id.in_(list(player_ids)),
+        )
+    )
+    return {player_id: member_id for player_id, member_id in result.all()}
+
+
 def team_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
     entities: list[_AbstractLoad] = []
 

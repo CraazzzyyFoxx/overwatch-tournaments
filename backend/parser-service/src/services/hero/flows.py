@@ -18,17 +18,30 @@ async def fetch_heroes(role: str) -> list[schemas.OverfastHero]:
 
 
 async def initial_create(session: AsyncSession) -> None:
+    heroes: list[schemas.OverfastHero] = []
     for hero_class in enums.HeroClass.__members__.keys():
-        heroes = await fetch_heroes(hero_class)
-        for hero in heroes:
-            if not await service.get_by_slug(session, hero.key):
-                await service.create(
-                    session,
-                    slug=hero.key,
-                    name=hero.name,
-                    type=hero.role,  # type: ignore
-                    image_path=hero.portrait,
-                )
+        heroes.extend(await fetch_heroes(hero_class))
+
+    # One existence query + one bulk insert instead of a get-then-create pair
+    # per hero.
+    existing_slugs = await service.get_existing_slugs(session, [hero.key for hero in heroes])
+    new_heroes: list[models.Hero] = []
+    for hero in heroes:
+        if hero.key in existing_slugs:
+            continue
+        existing_slugs.add(hero.key)
+        new_heroes.append(
+            models.Hero(
+                slug=hero.key,
+                name=hero.name,
+                type=hero.role,  # type: ignore
+                image_path=hero.portrait,
+            )
+        )
+
+    if new_heroes:
+        session.add_all(new_heroes)
+        await session.commit()
 
 
 async def get_by_name(session: AsyncSession, name: str) -> models.Hero:
