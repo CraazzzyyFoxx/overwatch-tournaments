@@ -69,6 +69,29 @@ depends_on = None
 
 
 # --------------------------------------------------------------------------- #
+# PART B helpers — coerce a jsonb value to the container type its extraction
+# function requires. ``COALESCE(x, '[]')`` only replaces SQL NULL; it does NOT
+# catch a JSON *scalar* such as ``'null'`` (e.g. a Python ``None`` written into
+# a ``sa.JSON`` column without ``none_as_null`` — 33 live
+# ``draft_player.secondary_roles_json`` rows store exactly that), and both
+# ``jsonb_array_elements*`` and ``jsonb_object_keys`` RAISE ("cannot extract
+# elements from a scalar" / "cannot call jsonb_object_keys on a scalar") on
+# non-container values. Type-check first: anything that is not the expected
+# container (SQL NULL, JSON null, string, number, wrong container) collapses to
+# an empty one, so the backfill degrades to "no roles/heroes" instead of
+# aborting the migration.
+# --------------------------------------------------------------------------- #
+def _as_jsonb_array(expr: str) -> str:
+    """Coerce ``expr`` to a jsonb array, safe to feed ``jsonb_array_elements*``."""
+    return f"CASE WHEN jsonb_typeof({expr}) = 'array' THEN ({expr}) ELSE '[]'::jsonb END"
+
+
+def _as_jsonb_object(expr: str) -> str:
+    """Coerce ``expr`` to a jsonb object, safe to feed ``jsonb_object_keys``."""
+    return f"CASE WHEN jsonb_typeof({expr}) = 'object' THEN ({expr}) ELSE '{{}}'::jsonb END"
+
+
+# --------------------------------------------------------------------------- #
 # PART A helpers — one identity anchor per (table, old_col, new_col).
 # --------------------------------------------------------------------------- #
 def _migrate_anchor(
@@ -246,14 +269,17 @@ def upgrade() -> None:
     # role_ranks keys + role_top_heroes keys; is_secondary reflects membership in
     # secondary_roles_json (NOT role != primary); rank_value comes from role_ranks
     # (absent -> NULL, so the read-side role_ranks dict omits it exactly as before).
+    _sec = _as_jsonb_array("dp.secondary_roles_json::jsonb")
+    _ranks = _as_jsonb_object("dp.role_ranks::jsonb")
+    _heroes = _as_jsonb_object("dp.role_top_heroes::jsonb")
     op.execute(
-        """
+        f"""
         INSERT INTO balancer.draft_player_role (draft_player_id, role, rank_value, is_secondary, priority, created_at)
         SELECT
             dp.id,
             ar.role,
             (dp.role_ranks::jsonb ->> ar.role)::int,
-            jsonb_exists(COALESCE(dp.secondary_roles_json::jsonb, '[]'::jsonb), ar.role),
+            jsonb_exists({_sec}, ar.role),
             ar.ord,
             now()
         FROM balancer.draft_player dp
@@ -263,12 +289,12 @@ def upgrade() -> None:
                 SELECT dp.primary_role AS role, 0 AS ord
                 UNION ALL
                 SELECT s.elem, s.idx::int
-                    FROM jsonb_array_elements_text(COALESCE(dp.secondary_roles_json::jsonb, '[]'::jsonb))
+                    FROM jsonb_array_elements_text({_sec})
                          WITH ORDINALITY AS s(elem, idx)
                 UNION ALL
-                SELECT k, 1000 FROM jsonb_object_keys(COALESCE(dp.role_ranks::jsonb, '{}'::jsonb)) AS k
+                SELECT k, 1000 FROM jsonb_object_keys({_ranks}) AS k
                 UNION ALL
-                SELECT k, 2000 FROM jsonb_object_keys(COALESCE(dp.role_top_heroes::jsonb, '{}'::jsonb)) AS k
+                SELECT k, 2000 FROM jsonb_object_keys({_heroes}) AS k
             ) u
             WHERE u.role IS NOT NULL AND u.role <> ''
             GROUP BY role
@@ -279,13 +305,14 @@ def upgrade() -> None:
     # Backfill hero rows: resolve each role's top-hero slugs to overwatch.hero.
     # Unknown slugs (no matching hero) are silently skipped; ON CONFLICT guards
     # against duplicate slug/priority collisions in legacy data.
+    _role_heroes = _as_jsonb_array("dp.role_top_heroes::jsonb -> dpr.role")
     op.execute(
-        """
+        f"""
         INSERT INTO balancer.draft_player_role_hero (draft_player_role_id, hero_id, priority, created_at)
         SELECT dpr.id, h.id, (he.idx - 1)::int, now()
         FROM balancer.draft_player dp
         JOIN balancer.draft_player_role dpr ON dpr.draft_player_id = dp.id
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(dp.role_top_heroes::jsonb -> dpr.role, '[]'::jsonb))
+        CROSS JOIN LATERAL jsonb_array_elements({_role_heroes})
              WITH ORDINALITY AS he(hero_json, idx)
         JOIN overwatch.hero h ON h.slug = (he.hero_json ->> 'slug')
         ON CONFLICT DO NOTHING
