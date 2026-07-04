@@ -44,7 +44,9 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(
+    config.settings.rabbitmq_url, logger=logger, prefetch_count=config.settings.rpc_prefetch_count
+)
 app = FastStream(broker)
 
 # The cashews singleton is process-global and has no default backend. The

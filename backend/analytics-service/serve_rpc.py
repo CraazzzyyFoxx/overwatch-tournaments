@@ -29,7 +29,9 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(
+    config.settings.rabbitmq_url, logger=logger, prefetch_count=config.settings.rpc_prefetch_count
+)
 app = FastStream(broker)
 
 # Typed read + mutation + job-control RPC methods served by the gateway

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from faststream.rabbit import RabbitRouter
+from faststream.rabbit import Channel, RabbitRouter
 from faststream.rabbit.annotations import RabbitMessage
 from loguru import logger
 from shared.messaging.config import (
@@ -21,6 +21,9 @@ from src.services.tournament.realtime_pubsub import publish_tournament_update
 
 task_router = RabbitRouter()
 
+# Isolated channel: recalculation fan-in must not compete with RPC QoS slots.
+_EVENTS_CHANNEL = Channel(prefetch_count=4)
+
 
 async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     event = TournamentChangedEvent.model_validate(data)
@@ -28,7 +31,9 @@ async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     await publish_tournament_update(event.tournament_id, event.reason)
 
 
-@task_router.subscriber(TOURNAMENT_CHANGED_TOURNAMENT_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE)
+@task_router.subscriber(
+    TOURNAMENT_CHANGED_TOURNAMENT_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE, channel=_EVENTS_CHANNEL
+)
 async def process_tournament_changed(data: dict[str, Any], msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=TOURNAMENT_CHANGED_TOURNAMENT_QUEUE,
