@@ -170,3 +170,49 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
         )
         self.assertLess(calls.index("enqueue:99"), calls.index("commit"))
         self.assertLess(calls.index("publish:99:structure_changed"), calls.index("commit"))
+
+
+class MapVetoSignatureTests(IsolatedAsyncioTestCase):
+    """``_map_veto_signature`` now reads the normalized ``map_pool`` child rows
+    (dbarch05) instead of the dropped ``map_pool_ids`` JSON array."""
+
+    def test_signature_reads_child_rows_in_relationship_order(self) -> None:
+        config = SimpleNamespace(
+            veto_sequence_json=["ban_home", "pick_away", "decider"],
+            # relationship is ordered by sort_order at the ORM layer.
+            map_pool=[
+                SimpleNamespace(map_id=7),
+                SimpleNamespace(map_id=3),
+                SimpleNamespace(map_id=11),
+            ],
+        )
+        self.assertEqual(
+            stage_service._map_veto_signature(config),
+            (("ban_home", "pick_away", "decider"), (7, 3, 11)),
+        )
+
+    def test_signature_handles_empty_pool_and_sequence(self) -> None:
+        config = SimpleNamespace(veto_sequence_json=None, map_pool=[])
+        self.assertEqual(stage_service._map_veto_signature(config), ((), ()))
+
+    def test_equal_configs_share_signature_for_merge_dedup(self) -> None:
+        left = SimpleNamespace(
+            veto_sequence_json=["ban_home"],
+            map_pool=[SimpleNamespace(map_id=1), SimpleNamespace(map_id=2)],
+        )
+        right = SimpleNamespace(
+            veto_sequence_json=["ban_home"],
+            map_pool=[SimpleNamespace(map_id=1), SimpleNamespace(map_id=2)],
+        )
+        different = SimpleNamespace(
+            veto_sequence_json=["ban_home"],
+            map_pool=[SimpleNamespace(map_id=2), SimpleNamespace(map_id=1)],
+        )
+        self.assertEqual(
+            stage_service._map_veto_signature(left),
+            stage_service._map_veto_signature(right),
+        )
+        self.assertNotEqual(
+            stage_service._map_veto_signature(left),
+            stage_service._map_veto_signature(different),
+        )

@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Enum, ForeignKey, Integer
+from sqlalchemy import JSON, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -10,6 +10,7 @@ from shared.models.tournament.tournament import Tournament
 __all__ = (
     "EncounterMapPool",
     "MapVetoConfig",
+    "MapVetoConfigMap",
 )
 
 
@@ -65,8 +66,48 @@ class MapVetoConfig(db.TimeStampIntegerMixin):
     stage_id: Mapped[int | None] = mapped_column(
         ForeignKey(Stage.id, ondelete="CASCADE"), nullable=True
     )
+    # Draft/ban step list (e.g. ["ban_home", "pick_away", "decider"]). This is a
+    # template-shaped ordered list of opaque step tokens, not a set of FK ids, so
+    # it stays JSON (see dbarch05 rationale). ``map_pool_ids`` (formerly a JSON
+    # array of overwatch.map ids with no FK) was normalized into the
+    # ``map_veto_config_map`` child table by dbarch05.
     veto_sequence_json: Mapped[list] = mapped_column(JSON, nullable=False)
-    map_pool_ids: Mapped[list] = mapped_column(JSON, nullable=False)
 
     tournament: Mapped[Tournament] = relationship()
     stage: Mapped["Stage | None"] = relationship()
+    map_pool: Mapped[list["MapVetoConfigMap"]] = relationship(
+        back_populates="config",
+        order_by="MapVetoConfigMap.sort_order",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class MapVetoConfigMap(db.TimeStampIntegerMixin):
+    """One map in a :class:`MapVetoConfig`'s pool.
+
+    Normalized replacement for the old ``MapVetoConfig.map_pool_ids`` JSON
+    array (a bare list of ``overwatch.map`` ids with no referential integrity).
+    ``sort_order`` preserves the array position.
+    """
+
+    __tablename__ = "map_veto_config_map"
+    __table_args__ = (
+        UniqueConstraint(
+            "map_veto_config_id", "map_id", name="uq_map_veto_config_map_config_map"
+        ),
+        {"schema": "tournament"},
+    )
+
+    map_veto_config_id: Mapped[int] = mapped_column(
+        ForeignKey(MapVetoConfig.id, ondelete="CASCADE"), index=True
+    )
+    map_id: Mapped[int] = mapped_column(
+        ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer(), nullable=False, server_default="0", default=0
+    )
+
+    config: Mapped[MapVetoConfig] = relationship(back_populates="map_pool")
+    map: Mapped[Map] = relationship()

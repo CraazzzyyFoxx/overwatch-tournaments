@@ -193,9 +193,12 @@ async def delete_stage(session: AsyncSession, stage_id: int) -> None:
 
 
 def _map_veto_signature(config: models.MapVetoConfig) -> tuple[tuple, tuple]:
+    # ``map_pool`` was normalized out of the old ``map_pool_ids`` JSON array
+    # (dbarch05) into the ``map_veto_config_map`` child table; the relationship
+    # is ordered by ``sort_order`` so the tuple mirrors the old array order.
     return (
         tuple(config.veto_sequence_json or []),
-        tuple(config.map_pool_ids or []),
+        tuple(entry.map_id for entry in config.map_pool),
     )
 
 
@@ -206,10 +209,12 @@ async def _merge_map_veto_configs(
     source_stage_ids: list[int],
 ) -> None:
     target_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id == target_stage.id,
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     target_configs = list(target_result.scalars().all())
     if len(target_configs) > 1:
@@ -219,10 +224,12 @@ async def _merge_map_veto_configs(
         )
 
     source_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id.in_(source_stage_ids),
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     source_configs = list(source_result.scalars().all())
     if not source_configs:

@@ -94,6 +94,18 @@ class AnalyticsShift(db.TimeStampIntegerMixin):
 
 
 class AnalyticsPredictions(db.TimeStampIntegerMixin):
+    """v1 integer predicted-place table.
+
+    DEPRECATED (superseded by :class:`AnalyticsStandingsDistribution`, v2). NOT
+    DEAD, though: it is still actively WRITTEN by the v1 OpenSkill flow
+    (``analytics/flows.py``) and mirrored by the v2 inference runner
+    (``ml/inference/runner.py``) so v1 integer-place consumers stay live, and
+    still READ by the ``get_predicted_places`` read API (surfaced as
+    ``predicted_place``). The drop is therefore GATED — see the DO-NOT-APPLY
+    banner in ``dbarch06_drop_legacy_tables``. Do not remove this model until
+    those readers/writers are migrated onto the v2 distribution.
+    """
+
     __tablename__ = "predictions"
     __table_args__ = ({"schema": "analytics"},)
 
@@ -540,6 +552,20 @@ class AnalyticsJob(db.TimeStampIntegerMixin):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default="pending", default="pending"
     )
+    # NOTE (dbarch05 JSON-normalization pass): both of the JSON columns below
+    # were evaluated for normalization into FK child tables and intentionally
+    # LEFT AS JSON (gated), because they are polymorphic/ephemeral job-request
+    # parameters, not sets of stable FK ids:
+    #   * ``algorithms`` is polymorphic by ``kind``: for ``kind='compute'`` it
+    #     holds v1 algorithm NAMES (soft refs to ``analytics.algorithms.name``),
+    #     but for ``kind='train_ml'`` it holds MODEL KINDS
+    #     (['performance','shift','standings'] — see the runner + AnalyticsJobCreate
+    #     schema), which are not rows in ``analytics.algorithms`` at all. A
+    #     ``job_algorithm`` FK table would silently drop every train_ml value.
+    #   * ``training_workspace_ids`` is a clean workspace-id array, but it is an
+    #     ephemeral, train_ml-only scoping parameter serialized directly into the
+    #     ``AnalyticsJobRow`` API response; normalizing it buys no referential
+    #     value for a request-tracker row and would only add lazy-load risk.
     algorithms: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     training_workspace_ids: Mapped[list[int] | None] = mapped_column(
         JSON,
