@@ -28,6 +28,7 @@ APPROVED_DIRECT_WRITE_FILES = {
     "analytics-service/src/services/ml/inference/player_anomaly_runner.py",
     "analytics-service/src/services/ml/inference/runner.py",
     "analytics-service/src/services/ml/training/registry.py",
+    "analytics-service/src/worker/balance_snapshot.py",
     "app-service/src/routes/assets.py",
     "app-service/src/routes/registration.py",
     "app-service/src/services/division_grid/marketplace.py",
