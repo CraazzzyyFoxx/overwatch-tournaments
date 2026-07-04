@@ -127,42 +127,32 @@ async def get_predicted_places(
 ) -> dict[int, int]:
     """Return ``{team_id: predicted_place}`` for a tournament.
 
-    Sources, in increasing priority:
-
-    1. Legacy ``analytics.predictions`` row written by the v1 algorithm currently
-       selected in the UI (only OpenSkill v1 actually writes here; for other
-       v1 algorithms the lookup is empty).
-    2. ``analytics.standings_distribution`` row written by the v2 ``Standings
-       MC v2`` algorithm — independent of the v1 selector. Overrides the v1
-       integer when present.
+    Derived entirely from the v2 ``analytics.standings_distribution`` rows written
+    by the ``Standings MC v2`` Monte-Carlo simulator: ``predicted_place`` is the
+    team's ``round(mean_position)`` — the mean finishing position across
+    simulations, rounded to the nearest integer place (the same scalar the retired
+    v1 ``analytics.predictions`` table used to mirror). Independent of the v1
+    ``algorithm_id`` selected in the UI for shifts/points, so that selector no
+    longer changes the forecast column.
     """
-    query = sa.select(
-        models.AnalyticsPredictions.team_id,
-        models.AnalyticsPredictions.predicted_place,
-    ).where(
-        models.AnalyticsPredictions.tournament_id == tournament_id,
-        models.AnalyticsPredictions.algorithm_id == algorithm_id,
-    )
-    result = await session.execute(query)
-    predictions = {
-        int(team_id): int(predicted_place)
-        for team_id, predicted_place in result.all()
-        if predicted_place is not None
-    }
+    del algorithm_id  # v1 ``analytics.predictions`` retired; served from v2.
 
+    predictions: dict[int, int] = {}
     standings_v2_id = await _algorithm_id_by_name(session, _STANDINGS_V2_NAME)
-    if standings_v2_id is not None:
-        distribution_query = sa.select(
-            models.AnalyticsStandingsDistribution.team_id,
-            models.AnalyticsStandingsDistribution.mean_position,
-        ).where(
-            models.AnalyticsStandingsDistribution.tournament_id == tournament_id,
-            models.AnalyticsStandingsDistribution.algorithm_id == standings_v2_id,
-        )
-        distribution_result = await session.execute(distribution_query)
-        for team_id, mean_position in distribution_result.all():
-            if mean_position is not None:
-                predictions[int(team_id)] = int(round(float(mean_position)))
+    if standings_v2_id is None:
+        return predictions
+
+    distribution_query = sa.select(
+        models.AnalyticsStandingsDistribution.team_id,
+        models.AnalyticsStandingsDistribution.mean_position,
+    ).where(
+        models.AnalyticsStandingsDistribution.tournament_id == tournament_id,
+        models.AnalyticsStandingsDistribution.algorithm_id == standings_v2_id,
+    )
+    distribution_result = await session.execute(distribution_query)
+    for team_id, mean_position in distribution_result.all():
+        if mean_position is not None:
+            predictions[int(team_id)] = int(round(float(mean_position)))
 
     return predictions
 

@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: owt
     orgId: 1
-    folder: Anak Tournaments
+    folder: OWT
     type: file
     disableDeletion: false
     updateIntervalSeconds: 60

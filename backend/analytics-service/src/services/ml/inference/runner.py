@@ -382,8 +382,8 @@ async def run_standings_for_tournament(
 ) -> int:
     """Compute Monte Carlo standings distribution and upsert results.
 
-    Also writes ``round(mean_position)`` into the legacy
-    ``analytics.predictions`` table so v1 integer-place consumers stay live.
+    Writes only ``analytics.standings_distribution``; the read API derives the
+    scalar ``predicted_place`` from ``round(mean_position)`` on demand.
     Returns the number of team rows persisted.
 
     ``prob_sharpening`` controls how decisively calibrated win-probabilities are
@@ -460,24 +460,6 @@ async def run_standings_for_tournament(
         for _, r in distribution.iterrows()
     ]
     await session.execute(sa.insert(models.AnalyticsStandingsDistribution), rows)
-
-    # Legacy ``AnalyticsPredictions.predicted_place`` mirror.
-    await session.execute(
-        sa.delete(models.AnalyticsPredictions).where(
-            models.AnalyticsPredictions.tournament_id == tournament_id,
-            models.AnalyticsPredictions.algorithm_id == algorithm_id,
-        )
-    )
-    legacy_rows = [
-        {
-            "tournament_id": tournament_id,
-            "team_id": int(r["team_id"]),
-            "algorithm_id": algorithm_id,
-            "predicted_place": int(round(float(r["mean_position"]))),
-        }
-        for _, r in distribution.iterrows()
-    ]
-    await session.execute(sa.insert(models.AnalyticsPredictions), legacy_rows)
 
     await session.commit()
     return len(rows)

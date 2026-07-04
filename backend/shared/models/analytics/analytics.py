@@ -24,7 +24,6 @@ __all__ = (
     "AnalyticsPerformance",
     "AnalyticsPlayer",
     "AnalyticsAlgorithm",
-    "AnalyticsPredictions",
     "AnalyticsShift",
     "AnalyticsStandingsDistribution",
     "MLFeatureStore",
@@ -91,34 +90,6 @@ class AnalyticsShift(db.TimeStampIntegerMixin):
 
     tournament: Mapped[Tournament] = relationship()
     player: Mapped[Player] = relationship()
-
-
-class AnalyticsPredictions(db.TimeStampIntegerMixin):
-    """v1 integer predicted-place table.
-
-    DEPRECATED (superseded by :class:`AnalyticsStandingsDistribution`, v2). NOT
-    DEAD, though: it is still actively WRITTEN by the v1 OpenSkill flow
-    (``analytics/flows.py``) and mirrored by the v2 inference runner
-    (``ml/inference/runner.py``) so v1 integer-place consumers stay live, and
-    still READ by the ``get_predicted_places`` read API (surfaced as
-    ``predicted_place``). The drop is therefore GATED — see the DO-NOT-APPLY
-    banner in ``dbarch06_drop_legacy_tables``. Do not remove this model until
-    those readers/writers are migrated onto the v2 distribution.
-    """
-
-    __tablename__ = "predictions"
-    __table_args__ = ({"schema": "analytics"},)
-
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
-    team_id: Mapped[int] = mapped_column(
-        ForeignKey(Team.id, ondelete="CASCADE"), index=True
-    )
-    predicted_place: Mapped[int] = mapped_column()
 
 
 # ---------------------------------------------------------------------------
@@ -339,9 +310,10 @@ class AnalyticsPerformance(db.TimeStampIntegerMixin):
 class AnalyticsStandingsDistribution(db.TimeStampIntegerMixin):
     """Per-team-per-tournament predicted standings distribution from MC simulation.
 
-    Replaces the deterministic integer ``predicted_place`` from
-    ``AnalyticsPredictions``. v1 ``predicted_place`` is kept for backwards
-    compatibility; v2 consumers should read these distributional columns.
+    The sole source of predicted standings. The scalar ``predicted_place`` served
+    by the read API is derived from these rows as ``round(mean_position)``; the
+    distributional columns (percentiles, ``prob_top{1,3,8}``, histogram) back the
+    richer v2 consumers.
     """
 
     __tablename__ = "standings_distribution"

@@ -259,7 +259,7 @@ docker compose -f docker-compose.production.yml restart nginx   # REQUIRED, else
 make monitoring-down && make monitoring-up
 ```
 
-Then verify: Grafana shows exactly 5 dashboards in `Anak Tournaments` (stale ones are
+Then verify: Grafana shows exactly 5 dashboards in `OWT` (stale ones are
 auto-removed), Prometheus targets are UP (incl. app-svc/identity-svc/analytics-svc/
 analytics-worker/node/cadvisor/postgres), and the RabbitMQ panels on Workers & Queues
 have data.
