@@ -46,7 +46,7 @@ from src.schemas.draft import (
 )
 from src.services.draft import board as board_svc
 from src.services.draft import export as export_svc
-from src.services.draft import lifecycle, selection
+from src.services.draft import lifecycle, loaders, selection
 from src.services.draft import realtime as draft_rt
 from src.services.draft import suggestions as sug
 
@@ -203,10 +203,13 @@ def register(broker: Any, logger: Any) -> None:
             current = await session.get(DraftPick, draft.current_pick_id)
             available = (
                 await session.scalars(
-                    sa.select(models.DraftPlayer).where(
+                    sa.select(models.DraftPlayer)
+                    .where(
                         models.DraftPlayer.session_id == draft.id,
                         models.DraftPlayer.status == "available",
                     )
+                    # Fit construction reads secondary_roles_json/user_id/role_ranks.
+                    .options(*loaders.player_options())
                 )
             ).all()
             counts = await selection._team_role_counts(session, current.draft_team_id)

@@ -18,6 +18,7 @@ from src.schemas.draft import (
     DraftSessionRead,
     DraftTeamRead,
 )
+from src.services.draft import loaders
 
 _ACTIVE = (
     DraftStatus.SETUP.value,
@@ -46,16 +47,23 @@ async def get_active_session(session: AsyncSession, tournament_id: int) -> Draft
 
 
 async def build_board(session: AsyncSession, draft_session: DraftSession) -> DraftBoardSnapshot:
+    # DraftTeamRead reads captain_user_id, DraftPickRead reads picked_by_user_id,
+    # DraftPlayerRead reads user_id/secondary_roles_json/role_ranks/role_top_heroes
+    # — eager-load the relationships those compat properties resolve through.
     teams = (
         await session.scalars(
             sa.select(DraftTeam)
             .where(DraftTeam.session_id == draft_session.id)
             .order_by(DraftTeam.draft_position.asc())
+            .options(*loaders.team_options())
         )
     ).all()
     picks = (
         await session.scalars(
-            sa.select(DraftPick).where(DraftPick.session_id == draft_session.id).order_by(DraftPick.overall_no.asc())
+            sa.select(DraftPick)
+            .where(DraftPick.session_id == draft_session.id)
+            .order_by(DraftPick.overall_no.asc())
+            .options(*loaders.pick_options())
         )
     ).all()
     players = (
@@ -63,6 +71,7 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
             sa.select(DraftPlayer)
             .where(DraftPlayer.session_id == draft_session.id)
             .order_by(DraftPlayer.id.asc())
+            .options(*loaders.player_options())
         )
     ).all()
 
@@ -102,7 +111,13 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
                         info["notes"] = user_notes[p.user_id]
                         p.additional_info = info
 
-    current = await session.get(DraftPick, draft_session.current_pick_id) if draft_session.current_pick_id else None
+    # Already among `picks` (loaded with pick_options) when set; options guard the
+    # cold-cache path so DraftPickRead.picked_by_user_id never lazy-loads.
+    current = (
+        await session.get(DraftPick, draft_session.current_pick_id, options=loaders.pick_options())
+        if draft_session.current_pick_id
+        else None
+    )
     topic = realtime_topics.draft(draft_session.tournament_id)
     last_event_id = await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic))
     return DraftBoardSnapshot(

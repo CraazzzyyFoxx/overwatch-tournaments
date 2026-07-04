@@ -19,7 +19,8 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.core.enums import DraftPickStatus, DraftRole  # noqa: E402
-from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftTeam  # noqa: E402
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftPlayerRole, DraftTeam  # noqa: E402
+from shared.models.tenancy.workspace import WorkspaceMember  # noqa: E402
 from src.services.draft.export import _draft_to_balancer_payload  # noqa: E402
 
 
@@ -30,6 +31,8 @@ def _team(tid: int, pos: int, name: str) -> DraftTeam:
 def _player(
     pid: int, *, captain=False, bt=None, role=DraftRole.DPS, rank=3000, sub=None, uid=None, role_ranks=None
 ) -> DraftPlayer:
+    # dbarch03: user_id resolves via ``member`` and role_ranks via the ``roles``
+    # child rows — both are read-only properties now, so seed the relationships.
     return DraftPlayer(
         id=pid,
         session_id=1,
@@ -38,8 +41,8 @@ def _player(
         primary_role=role.value,
         rank_value=rank,
         sub_role=sub,
-        user_id=uid,
-        role_ranks=role_ranks or {},
+        member=WorkspaceMember(player_id=uid) if uid is not None else None,
+        roles=[DraftPlayerRole(role=r, rank_value=rv) for r, rv in (role_ranks or {}).items()],
     )
 
 

@@ -19,13 +19,15 @@ from shared.core import db
 
 if TYPE_CHECKING:
     from shared.models.balancer.balance import BalancerBalance
-    from shared.models.identity.user import User
-    from shared.models.tenancy.workspace import Workspace
+    from shared.models.catalog.hero import Hero
+    from shared.models.tenancy.workspace import Workspace, WorkspaceMember
     from shared.models.tournament.tournament import Tournament
 
 __all__ = (
     "DraftPick",
     "DraftPlayer",
+    "DraftPlayerRole",
+    "DraftPlayerRoleHero",
     "DraftSession",
     "DraftTeam",
 )
@@ -102,8 +104,12 @@ class DraftTeam(db.TimeStampIntegerMixin):
     )
 
     session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"), index=True)
-    captain_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
+    # Captain's domain identity, anchored on workspace_member (dbarch03 dropped
+    # the legacy captain_user_id -> players.user.id column). The player id is
+    # reached via captain_member.player_id; readers must eager-load
+    # ``captain_member`` (see the captain_user_id property below).
+    captain_workspace_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # The auth account that registered as captain — the reliable "is this me"
     # signal for captain gating (independent of public-player linking).
@@ -117,26 +123,39 @@ class DraftTeam(db.TimeStampIntegerMixin):
     )
 
     session: Mapped["DraftSession"] = relationship(back_populates="teams")
-    captain: Mapped["User | None"] = relationship()
+    captain_member: Mapped["WorkspaceMember | None"] = relationship()
     picks: Mapped[list["DraftPick"]] = relationship(back_populates="draft_team", foreign_keys="DraftPick.draft_team_id")
     roster: Mapped[list["DraftPlayer"]] = relationship(
         primaryjoin="DraftPlayer.drafted_by_team_id == DraftTeam.id",
         viewonly=True,
     )
 
+    @property
+    def captain_user_id(self) -> int | None:
+        """The captain's domain player id (players.user.id) via its member.
+
+        Preserves the pre-dbarch03 read shape. ``captain_member`` must be
+        eager-loaded by the caller — never rely on a lazy load in async code.
+        """
+        member = self.captain_member
+        return member.player_id if member is not None else None
+
 
 class DraftPlayer(db.TimeStampIntegerMixin):
     __tablename__ = "draft_player"
     __table_args__ = (
-        UniqueConstraint("session_id", "user_id", name="uq_draft_player_session_user"),
+        UniqueConstraint("session_id", "workspace_member_id", name="uq_draft_player_session_member"),
         Index("ix_draft_player_session_status", "session_id", "status"),
         {"schema": "balancer"},
     )
 
     # session_id index is provided by ix_draft_player_session_status (leftmost prefix).
     session_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_session.id", ondelete="CASCADE"))
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
+    # Sole identity anchor (dbarch03 dropped the legacy user_id column): the
+    # domain player is reached via workspace_member.player_id. Nullable — most
+    # pool players are unlinked (battle_tag only) and have no member.
+    workspace_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True, index=True
     )
     battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     primary_role: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -149,20 +168,122 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     drafted_by_team_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.draft_team.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    secondary_roles_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    # Per-role rank catalogue: ``role.value -> SR``. The single source of truth
-    # for "what rank does this player have on role X" — ``rank_value`` is the
-    # primary-role default/fallback (see ``services.draft.ranks.role_rank``).
-    role_ranks: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
-    # Per-role top heroes: ``role.value -> [{"slug", "image_path"}]`` (display only).
-    role_top_heroes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
-    # Misc/extensible per-player data (e.g. ``notes``). Replaces the misnamed
-    # ``anomaly_flags`` bag — known concepts live in their own columns above.
+    # Misc/extensible per-player data (e.g. ``notes``). Known concepts (per-role
+    # rank/heroes, secondary roles) live in the normalized ``roles`` child table
+    # (dbarch03 dropped the ``role_ranks``/``role_top_heroes``/
+    # ``secondary_roles_json`` JSON bags); this catch-all is intentionally kept.
     additional_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
 
     session: Mapped["DraftSession"] = relationship(back_populates="players")
-    user: Mapped["User | None"] = relationship()
+    member: Mapped["WorkspaceMember | None"] = relationship()
     drafted_by_team: Mapped["DraftTeam | None"] = relationship(foreign_keys=[drafted_by_team_id], overlaps="roster")
+    roles: Mapped[list["DraftPlayerRole"]] = relationship(
+        back_populates="player",
+        cascade="all, delete-orphan",
+        order_by="DraftPlayerRole.priority",
+    )
+
+    @property
+    def user_id(self) -> int | None:
+        """The player's domain id (players.user.id) via its member.
+
+        Preserves the pre-dbarch03 read shape. ``member`` must be eager-loaded.
+        """
+        member = self.member
+        return member.player_id if member is not None else None
+
+    @property
+    def secondary_roles_json(self) -> list[str] | None:
+        """Off-role codes (``is_secondary``), ordered by priority.
+
+        Reconstructs the pre-dbarch03 ``secondary_roles_json`` shape from the
+        normalized ``roles`` child rows (empty -> None, matching the old writer).
+        ``roles`` must be eager-loaded.
+        """
+        secondary = [role.role for role in self.roles if role.is_secondary]
+        return secondary or None
+
+    @property
+    def role_ranks(self) -> dict[str, int]:
+        """Per-role rank catalogue (``role.value -> SR``), rebuilt from child rows.
+
+        Only roles carrying a rank appear (matches the old JSON bag). ``roles``
+        must be eager-loaded.
+        """
+        return {role.role: role.rank_value for role in self.roles if role.rank_value is not None}
+
+    @property
+    def role_top_heroes(self) -> dict[str, list[dict[str, Any]]]:
+        """Per-role top heroes (``role.value -> [{slug, image_path}]``).
+
+        Rebuilt from the child role/hero rows. Only roles with heroes appear
+        (matches the old JSON bag). ``roles.hero_entries.hero`` must be
+        eager-loaded.
+        """
+        out: dict[str, list[dict[str, Any]]] = {}
+        for role in self.roles:
+            heroes = [
+                {"slug": he.hero.slug, "image_path": he.hero.image_path}
+                for he in role.hero_entries
+                if he.hero is not None
+            ]
+            if heroes:
+                out[role.role] = heroes
+        return out
+
+
+class DraftPlayerRole(db.TimeStampIntegerMixin):
+    """Normalized per-role entry for a draft player (primary + secondaries).
+
+    Mirrors ``BalancerRegistrationRole``: one row per role the player has,
+    carrying that role's rank. ``is_secondary`` marks an off-role; the player's
+    primary role also gets a row (``is_secondary=False``).
+    """
+
+    __tablename__ = "draft_player_role"
+    __table_args__ = (
+        UniqueConstraint("draft_player_id", "role", name="uq_draft_player_role"),
+        {"schema": "balancer"},
+    )
+
+    draft_player_id: Mapped[int] = mapped_column(
+        ForeignKey("balancer.draft_player.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    is_secondary: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    priority: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
+
+    player: Mapped["DraftPlayer"] = relationship(back_populates="roles")
+    hero_entries: Mapped[list["DraftPlayerRoleHero"]] = relationship(
+        back_populates="role_entry",
+        cascade="all, delete-orphan",
+        order_by="DraftPlayerRoleHero.priority",
+    )
+
+
+class DraftPlayerRoleHero(db.TimeStampIntegerMixin):
+    """Ordered top-hero preference for a draft player's role entry.
+
+    Mirrors ``BalancerRegistrationRoleHero`` (real FK to ``overwatch.hero``
+    instead of a JSON blob of slugs).
+    """
+
+    __tablename__ = "draft_player_role_hero"
+    __table_args__ = (
+        UniqueConstraint("draft_player_role_id", "priority", name="uq_draft_player_role_hero_priority"),
+        UniqueConstraint("draft_player_role_id", "hero_id", name="uq_draft_player_role_hero_hero"),
+        {"schema": "balancer"},
+    )
+
+    draft_player_role_id: Mapped[int] = mapped_column(
+        ForeignKey("balancer.draft_player_role.id", ondelete="CASCADE"), index=True
+    )
+    hero_id: Mapped[int] = mapped_column(ForeignKey("overwatch.hero.id", ondelete="CASCADE"))
+    priority: Mapped[int] = mapped_column(Integer(), nullable=False)
+
+    role_entry: Mapped["DraftPlayerRole"] = relationship(back_populates="hero_entries")
+    hero: Mapped["Hero"] = relationship()
 
 
 class DraftPick(db.TimeStampIntegerMixin):
@@ -188,8 +309,11 @@ class DraftPick(db.TimeStampIntegerMixin):
     picked_player_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.draft_player.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    picked_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True
+    # The acting captain's domain identity, anchored on workspace_member
+    # (dbarch03 dropped the legacy picked_by_user_id column). Nullable —
+    # system/auto picks have no actor. Player id via picked_by_member.player_id.
+    picked_by_workspace_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True
     )
     is_autopick: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     is_admin_override: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
@@ -203,3 +327,14 @@ class DraftPick(db.TimeStampIntegerMixin):
     session: Mapped["DraftSession"] = relationship(back_populates="picks", foreign_keys=[session_id])
     draft_team: Mapped["DraftTeam"] = relationship(back_populates="picks", foreign_keys=[draft_team_id])
     picked_player: Mapped["DraftPlayer | None"] = relationship(foreign_keys=[picked_player_id])
+    picked_by_member: Mapped["WorkspaceMember | None"] = relationship(foreign_keys=[picked_by_workspace_member_id])
+
+    @property
+    def picked_by_user_id(self) -> int | None:
+        """The acting captain's domain id (players.user.id) via its member.
+
+        Preserves the pre-dbarch03 read shape. ``picked_by_member`` must be
+        eager-loaded.
+        """
+        member = self.picked_by_member
+        return member.player_id if member is not None else None

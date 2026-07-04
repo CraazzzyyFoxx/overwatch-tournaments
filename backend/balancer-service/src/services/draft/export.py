@@ -21,7 +21,7 @@ from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, D
 from src import models
 from src.schemas.team import BalancerTeam, BalancerTeamMember
 from src.services import team as team_flows
-from src.services.draft import ranks
+from src.services.draft import loaders, ranks
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
@@ -81,10 +81,13 @@ async def export(session: AsyncSession, draft_session: DraftSession) -> tuple[Dr
     teams = (await session.scalars(sa.select(DraftTeam).where(DraftTeam.session_id == draft_session.id))).all()
     roster_rows = (
         await session.scalars(
-            sa.select(DraftPlayer).where(
+            sa.select(DraftPlayer)
+            .where(
                 DraftPlayer.session_id == draft_session.id,
                 DraftPlayer.status == DraftPlayerStatus.PICKED.value,
             )
+            # payload reads p.user_id and ranks.role_rank(p, ...) -> role_ranks.
+            .options(*loaders.player_options())
         )
     ).all()
     roster_by_team: dict[int, list[DraftPlayer]] = defaultdict(list)

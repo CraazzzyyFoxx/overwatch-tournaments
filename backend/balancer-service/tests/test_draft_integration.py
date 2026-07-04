@@ -40,7 +40,7 @@ from src import models  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
-from src.services.draft import lifecycle, selection  # noqa: E402
+from src.services.draft import lifecycle, loaders, selection  # noqa: E402
 from src.services.draft import realtime as draft_realtime  # noqa: E402
 
 
@@ -190,7 +190,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.start(s, draft)
             await s.commit()
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             available = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer).where(
@@ -242,7 +247,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.start(s, draft)
             await s.commit()
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             chosen = await s.scalar(
                 sa.select(lifecycle.DraftPlayer).where(
                     lifecycle.DraftPlayer.session_id == draft.id,
@@ -288,7 +298,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.commit()
 
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             chosen = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer)
@@ -323,7 +338,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.start(s, draft)
             await s.commit()
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             chosen = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer)
@@ -429,7 +449,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 current.id,
                 status=DraftPickStatus.COMPLETED,
                 player_id=None,
-                picked_by_user_id=None,
+                picked_by_member_id=None,
                 is_autopick=False,
                 is_admin_override=False,
                 expected_version=v,
@@ -440,7 +460,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 current.id,
                 status=DraftPickStatus.AUTOPICKED,
                 player_id=None,
-                picked_by_user_id=None,
+                picked_by_member_id=None,
                 is_autopick=True,
                 is_admin_override=False,
                 expected_version=v,
@@ -745,7 +765,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
             # Execute first pick
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             available = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer).where(
