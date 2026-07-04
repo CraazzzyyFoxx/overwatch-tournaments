@@ -127,16 +127,6 @@ def join_encounter_entities(query: sa.Select, in_entities: list[str]) -> sa.Sele
     return query
 
 
-async def get_by_challonge_id(session: AsyncSession, challonge_id: int, entities: list[str]) -> models.Encounter | None:
-    query = (
-        sa.select(models.Encounter)
-        .options(*encounter_entities(entities))
-        .where(sa.and_(models.Encounter.challonge_id == challonge_id))
-    )
-    result = await session.execute(query)
-    return result.unique().scalars().first()
-
-
 async def get_by_tournament_group_id(
     session: AsyncSession, tournament_id: int, group_id: int, entities: list[str]
 ) -> typing.Sequence[models.Encounter]:
@@ -334,7 +324,6 @@ async def create(
     tournament: models.Tournament,
     group_id: int | None,
     status: enums.EncounterStatus,
-    challonge_id: int | None = None,
     has_logs: bool = False,
     stage_id: int | None = None,
     stage_item_id: int | None = None,
@@ -345,6 +334,10 @@ async def create(
     :func:`shared.services.stage_refs.resolve_stage_refs_from_group` when not
     supplied explicitly, so legacy flows (Challonge sync, parser) no longer
     produce encounters with NULL stage refs.
+
+    The deprecated ``encounter.challonge_id`` column is no longer written: the
+    encounter↔Challonge match link lives in ``challonge_match_mapping`` (managed
+    by the Challonge sync engine).
     """
     refs: StageRefs = await resolve_stage_refs_from_group(
         session,
@@ -365,7 +358,6 @@ async def create(
         tournament_group_id=group_id,
         stage_id=refs.stage_id,
         stage_item_id=refs.stage_item_id,
-        challonge_id=challonge_id,
         status=status,
         has_logs=has_logs,
     )
@@ -386,7 +378,6 @@ async def update(
     round: int | None = None,
     tournament_id: int | None = None,
     group_id: int | None = None,
-    challonge_id: int | None = None,
     status: enums.EncounterStatus | None = None,
     has_logs: bool | None = None,
 ) -> models.Encounter:
@@ -397,7 +388,6 @@ async def update(
     encounter.away_score = away_score or encounter.away_score
     encounter.round = round or encounter.round
     encounter.tournament_id = tournament_id or encounter.tournament_id
-    encounter.challonge_id = challonge_id or encounter.challonge_id
     encounter.status = status or encounter.status
     if has_logs is not None:
         encounter.has_logs = has_logs

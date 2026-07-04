@@ -159,14 +159,23 @@ async def get_by_tournament(
 async def get_by_tournament_challonge_id(
     session: AsyncSession, tournament_id: int, challonge_id: int, entities: list[str]
 ) -> models.Team | None:
+    # Resolve the team via the normalized challonge_participant_mapping ->
+    # challonge_source join instead of the deprecated challonge_team table.
     query = (
         sa.select(models.Team)
         .options(*team_entities(entities))
-        .join(models.ChallongeTeam, models.Team.id == models.ChallongeTeam.team_id)
+        .join(
+            models.ChallongeParticipantMapping,
+            models.ChallongeParticipantMapping.team_id == models.Team.id,
+        )
+        .join(
+            models.ChallongeSource,
+            models.ChallongeSource.id == models.ChallongeParticipantMapping.source_id,
+        )
         .where(
             sa.and_(
-                models.ChallongeTeam.tournament_id == tournament_id,
-                models.ChallongeTeam.challonge_id == challonge_id,
+                models.ChallongeSource.tournament_id == tournament_id,
+                models.ChallongeParticipantMapping.challonge_participant_id == challonge_id,
             )
         )
     )

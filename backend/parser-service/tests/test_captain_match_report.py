@@ -103,6 +103,9 @@ def _mk_session(
 
         result_mock = Mock()
         result_mock.scalar_one_or_none.return_value = None
+        # resolve_encounter_challonge iterates ``result.all()`` directly (no
+        # challonge_match_mapping rows here -> encounter treated as unlinked).
+        result_mock.all.return_value = []
         scalars_mock = Mock()
         scalars_mock.all.return_value = []
         result_mock.scalars.return_value = scalars_mock

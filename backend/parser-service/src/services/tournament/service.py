@@ -101,20 +101,19 @@ async def create(
     is_league: bool,
     name: str,
     description: str | None = None,
-    challonge_id: int | None = None,
-    challonge_slug: str | None = None,
     start_date: datetime | date | None = None,
     end_date: datetime | date | None = None,
     division_grid_version_id: int | None = None,
 ) -> models.Tournament:
+    # The deprecated tournament.challonge_id/slug columns are no longer written:
+    # the tournament↔Challonge link lives in the normalized challonge_source
+    # (source_type='tournament') created by the caller (admin link / import).
     tournament = models.Tournament(
         workspace_id=workspace_id,
         number=number,
         is_league=is_league,
         name=name,
         description=description,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
         start_date=start_date,
         end_date=end_date,
         division_grid_version_id=division_grid_version_id,
@@ -167,6 +166,11 @@ async def create_groups(
         stage_type = (
             enums.StageType.ROUND_ROBIN if spec.is_groups else enums.StageType.DOUBLE_ELIMINATION
         )
+        # The deprecated stage.challonge_id/slug columns are no longer written
+        # (the stage↔Challonge link is derived from challonge_source). The group's
+        # own challonge_id/slug below is KEPT: it stores Challonge's per-group
+        # match.group_id used to route matches to the local group and has no
+        # challonge_source equivalent.
         stages.append(
             models.Stage(
                 tournament_id=tournament.id,
@@ -174,8 +178,6 @@ async def create_groups(
                 description=spec.description,
                 stage_type=stage_type,
                 order=next_order + offset,
-                challonge_id=spec.challonge_id,
-                challonge_slug=spec.challonge_slug,
             )
         )
     session.add_all(stages)
