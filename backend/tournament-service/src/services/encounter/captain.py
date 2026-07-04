@@ -10,6 +10,7 @@ from shared.messaging.config import (
 )
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import EncounterCompletedEvent
+from shared.services.challonge_refs import resolve_encounter_challonge
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -186,8 +187,9 @@ async def confirm_result(
     await _enqueue_encounter_completed(session, encounter)
     await session.commit()
 
-    # Auto-push to Challonge if linked
-    if encounter.challonge_id:
+    # Auto-push to Challonge if linked (derived from challonge_match_mapping).
+    challonge_links = await resolve_encounter_challonge(session, [encounter.id])
+    if challonge_links.get(encounter.id) is not None:
         await challonge_sync.auto_push_on_confirm(session, encounter.id)
 
     await session.refresh(encounter)
@@ -272,7 +274,8 @@ async def admin_confirm_result(
     await _enqueue_encounter_completed(session, encounter)
     await session.commit()
 
-    if encounter.challonge_id:
+    challonge_links = await resolve_encounter_challonge(session, [encounter.id])
+    if challonge_links.get(encounter.id) is not None:
         await challonge_sync.auto_push_on_confirm(session, encounter.id)
 
     await session.refresh(encounter)

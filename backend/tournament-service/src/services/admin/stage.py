@@ -159,8 +159,25 @@ async def create_stage(session: AsyncSession, tournament_id: int, data: admin_sc
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-    stage = models.Stage(tournament_id=tournament_id, **data.model_dump())
+    # The deprecated stage.challonge_id/slug columns are no longer written: a
+    # supplied Challonge link becomes a normalized challonge_source row scoped to
+    # the new stage instead.
+    payload = data.model_dump()
+    challonge_id = payload.pop("challonge_id", None)
+    challonge_slug = payload.pop("challonge_slug", None)
+    stage = models.Stage(tournament_id=tournament_id, **payload)
     session.add(stage)
+    await session.flush()
+    if challonge_id is not None:
+        session.add(
+            models.ChallongeSource(
+                tournament_id=tournament_id,
+                stage_id=stage.id,
+                challonge_tournament_id=challonge_id,
+                slug=challonge_slug,
+                source_type="stage",
+            )
+        )
     await _publish_tournament_changed(session, tournament_id, "structure_changed")
     await session.commit()
     return await get_stage(session, stage.id)

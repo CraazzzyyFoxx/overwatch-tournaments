@@ -5,6 +5,7 @@ from itertools import groupby
 import sqlalchemy as sa
 from cashews import cache
 from shared.division_grid import DivisionGrid
+from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,19 @@ def _loaded_relationship(model: typing.Any, name: str) -> typing.Any | None:
     return getattr(model, name)
 
 
+def _apply_stage_challonge(
+    stage_read: schemas.StageSummaryRead,
+    stage_id: int,
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None,
+) -> schemas.StageSummaryRead:
+    """Override the KEPT ``challonge_id``/``challonge_slug`` fields with values
+    DERIVED from ``challonge_source`` (never the legacy ``stage`` columns)."""
+    challonge_id, challonge_slug = (
+        stage_challonge_refs.get(stage_id, (None, None)) if stage_challonge_refs is not None else (None, None)
+    )
+    return stage_read.model_copy(update={"challonge_id": challonge_id, "challonge_slug": challonge_slug})
+
+
 async def to_pydantic(
     session: AsyncSession,
     tournament: models.Tournament,
@@ -36,6 +50,8 @@ async def to_pydantic(
     *,
     participants_counts: typing.Mapping[int, int] | None = None,
     registrations_counts: typing.Mapping[int, int] | None = None,
+    challonge_ref: ChallongeRef | None = None,
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.TournamentRead:
     """
     Converts a `Tournament` model instance to a Pydantic `TournamentRead` schema, optionally including related entities.
@@ -44,6 +60,13 @@ async def to_pydantic(
         session: An SQLAlchemy `AsyncSession` for database interaction.
         tournament: The `Tournament` model instance to convert.
         entities: A list of strings representing the names of related entities to include.
+        challonge_ref: Optional prefetched ``(challonge_id, slug)`` DERIVED from
+            ``challonge_source`` (see ``shared.services.challonge_refs``). When
+            omitted the fields serialize as ``None`` — callers resolve/pass it so
+            the serializer never reads the deprecated ``tournament`` columns nor
+            issues a per-row query.
+        stage_challonge_refs: Optional prefetched ``stage_id -> (challonge_id, slug)``
+            map used the same way for nested ``stages``.
 
     Returns:
         A `TournamentRead` schema instance.
@@ -54,7 +77,11 @@ async def to_pydantic(
     if "stages" in entities:
         stage_models = _loaded_relationship(tournament, "stages") or []
         stages = [
-            schemas.StageSummaryRead.model_validate(stage, from_attributes=True)
+            _apply_stage_challonge(
+                schemas.StageSummaryRead.model_validate(stage, from_attributes=True),
+                stage.id,
+                stage_challonge_refs,
+            )
             for stage in sorted(stage_models, key=lambda item: item.order)
         ]
     if "participants_count" in entities:
@@ -75,6 +102,9 @@ async def to_pydantic(
                 division_grid_version_model,
                 from_attributes=True,
             )
+    tournament_challonge_id, tournament_challonge_slug = (
+        challonge_ref if challonge_ref is not None else (None, None)
+    )
     return schemas.TournamentRead(
         id=tournament.id,
         workspace_id=tournament.workspace_id,
@@ -87,8 +117,8 @@ async def to_pydantic(
         status=tournament.status,
         name=tournament.name,
         description=tournament.description,
-        challonge_id=tournament.challonge_id,
-        challonge_slug=tournament.challonge_slug,
+        challonge_id=tournament_challonge_id,
+        challonge_slug=tournament_challonge_slug,
         registration_opens_at=tournament.registration_opens_at,
         registration_closes_at=tournament.registration_closes_at,
         check_in_opens_at=tournament.check_in_opens_at,
@@ -105,7 +135,11 @@ async def to_pydantic(
 
 
 async def to_pydantic_group(
-    session: AsyncSession, group: models.TournamentGroup, entities: list[str]
+    session: AsyncSession,
+    group: models.TournamentGroup,
+    entities: list[str],
+    *,
+    challonge_ref: ChallongeRef | None = None,
 ) -> schemas.TournamentGroupRead:
     """
     Converts a `TournamentGroup` model instance to a Pydantic `TournamentGroupRead` schema.
@@ -114,16 +148,20 @@ async def to_pydantic_group(
         session: An SQLAlchemy `AsyncSession` for database interaction.
         group: The `TournamentGroup` model instance to convert.
         entities: A list of strings representing the names of related entities to include.
+        challonge_ref: Optional prefetched ``(challonge_id, slug)`` DERIVED from
+            ``challonge_source`` (via the group's stage); ``None`` serializes the
+            fields as ``None`` instead of reading the legacy ``group`` columns.
 
     Returns:
         A `TournamentGroupRead` schema instance.
     """
+    challonge_id, challonge_slug = challonge_ref if challonge_ref is not None else (None, None)
     return schemas.TournamentGroupRead(
         id=group.id,
         name=group.name,
         is_groups=group.is_groups,
-        challonge_id=group.challonge_id,
-        challonge_slug=group.challonge_slug,
+        challonge_id=challonge_id,
+        challonge_slug=challonge_slug,
         description=group.description,
     )
 
@@ -178,7 +216,18 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
         A `TournamentRead` schema instance.
     """
     tournament = await get(session, id, entities)
-    return await to_pydantic(session, tournament, entities)
+    challonge_ref = (await resolve_tournament_challonge(session, [tournament.id])).get(tournament.id)
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
+    if "stages" in entities:
+        stage_models = _loaded_relationship(tournament, "stages") or []
+        stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in stage_models])
+    return await to_pydantic(
+        session,
+        tournament,
+        entities,
+        challonge_ref=challonge_ref,
+        stage_challonge_refs=stage_challonge_refs,
+    )
 
 
 async def lookup(
@@ -206,7 +255,14 @@ async def get_stages_read(session: AsyncSession, tournament_id: int) -> list[sch
         .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
         .order_by(models.Stage.order)
     )
-    return [schemas.StageRead.model_validate(stage, from_attributes=True) for stage in result.scalars().all()]
+    stages = list(result.scalars().all())
+    stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in stages])
+    output: list[schemas.StageRead] = []
+    for stage in stages:
+        stage_read = schemas.StageRead.model_validate(stage, from_attributes=True)
+        challonge_id, challonge_slug = stage_challonge_refs.get(stage.id, (None, None))
+        output.append(stage_read.model_copy(update={"challonge_id": challonge_id, "challonge_slug": challonge_slug}))
+    return output
 
 
 async def get_by_number_and_league(
@@ -266,6 +322,15 @@ async def get_all(
         if "registrations_count" in params.entities
         else None
     )
+    # Batched Challonge-ref derivation (no N+1): one query for every tournament id
+    # on the page, plus one for every loaded stage id when stages are requested.
+    challonge_refs = await resolve_tournament_challonge(session, tournament_ids)
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
+    if "stages" in params.entities:
+        stage_ids = [
+            stage.id for result in results for stage in (_loaded_relationship(result, "stages") or [])
+        ]
+        stage_challonge_refs = await resolve_stage_challonge(session, stage_ids)
     return pagination.Paginated(
         results=[
             await to_pydantic(
@@ -274,6 +339,8 @@ async def get_all(
                 params.entities,
                 participants_counts=participants_counts,
                 registrations_counts=registrations_counts,
+                challonge_ref=challonge_refs.get(result.id),
+                stage_challonge_refs=stage_challonge_refs,
             )
             for result in results
         ],

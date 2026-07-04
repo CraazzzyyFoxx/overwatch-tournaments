@@ -2,6 +2,11 @@ import typing
 
 import sqlalchemy as sa
 from cashews import cache
+from shared.services.challonge_refs import (
+    ChallongeRef,
+    resolve_encounter_challonge,
+    resolve_tournament_challonge,
+)
 from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -108,6 +113,8 @@ async def to_pydantic(
     entities: list[str],
     *,
     prefetched_stage_refs: typing.Mapping[tuple[int, int], StageRefs] | None = None,
+    challonge_match_ids: typing.Mapping[int, int] | None = None,
+    tournament_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.EncounterRead:
     """
     Converts an Encounter model instance to a Pydantic schema (EncounterRead), including related entities.
@@ -120,6 +127,13 @@ async def to_pydantic(
             to already-resolved StageRefs (see ``_prefetch_stage_refs``). List call
             sites pass it to avoid a per-encounter resolver query; single-item call
             sites can omit it and fall back to the per-encounter resolver.
+        challonge_match_ids: Optional prefetched ``encounter_id -> challonge_match_id``
+            map DERIVED from ``challonge_match_mapping`` (see
+            ``shared.services.challonge_refs``). The KEPT ``challonge_id`` response
+            field (a bracket key for the frontend) is populated from it instead of
+            the deprecated ``encounter.challonge_id`` column; omitted → ``None``.
+        tournament_challonge_refs: Optional prefetched ``tournament_id -> (challonge_id,
+            slug)`` map used the same way for the nested ``tournament``.
 
     Returns:
         schemas.EncounterRead: The Pydantic schema representing the encounter.
@@ -154,7 +168,11 @@ async def to_pydantic(
         effective_stage_item_id = refs.stage_item_id
 
     if "stage" in entities and encounter.stage is not None:
-        stage = schemas.StageSummaryRead.model_validate(encounter.stage, from_attributes=True)
+        # Nested stage challonge is derived at the top-level tournament read, not
+        # here — override to None so the legacy ``stage`` columns are never read.
+        stage = schemas.StageSummaryRead.model_validate(encounter.stage, from_attributes=True).model_copy(
+            update={"challonge_id": None, "challonge_slug": None}
+        )
     if "stage_item" in entities and encounter.stage_item is not None:
         stage_item = schemas.StageItemSummaryRead.model_validate(encounter.stage_item, from_attributes=True)
     if "tournament" in entities:
@@ -162,6 +180,11 @@ async def to_pydantic(
             session,
             encounter.tournament,
             utils.prepare_entities(entities, "tournament"),
+            challonge_ref=(
+                tournament_challonge_refs.get(encounter.tournament_id)
+                if tournament_challonge_refs is not None
+                else None
+            ),
         )
     if "teams" in entities or "home_team" in entities:
         teams_entities = (
@@ -190,6 +213,12 @@ async def to_pydantic(
     # is the effective (stage_id, stage_item_id) pair even if DB still has NULL.
     encounter_dict["stage_id"] = effective_stage_id
     encounter_dict["stage_item_id"] = effective_stage_item_id
+    # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
+    # read from the deprecated ``encounter.challonge_id`` column. Always set it so
+    # the value survives the column being dropped; ``None`` when not prefetched.
+    encounter_dict["challonge_id"] = (
+        challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
+    )
 
     return schemas.EncounterRead(
         **encounter_dict,
@@ -279,7 +308,15 @@ async def get_encounter(session: AsyncSession, encounter_id: int, entities: list
             status_code=404,
             detail=[errors.ApiExc(code="not_found", msg=f"Encounter with id {encounter_id} not found")],
         )
-    return await to_pydantic(session, encounter, entities)
+    challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id])
+    tournament_challonge_refs = await resolve_tournament_challonge(session, [encounter.tournament_id])
+    return await to_pydantic(
+        session,
+        encounter,
+        entities,
+        challonge_match_ids=challonge_match_ids,
+        tournament_challonge_refs=tournament_challonge_refs,
+    )
 
 
 @cache(
@@ -311,12 +348,23 @@ async def get_all_encounters(
         viewer_auth_user_id=viewer_auth_user_id,
     )
     prefetched_stage_refs = await _prefetch_stage_refs(session, encounters)
+    challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id for encounter in encounters])
+    tournament_challonge_refs = await resolve_tournament_challonge(
+        session, [encounter.tournament_id for encounter in encounters]
+    )
     return pagination.Paginated(
         total=total,
         per_page=params.per_page,
         page=params.page,
         results=[
-            await to_pydantic(session, encounter, params.entities, prefetched_stage_refs=prefetched_stage_refs)
+            await to_pydantic(
+                session,
+                encounter,
+                params.entities,
+                prefetched_stage_refs=prefetched_stage_refs,
+                challonge_match_ids=challonge_match_ids,
+                tournament_challonge_refs=tournament_challonge_refs,
+            )
             for encounter in encounters
         ],
     )
@@ -418,9 +466,13 @@ async def get_encounters_overview(
     # One batched stage-ref resolution for all featured blocks instead of a
     # per-encounter resolver query inside to_pydantic (legacy encounters with
     # only tournament_group_id set).
-    featured_stage_refs = await _prefetch_stage_refs(
-        session,
-        [*data["closest"], *data["upcoming"], *data["live"]],
+    featured_encounters = [*data["closest"], *data["upcoming"], *data["live"]]
+    featured_stage_refs = await _prefetch_stage_refs(session, featured_encounters)
+    featured_challonge_match_ids = await resolve_encounter_challonge(
+        session, [encounter.id for encounter in featured_encounters]
+    )
+    featured_tournament_challonge_refs = await resolve_tournament_challonge(
+        session, [encounter.tournament_id for encounter in featured_encounters]
     )
 
     return schemas.EncounterOverviewRead(
@@ -454,6 +506,8 @@ async def get_encounters_overview(
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
                     prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["closest"]
             ],
@@ -463,6 +517,8 @@ async def get_encounters_overview(
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
                     prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["upcoming"]
             ],
@@ -472,6 +528,8 @@ async def get_encounters_overview(
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
                     prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["live"]
             ],

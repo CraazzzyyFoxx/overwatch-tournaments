@@ -116,6 +116,10 @@ def _mk_session(
         scalars_mock = Mock()
         scalars_mock.all.return_value = []
         result_mock.scalars.return_value = scalars_mock
+        # The Challonge auto-push gate now DERIVES the link from
+        # challonge_match_mapping via resolve_encounter_challonge (rows.all());
+        # an empty result means "not linked" so no push is attempted.
+        result_mock.all.return_value = []
         return result_mock
 
     added: list[object] = []
