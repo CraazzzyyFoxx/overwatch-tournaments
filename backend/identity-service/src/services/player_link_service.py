@@ -21,7 +21,7 @@ from shared.models.identity.auth_user import AuthUser
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.social import SocialAccount
 from shared.models.identity.user import User
-from shared.rbac import user_has_workspace_membership_role
+from shared.rbac import workspace_names_blocking_player_unlink
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -235,20 +235,24 @@ class PlayerLinkService:
         membership role: ``workspace_member`` is anchored on this player, so
         clearing the link would strand that membership row auth-less — hidden
         from the members list and unmanageable via the auth-keyed lookup. The
-        user must leave those workspaces first. Baseline ``player``
-        participation does not block the unlink (see
-        ``user_has_workspace_membership_role``).
+        409 names the blocking workspaces so the user knows which to leave
+        first. Baseline ``player`` participation does not block the unlink (see
+        ``workspace_names_blocking_player_unlink``).
         """
         player = await PlayerLinkService._get_player(session, player_id)
         auth_user_id = player.auth_user_id
         if auth_user_id is None:
             return  # already unlinked — idempotent no-op
-        if await user_has_workspace_membership_role(session, user_id=auth_user_id):
+        blocking_workspaces = await workspace_names_blocking_player_unlink(
+            session, user_id=auth_user_id
+        )
+        if blocking_workspaces:
+            listed = ", ".join(blocking_workspaces)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    "Cannot unlink this player while you are a member of one or more "
-                    "workspaces. Leave those workspaces first."
+                    f"Cannot unlink this player: the account is a member of the "
+                    f"following workspace(s): {listed}. Leave those workspaces first."
                 ),
             )
         player.auth_user_id = None

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.models.identity.rbac import Permission, Role, user_roles
+from shared.models.tenancy.workspace import Workspace
 
 from .catalog import PERMISSION_CATALOG, WORKSPACE_SYSTEM_ROLE_NAMES, permission_names_for_workspace_role
 
@@ -171,39 +172,44 @@ async def user_has_only_workspace_owner_role(
     return int(owner_count or 0) <= 1
 
 
-async def user_has_workspace_membership_role(
+async def workspace_names_blocking_player_unlink(
     session: AsyncSession,
     *,
     user_id: int,
-) -> bool:
-    """True when ``user_id`` holds a workspace-scoped role beyond the baseline
-    ``player`` participation role — i.e. is a real RBAC member/manager of some
-    workspace (``member`` / ``admin`` / ``owner`` or a custom workspace role).
+) -> list[str]:
+    """Distinct names of the workspaces where ``user_id`` holds a role beyond
+    the baseline ``player`` participation role — i.e. real RBAC memberships
+    (``member`` / ``admin`` / ``owner`` or a custom workspace role). Empty list
+    means unlinking the user's player is allowed.
 
     Used to guard player-unlink. ``workspace_member`` is anchored on
     ``players.user.id`` while RBAC (``user_roles``) is keyed on
     ``auth_user_id``; clearing ``players.user.auth_user_id`` (unlink) would
     leave any such member row auth-less — hidden from the members list
     (``list_by_workspace`` filters on ``auth_user_id IS NOT NULL``) and
-    unmanageable via the auth-keyed ``get_member`` join. Blocking the unlink in
-    that case keeps membership and the player link consistent.
+    unmanageable via the auth-keyed ``get_member`` join. The caller refuses the
+    unlink and names these workspaces so the user knows which to leave first.
 
     The baseline ``player`` role (auto-granted on self-registration) is
     intentionally excluded: a pure tournament participant is not a workspace
     member, so unlinking their public player must stay allowed.
     """
-    return bool(
-        await session.scalar(
-            sa.select(sa.literal(True))
-            .select_from(user_roles.join(Role, Role.id == user_roles.c.role_id))
-            .where(
-                user_roles.c.user_id == user_id,
-                Role.workspace_id.isnot(None),
-                Role.name != "player",
+    result = await session.execute(
+        sa.select(Workspace.name)
+        .select_from(
+            user_roles.join(Role, Role.id == user_roles.c.role_id).join(
+                Workspace, Workspace.id == Role.workspace_id
             )
-            .limit(1)
         )
+        .where(
+            user_roles.c.user_id == user_id,
+            Role.workspace_id.isnot(None),
+            Role.name != "player",
+        )
+        .distinct()
+        .order_by(Workspace.name)
     )
+    return list(result.scalars().all())
 
 
 async def legacy_workspace_role_name_for_user(

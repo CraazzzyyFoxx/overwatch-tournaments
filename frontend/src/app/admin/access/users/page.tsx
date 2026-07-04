@@ -107,7 +107,8 @@ export default function AccessAdminUsersPage() {
       setSelectedAnalyticsUserId(null);
       setSelectedAnalyticsUserName("");
       notify.success("Linked analytics account assigned");
-    }
+    },
+    onError: (error) => notify.apiError(error)
   });
 
   const removeLinkedPlayerMutation = useMutation({
@@ -119,7 +120,8 @@ export default function AccessAdminUsersPage() {
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       notify.success("Linked analytics account removed");
-    }
+    },
+    onError: (error) => notify.apiError(error)
   });
 
   const columns: ColumnDef<AuthAdminUser>[] = [

@@ -116,13 +116,16 @@ def test_unlink_blocked_when_workspace_membership_role_present() -> None:
     """Unlink must be refused (409) when the auth user still holds a real
     workspace membership role. ``workspace_member`` is anchored on this player,
     so clearing the link would strand that membership row auth-less. The link
-    must be left intact and no commit issued.
+    must be left intact, no commit issued, and the 409 must name the blocking
+    workspaces so the user knows which to leave first.
     """
     player = SimpleNamespace(id=99, auth_user_id=7)
     session = _UnlinkFakeSession(player)
 
     with patch.object(
-        pls_module, "user_has_workspace_membership_role", AsyncMock(return_value=True)
+        pls_module,
+        "workspace_names_blocking_player_unlink",
+        AsyncMock(return_value=["Alpha Cup", "Beta League"]),
     ):
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(
@@ -130,6 +133,8 @@ def test_unlink_blocked_when_workspace_membership_role_present() -> None:
             )
 
     assert exc_info.value.status_code == 409
+    assert "Alpha Cup" in exc_info.value.detail
+    assert "Beta League" in exc_info.value.detail
     assert player.auth_user_id == 7  # link untouched
     assert session.committed is False
 
@@ -141,7 +146,9 @@ def test_unlink_allowed_when_no_workspace_membership_role() -> None:
     session = _UnlinkFakeSession(player)
 
     with patch.object(
-        pls_module, "user_has_workspace_membership_role", AsyncMock(return_value=False)
+        pls_module,
+        "workspace_names_blocking_player_unlink",
+        AsyncMock(return_value=[]),
     ):
         asyncio.run(
             PlayerLinkService._unlink_player_from_auth_user(session, player_id=99)
@@ -158,7 +165,7 @@ def test_unlink_already_unlinked_is_noop() -> None:
     session = _UnlinkFakeSession(player)
 
     with patch.object(
-        pls_module, "user_has_workspace_membership_role", AsyncMock()
+        pls_module, "workspace_names_blocking_player_unlink", AsyncMock()
     ) as guard:
         asyncio.run(
             PlayerLinkService._unlink_player_from_auth_user(session, player_id=99)
