@@ -48,7 +48,7 @@ columns were evaluated and intentionally NOT normalized:
 See the model comments on ``AnalyticsJob`` for the same rationale.
 
 Revision ID: dbarch05
-Revises: dbarch04b
+Revises: dbarch04
 Create Date: 2026-07-04
 """
 
@@ -60,7 +60,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch05"
-down_revision: Union[str, None] = "dbarch04b"
+down_revision: Union[str, None] = "dbarch04"
 branch_labels = None
 depends_on = None
 

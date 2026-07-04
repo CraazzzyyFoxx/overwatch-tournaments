@@ -61,19 +61,20 @@ the mapping tables (using the FROM-clause-only UPDATE pattern), so a rollback re
 working legacy read path. Group/challonge_team re-derivation is best-effort (documented inline).
 
 Revision ID: dbarch04b
-Revises: dbarch04
+Revises: dbarch05
 Create Date: 2026-07-04
 """
 
 from __future__ import annotations
 
+import os
 from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch04b"
-down_revision: Union[str, None] = "dbarch04"
+down_revision: Union[str, None] = "dbarch05"
 branch_labels = None
 depends_on = None
 
@@ -86,6 +87,19 @@ _CHALLONGE_TEAM_INDEXES = (
 
 
 def upgrade() -> None:
+    # GATED — fail-closed. This migration is on the linear chain so `alembic
+    # upgrade head` reaches (and version-stamps) it, but the destructive drops
+    # only run when explicitly opted in via OWT_APPLY_CHALLONGE_DROP=1. Without
+    # the flag this is a no-op stamp, so a normal deploy reaches head WITHOUT
+    # dropping the still-live legacy Challonge columns/table. Only set the flag
+    # once the preconditions in this module's docstring hold (parser migration
+    # done, tournament-service readers/writers migrated, model attrs removed,
+    # mapping-table parity verified). If it was already stamped as a no-op, the
+    # real drop must be authored as a fresh follow-up migration (alembic will
+    # not re-run an applied revision).
+    if os.environ.get("OWT_APPLY_CHALLONGE_DROP") != "1":
+        return
+
     # Order is irrelevant for column drops (no cross-references), but drop the table last.
     op.drop_column("encounter", "challonge_id", schema="tournament")
 

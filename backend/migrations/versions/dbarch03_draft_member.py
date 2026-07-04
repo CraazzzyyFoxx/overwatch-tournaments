@@ -278,7 +278,15 @@ def upgrade() -> None:
         SELECT
             dp.id,
             ar.role,
-            (dp.role_ranks::jsonb ->> ar.role)::int,
+            -- Guarded cast: legacy role_ranks values are SR integers, but a
+            -- non-numeric string (messy data) would abort the whole migration
+            -- on ::int. Coerce anything non-integer to NULL (the read-side
+            -- role_ranks dict already omits null-rank roles).
+            CASE
+                WHEN (dp.role_ranks::jsonb ->> ar.role) ~ '^-?[0-9]+$'
+                THEN (dp.role_ranks::jsonb ->> ar.role)::int
+                ELSE NULL
+            END,
             jsonb_exists({_sec}, ar.role),
             ar.ord,
             now()

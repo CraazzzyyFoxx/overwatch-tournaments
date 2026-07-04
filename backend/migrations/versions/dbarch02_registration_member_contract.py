@@ -99,6 +99,30 @@ def upgrade() -> None:
     with op.get_context().autocommit_block():
         bind = op.get_bind()
 
+        # Re-run safety: this migration runs inside autocommit_block (needed for
+        # DROP INDEX CONCURRENTLY), so every statement commits independently. If
+        # the process died AFTER the DROP COLUMN user_id commit but BEFORE alembic
+        # stamped this revision, a re-run would restart upgrade() and the user_id
+        # references below would raise UndefinedColumn. The column being gone means
+        # the data work already completed — short-circuit to a clean no-op so the
+        # re-run can stamp the revision. Offline (--sql) render can't query the
+        # catalog, so emit the full script there (a fresh apply always has user_id).
+        if not op.get_context().as_sql:
+            user_id_exists = bind.scalar(
+                sa.text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'balancer'
+                          AND table_name = 'registration'
+                          AND column_name = 'user_id'
+                    )
+                    """
+                )
+            )
+            if not user_id_exists:
+                return
+
         # 1. Safety net: create workspace_member rows for user_id-anchored
         # registrations whose tournament's workspace has none yet, deduped per
         # (workspace_id, player_id). Bounded to the residual set via the

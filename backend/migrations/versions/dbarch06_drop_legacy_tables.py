@@ -55,24 +55,33 @@ it on the next recalculate/inference run, so a rollback restores a working v1
 read path without a data backfill.
 
 Revision ID: dbarch06
-Revises: dbarch05
+Revises: dbarch04b
 Create Date: 2026-07-04
 """
 
 from __future__ import annotations
 
+import os
 from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch06"
-down_revision: Union[str, None] = "dbarch05"
+down_revision: Union[str, None] = "dbarch04b"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    # GATED — fail-closed (see dbarch04b for the rationale). analytics.predictions
+    # v1 is still actively written (analytics/flows + ml runner mirror) and read
+    # (get_predicted_places -> predicted_place API), so `alembic upgrade head`
+    # must NOT drop it. The drop runs only under OWT_APPLY_PREDICTIONS_DROP=1,
+    # set once v1 has no writers/readers left; otherwise this is a no-op stamp.
+    if os.environ.get("OWT_APPLY_PREDICTIONS_DROP") != "1":
+        return
+
     # Dropping the table drops its FK constraints + FK indexes with it.
     op.drop_table("predictions", schema="analytics")
 
