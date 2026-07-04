@@ -1,0 +1,283 @@
+{
+  "title": "Infrastructure",
+  "uid": "infrastructure",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["infrastructure", "host", "postgres", "redis"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "CPU Usage",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.75 }, { "color": "red", "value": 0.9 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "CPU", "instant": true }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Memory Usage",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "legendFormat": "RAM", "instant": true }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Root Disk Used",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.85 }, { "color": "red", "value": 0.95 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"}", "legendFormat": "Disk", "instant": true }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "PostgreSQL",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        }
+      },
+      "targets": [{ "expr": "pg_up", "legendFormat": "Postgres", "instant": true }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Redis",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        }
+      },
+      "targets": [{ "expr": "redis_up", "legendFormat": "Redis", "instant": true }]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "PG Connections",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 80 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "sum(pg_stat_activity_count)", "legendFormat": "conns", "instant": true }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Host CPU",
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+      "targets": [
+        { "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "used" },
+        { "expr": "avg(rate(node_cpu_seconds_total{mode=\"iowait\"}[5m]))", "legendFormat": "iowait" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Host Memory",
+      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes", "legendFormat": "used" },
+        { "expr": "node_memory_MemTotal_bytes", "legendFormat": "total" }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Disk Usage by Mountpoint",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+      "targets": [
+        { "expr": "1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"}", "legendFormat": "{{ mountpoint }}" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Load Average",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "node_load1", "legendFormat": "load1" },
+        { "expr": "node_load5", "legendFormat": "load5" },
+        { "expr": "node_load15", "legendFormat": "load15" }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Network Traffic",
+      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br.*|docker.*\"}[5m]))", "legendFormat": "rx" },
+        { "expr": "sum(rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br.*|docker.*\"}[5m]))", "legendFormat": "tx" }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Disk Space Forecast (root, 7d)",
+      "description": "predict_linear over the last 6h: projected free bytes on / in 7 days. Negative = disk will fill up.",
+      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 5368709120 }, { "color": "green", "value": 21474836480 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [
+        { "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"}[6h], 7 * 24 * 3600)", "legendFormat": "free in 7d" }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Container CPU",
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        { "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]))", "legendFormat": "{{ name }}" }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Container Memory (working set)",
+      "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "container_memory_working_set_bytes{name!=\"\"}", "legendFormat": "{{ name }}" }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Container Restarts (start-time changes, 1h)",
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "changes(container_start_time_seconds{name!=\"\"}[1h]) > 0", "legendFormat": "{{ name }}" }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "PostgreSQL Connections",
+      "gridPos": { "x": 0, "y": 33, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (state) (pg_stat_activity_count)", "legendFormat": "{{ state }}" },
+        { "expr": "sum(pg_settings_max_connections)", "legendFormat": "max_connections" }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "PostgreSQL TPS",
+      "gridPos": { "x": 8, "y": 33, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_database_xact_commit{datname!~\"template.*\"}[5m]))", "legendFormat": "commits" },
+        { "expr": "sum(rate(pg_stat_database_xact_rollback{datname!~\"template.*\"}[5m]))", "legendFormat": "rollbacks" }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "PostgreSQL Cache Hit Ratio",
+      "gridPos": { "x": 16, "y": 33, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / clamp_min(sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])), 1)", "legendFormat": "hit ratio" }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Database Size",
+      "gridPos": { "x": 0, "y": 41, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "pg_database_size_bytes{datname!~\"template.*|postgres\"}", "legendFormat": "{{ datname }}" }
+      ]
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "PostgreSQL Deadlocks (1h)",
+      "gridPos": { "x": 8, "y": 41, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "targets": [
+        { "expr": "sum by (datname) (increase(pg_stat_database_deadlocks{datname!~\"template.*\"}[1h]))", "legendFormat": "{{ datname }}" }
+      ]
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Redis: Memory / Ops / Hit Ratio / Evictions",
+      "gridPos": { "x": 16, "y": 41, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "redis_memory_used_bytes", "legendFormat": "memory used (bytes)" },
+        { "expr": "rate(redis_commands_processed_total[5m])", "legendFormat": "ops/s" },
+        { "expr": "redis:keyspace_hit_ratio_5m", "legendFormat": "hit ratio" },
+        { "expr": "rate(redis_evicted_keys_total[5m])", "legendFormat": "evictions/s" }
+      ]
+    }
+  ]
+}

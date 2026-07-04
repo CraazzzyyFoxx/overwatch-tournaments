@@ -4,6 +4,7 @@
   "tags": ["logs", "loki"],
   "timezone": "browser",
   "schemaVersion": 39,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
   "templating": {
@@ -26,6 +27,13 @@
         "multi": true,
         "includeAll": true,
         "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "search",
+        "label": "Search",
+        "type": "textbox",
+        "query": "",
+        "current": { "selected": false, "text": "", "value": "" }
       }
     ]
   },
@@ -34,7 +42,7 @@
       "id": 1,
       "type": "timeseries",
       "title": "Log Rate by Level",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -52,10 +60,28 @@
       }
     },
     {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Log Volume by Service",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 30 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service) (rate({service=~\"$service\"}[5m]))",
+          "legendFormat": "{{ service }}"
+        }
+      ]
+    },
+    {
       "id": 2,
       "type": "timeseries",
       "title": "Error Rate by Service",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 8 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -65,10 +91,52 @@
       ]
     },
     {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Errors by Service (selected range)",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 50 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service) (count_over_time({level=~\"ERROR|CRITICAL\", service=~\"$service\"}[$__range]))",
+          "legendFormat": "{{ service }}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Errors Only",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\", level=~\"ERROR|CRITICAL\"} |~ \"$search\"",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
       "id": 3,
       "type": "logs",
       "title": "Live Log Stream",
-      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 16 },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 26 },
       "datasource": { "type": "loki", "uid": "loki" },
       "options": {
         "dedupStrategy": "none",
@@ -80,7 +148,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\", level=~\"$level\"}",
+          "expr": "{service=~\"$service\", level=~\"$level\"} |~ \"$search\"",
           "legendFormat": ""
         }
       ]
