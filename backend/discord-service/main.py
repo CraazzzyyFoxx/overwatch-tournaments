@@ -15,7 +15,7 @@ from shared.messaging.config import (
     UPLOAD_MATCH_LOG_QUEUE,
 )
 from shared.models import Tournament, TournamentDiscordChannel
-from shared.models.log_processing import LogProcessingRecord, LogProcessingStatus
+from shared.models.ingestion.log_processing import LogProcessingRecord, LogProcessingStatus
 from shared.observability import (
     make_rabbit_broker,
     observe_message_processing,

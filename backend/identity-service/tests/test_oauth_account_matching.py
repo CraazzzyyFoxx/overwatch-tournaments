@@ -31,7 +31,7 @@ _ensure_test_env()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from shared.models.user import User  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
 
 from src import schemas  # noqa: E402
 from src.services.oauth_service import OAuthService  # noqa: E402

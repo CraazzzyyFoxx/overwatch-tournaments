@@ -3,6 +3,7 @@ import base64
 import sqlalchemy as sa
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
     PROCESS_MATCH_LOG_QUEUE,
@@ -14,8 +15,7 @@ from shared.messaging.config import (
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
     UPLOAD_MATCH_LOG_QUEUE,
 )
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.models.log_processing import LogProcessingSource
+from shared.models.ingestion.log_processing import LogProcessingSource
 from shared.observability import (
     make_rabbit_broker,
     metrics,
@@ -40,10 +40,20 @@ from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
+)
+from src.rpc import (
     achievements as rpc_achievements,
+)
+from src.rpc import (
     bootstrap as rpc_bootstrap,
+)
+from src.rpc import (
     logs as rpc_logs,
+)
+from src.rpc import (
     misc as rpc_misc,
+)
+from src.rpc import (
     rank as rpc_rank,
 )
 from src.services.achievement.engine.consumer import handle_achievement_evaluate

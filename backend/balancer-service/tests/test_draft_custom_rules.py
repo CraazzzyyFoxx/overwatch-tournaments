@@ -19,14 +19,15 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus, DraftFormat
-from shared.models.draft import DraftPick
+from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus
+from shared.models.balancer.draft import DraftPick
+from shared.models.identity.user import User
+from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
-from shared.models.user import User
-from shared.models.workspace import Workspace
 from src import models
 from src.services.draft import board as draft_board
 from src.services.draft import lifecycle, selection
+
 
 def _async_url() -> str:
     u = os.environ.get("POSTGRES_USER", "postgres")
@@ -83,7 +84,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             await self.engine.dispose()
             return
         async with self.Session() as s:
-            from shared.models.draft import DraftSession
+            from shared.models.balancer.draft import DraftSession
             ids = (
                 await s.scalars(sa.select(DraftSession.id).where(DraftSession.tournament_id == self.tournament_id))
             ).all()

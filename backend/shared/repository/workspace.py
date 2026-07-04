@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
-from shared.models.rbac import user_roles
+from shared.models.identity.rbac import user_roles
 from shared.repository.base import BaseRepository
 
 

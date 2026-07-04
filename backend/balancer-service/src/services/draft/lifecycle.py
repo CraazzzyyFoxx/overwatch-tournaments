@@ -27,10 +27,13 @@ from shared.core.enums import (
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole, BalancerRegistrationRoleHero
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-from shared.models.workspace import WorkspaceMember
-
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.models.registration.registration import (
+    BalancerRegistration,
+    BalancerRegistrationRole,
+    BalancerRegistrationRoleHero,
+)
+from shared.models.tenancy.workspace import WorkspaceMember
 from src.services.draft.snake_order import generate_pick_order
 
 _ACTIVE_STATUSES = (

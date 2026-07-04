@@ -24,7 +24,7 @@ from shared.core.enums import (
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from src.services.draft import ranks
 from src.services.draft import suggestions as sug
 

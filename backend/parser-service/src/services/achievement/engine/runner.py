@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from loguru import logger
 from shared.core import errors
-from shared.models.achievement import (
+from shared.models.achievements.achievement import (
     AchievementRule,
     EvaluationRun,
     EvaluationRunStatus,

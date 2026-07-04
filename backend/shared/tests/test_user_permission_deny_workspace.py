@@ -6,7 +6,7 @@ over ``(user_id, permission_id)`` must be replaced by a workspace-aware unique
 expression index (the deny-CHECK logic that consumes this lives in Task 8).
 """
 
-from shared.models.rbac import UserPermissionDeny
+from shared.models.identity.rbac import UserPermissionDeny
 
 
 def test_user_permission_deny_has_nullable_workspace_fk():

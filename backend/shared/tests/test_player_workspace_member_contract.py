@@ -1,4 +1,4 @@
-from shared.models.team import Player
+from shared.models.tournament.team import Player
 
 
 def test_player_has_workspace_member_column_and_no_user_id():

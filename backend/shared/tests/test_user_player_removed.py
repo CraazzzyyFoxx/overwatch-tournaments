@@ -5,7 +5,7 @@ from shared.core import db
 
 def test_authuserplayer_class_no_longer_importable():
     with pytest.raises(ImportError):
-        from shared.models.auth_user import AuthUserPlayer  # noqa: F401
+        from shared.models.identity.auth_user import AuthUserPlayer  # noqa: F401
 
 
 def test_auth_user_player_table_absent_from_metadata():

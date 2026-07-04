@@ -9,8 +9,8 @@ from sqlalchemy.orm import selectinload
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.models.division_grid import DivisionGrid as DivisionGridModel
 from shared.models.division_grid import DivisionGridMapping, DivisionGridVersion
+from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
-from shared.models.workspace import Workspace
 from shared.services import division_grid_cache
 from shared.services.division_grid_cache import (
     DivisionGridMappingSnapshot,

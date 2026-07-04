@@ -29,8 +29,8 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-from shared.models.achievement import AchievementRule  # noqa: E402
-from shared.models.workspace import Workspace  # noqa: E402
+from shared.models.achievements.achievement import AchievementRule  # noqa: E402
+from shared.models.tenancy.workspace import Workspace  # noqa: E402
 
 from src.services.achievement.import_export import (  # noqa: E402
     PortableAchievementRule,

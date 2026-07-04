@@ -1,4 +1,4 @@
-from shared.models.balancer import BalancerRegistration
+from shared.models.registration.registration import BalancerRegistration
 
 
 def test_registration_anchored_on_workspace_member():

@@ -23,9 +23,9 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
-from shared.models.achievement import (
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.achievements.achievement import (
     AchievementEvaluationResult,
     AchievementOverride,
     AchievementOverrideAction,

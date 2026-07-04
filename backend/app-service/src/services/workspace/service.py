@@ -2,7 +2,7 @@ import typing
 
 import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.rbac import user_roles
+from shared.models.identity.rbac import user_roles
 from shared.rbac import (
     ensure_workspace_system_roles,
     legacy_workspace_role_name_for_user,

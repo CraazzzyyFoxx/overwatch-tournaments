@@ -15,7 +15,7 @@ from shared.domain.player_sub_roles import (
     normalize_sub_role,
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
-from shared.models.social import SocialAccount
+from shared.models.identity.social import SocialAccount
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

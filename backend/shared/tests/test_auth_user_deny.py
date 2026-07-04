@@ -1,6 +1,6 @@
 """Unit tests for the per-user deny overlay (negative RBAC) on AuthUser."""
 
-from shared.models.auth_user import AuthUser
+from shared.models.identity.auth_user import AuthUser
 
 
 def _user(*, superuser=False, permissions=None, denies=None) -> AuthUser:

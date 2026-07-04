@@ -13,7 +13,7 @@ import typing
 from collections.abc import Sequence
 
 from shared.core import enums
-from shared.models.encounter import Encounter
+from shared.models.tournament.encounter import Encounter
 
 __all__ = (
     "sort_bracket_matches",

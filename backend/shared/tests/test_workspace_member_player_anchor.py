@@ -1,4 +1,4 @@
-from shared.models.workspace import WorkspaceMember
+from shared.models.tenancy.workspace import WorkspaceMember
 
 
 def test_member_anchored_on_player():

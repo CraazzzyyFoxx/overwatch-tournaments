@@ -30,9 +30,10 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 from shared.core.enums import StageType  # noqa: E402
-from shared.models.achievement import AchievementGrain, AchievementRule  # noqa: E402
+from shared.models.achievements.achievement import AchievementGrain, AchievementRule  # noqa: E402
 from shared.services.achievement_effective import override_applies_to_scope  # noqa: E402
 
+from src.services.achievement.engine import differ as differ_module  # noqa: E402
 from src.services.achievement.engine.conditions import (  # noqa: E402
     get_registered_types,
     resolve_stat_name,
@@ -40,7 +41,6 @@ from src.services.achievement.engine.conditions import (  # noqa: E402
 from src.services.achievement.engine.conditions.tournament_format import (  # noqa: E402
     matches_tournament_format,
 )
-from src.services.achievement.engine import differ as differ_module  # noqa: E402
 from src.services.achievement.engine.differ import EvaluationSlice, diff_and_apply  # noqa: E402
 from src.services.achievement.engine.seeder import (  # noqa: E402
     _all_default_rules,

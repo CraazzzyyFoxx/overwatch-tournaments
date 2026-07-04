@@ -8,12 +8,12 @@ payload instead of legacy global roles only.
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.auth_user import AuthUser
-from shared.models.rbac import Permission, Role
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
+from shared.models.identity.rbac import Permission, Role
 from src import models
 
 

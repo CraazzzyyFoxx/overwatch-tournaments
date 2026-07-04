@@ -13,14 +13,14 @@ is later work.
 
 from collections.abc import Iterable
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
-from shared.models.auth_user import AuthUser
-from shared.models.oauth import OAuthConnection
-from shared.models.social import SocialAccount
-from shared.models.user import User
+from shared.models.identity.auth_user import AuthUser
+from shared.models.identity.oauth import OAuthConnection
+from shared.models.identity.social import SocialAccount
+from shared.models.identity.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

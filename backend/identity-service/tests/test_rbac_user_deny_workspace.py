@@ -8,7 +8,7 @@ every deny row. The critical invariant under test is the NULL-safe scope match
 (``_workspace_scope_filter``): a global deny and a workspace-scoped deny for the
 same permission must never be conflated by add's idempotency check or by
 remove's delete, mirroring the ``COALESCE(workspace_id, 0)`` partial-unique
-index in ``shared.models.rbac.UserPermissionDeny``.
+index in ``shared.models.identity.rbac.UserPermissionDeny``.
 """
 
 import asyncio

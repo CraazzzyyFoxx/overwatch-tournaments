@@ -31,11 +31,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 
 from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
-from shared.models.draft import DraftPick  # noqa: E402
-from shared.models.realtime import WorkspaceEvent  # noqa: E402
+from shared.models.balancer.draft import DraftPick  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
+from shared.models.platform.realtime import WorkspaceEvent  # noqa: E402
+from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
-from shared.models.user import User  # noqa: E402
-from shared.models.workspace import Workspace  # noqa: E402
 from src import models  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
@@ -110,7 +110,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await self.engine.dispose()
             return
         async with self.Session() as s:
-            from shared.models.draft import DraftSession
+            from shared.models.balancer.draft import DraftSession
 
             ids = (
                 await s.scalars(sa.select(DraftSession.id).where(DraftSession.tournament_id == self.tournament_id))
@@ -600,7 +600,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
     async def _build_balancer_pool(self, s, n: int) -> list[int]:
         """Create n approved, in-pool BalancerRegistration rows (with roles). Returns ids."""
-        from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole
+        from shared.models.registration.registration import BalancerRegistration, BalancerRegistrationRole
 
         roles = ["tank", "dps", "support"]
         ids: list[int] = []

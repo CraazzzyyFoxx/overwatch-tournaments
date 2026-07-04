@@ -7,7 +7,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.realtime import WorkspaceEvent
+from shared.models.platform.realtime import WorkspaceEvent
 from shared.schemas.realtime import EventFrame, WorkspaceEventEnvelope
 from shared.services.realtime_topics import realtime_channel
 

@@ -12,13 +12,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Sequence
 
-from shared.core.errors import BaseAPIException as HTTPException
+from loguru import logger
 from shared.core import http_status as status
 from shared.core import pagination
-from loguru import logger
-from shared.models.oauth import OAuthConnection
-from shared.models.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles
-from shared.models.workspace import WorkspaceMember
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.oauth import OAuthConnection
+from shared.models.identity.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles
+from shared.models.tenancy.workspace import WorkspaceMember
 from shared.rbac import user_has_only_workspace_owner_role
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession

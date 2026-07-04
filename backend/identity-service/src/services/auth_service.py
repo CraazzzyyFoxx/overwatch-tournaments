@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from loguru import logger
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.rbac import role_permissions, user_roles
+from shared.models.identity.rbac import role_permissions, user_roles
 from sqlalchemy import func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

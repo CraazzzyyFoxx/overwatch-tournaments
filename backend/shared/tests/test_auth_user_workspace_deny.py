@@ -8,7 +8,7 @@ A deny entry now optionally carries ``workspace_id``:
 Pure logic over ``_cached_denies`` (set via ``set_rbac_cache``) - no DB access.
 """
 
-from shared.models.auth_user import AuthUser
+from shared.models.identity.auth_user import AuthUser
 
 
 def _mk(u: AuthUser, denies: list[dict]) -> None:

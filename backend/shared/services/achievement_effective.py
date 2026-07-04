@@ -4,13 +4,13 @@ from typing import Iterable
 
 import sqlalchemy as sa
 
-from shared.models.achievement import (
+from shared.models.achievements.achievement import (
     AchievementEvaluationResult,
     AchievementOverride,
     AchievementOverrideAction,
     AchievementRule,
 )
-from shared.models.workspace import WorkspaceMember
+from shared.models.tenancy.workspace import WorkspaceMember
 
 
 def override_applies_to_scope(

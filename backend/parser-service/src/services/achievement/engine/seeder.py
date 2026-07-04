@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from loguru import logger
-from shared.models.achievement import (
+from shared.models.achievements.achievement import (
     AchievementCategory,
     AchievementEvaluationResult,
     AchievementGrain,
@@ -22,7 +22,7 @@ from shared.models.achievement import (
     EvaluationRun,
     EvaluationRunTrigger,
 )
-from shared.models.hero import Hero
+from shared.models.catalog.hero import Hero
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .catalog import CANONICAL_ACHIEVEMENT_CATALOG

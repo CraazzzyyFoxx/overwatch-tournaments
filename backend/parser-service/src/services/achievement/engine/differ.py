@@ -9,11 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared.models.achievement import AchievementEvaluationResult, AchievementRule
-from shared.models.workspace import WorkspaceMember
+from shared.models.achievements.achievement import AchievementEvaluationResult, AchievementRule
+from shared.models.tenancy.workspace import WorkspaceMember
 from shared.repository.workspace import get_or_create_workspace_member
+from sqlalchemy.ext.asyncio import AsyncSession
 
 ResultSet = set[tuple[int, ...]]
 

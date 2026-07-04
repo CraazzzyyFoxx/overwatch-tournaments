@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.models.stage import Stage, StageItem
 from shared.models.tournament import TournamentGroup
+from shared.models.tournament.stage import Stage, StageItem
 
 __all__ = (
     "StageRefs",

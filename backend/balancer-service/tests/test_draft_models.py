@@ -22,7 +22,7 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 from sqlalchemy.orm import configure_mappers  # noqa: E402
 
 import src.models  # noqa: E402,F401  (import registers all models)
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam  # noqa: E402
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam  # noqa: E402
 
 
 def test_mappers_configure_cleanly() -> None:

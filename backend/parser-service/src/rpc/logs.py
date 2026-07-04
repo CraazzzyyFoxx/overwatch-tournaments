@@ -19,10 +19,10 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.config import PROCESS_MATCH_LOG_QUEUE, PROCESS_TOURNAMENT_LOGS_QUEUE
-from shared.models.log_processing import LogProcessingSource, LogProcessingStatus
+from shared.models.ingestion.log_processing import LogProcessingSource, LogProcessingStatus
 from shared.observability import publish_message
 from shared.schemas.events import ProcessMatchLogEvent, ProcessTournamentLogsEvent
 from sqlalchemy import desc, select

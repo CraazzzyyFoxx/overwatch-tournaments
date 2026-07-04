@@ -1,5 +1,5 @@
-from shared.models.user import User
-from shared.models.auth_user import AuthUser
+from shared.models.identity.auth_user import AuthUser
+from shared.models.identity.user import User
 
 
 def test_user_has_unique_nullable_auth_user_id():

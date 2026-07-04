@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-from shared.models.realtime import WorkspaceEvent
+from shared.models.platform.realtime import WorkspaceEvent
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import event_to_envelope, publish_event_to_redis_url

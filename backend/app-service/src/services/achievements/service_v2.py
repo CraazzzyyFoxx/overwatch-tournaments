@@ -8,7 +8,7 @@ from datetime import datetime
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.models.achievement import AchievementRule
+from shared.models.achievements.achievement import AchievementRule
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad

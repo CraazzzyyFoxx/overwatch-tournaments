@@ -17,8 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftStatus
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from src import models
 from src.schemas.team import BalancerTeam, BalancerTeamMember
 from src.services import team as team_flows

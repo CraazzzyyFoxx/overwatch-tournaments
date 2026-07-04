@@ -19,7 +19,7 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.core.enums import DraftPickStatus, DraftRole  # noqa: E402
-from shared.models.draft import DraftPick, DraftPlayer, DraftTeam  # noqa: E402
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftTeam  # noqa: E402
 from src.services.draft.export import _draft_to_balancer_payload  # noqa: E402
 
 

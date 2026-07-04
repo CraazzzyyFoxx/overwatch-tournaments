@@ -18,12 +18,12 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftAutopickStrategy, DraftRole
-from shared.models.draft import DraftPick, DraftSession
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.balancer.draft import DraftPick, DraftSession
 from src import models
 from src.core import db
 from src.core.auth import (

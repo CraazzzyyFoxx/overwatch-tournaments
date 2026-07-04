@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.outbox import EventOutbox
+from shared.models.platform.outbox import EventOutbox
 
 PENDING_STATUSES = ("pending", "failed")
 

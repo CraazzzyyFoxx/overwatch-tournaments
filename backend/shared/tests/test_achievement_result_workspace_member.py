@@ -8,7 +8,7 @@ unique constraint, and that the legacy ``AchievementUser`` table (out of
 scope for this migration) is untouched.
 """
 
-from shared.models.achievement import (
+from shared.models.achievements.achievement import (
     AchievementEvaluationResult,
     AchievementOverride,
     AchievementUser,

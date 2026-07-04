@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.models.achievement import AchievementGrain
+from shared.models.achievements.achievement import AchievementGrain
 
 from .conditions import get_registered_types, validate_stat_name
 

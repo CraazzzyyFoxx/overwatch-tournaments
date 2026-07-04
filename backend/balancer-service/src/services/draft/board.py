@@ -8,10 +8,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftStatus
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-from shared.models.realtime import WorkspaceEvent
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.models.platform.realtime import WorkspaceEvent
 from shared.services import realtime_topics
-
 from src.schemas.draft import (
     DraftBoardSnapshot,
     DraftPickRead,
@@ -71,7 +70,7 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
     if players:
         user_ids = [p.user_id for p in players if p.user_id is not None]
         if user_ids:
-            from shared.models.balancer import BalancerRegistration
+            from shared.models.registration.registration import BalancerRegistration
             regs = (
                 await session.execute(
                     sa.select(BalancerRegistration.user_id, BalancerRegistration.notes)

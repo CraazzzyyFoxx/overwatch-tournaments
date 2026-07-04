@@ -55,13 +55,14 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared.core import enums  # noqa: E402
-from shared.models.auth_user import AuthUser  # noqa: E402
-from shared.models.rbac import user_roles  # noqa: E402
+from shared.models.identity.auth_user import AuthUser  # noqa: E402
+from shared.models.identity.rbac import user_roles  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
+from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
-from shared.models.user import User  # noqa: E402
-from shared.models.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.rbac import get_workspace_system_role  # noqa: E402
 from shared.services.division_grid_access import get_default_division_grid_version_id  # noqa: E402
+
 from src.services.registration import service as reg_service  # noqa: E402
 
 
