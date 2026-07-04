@@ -45,6 +45,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tracing"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/workspace"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ws"
 )
@@ -75,6 +76,20 @@ func run() error {
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// OpenTelemetry tracing (OTLP gRPC -> otel-collector -> Tempo), joining the
+	// distributed traces the Python services already emit. No-op when
+	// TRACING_ENABLED is false. The deferred shutdown flushes buffered spans
+	// after srv.Shutdown returns.
+	traceShutdown, err := tracing.Init(rootCtx, cfg.Tracing, cfg.Sentry.Release, cfg.Environment, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = traceShutdown(ctx)
+	}()
 
 	// Postgres pool for read-only queries (event replay + ACL membership).
 	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer)
@@ -357,15 +372,17 @@ func run() error {
 		wsHandler.ServeHTTP(w, r)
 	})
 
-	// REST middleware chain (outer to inner): Sentry -> httplog -> metrics -> mux.
-	// httplog wraps the metrics handler (which wraps mux); all share the same
-	// *http.Request, so r.Pattern — set by mux — is the matched route template for
-	// both the access log and the metrics labels. httplog also binds a
-	// request-scoped logger (correlation_id) used by the handlers' error logs.
-	// Sentry stays outermost for per-request hub + tracing + panic recovery
+	// REST middleware chain (outer to inner): Sentry -> tracing -> httplog ->
+	// metrics -> mux. metrics shares httplog's *http.Request, so r.Pattern — set
+	// by mux — is the matched route template for the access log and metrics
+	// labels; httplog copies Pattern back to the tracing middleware's request so
+	// the OTel span is named by route too. tracing sits outside httplog so the
+	// request logger picks up the OTel trace_id and rpc.Call/proxy see the span
+	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
 	instrumented := httplog.Middleware(mtr.Middleware(mux, authn, activeUsers), logger, authn)
-	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(instrumented)
+	traced := tracing.Middleware(instrumented)
+	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
 
 	// Outer router: WS + health are served directly (bypassing tracing); every
 	// other path falls through "/" to the traced REST surface.

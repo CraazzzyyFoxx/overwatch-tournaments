@@ -11,6 +11,9 @@ import (
 	"sort"
 	"strings"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 )
 
@@ -67,6 +70,13 @@ func newReverseProxy(target string) (*httputil.ReverseProxy, error) {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Never forward client-supplied trace context past the public edge; inject
+	// the gateway's own span context instead (no-op when tracing is disabled).
+	// ReverseProxy clones the header map for the outbound request, so mutating
+	// the inbound headers here is the standard injection point.
+	r.Header.Del("traceparent")
+	r.Header.Del("tracestate")
+	otel.GetTextMapPropagator().Inject(r.Context(), propagation.HeaderCarrier(r.Header))
 	for _, rt := range p.routes {
 		if matchPrefix(r.URL.Path, rt.prefix) {
 			rt.proxy.ServeHTTP(w, r)

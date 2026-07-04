@@ -31,8 +31,19 @@ type Config struct {
 	AuthRateWindow   time.Duration
 	Upstreams        Upstreams
 	Sentry           Sentry
+	Tracing          Tracing
 	Log              Log
 	Docs             Docs
+}
+
+// Tracing holds the OpenTelemetry settings. The variable names mirror the
+// Python services (backend/shared/observability/tracing.py) so one env block
+// configures the whole stack. The sampler kind is fixed to
+// parentbased_traceidratio (OTEL_TRACES_SAMPLER is not parsed).
+type Tracing struct {
+	Enabled      bool    // TRACING_ENABLED
+	OTLPEndpoint string  // OTLP_ENDPOINT
+	SamplerArg   float64 // OTEL_TRACES_SAMPLER_ARG
 }
 
 // Docs holds the Scalar API-documentation settings. Two pages are served from
@@ -129,6 +140,11 @@ func Load() (*Config, error) {
 			Environment:      getenv("SENTRY_ENVIRONMENT", "development"),
 			Release:          os.Getenv("SENTRY_RELEASE"),
 			TracesSampleRate: getenvFloat("SENTRY_TRACES_SAMPLE_RATE", 0.2),
+		},
+		Tracing: Tracing{
+			Enabled:      getenvBool("TRACING_ENABLED", false),
+			OTLPEndpoint: getenv("OTLP_ENDPOINT", "http://otel-collector:4317"),
+			SamplerArg:   getenvFloat("OTEL_TRACES_SAMPLER_ARG", 0.1),
 		},
 		Log: Log{
 			Level: getenv("LOG_LEVEL", "info"),
