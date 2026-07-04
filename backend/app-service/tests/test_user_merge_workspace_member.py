@@ -404,7 +404,6 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
             patch.object(
                 user_merge, "apply_identity_selection", AsyncMock(return_value={"moved": [], "deduped": []})
             ),
-            patch.object(user_merge, "_reference_is_available", AsyncMock(return_value=True)),
             patch.object(user_merge, "_reassign_reference", AsyncMock(side_effect=fake_reassign)),
             patch.object(
                 user_merge, "_repoint_player_workspace_members", AsyncMock(side_effect=fake_repoint)

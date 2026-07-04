@@ -27,8 +27,9 @@ REGISTRATION_MEMBER_REFERENCE_KEY = "balancer.registration.workspace_member_id"
 # dropped its user_id column): none of them are generic user_id columns
 # anymore, so they are handled by dedicated workspace_member-aware
 # counters/mergers (mirroring PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY) instead
-# of living in this table. Only the legacy achievements.user.user_id row
-# (untouched by P6) still fits the generic reassign.
+# of living in this table. The legacy achievements.user.user_id row was
+# dropped too — its table was removed by l2g4h6i0j1k2, so it no longer needs
+# a generic reassign here.
 REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("tournament.team.captain_id", models.Team, "captain_id"),
     ("matches.statistics.user_id", models.MatchStatistics, "user_id"),
@@ -36,14 +37,9 @@ REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("matches.kill_feed.victim_id", models.MatchKillFeed, "victim_id"),
     ("matches.assists.user_id", models.MatchEvent, "user_id"),
     ("matches.assists.related_user_id", models.MatchEvent, "related_user_id"),
-    ("achievements.user.user_id", models.AchievementUser, "user_id"),
     ("analytics.balance_player_snapshot.user_id", models.AnalyticsBalancePlayerSnapshot, "user_id"),
     ("log_processing.record.uploader_id", models.LogProcessingRecord, "uploader_id"),
 )
-
-OPTIONAL_REFERENCE_TABLES: dict[str, str] = {
-    "achievements.user.user_id": 'achievements."user"',
-}
 
 
 @dataclass
@@ -196,8 +192,6 @@ async def execute_merge(
             )
         )
         for reference_key, model, column_name in REFERENCE_CONFIG:
-            if not await _reference_is_available(session, reference_key):
-                continue
             affected_counts[reference_key] = await _reassign_reference(
                 session,
                 model,
@@ -394,8 +388,6 @@ async def _count_affected_rows(session: AsyncSession, source_user_id: int) -> di
         session, models.BalancerRegistration, source_user_id
     )
     for reference_key, model, column_name in REFERENCE_CONFIG:
-        if not await _reference_is_available(session, reference_key):
-            continue
         column = getattr(model, column_name)
         result = await session.execute(select(func.count()).select_from(model).where(column == source_user_id))
         counts[reference_key] = int(result.scalar_one())
@@ -435,20 +427,6 @@ async def _count_player_rows_for_source(session: AsyncSession, source_user_id: i
         .where(models.WorkspaceMember.player_id == source_user_id)
     )
     return int(result.scalar_one())
-
-
-async def _reference_is_available(session: AsyncSession, reference_key: str) -> bool:
-    table_name = OPTIONAL_REFERENCE_TABLES.get(reference_key)
-    if table_name is None:
-        return True
-    return await _table_exists(session, table_name)
-
-
-async def _table_exists(session: AsyncSession, table_name: str) -> bool:
-    result = await session.execute(
-        sa.text(f"SELECT to_regclass('{table_name}') IS NOT NULL")
-    )
-    return bool(result.scalar())
 
 
 def _build_user_summary(

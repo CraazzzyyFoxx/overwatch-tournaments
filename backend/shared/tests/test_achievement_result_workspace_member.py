@@ -3,15 +3,16 @@
 
 Pure model-metadata tests (no DB connection) mirroring the precedent set by
 ``test_player_workspace_member_contract.py`` for the ``tournament.player``
-contract step: verify the column swap, the FK target/cascade, the updated
-unique constraint, and that the legacy ``AchievementUser`` table (out of
-scope for this migration) is untouched.
+contract step: verify the column swap, the FK target/cascade, and the updated
+unique constraint.
 """
 
+import pytest
+
+from shared.core import db
 from shared.models.achievements.achievement import (
     AchievementEvaluationResult,
     AchievementOverride,
-    AchievementUser,
 )
 
 
@@ -86,10 +87,16 @@ def test_override_user_relationship_no_longer_exists():
     assert "user" not in AchievementOverride.__mapper__.relationships
 
 
-def test_legacy_achievement_user_table_untouched():
-    """Out of scope for P6: ``achievements.user`` keeps its plain ``user_id``."""
-    cols = set(AchievementUser.__table__.columns.keys())
-    assert "user_id" in cols
-    assert "workspace_member_id" not in cols
-    rel = AchievementUser.__mapper__.relationships["user"]
-    assert rel.uselist is False
+def test_legacy_achievement_models_removed():
+    """The old ``Achievement``/``AchievementUser`` models were dropped by
+    ``l2g4h6i0j1k2`` and removed from the codebase."""
+    with pytest.raises(ImportError):
+        from shared.models.achievements.achievement import (  # noqa: F401
+            AchievementUser,
+        )
+
+    table_names = {
+        (table.schema, table.name) for table in db.Base.metadata.tables.values()
+    }
+    assert ("achievements", "user") not in table_names
+    assert ("achievements", "achievement") not in table_names
