@@ -82,6 +82,25 @@ async def get_registration_workspace_id(session: AsyncSession, tournament_id: in
     return int(workspace_id)
 
 
+async def get_registration_player_id(
+    session: AsyncSession,
+    registration: models.BalancerRegistration,
+) -> int | None:
+    """The registration's domain player id (players.user.id), via its member.
+
+    workspace_member_id is the row's only identity anchor (dbarch02 dropped
+    user_id); an explicit scalar query avoids lazy-loading the relationship in
+    async code. Registrations without a member have no player identity.
+    """
+    if registration.workspace_member_id is None:
+        return None
+    return await session.scalar(
+        sa.select(models.WorkspaceMember.player_id).where(
+            models.WorkspaceMember.id == registration.workspace_member_id
+        )
+    )
+
+
 async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.BalancerRegistration,
@@ -93,7 +112,7 @@ async def enqueue_registration_approved(
             tournament_id=registration.tournament_id,
             workspace_id=workspace_id,
             registration_id=registration.id,
-            user_id=registration.user_id,
+            user_id=await get_registration_player_id(session, registration),
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
         ),
@@ -114,7 +133,7 @@ async def enqueue_registration_rejected(
             tournament_id=registration.tournament_id,
             workspace_id=workspace_id,
             registration_id=registration.id,
-            user_id=registration.user_id,
+            user_id=await get_registration_player_id(session, registration),
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
         ),

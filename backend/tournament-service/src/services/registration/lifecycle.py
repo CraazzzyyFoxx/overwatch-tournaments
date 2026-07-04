@@ -86,6 +86,8 @@ async def list_registrations(
             selectinload(models.BalancerRegistration.google_sheet_binding).selectinload(
                 models.BalancerRegistrationGoogleSheetBinding.feed
             ),
+            # serialize_registration derives user_id from workspace_member.player_id.
+            selectinload(models.BalancerRegistration.workspace_member),
         )
         .order_by(models.BalancerRegistration.submitted_at.desc(), models.BalancerRegistration.id.desc())
     )
@@ -117,6 +119,8 @@ async def get_registration_by_id(session: AsyncSession, registration_id: int) ->
             selectinload(models.BalancerRegistration.checked_in_by_user),
             selectinload(models.BalancerRegistration.google_sheet_binding),
             selectinload(models.BalancerRegistration.tournament),
+            # serialize_registration derives user_id from workspace_member.player_id.
+            selectinload(models.BalancerRegistration.workspace_member),
         )
     )
     registration = result.scalar_one_or_none()

@@ -323,7 +323,9 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 form=form,
                 payload=body,
-                player_id=reg.user_id,
+                # get_registration eager-loads workspace_member (the
+                # registration's only identity anchor since dbarch02).
+                player_id=reg.workspace_member.player_id if reg.workspace_member is not None else None,
                 partial=True,
             )
 

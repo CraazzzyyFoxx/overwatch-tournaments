@@ -57,7 +57,6 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 from shared.core import enums  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.rbac import user_roles  # noqa: E402
-from shared.models.identity.user import User  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
 from shared.rbac import get_workspace_system_role  # noqa: E402
@@ -172,7 +171,6 @@ def test_first_registration_creates_member_and_player_role(db_session) -> None:
             tournament_id=tournament.id,
             workspace_id=workspace.id,
             auth_user_id=auth_user.id,
-            user_id=None,
             battle_tag=battle_tag,
             smurf_tags=None,
             discord_nick=None,
@@ -189,10 +187,11 @@ def test_first_registration_creates_member_and_player_role(db_session) -> None:
         workspace_id, tournament_id, auth_user_id, registration = asyncio.run(_run())
 
         async def _verify():
+            # The registration's only identity anchor is workspace_member_id
+            # (dbarch02 dropped user_id) — resolve the member row it points at.
             member = await db_session.scalar(
                 sa.select(WorkspaceMember).where(
-                    WorkspaceMember.workspace_id == workspace_id,
-                    WorkspaceMember.player_id == registration.user_id,
+                    WorkspaceMember.id == registration.workspace_member_id,
                 )
             )
             player_role = await get_workspace_system_role(db_session, workspace_id, "player")
@@ -208,9 +207,11 @@ def test_first_registration_creates_member_and_player_role(db_session) -> None:
 
         member, player_role, has_role = asyncio.run(_verify())
 
-        assert registration.user_id is not None
+        assert registration.workspace_member_id is not None
         assert member is not None
-        assert member.player_id == registration.user_id
+        # Member created in the tournament's workspace, for a resolved player.
+        assert member.workspace_id == workspace_id
+        assert member.player_id is not None
         assert player_role is not None
         assert has_role is True
     finally:
@@ -242,7 +243,6 @@ def test_workspace_scoped_self_register_deny_returns_403(db_session) -> None:
                 tournament_id=tournament.id,
                 workspace_id=workspace.id,
                 auth_user_id=auth_user.id,
-                user_id=None,
                 battle_tag=f"Denied{suffix}#222",
                 smurf_tags=None,
                 discord_nick=None,
@@ -292,7 +292,6 @@ def test_second_registration_does_not_duplicate_member(db_session) -> None:
             tournament_id=tournament_a.id,
             workspace_id=workspace.id,
             auth_user_id=auth_user.id,
-            user_id=None,
             battle_tag=f"Dup{suffix}#333",
             smurf_tags=None,
             discord_nick=None,
@@ -308,7 +307,6 @@ def test_second_registration_does_not_duplicate_member(db_session) -> None:
             tournament_id=tournament_b.id,
             workspace_id=workspace.id,
             auth_user_id=auth_user.id,
-            user_id=registration_a.user_id,
             battle_tag=f"Dup{suffix}#333",
             smurf_tags=None,
             discord_nick=None,
@@ -325,11 +323,16 @@ def test_second_registration_does_not_duplicate_member(db_session) -> None:
         workspace_id, tournament_a_id, tournament_b_id, registration_a, registration_b = asyncio.run(_run())
 
         async def _verify():
+            member_a = await db_session.scalar(
+                sa.select(WorkspaceMember).where(
+                    WorkspaceMember.id == registration_a.workspace_member_id,
+                )
+            )
             members = (
                 await db_session.execute(
                     sa.select(WorkspaceMember).where(
                         WorkspaceMember.workspace_id == workspace_id,
-                        WorkspaceMember.player_id == registration_a.user_id,
+                        WorkspaceMember.player_id == member_a.player_id,
                     )
                 )
             ).scalars().all()
@@ -337,7 +340,11 @@ def test_second_registration_does_not_duplicate_member(db_session) -> None:
 
         members = asyncio.run(_verify())
 
-        assert registration_a.user_id == registration_b.user_id
+        # Both registrations are anchored on the SAME member row (dbarch02:
+        # workspace_member_id is the row's only identity anchor), and only one
+        # member exists for that (workspace, player) pairing.
+        assert registration_a.workspace_member_id is not None
+        assert registration_a.workspace_member_id == registration_b.workspace_member_id
         assert len(members) == 1
     finally:
         asyncio.run(

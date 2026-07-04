@@ -51,6 +51,17 @@ def _http_exception(status_code: int, detail: str) -> Exception:
     return HTTPException(status_code=status_code, detail=detail)
 
 
+def _registration_player_id(reg: models.BalancerRegistration) -> int | None:
+    """The registration's domain player id via its workspace_member anchor.
+
+    Callers MUST eager-load ``BalancerRegistration.workspace_member``
+    (``selectinload``) — accessing an unloaded relationship here would
+    lazy-load outside the request's greenlet and raise ``MissingGreenlet``.
+    """
+    member = reg.workspace_member
+    return member.player_id if member is not None else None
+
+
 async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
@@ -135,7 +146,9 @@ def _reg_to_read(
         id=reg.id,
         tournament_id=reg.tournament_id,
         workspace_id=workspace_id,
-        user_id=reg.user_id,
+        # API shape preserved: user_id stays in the payload, derived from the
+        # workspace_member anchor (callers eager-load it; see helper).
+        user_id=_registration_player_id(reg),
         battle_tag=reg.battle_tag,
         smurf_tags_json=reg.smurf_tags_json if include_private else None,
         discord_nick=reg.discord_nick,
@@ -168,14 +181,13 @@ async def _build_tournament_history(
     Uses tournament.player (the analytics table) — if a player record exists,
     they definitely participated. No extra checks needed.
 
-    Resolution order to find player user_id (players.user.id):
-    1. user_id on the registration itself
-    2. workspace_member -> player_id (self-service registrations are anchored
-       on workspace_member, whose player_id IS players.user.id — no more
-       auth_user_id indirection needed)
+    The player id (players.user.id) is resolved via workspace_member ->
+    player_id — the registration's only identity anchor since dbarch02
+    dropped user_id.
 
-    Callers must eager-load ``BalancerRegistration.workspace_member`` for step 2
-    to see anything (a lazy load here would run outside the request's greenlet).
+    Callers must eager-load ``BalancerRegistration.workspace_member`` for the
+    resolution to see anything (a lazy load here would run outside the
+    request's greenlet).
 
     Returns a tuple of:
     - ``history_map``: registration_id -> most-recent-first history entries,
@@ -187,9 +199,7 @@ async def _build_tournament_history(
     # Build reverse map: analytics_user_id -> list of registration ids
     player_to_reg_ids: dict[int, list[int]] = {}
     for r in registrations:
-        uid = r.user_id
-        if uid is None and r.workspace_member is not None:
-            uid = r.workspace_member.player_id
+        uid = _registration_player_id(r)
         if uid is not None:
             player_to_reg_ids.setdefault(uid, []).append(r.id)
 

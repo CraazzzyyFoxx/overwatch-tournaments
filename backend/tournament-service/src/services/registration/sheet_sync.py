@@ -482,7 +482,12 @@ async def sync_google_sheet_feed(
             .options(
                 selectinload(models.BalancerRegistrationGoogleSheetBinding.registration).selectinload(
                     models.BalancerRegistration.roles
-                )
+                ),
+                # Pre-warm the identity map so ensure_player_identity's member
+                # lookup below is query-free for already-anchored rows.
+                selectinload(models.BalancerRegistrationGoogleSheetBinding.registration).selectinload(
+                    models.BalancerRegistration.workspace_member
+                ),
             )
         )
         existing_bindings = list(existing_bindings_result.scalars().all())
@@ -500,28 +505,35 @@ async def sync_google_sheet_feed(
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.battle_tag_normalized.isnot(None),
             )
-            .options(selectinload(models.BalancerRegistration.roles))
+            .options(
+                selectinload(models.BalancerRegistration.roles),
+                # The member is the registration's identity anchor; loading it
+                # here keeps ensure_player_identity's lookup query-free.
+                selectinload(models.BalancerRegistration.workspace_member),
+            )
             .order_by(models.BalancerRegistration.id.asc())
         )
         registrations_by_tag: dict[str, models.BalancerRegistration] = {}
         for reg_row in reuse_rows.scalars().all():
             registrations_by_tag.setdefault(reg_row.battle_tag_normalized, reg_row)
 
-        # 2. Already-known battlenet handles of the linked players — lets
+        # 2. Already-known battlenet handles of the anchored players — lets
         #    ensure_player_identity below no-op (zero queries) for rows whose
         #    identity is already fully provisioned.
-        linked_user_ids = {
-            reg_row.user_id for reg_row in registrations_by_tag.values() if reg_row.user_id is not None
+        linked_player_ids = {
+            reg_row.workspace_member.player_id
+            for reg_row in registrations_by_tag.values()
+            if reg_row.workspace_member is not None
         }
         known_handles: set[tuple[int, str]] = set()
-        if linked_user_ids:
+        if linked_player_ids:
             handle_rows = await session.execute(
                 sa.select(models.SocialAccount.user_id, models.SocialAccount.username_normalized).where(
-                    models.SocialAccount.user_id.in_(linked_user_ids),
+                    models.SocialAccount.user_id.in_(linked_player_ids),
                     models.SocialAccount.provider == SocialProvider.BATTLENET,
                 )
             )
-            known_handles = {(user_id, handle) for user_id, handle in handle_rows.all()}
+            known_handles = {(player_id, handle) for player_id, handle in handle_rows.all()}
 
         created = 0
         updated = 0
@@ -539,8 +551,9 @@ async def sync_google_sheet_feed(
                     registration = registrations_by_tag.get(battle_tag_key)
 
             if registration is None:
-                # Sheet-sync-created registrations have no registering auth account,
-                # so workspace_member_id is left None (mirrors create_manual_registration).
+                # Sheet-sync-created registrations have no registering auth account;
+                # their workspace_member anchor is provisioned from the battle tag by
+                # ensure_player_identity below.
                 registration = models.BalancerRegistration(
                     tournament_id=tournament_id,
                     display_name=parsed_fields.get("display_name") or parsed_fields.get("battle_tag"),
@@ -575,14 +588,20 @@ async def sync_google_sheet_feed(
                 updated += 1
 
             # Resolve/provision the domain player so sheet-imported registrations
-            # carry user_id (mirrors create_registration). Without this, OW-rank
-            # lookup — which joins by user_id — finds nothing and the balancer
-            # rank-delta UI stays empty. Idempotent: respects an already-linked
-            # user_id, so re-syncs and already-linked rows are untouched.
-            # known_handles makes the call a zero-query no-op for rows whose
-            # identity is already fully provisioned (the common case on the
+            # are anchored on a workspace_member (mirrors create_registration).
+            # Without this, OW-rank lookup — which resolves the player via
+            # workspace_member.player_id — finds nothing and the balancer
+            # rank-delta UI stays empty. Idempotent: respects an already-anchored
+            # workspace_member_id, so re-syncs and already-linked rows are
+            # untouched. known_handles makes the call a zero-query no-op for rows
+            # whose identity is already fully provisioned (the common case on the
             # 5-minute re-sync of an unchanged sheet).
-            await ensure_player_identity(session, registration, known_handles=known_handles)
+            await ensure_player_identity(
+                session,
+                registration,
+                workspace_id=tournament.workspace_id,
+                known_handles=known_handles,
+            )
 
             if binding is None:
                 binding = models.BalancerRegistrationGoogleSheetBinding(

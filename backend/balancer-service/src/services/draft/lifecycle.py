@@ -23,7 +23,6 @@ from shared.core.enums import (
     DraftPickStatus,
     DraftPlayerStatus,
     DraftRole,
-    DraftRoundRule,
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
@@ -34,7 +33,6 @@ from shared.models.registration.registration import (
     BalancerRegistrationRoleHero,
 )
 from shared.models.tenancy.workspace import WorkspaceMember
-from src.services.draft.snake_order import generate_pick_order
 
 _ACTIVE_STATUSES = (
     DraftStatus.SETUP.value,
@@ -293,14 +291,25 @@ def _registration_auth_user_id(reg: BalancerRegistration) -> int | None:
     """Resolve the registering account's auth identity for a pool registration.
 
     ``BalancerRegistration`` no longer carries ``auth_user_id`` directly — identity
-    is anchored via ``workspace_member`` (self-service registrations only; manual/
-    sheet-synced registrations have no ``workspace_member`` and resolve to ``None``,
-    same as before this column existed for them).
+    is anchored via ``workspace_member`` (registrations without a member — e.g.
+    admin-created manual rows — resolve to ``None``, same as before this column
+    existed for them).
     """
     member = reg.workspace_member
     if member is None or member.player is None:
         return None
     return member.player.auth_user_id
+
+
+def _registration_player_id(reg: BalancerRegistration) -> int | None:
+    """The registration's domain player id (players.user.id) via its member.
+
+    ``workspace_member_id`` is the row's only identity anchor (dbarch02 dropped
+    ``user_id``); ``load_pool`` eager-loads the relationship, so this never
+    lazy-loads.
+    """
+    member = reg.workspace_member
+    return member.player_id if member is not None else None
 
 
 def _map_registration(reg: BalancerRegistration) -> dict:
@@ -382,7 +391,8 @@ async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerR
                 selectinload(BalancerRegistration.roles)
                 .selectinload(BalancerRegistrationRole.hero_entries)
                 .selectinload(BalancerRegistrationRoleHero.hero),
-                # Needed by _registration_auth_user_id (captain identity resolution).
+                # Needed by _registration_player_id / _registration_auth_user_id
+                # (the member is the registration's only identity anchor).
                 selectinload(BalancerRegistration.workspace_member).selectinload(WorkspaceMember.player),
             )
             .order_by(BalancerRegistration.battle_tag_normalized.asc())
@@ -466,7 +476,7 @@ async def seed_from_pool(
             CaptainSeed(
                 name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",
                 draft_position=position,
-                user_id=reg.user_id,
+                user_id=_registration_player_id(reg),
                 auth_user_id=_registration_auth_user_id(reg),
                 battle_tag=reg.battle_tag,
                 primary_role=mapped["primary_role"],
@@ -489,7 +499,7 @@ async def seed_from_pool(
         players.append(
             PlayerSeed(
                 primary_role=mapped["primary_role"],
-                user_id=reg.user_id,
+                user_id=_registration_player_id(reg),
                 battle_tag=reg.battle_tag,
                 secondary_roles=mapped["secondary_roles"],
                 sub_role=mapped["sub_role"],

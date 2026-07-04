@@ -113,14 +113,20 @@ async def _battle_tag_account(session, *, user_id: int, battle_tag: str) -> Soci
     )
 
 
-def _registration(*, battle_tag: str, user_id: int | None = None):
-    # BalancerRegistration no longer carries auth_user_id (identity is anchored via
-    # workspace_member); ensure_player_identity now takes the registering account's
-    # auth_user_id as an explicit keyword argument instead of reading it off the row.
+def _registration(*, battle_tag: str):
+    # BalancerRegistration no longer carries auth_user_id or user_id (identity is
+    # anchored via workspace_member_id — dbarch02); ensure_player_identity takes
+    # the registering account's auth_user_id as an explicit keyword argument
+    # instead of reading it off the row. tournament_id=None makes the member
+    # anchoring a no-op (no workspace resolvable), which keeps these tests
+    # focused on player reconciliation without provisioning workspaces.
     return SimpleNamespace(
+        id=None,
+        tournament_id=None,
         battle_tag=battle_tag,
         smurf_tags_json=None,
-        user_id=user_id,
+        workspace_member_id=None,
+        deleted_at=None,
     )
 
 

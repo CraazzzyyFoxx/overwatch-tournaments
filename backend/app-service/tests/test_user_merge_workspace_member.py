@@ -431,7 +431,9 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
         self.assertNotIn("reassign:Player.user_id", reference_calls)
         self.assertEqual(3, response.affected_counts[user_merge.PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY])
         # Registration workspace_member repoint fires once, right after the
-        # generic REFERENCE_CONFIG loop (which still reassigns registration.user_id).
+        # generic REFERENCE_CONFIG loop. Since dbarch02 dropped
+        # balancer.registration.user_id, the repoint is the SOLE mechanism that
+        # moves registrations — the generic loop must not touch the table.
         self.assertEqual([(5, 6)], registration_repoint_calls)
-        self.assertIn("reassign:BalancerRegistration.user_id", reference_calls)
+        self.assertNotIn("reassign:BalancerRegistration.user_id", reference_calls)
         self.assertEqual(2, response.affected_counts[user_merge.REGISTRATION_MEMBER_REFERENCE_KEY])

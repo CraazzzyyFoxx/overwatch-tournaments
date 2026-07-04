@@ -71,12 +71,25 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         user_ids = [p.user_id for p in players if p.user_id is not None]
         if user_ids:
             from shared.models.registration.registration import BalancerRegistration
+            from shared.models.tenancy.workspace import WorkspaceMember
+
+            # Registrations are anchored on workspace_member (dbarch02 dropped
+            # user_id); the inner join naturally skips member-less rows — they
+            # have no player identity, same as user_id IS NULL before.
             regs = (
                 await session.execute(
-                    sa.select(BalancerRegistration.user_id, BalancerRegistration.notes)
+                    sa.select(WorkspaceMember.player_id, BalancerRegistration.notes)
+                    # Explicit FROM anchor: the first select column is
+                    # WorkspaceMember, which would otherwise anchor the join
+                    # on the wrong side.
+                    .select_from(BalancerRegistration)
+                    .join(
+                        WorkspaceMember,
+                        WorkspaceMember.id == BalancerRegistration.workspace_member_id,
+                    )
                     .where(
                         BalancerRegistration.tournament_id == draft_session.tournament_id,
-                        BalancerRegistration.user_id.in_(user_ids),
+                        WorkspaceMember.player_id.in_(user_ids),
                         BalancerRegistration.deleted_at.is_(None),
                     )
                 )

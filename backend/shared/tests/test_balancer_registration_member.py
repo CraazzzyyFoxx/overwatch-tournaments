@@ -6,7 +6,9 @@ def test_registration_anchored_on_workspace_member():
     assert "workspace_member_id" in cols
     assert "auth_user_id" not in cols
     assert "workspace_id" not in cols
-    assert "user_id" in cols
+    # dbarch02 dropped the dual anchor: workspace_member_id is the ONLY
+    # identity column left on the row.
+    assert "user_id" not in cols
 
 
 def test_registration_workspace_member_column_nullable():
@@ -31,6 +33,7 @@ def test_registration_workspace_member_relationship_exists():
 def test_registration_no_auth_user_relationship():
     assert "auth_user" not in BalancerRegistration.__mapper__.relationships
     assert "workspace" not in BalancerRegistration.__mapper__.relationships
+    assert "user" not in BalancerRegistration.__mapper__.relationships
 
 
 def test_registration_unique_index_on_tournament_and_workspace_member():

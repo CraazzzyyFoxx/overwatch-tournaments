@@ -170,17 +170,21 @@ def register(broker: Any, logger: Any) -> None:
                 if registrations
                 else None
             )
-            user_ids = [r.user_id for r in registrations if r.user_id is not None]
+            # Registrations are anchored on workspace_member (eager-loaded by
+            # list_registrations); the player id is the member's player_id.
+            user_ids = [
+                r.workspace_member.player_id for r in registrations if r.workspace_member is not None
+            ]
             grid = await registration_service.get_tournament_grid(session, tournament_id)
             accounts_by_user = await fetch_latest_ow_ranks_by_account(session, user_ids)
             # Per registration, prefer the player's main (non-smurf) accounts and take the max rank.
             raw_ow_ranks_by_registration = {
                 registration.id: select_main_account_ow_ranks(
-                    accounts_by_user.get(registration.user_id, {}),
+                    accounts_by_user.get(registration.workspace_member.player_id, {}),
                     registration.smurf_tags_json,
                 )
                 for registration in registrations
-                if registration.user_id is not None
+                if registration.workspace_member is not None
             }
             ow_ranks = normalize_ow_ranks_to_grid(raw_ow_ranks_by_registration, grid)
             return [

@@ -62,12 +62,14 @@ class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
 
     async def test_registration_outbox_event_registers_structure_realtime_update(self) -> None:
         # BalancerRegistration has no denormalized workspace_id column anymore —
-        # enqueue_registration_approved derives it via a tournament lookup.
+        # enqueue_registration_approved derives it via a tournament lookup. The
+        # event's user_id is likewise resolved from the workspace_member anchor
+        # (dbarch02 dropped registration.user_id); None here skips that lookup.
         session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock(), scalar=AsyncMock(return_value=3))
         registration = SimpleNamespace(
             id=7,
             tournament_id=42,
-            user_id=None,
+            workspace_member_id=None,
             battle_tag="Player#1234",
         )
 

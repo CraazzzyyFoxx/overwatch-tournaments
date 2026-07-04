@@ -116,7 +116,8 @@ async def create_balance_snapshot(
     await session.flush()
 
     # Build registration lookup (battle_tag_normalized -> registration, roles eagerly
-    # loaded). Registrations are the source of truth for user_id and per-role rank.
+    # loaded). Registrations are the source of truth for player identity (via the
+    # workspace_member anchor) and per-role rank.
     from sqlalchemy.orm import selectinload
 
     from src.services.admin.balancer_registration import get_tournament_grid
@@ -128,7 +129,11 @@ async def create_balance_snapshot(
             models.BalancerRegistration.tournament_id == balance.tournament_id,
             models.BalancerRegistration.deleted_at.is_(None),
         )
-        .options(selectinload(models.BalancerRegistration.roles))
+        .options(
+            selectinload(models.BalancerRegistration.roles),
+            # The member anchor is the only path to the player id (user_id below).
+            selectinload(models.BalancerRegistration.workspace_member),
+        )
     )
     reg_lookup: dict[str, models.BalancerRegistration] = {}
     for reg in reg_result.scalars().all():
@@ -145,7 +150,11 @@ async def create_balance_snapshot(
             for player in players:
                 name_normalized = player.name.replace(" ", "").strip().lower()
                 registration = reg_lookup.get(name_normalized)
-                user_id = registration.user_id if registration else None
+                user_id = (
+                    registration.workspace_member.player_id
+                    if registration is not None and registration.workspace_member is not None
+                    else None
+                )
 
                 preferred_role: str | None = None
                 was_off_role = False

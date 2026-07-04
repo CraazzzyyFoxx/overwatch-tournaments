@@ -23,11 +23,12 @@ OVERRIDE_MEMBER_REFERENCE_KEY = "achievements.override.workspace_member_id"
 REGISTRATION_MEMBER_REFERENCE_KEY = "balancer.registration.workspace_member_id"
 
 # achievements.evaluation_result / achievements.override moved to
-# workspace_member_id (P6): they are no longer generic user_id columns, so
-# they are handled by dedicated workspace_member-aware counters/mergers
-# (mirroring PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY) instead of living in this
-# table. Only the legacy achievements.user.user_id row (untouched by P6)
-# still fits the generic reassign.
+# workspace_member_id (P6), and balancer.registration followed (dbarch02
+# dropped its user_id column): none of them are generic user_id columns
+# anymore, so they are handled by dedicated workspace_member-aware
+# counters/mergers (mirroring PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY) instead
+# of living in this table. Only the legacy achievements.user.user_id row
+# (untouched by P6) still fits the generic reassign.
 REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("tournament.team.captain_id", models.Team, "captain_id"),
     ("matches.statistics.user_id", models.MatchStatistics, "user_id"),
@@ -36,7 +37,6 @@ REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
     ("matches.assists.user_id", models.MatchEvent, "user_id"),
     ("matches.assists.related_user_id", models.MatchEvent, "related_user_id"),
     ("achievements.user.user_id", models.AchievementUser, "user_id"),
-    ("balancer.registration.user_id", models.BalancerRegistration, "user_id"),
     ("analytics.balance_player_snapshot.user_id", models.AnalyticsBalancePlayerSnapshot, "user_id"),
     ("log_processing.record.uploader_id", models.LogProcessingRecord, "uploader_id"),
 )
@@ -209,9 +209,10 @@ async def execute_merge(
         # balancer.registration.workspace_member_id is ON DELETE SET NULL, and
         # every registration still anchored on the source's workspace_member would
         # otherwise be silently nulled out by the CASCADE from
-        # workspace_member.player_id once the source User row is deleted below --
-        # the generic REFERENCE_CONFIG reassign above only moved user_id, not this
-        # workspace-scoped anchor. Run right after that reassign, same repoint
+        # workspace_member.player_id once the source User row is deleted below.
+        # Since dbarch02 dropped registration.user_id, this repoint is the SOLE
+        # mechanism that moves registrations during a merge (the generic
+        # REFERENCE_CONFIG loop no longer touches the table) — same repoint
         # pattern as Player/achievements above.
         affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = (
             await _repoint_registration_workspace_members(

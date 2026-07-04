@@ -107,6 +107,9 @@ async def get_registration(
             .selectinload(models.BalancerRegistrationRoleHero.hero)
         )
         .options(selectinload(models.BalancerRegistration.tournament))
+        # _reg_to_read serializes user_id from workspace_member.player_id and
+        # must never lazy-load it in async code.
+        .options(selectinload(models.BalancerRegistration.workspace_member))
     )
     return result.scalar_one_or_none()
 
@@ -236,20 +239,97 @@ async def _ensure_user_battle_tag(session: AsyncSession, user: models.User, batt
     )
 
 
+async def _anchor_registration_member(
+    session: AsyncSession,
+    registration: models.BalancerRegistration,
+    *,
+    player_id: int,
+    workspace_id: int | None,
+    defer_collision_to_db: bool = False,
+) -> None:
+    """Point ``registration.workspace_member_id`` at ``player_id``'s member row.
+
+    Resolves the workspace from the registration's tournament when the caller
+    didn't pass it (``Tournament.workspace_id`` is NOT NULL, so this is total
+    for any persisted registration). The partial unique index
+    ``uq_balancer_registration_user (tournament_id, workspace_member_id) WHERE
+    deleted_at IS NULL`` allows only one live registration per member per
+    tournament, so if another live row already holds that member the anchor is
+    skipped with a warning (the player identity — social accounts — is still
+    ensured; this mirrors how the admin user-merge skips colliding rows).
+
+    ``defer_collision_to_db=True`` disables that pre-check and lets the unique
+    index raise ``IntegrityError`` at flush/commit instead — used by the
+    self-service path, where a collision means a concurrent duplicate
+    registration and must surface as the historical 409, not a silently
+    unanchored row.
+    """
+    if workspace_id is None:
+        workspace_id = await session.scalar(
+            sa.select(models.Tournament.workspace_id).where(
+                models.Tournament.id == registration.tournament_id
+            )
+        )
+    if workspace_id is None:
+        logger.warning(
+            "ensure_player_identity: could not resolve a workspace for the registration's "
+            "tournament; leaving workspace_member_id unset",
+            registration_id=getattr(registration, "id", None),
+            tournament_id=registration.tournament_id,
+            player_id=player_id,
+        )
+        return
+
+    member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+    if registration.workspace_member_id == member.id:
+        return
+
+    if not defer_collision_to_db and registration.deleted_at is None:
+        collides = await session.scalar(
+            sa.select(
+                sa.exists().where(
+                    models.BalancerRegistration.tournament_id == registration.tournament_id,
+                    models.BalancerRegistration.workspace_member_id == member.id,
+                    models.BalancerRegistration.deleted_at.is_(None),
+                    models.BalancerRegistration.id != registration.id,
+                )
+            )
+        )
+        if collides:
+            logger.warning(
+                "ensure_player_identity: another live registration in this tournament is "
+                "already anchored on the resolved workspace_member (same player twice, e.g. "
+                "a main + smurf row); leaving this registration unanchored",
+                registration_id=getattr(registration, "id", None),
+                tournament_id=registration.tournament_id,
+                workspace_member_id=member.id,
+                player_id=player_id,
+            )
+            return
+
+    registration.workspace_member_id = member.id
+
+
 async def ensure_player_identity(
     session: AsyncSession,
     registration: models.BalancerRegistration,
     *,
     auth_user_id: int | None = None,
+    workspace_id: int | None = None,
     known_handles: set[tuple[int, str]] | None = None,
+    defer_member_collision_to_db: bool = False,
 ) -> int | None:
     """Find-or-create the domain player (players.user) for a registration's tags.
 
-    Links ``registration.user_id`` and ensures a battlenet ``social_account`` for
-    the main tag and each smurf. This is what lets first-time registrants — who
-    aren't yet in the analytics system — be picked up by rank collection / the
-    open-profile gate. Dedup is by the normalized handle (case-insensitive), so a
-    later log/CSV import reconciles to the same player. Flushes only; caller commits.
+    Anchors the registration on that player's ``workspace_member`` row
+    (``registration.workspace_member_id`` — the row's ONLY identity column
+    since dbarch02 dropped ``user_id``) and ensures a battlenet
+    ``social_account`` for the main tag and each smurf. This is what lets
+    first-time registrants — who aren't yet in the analytics system — be
+    picked up by rank collection / the open-profile gate. Dedup is by the
+    normalized handle (case-insensitive), so a later log/CSV import reconciles
+    to the same player. Returns the resolved player id (``players.user.id`` ==
+    the member's ``player_id``). Flushes only; caller commits.
 
     ``auth_user_id`` is the *registering* account's auth identity, passed explicitly
     by self-service callers (``create_registration``); manual/sheet-sync callers have
@@ -257,9 +337,21 @@ async def ensure_player_identity(
     registration row — ``BalancerRegistration`` has no ``auth_user_id`` column
     (identity is anchored via ``workspace_member`` instead).
 
+    ``workspace_id`` is the registration's tournament's workspace when the
+    caller already has it (``create_registration`` / sheet sync); when ``None``
+    it is resolved from ``registration.tournament_id`` with one query.
+
+    ``defer_member_collision_to_db`` controls what happens when another live
+    registration in the same tournament already holds the resolved member:
+    ``False`` (sheet sync / backfill) skips the anchor with a warning so one
+    bad row can't break a whole sync; ``True`` (self-service) sets it anyway
+    and lets the unique index raise at commit — see
+    ``_anchor_registration_member``.
+
     Identity precedence (registrant may already have an authenticated account):
-    1. An already-linked registration (``registration.user_id`` set, e.g. by a
-       prior save) is respected as-is.
+    1. An already-anchored registration (``registration.workspace_member_id``
+       set, e.g. by a prior save) is respected as-is — the member's
+       ``player_id`` is the player.
     2. Else, if the registering auth account already owns a player
        (``players.user.auth_user_id``), that player is reused — the battletag is
        attached to it rather than find-or-create-by-battletag. If a *different*
@@ -274,31 +366,55 @@ async def ensure_player_identity(
        account when present).
 
     ``known_handles`` is an optional bulk-prefetched cache of
-    ``(user_id, normalized_battlenet_handle)`` pairs used by the sheet-sync
+    ``(player_id, normalized_battlenet_handle)`` pairs used by the sheet-sync
     loop (which calls this once per row every 5 minutes): when the registration
-    is already linked and every tag is already a known handle of that user, the
-    call is a no-op with ZERO queries instead of 2+ per row. The set is mutated
-    (newly ensured handles are added) so repeated tags within one sync are also
-    deduplicated. Semantics for ``known_handles=None`` callers are unchanged.
+    is already anchored and every tag is already a known handle of that player,
+    the call is a no-op with ZERO queries — provided the caller eager-loaded
+    ``registration.workspace_member`` so the ``session.get`` below hits the
+    identity map. The set is mutated (newly ensured handles are added) so
+    repeated tags within one sync are also deduplicated. Semantics for
+    ``known_handles=None`` callers are unchanged.
     """
+    # Resolve the currently-anchored player, if any. session.get() is served
+    # from the identity map when the member was eager-loaded by the caller.
+    linked_member: models.WorkspaceMember | None = None
+    if registration.workspace_member_id is not None:
+        linked_member = await session.get(models.WorkspaceMember, registration.workspace_member_id)
+    linked_player_id = linked_member.player_id if linked_member is not None else None
+
     battle_tag = registration.battle_tag
     if not battle_tag:
-        return registration.user_id
+        if linked_player_id is not None:
+            return linked_player_id
+        # No battletag on the form: the only identity we can still anchor is
+        # the registering account's own player (preserves the pre-dbarch02
+        # behavior where the pre-resolved player id was linked directly).
+        owned = await _find_owned_user(session, auth_user_id)
+        if owned is None:
+            return None
+        await _anchor_registration_member(
+            session,
+            registration,
+            player_id=owned.id,
+            workspace_id=workspace_id,
+            defer_collision_to_db=defer_member_collision_to_db,
+        )
+        return owned.id
 
     tags = [battle_tag, *[smurf for smurf in (registration.smurf_tags_json or []) if smurf]]
 
-    def _handle_key(user_id: int, tag: str) -> tuple[int, str]:
-        return (user_id, normalize_social_handle(SocialProvider.BATTLENET, tag))
+    def _handle_key(player_id: int, tag: str) -> tuple[int, str]:
+        return (player_id, normalize_social_handle(SocialProvider.BATTLENET, tag))
 
-    if registration.user_id is not None and known_handles is not None:
-        keys = [_handle_key(registration.user_id, tag) for tag in tags if "#" in tag]
+    if linked_player_id is not None and known_handles is not None:
+        keys = [_handle_key(linked_player_id, tag) for tag in tags if "#" in tag]
         if all(key in known_handles for key in keys):
-            return registration.user_id
+            return linked_player_id
 
-    # Respect an already-linked registration; only reconcile when unset.
+    # Respect an already-anchored registration; only reconcile when unset.
     user: models.User | None = None
-    if registration.user_id is not None:
-        user = await session.get(models.User, registration.user_id)
+    if linked_player_id is not None:
+        user = await session.get(models.User, linked_player_id)
 
     if user is None:
         owned = await _find_owned_user(session, auth_user_id)
@@ -324,8 +440,14 @@ async def ensure_player_identity(
             known_handles.add(key)
         await _ensure_user_battle_tag(session, user, tag)
 
-    if registration.user_id != user.id:
-        registration.user_id = user.id
+    if linked_member is None or linked_member.player_id != user.id:
+        await _anchor_registration_member(
+            session,
+            registration,
+            player_id=user.id,
+            workspace_id=workspace_id,
+            defer_collision_to_db=defer_member_collision_to_db,
+        )
     return user.id
 
 
@@ -335,7 +457,6 @@ async def create_registration(
     tournament_id: int,
     workspace_id: int,
     auth_user_id: int,
-    user_id: int | None,
     battle_tag: str | None,
     smurf_tags: list[str] | None,
     discord_nick: str | None,
@@ -371,7 +492,6 @@ async def create_registration(
 
     registration = models.BalancerRegistration(
         tournament_id=tournament_id,
-        user_id=user_id,
         display_name=cleaned_battle_tag,
         battle_tag=cleaned_battle_tag,
         battle_tag_normalized=_normalize_battle_tag(cleaned_battle_tag),
@@ -390,24 +510,33 @@ async def create_registration(
     await session.flush()
     # Provision the domain player identity so first-time registrants are picked
     # up by rank collection / the open-profile gate. Done before the approval
-    # event so it carries the resolved user_id.
-    player_id = await ensure_player_identity(session, registration, auth_user_id=auth_user_id)
+    # event so it carries the resolved player. ensure_player_identity itself
+    # anchors registration.workspace_member_id on the resolved player's member
+    # row for this workspace (idempotently created via
+    # get_or_create_workspace_member) — the row's only identity column since
+    # dbarch02 dropped user_id.
+    # defer_member_collision_to_db: a member collision on this path means a
+    # concurrent duplicate self-registration — let the partial unique index
+    # raise IntegrityError at commit (mapped to 409 by
+    # submit_public_registration), matching the historical behavior.
+    player_id = await ensure_player_identity(
+        session,
+        registration,
+        auth_user_id=auth_user_id,
+        workspace_id=workspace_id,
+        defer_member_collision_to_db=True,
+    )
     if auth_user_id is not None and player_id is not None:
-        # Every self-service registration that resolved a domain player
-        # enrolls it as a workspace_member and grants the baseline "player"
-        # RBAC role. Both helpers are idempotent, so re-registering (e.g. a
-        # second tournament in the same workspace) is a no-op past the first
-        # time. The registration's own workspace_member_id anchor is set from
-        # this same resolved member (registration.workspace_id no longer
-        # exists; workspace is derived from workspace_member -> workspace, or
-        # from tournament_id when unset/manual).
+        # Every self-service registration that resolved a domain player grants
+        # the baseline "player" RBAC role (the workspace_member enrollment
+        # already happened inside ensure_player_identity above). Idempotent,
+        # so re-registering (e.g. a second tournament in the same workspace)
+        # is a no-op past the first time.
         #
         # assign_workspace_system_role() calls ensure_workspace_system_roles()
         # internally, so we don't seed the catalog explicitly here — doing so
         # would re-upsert the whole permission catalog twice per registration
         # on this hot path for no behavioural gain.
-        member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
-        registration.workspace_member_id = member.id
         await assign_workspace_system_role(
             session, user_id=auth_user_id, workspace_id=workspace_id, role_name="player"
         )
@@ -552,7 +681,10 @@ async def submit_public_registration(
             raise HTTPException(status_code=409, detail="Withdrawn registrations cannot be submitted again")
         raise HTTPException(status_code=409, detail="Already registered for this tournament")
 
-    # Resolve player profile from auth_user (explicit query to avoid lazy load)
+    # Resolve player profile from auth_user (explicit query to avoid lazy load).
+    # Only needed for the verified-identity validation below —
+    # create_registration/ensure_player_identity re-resolve the owned player
+    # from auth_user_id themselves when anchoring the workspace_member.
     user_player_id: int | None = await session.scalar(
         sa.select(models.User.id).where(models.User.auth_user_id == auth_user.id)
     )
@@ -578,7 +710,6 @@ async def submit_public_registration(
             tournament_id=tournament_id,
             workspace_id=workspace_id,
             auth_user_id=auth_user.id,
-            user_id=user_player_id,
             battle_tag=body.battle_tag,
             smurf_tags=body.smurf_tags,
             discord_nick=body.discord_nick,
@@ -604,7 +735,9 @@ async def submit_public_registration(
         .options(
             selectinload(models.BalancerRegistration.roles)
             .selectinload(models.BalancerRegistrationRole.hero_entries)
-            .selectinload(models.BalancerRegistrationRoleHero.hero)
+            .selectinload(models.BalancerRegistrationRoleHero.hero),
+            # _reg_to_read serializes user_id from workspace_member.player_id.
+            selectinload(models.BalancerRegistration.workspace_member),
         )
     )
     registration = result.scalar_one()
@@ -646,7 +779,8 @@ async def build_public_registration_list(
             selectinload(models.BalancerRegistration.roles)
             .selectinload(models.BalancerRegistrationRole.hero_entries)
             .selectinload(models.BalancerRegistrationRoleHero.hero),
-            # Needed by _build_tournament_history's user_id fallback below.
+            # Needed by _build_tournament_history and _reg_to_read below —
+            # the member is the registration's only identity anchor.
             selectinload(models.BalancerRegistration.workspace_member),
         )
         .order_by(models.BalancerRegistration.submitted_at.asc())

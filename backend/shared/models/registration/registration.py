@@ -11,7 +11,6 @@ from shared.core import db
 if TYPE_CHECKING:
     from shared.models.catalog.hero import Hero
     from shared.models.identity.auth_user import AuthUser
-    from shared.models.identity.user import User
     from shared.models.tenancy.workspace import Workspace, WorkspaceMember
     from shared.models.tournament.tournament import Tournament
 
@@ -138,11 +137,13 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     tournament_id: Mapped[int] = mapped_column(
         ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True
     )
+    # Sole identity anchor (dbarch02 dropped the legacy user_id column): the
+    # domain player is reached via workspace_member.player_id. Nullable — a
+    # registration with no member has no player identity at all (e.g. an
+    # admin-created manual row, or a sheet row whose identity provisioning
+    # was skipped).
     workspace_member_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace_member.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -183,8 +184,9 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     )
 
     tournament: Mapped["Tournament"] = relationship()
+    # Readers needing the domain player must eager-load this relationship
+    # (selectinload / explicit join) — never rely on a lazy load in async code.
     workspace_member: Mapped["WorkspaceMember | None"] = relationship()
-    user: Mapped["User | None"] = relationship()
     reviewer: Mapped["AuthUser | None"] = relationship(foreign_keys=[reviewed_by])
     deleted_by_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[deleted_by])
     checked_in_by_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[checked_in_by])

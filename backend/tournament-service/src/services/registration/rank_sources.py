@@ -172,12 +172,20 @@ async def _load_latest_ranks_from_balancer_history(
     if not user_ids:
         return {}
 
+    # Registrations are anchored on workspace_member; the domain player id is
+    # the member's player_id. Inner join: member-less registrations have no
+    # player identity and (as before, when user_id was NULL) never match.
     stmt = (
         sa.select(
-            models.BalancerRegistration.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.BalancerRegistrationRole.role,
             models.BalancerRegistrationRole.rank_value,
             models.Tournament.division_grid_version_id,
+        )
+        .select_from(models.BalancerRegistration)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id,
         )
         .join(
             models.BalancerRegistrationRole,
@@ -188,7 +196,7 @@ async def _load_latest_ranks_from_balancer_history(
             models.Tournament.id == models.BalancerRegistration.tournament_id,
         )
         .where(
-            models.BalancerRegistration.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             models.Tournament.workspace_id == workspace_id,
             models.BalancerRegistration.tournament_id != current_tournament_id,
             models.BalancerRegistration.deleted_at.is_(None),
@@ -196,7 +204,7 @@ async def _load_latest_ranks_from_balancer_history(
             models.BalancerRegistrationRole.rank_value.is_not(None),
         )
         .order_by(
-            models.BalancerRegistration.user_id,
+            models.WorkspaceMember.player_id,
             models.BalancerRegistrationRole.role,
             models.Tournament.number.desc().nullslast(),
             models.BalancerRegistration.tournament_id.desc(),
@@ -319,8 +327,12 @@ async def load_user_balancer_rank_history(
                 models.Tournament,
                 models.Tournament.id == models.BalancerRegistration.tournament_id,
             )
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id,
+            )
             .where(
-                models.BalancerRegistration.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Tournament.workspace_id == workspace_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistrationRole.is_active.is_(True),
