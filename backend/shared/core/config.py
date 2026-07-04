@@ -54,6 +54,12 @@ class BaseServiceSettings(BaseSettings):
     auth_service_timeout: float = 5.0
     auth_service_max_retries: int = 2
 
+    # RabbitMQ consumer QoS: max unacked messages per default channel. Bounds
+    # per-process concurrency so overload backlog stays in the queue (where the
+    # gateway's per-message TTL can drop stale requests) instead of the
+    # consumer buffer. Env: RPC_PREFETCH_COUNT.
+    rpc_prefetch_count: int = 16
+
     # Database pool
     db_pool_size: int = 10
     db_max_overflow: int = 20
