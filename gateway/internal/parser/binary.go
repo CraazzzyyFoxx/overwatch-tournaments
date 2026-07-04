@@ -44,7 +44,13 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
-	id, ok := b.identity(r)
+	id, ok, err := b.identity(r)
+	if err != nil {
+		b.log.Error("identity resolution unavailable", "err", err)
+		w.Header().Set("Retry-After", "1")
+		writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
 	if !ok {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
@@ -95,7 +101,13 @@ func (b *Binary) TeamsBalancerUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
-	id, ok := b.identity(r)
+	id, ok, err := b.identity(r)
+	if err != nil {
+		b.log.Error("identity resolution unavailable", "err", err)
+		w.Header().Set("Retry-After", "1")
+		writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
 	if !ok {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return

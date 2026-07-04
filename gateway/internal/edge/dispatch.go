@@ -30,8 +30,11 @@ type RPCCaller interface {
 }
 
 // IdentityResolver returns the validated RBAC identity payload for a request
-// (user_id/is_superuser/roles/permissions/workspaces), or ok=false if absent.
-type IdentityResolver func(r *http.Request) (map[string]any, bool)
+// (user_id/is_superuser/roles/permissions/workspaces), ok=false if absent, and
+// a non-nil error when the identity backend itself was unavailable (shed,
+// disconnected, or timed out). Callers must treat a non-nil error as a 503,
+// never as "not authenticated".
+type IdentityResolver func(r *http.Request) (map[string]any, bool, error)
 
 // Dispatcher turns RouteSpecs into http handlers that call RPC and relay the envelope.
 type Dispatcher struct {
@@ -77,8 +80,16 @@ func (d *Dispatcher) serve(w http.ResponseWriter, r *http.Request, spec RouteSpe
 	}
 
 	if spec.Auth != AuthNone {
-		id, ok := d.resolveIdentity(r)
+		id, ok, err := d.resolveIdentity(r)
 		switch {
+		case err != nil:
+			// Identity backend unavailable (shed/disconnected/timeout): this is
+			// a 503, not a 401 — treating it as "not authenticated" makes
+			// clients drop valid sessions and retry-storm during overload.
+			httplog.From(r.Context()).Error("identity resolution unavailable", "err", err)
+			w.Header().Set("Retry-After", "1")
+			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+			return
 		case ok:
 			data["identity"] = id
 		case spec.Auth == AuthRequired:
@@ -190,9 +201,9 @@ func matchPattern(pattern string, segs []string) (map[string]string, bool) {
 	return pp, true
 }
 
-func (d *Dispatcher) resolveIdentity(r *http.Request) (map[string]any, bool) {
+func (d *Dispatcher) resolveIdentity(r *http.Request) (map[string]any, bool, error) {
 	if d.identity == nil {
-		return nil, false
+		return nil, false, nil
 	}
 	return d.identity(r)
 }
