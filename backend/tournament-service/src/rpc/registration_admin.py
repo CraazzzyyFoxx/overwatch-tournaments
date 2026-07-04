@@ -37,15 +37,12 @@ handler adds a redundant commit.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
-from pydantic import ValidationError
 from shared.balancer_registration_statuses import get_status_metas_map
-from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
-from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 from shared.services.rank_snapshots import (
     fetch_latest_ow_ranks_by_account,
     normalize_ow_ranks_to_grid,
@@ -53,10 +50,12 @@ from shared.services.rank_snapshots import (
 from sqlalchemy import select
 
 from src import models
-from src.core import auth, db
+from src.core import auth
+from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.registration import RegistrationFormUpsert
 from src.services.registration import admin as registration_service
+from src.services.registration import service as reg_svc
 from src.services.registration import status_catalog
 from src.services.registration.ow_rank_selection import select_main_account_ow_ranks
 from src.services.registration.realtime import emit_balancer_registrations_changed
@@ -66,53 +65,25 @@ from src.services.registration.serializers import (
     serialize_status,
 )
 
-
 # --- helpers -----------------------------------------------------------------
 
-
-def _identity(data: dict[str, Any]) -> models.AuthUser:
-    """Rehydrate the gateway-injected identity into a transient AuthUser."""
-    return rehydrate_user(data.get("identity"))
-
-
-def _payload(data: dict[str, Any]) -> dict[str, Any]:
-    return data.get("payload") or {}
+# Same cap as BulkEncounterUpdate.encounter_ids — bulk operations must not
+# accept unbounded id lists.
+_MAX_BULK_IDS = 500
 
 
-def _path_int(data: dict[str, Any], name: str) -> int:
-    raw = data.get(name)
+def _bulk_ids(payload: dict[str, Any], key: str = "registration_ids") -> list[int]:
     try:
-        return int(raw)
+        ids = [int(value) for value in payload.get(key) or []]
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{name} is required") from exc
+        raise HTTPException(status_code=422, detail=f"{key} must be a list of integers") from exc
+    if len(ids) > _MAX_BULK_IDS:
+        raise HTTPException(status_code=422, detail=f"{key} accepts at most {_MAX_BULK_IDS} items")
+    return ids
 
 
-def _require_id(data: dict[str, Any]) -> int:
-    try:
-        return int(data["id"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="id is required") from exc
 
 
-def _q(data: dict[str, Any], key: str) -> list[str] | None:
-    vals = (data.get("query") or {}).get(key)
-    if vals is None:
-        return None
-    return vals if isinstance(vals, list) else [vals]
-
-
-def _q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str, default: Any = None) -> Any:
-    vals = _q(data, key)
-    if not vals:
-        return default
-    try:
-        return cast(vals[0])
-    except (TypeError, ValueError):
-        return default
-
-
-def _bool(value: str) -> bool:
-    return value.lower() in ("1", "true", "yes", "on")
 
 
 def _require_scope(data: dict[str, Any]) -> str:
@@ -130,31 +101,6 @@ def _require_slug(data: dict[str, Any]) -> str:
     return str(slug)
 
 
-def _dump(obj: Any) -> Any:
-    """Plain serialization (admin routes keep nulls — no exclude_none)."""
-    if obj is None:
-        return None
-    if isinstance(obj, list):
-        return [_dump(x) for x in obj]
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    return obj
-
-
-async def _run(logger: Any, op: Callable[[Any], Awaitable[Any]]) -> dict[str, Any]:
-    """Envelope wrapper mirroring admin_misc._run, with identity-failure mapping."""
-    try:
-        async with db.async_session_maker() as session:
-            return rpc_ok(await op(session))
-    except MissingIdentityError as exc:
-        return rpc_error("unauthorized", str(exc) or "Not authenticated")
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("tournament registration-admin rpc failed")
-        return rpc_error("internal", "internal error")
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -169,7 +115,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
             form = await registration_service.get_registration_form(session, tournament_id)
             if form is None:
@@ -185,45 +131,12 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             body = RegistrationFormUpsert.model_validate(_payload(data))
-
-            tournament = await registration_service.ensure_tournament_exists(session, tournament_id)
-            form = await registration_service.get_registration_form(session, tournament_id)
-            built_in_fields_json = {
-                key: value.model_dump(exclude_none=True) for key, value in body.built_in_fields.items()
-            }
-            custom_fields_json = [field.model_dump(exclude_none=True) for field in body.custom_fields]
-
-            if form is None:
-                form = models.BalancerRegistrationForm(
-                    tournament_id=tournament_id,
-                    workspace_id=tournament.workspace_id,
-                    is_open=body.is_open,
-                    auto_approve=body.auto_approve,
-                    opens_at=body.opens_at,
-                    closes_at=body.closes_at,
-                    require_open_profile=body.require_open_profile,
-                    open_profile_scope=body.open_profile_scope,
-                    show_ranks=body.show_ranks,
-                    built_in_fields_json=built_in_fields_json,
-                    custom_fields_json=custom_fields_json,
-                )
-                session.add(form)
-            else:
-                form.is_open = body.is_open
-                form.auto_approve = body.auto_approve
-                form.opens_at = body.opens_at
-                form.closes_at = body.closes_at
-                form.require_open_profile = body.require_open_profile
-                form.open_profile_scope = body.open_profile_scope
-                form.show_ranks = body.show_ranks
-                form.built_in_fields_json = built_in_fields_json
-                form.custom_fields_json = custom_fields_json
-
-            await session.commit()
-            await session.refresh(form)
+            # get_tournament_workspace_id above already 404s on a missing
+            # tournament; upsert_registration_form commits internally.
+            form = await reg_svc.upsert_registration_form(session, tournament_id, body, workspace_id=ws_id)
             return _dump(serialize_registration_form(form))
 
         return await _run(logger, op)
@@ -236,7 +149,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
 
             status_filter = _q1(data, "status_filter")
@@ -291,7 +204,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             body = admin_schemas.BalancerRegistrationCreateRequest.model_validate(_payload(data))
 
@@ -326,7 +239,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             body = admin_schemas.BalancerRegistrationUpdateRequest.model_validate(_payload(data))
 
@@ -362,7 +275,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             registration = await registration_service.approve_registration(
                 session,
@@ -386,7 +299,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             registration = await registration_service.reject_registration(
                 session,
@@ -410,7 +323,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             body = admin_schemas.BalancerRegistrationExclusionRequest.model_validate(_payload(data))
             registration = await registration_service.set_registration_exclusion(
@@ -436,7 +349,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             registration = await registration_service.withdraw_registration(session, registration_id)
             status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
@@ -456,7 +369,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             registration = await registration_service.restore_registration(session, registration_id)
             status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
@@ -476,7 +389,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             tournament_id = await session.scalar(
                 select(models.BalancerRegistration.tournament_id).where(
@@ -501,12 +414,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             payload = _payload(data)
-            registration_ids = [
-                int(registration_id) for registration_id in payload.get("registration_ids", [])
-            ]
+            registration_ids = _bulk_ids(payload)
             approved, skipped = await registration_service.bulk_approve_registrations(
                 session,
                 tournament_id,
@@ -526,7 +437,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             body = admin_schemas.SetBalancerStatusRequest.model_validate(_payload(data))
             registration = await registration_service.set_balancer_status(
@@ -551,12 +462,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             payload = _payload(data)
-            registration_ids = [
-                int(registration_id) for registration_id in payload.get("registration_ids", [])
-            ]
+            registration_ids = _bulk_ids(payload)
             balancer_status = payload.get("balancer_status", "ready")
             updated, skipped = await registration_service.bulk_add_to_balancer(
                 session,
@@ -577,7 +486,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
             body = admin_schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             result = await registration_service.autofill_registration_ranks_from_parsed(
@@ -602,7 +511,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             body = admin_schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             result = await registration_service.autofill_registration_ranks_from_parsed(
@@ -648,7 +557,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "import")
             result = await registration_service.export_registrations_to_users(session, tournament_id)
             return _dump(admin_schemas.RegistrationUserExportResponse(**result))
@@ -662,7 +571,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             registration_id = _require_id(data)
-            ws_id = await auth._get_registration_workspace_id(session, registration_id)
+            ws_id = await auth.get_registration_workspace_id(session, registration_id)
             ensure_workspace_permission(user, ws_id, "team", "update")
             body = admin_schemas.CheckInRequest.model_validate(_payload(data))
             if body.checked_in:

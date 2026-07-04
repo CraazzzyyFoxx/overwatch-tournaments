@@ -1,7 +1,7 @@
 """Admin service layer for team and player CRUD operations"""
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.player_sub_roles import normalize_sub_role
 from shared.repository import get_or_create_workspace_member
 from sqlalchemy import delete, select
@@ -343,6 +343,16 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
     if not team:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
 
+    # Tenant-isolation guard: the permission check upstream is resolved from
+    # data.tournament_id, so the team must belong to that same tournament —
+    # otherwise a caller with rights in workspace A could write into a team
+    # (and auto-create a WorkspaceMember) in workspace B.
+    if team.tournament_id != data.tournament_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="team_id does not belong to the specified tournament",
+        )
+
     related_player = await _get_related_player(session, related_player_id=data.related_player_id)
     _validate_related_player_scope(
         related_player=related_player,
@@ -352,6 +362,7 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
     )
 
     player_data = _prepare_player_create_data(data)
+    player_data["tournament_id"] = team.tournament_id
     player_data["workspace_member_id"] = await _resolve_workspace_member_id(
         session,
         tournament_id=team.tournament_id,
@@ -362,7 +373,7 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
     player = models.Player(**player_data)
 
     session.add(player)
-    await _enqueue_team_changed(session, data.tournament_id)
+    await _enqueue_team_changed(session, team.tournament_id)
     await session.commit()
     return await get_player(session, player.id)
 

@@ -240,7 +240,7 @@ class BalancerRankAutofillStage(BaseModel):
 
 
 class BalancerRegistrationRankAutofillRequest(BaseModel):
-    registration_ids: list[int] | None = None
+    registration_ids: list[int] | None = Field(None, max_length=500)
     overwrite_existing: bool = False
     add_to_balancer: bool = False
     # Apply found role ranks even when other active roles have no parsed rank (otherwise the whole

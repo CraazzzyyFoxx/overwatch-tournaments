@@ -2,9 +2,9 @@
 
 from datetime import UTC, datetime
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from shared.core.enums import EncounterResultStatus
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.config import (
     TOURNAMENT_EVENTS_EXCHANGE,
 )

@@ -106,7 +106,15 @@ def _reg_to_read(
     workspace_id: int,
     status_meta_map: dict[str, dict[str, dict[str, object]]] | None = None,
     show_ranks: bool = False,
+    include_private: bool = True,
 ) -> RegistrationRead:
+    """Serialize a registration for public API responses.
+
+    ``include_private=False`` is for anonymous/list contexts: it strips
+    self-declared smurf tags (anti-multi-accounting data), free-text notes and
+    organizer-defined custom fields — all of which may contain PII and are only
+    meant for the registrant themselves and tournament admins.
+    """
     roles = (
         [
             RegistrationRoleRead(
@@ -129,13 +137,13 @@ def _reg_to_read(
         workspace_id=workspace_id,
         user_id=reg.user_id,
         battle_tag=reg.battle_tag,
-        smurf_tags_json=reg.smurf_tags_json,
+        smurf_tags_json=reg.smurf_tags_json if include_private else None,
         discord_nick=reg.discord_nick,
         twitch_nick=reg.twitch_nick,
         stream_pov=reg.stream_pov,
         roles=roles,
-        notes=reg.notes,
-        custom_fields_json=reg.custom_fields_json,
+        notes=reg.notes if include_private else None,
+        custom_fields_json=reg.custom_fields_json if include_private else None,
         status=reg.status,
         status_meta=(status_meta_map["registration"].get(reg.status) if status_meta_map is not None else None)
         or build_unknown_status_meta("registration", reg.status),

@@ -72,7 +72,7 @@ async def enqueue_encounter_completed(
     )
 
 
-async def _get_registration_workspace_id(session: AsyncSession, tournament_id: int) -> int:
+async def get_registration_workspace_id(session: AsyncSession, tournament_id: int) -> int:
     # BalancerRegistration has no denormalized workspace_id column — derive it via
     # the owning tournament (registrations are always tournament-scoped).
     workspace_id = await session.scalar(
@@ -86,7 +86,7 @@ async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
-    workspace_id = await _get_registration_workspace_id(session, registration.tournament_id)
+    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationApprovedEvent(
@@ -107,7 +107,7 @@ async def enqueue_registration_rejected(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
-    workspace_id = await _get_registration_workspace_id(session, registration.tournament_id)
+    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationRejectedEvent(

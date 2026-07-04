@@ -3,8 +3,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.strategy_options import _AbstractLoad
@@ -713,32 +713,63 @@ async def get_overview_data(
         value = await session.scalar(query)
         return int(value or 0)
 
-    total = await scalar_int(sa.select(sa.func.count()).select_from(base_ids))
-    with_logs_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(models.Encounter.has_logs.is_(True))
-    )
-    recent_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(models.Encounter.created_at >= recent_since)
-    )
-    live_now_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(_live_condition(now))
-    )
-    upcoming_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(_upcoming_condition(now))
-    )
-    avg_closeness = await session.scalar(
-        sa.select(sa.func.avg(models.Encounter.closeness))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(models.Encounter.closeness.isnot(None))
-    )
+    # All same-shape scalar aggregates over `Encounter JOIN base_ids` are
+    # consolidated into ONE statement via `count(*) FILTER (WHERE ...)` — the
+    # base_ids subquery (which re-evaluates the full search filter) would
+    # otherwise run once per aggregate (this endpoint used to issue 22
+    # sequential round trips per cache miss).
+    completed = models.Encounter.status == enums.EncounterStatus.COMPLETED
+    agg = (
+        await session.execute(
+            sa.select(
+                sa.func.count().label("total"),
+                sa.func.count().filter(models.Encounter.has_logs.is_(True)).label("with_logs"),
+                sa.func.count().filter(models.Encounter.created_at >= recent_since).label("recent"),
+                sa.func.count().filter(_live_condition(now)).label("live_now"),
+                sa.func.count().filter(_upcoming_condition(now)).label("upcoming"),
+                # avg() ignores NULL closeness natively.
+                sa.func.avg(models.Encounter.closeness).label("avg_closeness"),
+                sa.func.count().filter(completed).label("completed_series"),
+                sa.func.count()
+                .filter(
+                    completed,
+                    sa.or_(models.Encounter.home_score == 0, models.Encounter.away_score == 0),
+                    models.Encounter.home_score != models.Encounter.away_score,
+                )
+                .label("sweeps"),
+                sa.func.count()
+                .filter(
+                    completed,
+                    models.Encounter.home_score + models.Encounter.away_score == models.Encounter.best_of,
+                )
+                .label("went_distance"),
+                sa.func.count()
+                .filter(completed, models.Encounter.home_score > models.Encounter.away_score)
+                .label("home_wins"),
+                sa.func.count()
+                .filter(completed, models.Encounter.away_score > models.Encounter.home_score)
+                .label("away_wins"),
+                sa.func.count()
+                .filter(models.Encounter.best_of >= 5, models.Encounter.closeness >= 0.6)
+                .label("close_bo5"),
+            )
+            .select_from(models.Encounter)
+            .join(base_ids, base_ids.c.id == models.Encounter.id)
+        )
+    ).one()
+
+    total = int(agg.total or 0)
+    with_logs_count = int(agg.with_logs or 0)
+    recent_count = int(agg.recent or 0)
+    live_now_count = int(agg.live_now or 0)
+    upcoming_count = int(agg.upcoming or 0)
+    avg_closeness = agg.avg_closeness
+    completed_series_count = int(agg.completed_series or 0)
+    sweep_count = int(agg.sweeps or 0)
+    went_distance_count = int(agg.went_distance or 0)
+    home_wins = int(agg.home_wins or 0)
+    away_wins = int(agg.away_wins or 0)
+    close_bo5_count = int(agg.close_bo5 or 0)
 
     bucket_expr = sa.case(
         (models.Encounter.closeness >= 1, 9),
@@ -786,44 +817,6 @@ async def get_overview_data(
         .subquery()
     )
     avg_series_seconds = await session.scalar(sa.select(sa.func.avg(duration_by_encounter.c.seconds)))
-    completed_series_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(models.Encounter.status == enums.EncounterStatus.COMPLETED)
-    )
-    sweep_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(
-            models.Encounter.status == enums.EncounterStatus.COMPLETED,
-            sa.or_(models.Encounter.home_score == 0, models.Encounter.away_score == 0),
-            models.Encounter.home_score != models.Encounter.away_score,
-        )
-    )
-    went_distance_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(
-            models.Encounter.status == enums.EncounterStatus.COMPLETED,
-            models.Encounter.home_score + models.Encounter.away_score == models.Encounter.best_of,
-        )
-    )
-    home_wins = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(
-            models.Encounter.status == enums.EncounterStatus.COMPLETED,
-            models.Encounter.home_score > models.Encounter.away_score,
-        )
-    )
-    away_wins = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(
-            models.Encounter.status == enums.EncounterStatus.COMPLETED,
-            models.Encounter.away_score > models.Encounter.home_score,
-        )
-    )
 
     closest_rows = await session.execute(
         encounter_base()
@@ -854,11 +847,6 @@ async def get_overview_data(
         .outerjoin(models.Stage, models.Encounter.stage_id == models.Stage.id)
         .outerjoin(models.StageItem, models.Encounter.stage_item_id == models.StageItem.id)
         .where(sa.or_(models.Stage.name.ilike("%final%"), models.StageItem.name.ilike("%final%")))
-    )
-    close_bo5_count = await scalar_int(
-        sa.select(sa.func.count(models.Encounter.id))
-        .join(base_ids, base_ids.c.id == models.Encounter.id)
-        .where(models.Encounter.best_of >= 5, models.Encounter.closeness >= 0.6)
     )
     home_standing = aliased(models.Standing)
     away_standing = aliased(models.Standing)
@@ -995,64 +983,68 @@ async def get_match_stats_for_user(
     return stats_out, heroes_out
 
 
-async def get_by_team(session: AsyncSession, team_id: int, entities: list[str]) -> typing.Sequence[models.Encounter]:
-    """
-    Retrieves all encounters involving a specific team.
+async def get_match_stats_for_users(
+    session: AsyncSession, match_id: int, user_ids: list[int]
+) -> dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]]:
+    """Batched variant of :func:`get_match_stats_for_user` for a full roster.
 
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        entities (list[str]): A list of related entities to load (e.g., ["tournament", "teams"]).
-
-    Returns:
-        typing.Sequence[models.Encounter]: A sequence of Encounter objects involving the specified team.
+    Runs the same two aggregate queries once with ``user_id IN (...)`` instead
+    of 2×N round trips when serializing a match page (the hottest public read).
+    Users without rows are still present in the result with empty dicts.
     """
+    out: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {
+        user_id: ({}, {}) for user_id in user_ids
+    }
+    if not user_ids:
+        return out
+
     query = (
-        sa.select(models.Encounter)
-        .options(*encounter_entities(entities))
-        .where(
-            sa.or_(
-                models.Encounter.home_team_id == team_id,
-                models.Encounter.away_team_id == team_id,
-            )
+        sa.select(
+            models.MatchStatistics.user_id,
+            models.MatchStatistics.round,
+            models.MatchStatistics.name,
+            sa.func.sum(models.MatchStatistics.value).cast(sa.Numeric(10, 2)).label("value"),
         )
-    )
-    query = join_encounter_entities(query, entities)
-    result = await session.execute(query)
-    return result.unique().scalars().all()
-
-
-async def get_by_team_group(
-    session: AsyncSession, team_id: int, group_id: int, entities: list[str]
-) -> typing.Sequence[models.Encounter]:
-    """
-    Retrieves all encounters involving a specific team within a specific tournament group.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        group_id (int): The ID of the tournament group.
-        entities (list[str]): A list of related entities to load (e.g., ["tournament", "teams"]).
-
-    Returns:
-        typing.Sequence[models.Encounter]: A sequence of Encounter objects involving the specified team and group.
-    """
-    query = (
-        sa.select(models.Encounter)
-        .options(*encounter_entities(entities))
         .where(
             sa.and_(
-                sa.or_(
-                    models.Encounter.home_team_id == team_id,
-                    models.Encounter.away_team_id == team_id,
-                ),
-                models.Encounter.tournament_group_id == group_id,
+                models.MatchStatistics.match_id == match_id,
+                models.MatchStatistics.user_id.in_(user_ids),
+                models.MatchStatistics.hero_id.is_(None),
             )
         )
+        .group_by(models.MatchStatistics.user_id, models.MatchStatistics.name, models.MatchStatistics.round)
     )
-    query = join_encounter_entities(query, entities)
-    result = await session.execute(query)
-    return result.unique().scalars().all()
+
+    heroes_round = (
+        sa.select(
+            models.MatchStatistics.user_id,
+            models.MatchStatistics.round,
+            sa.func.jsonb_agg(hero_jsonb_object),
+        )
+        .select_from(models.MatchStatistics)
+        .join(models.Hero, models.MatchStatistics.hero_id == models.Hero.id)
+        .where(
+            sa.and_(
+                models.MatchStatistics.match_id == match_id,
+                models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+                models.MatchStatistics.user_id.in_(user_ids),
+                models.MatchStatistics.hero_id.isnot(None),
+                models.MatchStatistics.value > 60,
+            )
+        )
+        .group_by(models.MatchStatistics.user_id, models.MatchStatistics.round)
+    )
+
+    stats_result = await session.execute(query)
+    heroes_result = await session.execute(heroes_round)
+
+    for user_id, match_round, name, value in stats_result.all():
+        out[user_id][0].setdefault(match_round, {})[name] = value
+
+    for user_id, match_round, value in heroes_result.all():
+        out[user_id][1][match_round] = value
+
+    return out
 
 
 async def get_by_stage_id(

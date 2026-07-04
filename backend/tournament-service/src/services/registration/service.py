@@ -8,18 +8,36 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
-from shared.core.errors import BaseAPIException as HTTPException
+from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
+from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import enums
-from shared.core.social import SocialProvider
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from shared.rbac import assign_workspace_system_role
 from shared.repository import get_or_create_workspace_member
 from shared.services import social_identity
+from shared.services.profile_visibility import resolve_profiles_open
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src import models
+from src.schemas.registration import (
+    RegistrationCreate,
+    RegistrationFormUpsert,
+    RegistrationListRead,
+    RegistrationListResponse,
+    RegistrationRead,
+)
+from src.schemas.registration_build import (
+    _build_tournament_history,
+    _reg_to_read,
+    _resolve_top_heroes_config,
+    _resolve_tournament_workspace,
+)
+from src.services.registration.validation import validate_registration_input, validate_verified_identity
 from src.services.tournament.events import enqueue_registration_approved
 from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
@@ -223,6 +241,7 @@ async def ensure_player_identity(
     registration: models.BalancerRegistration,
     *,
     auth_user_id: int | None = None,
+    known_handles: set[tuple[int, str]] | None = None,
 ) -> int | None:
     """Find-or-create the domain player (players.user) for a registration's tags.
 
@@ -253,10 +272,28 @@ async def ensure_player_identity(
     3. Else, fall back to the historical battletag dedup.
     4. Else, create a new bare player for this battletag (linked to the auth
        account when present).
+
+    ``known_handles`` is an optional bulk-prefetched cache of
+    ``(user_id, normalized_battlenet_handle)`` pairs used by the sheet-sync
+    loop (which calls this once per row every 5 minutes): when the registration
+    is already linked and every tag is already a known handle of that user, the
+    call is a no-op with ZERO queries instead of 2+ per row. The set is mutated
+    (newly ensured handles are added) so repeated tags within one sync are also
+    deduplicated. Semantics for ``known_handles=None`` callers are unchanged.
     """
     battle_tag = registration.battle_tag
     if not battle_tag:
         return registration.user_id
+
+    tags = [battle_tag, *[smurf for smurf in (registration.smurf_tags_json or []) if smurf]]
+
+    def _handle_key(user_id: int, tag: str) -> tuple[int, str]:
+        return (user_id, normalize_social_handle(SocialProvider.BATTLENET, tag))
+
+    if registration.user_id is not None and known_handles is not None:
+        keys = [_handle_key(registration.user_id, tag) for tag in tags if "#" in tag]
+        if all(key in known_handles for key in keys):
+            return registration.user_id
 
     # Respect an already-linked registration; only reconcile when unset.
     user: models.User | None = None
@@ -279,10 +316,13 @@ async def ensure_player_identity(
         session.add(user)
         await session.flush()
 
-    await _ensure_user_battle_tag(session, user, battle_tag)
-    for smurf in registration.smurf_tags_json or []:
-        if smurf:
-            await _ensure_user_battle_tag(session, user, smurf)
+    for tag in tags:
+        if known_handles is not None and "#" in tag:
+            key = _handle_key(user.id, tag)
+            if key in known_handles:
+                continue
+            known_handles.add(key)
+        await _ensure_user_battle_tag(session, user, tag)
 
     if registration.user_id != user.id:
         registration.user_id = user.id
@@ -473,3 +513,230 @@ async def check_in_registration(
     await session.commit()
     await session.refresh(registration)
     return registration
+
+
+# ── public self-service use-cases (called by rpc/public_rpc.py) ──────────────
+
+
+async def submit_public_registration(
+    session: AsyncSession,
+    *,
+    tournament_id: int,
+    auth_user: models.AuthUser,
+    body: RegistrationCreate,
+) -> RegistrationRead:
+    """Full public self-registration use-case.
+
+    Validates form state, subrole/hero catalogs and verified-identity fields,
+    rejects duplicates, creates the registration + role rows and returns the
+    serialized read model. Commits internally.
+    """
+    form = await get_registration_form(session, tournament_id)
+    if form is None or not form.is_open:
+        raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
+
+    workspace_id = form.workspace_id
+
+    subrole_catalog = await resolve_subrole_catalog(session, workspace_id)
+    hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form)
+    validate_registration_input(
+        form,
+        body,
+        subrole_catalog=subrole_catalog,
+        hero_catalog=hero_catalog,
+    )
+
+    existing = await get_registration(session, tournament_id, auth_user.id)
+    if existing is not None:
+        if existing.status == "withdrawn":
+            raise HTTPException(status_code=409, detail="Withdrawn registrations cannot be submitted again")
+        raise HTTPException(status_code=409, detail="Already registered for this tournament")
+
+    # Resolve player profile from auth_user (explicit query to avoid lazy load)
+    user_player_id: int | None = await session.scalar(
+        sa.select(models.User.id).where(models.User.auth_user_id == auth_user.id)
+    )
+
+    # Identity fields flagged ``require_verified`` must match an
+    # OAuth-verified social account on the registrant's player profile.
+    await validate_verified_identity(
+        session,
+        form=form,
+        payload=body,
+        player_id=user_player_id,
+    )
+
+    role_entries = build_registration_roles(
+        body.roles,
+        hero_catalog=hero_catalog,
+        max_heroes=max_heroes,
+    )
+
+    try:
+        registration = await create_registration(
+            session,
+            tournament_id=tournament_id,
+            workspace_id=workspace_id,
+            auth_user_id=auth_user.id,
+            user_id=user_player_id,
+            battle_tag=body.battle_tag,
+            smurf_tags=body.smurf_tags,
+            discord_nick=body.discord_nick,
+            twitch_nick=body.twitch_nick,
+            stream_pov=body.stream_pov,
+            notes=body.notes,
+            custom_fields=body.custom_fields,
+            auto_approve=form.auto_approve,
+            auth_user=auth_user,
+        )
+
+        # Write normalized roles
+        for entry in role_entries:
+            entry.registration_id = registration.id
+            session.add(entry)
+        await session.commit()
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Already registered for this tournament")
+
+    result = await session.execute(
+        sa.select(models.BalancerRegistration)
+        .where(models.BalancerRegistration.id == registration.id)
+        .options(
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero)
+        )
+    )
+    registration = result.scalar_one()
+    status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+    return _reg_to_read(
+        registration,
+        workspace_id=workspace_id,
+        status_meta_map=status_meta_map,
+        show_ranks=form.show_ranks,
+    )
+
+
+async def build_public_registration_list(
+    session: AsyncSession,
+    *,
+    tournament_id: int,
+) -> RegistrationListResponse:
+    """Anonymous participants-list read model.
+
+    The registration list must always reflect live data. Every read below is a
+    plain ``session.execute`` (or a helper that itself only runs raw ORM reads:
+    get_status_metas_map / get_registration_form / resolve_profiles_open) — none
+    of them go through the cashews cache, so no cache bypass is needed here.
+    NB: do NOT reintroduce ``cache.disabling(...)`` — it flips a *process-global*
+    flag on the shared cashews backend and races with every concurrent request
+    on this worker (see lesson_cashews_disabling_shared_cache).
+    """
+    workspace_id = await _resolve_tournament_workspace(session, tournament_id)
+
+    result = await session.execute(
+        sa.select(models.BalancerRegistration)
+        .where(
+            # tournament_id already pins this to a single workspace
+            # (BalancerRegistration has no denormalized workspace_id).
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+        )
+        .options(
+            selectinload(models.BalancerRegistration.roles)
+            .selectinload(models.BalancerRegistrationRole.hero_entries)
+            .selectinload(models.BalancerRegistrationRoleHero.hero),
+            # Needed by _build_tournament_history's user_id fallback below.
+            selectinload(models.BalancerRegistration.workspace_member),
+        )
+        .order_by(models.BalancerRegistration.submitted_at.asc())
+    )
+    registrations = result.scalars().all()
+    status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+
+    form = await get_registration_form(session, tournament_id)
+    profiles_open_map: dict[int, bool | None] = (
+        await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
+        if form is not None and form.require_open_profile
+        else {}
+    )
+    show_ranks = form.show_ranks if form is not None else False
+
+    history_map, history_count_map, division_grids = await _build_tournament_history(
+        session,
+        registrations,
+        tournament_id,
+        workspace_id,
+    )
+
+    registrations_read = [
+        RegistrationListRead(
+            **_reg_to_read(
+                r,
+                workspace_id=workspace_id,
+                status_meta_map=status_meta_map,
+                show_ranks=show_ranks,
+                # Anonymous endpoint: strip smurf tags / notes / custom
+                # fields (PII + anti-smurf data meant for admins only).
+                include_private=False,
+            ).model_dump(),
+            balancer_status=r.balancer_status,
+            balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
+            or build_unknown_status_meta("balancer", r.balancer_status),
+            profiles_open=profiles_open_map.get(r.id),
+            tournament_history=history_map.get(r.id, []),
+            tournament_history_count=history_count_map.get(r.id, 0),
+        )
+        for r in registrations
+    ]
+    return RegistrationListResponse(
+        registrations=registrations_read,
+        division_grids=division_grids,
+    )
+
+
+async def upsert_registration_form(
+    session: AsyncSession,
+    tournament_id: int,
+    body: RegistrationFormUpsert,
+    *,
+    workspace_id: int,
+) -> models.BalancerRegistrationForm:
+    """Create-or-update the tournament's registration form. Commits internally.
+
+    ``workspace_id`` is the tournament's already-resolved workspace (the RPC
+    handler resolves it for the permission check anyway).
+    """
+    form = await get_registration_form(session, tournament_id)
+    built_in_fields_json = {key: value.model_dump(exclude_none=True) for key, value in body.built_in_fields.items()}
+    custom_fields_json = [field.model_dump(exclude_none=True) for field in body.custom_fields]
+
+    if form is None:
+        form = models.BalancerRegistrationForm(
+            tournament_id=tournament_id,
+            workspace_id=workspace_id,
+            is_open=body.is_open,
+            auto_approve=body.auto_approve,
+            opens_at=body.opens_at,
+            closes_at=body.closes_at,
+            require_open_profile=body.require_open_profile,
+            open_profile_scope=body.open_profile_scope,
+            show_ranks=body.show_ranks,
+            built_in_fields_json=built_in_fields_json,
+            custom_fields_json=custom_fields_json,
+        )
+        session.add(form)
+    else:
+        form.is_open = body.is_open
+        form.auto_approve = body.auto_approve
+        form.opens_at = body.opens_at
+        form.closes_at = body.closes_at
+        form.require_open_profile = body.require_open_profile
+        form.open_profile_scope = body.open_profile_scope
+        form.show_ranks = body.show_ranks
+        form.built_in_fields_json = built_in_fields_json
+        form.custom_fields_json = custom_fields_json
+
+    await session.commit()
+    await session.refresh(form)
+    return form

@@ -7,7 +7,6 @@ from src.core import config, enums, errors, pagination, utils
 from src.services.map import flows as map_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
-from src.services.user import flows as user_flows
 
 from . import service
 
@@ -268,6 +267,11 @@ async def delete_saved_view(
     ttl=config.settings.encounters_cache_ttl,
     key="encounters_overview:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.only_count}:{params.query}:{params.fields}:{params.stage_id}:{params.stage_item_id}:{params.best_of}:{params.status}:{params.has_logs}:{params.closeness_min}:{params.closeness_max}:{params.scope}:{viewer_auth_user_id}",
     prefix="fastapi:",
+    # NB: no ``lock=True`` — cashews builds the herd-lock key WITHOUT the
+    # ``prefix``, and this codebase routes backends purely by key prefix (no
+    # default backend), so the lock raises NotConfiguredError (same bug class
+    # as lesson_cashews_prefixless_delete_match). TTL rollover herds are
+    # mitigated by the FILTER-consolidated aggregate query instead.
 )
 async def get_encounters_overview(
     session: AsyncSession,
@@ -455,6 +459,13 @@ async def get_match(
     return await to_pydantic_match(session, match, entities)
 
 
+@cache(
+    ttl=config.settings.match_cache_ttl,
+    # No tournament_id in the args, so this key can't participate in the
+    # targeted invalidation patterns — staleness is bounded by the short TTL.
+    key="match_stats:{match_id}:{entities}:{workspace_id}",
+    prefix="fastapi:",
+)
 async def get_match_with_stats(
     session: AsyncSession,
     match_id: int,
@@ -481,15 +492,20 @@ async def get_match_with_stats(
         entities.append("teams.players")
     match = await get_match(session, match_id, entities, workspace_id=workspace_id)
     max_round: int = 0
+    home_ids = [player.user_id for player in match.home_team.players]
+    away_ids = [player.user_id for player in match.away_team.players]
+    # One batched pair of aggregate queries for the whole roster instead of
+    # 2 queries per player (this is the hottest public read — the match page).
+    all_stats = await service.get_match_stats_for_users(session, match.id, [*home_ids, *away_ids])
     home_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}
     away_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}
-    for player in match.home_team.players:
-        player_data = await service.get_match_stats_for_user(session, match.id, player.user_id)
-        home_team_stats[player.user_id] = player_data
+    for user_id in home_ids:
+        player_data = all_stats[user_id]
+        home_team_stats[user_id] = player_data
         max_round = max(max_round, max(player_data[0].keys()) if player_data[0] else 0)
-    for player in match.away_team.players:
-        player_data = await service.get_match_stats_for_user(session, match.id, player.user_id)
-        away_team_stats[player.user_id] = player_data
+    for user_id in away_ids:
+        player_data = all_stats[user_id]
+        away_team_stats[user_id] = player_data
         max_round = max(max_round, max(player_data[0].keys()) if player_data[0] else 0)
 
     home_team = create_team_with_match_stats(match.home_team, home_team_stats)
@@ -500,100 +516,3 @@ async def get_match_with_stats(
         home_team=home_team,
         away_team=away_team,
     )
-
-
-async def get_encounters_by_user(
-    session: AsyncSession, user_id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None
-) -> pagination.Paginated[schemas.EncounterReadWithUserStats]:
-    """
-    Retrieves a paginated list of encounters involving a specific user, including user statistics.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        user_id (int): The ID of the user.
-        params (pagination.PaginationSortParams): Pagination and sorting parameters.
-
-    Returns:
-        pagination.Paginated[schemas.EncounterReadWithUserStats]: A paginated list of Pydantic schemas representing the encounters with user statistics.
-    """
-    match_entities = utils.prepare_entities(params.entities, "matches")
-
-    if "teams" in params.entities:
-        match_entities = utils.remove_from_entities(match_entities, "teams")
-
-    if "matches" in params.entities:
-        match_entities.extend(utils.find_entities(params.entities, "matches"))
-        params.entities = utils.remove_from_entities(params.entities, "matches")
-
-    params.entities = [*match_entities, *params.entities]
-
-    user = await user_flows.get(session, user_id, [])
-    encounters, total = await service.get_by_user(session, user.id, params, workspace_id=workspace_id)
-    encounters_read: list[schemas.EncounterReadWithUserStats] = []
-    encounters_cache: dict[int, models.Encounter] = {}
-    matches_cache: dict[int, list[schemas.MatchReadWithUserStats]] = {}
-
-    for encounter, match, performance, heroes in encounters:
-        encounters_cache.setdefault(encounter.id, encounter)
-        matches_cache.setdefault(encounter.id, [])
-
-        if match:
-            match_read_ = await to_pydantic_match(session, match, match_entities)
-            match_read = schemas.MatchReadWithUserStats(
-                **match_read_.model_dump(),
-                performance=performance,
-                heroes=heroes if heroes else [],  # type: ignore
-            )
-            matches_cache[encounter.id].append(match_read)
-
-    for encounter_id, encounter in encounters_cache.items():
-        encounter_read_ = await to_pydantic(session, encounter, params.entities)
-        encounter_read = schemas.EncounterReadWithUserStats(
-            **encounter_read_.model_dump(exclude={"matches"}),
-            matches=matches_cache.get(encounter_id, []),
-        )
-        encounters_read.append(encounter_read)
-
-    return pagination.Paginated(
-        total=total,
-        per_page=params.per_page,
-        page=params.page,
-        results=encounters_read,
-    )
-
-
-async def get_encounters_by_team(
-    session: AsyncSession, team_id: int, entities: list[str]
-) -> list[schemas.EncounterRead]:
-    """
-    Retrieves all encounters involving a specific team and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
-
-    Returns:
-        list[schemas.EncounterRead]: A list of Pydantic schemas representing the encounters.
-    """
-    encounters = await service.get_by_team(session, team_id, entities)
-    return [await to_pydantic(session, encounter, entities) for encounter in encounters]
-
-
-async def get_encounters_by_team_group(
-    session: AsyncSession, team_id: int, group_id: int, entities: list[str]
-) -> list[schemas.EncounterRead]:
-    """
-    Retrieves all encounters involving a specific team within a specific tournament group and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        group_id (int): The ID of the tournament group.
-        entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
-
-    Returns:
-        list[schemas.EncounterRead]: A list of Pydantic schemas representing the encounters.
-    """
-    encounters = await service.get_by_team_group(session, team_id, group_id, entities)
-    return [await to_pydantic(session, encounter, entities) for encounter in encounters]

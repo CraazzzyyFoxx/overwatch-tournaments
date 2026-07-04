@@ -3,10 +3,10 @@
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
 from sqlalchemy import delete, select

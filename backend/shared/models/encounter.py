@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -30,6 +30,19 @@ class Encounter(db.TimeStampIntegerMixin):
 
     __table_args__ = (
         Index("ix_encounter_tournament_group", "tournament_id", "tournament_group_id"),
+        # Created CONCURRENTLY by perfidx04: status is filtered on 10+ read
+        # paths (live/upcoming feeds, standings, Challonge export).
+        Index("ix_encounter_tournament_status", "tournament_id", "status"),
+        Index(
+            "ix_encounter_status_live_upcoming",
+            "tournament_id",
+            "status",
+            # NB: predicate uses uppercase enum NAMEs and the public-schema type
+            # (see the status column comment below).
+            postgresql_where=text(
+                "status IN ('PENDING'::public.encounterstatus, 'OPEN'::public.encounterstatus)"
+            ),
+        ),
         {"schema": "tournament"},
     )
 
@@ -65,6 +78,14 @@ class Encounter(db.TimeStampIntegerMixin):
     )
 
     challonge_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Enum(EncounterStatus) persists the member NAME (COMPLETED/PENDING/OPEN), not
+    # its .value (completed/pending/open) — there is no values_callable here, so any
+    # raw SQL/partial-index predicate against `status` must use the uppercase NAME
+    # labels (see migrations/versions/perfidx04_encounter_status_indexes.py). The
+    # underlying `encounterstatus` type also still lives in the default/public
+    # schema (created by a7634c02717d before `encounter` was moved to `tournament`
+    # by b8e2f4a1c903_split_domain_schemas — ALTER TABLE ... SET SCHEMA does not
+    # move the type along with the table).
     status: Mapped[enums.EncounterStatus] = mapped_column(
         Enum(enums.EncounterStatus), default=enums.EncounterStatus.OPEN
     )

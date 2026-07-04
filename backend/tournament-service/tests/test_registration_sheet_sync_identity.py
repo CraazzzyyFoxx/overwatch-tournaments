@@ -35,7 +35,10 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-reg_admin = importlib.import_module("src.services.registration.admin")
+# Patch targets must be the module that OWNS ``sync_google_sheet_feed`` (sheet_sync),
+# not the ``admin`` facade: the sync resolves its collaborators (fetch, parse,
+# ensure_player_identity, ...) from sheet_sync's module globals.
+reg_admin = importlib.import_module("src.services.registration.sheet_sync")
 reg_service = importlib.import_module("src.services.registration.service")
 
 

@@ -2,10 +2,10 @@
 
 from collections.abc import Sequence
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.schemas.events import TournamentChangedReason
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.engine import generate_bracket

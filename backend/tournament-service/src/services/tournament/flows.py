@@ -3,13 +3,15 @@ import typing
 from itertools import groupby
 
 import sqlalchemy as sa
+from cashews import cache
 from shared.division_grid import DivisionGrid
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src import models, schemas
-from src.core import enums, errors, pagination
+from src.core import config, enums, errors, pagination
 from src.services.registration import service as registration_service
 from src.services.team import service as team_service
 from src.services.user import flows as user_flows
@@ -155,6 +157,14 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
     return tournament
 
 
+@cache(
+    ttl=config.settings.tournaments_cache_ttl,
+    # Key deliberately contains "tournaments/{id}" so the existing
+    # invalidation pattern `*tournaments/{tournament_id}*` (see
+    # cache_invalidation.tournament_cache_patterns) purges it on change.
+    key="tournaments/{id}:{entities}",
+    prefix="fastapi:",
+)
 async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schemas.TournamentRead:
     """
     Retrieves a `Tournament` model instance by its ID and converts it to a `TournamentRead` schema.
@@ -169,6 +179,34 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
     """
     tournament = await get(session, id, entities)
     return await to_pydantic(session, tournament, entities)
+
+
+async def lookup(
+    session: AsyncSession,
+    *,
+    workspace_id: int | None = None,
+    is_league: bool | None = None,
+    limit: int = 500,
+) -> list[schemas.LookupItem]:
+    """Lightweight id/name lookup for pickers (rpc.tournament.lookup_tournaments)."""
+    query = sa.select(models.Tournament.id, models.Tournament.name).order_by(models.Tournament.id.desc()).limit(limit)
+    if workspace_id is not None:
+        query = query.where(models.Tournament.workspace_id == workspace_id)
+    if is_league is not None:
+        query = query.where(models.Tournament.is_league.is_(is_league))
+    result = await session.execute(query)
+    return [schemas.LookupItem(id=row.id, name=row.name) for row in result.all()]
+
+
+async def get_stages_read(session: AsyncSession, tournament_id: int) -> list[schemas.StageRead]:
+    """Ordered stages (with items/inputs) for a tournament (rpc.tournament.get_stages)."""
+    result = await session.execute(
+        sa.select(models.Stage)
+        .where(models.Stage.tournament_id == tournament_id)
+        .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
+        .order_by(models.Stage.order)
+    )
+    return [schemas.StageRead.model_validate(stage, from_attributes=True) for stage in result.scalars().all()]
 
 
 async def get_by_number_and_league(

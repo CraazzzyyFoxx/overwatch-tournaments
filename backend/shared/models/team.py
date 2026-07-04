@@ -132,7 +132,14 @@ class PlayerSubRole(db.TimeStampIntegerMixin):
 
 class ChallongeTeam(db.TimeStampIntegerMixin):
     __tablename__ = "challonge_team"
-    __table_args__ = ({"schema": "tournament"},)
+    __table_args__ = (
+        # FK indexes created CONCURRENTLY by perfidx03 (team_id is hit by the
+        # Challonge export's selectinload(Team.challonge) WHERE team_id IN (...)).
+        Index("ix_tournament_challonge_team_team_id", "team_id"),
+        Index("ix_tournament_challonge_team_tournament_id", "tournament_id"),
+        Index("ix_tournament_challonge_team_group_id", "group_id"),
+        {"schema": "tournament"},
+    )
 
     challonge_id: Mapped[int] = mapped_column(Integer())
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))

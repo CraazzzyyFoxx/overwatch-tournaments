@@ -1525,6 +1525,15 @@ async def import_tournament(session: AsyncSession, tournament_id: int, *, dry_ru
             "bracket_links_updated": 0,
         }
 
+        # Release the DB connection before the (potentially slow, rate-limited)
+        # Challonge HTTP round-trips: under NullPool + pgBouncer transaction
+        # pooling an open transaction pins a scarce backend slot for the whole
+        # network wait, and statement_timeout does not bound idle-in-transaction
+        # time. expire_on_commit=False keeps the loaded ``tournament`` (and its
+        # eager-loaded relationships) fully usable; the writes below open a
+        # fresh, short transaction.
+        await session.commit()
+
         raw_fetches = await _fetch_all_sources(sources)
         fetches: list[tuple[_ImportSource, _SourceFetch]] = []
         for source, fetch_result in raw_fetches:
@@ -1755,13 +1764,20 @@ async def _resolve_export_target(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
 ) -> tuple[_ImportSource | None, int | None]:
-    mapping_result = await session.execute(
-        select(models.ChallongeMatchMapping)
-        .where(models.ChallongeMatchMapping.encounter_id == encounter.id)
-        .options(selectinload(models.ChallongeMatchMapping.source))
-    )
-    mapping = mapping_result.scalars().first()
+    # ``match_mappings`` is an optional bulk prefetch (export path) keyed by
+    # encounter_id — mirrors the import path's _build_match_lookup pattern so
+    # the export loop doesn't issue one mapping query per encounter.
+    if match_mappings is not None:
+        mapping = match_mappings.get(encounter.id)
+    else:
+        mapping_result = await session.execute(
+            select(models.ChallongeMatchMapping)
+            .where(models.ChallongeMatchMapping.encounter_id == encounter.id)
+            .options(selectinload(models.ChallongeMatchMapping.source))
+        )
+        mapping = mapping_result.scalars().first()
     if mapping is not None and mapping.source is not None:
         source_row = mapping.source
         return (
@@ -1798,17 +1814,30 @@ async def _resolve_winner_challonge_id(
     source: _ImportSource,
     winner_team_id: int,
     encounter: models.Encounter,
+    *,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> int | None:
     if source.source_id is not None:
-        result = await session.execute(
-            select(models.ChallongeParticipantMapping)
-            .where(
-                models.ChallongeParticipantMapping.source_id == source.source_id,
-                models.ChallongeParticipantMapping.team_id == winner_team_id,
-            )
-            .order_by(models.ChallongeParticipantMapping.id.asc())
+        # ``participant_mappings`` is an optional bulk prefetch (export path)
+        # keyed by (source_id, team_id); a missing key falls back to the query
+        # so stale mappings referencing undiscovered sources still resolve.
+        cached = (
+            participant_mappings.get((source.source_id, winner_team_id))
+            if participant_mappings is not None
+            else None
         )
-        source_mappings = list(result.scalars().all())
+        if cached is not None:
+            source_mappings = cached
+        else:
+            result = await session.execute(
+                select(models.ChallongeParticipantMapping)
+                .where(
+                    models.ChallongeParticipantMapping.source_id == source.source_id,
+                    models.ChallongeParticipantMapping.team_id == winner_team_id,
+                )
+                .order_by(models.ChallongeParticipantMapping.id.asc())
+            )
+            source_mappings = list(result.scalars().all())
         if len(source_mappings) == 1:
             return source_mappings[0].challonge_participant_id
         if source_mappings:
@@ -1884,9 +1913,44 @@ async def export_tournament(session: AsyncSession, tournament_id: int) -> dict:
         )
         encounters = enc_result.scalars().all()
 
+        # Bulk prefetch of both mapping tables (same batching pattern as the
+        # import path's _build_team_lookup/_build_match_lookup) — the loop below
+        # would otherwise issue two lookup queries per encounter.
+        match_mappings: dict[int, models.ChallongeMatchMapping] = {}
+        encounter_ids = [encounter.id for encounter in encounters]
+        if encounter_ids:
+            mapping_rows = await session.execute(
+                select(models.ChallongeMatchMapping)
+                .where(models.ChallongeMatchMapping.encounter_id.in_(encounter_ids))
+                .options(selectinload(models.ChallongeMatchMapping.source))
+                .order_by(models.ChallongeMatchMapping.id.asc())
+            )
+            for mapping_row in mapping_rows.scalars():
+                match_mappings.setdefault(mapping_row.encounter_id, mapping_row)
+
+        participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] = {}
+        source_ids = [source.source_id for source in sources if source.source_id is not None]
+        if source_ids:
+            participant_rows = await session.execute(
+                select(models.ChallongeParticipantMapping)
+                .where(models.ChallongeParticipantMapping.source_id.in_(source_ids))
+                .order_by(models.ChallongeParticipantMapping.id.asc())
+            )
+            for participant_row in participant_rows.scalars():
+                participant_mappings.setdefault(
+                    (participant_row.source_id, participant_row.team_id), []
+                ).append(participant_row)
+
         for encounter in encounters:
             try:
-                pushed = await push_single_result(session, tournament, encounter, sources=sources)
+                pushed = await push_single_result(
+                    session,
+                    tournament,
+                    encounter,
+                    sources=sources,
+                    match_mappings=match_mappings,
+                    participant_mappings=participant_mappings,
+                )
                 if pushed:
                     stats["matches_pushed"] += 1
                 else:
@@ -1916,9 +1980,18 @@ async def push_single_result(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None = None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> bool:
     """Push a single encounter result to Challonge."""
-    return await _push_single_result_impl(session, tournament, encounter, sources=sources)
+    return await _push_single_result_impl(
+        session,
+        tournament,
+        encounter,
+        sources=sources,
+        match_mappings=match_mappings,
+        participant_mappings=participant_mappings,
+    )
 
 
 async def _push_single_result_impl(
@@ -1927,11 +2000,15 @@ async def _push_single_result_impl(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> bool:
     if not encounter.challonge_id:
         return False
 
-    source, challonge_match_id = await _resolve_export_target(session, tournament, encounter, sources=sources)
+    source, challonge_match_id = await _resolve_export_target(
+        session, tournament, encounter, sources=sources, match_mappings=match_mappings
+    )
     if source is None or challonge_match_id is None:
         raise ValueError(f"Encounter {encounter.id} has no Challonge source mapping")
 
@@ -1944,6 +2021,7 @@ async def _push_single_result_impl(
         source,
         winner_team.id,
         encounter,
+        participant_mappings=participant_mappings,
     )
     if winner_challonge_id is None:
         raise ValueError(
@@ -1951,6 +2029,15 @@ async def _push_single_result_impl(
         )
 
     scores_csv = f"{encounter.home_score}-{encounter.away_score}"
+
+    # Commit (and thereby release the pgBouncer-backed connection) before the
+    # external HTTP call: holding a transaction open across a third-party,
+    # rate-limited API round-trip pins a pool slot for the whole wait. This also
+    # gives export_tournament per-encounter commit granularity — resolve-target
+    # mapping writes and prior _log_sync rows land incrementally instead of in
+    # one giant end-of-loop transaction. Callers commit before invoking the
+    # push flow, so nothing unrelated can be committed here.
+    await session.commit()
 
     await challonge_service.update_match(
         source.challonge_id,

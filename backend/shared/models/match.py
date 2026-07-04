@@ -117,7 +117,15 @@ mv_hero_global_stats = table(
 
 class MatchKillFeed(db.TimeStampIntegerMixin):
     __tablename__ = "kill_feed"
-    __table_args__ = ({"schema": "matches"},)
+    __table_args__ = (
+        # FK indexes created CONCURRENTLY by perfidx03 (declared here so the
+        # model matches the DB and autogenerate doesn't drift).
+        Index("ix_matches_kill_feed_killer_hero_id", "killer_hero_id"),
+        Index("ix_matches_kill_feed_killer_team_id", "killer_team_id"),
+        Index("ix_matches_kill_feed_victim_team_id", "victim_team_id"),
+        Index("ix_matches_kill_feed_victim_hero_id", "victim_hero_id"),
+        {"schema": "matches"},
+    )
 
     match_id: Mapped[int] = mapped_column(
         ForeignKey(Match.id, ondelete="CASCADE"), index=True
@@ -153,7 +161,14 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
 
 class MatchEvent(db.TimeStampIntegerMixin):
     __tablename__ = "assists"
-    __table_args__ = ({"schema": "matches"},)
+    __table_args__ = (
+        # FK indexes created CONCURRENTLY by perfidx03.
+        Index("ix_matches_assists_hero_id", "hero_id"),
+        Index("ix_matches_assists_related_team_id", "related_team_id"),
+        Index("ix_matches_assists_related_user_id", "related_user_id"),
+        Index("ix_matches_assists_related_hero_id", "related_hero_id"),
+        {"schema": "matches"},
+    )
 
     match_id: Mapped[int] = mapped_column(
         ForeignKey(Match.id, ondelete="CASCADE"), index=True

@@ -28,23 +28,25 @@ The gateway passes path params as ``data["<name>"]`` (and the primary id as
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
-import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
-from pydantic import ValidationError
-from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
+from shared.balancer_registration_statuses import get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.rpc.identity import MissingIdentityError, rehydrate_user
-from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
+from shared.rpc.identity import rehydrate_user
 from shared.services.profile_visibility import resolve_profiles_open
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
 
 from src import models, schemas
-from src.core import db
+from src.rpc._helpers import (
+    _dump,
+    _identity,
+    _path_int,
+    _payload,
+    _require_id,
+    _require_q1,
+    _run,
+)
 from src.schemas.captain import (
     CaptainMatchReport,
     DisputeRequest,
@@ -54,16 +56,12 @@ from src.schemas.captain import (
 )
 from src.schemas.registration import (
     RegistrationCreate,
-    RegistrationListRead,
-    RegistrationListResponse,
     RegistrationStatusResponse,
     RegistrationUpdate,
 )
 from src.schemas.registration_build import (
-    _build_tournament_history,
     _form_to_read,
     _reg_to_read,
-    _resolve_top_heroes_config,
     _resolve_tournament_workspace,
 )
 from src.services.encounter import captain as captain_service
@@ -78,10 +76,6 @@ from src.services.registration.validation import (
 # --- helpers -----------------------------------------------------------------
 
 
-def _identity(data: dict[str, Any]) -> models.AuthUser:
-    """Rehydrate the gateway-injected identity into a transient AuthUser."""
-    return rehydrate_user(data.get("identity"))
-
 
 def _optional_identity(data: dict[str, Any]) -> models.AuthUser | None:
     """Rehydrate identity for AuthOptional routes; None when anonymous.
@@ -94,73 +88,12 @@ def _optional_identity(data: dict[str, Any]) -> models.AuthUser | None:
     return rehydrate_user(data.get("identity"))
 
 
-def _payload(data: dict[str, Any]) -> dict[str, Any]:
-    return data.get("payload") or {}
 
 
-def _require_id(data: dict[str, Any]) -> int:
-    try:
-        return int(data["id"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="id is required") from exc
 
 
-def _path_int(data: dict[str, Any], name: str) -> int:
-    raw = data.get(name)
-    try:
-        return int(raw)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{name} is required") from exc
 
 
-def _q(data: dict[str, Any], key: str) -> list[str] | None:
-    vals = (data.get("query") or {}).get(key)
-    if vals is None:
-        return None
-    return vals if isinstance(vals, list) else [vals]
-
-
-def _q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str, default: Any = None) -> Any:
-    vals = _q(data, key)
-    if not vals:
-        return default
-    try:
-        return cast(vals[0])
-    except (TypeError, ValueError):
-        return default
-
-
-def _require_q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str) -> Any:
-    val = _q1(data, key, cast)
-    if val is None:
-        raise HTTPException(status_code=422, detail=f"{key} is required")
-    return val
-
-
-def _dump(obj: Any, *, exclude_none: bool = False) -> Any:
-    if obj is None:
-        return None
-    if isinstance(obj, list):
-        return [_dump(x, exclude_none=exclude_none) for x in obj]
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json", exclude_none=exclude_none)
-    return obj
-
-
-async def _run(logger: Any, op: Callable[[Any], Awaitable[Any]]) -> dict[str, Any]:
-    """Envelope wrapper mirroring admin_misc._run, with identity-failure mapping."""
-    try:
-        async with db.async_session_maker() as session:
-            return rpc_ok(await op(session))
-    except MissingIdentityError as exc:
-        return rpc_error("unauthorized", str(exc) or "Not authenticated")
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("tournament public rpc failed")
-        return rpc_error("internal", "internal error")
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -338,91 +271,11 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             body = RegistrationCreate.model_validate(_payload(data))
-
-            form = await reg_service.get_registration_form(session, tournament_id)
-            if form is None or not form.is_open:
-                raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
-
-            workspace_id = form.workspace_id
-
-            subrole_catalog = await resolve_subrole_catalog(session, workspace_id)
-            hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form)
-            validate_registration_input(
-                form,
-                body,
-                subrole_catalog=subrole_catalog,
-                hero_catalog=hero_catalog,
-            )
-
-            existing = await reg_service.get_registration(session, tournament_id, user.id)
-            if existing is not None:
-                if existing.status == "withdrawn":
-                    raise HTTPException(status_code=409, detail="Withdrawn registrations cannot be submitted again")
-                raise HTTPException(status_code=409, detail="Already registered for this tournament")
-
-            # Resolve player profile from auth_user (explicit query to avoid lazy load)
-            user_player_id: int | None = await session.scalar(
-                sa.select(models.User.id).where(models.User.auth_user_id == user.id)
-            )
-
-            # Identity fields flagged ``require_verified`` must match an
-            # OAuth-verified social account on the registrant's player profile.
-            await validate_verified_identity(
-                session,
-                form=form,
-                payload=body,
-                player_id=user_player_id,
-            )
-
-            role_entries = reg_service.build_registration_roles(
-                body.roles,
-                hero_catalog=hero_catalog,
-                max_heroes=max_heroes,
-            )
-
-            try:
-                registration = await reg_service.create_registration(
-                    session,
-                    tournament_id=tournament_id,
-                    workspace_id=workspace_id,
-                    auth_user_id=user.id,
-                    user_id=user_player_id,
-                    battle_tag=body.battle_tag,
-                    smurf_tags=body.smurf_tags,
-                    discord_nick=body.discord_nick,
-                    twitch_nick=body.twitch_nick,
-                    stream_pov=body.stream_pov,
-                    notes=body.notes,
-                    custom_fields=body.custom_fields,
-                    auto_approve=form.auto_approve,
-                    auth_user=user,
-                )
-
-                # Write normalized roles
-                for entry in role_entries:
-                    entry.registration_id = registration.id
-                    session.add(entry)
-                await session.commit()
-            except IntegrityError:
-                raise HTTPException(status_code=409, detail="Already registered for this tournament")
-
-            result = await session.execute(
-                sa.select(models.BalancerRegistration)
-                .where(models.BalancerRegistration.id == registration.id)
-                .options(
-                    selectinload(models.BalancerRegistration.roles)
-                    .selectinload(models.BalancerRegistrationRole.hero_entries)
-                    .selectinload(models.BalancerRegistrationRoleHero.hero)
-                )
-            )
-            registration = result.scalar_one()
-            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+            # Full use-case (validation, duplicate check, create, serialize)
+            # lives in the service layer; commits internally.
             return _dump(
-                _reg_to_read(
-                    registration,
-                    workspace_id=workspace_id,
-                    status_meta_map=status_meta_map,
-                    show_ranks=form.show_ranks,
+                await reg_service.submit_public_registration(
+                    session, tournament_id=tournament_id, auth_user=user, body=body
                 )
             )
 
@@ -550,72 +403,11 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_pub_list")
     async def _reg_pub_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            # Public route — no identity required.
+            # Public route — no identity required. Read-model assembly lives in
+            # the service layer (always-live data; see its docstring for the
+            # cache.disabling() warning).
             tournament_id = _path_int(data, "tournament_id")
-            workspace_id = await _resolve_tournament_workspace(session, tournament_id)
-
-            # The registration list must always reflect live data. Every read below is a
-            # plain ``session.execute`` (or a helper that itself only runs raw ORM reads:
-            # get_status_metas_map / get_registration_form / resolve_profiles_open) — none
-            # of them go through the cashews cache, so no cache bypass is needed here.
-            # NB: do NOT reintroduce ``cache.disabling(...)`` — it flips a *process-global*
-            # flag on the shared cashews backend and races with every concurrent request
-            # on this worker (see lesson_cashews_disabling_shared_cache).
-            result = await session.execute(
-                sa.select(models.BalancerRegistration)
-                .where(
-                    # tournament_id already pins this to a single workspace
-                    # (BalancerRegistration has no denormalized workspace_id).
-                    models.BalancerRegistration.tournament_id == tournament_id,
-                    models.BalancerRegistration.deleted_at.is_(None),
-                )
-                .options(
-                    selectinload(models.BalancerRegistration.roles)
-                    .selectinload(models.BalancerRegistrationRole.hero_entries)
-                    .selectinload(models.BalancerRegistrationRoleHero.hero),
-                    # Needed by _build_tournament_history's user_id fallback below.
-                    selectinload(models.BalancerRegistration.workspace_member),
-                )
-                .order_by(models.BalancerRegistration.submitted_at.asc())
-            )
-            registrations = result.scalars().all()
-            status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-
-            form = await reg_service.get_registration_form(session, tournament_id)
-            profiles_open_map: dict[int, bool | None] = (
-                await resolve_profiles_open(session, registrations, scope=form.open_profile_scope)
-                if form is not None and form.require_open_profile
-                else {}
-            )
-            show_ranks = form.show_ranks if form is not None else False
-
-            history_map, history_count_map, division_grids = await _build_tournament_history(
-                session,
-                registrations,
-                tournament_id,
-                workspace_id,
-            )
-
-            registrations_read = [
-                RegistrationListRead(
-                    **_reg_to_read(
-                        r, workspace_id=workspace_id, status_meta_map=status_meta_map, show_ranks=show_ranks
-                    ).model_dump(),
-                    balancer_status=r.balancer_status,
-                    balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
-                    or build_unknown_status_meta("balancer", r.balancer_status),
-                    profiles_open=profiles_open_map.get(r.id),
-                    tournament_history=history_map.get(r.id, []),
-                    tournament_history_count=history_count_map.get(r.id, 0),
-                )
-                for r in registrations
-            ]
-            return _dump(
-                RegistrationListResponse(
-                    registrations=registrations_read,
-                    division_grids=division_grids,
-                )
-            )
+            return _dump(await reg_service.build_public_registration_list(session, tournament_id=tournament_id))
 
         return await _run(logger, op)
 
@@ -626,6 +418,8 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             workspace_id = _require_q1(data, "workspace_id", int)
+            if not user.is_workspace_member(workspace_id):
+                raise HTTPException(status_code=403, detail="Not a member of this workspace")
             body = schemas.EncounterSavedViewCreate.model_validate(_payload(data))
             # upsert_saved_view commits internally; route uses response_model_exclude_none=True.
             saved_view = await encounter_flows.save_view(
@@ -644,6 +438,8 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             saved_view_id = _path_int(data, "saved_view_id")
             workspace_id = _require_q1(data, "workspace_id", int)
+            if not user.is_workspace_member(workspace_id):
+                raise HTTPException(status_code=403, detail="Not a member of this workspace")
             # delete_saved_view commits internally; route returns 204 (no body).
             await encounter_flows.delete_saved_view(
                 session,
