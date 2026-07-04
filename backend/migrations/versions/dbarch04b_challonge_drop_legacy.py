@@ -106,11 +106,15 @@ def upgrade() -> None:
     op.drop_column("stage", "challonge_slug", schema="tournament")
     op.drop_column("stage", "challonge_id", schema="tournament")
 
-    op.drop_column("group", "challonge_slug", schema="tournament")
-    op.drop_column("group", "challonge_id", schema="tournament")
-
     op.drop_column("tournament", "challonge_slug", schema="tournament")
     op.drop_column("tournament", "challonge_id", schema="tournament")
+
+    # NOTE: group.challonge_id/challonge_slug are intentionally NOT dropped. That
+    # column stores Challonge's per-group `match.group_id` used to route matches to
+    # a local TournamentGroup; it has no challonge_source equivalent (sources are
+    # per-bracket, keyed by stage_id) and is still actively read/written by both
+    # tournament-service and parser-service. Dropping it needs a dedicated mapping
+    # table first (separate future work).
 
     # Dropping the table drops its FK constraints + the three perfidx03 indexes with it.
     op.drop_table("challonge_team", schema="tournament")
@@ -128,16 +132,7 @@ def downgrade() -> None:
         sa.Column("challonge_slug", sa.String(), nullable=True),
         schema="tournament",
     )
-    op.add_column(
-        "group",
-        sa.Column("challonge_id", sa.Integer(), nullable=True),
-        schema="tournament",
-    )
-    op.add_column(
-        "group",
-        sa.Column("challonge_slug", sa.String(), nullable=True),
-        schema="tournament",
-    )
+    # (group.challonge_id/slug are never dropped by upgrade() — nothing to restore.)
     op.add_column(
         "stage",
         sa.Column("challonge_id", sa.Integer(), nullable=True),
@@ -157,7 +152,9 @@ def downgrade() -> None:
     # 2. Re-create the challonge_team table + its perfidx03 FK indexes.
     op.create_table(
         "challonge_team",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        # Identity so re-created table can accept inserts (the reverse-backfill below
+        # and the app both omit id). The original mixin used a BigInteger identity PK.
+        sa.Column("id", sa.BigInteger(), sa.Identity(always=False), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("challonge_id", sa.Integer(), nullable=False),
@@ -193,16 +190,9 @@ def downgrade() -> None:
         WHERE cs.stage_id = s.id
           AND cs.source_type = 'stage'
     """))
-    # Group re-derivation is best-effort: challonge_source is scoped by stage_id (not group_id),
-    # so we match the group's stage to its 'group'/'playoff' source.
-    conn.execute(sa.text("""
-        UPDATE tournament."group" g
-        SET challonge_id = cs.challonge_tournament_id,
-            challonge_slug = cs.slug
-        FROM tournament.challonge_source cs
-        WHERE cs.stage_id = g.stage_id
-          AND cs.source_type IN ('group', 'playoff')
-    """))
+    # group.challonge_id/slug are NOT touched by upgrade() (they hold Challonge's
+    # per-group match-routing id, not a source id) — so downgrade must NOT overwrite
+    # them from challonge_source either.
     conn.execute(sa.text("""
         UPDATE tournament.encounter e
         SET challonge_id = mm.challonge_match_id
