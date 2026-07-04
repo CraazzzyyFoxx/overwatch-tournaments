@@ -17,7 +17,7 @@ from src.services.balancer.config.public_contract import normalize_balance_respo
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import InternalBalancerTeamsPayload
 from src.services import team as team_flows
-from src.services.admin.balance_analytics import create_balance_snapshot
+from src.services.admin.balance_analytics import enqueue_balance_exported_event
 from src.services.admin.balancer_dual_write import sync_balance_variants_and_slots
 
 logger = logging.getLogger(__name__)
@@ -244,7 +244,7 @@ async def export_balance(session: AsyncSession, balance_id: int) -> tuple[models
         balance.export_status = "success"
         balance.export_error = None
 
-        await create_balance_snapshot(session, balance, payload, public_teams)
+        await enqueue_balance_exported_event(session, balance, payload, public_teams)
 
         await session.commit()
     except Exception as exc:  # noqa: BLE001
