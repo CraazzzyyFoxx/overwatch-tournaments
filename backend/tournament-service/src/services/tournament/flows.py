@@ -283,6 +283,13 @@ async def get_all(
     )
 
 
+@cache(
+    ttl=config.settings.tournaments_cache_ttl,
+    # No tournament_id in the args, so this key can't participate in the
+    # targeted invalidation patterns — staleness is bounded by the short TTL.
+    key="tournaments_statistics_history:{workspace_id}",
+    prefix="fastapi:",
+)
 async def get_history_tournaments(
     session: AsyncSession,
     workspace_id: int | None = None,
@@ -329,11 +336,14 @@ async def get_avg_divisions_tournaments(
     values are comparable across tournaments that used different grid versions.
     Falls back to fallback_grid for tournaments that have no grid version set.
     """
-    raw_rank_cache: dict[int, dict[enums.HeroClass, list[float]]] = {}
+    # Values are (division_number, players_count) pairs: the service layer
+    # aggregates players to a per-(tournament, role, rank) histogram, so the
+    # average is weighted by the count instead of iterating every player row.
+    raw_rank_cache: dict[int, dict[enums.HeroClass, list[tuple[float, int]]]] = {}
     tournament_numbers: dict[int, int] = {}
 
     rows = await service.get_avg_div_tournaments(session, workspace_id=workspace_id)
-    for tournament, role, rank in rows:
+    for tournament, role, rank, players_count in rows:
         if tournament.id not in raw_rank_cache:
             raw_rank_cache[tournament.id] = {}
             tournament_numbers[tournament.id] = tournament.number
@@ -354,12 +364,15 @@ async def get_avg_divisions_tournaments(
             # No normalizer — use fallback (workspace/global default) grid
             div_number = fallback_grid.resolve_division_number(rank)
 
-        raw_rank_cache[tournament.id].setdefault(role, []).append(float(div_number))
+        raw_rank_cache[tournament.id].setdefault(role, []).append((float(div_number), int(players_count)))
 
-    def avg_or_none(values: list[float] | None) -> float | None:
+    def avg_or_none(values: list[tuple[float, int]] | None) -> float | None:
         if not values:
             return None
-        return round(sum(values) / len(values), 2)
+        total_players = sum(count for _, count in values)
+        if not total_players:
+            return None
+        return round(sum(division * count for division, count in values) / total_players, 2)
 
     output: list[schemas.DivisionStatistics] = []
     for tournament_id, roles in raw_rank_cache.items():

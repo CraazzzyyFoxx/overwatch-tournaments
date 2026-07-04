@@ -74,29 +74,28 @@ async def get_issues(
         .where(models.Encounter.has_logs.is_(False), *ws_filters)
     )
 
+    # Anti-joins use correlated NOT EXISTS instead of NOT IN (subquery):
+    # better plans (anti-join) and NULL-safe semantics.
+
     # Teams that have zero players
-    teams_with_players = (
-        sa.select(models.Player.team_id).group_by(models.Player.team_id)
-    )
     teams_without_players_q = (
         sa.select(sa.func.count(models.Team.id))
         .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
-        .where(models.Team.id.not_in(teams_with_players), *ws_filters)
+        .where(
+            ~sa.exists().where(models.Player.team_id == models.Team.id),
+            *ws_filters,
+        )
     )
 
     # Tournaments that have zero stages
-    tournaments_with_stages = (
-        sa.select(models.Stage.tournament_id)
-        .group_by(models.Stage.tournament_id)
-    )
     tournaments_without_stages_q = sa.select(sa.func.count(models.Tournament.id)).where(
-        models.Tournament.id.not_in(tournaments_with_stages), *ws_filters
+        ~sa.exists().where(models.Stage.tournament_id == models.Tournament.id),
+        *ws_filters,
     )
 
     # Users that have no social account (battle_tag / discord / twitch / …)
-    users_with_any = sa.select(models.SocialAccount.user_id)
     users_without_identities_q = sa.select(sa.func.count(models.User.id)).where(
-        models.User.id.not_in(users_with_any)
+        ~sa.exists().where(models.SocialAccount.user_id == models.User.id)
     )
 
     results = await session.execute(
