@@ -120,6 +120,45 @@ def test_get_or_create_workspace_member_distinct_players_distinct_rows(db_sessio
     assert member_a.player_id != member_b.player_id
 
 
+def test_get_members_excludes_players_without_auth_link(db_session) -> None:
+    """Regression: workspace_member rows anchored on tournament-only players
+    (``players.user.auth_user_id IS NULL`` — created by registration / team /
+    draft flows via ``get_or_create_workspace_member``) must NOT appear in the
+    RBAC members list.
+
+    Before the fix a single such row made ``rpc.app.workspaces.members_list``
+    500 for the whole workspace: ``_member_payload`` -> ``get_member_auth_user_id``
+    raised ``"workspace_member N has no linked auth user"`` on the null link,
+    poisoning the entire listing.
+    """
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+
+        linked = await _make_player(db_session, auth_user_id=None)
+        # Fake auth id — the FK is deferred, and this session is never committed
+        # (mirrors test_add_member_creates_row_anchored_on_player_id).
+        linked.auth_user_id = 999_000_101
+        await db_session.flush()
+
+        player_only = await _make_player(db_session, auth_user_id=None)
+
+        await get_or_create_workspace_member(
+            db_session, workspace_id=workspace.id, player_id=linked.id
+        )
+        await get_or_create_workspace_member(
+            db_session, workspace_id=workspace.id, player_id=player_only.id
+        )
+
+        members = await workspace_service.get_members(db_session, workspace.id)
+        return {m.player_id for m in members}, linked.id, player_only.id
+
+    player_ids, linked_id, player_only_id = asyncio.run(_run())
+
+    assert linked_id in player_ids
+    assert player_only_id not in player_ids
+
+
 def test_add_member_creates_row_anchored_on_player_id(db_session) -> None:
     async def _run():
         workspace = await _make_workspace(db_session)

@@ -87,10 +87,31 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         session: AsyncSession,
         workspace_id: int,
     ) -> Sequence[models.WorkspaceMember]:
+        """List the workspace's RBAC members — auth-linked players only.
+
+        ``workspace_member`` is anchored on ``player_id`` and now holds two
+        distinct populations: real RBAC members (auth users who joined via
+        ``add_member``) and tournament participants anchored by
+        registration / team / draft / achievement flows via
+        ``get_or_create_workspace_member``. The latter frequently have no auth
+        account (``players.user.auth_user_id IS NULL``) — they are pure
+        tournament players, not workspace members.
+
+        The RBAC members screen (``rpc.app.workspaces.members_list``) only
+        deals with the former, and every downstream step resolves the row's
+        auth identity (``get_member_auth_user_id``); an auth-less row would
+        make the whole listing 500. The INNER JOIN on ``players.user`` plus the
+        ``auth_user_id IS NOT NULL`` filter scope this to auth-linked members
+        (mirrors ``get_member``'s bridge join).
+        """
         result = await session.execute(
             sa.select(models.WorkspaceMember)
+            .join(models.User, models.User.id == models.WorkspaceMember.player_id)
             .options(selectinload(models.WorkspaceMember.player))
-            .where(models.WorkspaceMember.workspace_id == workspace_id)
+            .where(
+                models.WorkspaceMember.workspace_id == workspace_id,
+                models.User.auth_user_id.isnot(None),
+            )
             .order_by(models.WorkspaceMember.id.asc())
         )
         return result.scalars().all()
