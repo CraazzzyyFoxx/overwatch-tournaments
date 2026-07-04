@@ -139,6 +139,11 @@ class ChallongeSyncLog(db.TimeStampIntegerMixin):
 
 
 class ChallongeTeam(db.TimeStampIntegerMixin):
+    """DEPRECATED (Challonge consolidation): superseded by ChallongeParticipantMapping
+    (source_id -> challonge_participant_id -> team_id). Still dual-written and read as a
+    resolver fallback by both tournament-service and parser-service. Kept until the gated
+    migration dbarch04b_challonge_drop_legacy is applied on prod (see its docstring)."""
+
     __tablename__ = "challonge_team"
     __table_args__ = (
         # FK indexes created CONCURRENTLY by perfidx03 (team_id is hit by the

@@ -71,6 +71,8 @@ class Stage(db.TimeStampIntegerMixin):
         Boolean(), default=False, server_default="false"
     )
     settings_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # DEPRECATED (Challonge consolidation): superseded by tournament.challonge_source
+    # (source_type='stage', scoped via stage_id). Kept until dbarch04b is applied.
     challonge_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     challonge_slug: Mapped[str | None] = mapped_column(String(), nullable=True)
 
