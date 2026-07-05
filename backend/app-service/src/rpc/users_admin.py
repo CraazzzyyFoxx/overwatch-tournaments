@@ -76,6 +76,24 @@ async def _resolve_my_player_id(session: Any, user: Any) -> int:
     return player_id
 
 
+async def _propagate_avatar_to_auth_user(session: Any, player_user: Any, avatar_url: str | None) -> None:
+    """Mirror an admin-set player avatar onto the linked auth user's ``avatar_url``.
+
+    The public profile / admin dialog read ``players.avatar_url``, but the header
+    and the self-service My Account modal read ``AuthUser.avatar_url`` (via ``/me``).
+    Without this, an admin avatar change updated only the player and the two views
+    desynced. This is the inverse of identity-svc's ``_propagate_to_player`` (which
+    already mirrors self-service changes onto the player). No-op for players with no
+    linked account."""
+    if player_user.auth_user_id is None:
+        return
+    auth_user = await session.scalar(
+        sa.select(models.AuthUser).where(models.AuthUser.id == player_user.auth_user_id)
+    )
+    if auth_user is not None:
+        auth_user.avatar_url = avatar_url
+
+
 def _sheets_to_csv_url(url: str) -> str:
     match = _SHEETS_ID_RE.search(url)
     if not match:
@@ -337,6 +355,7 @@ def register(broker: Any, logger: Any) -> None:
             if not result.success:
                 raise HTTPException(status_code=400, detail=result.error)
             player_user.avatar_url = result.public_url
+            await _propagate_avatar_to_auth_user(session, player_user, result.public_url)
             await session.commit()
             player_user = await admin_service.get_user_or_404(session, user_id)
             return await user_flows.to_pydantic(session, player_user, _ENTITIES)
@@ -351,6 +370,7 @@ def register(broker: Any, logger: Any) -> None:
             player_user = await admin_service.get_user_or_404(session, user_id)
             await _clients.s3_client.delete_prefix(f"avatars/players/{user_id}/")
             player_user.avatar_url = None
+            await _propagate_avatar_to_auth_user(session, player_user, None)
             await session.commit()
             player_user = await admin_service.get_user_or_404(session, user_id)
             return await user_flows.to_pydantic(session, player_user, _ENTITIES)
