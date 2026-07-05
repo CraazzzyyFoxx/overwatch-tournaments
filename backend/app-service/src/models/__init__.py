@@ -16,7 +16,6 @@ from shared.models.ingestion.log_processing import *
 from shared.models.matches.match import *
 from shared.models.registration.registration import *
 from shared.models.tenancy.workspace import *
-from shared.models.tournament.challonge import ChallongeTeam  # was re-exported by team.py before the split
 from shared.models.tournament.encounter import *
 from shared.models.tournament.encounter_map import *
 from shared.models.tournament.stage import *

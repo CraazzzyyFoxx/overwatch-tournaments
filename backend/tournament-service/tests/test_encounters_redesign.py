@@ -169,7 +169,6 @@ class EncounterRedesignSerializationTests(IsolatedAsyncioTestCase):
             result_status="none",
             has_logs=False,
             closeness=None,
-            challonge_id=None,
         )
         prefetched = {(5, 9): StageRefs(stage_id=31, stage_item_id=77, tournament_group_id=9)}
 

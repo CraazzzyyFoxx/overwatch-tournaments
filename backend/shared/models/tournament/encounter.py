@@ -90,11 +90,6 @@ class Encounter(db.TimeStampIntegerMixin):
     stage_item_id: Mapped[int | None] = mapped_column(
         ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True, index=True
     )
-
-    # DEPRECATED (Challonge consolidation): superseded by tournament.challonge_match_mapping
-    # (encounter_id -> challonge_match_id, scoped by source). Still an active dual-write +
-    # export-gate + resolver-fallback path; kept until dbarch04b is applied on prod.
-    challonge_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # ENCOUNTER_STATUS_ENUM persists the member NAME (COMPLETED/PENDING/OPEN), not
     # its .value (completed/pending/open) — there is no values_callable, so any
     # raw SQL/partial-index predicate against `status` must use the uppercase NAME

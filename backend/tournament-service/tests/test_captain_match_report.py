@@ -79,7 +79,6 @@ def _mk_encounter(
         submitted_at=None,
         confirmed_by_id=None,
         confirmed_at=None,
-        challonge_id=None,
     )
 
 

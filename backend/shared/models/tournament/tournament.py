@@ -38,11 +38,6 @@ class Tournament(db.TimeStampIntegerMixin):
     number: Mapped[int] = mapped_column(Integer(), nullable=True)
     name: Mapped[str] = mapped_column(String())
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
-    # DEPRECATED (Challonge consolidation): superseded by tournament.challonge_source
-    # (source_type='tournament'). Still an active dual-write/read + API-serialization path;
-    # kept until the gated migration dbarch04b_challonge_drop_legacy is applied on prod.
-    challonge_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    challonge_slug: Mapped[str | None] = mapped_column(String(), nullable=True)
     is_league: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false", nullable=False
     )

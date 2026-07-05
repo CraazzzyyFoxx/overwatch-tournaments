@@ -20,7 +20,6 @@ from shared.models.tournament.tournament import Tournament
 
 if typing.TYPE_CHECKING:
     from shared.models.tenancy.workspace import WorkspaceMember
-    from shared.models.tournament.challonge import ChallongeTeam
     from shared.models.tournament.standings import Standing
 
 __all__ = ("Team", "Player", "PlayerSubRole")
@@ -49,7 +48,6 @@ class Team(db.TimeStampIntegerMixin):
     )
     captain: Mapped["User | None"] = relationship()
     standings: Mapped[list["Standing"]] = relationship(passive_deletes=True)
-    challonge: Mapped[list["ChallongeTeam"]] = relationship(passive_deletes=True)
 
 
 class Player(db.TimeStampIntegerMixin):

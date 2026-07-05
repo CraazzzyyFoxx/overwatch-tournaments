@@ -13,7 +13,6 @@ from shared.models.identity.user import *
 from shared.models.matches.match import *
 from shared.models.registration.registration import *
 from shared.models.tenancy.workspace import *
-from shared.models.tournament.challonge import ChallongeTeam  # was re-exported by team.py before the split
 from shared.models.tournament.encounter import *
 from shared.models.tournament.standings import *
 from shared.models.tournament.team import *

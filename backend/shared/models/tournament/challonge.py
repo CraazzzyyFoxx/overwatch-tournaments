@@ -5,14 +5,13 @@ from shared.core import db
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.team import Team
-from shared.models.tournament.tournament import Tournament, TournamentGroup
+from shared.models.tournament.tournament import Tournament
 
 __all__ = (
     "ChallongeSource",
     "ChallongeParticipantMapping",
     "ChallongeMatchMapping",
     "ChallongeSyncLog",
-    "ChallongeTeam",
 )
 
 
@@ -138,31 +137,3 @@ class ChallongeSyncLog(db.TimeStampIntegerMixin):
     source: Mapped[ChallongeSource | None] = relationship()
 
 
-class ChallongeTeam(db.TimeStampIntegerMixin):
-    """DEPRECATED (Challonge consolidation): superseded by ChallongeParticipantMapping
-    (source_id -> challonge_participant_id -> team_id). Still dual-written and read as a
-    resolver fallback by both tournament-service and parser-service. Kept until the gated
-    migration dbarch04b_challonge_drop_legacy is applied on prod (see its docstring)."""
-
-    __tablename__ = "challonge_team"
-    __table_args__ = (
-        # FK indexes created CONCURRENTLY by perfidx03 (team_id is hit by the
-        # Challonge export's selectinload(Team.challonge) WHERE team_id IN (...)).
-        Index("ix_tournament_challonge_team_team_id", "team_id"),
-        Index("ix_tournament_challonge_team_tournament_id", "tournament_id"),
-        Index("ix_tournament_challonge_team_group_id", "group_id"),
-        {"schema": "tournament"},
-    )
-
-    challonge_id: Mapped[int] = mapped_column(Integer())
-    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
-    group_id: Mapped[int | None] = mapped_column(
-        ForeignKey(TournamentGroup.id, ondelete="CASCADE"), nullable=True
-    )
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE")
-    )
-
-    team: Mapped[Team] = relationship(back_populates="challonge")
-    group: Mapped[TournamentGroup] = relationship()
-    tournament: Mapped[Tournament] = relationship()
