@@ -21,6 +21,35 @@ class UserRepository(BaseRepository[models.User]):
     async def get_by_auth_user_id(self, session: AsyncSession, auth_user_id: int) -> models.User | None:
         return await self.get_by(session, auth_user_id=auth_user_id)
 
+    async def ensure_for_auth_user(
+        self,
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        name_hint: str | None,
+    ) -> models.User:
+        """Return the ``players.user`` linked to ``auth_user_id``, provisioning a
+        bare one if none exists (the identity backbone every auth user needs to
+        anchor a ``workspace_member``).
+
+        Idempotent — returns the existing link unchanged. ``players.user.name`` is
+        UNIQUE, so the ``name_hint`` (username/email) is suffixed with the auth id
+        on collision with an existing player rather than raising IntegrityError.
+        """
+        existing = await self.get_by_auth_user_id(session, auth_user_id)
+        if existing is not None:
+            return existing
+
+        base = (name_hint or "").strip() or f"user-{auth_user_id}"
+        candidate = base
+        if await self.get_by_name(session, candidate) is not None:
+            candidate = f"{base} ({auth_user_id})"
+
+        player = models.User(name=candidate, auth_user_id=auth_user_id)
+        session.add(player)
+        await session.flush()
+        return player
+
 
 class SocialAccountRepository(BaseRepository[models.SocialAccount]):
     """Unified player social identities (battlenet/discord/twitch/boosty/…)."""

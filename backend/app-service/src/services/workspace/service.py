@@ -293,19 +293,22 @@ async def get_member(
 
 
 async def _resolve_player_id_for_auth_user(session: AsyncSession, auth_user_id: int) -> int:
-    """Resolve the ``players.user.id`` linked to ``auth_user_id``.
+    """Resolve the ``players.user.id`` linked to ``auth_user_id``, provisioning a
+    bare player if none exists.
 
-    Post-Phase-A every signup provisions a ``players.user`` row, so a caller
-    reaching here with a real auth user should always resolve. A miss means
-    the identity link is broken (pre-Phase-A leftover / data bug) and is
-    treated as a hard error rather than silently skipped.
+    ``workspace_member`` is anchored on ``player_id``, so adding a member needs
+    the auth user to have a linked ``players.user``. Post-Phase-A signups get one
+    automatically, but legacy accounts (registered before that provisioning) have
+    none — and Add Member explicitly targets staff who never played. Rather than
+    500 on such users, provision the identity backbone on demand (mirrors
+    ``ensure_player_for_auth_user``); the auth user's existence is validated by
+    the caller (member_add) before we get here.
     """
-    player = await _user_repo.get_by_auth_user_id(session, auth_user_id)
-    if player is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f"No players.user is linked to auth_user_id={auth_user_id}; cannot add workspace member",
-        )
+    auth_user = await session.get(models.AuthUser, auth_user_id)
+    name_hint = (auth_user.username or auth_user.email) if auth_user is not None else None
+    player = await _user_repo.ensure_for_auth_user(
+        session, auth_user_id=auth_user_id, name_hint=name_hint
+    )
     return player.id
 
 

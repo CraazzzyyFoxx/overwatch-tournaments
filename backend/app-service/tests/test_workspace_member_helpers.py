@@ -197,6 +197,23 @@ def test_add_member_creates_row_anchored_on_player_id(db_session) -> None:
     assert not hasattr(WorkspaceMember, "role")
 
 
+def test_add_member_provisions_player_for_authuser_without_one(db_session) -> None:
+    """A legacy auth user with no ``players.user`` can still be added: add_member
+    provisions a bare player on demand and anchors the membership on it."""
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+        auth_user = await _make_auth_user(db_session)  # deliberately no linked player
+
+        member = await workspace_service.add_member(db_session, workspace.id, auth_user.id)
+        player = await db_session.get(User, member.player_id)
+        return auth_user.id, player.auth_user_id, member.workspace_id
+
+    auth_id, player_auth_id, member_ws = asyncio.run(_run())
+
+    assert player_auth_id == auth_id  # the provisioned player links back to the auth user
+
+
 def test_assign_default_member_role_if_roleless_is_idempotent(db_session) -> None:
     """Role-less auth user gets ``member``; a second call is a no-op."""
     from shared.rbac import assign_default_member_role_if_roleless
