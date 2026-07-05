@@ -21,7 +21,8 @@ from shared.models.identity.auth_user import AuthUser
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.social import SocialAccount
 from shared.models.identity.user import User
-from shared.rbac import workspace_names_blocking_player_unlink
+from shared.models.tenancy.workspace import WorkspaceMember
+from shared.rbac import assign_default_member_role_if_roleless, workspace_names_blocking_player_unlink
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,11 +190,38 @@ class PlayerLinkService:
             )
 
         player.auth_user_id = auth_user_id
+        await session.flush()
+        # Autofill the baseline ``member`` role for every workspace this player is
+        # already anchored to (tournament participation created the member rows
+        # before the account existed). Now that the row is auth-linked it becomes
+        # a visible RBAC member and must not be role-less. Additive/idempotent.
+        await PlayerLinkService._autofill_member_roles_for_player(
+            session, auth_user_id=auth_user_id, player_id=player_id
+        )
         await session.commit()
         await session.refresh(player)
 
         logger.info(f"Linked player {player_id} to auth user {auth_user_id}")
         return player
+
+    @staticmethod
+    async def _autofill_member_roles_for_player(
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        player_id: int,
+    ) -> None:
+        """Grant the baseline ``member`` role in each workspace where ``player_id``
+        has a membership row but the (now-linked) auth user holds no role yet."""
+        workspace_ids = (
+            await session.scalars(
+                select(WorkspaceMember.workspace_id).where(WorkspaceMember.player_id == player_id)
+            )
+        ).all()
+        for workspace_id in workspace_ids:
+            await assign_default_member_role_if_roleless(
+                session, user_id=auth_user_id, workspace_id=workspace_id
+            )
 
     @staticmethod
     async def admin_link_player(

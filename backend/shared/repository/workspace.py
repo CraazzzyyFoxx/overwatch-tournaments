@@ -142,6 +142,22 @@ async def get_or_create_workspace_member(
         await session.flush()
         member = await session.get(models.WorkspaceMember, member_id)
         assert member is not None
+        # Autofill the baseline ``member`` RBAC role for a brand-new anchor of an
+        # auth-linked player: the members screen treats every auth-linked row as
+        # an RBAC member, so a fresh row must not be role-less. Fires ONLY on a
+        # real insert (not idempotent hits) and ONLY when the player has an auth
+        # account; the helper is additive (never downgrades a later ``player`` /
+        # explicit grant). Local import avoids any shared.repository<->shared.rbac
+        # import-time coupling on this widely-imported module.
+        from shared.rbac import assign_default_member_role_if_roleless
+
+        auth_user_id = await session.scalar(
+            sa.select(models.User.auth_user_id).where(models.User.id == player_id)
+        )
+        if auth_user_id is not None:
+            await assign_default_member_role_if_roleless(
+                session, user_id=auth_user_id, workspace_id=workspace_id
+            )
         return member
 
     existing = await WorkspaceMemberRepository().get_by_player(

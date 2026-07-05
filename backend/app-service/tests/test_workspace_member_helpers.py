@@ -15,8 +15,10 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
+from shared.models.identity.auth_user import AuthUser
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
+from shared.rbac import user_has_any_workspace_role
 from shared.repository import get_or_create_workspace_member
 from shared.services.division_grid_access import get_default_division_grid_version_id
 
@@ -63,6 +65,20 @@ async def _make_player(session, *, auth_user_id: int | None = None) -> User:
     session.add(player)
     await session.flush()
     return player
+
+
+async def _make_auth_user(session) -> AuthUser:
+    """Create a real ``auth.user`` so the anchor-trigger autofill (which inserts
+    ``auth.user_roles``) has a valid FK target — a fake id would violate it."""
+    suffix = uuid.uuid4().hex[:12]
+    auth_user = AuthUser(
+        email=f"wsm-{suffix}@example.com",
+        username=f"wsm_{suffix}",
+        hashed_password="x",
+    )
+    session.add(auth_user)
+    await session.flush()
+    return auth_user
 
 
 async def _make_workspace(session) -> Workspace:
@@ -135,12 +151,8 @@ def test_get_members_excludes_players_without_auth_link(db_session) -> None:
     async def _run():
         workspace = await _make_workspace(db_session)
 
-        linked = await _make_player(db_session, auth_user_id=None)
-        # Fake auth id — the FK is deferred, and this session is never committed
-        # (mirrors test_add_member_creates_row_anchored_on_player_id).
-        linked.auth_user_id = 999_000_101
-        await db_session.flush()
-
+        auth_user = await _make_auth_user(db_session)
+        linked = await _make_player(db_session, auth_user_id=auth_user.id)
         player_only = await _make_player(db_session, auth_user_id=None)
 
         await get_or_create_workspace_member(
@@ -162,20 +174,109 @@ def test_get_members_excludes_players_without_auth_link(db_session) -> None:
 def test_add_member_creates_row_anchored_on_player_id(db_session) -> None:
     async def _run():
         workspace = await _make_workspace(db_session)
-        player = await _make_player(db_session, auth_user_id=None)
-        # add_member resolves player_id from auth_user_id; give the player a
-        # (fake, non-FK-checked-here) auth_user_id to resolve through.
-        player.auth_user_id = 999_000_001
-        await db_session.flush()
+        auth_user = await _make_auth_user(db_session)
+        # add_member resolves player_id from auth_user_id via the player link.
+        await _make_player(db_session, auth_user_id=auth_user.id)
 
-        member = await workspace_service.add_member(db_session, workspace.id, player.auth_user_id)
+        member = await workspace_service.add_member(db_session, workspace.id, auth_user.id)
         row = await db_session.execute(
             sa.select(WorkspaceMember).where(WorkspaceMember.id == member.id)
         )
-        return member, row.scalar_one()
+        # The anchor autofill trigger grants the baseline member role to the
+        # new auth-linked member.
+        has_role = await user_has_any_workspace_role(
+            db_session, user_id=auth_user.id, workspace_id=workspace.id
+        )
+        return member, row.scalar_one(), has_role
 
-    member, row = asyncio.run(_run())
+    member, row, has_role = asyncio.run(_run())
 
     assert row.player_id == member.player_id
+    assert has_role is True
     assert not hasattr(WorkspaceMember, "auth_user_id")
     assert not hasattr(WorkspaceMember, "role")
+
+
+def test_assign_default_member_role_if_roleless_is_idempotent(db_session) -> None:
+    """Role-less auth user gets ``member``; a second call is a no-op."""
+    from shared.rbac import assign_default_member_role_if_roleless
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+        auth_user = await _make_auth_user(db_session)
+
+        first = await assign_default_member_role_if_roleless(
+            db_session, user_id=auth_user.id, workspace_id=workspace.id
+        )
+        again = await assign_default_member_role_if_roleless(
+            db_session, user_id=auth_user.id, workspace_id=workspace.id
+        )
+        has = await user_has_any_workspace_role(
+            db_session, user_id=auth_user.id, workspace_id=workspace.id
+        )
+        return first, again, has
+
+    first, again, has = asyncio.run(_run())
+
+    assert first is True  # assigned member
+    assert again is False  # already has a role -> no-op
+    assert has is True
+
+
+def test_list_members_page_paginates_and_excludes_auth_less(db_session) -> None:
+    """``list_members_page`` scopes to auth-linked members, counts them, and
+    honours page size."""
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+        au1 = await _make_auth_user(db_session)
+        au2 = await _make_auth_user(db_session)
+        p1 = await _make_player(db_session, auth_user_id=au1.id)
+        p2 = await _make_player(db_session, auth_user_id=au2.id)
+        orphan = await _make_player(db_session, auth_user_id=None)
+        for player in (p1, p2, orphan):
+            await get_or_create_workspace_member(
+                db_session, workspace_id=workspace.id, player_id=player.id
+            )
+
+        first_total, first_rows = await workspace_service.list_members_page(
+            db_session, workspace.id, page=1, per_page=1, search=None
+        )
+        all_total, all_rows = await workspace_service.list_members_page(
+            db_session, workspace.id, page=1, per_page=50, search=None
+        )
+        return first_total, len(first_rows), all_total, {au.id for (_m, au, _r) in all_rows}, au1.id, au2.id
+
+    first_total, first_len, all_total, auth_ids, au1_id, au2_id = asyncio.run(_run())
+
+    assert first_total == 2  # orphan (auth_user_id NULL) excluded from the count
+    assert first_len == 1  # per_page=1 returns one row
+    assert all_total == 2
+    assert auth_ids == {au1_id, au2_id}
+
+
+def test_autofill_member_roles_grants_member_to_roleless(db_session) -> None:
+    """``autofill_member_roles`` grants ``member`` to a role-less auth-linked
+    member and is idempotent on a second run."""
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+        auth_user = await _make_auth_user(db_session)
+        player = await _make_player(db_session, auth_user_id=auth_user.id)
+        # Insert the member row directly to bypass get_or_create's anchor autofill
+        # and simulate a legacy role-less member.
+        db_session.add(WorkspaceMember(workspace_id=workspace.id, player_id=player.id))
+        await db_session.flush()
+
+        assigned = await workspace_service.autofill_member_roles(db_session, workspace.id)
+        assigned_again = await workspace_service.autofill_member_roles(db_session, workspace.id)
+        has = await user_has_any_workspace_role(
+            db_session, user_id=auth_user.id, workspace_id=workspace.id
+        )
+        return assigned, assigned_again, has
+
+    assigned, assigned_again, has = asyncio.run(_run())
+
+    assert assigned == 1
+    assert assigned_again == 0
+    assert has is True

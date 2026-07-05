@@ -104,6 +104,65 @@ async def assign_workspace_system_role(
     return role
 
 
+async def user_has_any_workspace_role(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    workspace_id: int,
+) -> bool:
+    """True when ``user_id`` holds at least one role scoped to ``workspace_id``."""
+    return bool(
+        await session.scalar(
+            sa.select(sa.literal(True))
+            .select_from(user_roles.join(Role, Role.id == user_roles.c.role_id))
+            .where(user_roles.c.user_id == user_id, Role.workspace_id == workspace_id)
+            .limit(1)
+        )
+    )
+
+
+async def assign_default_member_role_if_roleless(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    workspace_id: int,
+) -> bool:
+    """Grant the workspace ``member`` system role to ``user_id`` iff they hold
+    no role in ``workspace_id`` yet. Returns True when a role was assigned.
+
+    The members screen treats every auth-linked ``workspace_member`` as an RBAC
+    member; a row whose auth user has zero workspace roles is the "role-less
+    member" this autofill closes. Idempotent and additive — it never touches an
+    existing role, so a ``player`` / ``admin`` / custom assignment is preserved
+    and never downgraded.
+
+    Kept cheap for the hot anchor path (``get_or_create_workspace_member``):
+    resolves the existing ``member`` role directly and only falls back to the
+    full ``ensure_workspace_system_roles`` upsert when the workspace has no
+    system roles yet, rather than upserting the whole catalog on every call.
+    """
+    if await user_has_any_workspace_role(session, user_id=user_id, workspace_id=workspace_id):
+        return False
+
+    member_role = await get_workspace_system_role(session, workspace_id, "member")
+    if member_role is None:
+        member_role = (await ensure_workspace_system_roles(session, workspace_id))["member"]
+
+    await session.execute(
+        sa.insert(user_roles).from_select(
+            ["user_id", "role_id"],
+            sa.select(sa.literal(user_id), sa.literal(member_role.id)).where(
+                ~sa.exists().where(
+                    user_roles.c.user_id == user_id,
+                    user_roles.c.role_id == member_role.id,
+                )
+            ),
+        )
+    )
+    await session.flush()
+    return True
+
+
 async def _workspace_roles_by_ids(
     session: AsyncSession,
     *,

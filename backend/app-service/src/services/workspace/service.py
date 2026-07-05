@@ -125,6 +125,112 @@ async def get_members(
     return await _workspace_member_repo.list_by_workspace(session, workspace_id)
 
 
+_UNLIMITED_MEMBERS_CAP = 10_000
+
+
+def _members_filtered_query(base: sa.Select, workspace_id: int, search: str | None) -> sa.Select:
+    """Attach the auth-linked join + workspace filter (+ optional username/email
+    search) shared by the count and page queries.
+
+    Auth-linked only (INNER JOIN ``players.user`` + ``auth.user``) so the
+    ``auth_user_id IS NOT NULL`` invariant holds and every row resolves an auth
+    identity — the same scoping ``list_by_workspace`` applies.
+    """
+    base = (
+        base.join(models.User, models.User.id == models.WorkspaceMember.player_id)
+        .join(models.AuthUser, models.AuthUser.id == models.User.auth_user_id)
+        .where(models.WorkspaceMember.workspace_id == workspace_id)
+    )
+    if search and search.strip():
+        like = f"%{search.strip()}%"
+        base = base.where(
+            sa.or_(models.AuthUser.username.ilike(like), models.AuthUser.email.ilike(like))
+        )
+    return base
+
+
+async def list_members_page(
+    session: AsyncSession,
+    workspace_id: int,
+    *,
+    page: int,
+    per_page: int,
+    search: str | None,
+) -> tuple[int, list[tuple[models.WorkspaceMember, models.AuthUser, list[models.Role]]]]:
+    """Paginated + searchable RBAC members, batched to kill the per-row N+1 the
+    old ``_member_payload`` loop incurred.
+
+    Returns ``(total, [(member, auth_user, workspace_roles)])``. Roles for the
+    whole page are loaded in a single query and grouped in memory, so the cost is
+    ~3 queries (count + page + roles) regardless of page size. ``per_page == -1``
+    returns all members (capped) for selector/combobox callers.
+    """
+    total = await session.scalar(
+        _members_filtered_query(
+            sa.select(sa.func.count()).select_from(models.WorkspaceMember),
+            workspace_id,
+            search,
+        )
+    ) or 0
+
+    page_q = _members_filtered_query(
+        sa.select(models.WorkspaceMember, models.AuthUser), workspace_id, search
+    ).order_by(models.AuthUser.username.asc(), models.WorkspaceMember.id.asc())
+    if per_page == -1:
+        page_q = page_q.limit(_UNLIMITED_MEMBERS_CAP)
+    else:
+        page_q = page_q.offset(max(page - 1, 0) * per_page).limit(per_page)
+
+    rows = (await session.execute(page_q)).all()
+    auth_ids = [auth_user.id for (_member, auth_user) in rows]
+
+    roles_by_user: dict[int, list[models.Role]] = {}
+    if auth_ids:
+        role_rows = await session.execute(
+            sa.select(user_roles.c.user_id, models.Role)
+            .join(models.Role, models.Role.id == user_roles.c.role_id)
+            .where(
+                user_roles.c.user_id.in_(auth_ids),
+                models.Role.workspace_id == workspace_id,
+            )
+        )
+        for user_id, role in role_rows.all():
+            roles_by_user.setdefault(user_id, []).append(role)
+
+    return total, [(member, auth_user, roles_by_user.get(auth_user.id, [])) for (member, auth_user) in rows]
+
+
+async def autofill_member_roles(session: AsyncSession, workspace_id: int) -> int:
+    """Grant the baseline ``member`` role to every auth-linked member of
+    ``workspace_id`` whose auth user currently holds no role there.
+
+    Set-based and idempotent (the ``NOT EXISTS`` guard only touches role-less
+    members, so re-running assigns nothing and never duplicates). Ensures the
+    workspace system roles exist first so the ``member`` role is guaranteed
+    present. Returns the number of grants inserted.
+    """
+    await ensure_workspace_system_roles(session, workspace_id)
+    result = await session.execute(
+        sa.text(
+            """
+            INSERT INTO auth.user_roles (user_id, role_id)
+            SELECT DISTINCT pu.auth_user_id, r.id
+            FROM workspace_member wm
+            JOIN players."user" pu ON pu.id = wm.player_id AND pu.auth_user_id IS NOT NULL
+            JOIN auth.roles r ON r.workspace_id = wm.workspace_id AND r.name = 'member'
+            WHERE wm.workspace_id = :workspace_id
+              AND NOT EXISTS (
+                SELECT 1 FROM auth.user_roles ur
+                JOIN auth.roles r2 ON r2.id = ur.role_id
+                WHERE ur.user_id = pu.auth_user_id AND r2.workspace_id = wm.workspace_id
+              )
+            """
+        ),
+        {"workspace_id": workspace_id},
+    )
+    return result.rowcount or 0
+
+
 async def get_member(
     session: AsyncSession, workspace_id: int, auth_user_id: int
 ) -> models.WorkspaceMember | None:
