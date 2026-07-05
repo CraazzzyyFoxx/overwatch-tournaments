@@ -12,9 +12,8 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { usePermissions } from "@/hooks/usePermissions";
 import meService from "@/services/me.service";
 import { revalidateUser } from "@/app/actions/users";
+import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import type { User } from "@/types/user.types";
-
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
 
 // Providers a user can OAuth-link (and thereby verify).
 const OAUTH_ADDABLE = ["battlenet", "discord", "twitch"] as const;

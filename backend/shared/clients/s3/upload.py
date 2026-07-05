@@ -9,7 +9,7 @@ from .client import S3Client
 from .types import UploadResult
 
 ALLOWED_IMAGE_TYPES = {"image/webp", "image/png", "image/jpeg", "image/gif"}
-MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2 MB
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB (keep in sync with frontend MAX_AVATAR_BYTES)
 MAX_ASSET_SIZE = 5 * 1024 * 1024  # 5 MB
 
 # Leading magic bytes per MIME type. The client-supplied ``content_type`` is

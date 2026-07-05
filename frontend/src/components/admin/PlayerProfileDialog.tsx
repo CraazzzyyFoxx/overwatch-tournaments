@@ -20,6 +20,8 @@ import {
 import adminService from "@/services/admin.service";
 import { SocialAccountsEditor } from "@/components/social/SocialAccountsEditor";
 import { revalidateUser } from "@/app/actions/users";
+import { notify } from "@/lib/notify";
+import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import type { User } from "@/types/user.types";
 
 // ─── Avatar section ─────────────────────────────────────────────────────────
@@ -61,7 +63,8 @@ function AvatarSection({ user, canEdit, onUserUpdated }: AvatarSectionProps) {
         busy={isPending}
         onSelectFile={(file) => uploadMutation.mutate(file)}
         onDelete={user.avatar_url ? () => deleteMutation.mutate() : undefined}
-        maxSizeBytes={2 * 1024 * 1024}
+        maxSizeBytes={MAX_AVATAR_BYTES}
+        onError={(message) => notify.error(message)}
       />
 
       {(uploadMutation.isError || deleteMutation.isError) && (
