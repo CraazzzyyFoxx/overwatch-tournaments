@@ -1,11 +1,24 @@
 # ERD базы данных — anak-tournaments
 
 Единая PostgreSQL-база, которую делят все Python-сервисы монорепы. ORM-модели
-живут в `backend/shared/models/` (SQLAlchemy) и физически разложены по
-**Postgres-схемам** — они же служат границами доменов.
+(SQLAlchemy) разложены по **доменным подпакетам** внутри
+`backend/shared/models/<domain>/` — `identity/` (auth_user, rbac, oauth,
+api_key, user, social, user_merge_audit), `tenancy/` (workspace, settings),
+`catalog/` (hero, map, gamemode), `division_grid/`, `tournament/` (tournament,
+stage, team, encounter, encounter_link, encounter_map, standings, computation,
+challonge), `registration/`, `balancer/` (balance, draft), `matches/`,
+`achievements/`, `analytics/`, `ranks/`, `ingestion/`, `preferences/`,
+`platform/`. Физически таблицы разложены по **Postgres-схемам** — они же
+служат границами доменов (имя подпакета не всегда совпадает с именем схемы:
+напр. `ranks/` → схема `overwatch_rank`, `ingestion/` → `log_processing`).
 
 Ниже — обзор схем, карта доменов и отдельная ER-диаграмма на каждый домен
 (Mermaid `erDiagram`, рендерится в GitHub / VS Code / любом Mermaid-вьюере).
+
+> **Актуальность.** Документ отражает финальное состояние после
+> identity/workspace-рефактора и нормализаций Challonge / map-veto / draft /
+> predictions. Alembic head — **`dbarch06`**. Сводка изменений — в конце
+> файла («История изменений схемы»).
 
 > Соглашение об именах на диаграммах: имя сущности = `SCHEMA_TABLE`, потому что
 > одно и то же имя таблицы встречается в разных схемах (`auth.user` vs
@@ -29,8 +42,8 @@
 | `overwatch_rank` | Телеметрия рангов OW | `rank_snapshot`, `battle_tag_state`, `fetch_log` | parser-service |
 | `matches` | Разобранные матч-логи | `match`, `statistics`, `kill_feed`, `assists`, `mv_hero_global_stats` (MV) | parser-service |
 | `balancer` | Регистрация и балансировка | `registration*`, `balance*`, `team*`, `tournament_config`, `draft_*` | balancer-service |
-| `achievements` | Движок достижений | `rule`, `evaluation_result`, `override`, `evaluation_run` (+ legacy) | parser / app |
-| `analytics` | Аналитика и ML | `tournament`, `shifts`, `performance`, `predictions`, `ml_*`, `job`, … | analytics-service |
+| `achievements` | Движок достижений | `rule`, `evaluation_result`, `override`, `evaluation_run` | parser / app |
+| `analytics` | Аналитика и ML | `tournament`, `shifts`, `performance`, `standings_distribution`, `match_quality`, `ml_*`, `job`, … | analytics-service |
 | `log_processing` | Загрузка/парсинг логов | `record`, `discord_channel` | parser / discord |
 | `realtime` | Журнал realtime-событий | `workspace_event` | gateway (Go) |
 
@@ -39,7 +52,7 @@
 - **`public.workspace`** — арендатор (мультитенантность). Почти всё скоупится по `workspace_id`.
 - **`players.user`** — доменная идентичность игрока (может существовать без аккаунта — «shadow player» из логов/CSV).
 - **`auth.user`** — учётная запись для входа; линк к `players.user` — `1:0..1`.
-- **`workspace_member`** — якорь принадлежности игрока к воркспейсу (`workspace_id + player_id`); на него ссылаются ростер и достижения.
+- **`workspace_member`** — якорь принадлежности игрока к воркспейсу (уникальность по `workspace_id + player_id`); на него по `workspace_member_id` ссылаются ростер (`tournament.player`), регистрации (`balancer.registration`), драфт (`draft_team`/`draft_player`/`draft_pick`) и достижения (`evaluation_result`/`override`). Денормализованной роли нет — роль выводится из RBAC.
 - **`tournament.tournament`** — турнир; корень для стадий, команд, матчей, регистраций, аналитики.
 - **`overwatch.hero`** — герой; на него ссылаются статистика, топ-герои регистрации, достижения.
 
@@ -189,6 +202,7 @@ erDiagram
         int user_id FK
         int permission_id FK
         int workspace_id FK "nullable: NULL = глобальный deny"
+        int created_by FK "nullable → auth.user (SET NULL); FK добавлен dbarch01"
         string reason
     }
     WORKSPACE {
@@ -203,11 +217,17 @@ erDiagram
     AUTH_ROLE ||--o{ AUTH_ROLE_PERMISSION : "даёт"
     AUTH_PERMISSION ||--o{ AUTH_ROLE_PERMISSION : "включено в роль"
     AUTH_USER ||--o{ AUTH_USER_PERMISSION_DENY : "запреты"
+    AUTH_USER |o--o{ AUTH_USER_PERMISSION_DENY : "создал (created_by)"
     AUTH_PERMISSION ||--o{ AUTH_USER_PERMISSION_DENY : "что запрещено"
     WORKSPACE ||--o{ AUTH_ROLE : "скоупит (nullable)"
     WORKSPACE ||--o{ AUTH_API_KEY : "скоупит"
     WORKSPACE ||--o{ AUTH_USER_PERMISSION_DENY : "скоупит (nullable)"
 ```
+
+> **Гигиена индексов/FK (dbarch01).** Ассоциативные таблицы `auth.user_roles`
+> и `auth.role_permissions` получили индексы на обе FK-колонки (раньше
+> резолвинг прав и каскадные удаления делали seq-scan). FK `deny.created_by →
+> auth.user` добавлен как `NOT VALID` + `VALIDATE` (SET NULL).
 
 ---
 
@@ -248,9 +268,9 @@ erDiagram
     }
     PLAYERS_USER_MERGE_AUDIT {
         int id PK
-        int source_user_id "audit-only, не FK"
-        int target_user_id "audit-only, не FK"
-        int operator_auth_user_id FK "nullable"
+        int source_user_id FK "nullable → players.user (SET NULL); FK с dbarch01"
+        int target_user_id FK "nullable → players.user (SET NULL); FK с dbarch01"
+        int operator_auth_user_id FK "nullable → auth.user"
         json field_policy_json
         json affected_counts_json
     }
@@ -276,10 +296,19 @@ erDiagram
     PLAYERS_SOCIAL_ACCOUNT ||--o{ PLAYERS_SOCIAL_VISIBILITY : "видимость по scope"
     WORKSPACE ||--o{ PLAYERS_SOCIAL_VISIBILITY : "scope (nullable=global)"
     AUTH_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : "оператор merge"
+    PLAYERS_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : "источник merge (SET NULL)"
+    PLAYERS_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : "цель merge (SET NULL)"
     WORKSPACE ||--o{ WORKSPACE_MEMBER : "участники"
     PLAYERS_USER ||--o{ WORKSPACE_MEMBER : "член воркспейса"
     DIVISION_GRID_VERSION |o--o{ WORKSPACE : "дефолтная сетка"
 ```
+
+> **`workspace_member`** ключуется на `player_id` (FK → `players.user`) с
+> уникальностью `(workspace_id, player_id)`; денормализованной роли нет.
+> **`players.social_account`** имеет частичный unique-индекс (dbarch01) для
+> строк с `username_normalized IS NULL` (по `lower(btrim(username))`) — он
+> закрывает обход основного `uq(user, provider, username_normalized)`, который
+> не дедуплицирует NULL-хендлы.
 
 ---
 
@@ -429,13 +458,6 @@ erDiagram
         string label
         bool is_active
     }
-    CHALLONGE_TEAM {
-        int id PK
-        int team_id FK
-        int group_id FK "nullable"
-        int tournament_id FK
-        int challonge_id
-    }
     STANDING {
         int id PK
         int tournament_id FK
@@ -472,7 +494,6 @@ erDiagram
     WORKSPACE_MEMBER ||--o{ PLAYER : "идентичность"
     PLAYER |o--o{ PLAYER : "замена (related)"
     WORKSPACE ||--o{ PLAYER_SUB_ROLE : "каталог суб-ролей"
-    TOURNAMENT_TEAM ||--o{ CHALLONGE_TEAM : "маппинг Challonge"
     TOURNAMENT ||--o{ STANDING : "итоги"
     TOURNAMENT_TEAM ||--o{ STANDING : "место команды"
     STAGE |o--o{ STANDING : "по стадии"
@@ -484,8 +505,19 @@ erDiagram
 ## 5. Встречи, сетка и синхронизация с Challonge (`tournament`)
 
 `encounter` — конкретная встреча (best-of), `encounter_link` — явные рёбра
-продвижения (winner/loser → слот). Пул карт и вето. Плюс мост к Challonge
-(source/participant/match mapping + журнал синка) и сохранённые фильтры.
+продвижения (winner/loser → слот). Пул карт и вето (пул `map_veto_config`
+нормализован из JSON `map_pool_ids` в дочернюю `map_veto_config_map` —
+dbarch05). Плюс мост к Challonge (source/participant/match mapping + журнал
+синка) и сохранённые фильтры.
+
+> **Нормализация Challonge (dbarch04 + dbarch04b, применено на проде).**
+> Легаси-колонки `challonge_id`/`challonge_slug` на `tournament`/`stage` и
+> `encounter.challonge_id`, а также таблица `challonge_team` — **удалены**.
+> Единственный источник правды: `challonge_source` +
+> `challonge_participant_mapping` + `challonge_match_mapping` +
+> `challonge_sync_log`. Исключение — `tournament.group.challonge_id` /
+> `challonge_slug` **оставлены**: они хранят Challonge-значение маршрутизации
+> `match.group_id` по группам (не покрывается source-моделью).
 
 ```mermaid
 erDiagram
@@ -525,8 +557,13 @@ erDiagram
         int id PK
         int tournament_id FK
         int stage_id FK "nullable"
-        json veto_sequence_json
-        json map_pool_ids
+        json veto_sequence_json "шаги ban/pick — остаётся JSON"
+    }
+    MAP_VETO_CONFIG_MAP {
+        int id PK
+        int map_veto_config_id FK "UK(config, map)"
+        int map_id FK "→ overwatch.map"
+        int sort_order
     }
     ENCOUNTER_SAVED_VIEW {
         int id PK
@@ -538,10 +575,11 @@ erDiagram
     CHALLONGE_SOURCE {
         int id PK
         int tournament_id FK "UK(tournament, challonge_tournament_id)"
-        int stage_id FK "nullable"
-        int stage_item_id FK "nullable"
+        int stage_id FK "nullable (SET NULL)"
+        int stage_item_id FK "nullable (SET NULL)"
         int challonge_tournament_id
-        string source_type
+        string slug "nullable"
+        string source_type "tournament/stage/group/playoff"
     }
     CHALLONGE_PARTICIPANT_MAPPING {
         int id PK
@@ -580,6 +618,8 @@ erDiagram
     ENCOUNTER ||--o{ ENCOUNTER_MAP_POOL : "пул карт"
     MAP ||--o{ ENCOUNTER_MAP_POOL : "карта"
     TOURNAMENT ||--o{ MAP_VETO_CONFIG : "конфиг вето"
+    MAP_VETO_CONFIG ||--o{ MAP_VETO_CONFIG_MAP : "пул карт (нормализован)"
+    MAP ||--o{ MAP_VETO_CONFIG_MAP : "карта пула"
     TOURNAMENT ||--o{ CHALLONGE_SOURCE : "источники Challonge"
     CHALLONGE_SOURCE ||--o{ CHALLONGE_PARTICIPANT_MAPPING : "участники"
     TOURNAMENT_TEAM ||--o{ CHALLONGE_PARTICIPANT_MAPPING : "команда"
@@ -764,8 +804,7 @@ erDiagram
     BAL_REGISTRATION {
         int id PK
         int tournament_id FK
-        int workspace_member_id FK "nullable (sheet/CSV — без члена)"
-        int user_id FK "nullable → players.user"
+        int workspace_member_id FK "nullable, единственный якорь идентичности (SET NULL); dbarch02 удалил user_id"
         string battle_tag
         string battle_tag_normalized "UK(tournament, tag) активные"
         string status
@@ -867,9 +906,6 @@ erDiagram
     WORKSPACE_MEMBER {
         int id PK
     }
-    PLAYERS_USER {
-        int id PK
-    }
     HERO {
         int id PK
     }
@@ -879,8 +915,7 @@ erDiagram
 
     TOURNAMENT |o--o| BAL_REGISTRATION_FORM : "форма (1:0..1)"
     TOURNAMENT ||--o{ BAL_REGISTRATION : "заявки"
-    WORKSPACE_MEMBER |o--o{ BAL_REGISTRATION : "член (nullable)"
-    PLAYERS_USER |o--o{ BAL_REGISTRATION : "игрок (nullable)"
+    WORKSPACE_MEMBER |o--o{ BAL_REGISTRATION : "член (nullable — единственный якорь)"
     BAL_REGISTRATION ||--o{ BAL_REGISTRATION_ROLE : "роли"
     BAL_REGISTRATION_ROLE ||--o{ BAL_REGISTRATION_ROLE_HERO : "топ-герои"
     HERO ||--o{ BAL_REGISTRATION_ROLE_HERO : "герой"
@@ -904,7 +939,10 @@ erDiagram
 
 Snake-драфт: сессия на турнир, команды с капитанами, пул игроков и последовательность
 пиков (server-authoritative часы, optimistic-concurrency `version`). Пул берётся
-из сохранённого баланса.
+из сохранённого баланса. Идентичность капитана/игрока/актора пика якорится на
+`workspace_member` (dbarch03 удалил легаси `*_user_id`-колонки). Per-role
+данные игрока (`role_ranks`/`role_top_heroes`/`secondary_roles_json`) вынесены
+из JSON в дочерние `draft_player_role` + `draft_player_role_hero` (dbarch03).
 
 ```mermaid
 erDiagram
@@ -922,29 +960,43 @@ erDiagram
     DRAFT_TEAM {
         int id PK
         int session_id FK "UK(session, draft_position)"
-        int captain_user_id FK "nullable → players.user"
-        int captain_auth_user_id FK "nullable → auth.user"
+        int captain_workspace_member_id FK "nullable → workspace_member (SET NULL); dbarch03 удалил captain_user_id"
+        int captain_auth_user_id FK "nullable → auth.user (сигнал 'это я')"
         int exported_team_id FK "nullable → tournament.team"
         string name
         int draft_position
     }
     DRAFT_PLAYER {
         int id PK
-        int session_id FK "UK(session, user)"
-        int user_id FK "nullable → players.user"
+        int session_id FK "UK(session, workspace_member_id)"
+        int workspace_member_id FK "nullable → workspace_member (SET NULL); dbarch03 удалил user_id"
         int drafted_by_team_id FK "nullable"
         string battle_tag
         string primary_role
         string status "available/drafted/…"
         int rank_value "nullable"
-        json role_ranks
+        json additional_info "прочий per-player bag (role_ranks/top_heroes/secondary вынесены в дочерние)"
+    }
+    DRAFT_PLAYER_ROLE {
+        int id PK
+        int draft_player_id FK "UK(draft_player, role)"
+        string role
+        int rank_value "nullable"
+        bool is_secondary
+        int priority
+    }
+    DRAFT_PLAYER_ROLE_HERO {
+        int id PK
+        int draft_player_role_id FK "UK(role, priority); UK(role, hero)"
+        int hero_id FK "→ overwatch.hero"
+        int priority
     }
     DRAFT_PICK {
         int id PK
         int session_id FK "UK(session, overall_no)"
         int draft_team_id FK
         int picked_player_id FK "nullable"
-        int picked_by_user_id FK "nullable"
+        int picked_by_workspace_member_id FK "nullable → workspace_member (SET NULL); dbarch03 удалил picked_by_user_id"
         int overall_no
         int round_no
         string status "upcoming/…"
@@ -959,7 +1011,10 @@ erDiagram
     BAL_BALANCE {
         int id PK
     }
-    PLAYERS_USER {
+    WORKSPACE_MEMBER {
+        int id PK
+    }
+    HERO {
         int id PK
     }
     TOURNAMENT_TEAM {
@@ -974,10 +1029,14 @@ erDiagram
     DRAFT_SESSION ||--o{ DRAFT_PICK : "пики"
     DRAFT_TEAM ||--o{ DRAFT_PICK : "чей пик"
     DRAFT_TEAM |o--o{ DRAFT_PLAYER : "задрафтован в"
+    DRAFT_PLAYER ||--o{ DRAFT_PLAYER_ROLE : "роли (primary + off-role)"
+    DRAFT_PLAYER_ROLE ||--o{ DRAFT_PLAYER_ROLE_HERO : "топ-герои"
+    HERO ||--o{ DRAFT_PLAYER_ROLE_HERO : "герой"
     DRAFT_PLAYER |o--o{ DRAFT_PICK : "выбранный игрок"
     DRAFT_PICK |o--o| DRAFT_SESSION : "текущий пик"
-    PLAYERS_USER |o--o{ DRAFT_TEAM : "капитан"
-    PLAYERS_USER |o--o{ DRAFT_PLAYER : "игрок"
+    WORKSPACE_MEMBER |o--o{ DRAFT_TEAM : "капитан (member)"
+    WORKSPACE_MEMBER |o--o{ DRAFT_PLAYER : "игрок (member)"
+    WORKSPACE_MEMBER |o--o{ DRAFT_PICK : "актор пика (member)"
     TOURNAMENT_TEAM |o--o{ DRAFT_TEAM : "экспорт команды"
 ```
 
@@ -988,7 +1047,8 @@ erDiagram
 Декларативный движок: `rule` (условие как JSON-дерево) → `evaluation_result`
 (кто и почему квалифицировался) + `override` (ручной grant/revoke overlay) +
 `evaluation_run` (аудит прогонов). Идентичность — через `workspace_member`.
-Модели `achievement`/`achievements.user` — legacy на период миграции.
+Легаси-таблицы `achievements.achievement` и `achievements.user`
+(`AchievementUser`) **удалены** (данные смигрированы, таблицы дропнуты).
 
 ```mermaid
 erDiagram
@@ -1031,18 +1091,6 @@ erDiagram
         string status
         int results_created
     }
-    ACH_ACHIEVEMENT_LEGACY {
-        int id PK
-        int hero_id FK "nullable"
-        string slug UK
-    }
-    ACH_USER_LEGACY {
-        int id PK
-        int user_id FK "→ players.user"
-        int achievement_id FK
-        int tournament_id FK "nullable"
-        int match_id FK "nullable"
-    }
     WORKSPACE {
         int id PK
     }
@@ -1068,8 +1116,7 @@ erDiagram
     ACH_RULE ||--o{ ACH_OVERRIDE : "overlay"
     WORKSPACE_MEMBER ||--o{ ACH_OVERRIDE : "получатель"
     WORKSPACE ||--o{ ACH_EVALUATION_RUN : "прогоны"
-    HERO |o--o{ ACH_ACHIEVEMENT_LEGACY : "legacy"
-    ACH_ACHIEVEMENT_LEGACY ||--o{ ACH_USER_LEGACY : "legacy grant"
+    ACH_EVALUATION_RUN |o--o{ ACH_EVALUATION_RESULT : "прогон (run_id, SET NULL; FK dbarch01)"
 ```
 
 ---
@@ -1077,10 +1124,12 @@ erDiagram
 ## 11. Аналитика и ML (`analytics`)
 
 Сигналы поверх матч-логов: per-tournament статистика игрока (`analytics.tournament`),
-shift-алгоритмы, прогнозы мест, снапшоты качества баланса, feature-store и
-реестр ML-моделей, per-player performance (v2), распределения мест (Монте-Карло),
-качество матчей и аномалии + обратная связь ревьюера. `job` — единый трекер
-пересчёта.
+shift-алгоритмы, снапшоты качества баланса, feature-store и реестр ML-моделей,
+per-player performance (v2), распределения мест (Монте-Карло,
+`standings_distribution` — **единственный** источник прогноза мест: скалярный
+`predicted_place = round(mean_position)`; v1-таблица `predictions` удалена
+dbarch06), качество матчей и аномалии + обратная связь ревьюера. `job` — единый
+трекер пересчёта.
 
 ```mermaid
 erDiagram
@@ -1104,13 +1153,6 @@ erDiagram
         int player_id FK
         float shift
         float confidence
-    }
-    AN_PREDICTION {
-        int id PK
-        int tournament_id FK
-        int algorithm_id FK
-        int team_id FK
-        int predicted_place
     }
     AN_PERFORMANCE {
         int id PK
@@ -1226,8 +1268,6 @@ erDiagram
     AN_ALGORITHM ||--o{ AN_SHIFT : "алгоритм"
     TOURNAMENT ||--o{ AN_SHIFT : "турнир"
     PLAYER ||--o{ AN_SHIFT : "игрок"
-    AN_ALGORITHM ||--o{ AN_PREDICTION : "алгоритм"
-    TOURNAMENT_TEAM ||--o{ AN_PREDICTION : "команда"
     AN_ALGORITHM ||--o{ AN_PERFORMANCE : "алгоритм"
     PLAYER ||--o{ AN_PERFORMANCE : "игрок"
     AN_ALGORITHM ||--o{ AN_STANDINGS_DISTRIBUTION : "алгоритм"
@@ -1352,16 +1392,54 @@ erDiagram
   (напрямую или транзитивно через `tournament`/`workspace_member`). Глобальные
   сущности (роль/деней/сетка/статус) допускают `workspace_id = NULL`.
 - **Двойная идентичность.** `auth.user` (вход) и `players.user` (игрок) — разные
-  таблицы, связь `1:0..1`. Ростер (`tournament.player`), достижения и регистрации
-  якорятся на `workspace_member` (= `workspace_id + player_id`), что и есть суть
-  identity/workspace-рефактора.
-- **Legacy в процессе миграции.** `tournament.group` (→ `stage`),
-  `achievements.achievement` + `achievements.user` (→ `rule`/`evaluation_result`),
-  `analytics.predictions` (→ `standings_distribution`) сохранены на переходный
-  период.
+  таблицы, связь `1:0..1`. Ростер (`tournament.player`), регистрации
+  (`balancer.registration`), драфт (`draft_*`) и достижения
+  (`evaluation_result`/`override`) якорятся на `workspace_member`
+  (= уникальность `workspace_id + player_id`), что и есть суть
+  identity/workspace-рефактора. Денормализованной роли на `workspace_member`
+  нет — роль выводится из RBAC.
+- **Единственный legacy.** Осталась только `tournament.group` (→ `stage`).
+  `achievements.achievement`/`achievements.user` и `analytics.predictions`
+  (v1) — **удалены** (см. «История изменений схемы»).
 - **Циклические FK.** `draft_session.current_pick_id ↔ draft_pick.session_id`
   (создаётся с `use_alter`); `division_grid_version.created_from_version_id` и
   `tournament.player.related_player_id` — само-ссылки.
+- **Enum `encounterstatus`.** Тип перенесён из схемы `public` в `tournament`
+  (dbarch01); хранит имя члена (`COMPLETED`/`PENDING`/`OPEN`), не `.value`.
 - `mv_hero_global_stats` — **materialized view** (не в диаграммах как таблица):
   глобальные рекорды по (hero, stat), обновляется вне транзакций.
-```
+
+---
+
+## История изменений схемы
+
+Документ актуализирован под финальное состояние (Alembic head — **`dbarch06`**).
+Ключевые изменения относительно прежнего mid-refactor состояния:
+
+- **Identity/workspace-рефактор.** `players.user.auth_user_id` (unique nullable;
+  NULL = shadow-player) — линк `1:0..1` к `auth.user`. `public.workspace_member`
+  ключуется на `player_id` (FK → `players.user`) с уникальностью
+  `(workspace_id, player_id)`; денормализованная роль убрана. На
+  `workspace_member_id` теперь якорятся `balancer.registration` (dbarch02),
+  `tournament.player` (iwrefac07, NOT NULL), `draft_team`/`draft_player`/`draft_pick`
+  (dbarch03) и `achievements.evaluation_result`/`override`.
+- **Challonge-нормализация (dbarch04 + dbarch04b).** Удалены
+  `tournament.tournament.challonge_id`/`challonge_slug`,
+  `tournament.stage.challonge_id`/`challonge_slug`,
+  `tournament.encounter.challonge_id` и таблица `tournament.challonge_team`.
+  Источник правды — `challonge_source` + `challonge_participant_mapping` +
+  `challonge_match_mapping` + `challonge_sync_log`. **Оставлены**
+  `tournament.group.challonge_id`/`challonge_slug` (routing-значение
+  `match.group_id` по группам).
+- **JSON-нормализация (dbarch05).** `map_veto_config.map_pool_ids` (JSON) →
+  дочерняя `map_veto_config_map`; `veto_sequence_json` остался JSON.
+- **Draft-нормализация (dbarch03).** `draft_player.role_ranks`/`role_top_heroes`/
+  `secondary_roles_json` (JSON) → `draft_player_role` + `draft_player_role_hero`.
+- **Predictions (dbarch06).** `analytics.predictions` (v1) удалена;
+  `analytics.standings_distribution` (v2) — единственный источник прогноза мест.
+- **Гигиена индексов/FK (dbarch01).** Индексы на `auth.user_roles`/
+  `auth.role_permissions`; новые FK: `achievements.evaluation_result.run_id →
+  evaluation_run`, `players.user_merge_audit.source_user_id`/`target_user_id →
+  players.user`, `auth.user_permission_deny.created_by → auth.user`; перенос
+  типа `encounterstatus` `public` → `tournament`; частичный unique-индекс на
+  `players.social_account` для NULL-хендлов.

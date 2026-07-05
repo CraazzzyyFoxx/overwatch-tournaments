@@ -106,8 +106,7 @@ erDiagram
     REGISTRATION {
         int id PK
         int tournament_id FK
-        int workspace_member_id FK "nullable: NULL = sheet/CSV import (no account)"
-        int user_id FK "players_user.id — independent battletag dedup"
+        int workspace_member_id FK "nullable, sole identity anchor (SET NULL); dbarch02 dropped user_id"
         string battle_tag
         string status
         string balancer_status
@@ -118,11 +117,20 @@ erDiagram
     TOURNAMENT_PLAYER {
         int id PK
         int tournament_id FK
-        int workspace_member_id FK
+        int workspace_member_id FK "NOT NULL, sole identity anchor (iwrefac07)"
         int team_id FK
         string role
         int rank
         bool is_substitution
+    }
+
+    DRAFT_PLAYER {
+        int id PK
+        int session_id FK
+        int workspace_member_id FK "nullable, sole identity anchor (SET NULL); dbarch03 dropped user_id"
+        string battle_tag
+        string primary_role
+        string status
     }
 
     %% ─── ACHIEVEMENTS LAYER ───────────────────────────────────────────────────
@@ -138,12 +146,6 @@ erDiagram
         int workspace_member_id FK "was: user_id → players.user"
         int rule_id FK
         int workspace_id FK
-    }
-
-    ACHIEVEMENT_USER {
-        int id PK
-        int workspace_member_id FK "was: user_id → players.user"
-        int achievement_id FK
     }
 
     %% ─── RELATIONS ────────────────────────────────────────────────────────────
@@ -171,16 +173,15 @@ erDiagram
     WORKSPACE ||--o{ WORKSPACE_MEMBER : "has members"
     PLAYERS_USER ||--o{ WORKSPACE_MEMBER : "is member (identity anchor)"
 
-    %% Tournament
+    %% Tournament (all roster/registration/draft rows anchor on workspace_member_id)
     WORKSPACE ||--o{ TOURNAMENT : "hosts"
     TOURNAMENT ||--o{ REGISTRATION : "receives"
     WORKSPACE_MEMBER |o--o{ REGISTRATION : "submits (nullable — sheet/CSV imports have no member)"
-    PLAYERS_USER ||--o{ REGISTRATION : "identified by battletag dedup (independent of submitter)"
     WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : "plays in"
     TOURNAMENT ||--o{ TOURNAMENT_PLAYER : "roster"
+    WORKSPACE_MEMBER |o--o{ DRAFT_PLAYER : "drafted as (nullable)"
 
     %% Achievements (workspace-isolated, cross-workspace via player_id join)
     WORKSPACE ||--o{ ACHIEVEMENT_RULE : "defines"
     WORKSPACE_MEMBER ||--o{ ACHIEVEMENT_EVALUATION_RESULT : "evaluated"
     ACHIEVEMENT_RULE ||--o{ ACHIEVEMENT_EVALUATION_RESULT : "produced by"
-    WORKSPACE_MEMBER ||--o{ ACHIEVEMENT_USER : "earned by"
