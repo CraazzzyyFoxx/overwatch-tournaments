@@ -255,6 +255,46 @@ def test_list_members_page_paginates_and_excludes_auth_less(db_session) -> None:
     assert auth_ids == {au1_id, au2_id}
 
 
+def test_list_members_page_role_filter_and_sort(db_session) -> None:
+    """``role_id`` narrows to members holding that role; ``sort='role'`` orders by
+    the primary system-role rank (admin before member)."""
+    from shared.rbac import assign_workspace_system_role, get_workspace_system_role
+
+    async def _run():
+        workspace = await _make_workspace(db_session)
+        au_admin = await _make_auth_user(db_session)
+        au_member = await _make_auth_user(db_session)
+        p_admin = await _make_player(db_session, auth_user_id=au_admin.id)
+        p_member = await _make_player(db_session, auth_user_id=au_member.id)
+        for player in (p_admin, p_member):
+            await get_or_create_workspace_member(
+                db_session, workspace_id=workspace.id, player_id=player.id
+            )
+        # Both got 'member' via the anchor trigger; promote one to admin.
+        await assign_workspace_system_role(
+            db_session, user_id=au_admin.id, workspace_id=workspace.id, role_name="admin"
+        )
+        admin_role = await get_workspace_system_role(db_session, workspace.id, "admin")
+
+        _f_total, f_rows = await workspace_service.list_members_page(
+            db_session, workspace.id, page=1, per_page=50, search=None, role_id=admin_role.id
+        )
+        _s_total, s_rows = await workspace_service.list_members_page(
+            db_session, workspace.id, page=1, per_page=50, search=None, sort="role", order="asc"
+        )
+        return (
+            {au.id for (_m, au, _r) in f_rows},
+            [au.id for (_m, au, _r) in s_rows],
+            au_admin.id,
+            au_member.id,
+        )
+
+    filtered_ids, sorted_ids, admin_id, member_id = asyncio.run(_run())
+
+    assert filtered_ids == {admin_id}  # role filter keeps only the admin
+    assert sorted_ids.index(admin_id) < sorted_ids.index(member_id)  # admin rank < member rank
+
+
 def test_autofill_member_roles_grants_member_to_roleless(db_session) -> None:
     """``autofill_member_roles`` grants ``member`` to a role-less auth-linked
     member and is idempotent on a second run."""

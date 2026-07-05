@@ -51,13 +51,23 @@ export default class workspaceService {
 
   static async getMembers(
     workspaceId: number,
-    params?: { page?: number; per_page?: number; search?: string }
+    params?: {
+      page?: number;
+      per_page?: number;
+      search?: string;
+      role_id?: number | null;
+      sort?: "username" | "role";
+      order?: "asc" | "desc";
+    }
   ): Promise<PaginatedResponse<WorkspaceMember>> {
     return apiFetch(`/api/v1/workspaces/${workspaceId}/members`, {
       query: {
         page: params?.page,
         per_page: params?.per_page,
-        search: params?.search?.trim() || undefined
+        search: params?.search?.trim() || undefined,
+        role_id: params?.role_id ?? undefined,
+        sort: params?.sort,
+        order: params?.order
       }
     }).then((r) => r.json());
   }

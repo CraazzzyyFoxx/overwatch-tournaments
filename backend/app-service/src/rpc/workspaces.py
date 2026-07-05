@@ -189,8 +189,20 @@ def register(broker: Any, logger: Any) -> None:
             if per_page != -1:
                 per_page = min(max(per_page, 1), 100)
             search = c.q1(data, "search", str, None)
+            role_id = c.q1(data, "role_id", int, None)
+            sort = c.q1(data, "sort", str, "username")
+            if sort not in workspace_service.MEMBERS_SORT_FIELDS:
+                sort = "username"
+            order = "desc" if c.q1(data, "order", str, "asc") == "desc" else "asc"
             total, rows = await workspace_service.list_members_page(
-                session, workspace_id, page=page, per_page=per_page, search=search
+                session,
+                workspace_id,
+                page=page,
+                per_page=per_page,
+                search=search,
+                role_id=role_id,
+                sort=sort,
+                order=order,
             )
             return Paginated(
                 page=page,

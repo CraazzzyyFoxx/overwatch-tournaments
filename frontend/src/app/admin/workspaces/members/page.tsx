@@ -72,6 +72,7 @@ export default function WorkspaceMembersPage() {
   const workspace = getCurrentWorkspace();
 
   const [addOpen, setAddOpen] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const canCreateMembers =
     isSuperuser ||
@@ -176,6 +177,7 @@ export default function WorkspaceMembersPage() {
       {
         id: "user",
         header: "User",
+        enableSorting: true,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -200,6 +202,7 @@ export default function WorkspaceMembersPage() {
         id: "role",
         header: "Role",
         size: 340,
+        enableSorting: true,
         cell: ({ row }) => {
           const member = row.original;
           const customCount = memberCustomRoleIds(member).length;
@@ -296,6 +299,7 @@ export default function WorkspaceMembersPage() {
       cols.push({
         id: "actions",
         header: "",
+        enableSorting: false,
         cell: ({ row }) => (
           <Button
             variant="ghost"
@@ -328,8 +332,26 @@ export default function WorkspaceMembersPage() {
     );
   }
 
+  const filterRoles = scopedRoles ?? [];
   const tableActions = (
     <>
+      {filterRoles.length > 0 ? (
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="h-9 w-[150px] text-[13px]" aria-label="Filter by role">
+            <SelectValue placeholder="All roles" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" className="text-[13px]">
+              All roles
+            </SelectItem>
+            {filterRoles.map((role) => (
+              <SelectItem key={role.id} value={String(role.id)} className="text-[13px]">
+                {role.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
       {canUpdateMembers ? (
         <Button
           variant="outline"
@@ -359,16 +381,19 @@ export default function WorkspaceMembersPage() {
       />
 
       <AdminDataTable<WorkspaceMember>
-        queryKey={(page, search, pageSize) => [
+        queryKey={(page, search, pageSize, sortField, sortDir) => [
           "workspace-members",
           currentWorkspaceId,
-          { page, search, pageSize }
+          { page, search, pageSize, sortField, sortDir, roleFilter }
         ]}
-        queryFn={(page, search, pageSize) =>
+        queryFn={(page, search, pageSize, sortField, sortDir) =>
           workspaceService.getMembers(currentWorkspaceId, {
             page,
             per_page: pageSize,
-            search
+            search,
+            role_id: roleFilter !== "all" ? Number(roleFilter) : null,
+            sort: sortField === "role" ? "role" : "username",
+            order: sortDir
           })
         }
         columns={columns}

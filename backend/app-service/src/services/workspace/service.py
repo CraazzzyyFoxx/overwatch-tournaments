@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.rbac import user_roles
 from shared.rbac import (
+    WORKSPACE_SYSTEM_ROLE_NAMES,
     ensure_workspace_system_roles,
     legacy_workspace_role_name_for_user,
     replace_user_workspace_roles,
@@ -126,15 +127,20 @@ async def get_members(
 
 
 _UNLIMITED_MEMBERS_CAP = 10_000
+MEMBERS_SORT_FIELDS = ("username", "role")
+_ROLELESS_RANK = 99
 
 
-def _members_filtered_query(base: sa.Select, workspace_id: int, search: str | None) -> sa.Select:
+def _members_filtered_query(
+    base: sa.Select, workspace_id: int, search: str | None, role_id: int | None = None
+) -> sa.Select:
     """Attach the auth-linked join + workspace filter (+ optional username/email
-    search) shared by the count and page queries.
+    search + optional role filter) shared by the count and page queries.
 
     Auth-linked only (INNER JOIN ``players.user`` + ``auth.user``) so the
     ``auth_user_id IS NOT NULL`` invariant holds and every row resolves an auth
-    identity — the same scoping ``list_by_workspace`` applies.
+    identity — the same scoping ``list_by_workspace`` applies. ``role_id`` narrows
+    to members whose auth user holds that (workspace-scoped) role.
     """
     base = (
         base.join(models.User, models.User.id == models.WorkspaceMember.player_id)
@@ -146,7 +152,31 @@ def _members_filtered_query(base: sa.Select, workspace_id: int, search: str | No
         base = base.where(
             sa.or_(models.AuthUser.username.ilike(like), models.AuthUser.email.ilike(like))
         )
+    if role_id is not None:
+        base = base.where(
+            sa.exists().where(
+                user_roles.c.user_id == models.AuthUser.id,
+                user_roles.c.role_id == role_id,
+            )
+        )
     return base
+
+
+def _primary_role_rank(workspace_id: int):
+    """Correlated scalar: the highest system role rank the current ``auth.user``
+    holds in ``workspace_id`` (owner=0 … player=3; custom/none -> 99), used to
+    ORDER BY the effective primary role."""
+    rank_case = sa.case(
+        *[(models.Role.name == name, idx) for idx, name in enumerate(WORKSPACE_SYSTEM_ROLE_NAMES)],
+        else_=_ROLELESS_RANK,
+    )
+    return (
+        sa.select(sa.func.coalesce(sa.func.min(rank_case), _ROLELESS_RANK))
+        .select_from(user_roles.join(models.Role, models.Role.id == user_roles.c.role_id))
+        .where(user_roles.c.user_id == models.AuthUser.id, models.Role.workspace_id == workspace_id)
+        .correlate(models.AuthUser)
+        .scalar_subquery()
+    )
 
 
 async def list_members_page(
@@ -156,26 +186,47 @@ async def list_members_page(
     page: int,
     per_page: int,
     search: str | None,
+    role_id: int | None = None,
+    sort: str = "username",
+    order: str = "asc",
 ) -> tuple[int, list[tuple[models.WorkspaceMember, models.AuthUser, list[models.Role]]]]:
-    """Paginated + searchable RBAC members, batched to kill the per-row N+1 the
-    old ``_member_payload`` loop incurred.
+    """Paginated + searchable + role-filterable/sortable RBAC members, batched to
+    kill the per-row N+1 the old ``_member_payload`` loop incurred.
 
     Returns ``(total, [(member, auth_user, workspace_roles)])``. Roles for the
     whole page are loaded in a single query and grouped in memory, so the cost is
     ~3 queries (count + page + roles) regardless of page size. ``per_page == -1``
-    returns all members (capped) for selector/combobox callers.
+    returns all members (capped) for selector/combobox callers. ``sort`` is one of
+    ``username`` / ``role`` (primary system-role rank); ``order`` is ``asc`` /
+    ``desc``.
     """
+    descending = order == "desc"
     total = await session.scalar(
         _members_filtered_query(
             sa.select(sa.func.count()).select_from(models.WorkspaceMember),
             workspace_id,
             search,
+            role_id,
         )
     ) or 0
 
+    if sort == "role":
+        rank = _primary_role_rank(workspace_id)
+        order_cols = [
+            rank.desc() if descending else rank.asc(),
+            models.AuthUser.username.asc(),
+            models.WorkspaceMember.id.asc(),
+        ]
+    else:
+        name_col = models.AuthUser.username
+        order_cols = [
+            name_col.desc() if descending else name_col.asc(),
+            models.WorkspaceMember.id.asc(),
+        ]
+
     page_q = _members_filtered_query(
-        sa.select(models.WorkspaceMember, models.AuthUser), workspace_id, search
-    ).order_by(models.AuthUser.username.asc(), models.WorkspaceMember.id.asc())
+        sa.select(models.WorkspaceMember, models.AuthUser), workspace_id, search, role_id
+    ).order_by(*order_cols)
     if per_page == -1:
         page_q = page_q.limit(_UNLIMITED_MEMBERS_CAP)
     else:
