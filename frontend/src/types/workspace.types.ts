@@ -122,11 +122,14 @@ export interface Workspace {
   default_division_grid_version: DivisionGridVersion | null;
 }
 
+export type WorkspaceSystemRole = "owner" | "admin" | "member" | "player";
+
 export interface WorkspaceMember {
   id: number;
   workspace_id: number;
   auth_user_id: number;
-  role: "owner" | "admin" | "member";
+  /** Highest system role held (owner > admin > member > player). */
+  role: WorkspaceSystemRole;
   username?: string | null;
   email?: string | null;
   first_name?: string | null;
