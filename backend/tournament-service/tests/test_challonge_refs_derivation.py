@@ -170,7 +170,9 @@ class TournamentDerivationTests(IsolatedAsyncioTestCase):
         self.assertIsNone(read.challonge_id)
         self.assertIsNone(read.challonge_slug)
 
-    async def test_group_challonge_ref_populates_fields(self) -> None:
+    async def test_group_challonge_read_from_kept_column(self) -> None:
+        # group.challonge_id/slug is a KEPT column (dbarch04b does not drop it);
+        # to_pydantic_group reads it directly, NOT derived from challonge_source.
         group = models.TournamentGroup(
             id=3,
             created_at=datetime.now(UTC),
@@ -179,18 +181,13 @@ class TournamentDerivationTests(IsolatedAsyncioTestCase):
             name="Group A",
             description=None,
             is_groups=True,
-            challonge_id=None,
-            challonge_slug=None,
+            challonge_id=777,
+            challonge_slug="group-slug",
             stage_id=10,
         )
         make_transient_to_detached(group)
 
-        read = await tournament_flows.to_pydantic_group(
-            cast(AsyncSession, object()),
-            group,
-            [],
-            challonge_ref=(777, "group-slug"),
-        )
+        read = await tournament_flows.to_pydantic_group(cast(AsyncSession, object()), group, [])
 
         self.assertEqual(read.challonge_id, 777)
         self.assertEqual(read.challonge_slug, "group-slug")

@@ -1,6 +1,5 @@
 from cashews import cache
 from shared.division_grid import DivisionGrid
-from shared.services.challonge_refs import resolve_group_challonge
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,13 +64,7 @@ async def to_pydantic(
             standing.group for standing in team.standings if standing.group is not None and standing.group.is_groups
         ]
         if groups:
-            group_challonge_refs = await resolve_group_challonge(session, [groups[0].id])
-            group = await tournament_flows.to_pydantic_group(
-                session,
-                groups[0],
-                [],
-                challonge_ref=group_challonge_refs.get(groups[0].id),
-            )
+            group = await tournament_flows.to_pydantic_group(session, groups[0], [])
 
     return schemas.TeamRead(
         id=team.id,

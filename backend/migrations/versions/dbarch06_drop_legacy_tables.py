@@ -29,26 +29,18 @@ was grepped across every service first:
 
 PRECONDITIONS — ALL must hold on prod before this may be applied
 ================================================================
-1. **The v1 OpenSkill flow no longer WRITES it.** ``analytics-service/src/
-   services/analytics/flows.py`` deletes + re-inserts ``AnalyticsPredictions``
-   rows for the OpenSkill v1 algorithm on every recalculate.
-2. **The v2 inference runner no longer MIRRORS into it.** ``analytics-service/
-   src/services/ml/inference/runner.py`` deletes + re-inserts a legacy
-   ``predicted_place`` mirror from the Standings-MC v2 simulation
-   "so v1 integer-place consumers stay live".
-3. **The read API no longer READS it.** ``analytics-service/src/services/
-   analytics_read/service.py::get_predicted_places`` reads this table (falling
-   back to it beneath ``standings_distribution``) and the result is surfaced as
-   ``predicted_place`` in the team read + placement-delta
-   (``analytics_read/flows.py`` + ``schemas/analytics_read.py``).
-   Each of these must first be switched to read/write
-   ``analytics.standings_distribution`` (the v2 replacement) exclusively.
+The analytics-service code migration (commit ``0b9206d7``) already satisfied the
+code-side preconditions 1-4: the v1 OpenSkill write in ``analytics/flows.py`` and
+the v2 mirror in ``ml/inference/runner.py`` are removed; ``get_predicted_places``
+now derives ``predicted_place = round(mean_position)`` solely from
+``analytics.standings_distribution`` (v2); and the ``AnalyticsPredictions`` model
++ its ``__all__`` entry are removed from ``shared/models/analytics/analytics.py``.
 
-4. **The ORM model still declares the table.** ``AnalyticsPredictions`` is kept
-   (with a deprecation docstring) in ``shared/models/analytics/analytics.py`` so
-   model<->DB stay consistent while this migration is unapplied. When this
-   migration is applied, that model + its ``__all__`` entry MUST be removed in
-   the same change.
+The ONLY remaining gate is deployment ordering: that migrated analytics-service
+code must be DEPLOYED to prod and verified (no reads/writes of ``analytics.
+predictions``) BEFORE this drop runs — otherwise a still-running old container
+would hit ``UndefinedTable``. Apply only in the same maintenance window as the
+Phase-1 deploy, with ``OWT_APPLY_PREDICTIONS_DROP=1``.
 
 ``downgrade()`` re-creates the table (empty). The v1 flow / v2 mirror repopulate
 it on the next recalculate/inference run, so a rollback restores a working v1

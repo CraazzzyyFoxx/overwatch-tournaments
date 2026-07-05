@@ -94,22 +94,21 @@ async def to_pydantic_group(
     session: AsyncSession,
     group: models.TournamentGroup,
     entities: list[str],
-    *,
-    challonge_ref: ChallongeRef | None = None,
 ) -> schemas.TournamentGroupRead:
     """Serialize a tournament group.
 
-    The KEPT ``challonge_id``/``challonge_slug`` response fields are DERIVED from
-    ``challonge_source`` (via the group's stage, see ``resolve_group_challonge``)
-    rather than the legacy ``group`` columns; ``None`` when not prefetched.
+    ``group.challonge_id``/``challonge_slug`` is a KEPT column (dbarch04b does NOT
+    drop it — it holds Challonge's per-group match-routing id, which has no
+    ``challonge_source`` equivalent). Read it directly; do NOT derive it from
+    ``challonge_source`` (the shared bracket is a stage/tournament-scoped source, so
+    a group-scoped lookup would wrongly return NULL for historical tournaments).
     """
-    challonge_id, challonge_slug = challonge_ref if challonge_ref is not None else (None, None)
     return schemas.TournamentGroupRead(
         id=group.id,
         name=group.name,
         is_groups=group.is_groups,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
+        challonge_id=group.challonge_id,
+        challonge_slug=group.challonge_slug,
         description=group.description,
     )
 

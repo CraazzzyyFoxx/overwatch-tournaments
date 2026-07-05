@@ -138,8 +138,6 @@ async def to_pydantic_group(
     session: AsyncSession,
     group: models.TournamentGroup,
     entities: list[str],
-    *,
-    challonge_ref: ChallongeRef | None = None,
 ) -> schemas.TournamentGroupRead:
     """
     Converts a `TournamentGroup` model instance to a Pydantic `TournamentGroupRead` schema.
@@ -148,20 +146,21 @@ async def to_pydantic_group(
         session: An SQLAlchemy `AsyncSession` for database interaction.
         group: The `TournamentGroup` model instance to convert.
         entities: A list of strings representing the names of related entities to include.
-        challonge_ref: Optional prefetched ``(challonge_id, slug)`` DERIVED from
-            ``challonge_source`` (via the group's stage); ``None`` serializes the
-            fields as ``None`` instead of reading the legacy ``group`` columns.
 
     Returns:
         A `TournamentGroupRead` schema instance.
     """
-    challonge_id, challonge_slug = challonge_ref if challonge_ref is not None else (None, None)
+    # group.challonge_id/slug is a KEPT column (dbarch04b does NOT drop it — it
+    # holds Challonge's per-group match-routing id, which has no challonge_source
+    # equivalent). Read it directly; do NOT derive it from challonge_source (the
+    # shared bracket is stored as a source_type='stage'/'tournament' row, so a
+    # 'group'-scoped lookup would wrongly return NULL for historical tournaments).
     return schemas.TournamentGroupRead(
         id=group.id,
         name=group.name,
         is_groups=group.is_groups,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
+        challonge_id=group.challonge_id,
+        challonge_slug=group.challonge_slug,
         description=group.description,
     )
 

@@ -14,10 +14,8 @@ reconstruct the exact same values from the normalized tables instead:
     → ``challonge_source`` WHERE ``tournament_id = T`` AND ``source_type = 'tournament'``
       (``challonge_tournament_id`` / ``slug``).
 * ``stage.challonge_id`` / ``challonge_slug``
-    → ``challonge_source`` WHERE ``stage_id = S`` (any source_type).
-* ``group.challonge_id`` / ``challonge_slug``
-    → ``challonge_source`` joined to ``group`` on ``stage_id`` WHERE
-      ``source_type IN ('group', 'playoff')`` (mirrors dbarch04b's reverse backfill).
+    → ``challonge_source`` WHERE ``stage_id = S`` AND
+      ``source_type IN ('tournament', 'stage')``.
 * ``encounter.challonge_id``
     → ``challonge_match_mapping.challonge_match_id`` WHERE ``encounter_id = E``.
 
@@ -34,24 +32,17 @@ from collections.abc import Iterable
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.tournament import TournamentGroup
 from shared.models.tournament.challonge import ChallongeMatchMapping, ChallongeSource
 
 __all__ = (
     "ChallongeRef",
-    "GROUP_SOURCE_TYPES",
     "resolve_tournament_challonge",
     "resolve_stage_challonge",
-    "resolve_group_challonge",
     "resolve_encounter_challonge",
 )
 
 # (challonge_id, slug) — mirrors the legacy pair of columns.
 ChallongeRef = tuple[int | None, str | None]
-
-# ``challonge_source.source_type`` values that represent a stage/group-scoped
-# bracket. The tournament-scoped bracket uses ``'tournament'``.
-GROUP_SOURCE_TYPES = ("group", "playoff")
 
 
 def _unique_ints(values: Iterable[int | None]) -> list[int]:
@@ -90,7 +81,14 @@ async def resolve_tournament_challonge(
 async def resolve_stage_challonge(
     session: AsyncSession, stage_ids: Iterable[int | None]
 ) -> dict[int, ChallongeRef]:
-    """Map ``stage_id -> (challonge_id, slug)`` from the source scoped to that stage."""
+    """Map ``stage_id -> (challonge_id, slug)`` from the stage-scoped source.
+
+    Filters ``source_type IN ('tournament','stage')`` to reproduce the legacy
+    ``stage.challonge_id`` (the shared bracket is stored either as a dedicated
+    ``'stage'`` source or as the ``'tournament'`` source enriched with a
+    ``stage_id``). A ``'group'``/``'playoff'`` source that happens to share the
+    stage_id must NOT be returned as the stage's value.
+    """
     ids = _unique_ints(stage_ids)
     if not ids:
         return {}
@@ -100,44 +98,16 @@ async def resolve_stage_challonge(
             ChallongeSource.challonge_tournament_id,
             ChallongeSource.slug,
         )
-        .where(ChallongeSource.stage_id.in_(ids))
+        .where(
+            ChallongeSource.stage_id.in_(ids),
+            ChallongeSource.source_type.in_(("tournament", "stage")),
+        )
         .order_by(ChallongeSource.id.asc())
     )
     result: dict[int, ChallongeRef] = {}
     for stage_id, challonge_id, slug in rows.all():
         if stage_id is not None:
             result.setdefault(stage_id, (challonge_id, slug))
-    return result
-
-
-async def resolve_group_challonge(
-    session: AsyncSession, group_ids: Iterable[int | None]
-) -> dict[int, ChallongeRef]:
-    """Map ``group_id -> (challonge_id, slug)``.
-
-    ``challonge_source`` is scoped by ``stage_id`` (not ``group_id``), so a group
-    is matched to its ``'group'``/``'playoff'`` source through the group's
-    ``stage_id`` — the same join dbarch04b uses to re-derive the column.
-    """
-    ids = _unique_ints(group_ids)
-    if not ids:
-        return {}
-    rows = await session.execute(
-        sa.select(
-            TournamentGroup.id,
-            ChallongeSource.challonge_tournament_id,
-            ChallongeSource.slug,
-        )
-        .join(ChallongeSource, ChallongeSource.stage_id == TournamentGroup.stage_id)
-        .where(
-            TournamentGroup.id.in_(ids),
-            ChallongeSource.source_type.in_(GROUP_SOURCE_TYPES),
-        )
-        .order_by(ChallongeSource.id.asc())
-    )
-    result: dict[int, ChallongeRef] = {}
-    for group_id, challonge_id, slug in rows.all():
-        result.setdefault(group_id, (challonge_id, slug))
     return result
 
 
