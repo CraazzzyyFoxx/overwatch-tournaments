@@ -1,0 +1,564 @@
+/* Self-contained dark/teal developer-docs explorer. No external fonts/CDN. */
+
+.root {
+  --bg: #0d1117;
+  --panel: #12171f;
+  --panel-2: #161b22;
+  --border: #21262d;
+  --border-soft: #1c2430;
+  --teal: #2dd4bf;
+  --teal-dim: rgba(45, 212, 191, 0.14);
+  --teal-line: rgba(45, 212, 191, 0.5);
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --muted-2: #6e7681;
+  --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex: 0 0 auto;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.title .accent {
+  color: var(--teal);
+}
+
+.subtitle {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.search {
+  margin-left: auto;
+  position: relative;
+  flex: 0 1 320px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.45rem 0.7rem 0.45rem 2rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.searchInput::placeholder {
+  color: var(--muted-2);
+}
+
+.searchInput:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal-dim);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted-2);
+  pointer-events: none;
+  font-size: 0.85rem;
+}
+
+.searchClear {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.searchClear:hover {
+  color: var(--teal);
+}
+
+/* ---------- Body split ---------- */
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar {
+  flex: 0 0 288px;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.sidebarHint {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.68rem;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.navItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 2px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 6px 6px 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.navItem:hover {
+  background: var(--panel-2);
+}
+
+.navItemActive {
+  background: var(--teal-dim);
+  border-left-color: var(--teal);
+}
+
+.navRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.navSection {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--teal);
+  flex: 0 0 auto;
+}
+
+.navTitle {
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.navMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 3px;
+  padding-left: calc(0.7rem + 2px);
+}
+
+.navSchema {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.navCount {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--muted-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.navChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 4px 0 2px;
+  padding-left: calc(0.7rem + 2px);
+}
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.chipMatch {
+  color: #0d1117;
+  background: var(--teal);
+  border-color: var(--teal);
+  font-weight: 600;
+}
+
+.navEmpty {
+  padding: 1rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- Stage ---------- */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.stageHeader {
+  flex: 0 0 auto;
+  padding: 1rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.stageTitle {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stageTitle .section {
+  font-family: var(--mono);
+  color: var(--teal);
+  margin-right: 0.5rem;
+}
+
+.stageSchema {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--teal);
+  background: var(--teal-dim);
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.stageDesc {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 70ch;
+}
+
+/* ---------- Mermaid diagram surface ---------- */
+.diagramWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.diagramScroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+/* Inline variant — grows to content height inside normal flow (overview map). */
+.diagramWrapInline {
+  position: relative;
+  width: 100%;
+}
+
+.diagramScrollInline {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  min-height: 140px;
+}
+
+.diagramInner {
+  transform-origin: top left;
+  transition: transform 0.08s ease-out;
+  width: max-content;
+}
+
+.diagramInner svg {
+  max-width: none !important;
+  height: auto;
+}
+
+.zoomControls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.zoomBtn {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  min-width: 30px;
+  height: 30px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.zoomBtn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.zoomLevel {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  min-width: 44px;
+  justify-content: center;
+}
+
+.diagramState {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.diagramError {
+  color: #f85149;
+  padding: 1.5rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+/* ---------- Overview view ---------- */
+.overview {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+.overviewSection {
+  margin-bottom: 2.25rem;
+}
+
+.overviewSection > h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text);
+}
+
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.schemaTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.schemaTable th {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.schemaTable td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+  color: var(--text);
+}
+
+.schemaTable tr:last-child td {
+  border-bottom: none;
+}
+
+.schemaRowActive {
+  cursor: pointer;
+}
+
+.schemaRowActive:hover td {
+  background: var(--panel-2);
+}
+
+.schemaName {
+  font-family: var(--mono);
+  color: var(--teal);
+  white-space: nowrap;
+}
+
+.schemaKeyTables {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.owner {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.defList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.defItem {
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--teal-line);
+}
+
+.defTerm {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--teal);
+  margin-bottom: 2px;
+}
+
+.defBody {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--teal);
+  background: var(--teal-dim);
+  border-radius: 4px;
+  padding: 0.5px 4px;
+}
+
+.mapNote {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 0.85rem;
+  line-height: 1.5;
+}
+
+.mapWrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+/* Scrollbar polish (WebKit) */
+.sidebar::-webkit-scrollbar,
+.diagramScroll::-webkit-scrollbar,
+.overview::-webkit-scrollbar,
+.tableScroll::-webkit-scrollbar,
+.mapWrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.diagramScroll::-webkit-scrollbar-thumb,
+.overview::-webkit-scrollbar-thumb,
+.tableScroll::-webkit-scrollbar-thumb,
+.mapWrap::-webkit-scrollbar-thumb {
+  background: #2b3440;
+  border-radius: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.diagramScroll::-webkit-scrollbar-thumb:hover,
+.overview::-webkit-scrollbar-thumb:hover {
+  background: #3a4550;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    flex-basis: 220px;
+  }
+  .search {
+    flex-basis: 180px;
+  }
+}
