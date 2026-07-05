@@ -35,8 +35,16 @@ async def get_users(session: AsyncSession, params: admin_schemas.UserListParams)
 
     Returns raw ``User`` models; the RPC layer serializes them via the shared
     ``to_pydantic`` so the legacy groupings are derived from ``social_accounts``.
+
+    Visibility scopes are eager-loaded alongside the accounts so ``visible_global``
+    / ``visible_workspace_ids`` serialize accurately in the admin profile dialog —
+    without it ``_social_account_read`` falls back to the ``visible_global=True``
+    default and the dialog's visibility switches desync from the real state (and
+    from the self-service modal, which loads via ``get_user_or_404``).
     """
-    query = select(models.User).options(selectinload(models.User.social_accounts))
+    query = select(models.User).options(
+        selectinload(models.User.social_accounts).selectinload(models.SocialAccount.visibilities)
+    )
     count_query = select(sa.func.count(models.User.id))
 
     if params.search:
