@@ -3,7 +3,7 @@ import re
 
 from loguru import logger
 from pydantic import ValidationError
-from shared.core.social import SocialProvider
+from shared.core.social import SocialProvider, normalize_social_handle
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -87,30 +87,56 @@ async def find_by_battle_tag(session: AsyncSession, battle_tag: str) -> models.U
 async def create_or_ignore_battle_tags(session: AsyncSession, player: models.User, in_battle_tags: list[str]) -> None:
     battle_tags = _usernames(player, SocialProvider.BATTLENET)
 
-    for battle_tag in set(in_battle_tags):
-        if (
-            battle_tag
-            and "#" in battle_tag
-            and battle_tag not in battle_tags
-            and not await service.get_battle_tag(session, battle_tag)
-        ):
-            await service.create_battle_tag(session, player, battle_tag=battle_tag)
+    candidates = [
+        battle_tag
+        for battle_tag in set(in_battle_tags)
+        if battle_tag and "#" in battle_tag and battle_tag not in battle_tags
+    ]
+    if not candidates:
+        return
+
+    # One existence query for the whole batch instead of a find_by_handle
+    # round-trip per tag; matching stays on the normalized handle, exactly like
+    # the old per-item ``service.get_battle_tag`` probe.
+    taken = await service.get_taken_handles(session, SocialProvider.BATTLENET, candidates)
+    for battle_tag in candidates:
+        normalized = normalize_social_handle(SocialProvider.BATTLENET, battle_tag)
+        if normalized in taken:
+            continue
+        taken.add(normalized)
+        await service.create_battle_tag(session, player, battle_tag=battle_tag)
 
 
 async def create_or_ignore_discords(session: AsyncSession, player: models.User, in_discords: list[str]) -> None:
     discords = _usernames(player, SocialProvider.DISCORD)
 
-    for discord in set(in_discords):
-        if discord and discord not in discords and not await service.get_discord(session, discord):
-            await service.create_discord(session, player, discord=discord)
+    candidates = [discord for discord in set(in_discords) if discord and discord not in discords]
+    if not candidates:
+        return
+
+    taken = await service.get_taken_handles(session, SocialProvider.DISCORD, candidates)
+    for discord in candidates:
+        normalized = normalize_social_handle(SocialProvider.DISCORD, discord)
+        if normalized in taken:
+            continue
+        taken.add(normalized)
+        await service.create_discord(session, player, discord=discord)
 
 
 async def create_or_ignore_twitches(session: AsyncSession, player: models.User, in_twitches: list[str]) -> None:
     twitches = _usernames(player, SocialProvider.TWITCH)
 
-    for twitch in set(in_twitches):
-        if twitch and twitch not in twitches and not await service.get_twitch(session, twitch):
-            await service.create_twitch(session, player, twitch=twitch)
+    candidates = [twitch for twitch in set(in_twitches) if twitch and twitch not in twitches]
+    if not candidates:
+        return
+
+    taken = await service.get_taken_handles(session, SocialProvider.TWITCH, candidates)
+    for twitch in candidates:
+        normalized = normalize_social_handle(SocialProvider.TWITCH, twitch)
+        if normalized in taken:
+            continue
+        taken.add(normalized)
+        await service.create_twitch(session, player, twitch=twitch)
 
 
 async def create(session: AsyncSession, data_in: schemas.UserCSV) -> models.User:

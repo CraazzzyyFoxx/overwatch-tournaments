@@ -66,8 +66,6 @@ def _round_robin_stage() -> models.Stage:
         is_active=True,
         is_completed=False,
         settings_json=None,
-        challonge_id=None,
-        challonge_slug=None,
     )
 
 
@@ -95,7 +93,6 @@ def _encounter(
         tournament_group_id=None,
         stage_id=stage_id,
         stage_item_id=stage_item_id,
-        challonge_id=None,
         closeness=None,
         has_logs=False,
         status=enums.EncounterStatus.COMPLETED,

@@ -67,17 +67,13 @@ def _account_gate(data: dict) -> Any:
 
 
 async def _resolve_my_player_id(session: Any, user: Any) -> int:
-    """Current user's primary linked player id (404 if the user has no player)."""
-    link = (
-        await session.execute(
-            sa.select(models.AuthUserPlayer)
-            .where(models.AuthUserPlayer.auth_user_id == user.id)
-            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id)
-        )
-    ).scalars().first()
-    if link is None:
+    """Current user's linked player id (404 if the user has no player)."""
+    player_id = await session.scalar(
+        sa.select(models.User.id).where(models.User.auth_user_id == user.id)
+    )
+    if player_id is None:
         raise HTTPException(status_code=404, detail="No linked player profile")
-    return link.player_id
+    return player_id
 
 
 def _sheets_to_csv_url(url: str) -> str:

@@ -2,11 +2,17 @@
 
 For every non-deleted registration in an active (not completed/archived)
 tournament, ensures a ``players.user`` + battlenet ``social_account`` exists for
-its battle tags and links ``registration.user_id`` — the same provisioning that
-now runs on new submissions. This lets already-registered players (who weren't yet
-in the analytics system) be picked up by rank collection / the open-profile gate.
+its battle tags and anchors ``registration.workspace_member_id`` on that
+player's member row (dbarch02 dropped the legacy ``user_id`` column) — the same
+provisioning that now runs on new submissions. This lets already-registered
+players (who weren't yet in the analytics system) be picked up by rank
+collection / the open-profile gate.
 
-Idempotent (dedups by normalized battlenet handle), so safe to re-run.
+Idempotent (dedups by normalized battlenet handle; respects an existing member
+anchor), so safe to re-run. Note: the ``dbarch02`` migration already
+member-backfills all historical rows — this script remains useful only for
+re-provisioning rows whose identity was never resolvable (e.g. a battle tag
+fixed after import).
 
 Run once from the ``backend/`` directory so the service ``.env`` is picked up::
 

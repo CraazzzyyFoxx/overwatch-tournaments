@@ -3,13 +3,16 @@ import typing
 from itertools import groupby
 
 import sqlalchemy as sa
+from cashews import cache
 from shared.division_grid import DivisionGrid
+from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src import models, schemas
-from src.core import enums, errors, pagination
+from src.core import config, enums, errors, pagination
 from src.services.registration import service as registration_service
 from src.services.team import service as team_service
 from src.services.user import flows as user_flows
@@ -27,6 +30,19 @@ def _loaded_relationship(model: typing.Any, name: str) -> typing.Any | None:
     return getattr(model, name)
 
 
+def _apply_stage_challonge(
+    stage_read: schemas.StageSummaryRead,
+    stage_id: int,
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None,
+) -> schemas.StageSummaryRead:
+    """Override the KEPT ``challonge_id``/``challonge_slug`` fields with values
+    DERIVED from ``challonge_source`` (never the legacy ``stage`` columns)."""
+    challonge_id, challonge_slug = (
+        stage_challonge_refs.get(stage_id, (None, None)) if stage_challonge_refs is not None else (None, None)
+    )
+    return stage_read.model_copy(update={"challonge_id": challonge_id, "challonge_slug": challonge_slug})
+
+
 async def to_pydantic(
     session: AsyncSession,
     tournament: models.Tournament,
@@ -34,6 +50,8 @@ async def to_pydantic(
     *,
     participants_counts: typing.Mapping[int, int] | None = None,
     registrations_counts: typing.Mapping[int, int] | None = None,
+    challonge_ref: ChallongeRef | None = None,
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.TournamentRead:
     """
     Converts a `Tournament` model instance to a Pydantic `TournamentRead` schema, optionally including related entities.
@@ -42,6 +60,13 @@ async def to_pydantic(
         session: An SQLAlchemy `AsyncSession` for database interaction.
         tournament: The `Tournament` model instance to convert.
         entities: A list of strings representing the names of related entities to include.
+        challonge_ref: Optional prefetched ``(challonge_id, slug)`` DERIVED from
+            ``challonge_source`` (see ``shared.services.challonge_refs``). When
+            omitted the fields serialize as ``None`` — callers resolve/pass it so
+            the serializer never reads the deprecated ``tournament`` columns nor
+            issues a per-row query.
+        stage_challonge_refs: Optional prefetched ``stage_id -> (challonge_id, slug)``
+            map used the same way for nested ``stages``.
 
     Returns:
         A `TournamentRead` schema instance.
@@ -52,7 +77,11 @@ async def to_pydantic(
     if "stages" in entities:
         stage_models = _loaded_relationship(tournament, "stages") or []
         stages = [
-            schemas.StageSummaryRead.model_validate(stage, from_attributes=True)
+            _apply_stage_challonge(
+                schemas.StageSummaryRead.model_validate(stage, from_attributes=True),
+                stage.id,
+                stage_challonge_refs,
+            )
             for stage in sorted(stage_models, key=lambda item: item.order)
         ]
     if "participants_count" in entities:
@@ -73,6 +102,9 @@ async def to_pydantic(
                 division_grid_version_model,
                 from_attributes=True,
             )
+    tournament_challonge_id, tournament_challonge_slug = (
+        challonge_ref if challonge_ref is not None else (None, None)
+    )
     return schemas.TournamentRead(
         id=tournament.id,
         workspace_id=tournament.workspace_id,
@@ -85,8 +117,8 @@ async def to_pydantic(
         status=tournament.status,
         name=tournament.name,
         description=tournament.description,
-        challonge_id=tournament.challonge_id,
-        challonge_slug=tournament.challonge_slug,
+        challonge_id=tournament_challonge_id,
+        challonge_slug=tournament_challonge_slug,
         registration_opens_at=tournament.registration_opens_at,
         registration_closes_at=tournament.registration_closes_at,
         check_in_opens_at=tournament.check_in_opens_at,
@@ -103,7 +135,9 @@ async def to_pydantic(
 
 
 async def to_pydantic_group(
-    session: AsyncSession, group: models.TournamentGroup, entities: list[str]
+    session: AsyncSession,
+    group: models.TournamentGroup,
+    entities: list[str],
 ) -> schemas.TournamentGroupRead:
     """
     Converts a `TournamentGroup` model instance to a Pydantic `TournamentGroupRead` schema.
@@ -116,6 +150,11 @@ async def to_pydantic_group(
     Returns:
         A `TournamentGroupRead` schema instance.
     """
+    # group.challonge_id/slug is a KEPT column (dbarch04b does NOT drop it — it
+    # holds Challonge's per-group match-routing id, which has no challonge_source
+    # equivalent). Read it directly; do NOT derive it from challonge_source (the
+    # shared bracket is stored as a source_type='stage'/'tournament' row, so a
+    # 'group'-scoped lookup would wrongly return NULL for historical tournaments).
     return schemas.TournamentGroupRead(
         id=group.id,
         name=group.name,
@@ -155,6 +194,14 @@ async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Tou
     return tournament
 
 
+@cache(
+    ttl=config.settings.tournaments_cache_ttl,
+    # Key deliberately contains "tournaments/{id}" so the existing
+    # invalidation pattern `*tournaments/{tournament_id}*` (see
+    # cache_invalidation.tournament_cache_patterns) purges it on change.
+    key="tournaments/{id}:{entities}",
+    prefix="fastapi:",
+)
 async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schemas.TournamentRead:
     """
     Retrieves a `Tournament` model instance by its ID and converts it to a `TournamentRead` schema.
@@ -168,7 +215,53 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
         A `TournamentRead` schema instance.
     """
     tournament = await get(session, id, entities)
-    return await to_pydantic(session, tournament, entities)
+    challonge_ref = (await resolve_tournament_challonge(session, [tournament.id])).get(tournament.id)
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
+    if "stages" in entities:
+        stage_models = _loaded_relationship(tournament, "stages") or []
+        stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in stage_models])
+    return await to_pydantic(
+        session,
+        tournament,
+        entities,
+        challonge_ref=challonge_ref,
+        stage_challonge_refs=stage_challonge_refs,
+    )
+
+
+async def lookup(
+    session: AsyncSession,
+    *,
+    workspace_id: int | None = None,
+    is_league: bool | None = None,
+    limit: int = 500,
+) -> list[schemas.LookupItem]:
+    """Lightweight id/name lookup for pickers (rpc.tournament.lookup_tournaments)."""
+    query = sa.select(models.Tournament.id, models.Tournament.name).order_by(models.Tournament.id.desc()).limit(limit)
+    if workspace_id is not None:
+        query = query.where(models.Tournament.workspace_id == workspace_id)
+    if is_league is not None:
+        query = query.where(models.Tournament.is_league.is_(is_league))
+    result = await session.execute(query)
+    return [schemas.LookupItem(id=row.id, name=row.name) for row in result.all()]
+
+
+async def get_stages_read(session: AsyncSession, tournament_id: int) -> list[schemas.StageRead]:
+    """Ordered stages (with items/inputs) for a tournament (rpc.tournament.get_stages)."""
+    result = await session.execute(
+        sa.select(models.Stage)
+        .where(models.Stage.tournament_id == tournament_id)
+        .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
+        .order_by(models.Stage.order)
+    )
+    stages = list(result.scalars().all())
+    stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in stages])
+    output: list[schemas.StageRead] = []
+    for stage in stages:
+        stage_read = schemas.StageRead.model_validate(stage, from_attributes=True)
+        challonge_id, challonge_slug = stage_challonge_refs.get(stage.id, (None, None))
+        output.append(stage_read.model_copy(update={"challonge_id": challonge_id, "challonge_slug": challonge_slug}))
+    return output
 
 
 async def get_by_number_and_league(
@@ -228,6 +321,15 @@ async def get_all(
         if "registrations_count" in params.entities
         else None
     )
+    # Batched Challonge-ref derivation (no N+1): one query for every tournament id
+    # on the page, plus one for every loaded stage id when stages are requested.
+    challonge_refs = await resolve_tournament_challonge(session, tournament_ids)
+    stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
+    if "stages" in params.entities:
+        stage_ids = [
+            stage.id for result in results for stage in (_loaded_relationship(result, "stages") or [])
+        ]
+        stage_challonge_refs = await resolve_stage_challonge(session, stage_ids)
     return pagination.Paginated(
         results=[
             await to_pydantic(
@@ -236,6 +338,8 @@ async def get_all(
                 params.entities,
                 participants_counts=participants_counts,
                 registrations_counts=registrations_counts,
+                challonge_ref=challonge_refs.get(result.id),
+                stage_challonge_refs=stage_challonge_refs,
             )
             for result in results
         ],
@@ -245,6 +349,13 @@ async def get_all(
     )
 
 
+@cache(
+    ttl=config.settings.tournaments_cache_ttl,
+    # No tournament_id in the args, so this key can't participate in the
+    # targeted invalidation patterns — staleness is bounded by the short TTL.
+    key="tournaments_statistics_history:{workspace_id}",
+    prefix="fastapi:",
+)
 async def get_history_tournaments(
     session: AsyncSession,
     workspace_id: int | None = None,
@@ -291,11 +402,14 @@ async def get_avg_divisions_tournaments(
     values are comparable across tournaments that used different grid versions.
     Falls back to fallback_grid for tournaments that have no grid version set.
     """
-    raw_rank_cache: dict[int, dict[enums.HeroClass, list[float]]] = {}
+    # Values are (division_number, players_count) pairs: the service layer
+    # aggregates players to a per-(tournament, role, rank) histogram, so the
+    # average is weighted by the count instead of iterating every player row.
+    raw_rank_cache: dict[int, dict[enums.HeroClass, list[tuple[float, int]]]] = {}
     tournament_numbers: dict[int, int] = {}
 
     rows = await service.get_avg_div_tournaments(session, workspace_id=workspace_id)
-    for tournament, role, rank in rows:
+    for tournament, role, rank, players_count in rows:
         if tournament.id not in raw_rank_cache:
             raw_rank_cache[tournament.id] = {}
             tournament_numbers[tournament.id] = tournament.number
@@ -316,12 +430,15 @@ async def get_avg_divisions_tournaments(
             # No normalizer — use fallback (workspace/global default) grid
             div_number = fallback_grid.resolve_division_number(rank)
 
-        raw_rank_cache[tournament.id].setdefault(role, []).append(float(div_number))
+        raw_rank_cache[tournament.id].setdefault(role, []).append((float(div_number), int(players_count)))
 
-    def avg_or_none(values: list[float] | None) -> float | None:
+    def avg_or_none(values: list[tuple[float, int]] | None) -> float | None:
         if not values:
             return None
-        return round(sum(values) / len(values), 2)
+        total_players = sum(count for _, count in values)
+        if not total_players:
+            return None
+        return round(sum(division * count for division, count in values) / total_players, 2)
 
     output: list[schemas.DivisionStatistics] = []
     for tournament_id, roles in raw_rank_cache.items():
@@ -506,9 +623,11 @@ async def get_league_player_stacks(
             player1, player2 = None, None
             for players in team_tournament_players.values():
                 for p in players:
-                    if p.user_id == player1_id:
+                    # Player.user_id was dropped in the contract step (iwrefac07); the
+                    # identity anchor is workspace_member.player_id instead.
+                    if p.workspace_member.player_id == player1_id:
                         player1 = p
-                    elif p.user_id == player2_id:
+                    elif p.workspace_member.player_id == player2_id:
                         player2 = p
                     if player1 and player2:
                         break
@@ -523,8 +642,8 @@ async def get_league_player_stacks(
 
             stack_results.append(
                 schemas.LeaguePlayerStack(
-                    user_1=await get_user_read(player1_value.user),
-                    user_2=await get_user_read(player2_value.user),
+                    user_1=await get_user_read(player1_value.workspace_member.player),
+                    user_2=await get_user_read(player2_value.workspace_member.player),
                     games=games_together,
                     avg_position=round(avg_position, 2),
                 )

@@ -15,7 +15,7 @@ from typing import Any
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.draft import DraftSession
+from shared.models.balancer.draft import DraftSession
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import publish_event
 

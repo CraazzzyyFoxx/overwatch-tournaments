@@ -43,6 +43,9 @@ export interface UserTournamentWithStats {
   number: number;
   name: string;
   division: number;
+  /** Grid the `division` was resolved against — render its icon on this grid,
+   * not the workspace default. */
+  division_grid_version: DivisionGridVersion | null;
   role: string;
   group_placement: number;
   playoff_placement: number;

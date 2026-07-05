@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -71,18 +72,47 @@ async def enqueue_encounter_completed(
     )
 
 
+async def get_registration_workspace_id(session: AsyncSession, tournament_id: int) -> int:
+    # BalancerRegistration has no denormalized workspace_id column — derive it via
+    # the owning tournament (registrations are always tournament-scoped).
+    workspace_id = await session.scalar(
+        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
+    )
+    assert workspace_id is not None, f"Tournament {tournament_id} has no workspace_id"
+    return int(workspace_id)
+
+
+async def get_registration_player_id(
+    session: AsyncSession,
+    registration: models.BalancerRegistration,
+) -> int | None:
+    """The registration's domain player id (players.user.id), via its member.
+
+    workspace_member_id is the row's only identity anchor (dbarch02 dropped
+    user_id); an explicit scalar query avoids lazy-loading the relationship in
+    async code. Registrations without a member have no player identity.
+    """
+    if registration.workspace_member_id is None:
+        return None
+    return await session.scalar(
+        sa.select(models.WorkspaceMember.player_id).where(
+            models.WorkspaceMember.id == registration.workspace_member_id
+        )
+    )
+
+
 async def enqueue_registration_approved(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
+    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationApprovedEvent(
             tournament_id=registration.tournament_id,
-            workspace_id=registration.workspace_id,
+            workspace_id=workspace_id,
             registration_id=registration.id,
-            auth_user_id=registration.auth_user_id,
-            user_id=registration.user_id,
+            user_id=await get_registration_player_id(session, registration),
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
         ),
@@ -96,14 +126,14 @@ async def enqueue_registration_rejected(
     session: AsyncSession,
     registration: models.BalancerRegistration,
 ) -> None:
+    workspace_id = await get_registration_workspace_id(session, registration.tournament_id)
     await enqueue_outbox_event(
         session,
         RegistrationRejectedEvent(
             tournament_id=registration.tournament_id,
-            workspace_id=registration.workspace_id,
+            workspace_id=workspace_id,
             registration_id=registration.id,
-            auth_user_id=registration.auth_user_id,
-            user_id=registration.user_id,
+            user_id=await get_registration_player_id(session, registration),
             battle_tag=registration.battle_tag,
             source_service="tournament-service",
         ),

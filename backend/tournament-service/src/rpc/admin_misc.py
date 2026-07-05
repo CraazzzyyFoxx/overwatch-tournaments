@@ -20,20 +20,18 @@ extra commit. job_get/job_list are read-only.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from faststream.rabbit.annotations import RabbitMessage
-from pydantic import BaseModel, ValidationError
-
-from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
-from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
+from pydantic import BaseModel
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 
 from src import models
-from src.core import auth, db
+from src.core import auth
+from src.rpc._helpers import _bool, _dump, _identity, _payload, _q1, _require_id, _run
 from src.schemas.admin import encounter as enc_schemas
 from src.schemas.admin import tournament as tournament_schemas
 from src.schemas.admin.computation import TournamentComputationJobRead
@@ -55,76 +53,13 @@ class AdminMapPoolAssign(BaseModel):
 # --- helpers -----------------------------------------------------------------
 
 
-def _identity(data: dict[str, Any]) -> models.AuthUser:
-    """Rehydrate the gateway-injected identity into a transient AuthUser."""
-    return rehydrate_user(data.get("identity"))
 
 
-def _payload(data: dict[str, Any]) -> dict[str, Any]:
-    return data.get("payload") or {}
 
 
-def _path_int(data: dict[str, Any], name: str) -> int:
-    raw = data.get(name)
-    try:
-        return int(raw)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{name} is required") from exc
 
 
-def _require_id(data: dict[str, Any]) -> int:
-    try:
-        return int(data["id"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="id is required") from exc
 
-
-def _q(data: dict[str, Any], key: str) -> list[str] | None:
-    vals = (data.get("query") or {}).get(key)
-    if vals is None:
-        return None
-    return vals if isinstance(vals, list) else [vals]
-
-
-def _q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str, default: Any = None) -> Any:
-    vals = _q(data, key)
-    if not vals:
-        return default
-    try:
-        return cast(vals[0])
-    except (TypeError, ValueError):
-        return default
-
-
-def _bool(value: str) -> bool:
-    return value.lower() in ("1", "true", "yes", "on")
-
-
-def _dump(obj: Any) -> Any:
-    """Plain serialization (admin routes keep nulls — no exclude_none)."""
-    if obj is None:
-        return None
-    if isinstance(obj, list):
-        return [_dump(x) for x in obj]
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    return obj
-
-
-async def _run(logger: Any, op: Callable[[Any], Awaitable[Any]]) -> dict[str, Any]:
-    """Envelope wrapper mirroring reads._read, with identity-failure mapping."""
-    try:
-        async with db.async_session_maker() as session:
-            return rpc_ok(await op(session))
-    except MissingIdentityError as exc:
-        return rpc_error("unauthorized", str(exc) or "Not authenticated")
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("tournament admin-misc rpc failed")
-        return rpc_error("internal", "internal error")
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -152,7 +87,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             match_id = _require_id(data)
-            ws_id = await auth._get_match_workspace_id(session, match_id)
+            ws_id = await auth.get_match_workspace_id(session, match_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
             body = enc_schemas.MatchUpdate.model_validate(_payload(data))
             # update_match commits internally; route returns a custom dict.
@@ -177,7 +112,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             encounter_id = _require_id(data)
-            ws_id = await auth._get_encounter_workspace_id(session, encounter_id)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
             # admin_confirm_result commits internally; route returns a custom dict.
             encounter = await captain_service.admin_confirm_result(session, encounter_id)
@@ -194,7 +129,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             encounter_id = _require_id(data)
-            ws_id = await auth._get_encounter_workspace_id(session, encounter_id)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
             body = AdminMapPoolAssign.model_validate(_payload(data))
             # initialize_map_pool commits internally; route returns {"assigned": N}.
@@ -227,7 +162,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "tournament", "update")
             body = tournament_schemas.TournamentStatusTransition.model_validate(_payload(data))
             # force bypass is superuser-only (matches the route's explicit gate).

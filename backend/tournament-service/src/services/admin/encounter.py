@@ -2,9 +2,9 @@
 
 from collections.abc import Iterable
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -124,6 +124,27 @@ async def _resolve_stage_refs(
     return stage_id, stage_item_id, resolved_group.id if resolved_group else None
 
 
+async def _require_team_in_tournament(
+    session: AsyncSession, *, team_id: int, tournament_id: int, label: str
+) -> models.Team:
+    """Resolve a team and enforce that it belongs to the given tournament.
+
+    Tenant-isolation guard: encounter/match writes are authorized against the
+    encounter's own tournament workspace, so any team reference in the payload
+    must live in that same tournament (mirrors the stage-refs validation).
+    """
+    result = await session.execute(select(models.Team).where(models.Team.id == team_id))
+    team = result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{label} not found")
+    if team.tournament_id != tournament_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} does not belong to this tournament",
+        )
+    return team
+
+
 async def create_encounter(session: AsyncSession, data: admin_schemas.EncounterCreate) -> models.Encounter:
     """Create a new encounter"""
     # Verify tournament exists
@@ -133,20 +154,16 @@ async def create_encounter(session: AsyncSession, data: admin_schemas.EncounterC
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-    # Verify selected teams exist when provided
+    # Verify selected teams exist and belong to this tournament when provided
     if data.home_team_id is not None:
-        result = await session.execute(select(models.Team).where(models.Team.id == data.home_team_id))
-        home_team = result.scalar_one_or_none()
-
-        if not home_team:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
+        await _require_team_in_tournament(
+            session, team_id=data.home_team_id, tournament_id=data.tournament_id, label="Home team"
+        )
 
     if data.away_team_id is not None:
-        result = await session.execute(select(models.Team).where(models.Team.id == data.away_team_id))
-        away_team = result.scalar_one_or_none()
-
-        if not away_team:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
+        await _require_team_in_tournament(
+            session, team_id=data.away_team_id, tournament_id=data.tournament_id, label="Away team"
+        )
 
     stage_id, stage_item_id, tournament_group_id = await _resolve_stage_refs(
         session,
@@ -215,14 +232,20 @@ async def update_encounter(
     update_data = data.model_dump(exclude_unset=True)
 
     if "home_team_id" in update_data and update_data["home_team_id"] is not None:
-        result = await session.execute(select(models.Team).where(models.Team.id == update_data["home_team_id"]))
-        if result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
+        await _require_team_in_tournament(
+            session,
+            team_id=update_data["home_team_id"],
+            tournament_id=encounter.tournament_id,
+            label="Home team",
+        )
 
     if "away_team_id" in update_data and update_data["away_team_id"] is not None:
-        result = await session.execute(select(models.Team).where(models.Team.id == update_data["away_team_id"]))
-        if result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
+        await _require_team_in_tournament(
+            session,
+            team_id=update_data["away_team_id"],
+            tournament_id=encounter.tournament_id,
+            label="Away team",
+        )
 
     resolved_stage_id, resolved_stage_item_id, resolved_group_id = await _resolve_stage_refs(
         session,
@@ -288,14 +311,26 @@ async def update_match(
 
     update_data = data.model_dump(exclude_unset=True)
 
+    match_tournament_id = match.encounter.tournament_id if match.encounter else None
+
     if "home_team_id" in update_data:
-        result = await session.execute(select(models.Team).where(models.Team.id == update_data["home_team_id"]))
-        if result.scalar_one_or_none() is None:
+        if update_data["home_team_id"] is None or match_tournament_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
+        await _require_team_in_tournament(
+            session,
+            team_id=update_data["home_team_id"],
+            tournament_id=match_tournament_id,
+            label="Home team",
+        )
     if "away_team_id" in update_data:
-        result = await session.execute(select(models.Team).where(models.Team.id == update_data["away_team_id"]))
-        if result.scalar_one_or_none() is None:
+        if update_data["away_team_id"] is None or match_tournament_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
+        await _require_team_in_tournament(
+            session,
+            team_id=update_data["away_team_id"],
+            tournament_id=match_tournament_id,
+            label="Away team",
+        )
     if "map_id" in update_data and update_data["map_id"] is not None:
         result = await session.execute(select(models.Map).where(models.Map.id == update_data["map_id"]))
         if result.scalar_one_or_none() is None:

@@ -71,20 +71,30 @@ async def execute_team_otp_count(
 
     qualifying_teams = (
         sa.select(models.Player.team_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(
             otp_users,
             sa.and_(
-                otp_users.c.user_id == models.Player.user_id,
+                otp_users.c.user_id == models.WorkspaceMember.player_id,
                 otp_users.c.tournament_id == models.Player.tournament_id,
             ),
         )
         .where(models.Player.is_substitution.is_(False))
         .group_by(models.Player.team_id, models.Player.tournament_id)
-        .having(op_fn(sa.func.count(models.Player.user_id.distinct()), value))
+        .having(op_fn(sa.func.count(models.WorkspaceMember.player_id.distinct()), value))
     ).subquery("qualifying_teams")
 
     query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(
             qualifying_teams,
             sa.and_(

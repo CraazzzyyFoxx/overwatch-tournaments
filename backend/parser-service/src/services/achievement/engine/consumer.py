@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 
 from loguru import logger
-from shared.models.achievement import EvaluationRunTrigger
+from shared.models.achievements.achievement import EvaluationRunTrigger
 from shared.observability.correlation import correlation_id_ctx
 from shared.schemas.events import AchievementEvaluateEvent
 

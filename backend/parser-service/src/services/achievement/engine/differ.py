@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
+from shared.models.achievements.achievement import AchievementEvaluationResult, AchievementRule
+from shared.models.tenancy.workspace import WorkspaceMember
+from shared.repository.workspace import get_or_create_workspace_member
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared.models.achievement import AchievementEvaluationResult, AchievementRule
 
 ResultSet = set[tuple[int, ...]]
 
@@ -55,15 +56,29 @@ async def diff_and_apply(
 ) -> DiffResult:
     """Compare new results with stored results and apply changes.
 
+    ``new_results`` tuples carry the player identity (``players.user.id``,
+    matching what the condition-tree evaluator already returns via
+    ``WorkspaceMember.player_id``), never the raw ``workspace_member_id``.
+    Stored rows are anchored on ``workspace_member_id``, so the diff keys off
+    the player identity (joining back to ``WorkspaceMember`` to read it) and
+    resolves/creates the target ``workspace_member`` row — scoped to the
+    rule's own workspace — only when a row actually needs to be inserted.
+
     Returns a DiffResult with counts for audit.
     """
-    # Load existing results for this rule
-    existing_query = sa.select(
-        AchievementEvaluationResult.id,
-        AchievementEvaluationResult.user_id,
-        AchievementEvaluationResult.tournament_id,
-        AchievementEvaluationResult.match_id,
-    ).where(AchievementEvaluationResult.achievement_rule_id == rule.id)
+    # Load existing results for this rule, resolving each row's player
+    # identity through its workspace_member so the diff key is unchanged.
+    existing_query = (
+        sa.select(
+            AchievementEvaluationResult.id,
+            WorkspaceMember.player_id,
+            AchievementEvaluationResult.tournament_id,
+            AchievementEvaluationResult.match_id,
+        )
+        .select_from(AchievementEvaluationResult)
+        .join(WorkspaceMember, WorkspaceMember.id == AchievementEvaluationResult.workspace_member_id)
+        .where(AchievementEvaluationResult.achievement_rule_id == rule.id)
+    )
     if evaluation_slice is not None:
         existing_query = existing_query.where(*evaluation_slice.query_filters())
 
@@ -103,11 +118,17 @@ async def diff_and_apply(
     # Apply insertions
     now = datetime.now(timezone.utc)
     inserts = []
+    member_id_by_player: dict[int, int] = {}
     for key in to_add:
         user_id, tournament_id, match_id = _unpack_key(key)
+        if user_id not in member_id_by_player:
+            member = await get_or_create_workspace_member(
+                session, workspace_id=rule.workspace_id, player_id=user_id
+            )
+            member_id_by_player[user_id] = member.id
         row = AchievementEvaluationResult(
             achievement_rule_id=rule.id,
-            user_id=user_id,
+            workspace_member_id=member_id_by_player[user_id],
             tournament_id=tournament_id,
             match_id=match_id,
             qualified_at=now,

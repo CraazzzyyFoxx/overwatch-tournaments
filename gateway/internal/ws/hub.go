@@ -10,6 +10,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 )
 
 const sendTimeout = 2 * time.Second
@@ -187,13 +188,16 @@ func (h *Hub) Route(topic string, payload []byte, exclude *Conn) {
 	var wg sync.WaitGroup
 	for _, c := range targets {
 		wg.Add(1)
-		go func(c *Conn) {
+		// safego.Go recovers a panic in this per-target send (this runs for every
+		// realtime message to every subscriber) so one bad connection cannot crash
+		// the whole process. wg.Done is deferred inside so it fires even on panic.
+		safego.Go(func() {
 			defer wg.Done()
 			if err := c.send(payload); err != nil {
 				h.remove(c)
 				c.close()
 			}
-		}(c)
+		})
 	}
 	wg.Wait()
 }

@@ -2,7 +2,7 @@
   "title": "Gateway",
   "uid": "gateway-usage",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "tags": ["gateway", "usage"],
@@ -10,138 +10,213 @@
   "panels": [
     {
       "id": 1,
-      "title": "Request Rate (req/s)",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "Request Rate",
+      "gridPos": { "x": 0, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "expr": "sum(rate(gateway_http_requests_total[5m]))",
-          "legendFormat": "total",
-          "refId": "A"
-        }
-      ]
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [{ "expr": "sum(rate(gateway_http_requests_total[5m]))", "legendFormat": "RPS", "instant": true }]
     },
     {
       "id": 2,
-      "title": "HTTP 5xx Error Ratio",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "5xx Ratio (5m)",
+      "gridPos": { "x": 5, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
-      "targets": [
-        {
-          "expr": "gateway:http_error_ratio_5m",
-          "legendFormat": "5xx ratio",
-          "refId": "A"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.01 }, { "color": "red", "value": 0.05 }] },
+          "color": { "mode": "thresholds" }
         }
-      ]
+      },
+      "targets": [{ "expr": "gateway:http_error_ratio_5m", "legendFormat": "5xx", "instant": true }]
     },
     {
       "id": 3,
-      "title": "Latency p50 / p95 / p99",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "Latency p95",
+      "gridPos": { "x": 10, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p99",
-          "refId": "C"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1.5 }] },
+          "color": { "mode": "thresholds" }
         }
-      ]
+      },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "instant": true }]
     },
     {
       "id": 4,
-      "title": "WebSocket Connections",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "WS Online",
+      "gridPos": { "x": 15, "y": 0, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "expr": "gateway_ws_connections{state=\"total\"}",
-          "legendFormat": "total",
-          "refId": "A"
-        },
-        {
-          "expr": "gateway_ws_connections{state=\"authenticated\"}",
-          "legendFormat": "authenticated",
-          "refId": "B"
-        }
-      ]
+      "targets": [{ "expr": "gateway_ws_connections{state=\"total\"}", "legendFormat": "WS", "instant": true }]
     },
     {
       "id": 5,
-      "title": "Active Users",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 6 },
+      "title": "DAU",
+      "gridPos": { "x": 19, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "expr": "gateway_active_users{window=\"1d\"}",
-          "legendFormat": "DAU",
-          "refId": "A",
-          "instant": true
-        },
-        {
-          "expr": "gateway_active_users{window=\"7d\"}",
-          "legendFormat": "WAU",
-          "refId": "B",
-          "instant": true
-        },
-        {
-          "expr": "gateway_active_users{window=\"30d\"}",
-          "legendFormat": "MAU",
-          "refId": "C",
-          "instant": true
-        }
-      ]
+      "targets": [{ "expr": "gateway_active_users{window=\"1d\"}", "legendFormat": "DAU", "instant": true }]
     },
     {
-      "id": 6,
-      "title": "Active Users Over Time",
+      "id": 10,
       "type": "timeseries",
-      "gridPos": { "x": 8, "y": 16, "w": 16, "h": 6 },
+      "title": "Request Rate by Route (top 10)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [{ "expr": "topk(10, sum by (route) (rate(gateway_http_requests_total[5m])))", "legendFormat": "{{ route }}" }]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Error Rates: 4xx vs 5xx",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "5xx" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "4xx" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
       "targets": [
-        {
-          "expr": "gateway_active_users",
-          "legendFormat": "{{ window }}",
-          "refId": "A"
-        }
+        { "expr": "sum(rate(gateway_http_requests_total{code=~\"4..\"}[5m]))", "legendFormat": "4xx" },
+        { "expr": "sum(rate(gateway_http_requests_total{code=~\"5..\"}[5m]))", "legendFormat": "5xx" }
       ]
     },
     {
-      "id": 7,
-      "title": "Top Endpoints by Request Rate",
-      "type": "table",
-      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 10 },
+      "id": 12,
+      "type": "timeseries",
+      "title": "Latency p50 / p95 / p99",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(gateway_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Latency p95 by Route (top 10)",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "topk(10, gateway:http_latency_p95_5m)", "legendFormat": "{{ route }}" }]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "WebSocket Connections",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        {
-          "expr": "topk(15, sum by (route) (rate(gateway_http_requests_total[5m])))",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
-      ],
+        { "expr": "gateway_ws_connections{state=\"total\"}", "legendFormat": "total" },
+        { "expr": "gateway_ws_connections{state=\"authenticated\"}", "legendFormat": "authenticated" }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Active Users Over Time",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "gateway_active_users", "legendFormat": "{{ window }}" }]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Goroutines",
+      "gridPos": { "x": 0, "y": 27, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "go_goroutines{job=\"gateway\"}", "legendFormat": "goroutines" }]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Memory",
+      "gridPos": { "x": 6, "y": 27, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{job=\"gateway\"}", "legendFormat": "RSS" },
+        { "expr": "go_memstats_heap_inuse_bytes{job=\"gateway\"}", "legendFormat": "heap in use" }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "GC Pause (quantiles)",
+      "gridPos": { "x": 12, "y": 27, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "go_gc_duration_seconds{job=\"gateway\"}", "legendFormat": "q{{ quantile }}" }]
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "CPU Usage",
+      "gridPos": { "x": 18, "y": 27, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total{job=\"gateway\"}[5m])", "legendFormat": "cpu" }]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Top Routes by Request Rate",
+      "gridPos": { "x": 0, "y": 33, "w": 8, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "topk(15, sum by (route) (rate(gateway_http_requests_total[5m])))", "refId": "A", "instant": true, "format": "table" }],
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": { "Time": true, "__name__": true },
-            "renameByName": { "route": "Endpoint", "Value": "req/s" }
+            "renameByName": { "route": "Route", "Value": "req/s" }
+          }
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Top Routes by p95 Latency",
+      "gridPos": { "x": 8, "y": 33, "w": 8, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "topk(15, gateway:http_latency_p95_5m)", "refId": "A", "instant": true, "format": "table" }],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true },
+            "renameByName": { "route": "Route", "Value": "p95 (s)" }
+          }
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "table",
+      "title": "Top Routes by 5xx Rate",
+      "gridPos": { "x": 16, "y": 33, "w": 8, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "topk(15, sum by (route) (rate(gateway_http_requests_total{code=~\"5..\"}[5m])) > 0)", "refId": "A", "instant": true, "format": "table" }],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true },
+            "renameByName": { "route": "Route", "Value": "5xx/s" }
           }
         }
       ]

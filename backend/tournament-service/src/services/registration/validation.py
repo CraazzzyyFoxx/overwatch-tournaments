@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from typing import Any, NoReturn
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.domain.player_sub_roles import (
     REGISTRATION_ROLE_CODES,
@@ -15,7 +15,7 @@ from shared.domain.player_sub_roles import (
     normalize_sub_role,
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
-from shared.models.social import SocialAccount
+from shared.models.identity.social import SocialAccount
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

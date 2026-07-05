@@ -8,7 +8,7 @@ primary-role default) as the fallback when a role has no specific entry.
 from __future__ import annotations
 
 from shared.core.enums import DraftRole
-from shared.models.draft import DraftPlayer
+from shared.models.balancer.draft import DraftPlayer
 
 
 def role_rank(player: DraftPlayer, role: DraftRole | str | None) -> int | None:

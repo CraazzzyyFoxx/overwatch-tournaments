@@ -2,10 +2,10 @@
 
 from collections.abc import Sequence
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.schemas.events import TournamentChangedReason
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.engine import generate_bracket
@@ -159,8 +159,25 @@ async def create_stage(session: AsyncSession, tournament_id: int, data: admin_sc
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-    stage = models.Stage(tournament_id=tournament_id, **data.model_dump())
+    # The deprecated stage.challonge_id/slug columns are no longer written: a
+    # supplied Challonge link becomes a normalized challonge_source row scoped to
+    # the new stage instead.
+    payload = data.model_dump()
+    challonge_id = payload.pop("challonge_id", None)
+    challonge_slug = payload.pop("challonge_slug", None)
+    stage = models.Stage(tournament_id=tournament_id, **payload)
     session.add(stage)
+    await session.flush()
+    if challonge_id is not None:
+        session.add(
+            models.ChallongeSource(
+                tournament_id=tournament_id,
+                stage_id=stage.id,
+                challonge_tournament_id=challonge_id,
+                slug=challonge_slug,
+                source_type="stage",
+            )
+        )
     await _publish_tournament_changed(session, tournament_id, "structure_changed")
     await session.commit()
     return await get_stage(session, stage.id)
@@ -193,9 +210,12 @@ async def delete_stage(session: AsyncSession, stage_id: int) -> None:
 
 
 def _map_veto_signature(config: models.MapVetoConfig) -> tuple[tuple, tuple]:
+    # ``map_pool`` was normalized out of the old ``map_pool_ids`` JSON array
+    # (dbarch05) into the ``map_veto_config_map`` child table; the relationship
+    # is ordered by ``sort_order`` so the tuple mirrors the old array order.
     return (
         tuple(config.veto_sequence_json or []),
-        tuple(config.map_pool_ids or []),
+        tuple(entry.map_id for entry in config.map_pool),
     )
 
 
@@ -206,10 +226,12 @@ async def _merge_map_veto_configs(
     source_stage_ids: list[int],
 ) -> None:
     target_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id == target_stage.id,
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     target_configs = list(target_result.scalars().all())
     if len(target_configs) > 1:
@@ -219,10 +241,12 @@ async def _merge_map_veto_configs(
         )
 
     source_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id.in_(source_stage_ids),
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     source_configs = list(source_result.scalars().all())
     if not source_configs:

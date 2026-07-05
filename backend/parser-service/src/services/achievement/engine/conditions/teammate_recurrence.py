@@ -38,25 +38,29 @@ async def execute_teammate_recurrence(
 
     p1 = sa.orm.aliased(models.Player, name="p1")
     p2 = sa.orm.aliased(models.Player, name="p2")
+    wm1 = sa.orm.aliased(models.WorkspaceMember, name="wm1")
+    wm2 = sa.orm.aliased(models.WorkspaceMember, name="wm2")
     tournament = sa.orm.aliased(models.Tournament, name="trec")
 
     shared_teams = sa.func.count(p1.team_id.distinct())
 
     query = (
         sa.select(
-            sa.func.least(p1.user_id, p2.user_id).label("u1"),
-            sa.func.greatest(p1.user_id, p2.user_id).label("u2"),
+            sa.func.least(wm1.player_id, wm2.player_id).label("u1"),
+            sa.func.greatest(wm1.player_id, wm2.player_id).label("u2"),
         )
         .select_from(p1)
+        .join(wm1, wm1.id == p1.workspace_member_id)
         .join(p2, p1.team_id == p2.team_id)
+        .join(wm2, wm2.id == p2.workspace_member_id)
         .join(tournament, tournament.id == p1.tournament_id)
         .where(
-            p1.user_id != p2.user_id,
+            wm1.player_id != wm2.player_id,
             tournament.workspace_id == context.workspace_id,
         )
         .group_by(
-            sa.func.least(p1.user_id, p2.user_id),
-            sa.func.greatest(p1.user_id, p2.user_id),
+            sa.func.least(wm1.player_id, wm2.player_id),
+            sa.func.greatest(wm1.player_id, wm2.player_id),
         )
         .having(op_fn(shared_teams, value))
     )

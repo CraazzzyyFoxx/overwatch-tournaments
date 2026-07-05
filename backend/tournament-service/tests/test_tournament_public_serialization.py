@@ -38,8 +38,6 @@ def _tournament() -> models.Tournament:
         number=10,
         name="Tournament 10",
         description=None,
-        challonge_id=None,
-        challonge_slug=None,
         is_league=False,
         is_finished=False,
         status=enums.TournamentStatus.LIVE,

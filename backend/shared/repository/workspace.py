@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
-from shared.models.rbac import user_roles
+from shared.models.identity.rbac import user_roles
 from shared.repository.base import BaseRepository
 
 
@@ -49,12 +50,34 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         workspace_id: int,
         auth_user_id: int,
     ) -> models.WorkspaceMember | None:
+        """Look up a member by the auth identity, joining through ``players.user``.
+
+        ``workspace_member`` is anchored on ``player_id``; this join is the
+        bridge so RPC/route callers that only know the current auth user's id
+        can still resolve their membership row.
+        """
         result = await session.execute(
             sa.select(models.WorkspaceMember)
-            .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
+            .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+            .options(selectinload(models.WorkspaceMember.player))
             .where(
                 models.WorkspaceMember.workspace_id == workspace_id,
-                models.WorkspaceMember.auth_user_id == auth_user_id,
+                models.User.auth_user_id == auth_user_id,
+            )
+        )
+        return result.scalars().first()
+
+    async def get_by_player(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        player_id: int,
+    ) -> models.WorkspaceMember | None:
+        result = await session.execute(
+            sa.select(models.WorkspaceMember).where(
+                models.WorkspaceMember.workspace_id == workspace_id,
+                models.WorkspaceMember.player_id == player_id,
             )
         )
         return result.scalars().first()
@@ -64,13 +87,88 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         session: AsyncSession,
         workspace_id: int,
     ) -> Sequence[models.WorkspaceMember]:
+        """List the workspace's RBAC members — auth-linked players only.
+
+        ``workspace_member`` is anchored on ``player_id`` and now holds two
+        distinct populations: real RBAC members (auth users who joined via
+        ``add_member``) and tournament participants anchored by
+        registration / team / draft / achievement flows via
+        ``get_or_create_workspace_member``. The latter frequently have no auth
+        account (``players.user.auth_user_id IS NULL``) — they are pure
+        tournament players, not workspace members.
+
+        The RBAC members screen (``rpc.app.workspaces.members_list``) only
+        deals with the former, and every downstream step resolves the row's
+        auth identity (``get_member_auth_user_id``); an auth-less row would
+        make the whole listing 500. The INNER JOIN on ``players.user`` plus the
+        ``auth_user_id IS NOT NULL`` filter scope this to auth-linked members
+        (mirrors ``get_member``'s bridge join).
+        """
         result = await session.execute(
             sa.select(models.WorkspaceMember)
-            .options(selectinload(models.WorkspaceMember.auth_user).selectinload(models.AuthUser.roles))
-            .where(models.WorkspaceMember.workspace_id == workspace_id)
+            .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+            .options(selectinload(models.WorkspaceMember.player))
+            .where(
+                models.WorkspaceMember.workspace_id == workspace_id,
+                models.User.auth_user_id.isnot(None),
+            )
             .order_by(models.WorkspaceMember.id.asc())
         )
         return result.scalars().all()
+
+
+async def get_or_create_workspace_member(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    player_id: int,
+) -> models.WorkspaceMember:
+    """Idempotently create (or fetch) the membership row for ``player_id``.
+
+    Insert-or-select on ``uq_workspace_member_workspace_player``: an
+    ``INSERT ... ON CONFLICT DO NOTHING`` followed by a ``SELECT`` when the
+    row already existed, so concurrent calls never raise
+    ``IntegrityError``/duplicate-key races.
+    """
+    insert_stmt = (
+        pg_insert(models.WorkspaceMember)
+        .values(workspace_id=workspace_id, player_id=player_id)
+        .on_conflict_do_nothing(constraint="uq_workspace_member_workspace_player")
+        .returning(models.WorkspaceMember.id)
+    )
+    result = await session.execute(insert_stmt)
+    member_id = result.scalar_one_or_none()
+    if member_id is not None:
+        await session.flush()
+        member = await session.get(models.WorkspaceMember, member_id)
+        assert member is not None
+        # Autofill the baseline ``member`` RBAC role for a brand-new anchor of an
+        # auth-linked player: the members screen treats every auth-linked row as
+        # an RBAC member, so a fresh row must not be role-less. Fires ONLY on a
+        # real insert (not idempotent hits) and ONLY when the player has an auth
+        # account; the helper is additive (never downgrades a later ``player`` /
+        # explicit grant). Local import avoids any shared.repository<->shared.rbac
+        # import-time coupling on this widely-imported module.
+        from shared.rbac import assign_default_member_role_if_roleless
+
+        auth_user_id = await session.scalar(
+            sa.select(models.User.auth_user_id).where(models.User.id == player_id)
+        )
+        if auth_user_id is not None:
+            await assign_default_member_role_if_roleless(
+                session, user_id=auth_user_id, workspace_id=workspace_id
+            )
+        return member
+
+    existing = await WorkspaceMemberRepository().get_by_player(
+        session, workspace_id=workspace_id, player_id=player_id
+    )
+    if existing is None:
+        raise RuntimeError(
+            f"get_or_create_workspace_member: no row after ON CONFLICT DO NOTHING "
+            f"(workspace_id={workspace_id}, player_id={player_id})"
+        )
+    return existing
 
 
 class RoleRepository(BaseRepository[models.Role]):

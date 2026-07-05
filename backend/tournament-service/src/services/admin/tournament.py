@@ -3,10 +3,10 @@
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
 from sqlalchemy import delete, select
@@ -43,6 +43,52 @@ def _normalize_challonge_slug(value: str) -> str:
             return path.split("/")[-1]
 
     return slug.strip("/").split("/")[-1]
+
+
+async def _link_tournament_challonge_source(
+    session: AsyncSession,
+    tournament: models.Tournament,
+    *,
+    challonge_id: int,
+    slug: str | None,
+) -> None:
+    """Create/update the tournament-scoped ``challonge_source`` row.
+
+    Replaces the legacy ``tournament.challonge_id`` / ``challonge_slug`` write:
+    the normalized ``challonge_source`` (source_type='tournament') is now the
+    sole persistence target for the tournament↔Challonge link.
+    """
+    result = await session.execute(
+        select(models.ChallongeSource).where(
+            models.ChallongeSource.tournament_id == tournament.id,
+            models.ChallongeSource.source_type == "tournament",
+        )
+    )
+    source = result.scalars().first()
+    if source is None:
+        session.add(
+            models.ChallongeSource(
+                tournament_id=tournament.id,
+                challonge_tournament_id=challonge_id,
+                slug=slug,
+                source_type="tournament",
+            )
+        )
+    else:
+        source.challonge_tournament_id = challonge_id
+        source.slug = slug
+
+
+async def _unlink_tournament_challonge_source(
+    session: AsyncSession, tournament: models.Tournament
+) -> None:
+    """Drop the tournament-scoped ``challonge_source`` row(s) when the link is cleared."""
+    await session.execute(
+        delete(models.ChallongeSource).where(
+            models.ChallongeSource.tournament_id == tournament.id,
+            models.ChallongeSource.source_type == "tournament",
+        )
+    )
 
 
 async def _resolve_division_grid_version_id(
@@ -156,11 +202,14 @@ async def update_tournament(
         if raw_slug:
             challonge_slug = _normalize_challonge_slug(raw_slug)
             challonge_tournament = await challonge_service.fetch_tournament(challonge_slug)
-            tournament.challonge_slug = challonge_tournament.url
-            tournament.challonge_id = challonge_tournament.id
+            await _link_tournament_challonge_source(
+                session,
+                tournament,
+                challonge_id=challonge_tournament.id,
+                slug=challonge_tournament.url,
+            )
         else:
-            tournament.challonge_slug = None
-            tournament.challonge_id = None
+            await _unlink_tournament_challonge_source(session, tournament)
 
     if "division_grid_version_id" in update_data:
         update_data["division_grid_version_id"] = await _resolve_division_grid_version_id(

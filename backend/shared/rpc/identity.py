@@ -28,10 +28,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
-
-from shared.models.auth_user import AuthUser
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
 
 __all__ = ("rehydrate_user", "ensure_workspace_permission", "ensure_admin_panel_access", "MissingIdentityError")
 

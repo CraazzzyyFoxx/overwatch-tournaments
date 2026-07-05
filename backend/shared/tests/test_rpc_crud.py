@@ -169,9 +169,11 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(res["error"]["code"], "bad_request")
 
     async def test_missing_identity(self) -> None:
+        # A missing/expired token is 401 unauthorized (not 403 forbidden), matching
+        # every other service so the frontend treats it as "session dead" -> relogin.
         dispatcher = self._dispatcher(_team_cfg())
         res = await dispatcher.do_update({"entity": "team", "id": 5, "payload": {"name": "X"}})
-        self.assertEqual(res["error"]["code"], "forbidden")
+        self.assertEqual(res["error"]["code"], "unauthorized")
 
     async def test_missing_id(self) -> None:
         dispatcher = self._dispatcher(_team_cfg())
@@ -234,8 +236,9 @@ class PublicReadTests(IsolatedAsyncioTestCase):
         res = await dispatcher.do_get({"entity": "hero"})  # no id
         self.assertEqual(res["error"]["code"], "unprocessable")
 
-    async def test_non_public_get_without_identity_forbidden(self) -> None:
-        # Regression guard: default public_read=False keeps the auth gate.
+    async def test_non_public_get_without_identity_unauthorized(self) -> None:
+        # Regression guard: default public_read=False keeps the auth gate; a missing
+        # identity is reported as 401 unauthorized (not 403 forbidden).
         async def svc_get(session: Any, obj_id: int, data: dict[str, Any]) -> _Dummy:
             raise AssertionError("hook must not run when identity is missing")
 
@@ -244,4 +247,20 @@ class PublicReadTests(IsolatedAsyncioTestCase):
             _session_factory,
         )
         res = await dispatcher.do_get({"entity": "team", "id": 5})  # no identity
-        self.assertEqual(res["error"]["code"], "forbidden")
+        self.assertEqual(res["error"]["code"], "unauthorized")
+
+    async def test_non_public_list_without_resolver_bad_request(self) -> None:
+        # Fail-closed: a non-public list entity that forgets its workspace resolver
+        # must be rejected, never fall through to list_fn without a permission check.
+        async def list_fn(session: Any, data: dict[str, Any]) -> dict[str, Any]:
+            raise AssertionError("list_fn must not run without a workspace resolver")
+
+        cfg = _team_cfg(
+            list_fn=list_fn,
+            resolve_ws_for_list=None,
+            actions=frozenset({"list"}),
+        )
+        dispatcher = self._dispatcher(cfg)
+        res = await dispatcher.do_list({"entity": "team", "identity": SUPERUSER})
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"]["code"], "bad_request")

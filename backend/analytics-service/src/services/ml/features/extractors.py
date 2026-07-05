@@ -200,9 +200,15 @@ async def extract_match_features(
         .join(
             models.Player,
             sa.and_(
-                models.Player.user_id == models.MatchStatistics.user_id,
                 models.Player.team_id == models.MatchStatistics.team_id,
                 models.Player.tournament_id == models.Tournament.id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            sa.and_(
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.player_id == models.MatchStatistics.user_id,
             ),
         )
         .where(
@@ -555,9 +561,15 @@ async def extract_round_residuals(
         .join(
             models.Player,
             sa.and_(
-                models.Player.user_id == models.MatchStatistics.user_id,
                 models.Player.team_id == models.MatchStatistics.team_id,
                 models.Player.tournament_id == models.Tournament.id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            sa.and_(
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.player_id == models.MatchStatistics.user_id,
             ),
         )
         .where(

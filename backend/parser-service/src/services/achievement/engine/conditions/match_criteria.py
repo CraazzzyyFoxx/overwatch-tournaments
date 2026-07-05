@@ -73,7 +73,7 @@ async def _execute_encounter_field(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             first_match.c.match_id,
         )
@@ -91,6 +91,10 @@ async def _execute_encounter_field(
             models.Player.team_id == models.Team.id,
             models.Player.tournament_id == models.Encounter.tournament_id,
         ))
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             op_fn(column, value),
             models.Tournament.workspace_id == context.workspace_id,
@@ -117,7 +121,7 @@ async def _execute_match_field(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             models.Match.id.label("match_id"),
         )
@@ -135,6 +139,10 @@ async def _execute_match_field(
             models.Player.team_id == models.Team.id,
             models.Player.tournament_id == models.Encounter.tournament_id,
         ))
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             op_fn(column, value),
             models.Tournament.workspace_id == context.workspace_id,

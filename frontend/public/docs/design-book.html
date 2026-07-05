@@ -1,0 +1,545 @@
+<meta charset="utf-8">
+<title>OWT Design System — Editorial Tactical</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Onest:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     OWT DESIGN SYSTEM — "Editorial Tactical"
+     Full reference: tokens · type · components · patterns
+     ============================================================ */
+  :root {
+    --bg:#0b0d11; --surface:#101319; --surface-2:#151922; --elevated:#1b2029;
+    --line:#1e232c; --line-2:#2c333e;
+    --text:#f1f4f8; --text-strong:#fff; --text-muted:#9aa5b2; --text-subtle:#6a7480;
+    --brand:#25d3bd; --brand-deep:#0f9384; --brand-dim:rgba(37,211,189,.12); --brand-line:rgba(37,211,189,.34);
+    --warm:#f4b455; --warm-dim:rgba(244,180,85,.12);
+    --tank:#5aa6ef; --dps:#ef6398; --support:#3fcb86;
+    --win:#3fcb86; --loss:#f0506e; --draw:#f4b455; --good:var(--win); --mid:var(--draw); --bad:var(--loss);
+    --live:#f0506e; --upcoming:#f4b455; --finished:#6a7480; --draft:#5f9cf0;
+    --gold:#d9b35a; --silver:#aab8c8; --bronze:#c2814f;
+    --spectrum:linear-gradient(90deg,var(--tank),var(--dps),var(--support));
+    --r:10px; --r-sm:7px; --r-xs:4px;
+    --sh-1:0 1px 0 rgba(255,255,255,.04) inset; --sh-2:0 12px 34px rgba(0,0,0,.4);
+    --f-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --f-disp:"Onest","Inter",system-ui,sans-serif;
+    --f-mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--f-ui); font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,h4{ margin:0; letter-spacing:-.02em; text-wrap:balance; color:var(--text-strong); }
+  a{ color:inherit; text-decoration:none; }
+  .tnum{ font-family:var(--f-mono); font-variant-numeric:tabular-nums; }
+  .muted{ color:var(--text-muted);} .subtle{ color:var(--text-subtle);}
+  .mono{ font-family:var(--f-mono); }
+  .eyebrow{ display:inline-flex; align-items:center; gap:9px; font-family:var(--f-mono); font-size:11px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--text-subtle); }
+  .eyebrow::before{ content:""; width:22px; height:3px; border-radius:2px; background:var(--brand); }
+
+  /* ---------------- shell: sidebar + content ---------------- */
+  .top{ position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:14px; height:60px; padding:0 28px; background:rgba(11,13,17,.82); backdrop-filter:blur(18px); border-bottom:1px solid var(--line); }
+  .mark{ width:32px; height:32px; display:grid; place-items:center; background:var(--surface-2); border:1px solid var(--line-2); clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); }
+  .mark b{ font-family:var(--f-disp); font-weight:700; color:var(--brand); font-size:15px; }
+  .top .ttl b{ font-family:var(--f-disp); font-weight:600; font-size:16px; letter-spacing:.04em; }
+  .top .ttl span{ display:block; font-family:var(--f-mono); font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-subtle); margin-top:2px; }
+  .top .ver{ margin-left:auto; font-family:var(--f-mono); font-size:11px; color:var(--text-subtle); border:1px solid var(--line-2); padding:4px 9px; border-radius:999px; }
+
+  .layout{ display:grid; grid-template-columns:226px 1fr; max-width:1280px; margin:0 auto; }
+  .side{ position:sticky; top:60px; align-self:start; height:calc(100vh - 60px); overflow-y:auto; padding:26px 18px; border-right:1px solid var(--line); }
+  .side .grp{ font-family:var(--f-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-subtle); margin:18px 10px 8px; }
+  .side a{ display:block; padding:6px 10px; border-radius:6px; font-size:13px; color:var(--text-muted); }
+  .side a:hover{ background:rgba(255,255,255,.04); color:var(--text); }
+  .side a.on{ color:var(--brand); background:var(--brand-dim); }
+
+  .content{ padding:40px 44px 120px; min-width:0; }
+  section.doc{ padding:36px 0; border-bottom:1px solid var(--line); scroll-margin-top:76px; }
+  section.doc:first-child{ padding-top:8px; }
+  section.doc > .sh{ margin-bottom:24px; }
+  section.doc h2{ font-size:30px; font-weight:600; margin-top:10px; }
+  section.doc h3{ font-size:15px; font-weight:600; margin:28px 0 14px; color:var(--text); }
+  section.doc p.lead{ color:var(--text-muted); font-size:15px; max-width:60ch; margin:12px 0 0; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .grid4{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .demo{ border:1px solid var(--line); border-radius:var(--r); padding:22px; background:var(--surface); }
+  .demo .cap{ font-family:var(--f-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-subtle); margin-bottom:16px; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .note{ font-size:12.5px; color:var(--text-subtle); background:var(--surface-2); border:1px dashed var(--line-2); border-radius:var(--r-sm); padding:13px 15px; line-height:1.6; }
+  .note code,p code,li code{ font-family:var(--f-mono); color:var(--brand); font-size:.92em; }
+  .ok{ color:var(--good); font-weight:600;} .bad{ color:var(--bad); font-weight:600;}
+
+  pre{ margin:0; background:#08090d; border:1px solid var(--line); border-radius:var(--r-sm); padding:16px 18px; overflow-x:auto; }
+  pre code{ font-family:var(--f-mono); font-size:12px; line-height:1.7; color:#c8d2dd; }
+  .tok-k{ color:var(--brand); } .tok-v{ color:var(--warm); } .tok-c{ color:var(--text-subtle); }
+
+  /* color */
+  .ramp{ display:grid; grid-template-columns:repeat(6,1fr); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; }
+  .ramp .s{ height:84px; display:flex; align-items:flex-end; padding:8px; } .ramp .s span{ font-family:var(--f-mono); font-size:9.5px; color:rgba(255,255,255,.6); }
+  .sw{ display:flex; flex-direction:column; gap:8px; } .sw .c{ height:60px; border-radius:var(--r-sm); border:1px solid rgba(255,255,255,.05); } .sw b{ font-size:12px; } .sw code{ font-family:var(--f-mono); font-size:10px; color:var(--text-subtle); }
+
+  /* type */
+  .specimen{ border:1px solid var(--line); border-radius:var(--r); overflow:hidden; }
+  .specimen .hd{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--surface); }
+  .specimen .hd b{ font-size:13px; } .specimen .hd span{ font-family:var(--f-mono); font-size:11px; color:var(--text-subtle); }
+  .specimen .bd{ padding:20px 16px; }
+  .glyphset{ font-size:30px; letter-spacing:.01em; word-spacing:.1em; }
+  .weights{ display:flex; gap:18px; flex-wrap:wrap; margin-top:10px; } .weights span{ font-size:22px; }
+  .scale-row{ display:flex; align-items:baseline; gap:20px; padding:14px 0; border-bottom:1px solid var(--line); } .scale-row:last-child{ border-bottom:none; }
+  .scale-row .k{ width:160px; flex:none; font-family:var(--f-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-subtle); }
+
+  /* buttons */
+  .btn{ display:inline-flex; align-items:center; gap:8px; justify-content:center; font-family:var(--f-ui); font-size:13px; font-weight:600; line-height:1; padding:11px 17px; border-radius:9px; cursor:pointer; border:1px solid transparent; transition:transform .08s,background .12s,border-color .12s; }
+  .btn:active{ transform:translateY(1px);} .btn:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+  .btn-primary{ background:var(--brand); color:#042220;} .btn-primary:hover{ background:#37e0ca; }
+  .btn-warm{ background:var(--warm); color:#2a1c05;} .btn-warm:hover{ filter:brightness(1.06);}
+  .btn-outline{ border-color:var(--line-2); color:var(--text); background:var(--surface);} .btn-outline:hover{ border-color:var(--text-subtle);}
+  .btn-ghost{ color:var(--text-muted);} .btn-ghost:hover{ background:rgba(255,255,255,.04); color:var(--text);}
+  .btn-danger{ background:rgba(240,80,110,.14); color:var(--live); border-color:rgba(240,80,110,.3);}
+  .btn.sm{ padding:7px 12px; font-size:12.5px; } .btn.lg{ padding:13px 22px; font-size:14px; }
+  .btn[disabled]{ opacity:.4; cursor:not-allowed; }
+
+  /* inputs */
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:7px; }
+  .input{ width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--line-2); border-radius:var(--r-sm); color:var(--text); font-family:var(--f-ui); font-size:14px; }
+  .input:focus{ outline:none; border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-dim); }
+  .switch{ width:38px; height:22px; border-radius:999px; background:var(--elevated); position:relative; border:1px solid var(--line-2); cursor:pointer; }
+  .switch.on{ background:var(--brand); border-color:var(--brand);} .switch i{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .14s; } .switch.on i{ left:18px; }
+
+  /* chip-button — two sizes: default = main control (filters, tabs), .sm = compact (chart axis, sort) */
+  .chip-f{ font-family:var(--f-mono); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; padding:7px 13px; border-radius:7px; border:1px solid var(--line-2); color:var(--text-muted); cursor:pointer; background:transparent; transition:color .12s,border-color .12s,background .12s; }
+  .chip-f:hover{ color:var(--text); border-color:var(--text-subtle); }
+  .chip-f:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+  .chip-f.on{ background:var(--brand-dim); border-color:var(--brand-line); color:var(--brand); }
+  .chip-f.sm{ font-size:9.5px; letter-spacing:.05em; padding:4px 9px; border-radius:5px; }
+
+  /* status / role */
+  .pill{ display:inline-flex; align-items:center; gap:6px; font-family:var(--f-mono); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; border-radius:5px; border:1px solid var(--line-2); }
+  .pill .d{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.live{ color:var(--live); background:rgba(240,80,110,.12); border-color:rgba(240,80,110,.3);} .pill.live .d{ animation:pulse 1.8s infinite; }
+  .pill.up{ color:var(--upcoming); background:var(--warm-dim); border-color:rgba(244,180,85,.3);}
+  .pill.fin{ color:var(--text-muted); background:rgba(106,116,128,.12);} .pill.draft{ color:var(--draft); background:rgba(95,156,240,.12); border-color:rgba(95,156,240,.3);}
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .ri{ width:15px; height:15px; flex:none; } .ri.tank{ color:var(--tank);} .ri.dps{ color:var(--dps);} .ri.support{ color:var(--support);}
+  .role{ display:inline-flex; align-items:center; gap:6px; font-family:var(--f-mono); font-size:10.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+  .role.tank{ color:var(--tank);} .role.dps{ color:var(--dps);} .role.support{ color:var(--support);}
+
+  /* avatars / podium */
+  .hav{ width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:11px; color:#0b0d11; border:2px solid var(--surface); flex:none; }
+  .hav.tank{ background:linear-gradient(135deg,#83c0f7,#477fcf);} .hav.dps{ background:linear-gradient(135deg,#f593b6,#d44a78);} .hav.support{ background:linear-gradient(135deg,#76d9a4,#34ab6a);}
+  .stack-av{ display:flex; } .stack-av .hav:not(:first-child){ margin-left:-9px; } .stack-av .more{ width:30px; height:30px; border-radius:50%; margin-left:-9px; background:var(--elevated); border:2px solid var(--surface); display:grid; place-items:center; font-size:10px; font-weight:700; color:var(--text-muted);}
+  .place{ width:24px; height:24px; border-radius:50%; display:inline-grid; place-items:center; font-family:var(--f-mono); font-size:11px; font-weight:700; color:#0b0d11; flex:none;} .place.p1{background:var(--gold);} .place.p2{background:var(--silver);} .place.p3{background:var(--bronze);} .place.pn{background:var(--elevated); color:var(--text-muted);}
+  /* division emblem — icon-only rank display (stand-in for DivisionIcon PNGs) */
+  .divi{ width:32px; height:32px; flex:none; display:grid; place-items:center; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); font-family:var(--f-mono); font-weight:700; font-size:12px; color:#0b0d11; }
+  .divi.bronze{ background:linear-gradient(135deg,#c79366,#9b6736);} .divi.silver{ background:linear-gradient(135deg,#c3cedb,#8d9cae);} .divi.gold{ background:linear-gradient(135deg,#eccb6a,#cda23e);} .divi.platinum{ background:linear-gradient(135deg,#5fc7ba,#2f9387);} .divi.diamond{ background:linear-gradient(135deg,#8fc1ef,#4f86c9);} .divi.master{ background:linear-gradient(135deg,#f4ad5c,#d9822c);} .divi.grandmaster{ background:linear-gradient(135deg,#e487a6,#c25677);} .divi.champion{ background:linear-gradient(135deg,#f3dd92,#d2a64e);}
+
+  /* role distribution bar — the spectrum, now SEMANTIC */
+  .rolebar{ display:flex; height:10px; border-radius:999px; overflow:hidden; border:1px solid var(--line); }
+  .rolebar i{ display:block; height:100%; } .rolebar .t{ background:var(--tank);} .rolebar .d{ background:var(--dps);} .rolebar .s{ background:var(--support);}
+  .legend{ display:flex; gap:16px; margin-top:10px; font-size:11px; } .legend span{ display:inline-flex; align-items:center; gap:6px; color:var(--text-muted);} .legend i{ width:9px; height:9px; border-radius:2px; }
+
+  /* cards */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r); } .card .hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--line); font-size:13px; font-weight:600;} .card .hd .h{ font-family:var(--f-mono); font-size:10.5px; color:var(--text-subtle); font-weight:400;} .card .bd{ padding:18px; }
+  .open-stat{ border-left:1px solid var(--line); padding-left:18px; } .open-stat .l{ font-family:var(--f-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-subtle);} .open-stat .v{ font-family:var(--f-disp); font-weight:700; font-size:34px; margin-top:8px;}
+
+  /* table */
+  .tblw{ overflow-x:auto; } table.tbl{ width:100%; border-collapse:collapse; font-size:13px;} table.tbl th{ text-align:left; font-family:var(--f-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-subtle); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--line);} table.tbl td{ padding:12px 14px; border-bottom:1px solid var(--line);} table.tbl tr:last-child td{ border-bottom:none;} table.tbl tbody tr:hover{ background:rgba(255,255,255,.02);} .num{ text-align:right;} .wld b{ color:var(--support);} .wld u{ color:var(--live); text-decoration:none;} .wld s{ color:var(--text-subtle); text-decoration:none;}
+
+  /* meters / chart */
+  .meter{ height:6px; border-radius:999px; background:var(--elevated); overflow:hidden; } .meter>i{ display:block; height:100%; border-radius:999px; background:var(--brand);}
+  .bars{ display:flex; align-items:flex-end; gap:4px; height:72px;} .bars .b{ flex:1; border-radius:3px 3px 0 0; background:var(--brand-dim); min-height:4px;} .bars .b.hi{ background:var(--brand);}
+
+  /* tabs */
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--line);} .tabs .t{ padding:10px 14px; font-size:13px; color:var(--text-muted); border:none; background:none; border-bottom:2px solid transparent; cursor:pointer; font-family:var(--f-ui);} .tabs .t.on{ color:var(--text-strong); border-bottom-color:var(--brand);} .tabs .t:hover{ color:var(--text);}
+
+  /* do/dont */
+  .dd{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .dd .box{ border:1px solid var(--line); border-radius:var(--r); overflow:hidden;} .dd .box .t{ padding:8px 14px; font-family:var(--f-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;} .dd .box.good .t{ color:var(--good); border-bottom:1px solid var(--line); background:rgba(63,203,134,.06);} .dd .box.bad .t{ color:var(--bad); border-bottom:1px solid var(--line); background:rgba(240,80,110,.06);} .dd .box .b{ padding:20px; }
+
+  @media (max-width:980px){
+    .layout{ grid-template-columns:1fr; } .side{ display:none; }
+    .content{ padding:28px 22px 80px; }
+    .grid2,.grid3,.grid4,.dd{ grid-template-columns:1fr; }
+    .ramp{ grid-template-columns:repeat(3,1fr); } .scale-row .k{ width:110px; }
+  }
+  @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+
+<header class="top">
+  <span class="mark"><b>O</b></span>
+  <span class="ttl"><b>OWT Design System</b><span>Editorial Tactical</span></span>
+  <span class="ver">v1.0 · ref</span>
+</header>
+
+<div class="layout">
+  <!-- ---------------- sidebar nav ---------------- -->
+  <aside class="side">
+    <div class="grp">Foundations</div>
+    <a href="#overview" class="on">Overview</a>
+    <a href="#color">Color</a>
+    <a href="#type">Typography &amp; fonts</a>
+    <a href="#space">Spacing &amp; layout</a>
+    <a href="#shape">Radii · elevation · motion</a>
+    <a href="#roles">Role system &amp; spectrum</a>
+    <a href="#divisions">Divisions</a>
+    <div class="grp">Components</div>
+    <a href="#buttons">Buttons</a>
+    <a href="#forms">Forms &amp; inputs</a>
+    <a href="#status">Status &amp; badges</a>
+    <a href="#avatars">Avatars &amp; podium</a>
+    <a href="#cards">Cards &amp; surfaces</a>
+    <a href="#tables">Tables &amp; data</a>
+    <a href="#charts">Charts &amp; meters</a>
+    <a href="#tabsnav">Tabs &amp; nav</a>
+    <div class="grp">Apply</div>
+    <a href="#patterns">Patterns</a>
+    <a href="#log">Decisions log</a>
+    <a href="#tokens">Tokens &amp; code</a>
+  </aside>
+
+  <main class="content">
+
+    <!-- OVERVIEW -->
+    <section class="doc" id="overview">
+      <div class="sh"><span class="eyebrow">Design system · v1.0</span><h2>Editorial Tactical</h2></div>
+      <p class="lead">A dark, broadcast-grade system for a competitive Overwatch tournament platform. Premium editorial layout — air, hairline rules, big mixed-case headlines — carrying a mission-control voice: faint coordinate grid, monospace labels, oversized grotesk numbers.</p>
+      <div class="grid3" style="margin-top:24px">
+        <div class="demo"><div class="cap">01 · Air over boxes</div><p class="subtle" style="font-size:13px;margin:0">Group with whitespace and hairlines first; reach for a bordered card only for dense data.</p></div>
+        <div class="demo"><div class="cap">02 · Numbers are telemetry</div><p class="subtle" style="font-size:13px;margin:0">Stats in grotesk + mono, tabular, treated like a broadcast stat overlay.</p></div>
+        <div class="demo"><div class="cap">03 · Meaning over decoration</div><p class="subtle" style="font-size:13px;margin:0">Color and the role spectrum encode data — never ornament. One teal accent leads.</p></div>
+      </div>
+    </section>
+
+    <!-- COLOR -->
+    <section class="doc" id="color">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Color</h2><p class="lead">One source of truth. A deep cool-ink ground, a single jewel-teal accent, role + status semantics, and one warm spark reserved for featured moments.</p></div>
+
+      <h3>Elevation ramp</h3>
+      <div class="ramp">
+        <div class="s" style="background:var(--bg)"><span>bg</span></div>
+        <div class="s" style="background:var(--surface)"><span>surface</span></div>
+        <div class="s" style="background:var(--surface-2)"><span>surface-2</span></div>
+        <div class="s" style="background:var(--elevated)"><span>elevated</span></div>
+        <div class="s" style="background:var(--line)"><span>line</span></div>
+        <div class="s" style="background:var(--line-2)"><span>line-2</span></div>
+      </div>
+
+      <h3>Text</h3>
+      <div class="row">
+        <span style="color:var(--text-strong);font-size:15px">Strong — #fff</span><span style="color:var(--text);font-size:15px">Default — #f1f4f8</span><span style="color:var(--text-muted);font-size:15px">Muted — #9aa5b2</span><span style="color:var(--text-subtle);font-size:15px">Subtle — #6a7480</span>
+      </div>
+
+      <h3>Accent &amp; semantics</h3>
+      <div class="grid4" style="margin-top:4px">
+        <div class="sw"><div class="c" style="background:var(--brand)"></div><b>Brand / teal</b><code>#25d3bd</code></div>
+        <div class="sw"><div class="c" style="background:var(--warm)"></div><b>Warm (featured only)</b><code>#f4b455</code></div>
+        <div class="sw"><div class="c" style="background:var(--live)"></div><b>Live / loss</b><code>#f0506e</code></div>
+        <div class="sw"><div class="c" style="background:var(--win)"></div><b>Win · loss · draw</b><code>--win / --loss / --draw</code></div>
+        <div class="sw"><div class="c" style="background:var(--tank)"></div><b>Tank</b><code>#5aa6ef</code></div>
+        <div class="sw"><div class="c" style="background:var(--dps)"></div><b>Damage</b><code>#ef6398</code></div>
+        <div class="sw"><div class="c" style="background:var(--support)"></div><b>Support</b><code>#3fcb86</code></div>
+        <div class="sw"><div class="c" style="background:linear-gradient(135deg,var(--gold),var(--bronze))"></div><b>Podium</b><code>gold/silver/bronze</code></div>
+      </div>
+      <p class="note" style="margin-top:18px">Single teal hue everywhere (kills the old <code>162</code> vs <code>174</code> drift). Six near-identical borders collapse to <code>--line</code> / <code>--line-2</code>. Semantic win/loss is separate from the teal accent. Results (<code>--win/--loss/--draw</code>) and quality tints (<code>--good/--mid/--bad</code>) are dedicated tokens — they share hues with support/live/warm today but can diverge without touching roles or statuses.</p>
+    </section>
+
+    <!-- TYPE -->
+    <section class="doc" id="type">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Typography &amp; fonts</h2><p class="lead">Three roles. Inter for UI &amp; headlines (mixed-case, never condensed caps). Onest for display &amp; big numbers — a cyrillic-native geometric grotesk, so RU headlines and player names keep the same texture as Latin (Space Grotesk has no Cyrillic). JetBrains Mono for data, labels and the tactical voice.</p></div>
+
+      <div class="grid3">
+        <div class="specimen"><div class="hd"><b>Inter</b><span>UI · headline</span></div><div class="bd"><div class="glyphset" style="font-family:var(--f-ui)">Aa Gg Rr 24</div><div class="weights" style="font-family:var(--f-ui)"><span style="font-weight:400">400</span><span style="font-weight:500">500</span><span style="font-weight:600">600</span><span style="font-weight:700">700</span></div></div></div>
+        <div class="specimen"><div class="hd"><b>Onest</b><span>display · numbers</span></div><div class="bd"><div class="glyphset" style="font-family:var(--f-disp)">Aa Gg Rr 24</div><div class="weights" style="font-family:var(--f-disp)"><span style="font-weight:500">500</span><span style="font-weight:700">700</span></div></div></div>
+        <div class="specimen"><div class="hd"><b>JetBrains Mono</b><span>data · labels</span></div><div class="bd"><div class="glyphset" style="font-family:var(--f-mono)">Aa Gg Rr 24</div><div class="weights" style="font-family:var(--f-mono)"><span style="font-weight:400">400</span><span style="font-weight:600">600</span></div></div></div>
+      </div>
+
+      <h3>Type scale</h3>
+      <div>
+        <div class="scale-row"><span class="k">Display · Grotesk 700</span><span style="font-family:var(--f-disp);font-size:52px;font-weight:700;letter-spacing:-.03em;line-height:1">Grand Final</span></div>
+        <div class="scale-row"><span class="k">H1 · Inter 600 · 30</span><span style="font-size:30px;font-weight:600;letter-spacing:-.02em">Community dashboard</span></div>
+        <div class="scale-row"><span class="k">H2 · Inter 600 · 22</span><span style="font-size:22px;font-weight:600">Standings snapshot</span></div>
+        <div class="scale-row"><span class="k">Title · 600 · 17</span><span style="font-size:17px;font-weight:600">Apex Predators</span></div>
+        <div class="scale-row"><span class="k">Body · 400 · 14</span><span class="muted" style="font-size:14px">Live brackets and player telemetry across communities.</span></div>
+        <div class="scale-row"><span class="k">Label · Mono · 11</span><span class="eyebrow">Season overview</span></div>
+        <div class="scale-row"><span class="k">Data · Mono · 14</span><span class="tnum" style="font-size:15px">12–4–1 · 256/412 maps · 61.2%</span></div>
+      </div>
+
+      <h3>Implementation — <span class="mono" style="font-size:13px">next/font</span> (real build)</h3>
+      <pre><code><span class="tok-c">// app/layout.tsx — fonts ship locally, no CDN, no layout shift</span>
+<span class="tok-k">import</span> { Inter, Onest, JetBrains_Mono } <span class="tok-k">from</span> <span class="tok-v">"next/font/google"</span>;
+
+<span class="tok-k">const</span> ui      = Inter({ subsets:[<span class="tok-v">"latin"</span>,<span class="tok-v">"cyrillic"</span>], variable:<span class="tok-v">"--f-ui"</span> });
+<span class="tok-k">const</span> display = Onest({ subsets:[<span class="tok-v">"latin"</span>,<span class="tok-v">"cyrillic"</span>], weight:[<span class="tok-v">"500"</span>,<span class="tok-v">"700"</span>], variable:<span class="tok-v">"--f-disp"</span> });
+<span class="tok-k">const</span> mono    = JetBrains_Mono({ subsets:[<span class="tok-v">"latin"</span>], variable:<span class="tok-v">"--f-mono"</span> });</code></pre>
+      <p class="note" style="margin-top:16px"><b>Preview caveat:</b> this artifact can&rsquo;t load CDN webfonts, so specimens fall back to your system fonts. The spec above is exact — in the app the three faces embed via <code>next/font</code> and render precisely (incl. Cyrillic for RU).</p>
+    </section>
+
+    <!-- SPACING -->
+    <section class="doc" id="space">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Spacing &amp; layout</h2><p class="lead">A 4px base step. Generous section rhythm — the system leans airy. Max content width 1180px.</p></div>
+      <div class="row" style="align-items:flex-end;gap:10px;margin-top:6px">
+        <div style="text-align:center"><div style="width:4px;height:4px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">4</div></div>
+        <div style="text-align:center"><div style="width:8px;height:8px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">8</div></div>
+        <div style="text-align:center"><div style="width:12px;height:12px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">12</div></div>
+        <div style="text-align:center"><div style="width:16px;height:16px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">16</div></div>
+        <div style="text-align:center"><div style="width:24px;height:24px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">24</div></div>
+        <div style="text-align:center"><div style="width:32px;height:32px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">32</div></div>
+        <div style="text-align:center"><div style="width:56px;height:56px;background:var(--brand)"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">56 · section</div></div>
+      </div>
+    </section>
+
+    <!-- SHAPE -->
+    <section class="doc" id="shape">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Radii · elevation · motion</h2></div>
+      <div class="grid3">
+        <div class="demo"><div class="cap">Radii</div><div class="row" style="align-items:flex-end"><div><div style="width:48px;height:48px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:4px"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">4 · xs</div></div><div><div style="width:48px;height:48px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:7px"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">7 · sm</div></div><div><div style="width:48px;height:48px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px"></div><div class="subtle mono" style="font-size:10px;margin-top:8px">10 · base</div></div></div></div>
+        <div class="demo"><div class="cap">Elevation</div><div class="row"><div style="width:60px;height:48px;background:var(--surface);border:1px solid var(--line);border-radius:8px"></div><div style="width:60px;height:48px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;box-shadow:var(--sh-2)"></div></div><p class="subtle" style="font-size:11.5px;margin:12px 0 0">Flat by default; shadow only for overlays (menus, dialogs).</p></div>
+        <div class="demo"><div class="cap">Motion</div><p class="subtle" style="font-size:12.5px;margin:0">120–180ms ease on hover/active. One live pulse for real-time. Honors <code>prefers-reduced-motion</code>. No decorative micro-motion.</p></div>
+      </div>
+    </section>
+
+    <!-- ROLES & SPECTRUM -->
+    <section class="doc" id="roles">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Role system &amp; the spectrum</h2><p class="lead">Roles read through Overwatch glyphs in role color — not abstract swatches. The tank→damage→support spectrum is a <b>semantic</b> device: it appears only where it represents a real role split, never as decoration.</p></div>
+
+      <h3>Role marker — icon + mono label</h3>
+      <div class="demo"><div class="row" style="gap:22px">
+        <span class="role tank"><svg class="ri tank" viewBox="0 0 40 40" fill="currentColor"><path d="M36.8022 5.87733C36.8922 2.31733 34.0621 1.77733 31.6521 1.17733C27.9633 0.333167 24.1856 -0.0597094 20.4021 0.00733291C16.6186 -0.0597094 12.8409 0.333167 9.1521 1.17733C6.7421 1.77733 3.91219 2.31733 4.00219 5.87733C4.13219 10.7973 4.00219 15.7173 4.00219 20.6373C3.97714 21.4489 4.16692 22.2526 4.55224 22.9673C8.14312 29.5379 13.209 35.1859 19.352 39.4673C19.637 39.6977 19.9864 39.834 20.352 39.8573C20.7177 39.834 21.0671 39.6977 21.352 39.4673C27.4951 35.1859 32.5612 29.5379 36.1521 22.9673C36.5374 22.2526 36.7272 21.4489 36.7021 20.6373C36.7721 15.7173 36.6722 10.7973 36.8022 5.87733Z"/></svg>Tank</span>
+        <span class="role dps"><svg class="ri dps" viewBox="0 0 40 40" fill="currentColor"><path d="M2.13965 35.1085V38.8528C2.13965 39.157 2.26061 39.4488 2.47576 39.664C2.69091 39.8791 2.98274 40 3.28701 40H9.83685C10.1411 40 10.433 39.8791 10.6481 39.664C10.8633 39.4488 10.984 39.157 10.984 38.8528V35.1085H2.13965Z"/><path d="M6.89593 0.05448C6.71162 -0.01816 6.50656 -0.01816 6.32225 0.05448C2.24426 1.83795 2.15039 7.75154 2.15039 7.75154V31.6771H10.9947V7.75154C10.9947 7.75154 10.9322 1.85881 6.89593 0.05448Z"/><path d="M15.1562 35.1085V38.8528C15.1563 39.157 15.2772 39.4488 15.4924 39.664C15.7075 39.8791 15.9993 40 16.3036 40H22.8639C23.1673 39.9973 23.4575 39.8756 23.6721 39.661C23.8867 39.4464 24.0083 39.1562 24.011 38.8528V35.1085H15.1562Z"/><path d="M19.8705 0.05448C19.6862 -0.01816 19.4812 -0.01816 19.2969 0.05448C15.2189 1.83795 15.125 7.75154 15.125 7.75154V31.6771H23.9798V7.75154C23.9798 7.75154 23.9485 1.85881 19.8705 0.05448Z"/><path d="M28.1719 35.1085V38.8528C28.1719 39.157 28.2928 39.4488 28.508 39.664C28.7231 39.8791 29.015 40 29.3192 40H35.8795C36.1838 40 36.4756 39.8791 36.6908 39.664C36.9059 39.4488 37.0266 39.157 37.0266 38.8528V35.1085H28.1719Z"/><path d="M32.8869 0.05448C32.7026 -0.01816 32.4978 -0.01816 32.3135 0.05448C28.2355 1.83795 28.1416 7.75154 28.1416 7.75154V31.6771H36.9964V7.75154C36.9964 7.75154 36.9649 1.85881 32.8869 0.05448Z"/></svg>Damage</span>
+        <span class="role support"><svg class="ri support" viewBox="0 0 40 40" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M38.9455 12.7133H27.7087C27.5959 12.7108 27.4886 12.6643 27.4098 12.5836C27.3309 12.503 27.2866 12.3947 27.2866 12.2819V1.05464C27.2866 0.774931 27.1757 0.506677 26.9779 0.308892C26.7801 0.111106 26.5118 0 26.2321 0H13.7681C13.4884 0 13.2201 0.111106 13.0223 0.308892C12.8245 0.506677 12.7133 0.774931 12.7133 1.05464V12.2819C12.7133 12.3963 12.6678 12.506 12.5869 12.5869C12.506 12.6679 12.3964 12.7133 12.2819 12.7133H1.05474C0.775033 12.7133 0.506765 12.8244 0.308979 13.0222C0.111194 13.22 0 13.4883 0 13.768V26.232C0 26.5117 0.111194 26.78 0.308979 26.9778C0.506765 27.1756 0.775033 27.2867 1.05474 27.2867H12.2819C12.3964 27.2867 12.506 27.3321 12.5869 27.413C12.6678 27.4939 12.7133 27.6037 12.7133 27.7181V38.9453C12.7133 39.2251 12.8245 39.4933 13.0223 39.6911C13.2201 39.8889 13.4884 40 13.7681 40H26.2321C26.5118 40 26.7801 39.8889 26.9779 39.6911C27.1757 39.4933 27.2866 39.2251 27.2866 38.9453V27.7373C27.2866 27.6245 27.3309 27.5162 27.4098 27.4356C27.4886 27.3549 27.5959 27.3083 27.7087 27.3058H38.9455C39.2252 27.3058 39.4934 27.1947 39.6912 26.9969C39.889 26.7992 40 26.5309 40 26.2512V13.7871C40.0025 13.647 39.9772 13.5078 39.9253 13.3777C39.8734 13.2475 39.7962 13.1289 39.698 13.029C39.5998 12.929 39.4827 12.8496 39.3535 12.7954C39.2242 12.7412 39.0856 12.7133 38.9455 12.7133Z"/></svg>Support</span>
+      </div></div>
+
+      <h3>The spectrum as data — role distribution</h3>
+      <div class="demo">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:10px"><b>Apex Predators · roster composition</b><span class="subtle mono">6 players</span></div>
+        <div class="rolebar"><i class="t" style="width:33%"></i><i class="d" style="width:34%"></i><i class="s" style="width:33%"></i></div>
+        <div class="legend"><span><i style="background:var(--tank)"></i>2 Tank</span><span><i style="background:var(--dps)"></i>2 Damage</span><span><i style="background:var(--support)"></i>2 Support</span></div>
+      </div>
+
+      <h3>The signature, dialed back</h3>
+      <div class="dd">
+        <div class="box good"><div class="t">✓ Spectrum = meaning</div><div class="b"><div class="rolebar" style="margin-bottom:8px"><i class="t" style="width:33%"></i><i class="d" style="width:34%"></i><i class="s" style="width:33%"></i></div><p class="subtle" style="font-size:12px;margin:0">Used where it encodes the three roles.</p></div></div>
+        <div class="box bad"><div class="t">✕ Spectrum = decoration</div><div class="b"><div style="height:3px;background:var(--spectrum);border-radius:2px;margin-bottom:8px"></div><p class="subtle" style="font-size:12px;margin:0">A rainbow rule on a random card means nothing — avoid.</p></div></div>
+      </div>
+      <p class="note" style="margin-top:18px">Per feedback, the rainbow no longer leads as a decorative anchor. The brand signature is the <b>single teal accent</b> + the tactical mono/grid voice; the spectrum is held back for genuine role data.</p>
+    </section>
+
+    <!-- DIVISIONS -->
+    <section class="doc" id="divisions">
+      <div class="sh"><span class="eyebrow">Foundations</span><h2>Divisions</h2><p class="lead">Divisions render as <b>icons only — never a text label</b>. The emblem encodes tier + sub-tier; the name lives in <code>alt</code> / <code>title</code> for screen readers and hover. Icons come from the workspace <b>division grid</b> (8 tiers × 5 = 40 divisions), so a community can swap the entire set.</p></div>
+
+      <h3>Tiers · default grid</h3>
+      <div class="demo"><div class="cap">Bronze → Champion · showing sub-tier 2</div>
+        <div class="row" style="gap:14px">
+          <span class="divi bronze" title="Bronze 2"><b>2</b></span>
+          <span class="divi silver" title="Silver 2"><b>2</b></span>
+          <span class="divi gold" title="Gold 2"><b>2</b></span>
+          <span class="divi platinum" title="Platinum 2"><b>2</b></span>
+          <span class="divi diamond" title="Diamond 2"><b>2</b></span>
+          <span class="divi master" title="Master 2"><b>2</b></span>
+          <span class="divi grandmaster" title="Grandmaster 2"><b>2</b></span>
+          <span class="divi champion" title="Champion 2"><b>2</b></span>
+        </div>
+        <p class="subtle" style="font-size:12px;margin:16px 0 0">Stand-ins shown here. The real build renders the grid&rsquo;s PNGs via <code>DivisionIcon</code> (default set on MinIO), icon-only, sized 24–36px. Each of the 8 tiers has 5 sub-tiers (1–5).</p>
+      </div>
+
+      <h3>In context — no text label</h3>
+      <div class="demo"><div class="cap">Roster · division reads as an emblem, not &ldquo;Diamond 2&rdquo;</div>
+        <div style="max-width:380px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><span class="hav tank">R</span><b>Vanguard</b></span><span class="divi diamond" title="Diamond 2"><b>2</b></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)"><span style="display:flex;align-items:center;gap:10px"><span class="hav dps">T</span><b>Echo</b></span><span class="divi master" title="Master 5"><b>5</b></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0"><span style="display:flex;align-items:center;gap:10px"><span class="hav support">K</span><b>Pulse</b></span><span class="divi platinum" title="Platinum 3"><b>3</b></span></div>
+        </div>
+      </div>
+
+      <h3>Rule</h3>
+      <div class="dd">
+        <div class="box good"><div class="t">✓ Icon only</div><div class="b"><div style="display:flex;align-items:center;gap:10px"><span class="hav tank">R</span><b>Vanguard</b><span class="divi diamond" title="Diamond 2" style="margin-left:auto"><b>2</b></span></div><p class="subtle" style="font-size:12px;margin:12px 0 0">Name carried by <code>title</code>/<code>alt</code> — accessible, hover-able.</p></div></div>
+        <div class="box bad"><div class="t">✕ Text label</div><div class="b"><div style="display:flex;align-items:center;gap:10px"><span class="hav tank">R</span><b>Vanguard</b><span class="subtle tnum" style="margin-left:auto">Diamond 2</span></div><p class="subtle" style="font-size:12px;margin:12px 0 0">No spelled-out division on display surfaces.</p></div></div>
+      </div>
+      <p class="note" style="margin-top:18px">Wired to <code>DivisionIcon</code> / <code>division-grid.ts</code> (<code>getDivisionIconSrc</code>). The icon-only rule governs <b>display</b> surfaces (profiles, rosters, tables, standings). A form that <i>selects</i> a rank may still list names in its dropdown — that&rsquo;s input, not display.</p>
+    </section>
+
+    <!-- BUTTONS -->
+    <section class="doc" id="buttons">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Buttons</h2><p class="lead">One component, four intents, three sizes. Replaces the old <code>.tn-btn</code> / shadcn / bare-button mix.</p></div>
+      <div class="demo"><div class="cap">Intents</div><div class="row"><button class="btn btn-primary" type="button">Primary</button><button class="btn btn-warm" type="button">Featured</button><button class="btn btn-outline" type="button">Outline</button><button class="btn btn-ghost" type="button">Ghost</button><button class="btn btn-danger" type="button">Danger</button></div></div>
+      <div class="grid2" style="margin-top:16px">
+        <div class="demo"><div class="cap">Sizes</div><div class="row"><button class="btn btn-primary sm" type="button">Small</button><button class="btn btn-primary" type="button">Default</button><button class="btn btn-primary lg" type="button">Large</button></div></div>
+        <div class="demo"><div class="cap">States</div><div class="row"><button class="btn btn-primary" type="button">Default</button><button class="btn btn-primary" type="button" style="background:#37e0ca">Hover</button><button class="btn btn-primary" type="button" disabled>Disabled</button></div></div>
+      </div>
+      <div class="demo" style="margin-top:16px"><div class="cap">Chip-buttons · two sizes</div>
+        <div class="grid2">
+          <div><div class="subtle" style="font-size:11px;margin-bottom:9px">Main control — filters, toggles, tabs</div><div class="row"><button class="chip-f on" type="button">All</button><button class="chip-f" type="button">Wins</button><button class="chip-f" type="button">Losses</button><button class="chip-f" type="button">Playoffs</button></div></div>
+          <div><div class="subtle" style="font-size:11px;margin-bottom:9px">Small <code>.sm</code> — chart axis, inline sort</div><div class="row"><button class="chip-f sm on" type="button">KDA</button><button class="chip-f sm on" type="button">Dmg</button><button class="chip-f sm on" type="button">Mit</button><button class="chip-f sm" type="button">+ axis</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORMS -->
+    <section class="doc" id="forms">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Forms &amp; inputs</h2></div>
+      <div class="grid2">
+        <div class="demo"><div class="cap">Text · select</div><div class="field" style="margin-bottom:14px"><label>Battle tag</label><input class="input" value="Vanguard#2381" /></div><div class="field"><label>Current rank</label><select class="input"><option>Diamond 2</option><option>Master 5</option></select></div></div>
+        <div class="demo"><div class="cap">Focus · toggle</div><div class="field" style="margin-bottom:18px"><label>Focused field</label><input class="input" style="border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-dim)" value="typing…" /></div><div class="row" style="gap:12px"><span class="switch on"><i></i></span><span class="subtle" style="font-size:13px">Public profile</span><span class="switch" style="margin-left:14px"><i></i></span><span class="subtle" style="font-size:13px">Smurf hidden</span></div></div>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <section class="doc" id="status">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Status &amp; badges</h2></div>
+      <div class="grid3">
+        <div class="demo"><div class="cap">Tournament status (4)</div><div class="row"><span class="pill live"><span class="d"></span>Live</span><span class="pill up"><span class="d"></span>Upcoming</span><span class="pill fin"><span class="d"></span>Finished</span><span class="pill draft"><span class="d"></span>Draft</span></div></div>
+        <div class="demo"><div class="cap">Role markers · icon-only in rows &amp; tables, icon + label ONLY in Role split, text-only in meta lines</div><div class="row" style="gap:16px"><span class="role tank"><svg class="ri tank" viewBox="0 0 40 40" fill="currentColor"><path d="M36.8022 5.87733C36.8922 2.31733 34.0621 1.77733 31.6521 1.17733C27.9633 0.333167 24.1856 -0.0597094 20.4021 0.00733291C16.6186 -0.0597094 12.8409 0.333167 9.1521 1.17733C6.7421 1.77733 3.91219 2.31733 4.00219 5.87733C4.13219 10.7973 4.00219 15.7173 4.00219 20.6373C3.97714 21.4489 4.16692 22.2526 4.55224 22.9673C8.14312 29.5379 13.209 35.1859 19.352 39.4673C19.637 39.6977 19.9864 39.834 20.352 39.8573C20.7177 39.834 21.0671 39.6977 21.352 39.4673C27.4951 35.1859 32.5612 29.5379 36.1521 22.9673C36.5374 22.2526 36.7272 21.4489 36.7021 20.6373C36.7721 15.7173 36.6722 10.7973 36.8022 5.87733Z"/></svg>Tank</span><span class="role dps"><svg class="ri dps" viewBox="0 0 40 40" fill="currentColor"><path d="M2.13965 35.1085V38.8528C2.13965 39.157 2.26061 39.4488 2.47576 39.664C2.69091 39.8791 2.98274 40 3.28701 40H9.83685C10.1411 40 10.433 39.8791 10.6481 39.664C10.8633 39.4488 10.984 39.157 10.984 38.8528V35.1085H2.13965Z"/><path d="M6.89593 0.05448C6.71162 -0.01816 6.50656 -0.01816 6.32225 0.05448C2.24426 1.83795 2.15039 7.75154 2.15039 7.75154V31.6771H10.9947V7.75154C10.9947 7.75154 10.9322 1.85881 6.89593 0.05448Z"/><path d="M15.1562 35.1085V38.8528C15.1563 39.157 15.2772 39.4488 15.4924 39.664C15.7075 39.8791 15.9993 40 16.3036 40H22.8639C23.1673 39.9973 23.4575 39.8756 23.6721 39.661C23.8867 39.4464 24.0083 39.1562 24.011 38.8528V35.1085H15.1562Z"/><path d="M19.8705 0.05448C19.6862 -0.01816 19.4812 -0.01816 19.2969 0.05448C15.2189 1.83795 15.125 7.75154 15.125 7.75154V31.6771H23.9798V7.75154C23.9798 7.75154 23.9485 1.85881 19.8705 0.05448Z"/><path d="M28.1719 35.1085V38.8528C28.1719 39.157 28.2928 39.4488 28.508 39.664C28.7231 39.8791 29.015 40 29.3192 40H35.8795C36.1838 40 36.4756 39.8791 36.6908 39.664C36.9059 39.4488 37.0266 39.157 37.0266 38.8528V35.1085H28.1719Z"/><path d="M32.8869 0.05448C32.7026 -0.01816 32.4978 -0.01816 32.3135 0.05448C28.2355 1.83795 28.1416 7.75154 28.1416 7.75154V31.6771H36.9964V7.75154C36.9964 7.75154 36.9649 1.85881 32.8869 0.05448Z"/></svg>DPS</span><span class="role support"><svg class="ri support" viewBox="0 0 40 40" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M38.9455 12.7133H27.7087C27.5959 12.7108 27.4886 12.6643 27.4098 12.5836C27.3309 12.503 27.2866 12.3947 27.2866 12.2819V1.05464C27.2866 0.774931 27.1757 0.506677 26.9779 0.308892C26.7801 0.111106 26.5118 0 26.2321 0H13.7681C13.4884 0 13.2201 0.111106 13.0223 0.308892C12.8245 0.506677 12.7133 0.774931 12.7133 1.05464V12.2819C12.7133 12.3963 12.6678 12.506 12.5869 12.5869C12.506 12.6679 12.3964 12.7133 12.2819 12.7133H1.05474C0.775033 12.7133 0.506765 12.8244 0.308979 13.0222C0.111194 13.22 0 13.4883 0 13.768V26.232C0 26.5117 0.111194 26.78 0.308979 26.9778C0.506765 27.1756 0.775033 27.2867 1.05474 27.2867H12.2819C12.3964 27.2867 12.506 27.3321 12.5869 27.413C12.6678 27.4939 12.7133 27.6037 12.7133 27.7181V38.9453C12.7133 39.2251 12.8245 39.4933 13.0223 39.6911C13.2201 39.8889 13.4884 40 13.7681 40H26.2321C26.5118 40 26.7801 39.8889 26.9779 39.6911C27.1757 39.4933 27.2866 39.2251 27.2866 38.9453V27.7373C27.2866 27.6245 27.3309 27.5162 27.4098 27.4356C27.4886 27.3549 27.5959 27.3083 27.7087 27.3058H38.9455C39.2252 27.3058 39.4934 27.1947 39.6912 26.9969C39.889 26.7992 40 26.5309 40 26.2512V13.7871C40.0025 13.647 39.9772 13.5078 39.9253 13.3777C39.8734 13.2475 39.7962 13.1289 39.698 13.029C39.5998 12.929 39.4827 12.8496 39.3535 12.7954C39.2242 12.7412 39.0856 12.7133 38.9455 12.7133Z"/></svg>Sup</span></div></div>
+        <div class="demo"><div class="cap">Result chips</div><div class="row"><span class="place" style="background:var(--win);color:#06210f">W</span><span class="place" style="background:var(--loss)">L</span><span class="place" style="background:var(--draw);color:#2a1c05">D</span><span class="tnum subtle">12-4-1</span></div></div>
+      </div>
+    </section>
+
+    <!-- AVATARS -->
+    <section class="doc" id="avatars">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Avatars &amp; podium</h2><p class="lead">Hero avatars render via the role-gradient stack (the project&rsquo;s HeroImage / AvatarStack standard), collapsing to <code>+N</code>. Sizes: <b>30px</b> standard stack, <b>24px</b> compact (dense detail rows), <b>26px</b> inline in tables. Podium uses gold / silver / bronze tokens.</p></div>
+      <div class="grid2">
+        <div class="demo"><div class="cap">Avatar stack · collapse +N</div><div class="stack-av"><span class="hav tank">R</span><span class="hav dps">T</span><span class="hav dps">A</span><span class="hav support">K</span><span class="hav support">J</span><span class="more">+2</span></div></div>
+        <div class="demo"><div class="cap">Podium</div><div class="row"><span class="place p1">1</span><span class="place p2">2</span><span class="place p3">3</span><span class="place pn">4</span><span class="place pn">5</span></div></div>
+      </div>
+    </section>
+
+    <!-- CARDS -->
+    <section class="doc" id="cards">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Cards &amp; surfaces</h2><p class="lead">Two modes. <b>Open</b> blocks (hairline + air) are the default for stats and lists. <b>Bordered</b> cards group dense data only.</p></div>
+      <div class="grid2">
+        <div class="demo"><div class="cap">Open stat (default)</div><div style="display:flex;gap:0"><div class="open-stat" style="border-left:none;padding-left:0"><div class="l">Tournaments</div><div class="v tnum">128</div></div><div class="open-stat" style="margin-left:24px"><div class="l">Players</div><div class="v tnum">7 318</div></div></div></div>
+        <div class="demo"><div class="cap">Bordered card (dense data)</div><div class="card"><div class="hd">Tournament activity <span class="h">last 12</span></div><div class="bd"><div class="bars" id="cardBars"></div></div></div></div>
+      </div>
+    </section>
+
+    <!-- TABLES -->
+    <section class="doc" id="tables">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Tables &amp; data</h2></div>
+      <div class="card"><div class="tblw"><table class="tbl">
+        <thead><tr><th style="width:34px">#</th><th>Team</th><th>Captain</th><th>Roster</th><th class="num">W-D-L</th><th class="num">Pts</th></tr></thead>
+        <tbody>
+          <tr><td><span class="place p1">1</span></td><td><b>Apex Predators</b></td><td><span class="role tank"><svg class="ri tank" viewBox="0 0 40 40" fill="currentColor"><path d="M36.8022 5.87733C36.8922 2.31733 34.0621 1.77733 31.6521 1.17733C27.9633 0.333167 24.1856 -0.0597094 20.4021 0.00733291C16.6186 -0.0597094 12.8409 0.333167 9.1521 1.17733C6.7421 1.77733 3.91219 2.31733 4.00219 5.87733C4.13219 10.7973 4.00219 15.7173 4.00219 20.6373C3.97714 21.4489 4.16692 22.2526 4.55224 22.9673C8.14312 29.5379 13.209 35.1859 19.352 39.4673C19.637 39.6977 19.9864 39.834 20.352 39.8573C20.7177 39.834 21.0671 39.6977 21.352 39.4673C27.4951 35.1859 32.5612 29.5379 36.1521 22.9673C36.5374 22.2526 36.7272 21.4489 36.7021 20.6373C36.7721 15.7173 36.6722 10.7973 36.8022 5.87733Z"/></svg>Vanguard</span></td><td><span class="stack-av"><span class="hav tank">R</span><span class="hav dps">T</span><span class="hav support">K</span><span class="more">+2</span></span></td><td class="num wld"><b>6</b>-<s>0</s>-<u>1</u></td><td class="num tnum"><b>18</b></td></tr>
+          <tr><td><span class="place p2">2</span></td><td><b>Night Owls</b></td><td><span class="role dps"><svg class="ri dps" viewBox="0 0 40 40" fill="currentColor"><path d="M2.13965 35.1085V38.8528C2.13965 39.157 2.26061 39.4488 2.47576 39.664C2.69091 39.8791 2.98274 40 3.28701 40H9.83685C10.1411 40 10.433 39.8791 10.6481 39.664C10.8633 39.4488 10.984 39.157 10.984 38.8528V35.1085H2.13965Z"/><path d="M6.89593 0.05448C6.71162 -0.01816 6.50656 -0.01816 6.32225 0.05448C2.24426 1.83795 2.15039 7.75154 2.15039 7.75154V31.6771H10.9947V7.75154C10.9947 7.75154 10.9322 1.85881 6.89593 0.05448Z"/><path d="M15.1562 35.1085V38.8528C15.1563 39.157 15.2772 39.4488 15.4924 39.664C15.7075 39.8791 15.9993 40 16.3036 40H22.8639C23.1673 39.9973 23.4575 39.8756 23.6721 39.661C23.8867 39.4464 24.0083 39.1562 24.011 38.8528V35.1085H15.1562Z"/><path d="M19.8705 0.05448C19.6862 -0.01816 19.4812 -0.01816 19.2969 0.05448C15.2189 1.83795 15.125 7.75154 15.125 7.75154V31.6771H23.9798V7.75154C23.9798 7.75154 23.9485 1.85881 19.8705 0.05448Z"/><path d="M28.1719 35.1085V38.8528C28.1719 39.157 28.2928 39.4488 28.508 39.664C28.7231 39.8791 29.015 40 29.3192 40H35.8795C36.1838 40 36.4756 39.8791 36.6908 39.664C36.9059 39.4488 37.0266 39.157 37.0266 38.8528V35.1085H28.1719Z"/><path d="M32.8869 0.05448C32.7026 -0.01816 32.4978 -0.01816 32.3135 0.05448C28.2355 1.83795 28.1416 7.75154 28.1416 7.75154V31.6771H36.9964V7.75154C36.9964 7.75154 36.9649 1.85881 32.8869 0.05448Z"/></svg>Echo</span></td><td><span class="stack-av"><span class="hav tank">W</span><span class="hav dps">S</span><span class="hav support">M</span><span class="more">+2</span></span></td><td class="num wld"><b>5</b>-<s>1</s>-<u>1</u></td><td class="num tnum"><b>16</b></td></tr>
+        </tbody>
+      </table></div></div>
+    </section>
+
+    <!-- CHARTS -->
+    <section class="doc" id="charts">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Charts &amp; meters</h2></div>
+      <div class="grid3">
+        <div class="demo"><div class="cap">Bar</div><div class="bars" id="chBars"></div></div>
+        <div class="demo"><div class="cap">Win-rate meter</div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>Reinhardt</span><span class="tnum subtle">64%</span></div><div class="meter"><i style="width:64%"></i></div></div>
+        <div class="demo"><div class="cap">Percentile bar · stat vs lobby, fuller is better</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><span style="font-family:var(--f-disp);font-weight:700;font-size:20px">3.4 <span style="font-family:var(--f-mono);font-weight:400;font-size:10px;letter-spacing:.1em;color:var(--text-subtle)">KDA</span></span><span class="tnum" style="font-size:12px;color:var(--text-muted)">Top 2%</span></div><div class="meter" style="height:5px"><i style="width:98%"></i></div></div>
+        <div class="demo"><div class="cap">Ring</div><svg width="74" height="74" viewBox="0 0 74 74"><circle cx="37" cy="37" r="29" fill="none" stroke="var(--elevated)" stroke-width="7"/><circle cx="37" cy="37" r="29" fill="none" stroke="var(--brand)" stroke-width="7" stroke-linecap="round" stroke-dasharray="130 182" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-family="system-ui" font-size="15" font-weight="700" fill="var(--brand)">71%</text></svg></div>
+      </div>
+    </section>
+
+    <!-- TABS / NAV -->
+    <section class="doc" id="tabsnav">
+      <div class="sh"><span class="eyebrow">Components</span><h2>Tabs &amp; navigation</h2></div>
+      <div class="demo"><div class="cap">In-page tabs</div><div class="tabs"><button class="t on" type="button">Overview</button><button class="t" type="button">Matches</button><button class="t" type="button">Heroes</button><button class="t" type="button">Maps</button></div></div>
+    </section>
+
+    <!-- PATTERNS -->
+    <section class="doc" id="patterns">
+      <div class="sh"><span class="eyebrow">Apply</span><h2>Patterns</h2><p class="lead">Compositions assembled from the components above — the building blocks of every page.</p></div>
+      <h3>Event row · editorial</h3>
+      <div class="demo"><div style="display:flex;flex-direction:column;gap:7px"><div style="display:flex;justify-content:space-between;align-items:center"><span class="pill live"><span class="d"></span>Live · Ro8</span><span class="subtle mono" style="font-size:10px">AnakQ</span></div><div style="font-size:17px;font-weight:600">Anak Cup #42 — Spring Split</div><div style="display:flex;align-items:center;gap:12px"><span class="stack-av"><span class="hav tank">R</span><span class="hav dps">T</span><span class="hav support">K</span><span class="more">+13</span></span><span class="subtle mono" style="font-size:10px;margin-left:auto">96 players</span></div></div></div>
+      <h3>Empty state</h3>
+      <div class="demo" style="text-align:center"><div class="subtle" style="font-size:13px">No active events right now.</div><button class="btn btn-outline sm" type="button" style="margin-top:12px">Browse past tournaments</button></div>
+      <p class="note">Two flavours: a page-level invitation (above) and a <b>filter-zero</b> state inside lists — one line naming the cause plus an inline <i>Reset filters</i> action. A filtered list never just goes blank.</p>
+
+      <h3>Digest blocks &middot; "view all"</h3>
+      <div class="demo"><div style="display:flex;justify-content:space-between;align-items:center"><span class="eyebrow">Recent encounters</span><span style="display:flex;gap:14px;align-items:center"><span class="subtle mono" style="font-size:10px">LAST 5</span><span style="color:var(--brand);font-size:13px;font-weight:600;cursor:pointer">All 284 &rarr;</span></span></div></div>
+      <p class="note">Every Overview block that previews another tab carries a <b>View all &rarr;</b> link switching to that tab (and deep-links to it). No dead-end digests.</p>
+
+      <h3>Lobby leaderboard &middot; compare yourself</h3>
+      <div class="demo"><table class="tbl" style="font-size:13px"><thead><tr><th style="width:28px">#</th><th>Player</th><th class="num">KDA</th><th style="width:80px"></th></tr></thead><tbody>
+        <tr><td class="num tnum" style="color:var(--gold)">1</td><td><b>Icefall</b></td><td class="num tnum" style="font-weight:700">3.6</td><td><div class="meter" style="height:4px"><i style="width:100%"></i></div></td></tr>
+        <tr style="background:rgba(37,211,189,.12)"><td class="num tnum" style="color:var(--silver)">2</td><td><b style="color:var(--brand)">Vanguard</b> <span class="mono" style="font-size:9px;letter-spacing:.08em;color:var(--brand)">YOU</span></td><td class="num tnum" style="font-weight:700">3.4</td><td><div class="meter" style="height:4px"><i style="width:94%"></i></div></td></tr>
+        <tr><td class="num tnum" style="color:var(--bronze)">3</td><td><b>Dustforge</b></td><td class="num tnum" style="font-weight:700">3.4</td><td><div class="meter" style="height:4px"><i style="width:93%"></i></div></td></tr>
+      </tbody></table></div>
+      <p class="note">Every per-stat KPI tile is a <b>button</b> opening the lobby leaderboard preselected on that stat: all players ranked, stat chips to switch, medals for top-3, your row highlighted with rank + top-% line. Inverted stats (Deaths) rank ascending and say <i>lower is better</i>. Bar = value vs leader.</p>
+
+      <h3>Low-sample gate</h3>
+      <div class="demo"><div class="row" style="gap:10px;align-items:center"><b>Zarya</b><span class="mono" style="font-size:9.5px;letter-spacing:.08em;color:var(--text-subtle);border:1px dashed var(--line-2);border-radius:4px;padding:2px 6px">LOW SAMPLE</span><span class="tnum subtle">6 games &middot; Win% &mdash; &middot; vs avg &mdash;</span></div></div>
+      <p class="note"><b>Percentiles and vs-avg comparisons are hidden under 10 games</b> — show an em dash with a <code>title</code> explaining the rule, plus the LOW SAMPLE badge. "Top 2%" over 3 games is noise, not signal.</p>
+
+      <h3>Dates</h3>
+      <p class="note">Relative and short: <code>2d ago</code>, with the absolute date in <code>title</code>. Never a bare uppercase <code>2D</code> — it collides with the Draw letter.</p>
+
+      <h3>Deep links</h3>
+      <p class="note">Screen, active tab, list filters, search text and the selected event live in the URL (hash in the prototype, <code>searchParams</code> in Next). A profile state pasted into Discord must reopen exactly as sent.</p>
+
+      <h3>Share card</h3>
+      <p class="note">The Player card renders to a <b>1200&times;630</b> OG-size PNG on canvas (grid ground, spectrum hairline, Onest numerals, form chips, profile URL) — copied to the clipboard with a download fallback.</p>
+
+      <h3>Popover accessibility</h3>
+      <p class="note">Every hover popover (hero stats, MVP breakdown) also opens on <b>focus</b> and <b>tap</b>: triggers get <code>tabindex="0"</code> + <code>aria-label</code>, tap outside closes, scroll hides. Hover is an enhancement, not the only path.</p>
+    </section>
+
+    <!-- DECISIONS LOG -->
+    <section class="doc" id="log">
+      <div class="sh"><span class="eyebrow">Apply</span><h2>Decisions log</h2><p class="lead">The binding calls made while iterating the profile prototype (v46&ndash;v48) — each is a rule, not a suggestion.</p></div>
+      <div class="deflist">
+        <p class="note"><b>Display face = Onest.</b> Cyrillic-native geometric grotesk; identical texture on Latin, Cyrillic and digits. Space Grotesk rejected — no Cyrillic subset. Real build: <code>next/font</code> with <code>subsets:["latin","cyrillic"]</code>.</p>
+        <p class="note"><b>Results &ne; roles.</b> <code>--win/--loss/--draw</code> colour results (scores, W&ndash;D&ndash;L, form chips, pips); <code>--good/--mid/--bad</code> colour quality (winrate %, deltas, impact bars; thresholds &ge;60 / 50&ndash;59 / &lt;50). They share hues with support/live/warm today but may diverge without touching roles or statuses.</p>
+        <p class="note"><b>Role markers.</b> Icon + label <b>only in Role split</b>. Tables and rows: icon-only with the name in <code>title</code>. Meta lines (header, event subtitle): text-only. Never both outside Role split.</p>
+        <p class="note"><b>Hero avatars.</b> Stack 30px, compact detail rows 24px, table-inline 26px, standalone 32px. Rendered via HeroImage / AvatarStack, collapsing to +N.</p>
+        <p class="note"><b>Never colour-only.</b> W/L map squares carry letters; trend dots ring the podium and hollow the bottom bucket; result chips always carry W/L/D letterforms.</p>
+        <p class="note"><b>Percentile bars.</b> Horizontal under the value, fuller = better. The old vertical tick needed a caption to explain itself — an encoding that needs a caption is a failed encoding.</p>
+        <p class="note"><b>One name per metric.</b> "Closeness" everywhere (was Proximity in one place), with a <code>title</code> glossary on first use. No SR/MMR anywhere — the platform has none.</p>
+        <p class="note"><b>Quiet chrome.</b> Provider chips in the header are neutral (coloured glyph only); Share and Compare carry equal visual weight; one teal leads.</p>
+      </div>
+    </section>
+
+    <!-- TOKENS -->
+    <section class="doc" id="tokens" style="border-bottom:none">
+      <div class="sh"><span class="eyebrow">Apply</span><h2>Tokens &amp; code</h2><p class="lead">Drop-in for Tailwind v4 <code>@theme</code> / <code>:root</code>. Existing <code>--aqt-*</code> become aliases to these so migration is non-breaking.</p></div>
+      <pre><code><span class="tok-c">/* globals.css — single source of truth */</span>
+<span class="tok-k">:root</span> {
+  <span class="tok-c">/* ground &amp; elevation */</span>
+  <span class="tok-k">--bg</span>:<span class="tok-v">#0b0d11</span>; <span class="tok-k">--surface</span>:<span class="tok-v">#101319</span>; <span class="tok-k">--surface-2</span>:<span class="tok-v">#151922</span>; <span class="tok-k">--elevated</span>:<span class="tok-v">#1b2029</span>;
+  <span class="tok-k">--line</span>:<span class="tok-v">#1e232c</span>; <span class="tok-k">--line-2</span>:<span class="tok-v">#2c333e</span>;
+  <span class="tok-c">/* text */</span>
+  <span class="tok-k">--text</span>:<span class="tok-v">#f1f4f8</span>; <span class="tok-k">--text-muted</span>:<span class="tok-v">#9aa5b2</span>; <span class="tok-k">--text-subtle</span>:<span class="tok-v">#6a7480</span>;
+  <span class="tok-c">/* accent &amp; semantics */</span>
+  <span class="tok-k">--brand</span>:<span class="tok-v">#25d3bd</span>; <span class="tok-k">--warm</span>:<span class="tok-v">#f4b455</span>;
+  <span class="tok-k">--tank</span>:<span class="tok-v">#5aa6ef</span>; <span class="tok-k">--dps</span>:<span class="tok-v">#ef6398</span>; <span class="tok-k">--support</span>:<span class="tok-v">#3fcb86</span>;
+  <span class="tok-c">/* results &amp; quality — separate from roles/statuses */</span>
+  <span class="tok-k">--win</span>:<span class="tok-v">#3fcb86</span>; <span class="tok-k">--loss</span>:<span class="tok-v">#f0506e</span>; <span class="tok-k">--draw</span>:<span class="tok-v">#f4b455</span>;
+  <span class="tok-k">--good</span>:<span class="tok-v">var(--win)</span>; <span class="tok-k">--mid</span>:<span class="tok-v">var(--draw)</span>; <span class="tok-k">--bad</span>:<span class="tok-v">var(--loss)</span>;
+  <span class="tok-k">--live</span>:<span class="tok-v">#f0506e</span>; <span class="tok-k">--upcoming</span>:<span class="tok-v">#f4b455</span>; <span class="tok-k">--draft</span>:<span class="tok-v">#5f9cf0</span>;
+  <span class="tok-c">/* shape */</span>
+  <span class="tok-k">--r</span>:<span class="tok-v">10px</span>; <span class="tok-k">--r-sm</span>:<span class="tok-v">7px</span>; <span class="tok-k">--r-xs</span>:<span class="tok-v">4px</span>;
+}
+<span class="tok-c">/* non-breaking bridge for the old system */</span>
+<span class="tok-k">:root</span> { <span class="tok-k">--aqt-bg</span>:<span class="tok-v">var(--bg)</span>; <span class="tok-k">--aqt-teal</span>:<span class="tok-v">var(--brand)</span>; <span class="tok-k">--aqt-card</span>:<span class="tok-v">var(--surface)</span>; }</code></pre>
+      <p class="note" style="margin-top:16px">Next step on your word: I wire these tokens + <code>next/font</code> into the real codebase (Phase 0 of the refactor plan), then apply the Editorial Tactical layout screen by screen.</p>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // active section highlight in sidebar
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll(".side a"));
+    var map = {}; links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+    var secs = Array.prototype.slice.call(document.querySelectorAll("section.doc"));
+    if (!("IntersectionObserver" in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { links.forEach(function (l) { l.classList.remove("on"); }); if (map[e.target.id]) map[e.target.id].classList.add("on"); }
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    secs.forEach(function (s) { io.observe(s); });
+  })();
+  // mini charts
+  (function () {
+    function fill(el, data) { if (!el) return; var m = Math.max.apply(null, data); data.forEach(function (v, i) { var b = document.createElement("div"); b.className = "b" + (i === data.length - 1 ? " hi" : ""); b.style.height = Math.max(4, (v / m) * 100) + "%"; el.appendChild(b); }); }
+    fill(document.getElementById("cardBars"), [30,52,41,68,57,74,63,88,71,95,80,93]);
+    fill(document.getElementById("chBars"), [40,62,51,78,67,84,73,92]);
+  })();
+</script>

@@ -4,7 +4,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.models.rbac import Permission, Role, user_roles
+from shared.models.identity.rbac import Permission, Role, user_roles
+from shared.models.tenancy.workspace import Workspace
 
 from .catalog import PERMISSION_CATALOG, WORKSPACE_SYSTEM_ROLE_NAMES, permission_names_for_workspace_role
 
@@ -103,6 +104,65 @@ async def assign_workspace_system_role(
     return role
 
 
+async def user_has_any_workspace_role(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    workspace_id: int,
+) -> bool:
+    """True when ``user_id`` holds at least one role scoped to ``workspace_id``."""
+    return bool(
+        await session.scalar(
+            sa.select(sa.literal(True))
+            .select_from(user_roles.join(Role, Role.id == user_roles.c.role_id))
+            .where(user_roles.c.user_id == user_id, Role.workspace_id == workspace_id)
+            .limit(1)
+        )
+    )
+
+
+async def assign_default_member_role_if_roleless(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    workspace_id: int,
+) -> bool:
+    """Grant the workspace ``member`` system role to ``user_id`` iff they hold
+    no role in ``workspace_id`` yet. Returns True when a role was assigned.
+
+    The members screen treats every auth-linked ``workspace_member`` as an RBAC
+    member; a row whose auth user has zero workspace roles is the "role-less
+    member" this autofill closes. Idempotent and additive — it never touches an
+    existing role, so a ``player`` / ``admin`` / custom assignment is preserved
+    and never downgraded.
+
+    Kept cheap for the hot anchor path (``get_or_create_workspace_member``):
+    resolves the existing ``member`` role directly and only falls back to the
+    full ``ensure_workspace_system_roles`` upsert when the workspace has no
+    system roles yet, rather than upserting the whole catalog on every call.
+    """
+    if await user_has_any_workspace_role(session, user_id=user_id, workspace_id=workspace_id):
+        return False
+
+    member_role = await get_workspace_system_role(session, workspace_id, "member")
+    if member_role is None:
+        member_role = (await ensure_workspace_system_roles(session, workspace_id))["member"]
+
+    await session.execute(
+        sa.insert(user_roles).from_select(
+            ["user_id", "role_id"],
+            sa.select(sa.literal(user_id), sa.literal(member_role.id)).where(
+                ~sa.exists().where(
+                    user_roles.c.user_id == user_id,
+                    user_roles.c.role_id == member_role.id,
+                )
+            ),
+        )
+    )
+    await session.flush()
+    return True
+
+
 async def _workspace_roles_by_ids(
     session: AsyncSession,
     *,
@@ -169,6 +229,46 @@ async def user_has_only_workspace_owner_role(
         sa.select(sa.func.count(sa.distinct(user_roles.c.user_id))).where(user_roles.c.role_id == owner_role.id)
     )
     return int(owner_count or 0) <= 1
+
+
+async def workspace_names_blocking_player_unlink(
+    session: AsyncSession,
+    *,
+    user_id: int,
+) -> list[str]:
+    """Distinct names of the workspaces where ``user_id`` holds a role beyond
+    the baseline ``player`` participation role — i.e. real RBAC memberships
+    (``member`` / ``admin`` / ``owner`` or a custom workspace role). Empty list
+    means unlinking the user's player is allowed.
+
+    Used to guard player-unlink. ``workspace_member`` is anchored on
+    ``players.user.id`` while RBAC (``user_roles``) is keyed on
+    ``auth_user_id``; clearing ``players.user.auth_user_id`` (unlink) would
+    leave any such member row auth-less — hidden from the members list
+    (``list_by_workspace`` filters on ``auth_user_id IS NOT NULL``) and
+    unmanageable via the auth-keyed ``get_member`` join. The caller refuses the
+    unlink and names these workspaces so the user knows which to leave first.
+
+    The baseline ``player`` role (auto-granted on self-registration) is
+    intentionally excluded: a pure tournament participant is not a workspace
+    member, so unlinking their public player must stay allowed.
+    """
+    result = await session.execute(
+        sa.select(Workspace.name)
+        .select_from(
+            user_roles.join(Role, Role.id == user_roles.c.role_id).join(
+                Workspace, Workspace.id == Role.workspace_id
+            )
+        )
+        .where(
+            user_roles.c.user_id == user_id,
+            Role.workspace_id.isnot(None),
+            Role.name != "player",
+        )
+        .distinct()
+        .order_by(Workspace.name)
+    )
+    return list(result.scalars().all())
 
 
 async def legacy_workspace_role_name_for_user(

@@ -104,7 +104,18 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.workspaces.icon_delete": Op(response=schemas.WorkspaceRead),
     "rpc.app.workspaces.create": Op(request=schemas.WorkspaceCreate, response=schemas.WorkspaceRead),
     "rpc.app.admin.update#workspace": Op(request=schemas.WorkspaceUpdate, response=schemas.WorkspaceRead),
-    "rpc.app.workspaces.members_list": Op(response=schemas.WorkspaceMemberRead, response_array=True),
+    "rpc.app.workspaces.members_list": Op(
+        response=Paginated[schemas.WorkspaceMemberRead],
+        query_params=(
+            QueryParam("page", "integer"),
+            QueryParam("per_page", "integer"),
+            QueryParam("search"),
+            QueryParam("role_id", "integer"),
+            QueryParam("sort"),
+            QueryParam("order"),
+        ),
+    ),
+    "rpc.app.workspaces.members_autofill_roles": Op(response=schemas.WorkspaceMemberAutofillResult),
     "rpc.app.workspaces.member_add": Op(request=schemas.WorkspaceMemberCreate, response=schemas.WorkspaceMemberRead),
     "rpc.app.workspaces.member_update": Op(request=schemas.WorkspaceMemberUpdate, response=schemas.WorkspaceMemberRead),
     # ── metadata admin (hero/map/gamemode) ─────────────────────────────────

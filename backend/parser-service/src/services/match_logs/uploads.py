@@ -1,9 +1,9 @@
 """Shared helpers for storing uploaded match log files."""
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from shared.clients.s3 import S3Client
-from shared.models.log_processing import LogProcessingRecord, LogProcessingSource
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.ingestion.log_processing import LogProcessingRecord, LogProcessingSource
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,13 +36,7 @@ async def resolve_auth_uploader_id(session: AsyncSession, auth_user: models.Auth
     if auth_user is None:
         return None
 
-    player_link = await session.execute(
-        select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user.id).limit(1)
-    )
-    auth_player = player_link.scalar_one_or_none()
-    if auth_player is None:
-        return None
-    return auth_player.player_id
+    return await session.scalar(select(models.User.id).where(models.User.auth_user_id == auth_user.id))
 
 
 async def store_uploaded_log_bytes(

@@ -7,13 +7,21 @@ from redis.exceptions import RedisError
 
 from src.core.redis import get_redis
 
-RBAC_KEY_PREFIX = "rbac:user:"
+RBAC_CACHE_VERSION = 2  # v2: deny entries carry workspace_id (Phase A, Task 8)
+RBAC_KEY_PREFIX = f"rbac:v{RBAC_CACHE_VERSION}:user:"
 RBAC_TTL_SECONDS = 60
 
 # Idempotency cache for token refresh — prevents concurrent refresh
 # requests from triggering false reuse-attack detection.
 REFRESH_IDEM_PREFIX = "refresh:idem:"
 REFRESH_IDEM_TTL_SECONDS = 30
+
+# Blacklist of revoked session ids (``sid`` JWT claim). Access tokens are
+# stateless and short-lived (~15 min), so revoking a session (logout / revoke /
+# reuse-detection) must also block any still-valid access token carrying that
+# sid until it naturally expires. Entries are set with a TTL equal to the access
+# token lifetime so the key self-expires once no live token can reference it.
+SESSION_BLACKLIST_PREFIX = "auth:sid:revoked:"
 
 
 def _key(user_id: int) -> str:
@@ -56,7 +64,7 @@ async def set_rbac(
     roles: list[str],
     permissions: list[dict[str, str]],
     workspace_roles: dict | None = None,
-    denies: list[dict[str, str]] | None = None,
+    denies: list[dict[str, object]] | None = None,
 ) -> None:
     """Store RBAC data with TTL."""
     try:
@@ -92,6 +100,52 @@ async def invalidate_rbac(user_id: int) -> None:
         return
 
     logger.info(f"RBAC cache invalidated for user {user_id}")
+
+
+def _sid_key(session_id: str) -> str:
+    return f"{SESSION_BLACKLIST_PREFIX}{session_id}"
+
+
+async def blacklist_session(session_id: str, ttl_seconds: int) -> None:
+    """Mark a session id as revoked for ``ttl_seconds`` (= access-token TTL).
+
+    Best-effort: if Redis is unavailable the blacklist degrades to fail-open
+    (the access token stays valid until it expires on its own), matching the
+    graceful-degradation contract of the rest of this cache. Refresh-token
+    revocation in the DB is the durable source of truth regardless.
+    """
+    if not session_id or ttl_seconds <= 0:
+        return
+    try:
+        redis = get_redis()
+    except RuntimeError as exc:
+        _log_redis_degraded("session blacklist write", exc)
+        return
+    try:
+        await redis.set(_sid_key(session_id), "1", ex=ttl_seconds)
+    except (RedisError, OSError, RuntimeError) as exc:
+        _log_redis_degraded("session blacklist write", exc)
+
+
+async def is_session_blacklisted(session_id: str | None) -> bool:
+    """Return True only when the session id is known-revoked.
+
+    Fails open (returns False) on a Redis outage: we cannot prove the session
+    was revoked, and the DB refresh-token revocation still applies on the next
+    refresh, so a stale access token lives at most one access-token TTL.
+    """
+    if not session_id:
+        return False
+    try:
+        redis = get_redis()
+    except RuntimeError as exc:
+        _log_redis_degraded("session blacklist read", exc)
+        return False
+    try:
+        return await redis.get(_sid_key(session_id)) is not None
+    except (RedisError, OSError, RuntimeError) as exc:
+        _log_redis_degraded("session blacklist read", exc)
+        return False
 
 
 def _refresh_idem_key(token_hash: str) -> str:

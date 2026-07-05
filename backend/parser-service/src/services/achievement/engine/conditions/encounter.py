@@ -116,7 +116,7 @@ async def execute_encounter_score(
         query = (
             _encounter_query_with_stage_context()
             .with_only_columns(
-                models.Player.user_id,
+                models.WorkspaceMember.player_id,
                 models.Encounter.tournament_id,
             )
             .join(
@@ -129,7 +129,7 @@ async def execute_encounter_score(
         )
     else:
         query = _encounter_query_with_stage_context().with_only_columns(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
         )
 
@@ -169,7 +169,10 @@ async def execute_encounter_score(
             ),
         )
 
-    query = query.where(
+    query = query.join(
+        models.WorkspaceMember,
+        models.WorkspaceMember.id == models.Player.workspace_member_id,
+    ).where(
         *base_where,
         models.Player.is_substitution.is_(False),
     )
@@ -210,7 +213,7 @@ async def execute_encounter_revenge(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             e2.tournament_id,
         )
         .select_from(e1)
@@ -232,6 +235,10 @@ async def execute_encounter_revenge(
                 models.Player.team_id == e2_winner,
                 models.Player.tournament_id == e2.tournament_id,
             ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .where(
             models.Tournament.workspace_id == context.workspace_id,

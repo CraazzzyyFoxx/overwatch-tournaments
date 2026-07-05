@@ -11,6 +11,7 @@ __all__ = (
     "WorkspaceMemberRead",
     "WorkspaceMemberCreate",
     "WorkspaceMemberUpdate",
+    "WorkspaceMemberAutofillResult",
 )
 
 
@@ -72,3 +73,10 @@ class WorkspaceMemberCreate(BaseModel):
 class WorkspaceMemberUpdate(BaseModel):
     role: str | None = Field(default=None, pattern=r"^(owner|admin|member)$")
     role_ids: list[int] | None = None
+
+
+class WorkspaceMemberAutofillResult(BaseModel):
+    """Result of the ``members_autofill_roles`` action: how many role-less
+    members were granted the baseline ``member`` role."""
+
+    assigned: int

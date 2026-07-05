@@ -28,6 +28,7 @@ from src.scheduler import register_jobs
 from src.services.jobs.runner import run_job
 from src.services.ml.inference.runner import run_for_tournament
 from src.services.ml.training.orchestrator import train_all_models
+from src.worker import balance_snapshot
 
 logger = setup_logging(
     service_name="analytics-worker",
@@ -40,6 +41,10 @@ broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = register_jobs()
 redis_client: Redis | None = None
+
+# Domain-event consumer: analytics owns the writes to analytics.balance_snapshot
+# + balance_player_snapshot; balancer-service emits balance_exported via its outbox.
+balance_snapshot.register(broker, logger)
 
 
 @app.on_startup

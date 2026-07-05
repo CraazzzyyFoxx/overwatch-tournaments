@@ -65,7 +65,9 @@ def to_user_tournament_player(
         sub_role=player.sub_role,
         rank=player.rank,
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
-        user_id=player.user_id,
+        # workspace_member_id is NOT NULL (contract step, iwrefac07): the
+        # identity anchor is always workspace_member.player_id.
+        user_id=player.workspace_member.player_id,
         is_substitution=player.is_substitution,
         is_newcomer=player.is_newcomer,
         is_newcomer_role=player.is_newcomer_role,
@@ -137,9 +139,11 @@ def to_encounter_stage_item_summary(
 def _to_encounter_team_player_ref(
     player: models.Player,
 ) -> schemas.UserEncounterTeamPlayerRef:
+    # workspace_member_id is NOT NULL (contract step, iwrefac07): the identity
+    # anchor is always workspace_member.player_id.
     return schemas.UserEncounterTeamPlayerRef(
         id=player.id,
-        user_id=player.user_id,
+        user_id=player.workspace_member.player_id,
         role=player.role,
         name=player.name,
     )
@@ -167,12 +171,14 @@ def _resolve_user_team_id(
     home = getattr(encounter, "home_team", None)
     if home is not None:
         for player in getattr(home, "players", []) or []:
-            if player.user_id == user_id:
+            member = player.workspace_member
+            if member is not None and member.player_id == user_id:
                 return home.id
     away = getattr(encounter, "away_team", None)
     if away is not None:
         for player in getattr(away, "players", []) or []:
-            if player.user_id == user_id:
+            member = player.workspace_member
+            if member is not None and member.player_id == user_id:
                 return away.id
     return None
 

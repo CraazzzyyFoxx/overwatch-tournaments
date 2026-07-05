@@ -476,7 +476,7 @@ async def get_hero_leaderboard(
 
     player_rn_subq = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.name,
             models.Player.role,
             division_case_expr(models.Player.rank, grid).label("div"),
@@ -484,12 +484,13 @@ async def get_hero_leaderboard(
             models.Team.name.label("team"),
             sa.func.row_number()
             .over(
-                partition_by=models.Player.user_id,
+                partition_by=models.WorkspaceMember.player_id,
                 order_by=models.Player.tournament_id.desc(),
             )
             .label("rn"),
         )
         .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Player.is_substitution.is_(False))
     ).subquery("player_rn")
 

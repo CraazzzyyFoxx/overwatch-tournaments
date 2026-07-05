@@ -94,14 +94,17 @@ class AlgorithmConfig(BaseSettings):
     stagnation_kick_patience: int = Field(default=15, ge=0, le=5000)
     crossover_rate: float = Field(default=0.85, ge=0.0, le=1.0)
     time_limit_ms: int | None = Field(
-        default=None,
+        default=600000,
         ge=100,
         le=600000,
         description=(
             "Hard wall-clock budget for the native optimizer in milliseconds. "
             "When exceeded, evolution and polishing stop early and the best "
             "archive found so far is returned. Trades reproducibility "
-            "(same seed may yield different results under load) for latency."
+            "(same seed may yield different results under load) for latency. "
+            "Defaults to the maximum so every job has a mandatory hard stop "
+            "even when the client omits it (review H5); normal jobs converge "
+            "long before this, so results stay deterministic in practice."
         ),
     )
 

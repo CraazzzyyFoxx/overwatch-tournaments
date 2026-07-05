@@ -29,8 +29,8 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-from shared.models.achievement import AchievementRule  # noqa: E402
-from shared.models.workspace import Workspace  # noqa: E402
+from shared.models.achievements.achievement import AchievementRule  # noqa: E402
+from shared.models.tenancy.workspace import Workspace  # noqa: E402
 
 from src.services.achievement.import_export import (  # noqa: E402
     PortableAchievementRule,
@@ -93,7 +93,8 @@ class CopyImageTests(IsolatedAsyncioTestCase):
             _public_url="http://cdn/bucket",
             get_object=AsyncMock(return_value=b"img-bytes"),
             head_object=AsyncMock(return_value={"ContentType": "image/webp"}),
-            list_objects=AsyncMock(return_value=[]),
+            # The source workspace's real asset inventory is the allow-list.
+            list_objects=AsyncMock(return_value=["assets/achievements/source/alpha.webp"]),
         )
         source_workspace = Workspace(id=1, slug="source", name="Source")
         target_workspace = Workspace(id=2, slug="target", name="Target")
@@ -113,6 +114,38 @@ class CopyImageTests(IsolatedAsyncioTestCase):
         self.assertEqual("http://cdn/bucket/assets/achievements/target/alpha.webp", copied_url)
         self.assertIsNone(warning)
         upload_mock.assert_awaited_once()
+        s3.get_object.assert_awaited_once_with("assets/achievements/source/alpha.webp")
+
+    async def test_copy_rejects_image_url_pointing_outside_source_workspace(self) -> None:
+        """C3: a crafted image_url resolving to a foreign object key must never
+        be fetched/copied, even when it shares the bucket's public base URL."""
+        s3 = SimpleNamespace(
+            _public_url="http://cdn/bucket",
+            get_object=AsyncMock(return_value=b"stolen-bytes"),
+            head_object=AsyncMock(return_value={"ContentType": "text/plain"}),
+            # Only the source workspace's own asset is listed; the foreign key is not.
+            list_objects=AsyncMock(return_value=["assets/achievements/source/legit.webp"]),
+        )
+        source_workspace = Workspace(id=1, slug="source", name="Source")
+        target_workspace = Workspace(id=2, slug="target", name="Target")
+
+        with patch(
+            "src.services.achievement.import_export.upload_asset",
+            AsyncMock(),
+        ) as upload_mock:
+            copied_url, warning = await copy_workspace_achievement_image(
+                s3,
+                source_workspace=source_workspace,
+                target_workspace=target_workspace,
+                slug="alpha",
+                image_url="http://cdn/bucket/logs/99/secret.replay",
+            )
+
+        self.assertIsNone(copied_url)
+        self.assertIsNotNone(warning)
+        upload_mock.assert_not_awaited()
+        # The foreign object must never be read.
+        s3.get_object.assert_not_awaited()
 
 
 class ImportRulesTests(IsolatedAsyncioTestCase):

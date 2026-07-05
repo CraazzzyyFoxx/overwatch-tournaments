@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.messaging.config import TOURNAMENT_COMPUTE_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
-from shared.models.tournament_computation import TournamentComputationJob
+from shared.models.tournament.computation import TournamentComputationJob
 
 JobKind = Literal["bracket", "standings"]
 BracketOperation = Literal["generate_stage", "activate_and_generate", "generate_next_swiss_round"]

@@ -42,6 +42,7 @@ func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
@@ -73,6 +74,7 @@ func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r) // forward workspace_id (and any other query param)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return

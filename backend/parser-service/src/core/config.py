@@ -10,6 +10,13 @@ class AppConfig(BaseServiceSettings):
     battle_tag_regex: str = r"([\w0-9]{2,12}#[0-9]{4,})"
     port: int = 8002
 
+    # Match-log ingestion safety caps (defense-in-depth against oversized or
+    # adversarial logs; see review MEDIUM: match-logs uploaded/parsed without a
+    # size limit). Enforced before base64-decode and before building the parsing
+    # DataFrame.
+    max_match_log_bytes: int = 25 * 1024 * 1024
+    max_match_log_lines: int = 500_000
+
     redis_url: RedisDsn
 
     # OverFast API (self-hosted instance) — base URL for Overwatch stats/metadata.

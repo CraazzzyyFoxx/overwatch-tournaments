@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.schemas.base import BaseRead
 
@@ -83,6 +83,15 @@ class DivisionGridTierWrite(BaseModel):
     icon_url: str = Field(..., min_length=1, max_length=2048)
     ow_rank_min: int | None = None
     ow_rank_max: int | None = None
+
+    @field_validator("icon_url")
+    @classmethod
+    def _icon_url_scheme(cls, value: str) -> str:
+        # Rendered as <img src>; only http(s) or site-relative paths are safe
+        # (blocks javascript:/data: payloads).
+        if value.startswith(("https://", "http://", "/")):
+            return value
+        raise ValueError("icon_url must be an http(s) URL or a site-relative path")
 
 
 class DivisionGridMappingRuleRead(BaseRead):

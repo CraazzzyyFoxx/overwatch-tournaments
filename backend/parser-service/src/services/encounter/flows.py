@@ -1,11 +1,16 @@
+import typing
+
 from loguru import logger
-from shared.services.encounter_naming import build_encounter_name
-from shared.services.stage_refs import resolve_stage_refs_from_group
+from shared.services.challonge_refs import (
+    ChallongeRef,
+    resolve_encounter_challonge,
+    resolve_tournament_challonge,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from src import models, schemas
-from src.core import enums, errors, utils
+from src.core import errors, utils
 from src.services.challonge import sync as challonge_sync
 from src.services.map import flows as map_flows
 from src.services.team import flows as team_flows
@@ -16,8 +21,21 @@ from . import service
 
 
 async def to_pydantic(
-    session: AsyncSession, encounter: models.Encounter, entities: list[str]
+    session: AsyncSession,
+    encounter: models.Encounter,
+    entities: list[str],
+    *,
+    challonge_match_ids: typing.Mapping[int, int] | None = None,
+    tournament_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.EncounterRead:
+    """Serialize an encounter.
+
+    ``challonge_match_ids`` carries the KEPT ``challonge_id`` response field (a
+    bracket key for the frontend) DERIVED from ``challonge_match_mapping`` (see
+    ``shared.services.challonge_refs``) instead of the deprecated
+    ``encounter.challonge_id`` column; ``tournament_challonge_refs`` does the same
+    for the nested ``tournament``. Both default to ``None`` when not prefetched.
+    """
     stage: schemas.StageRead | None = None
     stage_item: schemas.StageItemRead | None = None
     tournament: schemas.TournamentRead | None = None
@@ -26,7 +44,11 @@ async def to_pydantic(
     matches_read: list[schemas.MatchRead] = []
 
     if "stage" in entities and encounter.stage is not None:
-        stage = schemas.StageRead.model_validate(encounter.stage, from_attributes=True)
+        # Nested stage challonge is derived at the tournament read, not here —
+        # override to None so the legacy ``stage`` columns are never read.
+        stage = schemas.StageRead.model_validate(encounter.stage, from_attributes=True).model_copy(
+            update={"challonge_id": None, "challonge_slug": None}
+        )
     if "stage_item" in entities and encounter.stage_item is not None:
         stage_item = schemas.StageItemRead.model_validate(
             encounter.stage_item, from_attributes=True
@@ -36,6 +58,11 @@ async def to_pydantic(
             session,
             encounter.tournament,
             utils.prepare_entities(entities, "tournament"),
+            challonge_ref=(
+                tournament_challonge_refs.get(encounter.tournament_id)
+                if tournament_challonge_refs is not None
+                else None
+            ),
         )
     if "teams" in entities or "home_team" in entities:
         team_entities = (
@@ -63,8 +90,15 @@ async def to_pydantic(
             for match in encounter.matches
         ]
 
+    encounter_dict = encounter.to_dict()
+    # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
+    # read from the deprecated ``encounter.challonge_id`` column. Always override so
+    # the value survives the column being dropped; ``None`` when not prefetched.
+    encounter_dict["challonge_id"] = (
+        challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
+    )
     return schemas.EncounterRead(
-        **encounter.to_dict(),
+        **encounter_dict,
         score=schemas.Score(home=encounter.home_score, away=encounter.away_score),
         stage=stage,
         stage_item=stage_item,
@@ -129,7 +163,15 @@ async def get_encounter(
                 )
             ],
         )
-    return await to_pydantic(session, encounter, entities)
+    challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id])
+    tournament_challonge_refs = await resolve_tournament_challonge(session, [encounter.tournament_id])
+    return await to_pydantic(
+        session,
+        encounter,
+        entities,
+        challonge_match_ids=challonge_match_ids,
+        tournament_challonge_refs=tournament_challonge_refs,
+    )
 
 
 async def get_by_teams_ids(
@@ -167,58 +209,6 @@ def get_by_teams_ids_sync(session: Session, home_team_id: int, away_team_id: int
             ],
         )
     return encounter
-
-
-async def _create_encounter_from_challonge(
-    session: AsyncSession,
-    tournament: models.Tournament,
-    group_id: int,
-    match: schemas.ChallongeMatch,
-) -> models.Encounter | None:
-    if match.state == "pending":
-        logger.info(f"Encounter [name={match.id}] is pending. Skipping...")
-        return None
-
-    home_team = await team_flows.get_by_tournament_challonge_id(session, tournament.id, match.player1_id, [])
-    away_team = await team_flows.get_by_tournament_challonge_id(session, tournament.id, match.player2_id, [])
-    try:
-        home_score, away_score = map(int, match.scores_csv.split("-"))
-    except ValueError:
-        home_score, away_score = 0, 0
-    name = build_encounter_name(home_team.name, away_team.name)
-    existed = await service.get_by_challonge_id(session, match.id, [])
-    if existed:
-        existed.home_score = home_score
-        existed.away_score = away_score
-        existed.status = enums.EncounterStatus(match.state if match.state != 'complete' else 'completed')
-        # Self-heal stage refs for legacy encounters (stage_id/stage_item_id NULL)
-        if existed.stage_id is None:
-            refs = await resolve_stage_refs_from_group(
-                session,
-                tournament_id=tournament.id,
-                tournament_group_id=group_id,
-            )
-            existed.stage_id = refs.stage_id
-            existed.stage_item_id = refs.stage_item_id
-        await session.commit()
-        return existed
-    match_db = await service.create(
-        session,
-        name=name,
-        home_team=home_team,
-        away_team=away_team,
-        home_score=home_score,
-        away_score=away_score,
-        round=match.round,
-        tournament=tournament,
-        group_id=group_id,
-        challonge_id=match.id,
-        status=enums.EncounterStatus(match.state if match.state != 'complete' else 'completed'),
-    )
-    logger.info(
-        f"Encounter [name={match_db.name}] created in tournament [id={tournament.id} number={tournament.number}]"
-    )
-    return match_db
 
 
 async def bulk_create_for_tournament_from_challonge(

@@ -115,7 +115,12 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
     >
       <div className="flex flex-col gap-3.5">
         <div className="flex items-center gap-3.5">
-          <DivisionIcon division={tournament.division} width={52} height={52} />
+          <DivisionIcon
+            division={tournament.division}
+            tournamentGrid={tournament.division_grid_version}
+            width={52}
+            height={52}
+          />
           <div className="flex-1 min-w-0">
             <div
               className="aqt-display flex items-center gap-1.5 text-[20px] font-bold uppercase leading-none"

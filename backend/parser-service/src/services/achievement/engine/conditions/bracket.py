@@ -180,7 +180,12 @@ async def execute_bracket_path(
     team_sq = team_query.subquery("qualifying_teams")
 
     players_query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(
             team_sq,
             sa.and_(

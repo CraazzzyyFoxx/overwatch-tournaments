@@ -160,43 +160,48 @@ async def get_history_tournaments(
         3. The average SR of teams in the tournament.
         4. The average closeness of encounters in the tournament.
     """
-    players_count = (
-        (
-            sa.select(sa.func.count(models.Player.user_id)).where(
-                models.Player.tournament_id == models.Tournament.id,
-                models.Tournament.number.isnot(None),
-            )
+    # One pass with grouped subqueries LEFT JOINed on tournament_id instead of
+    # three correlated scalar subqueries evaluated per tournament row.
+    players_sq = (
+        sa.select(
+            models.Player.tournament_id,
+            sa.func.count(models.Player.id).label("players_count"),
         )
-        .scalar_subquery()
-        .correlate(models.Tournament)
+        .group_by(models.Player.tournament_id)
+        .subquery()
     )
 
-    avg_sr = (
-        (
-            sa.select(sa.func.avg(models.Team.avg_sr)).where(
-                models.Team.tournament_id == models.Tournament.id,
-                models.Tournament.number.isnot(None),
-            )
+    teams_sq = (
+        sa.select(
+            models.Team.tournament_id,
+            sa.func.avg(models.Team.avg_sr).label("avg_sr"),
         )
-        .scalar_subquery()
-        .correlate(models.Tournament)
+        .group_by(models.Team.tournament_id)
+        .subquery()
     )
 
-    avg_closeness = (
-        (
-            sa.select(sa.func.avg(models.Encounter.closeness)).where(
-                models.Encounter.tournament_id == models.Tournament.id,
-                models.Tournament.number.isnot(None),
-            )
+    encounters_sq = (
+        sa.select(
+            models.Encounter.tournament_id,
+            sa.func.avg(models.Encounter.closeness).label("avg_closeness"),
         )
-        .scalar_subquery()
-        .correlate(models.Tournament)
+        .group_by(models.Encounter.tournament_id)
+        .subquery()
     )
 
     query = (
-        sa.select(models.Tournament, players_count, avg_sr, avg_closeness)
+        sa.select(
+            models.Tournament,
+            # The correlated count() form returned 0 for tournaments without
+            # players; LEFT JOIN yields NULL there, so coalesce to keep parity.
+            sa.func.coalesce(players_sq.c.players_count, 0),
+            teams_sq.c.avg_sr,
+            encounters_sq.c.avg_closeness,
+        )
+        .join(players_sq, players_sq.c.tournament_id == models.Tournament.id, isouter=True)
+        .join(teams_sq, teams_sq.c.tournament_id == models.Tournament.id, isouter=True)
+        .join(encounters_sq, encounters_sq.c.tournament_id == models.Tournament.id, isouter=True)
         .where(models.Tournament.number.isnot(None))
-        .group_by(models.Tournament.id)
         .order_by(models.Tournament.number)
     )
     if workspace_id is not None:
@@ -208,26 +213,38 @@ async def get_history_tournaments(
 async def get_avg_div_tournaments(
     session: AsyncSession,
     workspace_id: int | None = None,
-) -> typing.Sequence[tuple[models.Tournament, enums.HeroClass, int]]:
+) -> typing.Sequence[tuple[models.Tournament, enums.HeroClass, int, int]]:
     """
-    Retrieves raw player rank data for computing per-tournament division averages.
+    Retrieves aggregated player rank data for computing per-tournament division averages.
 
-    Returns (tournament, role, rank) rows. Division computation and normalization
-    to the target grid is done in the flow layer using DivisionGridNormalizer so
-    that each tournament's own division_grid_version is respected.
+    Returns (tournament, role, rank, players_count) rows — one row per distinct
+    (tournament, role, rank) combination with the number of players holding that
+    rank, so thousands of per-player rows collapse into a small rank histogram.
+    Division computation and normalization to the target grid is done in the flow
+    layer using DivisionGridNormalizer so that each tournament's own
+    division_grid_version is respected.
 
     Returns:
         A sequence of tuples containing:
         1. A `Tournament` model instance (with division_grid_version_id available).
         2. The role (e.g., tank, damage, support).
         3. The player's raw rank.
+        4. The number of players with that (role, rank) in the tournament.
     """
     query = (
-        sa.select(models.Tournament, models.Player.role, models.Player.rank)
+        sa.select(
+            models.Tournament,
+            models.Player.role,
+            models.Player.rank,
+            sa.func.count(models.Player.id).label("players_count"),
+        )
         .where(
             models.Player.tournament_id == models.Tournament.id,
             models.Tournament.number.isnot(None),
         )
+        # Grouping by the Tournament PK lets Postgres project the whole
+        # tournament row (functional dependency).
+        .group_by(models.Tournament.id, models.Player.role, models.Player.rank)
         .order_by(models.Tournament.number)
     )
     if workspace_id is not None:
@@ -265,14 +282,17 @@ async def get_tournaments_overall(session: AsyncSession, workspace_id: int | Non
     )
 
     players_count_query = (
-        sa.select(sa.func.count(sa.distinct(models.Player.user_id)))
+        sa.select(sa.func.count(sa.distinct(models.WorkspaceMember.player_id)))
+        .select_from(models.Player)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Tournament.is_league.is_(False), *ws_filters)
     )
 
     champions_count_query = (
-        sa.select(sa.func.count(models.Player.user_id.distinct()))
+        sa.select(sa.func.count(models.WorkspaceMember.player_id.distinct()))
         .select_from(models.Player)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .join(models.Standing, models.Standing.team_id == models.Player.team_id)
         .join(
             models.TournamentGroup,
@@ -327,7 +347,8 @@ async def get_owal_standings(
         .select_from(models.Player)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .join(models.Team, models.Team.id == models.Player.team_id)
-        .join(models.User, models.User.id == models.Player.user_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
         .where(
             sa.and_(
                 models.Tournament.is_league.is_(True),
@@ -443,7 +464,7 @@ async def get_league_player_stacks(
                     )
                 )
                 .options(
-                    sa.orm.joinedload(models.Player.user),
+                    sa.orm.joinedload(models.Player.workspace_member).joinedload(models.WorkspaceMember.player),
                     sa.orm.joinedload(models.Player.team),
                     sa.orm.joinedload(models.Player.tournament),
                 )
@@ -461,7 +482,10 @@ async def get_league_player_stacks(
     stacks = defaultdict(list)
     for (team_id, tournament_id), team_players in team_tournament_players.items():
         for player1, player2 in combinations(team_players, 2):
-            stack_key = tuple(sorted([player1.user_id, player2.user_id]))
+            # Player.user_id was dropped in the contract step (iwrefac07); the
+            # identity anchor is workspace_member.player_id instead (already
+            # eager-loaded above).
+            stack_key = tuple(sorted([player1.workspace_member.player_id, player2.workspace_member.player_id]))
             stacks[stack_key].append((team_id, tournament_id))
 
     team_tournament_ids = {(team_id, tournament_id) for stack in stacks.values() for team_id, tournament_id in stack}

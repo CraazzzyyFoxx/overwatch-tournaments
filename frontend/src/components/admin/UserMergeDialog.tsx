@@ -40,6 +40,21 @@ interface UserMergeDialogProps {
 
 type FieldKey = keyof UserMergeFieldPolicy;
 
+// The backend reports affected-record counts under raw FK-path keys
+// (e.g. "tournament.player.workspace_member_id"). Map them to human-readable
+// labels for the admin preview; unknown keys fall back to the raw key.
+const AFFECTED_RECORD_LABELS: Record<string, string> = {
+  "tournament.player.workspace_member_id": "Tournament roster entries",
+  "balancer.registration.workspace_member_id": "Balancer registrations",
+  "achievements.evaluation_result.workspace_member_id": "Achievement results",
+  "achievements.override.workspace_member_id": "Achievement overrides",
+  "players.user.auth_user_id": "Linked account"
+};
+
+function affectedRecordLabel(key: string): string {
+  return AFFECTED_RECORD_LABELS[key] ?? key;
+}
+
 function buildDefaultIdentitySelection(
   preview: UserMergePreviewResponse
 ): UserMergeIdentitySelection {
@@ -328,7 +343,7 @@ export function UserMergeDialog({
                             key={key}
                             className="flex items-center justify-between gap-3 text-sm"
                           >
-                            <span className="text-muted-foreground">{key}</span>
+                            <span className="text-muted-foreground">{affectedRecordLabel(key)}</span>
                             <Badge variant="secondary" className="tabular-nums">
                               {count}
                             </Badge>

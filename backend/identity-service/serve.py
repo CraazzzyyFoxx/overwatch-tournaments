@@ -753,7 +753,10 @@ async def rpc_rbac_add_user_deny(data: dict, msg: RabbitMessage) -> dict:
         permission_id = _opt_int(data, "permission_id")
         if user_id is None or permission_id is None:
             raise HTTPException(status_code=422, detail="user_id and permission_id are required")
-        return await rbac_flows.add_user_deny(session, user, user_id, permission_id, reason=data.get("reason"))
+        workspace_id = _opt_int(data, "workspace_id")
+        return await rbac_flows.add_user_deny(
+            session, user, user_id, permission_id, reason=data.get("reason"), workspace_id=workspace_id
+        )
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -767,7 +770,8 @@ async def rpc_rbac_remove_user_deny(data: dict, msg: RabbitMessage) -> dict:
         permission_id = _opt_int(data, "permission_id")
         if user_id is None or permission_id is None:
             raise HTTPException(status_code=422, detail="user_id and permission_id are required")
-        return await rbac_flows.remove_user_deny(session, user, user_id, permission_id)
+        workspace_id = _opt_int(data, "workspace_id")
+        return await rbac_flows.remove_user_deny(session, user, user_id, permission_id, workspace_id=workspace_id)
 
     return await _with_active_user(data.get("access_token"), op)
 

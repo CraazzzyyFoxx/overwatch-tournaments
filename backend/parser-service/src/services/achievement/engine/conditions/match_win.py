@@ -33,7 +33,7 @@ async def execute(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             models.Match.id.label("match_id"),
         )
@@ -46,6 +46,10 @@ async def execute(
                 models.Player.team_id == winning_team,
                 models.Player.tournament_id == models.Encounter.tournament_id,
             ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .where(
             models.Match.home_score != models.Match.away_score,

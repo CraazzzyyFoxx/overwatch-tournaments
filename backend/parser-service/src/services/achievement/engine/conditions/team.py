@@ -235,7 +235,12 @@ async def execute_team_players_match(
     team_sq = team_query.subquery("qualifying_teams")
 
     players_query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(team_sq, sa.and_(
             models.Player.team_id == team_sq.c.team_id,
             models.Player.tournament_id == team_sq.c.tournament_id,
@@ -249,7 +254,7 @@ async def execute_team_players_match(
 
     team_players_query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.team_id,
             models.Player.tournament_id,
             models.Player.role,
@@ -257,6 +262,11 @@ async def execute_team_players_match(
             models.Player.is_newcomer,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -312,7 +322,7 @@ async def execute_captain_property(
     # Find captains matching the sub-condition
     captain_query = (
         sa.select(
-            models.Player.user_id.label("captain_user_id"),
+            models.WorkspaceMember.player_id.label("captain_user_id"),
             models.Player.team_id,
             models.Player.tournament_id,
             models.Player.role,
@@ -321,10 +331,15 @@ async def execute_captain_property(
             models.Player.rank,
             models.Tournament.division_grid_version_id,
         )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Team, models.Team.id == models.Player.team_id)
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
-            models.Team.captain_id == models.Player.user_id,
+            models.Team.captain_id == models.WorkspaceMember.player_id,
             models.Tournament.workspace_id == context.workspace_id,
             models.Player.is_substitution.is_(False),
             *sql_filters,
@@ -354,13 +369,18 @@ async def execute_captain_property(
 
     # Get teammates (excluding captain)
     teammates_query = (
-        sa.select(models.Player.user_id, models.Player.tournament_id)
+        sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(captain_sq, sa.and_(
             models.Player.team_id == captain_sq.c.team_id,
             models.Player.tournament_id == captain_sq.c.tournament_id,
         ))
         .where(
-            models.Player.user_id != captain_sq.c.captain_user_id,
+            models.WorkspaceMember.player_id != captain_sq.c.captain_user_id,
             models.Player.is_substitution.is_(False),
         )
     )

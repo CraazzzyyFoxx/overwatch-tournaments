@@ -30,7 +30,9 @@ tournament_flows = importlib.import_module("src.services.tournament.flows")
 
 class TournamentCreateWithGroupsTests(IsolatedAsyncioTestCase):
     async def test_create_with_groups_uses_workspace_default_division_grid_when_missing(self) -> None:
-        session = SimpleNamespace()
+        from unittest.mock import Mock
+
+        session = SimpleNamespace(commit=AsyncMock(), add=Mock())
         created_tournament = SimpleNamespace(id=123)
         loaded_tournament = SimpleNamespace(id=123)
         challonge_tournament = SimpleNamespace(
@@ -81,6 +83,8 @@ class TournamentCreateWithGroupsTests(IsolatedAsyncioTestCase):
 
         self.assertIs(result, loaded_tournament)
         get_default_version.assert_awaited_once_with(session, 10)
+        # The Challonge link is no longer written to the deprecated
+        # tournament.challonge_id/slug columns.
         create_tournament.assert_awaited_once_with(
             session,
             workspace_id=10,
@@ -88,16 +92,22 @@ class TournamentCreateWithGroupsTests(IsolatedAsyncioTestCase):
             is_league=False,
             name="Imported",
             description="Desc",
-            challonge_id=50,
-            challonge_slug="challonge-url",
             start_date=date(2026, 4, 17),
             end_date=date(2026, 4, 18),
             division_grid_version_id=77,
         )
+        # Instead it becomes a normalized challonge_source (source_type='tournament').
+        added_source = session.add.call_args.args[0]
+        self.assertIsInstance(added_source, tournament_flows.models.ChallongeSource)
+        self.assertEqual(50, added_source.challonge_tournament_id)
+        self.assertEqual("challonge-url", added_source.slug)
+        self.assertEqual("tournament", added_source.source_type)
         create_groups.assert_awaited_once_with(session, loaded_tournament, challonge_tournament)
 
     async def test_create_with_groups_uses_explicit_division_grid_when_provided(self) -> None:
-        session = SimpleNamespace()
+        from unittest.mock import Mock
+
+        session = SimpleNamespace(commit=AsyncMock(), add=Mock())
         created_tournament = SimpleNamespace(id=123)
         loaded_tournament = SimpleNamespace(id=123)
         challonge_tournament = SimpleNamespace(

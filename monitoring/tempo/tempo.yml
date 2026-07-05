@@ -42,6 +42,11 @@ metrics_generator:
       source: tempo
   storage:
     path: /var/tempo/generator
+    # Push generated span-metrics / service-graph series into Prometheus
+    # (requires --web.enable-remote-write-receiver on the Prometheus side).
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
 
 overrides:
   defaults:

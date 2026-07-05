@@ -229,10 +229,17 @@ async def _registration_collection_targets(
     tournament = models.Tournament
     acc = models.SocialAccount
 
+    # Registrations are anchored on workspace_member (dbarch02 dropped
+    # user_id); LEFT JOIN so member-less rows still contribute their entered
+    # battle tags (their player_id resolves to None, exactly like the old
+    # NULL user_id).
+    member = models.WorkspaceMember
     rows = (
         await session.execute(
-            sa.select(reg.user_id, reg.battle_tag, reg.smurf_tags_json)
+            sa.select(member.player_id, reg.battle_tag, reg.smurf_tags_json)
+            .select_from(reg)
             .join(tournament, tournament.id == reg.tournament_id)
+            .outerjoin(member, member.id == reg.workspace_member_id)
             .where(
                 reg.deleted_at.is_(None),
                 tournament.status.notin_(INACTIVE_TOURNAMENT_STATUSES),

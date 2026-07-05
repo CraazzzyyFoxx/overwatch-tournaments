@@ -2,26 +2,117 @@
   "title": "Tracing",
   "uid": "tracing-overview",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
   "tags": ["tracing", "tempo", "logs"],
   "panels": [
     {
       "id": 1,
-      "type": "text",
-      "title": "Trace Drilldown",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
-      "options": {
-        "mode": "markdown",
-        "content": "Use the logs panel below and click the derived `TraceID` field to open the full trace in Tempo. The panel only shows sampled traces, because unsampled spans still have a `trace_id` in logs but do not exist in Tempo."
-      }
+      "type": "timeseries",
+      "title": "Request Rate by Service",
+      "description": "From Tempo span-metrics (SERVER + CONSUMER spans). Requires Tempo metrics_generator remote_write into Prometheus.",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        { "expr": "sum by (service) (rate(traces_spanmetrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[5m]))", "legendFormat": "{{ service }}" }
+      ]
     },
     {
       "id": 2,
+      "type": "timeseries",
+      "title": "Error Rate by Service",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        { "expr": "sum by (service) (rate(traces_spanmetrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[5m]))", "legendFormat": "{{ service }}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latency p95 by Service",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (service, le) (rate(traces_spanmetrics_latency_bucket{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[5m])))", "legendFormat": "{{ service }}" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "nodeGraph",
+      "title": "Service Graph",
+      "description": "Built from Tempo service-graph metrics stored in Prometheus.",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 10 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [{ "queryType": "serviceMap", "refId": "A" }]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Slowest Operations (p95)",
+      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "topk(15, histogram_quantile(0.95, sum by (service, span_name, le) (rate(traces_spanmetrics_latency_bucket{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\"}[5m]))))", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true },
+            "renameByName": { "service": "Service", "span_name": "Operation", "Value": "p95 (s)" }
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Top Failing Operations",
+      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "topk(15, sum by (service, span_name) (rate(traces_spanmetrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) > 0)", "refId": "A", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true },
+            "renameByName": { "service": "Service", "span_name": "Operation", "Value": "errors/s" }
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Slow Traces (> 1s)",
+      "description": "TraceQL search — click a trace ID to open the full trace.",
+      "gridPos": { "x": 0, "y": 27, "w": 12, "h": 9 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [{ "queryType": "traceql", "query": "{ duration > 1s }", "limit": 20, "refId": "A" }]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Error Traces",
+      "description": "TraceQL search — click a trace ID to open the full trace.",
+      "gridPos": { "x": 12, "y": 27, "w": 12, "h": 9 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [{ "queryType": "traceql", "query": "{ status = error }", "limit": 20, "refId": "A" }]
+    },
+    {
+      "id": 9,
       "type": "logs",
       "title": "Logs With Trace Context",
-      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 16 },
+      "description": "Only sampled traces (unsampled spans still log a trace_id but do not exist in Tempo). Click the derived TraceID field to open the trace.",
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 12 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {

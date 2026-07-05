@@ -7,8 +7,8 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.clients import S3Client
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.services import division_grid_cache
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

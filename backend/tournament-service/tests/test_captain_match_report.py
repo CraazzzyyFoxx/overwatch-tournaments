@@ -79,7 +79,6 @@ def _mk_encounter(
         submitted_at=None,
         confirmed_by_id=None,
         confirmed_at=None,
-        challonge_id=None,
     )
 
 
@@ -87,6 +86,13 @@ def _mk_session(
     encounter: SimpleNamespace | None,
     captain_player_ids: list[int],
 ) -> SimpleNamespace:
+    """``captain_player_ids`` mirrors the linked-player lookup result.
+
+    ``players.user.auth_user_id`` links an auth user to at most one player, so
+    only the first id (if any) is used as the resolved player's id — callers
+    still pass a one-element list for readability at call sites.
+    """
+    linked_player_id = captain_player_ids[0] if captain_player_ids else None
     execute_count = 0
 
     async def fake_execute(_query):
@@ -99,10 +105,9 @@ def _mk_session(
             return result_mock
 
         if execute_count == 2:
-            scalars_mock = Mock()
-            scalars_mock.all.return_value = [SimpleNamespace(player_id=pid) for pid in captain_player_ids]
             result_mock = Mock()
-            result_mock.scalars.return_value = scalars_mock
+            player = SimpleNamespace(id=linked_player_id) if linked_player_id is not None else None
+            result_mock.scalar_one_or_none.return_value = player
             return result_mock
 
         result_mock = Mock()
@@ -110,6 +115,10 @@ def _mk_session(
         scalars_mock = Mock()
         scalars_mock.all.return_value = []
         result_mock.scalars.return_value = scalars_mock
+        # The Challonge auto-push gate now DERIVES the link from
+        # challonge_match_mapping via resolve_encounter_challonge (rows.all());
+        # an empty result means "not linked" so no push is attempted.
+        result_mock.all.return_value = []
         return result_mock
 
     added: list[object] = []

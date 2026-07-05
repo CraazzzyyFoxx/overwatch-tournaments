@@ -92,7 +92,12 @@ async def get_all_eligible_users(
 ) -> ResultSet:
     """Get all users in the workspace as (user_id,) tuples."""
     query = (
-        sa.select(models.Player.user_id.distinct())
+        sa.select(models.WorkspaceMember.player_id.distinct())
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(models.Tournament.workspace_id == context.workspace_id)
     )

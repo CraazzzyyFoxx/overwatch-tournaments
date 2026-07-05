@@ -13,11 +13,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.crud import CrudDispatcher, EntityConfig
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import schemas
 from src.core import auth, db
@@ -37,7 +36,6 @@ from src.services.encounter import flows as encounter_flows
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
-
 
 # --- workspace resolvers for create/list (must be awaitables) ---
 
@@ -64,19 +62,26 @@ async def _ws_body(data: dict[str, Any]) -> int:
 
 
 async def _ws_via_tournament_body(session: AsyncSession, data: dict[str, Any]) -> int:
-    return await auth._get_tournament_workspace_id(session, _int_or_400(_body(data).get("tournament_id"), "tournament_id"))
+    return await auth.get_tournament_workspace_id(session, _int_or_400(_body(data).get("tournament_id"), "tournament_id"))
+
+
+async def _ws_via_team_body(session: AsyncSession, data: dict[str, Any]) -> int:
+    # For entities attached to a team (player), the permission workspace must be
+    # derived from the team actually being written to — not from an independent
+    # client-supplied tournament_id.
+    return await auth.get_team_workspace_id(session, _int_or_400(_body(data).get("team_id"), "team_id"))
 
 
 async def _ws_via_tournament_path(session: AsyncSession, data: dict[str, Any]) -> int:
-    return await auth._get_tournament_workspace_id(session, _int_or_400(data.get("tournament_id"), "tournament_id"))
+    return await auth.get_tournament_workspace_id(session, _int_or_400(data.get("tournament_id"), "tournament_id"))
 
 
 async def _ws_via_stage_path(session: AsyncSession, data: dict[str, Any]) -> int:
-    return await auth._get_stage_workspace_id(session, _int_or_400(data.get("stage_id"), "stage_id"))
+    return await auth.get_stage_workspace_id(session, _int_or_400(data.get("stage_id"), "stage_id"))
 
 
 async def _ws_via_stage_item_path(session: AsyncSession, data: dict[str, Any]) -> int:
-    return await auth._get_stage_item_workspace_id(session, _int_or_400(data.get("stage_item_id"), "stage_item_id"))
+    return await auth.get_stage_item_workspace_id(session, _int_or_400(data.get("stage_item_id"), "stage_item_id"))
 
 
 async def _ws_query(session: AsyncSession, data: dict[str, Any]) -> int:
@@ -160,7 +165,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_tournament,
         create_schema=tournament_schemas.TournamentCreate,
         update_schema=tournament_schemas.TournamentUpdate,
-        resolve_ws_from_id=auth._get_tournament_workspace_id,
+        resolve_ws_from_id=auth.get_tournament_workspace_id,
         resolve_ws_for_create=lambda s, d: _ws_body(d),
         service_create=lambda s, p, d: tournament_service.create_tournament(s, p),
         service_get=lambda s, i, d: tournament_service.get_tournament(s, i),
@@ -176,7 +181,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_team,
         create_schema=team_schemas.TeamCreate,
         update_schema=team_schemas.TeamUpdate,
-        resolve_ws_from_id=auth._get_team_workspace_id,
+        resolve_ws_from_id=auth.get_team_workspace_id,
         resolve_ws_for_create=_ws_via_tournament_body,
         service_create=lambda s, p, d: team_service.create_team(s, p),
         service_get=lambda s, i, d: team_service.get_team(s, i),
@@ -192,8 +197,8 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_player,
         create_schema=team_schemas.PlayerCreate,
         update_schema=team_schemas.PlayerUpdate,
-        resolve_ws_from_id=auth._get_player_workspace_id,
-        resolve_ws_for_create=_ws_via_tournament_body,
+        resolve_ws_from_id=auth.get_player_workspace_id,
+        resolve_ws_for_create=_ws_via_team_body,
         service_create=lambda s, p, d: team_service.create_player(s, p),
         service_update=lambda s, i, p, d: team_service.update_player(s, i, p),
         service_delete=lambda s, i, d: team_service.delete_player(s, i),
@@ -207,7 +212,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_stage,
         create_schema=stage_schemas.StageCreate,
         update_schema=stage_schemas.StageUpdate,
-        resolve_ws_from_id=auth._get_stage_workspace_id,
+        resolve_ws_from_id=auth.get_stage_workspace_id,
         resolve_ws_for_create=_ws_via_tournament_path,
         resolve_ws_for_list=_ws_via_tournament_path,
         service_create=lambda s, p, d: stage_service.create_stage(s, _int_or_400(d.get("tournament_id"), "tournament_id"), p),
@@ -225,7 +230,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_stage_item,
         create_schema=stage_schemas.StageItemCreate,
         update_schema=stage_schemas.StageItemUpdate,
-        resolve_ws_from_id=auth._get_stage_item_workspace_id,
+        resolve_ws_from_id=auth.get_stage_item_workspace_id,
         resolve_ws_for_create=_ws_via_stage_path,
         service_create=lambda s, p, d: stage_service.create_stage_item(s, _int_or_400(d.get("stage_id"), "stage_id"), p),
         service_update=lambda s, i, p, d: stage_service.update_stage_item(s, i, p),
@@ -239,7 +244,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_stage_item_input,
         create_schema=stage_schemas.StageItemInputCreate,
         update_schema=stage_schemas.StageItemInputUpdate,
-        resolve_ws_from_id=auth._get_stage_item_input_workspace_id,
+        resolve_ws_from_id=auth.get_stage_item_input_workspace_id,
         resolve_ws_for_create=_ws_via_stage_item_path,
         service_create=lambda s, p, d: stage_service.create_stage_item_input(s, _int_or_400(d.get("stage_item_id"), "stage_item_id"), p),
         service_update=lambda s, i, p, d: stage_service.update_stage_item_input(s, i, p),
@@ -253,7 +258,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_encounter,
         create_schema=enc_schemas.EncounterCreate,
         update_schema=enc_schemas.EncounterUpdate,
-        resolve_ws_from_id=auth._get_encounter_workspace_id,
+        resolve_ws_from_id=auth.get_encounter_workspace_id,
         resolve_ws_for_create=_ws_via_tournament_body,
         service_create=lambda s, p, d: enc_service.create_encounter(s, p),
         service_update=lambda s, i, p, d: enc_service.update_encounter(s, i, p),
@@ -267,7 +272,7 @@ REGISTRY: dict[str, EntityConfig] = {
         permission_resource="standing",
         serializer=_ser_standing,
         update_schema=standing_schemas.StandingUpdate,
-        resolve_ws_from_id=auth._get_standing_workspace_id,
+        resolve_ws_from_id=auth.get_standing_workspace_id,
         service_update=lambda s, i, p, d: standing_service.update_standing(s, i, p),
         service_delete=lambda s, i, d: standing_service.delete_standing(s, i),
         not_found_detail="Standing not found",
@@ -280,7 +285,7 @@ REGISTRY: dict[str, EntityConfig] = {
         serializer=_ser_player_sub_role,
         create_schema=psr_schemas.PlayerSubRoleCreate,
         update_schema=psr_schemas.PlayerSubRoleUpdate,
-        resolve_ws_from_id=auth._get_player_sub_role_workspace_id,
+        resolve_ws_from_id=auth.get_player_sub_role_workspace_id,
         resolve_ws_for_create=lambda s, d: _ws_body(d),
         resolve_ws_for_list=_ws_query,
         service_create=lambda s, p, d: psr_service.create_sub_role(s, p),

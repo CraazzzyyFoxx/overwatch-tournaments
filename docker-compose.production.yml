@@ -568,6 +568,12 @@ services:
       - UPSTREAM_FRONTEND=http://frontend:3000
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
       - SENTRY_ENVIRONMENT=production
+      # OpenTelemetry tracing into the shared otel-collector (same block as the
+      # Python services), so gateway spans join the distributed traces in Tempo.
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
     volumes:
       # Structured JSON logs tailed by Promtail into Loki (LOG_FILE=/logs/gateway.log).
       # The distroless image runs as uid 65532 — ./logs/gateway must be writable by
@@ -590,7 +596,7 @@ services:
     restart: always
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.31-alpine
     deploy:
       resources:
         limits:

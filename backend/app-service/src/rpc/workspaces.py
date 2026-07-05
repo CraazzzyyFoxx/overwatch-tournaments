@@ -16,11 +16,14 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.pagination import Paginated
 from redis.asyncio import Redis
 from shared.rbac import (
+    WORKSPACE_SYSTEM_ROLE_NAMES,
     assign_workspace_system_role,
     ensure_workspace_system_roles,
     get_workspace_system_role,
+    legacy_workspace_role_name_for_user,
 )
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission
@@ -42,10 +45,13 @@ def _path_int(data: dict[str, Any], key: str) -> int:
         raise HTTPException(status_code=422, detail=f"{key} is required") from exc
 
 
+CROSS_SERVICE_RBAC_KEY_PREFIX = "rbac:v2:user:"  # noqa: E501 -- must match identity-service/src/services/session_cache.py RBAC_KEY_PREFIX
+
+
 async def _invalidate_auth_rbac_cache(auth_user_id: int, logger: Any) -> None:
     redis = Redis.from_url(str(config.settings.redis_url), decode_responses=True)
     try:
-        await redis.delete(f"rbac:user:{auth_user_id}")
+        await redis.delete(f"{CROSS_SERVICE_RBAC_KEY_PREFIX}{auth_user_id}")
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to invalidate auth RBAC cache for user %s: %s", auth_user_id, exc)
     finally:
@@ -53,22 +59,66 @@ async def _invalidate_auth_rbac_cache(auth_user_id: int, logger: Any) -> None:
 
 
 async def _member_payload(session: AsyncSession, member: models.WorkspaceMember) -> schemas.WorkspaceMemberRead:
-    auth_user = await _auth_user_repo.get(session, member.auth_user_id)
-    roles = await workspace_service.get_member_workspace_roles(session, member.workspace_id, member.auth_user_id)
+    auth_user_id = await workspace_service.get_member_auth_user_id(session, member)
+    auth_user = await _auth_user_repo.get(session, auth_user_id)
+    roles = await workspace_service.get_member_workspace_roles(session, member.workspace_id, auth_user_id)
+    legacy_role = await legacy_workspace_role_name_for_user(
+        session, user_id=auth_user_id, workspace_id=member.workspace_id
+    )
     return schemas.WorkspaceMemberRead.model_validate(
         {
             "id": member.id,
             "created_at": member.created_at,
             "updated_at": member.updated_at,
             "workspace_id": member.workspace_id,
-            "auth_user_id": member.auth_user_id,
-            "role": member.role,
+            "auth_user_id": auth_user_id,
+            "role": legacy_role,
             "username": auth_user.username if auth_user else None,
             "email": auth_user.email if auth_user else None,
             "first_name": auth_user.first_name if auth_user else None,
             "last_name": auth_user.last_name if auth_user else None,
             "avatar_url": auth_user.avatar_url if auth_user else None,
             "rbac_roles": roles,
+        }
+    )
+
+
+def _legacy_role_from_roles(roles: list[models.Role]) -> str:
+    """Highest system role held (owner>admin>member>player), else ``member``.
+
+    In-memory equivalent of ``legacy_workspace_role_name_for_user`` for the
+    batched list path, so a page of members needs no per-row role query.
+    """
+    names = {role.name for role in roles}
+    for system_name in WORKSPACE_SYSTEM_ROLE_NAMES:
+        if system_name in names:
+            return system_name
+    return "member"
+
+
+def _member_read(
+    member: models.WorkspaceMember,
+    auth_user: models.AuthUser,
+    roles: list[models.Role],
+) -> schemas.WorkspaceMemberRead:
+    """Build a member payload from already-loaded rows (no queries) — the batched
+    counterpart of ``_member_payload``. ``rbac_roles`` are Role ORM objects that
+    Pydantic validates via ``from_attributes`` (incl. ``is_system``); system
+    roles sort before custom, then by name."""
+    return schemas.WorkspaceMemberRead.model_validate(
+        {
+            "id": member.id,
+            "created_at": member.created_at,
+            "updated_at": member.updated_at,
+            "workspace_id": member.workspace_id,
+            "auth_user_id": auth_user.id,
+            "role": _legacy_role_from_roles(roles),
+            "username": auth_user.username,
+            "email": auth_user.email,
+            "first_name": auth_user.first_name,
+            "last_name": auth_user.last_name,
+            "avatar_url": auth_user.avatar_url,
+            "rbac_roles": sorted(roles, key=lambda role: (not role.is_system, role.name)),
         }
     )
 
@@ -116,7 +166,7 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=400, detail="Workspace with this slug already exists")
             workspace = await workspace_service.create(session, **body.model_dump())
             await ensure_workspace_system_roles(session, workspace.id)
-            await workspace_service.add_member(session, workspace.id, user.id, role="owner")
+            await workspace_service.add_member(session, workspace.id, user.id)
             await assign_workspace_system_role(session, user_id=user.id, workspace_id=workspace.id, role_name="owner")
             await session.commit()
             await _invalidate_auth_rbac_cache(int(user.id), logger)
@@ -134,10 +184,49 @@ def register(broker: Any, logger: Any) -> None:
             ensure_workspace_permission(user, workspace_id, "workspace_member", "read")
             if not await workspace_service.get_by_id(session, workspace_id):
                 raise HTTPException(status_code=404, detail="Workspace not found")
-            members = await workspace_service.get_members(session, workspace_id)
-            return [await _member_payload(session, m) for m in members]
+            page = max(c.q1(data, "page", int, 1) or 1, 1)
+            per_page = c.q1(data, "per_page", int, 20)
+            if per_page != -1:
+                per_page = min(max(per_page, 1), 100)
+            search = c.q1(data, "search", str, None)
+            role_id = c.q1(data, "role_id", int, None)
+            sort = c.q1(data, "sort", str, "username")
+            if sort not in workspace_service.MEMBERS_SORT_FIELDS:
+                sort = "username"
+            order = "desc" if c.q1(data, "order", str, "asc") == "desc" else "asc"
+            total, rows = await workspace_service.list_members_page(
+                session,
+                workspace_id,
+                page=page,
+                per_page=per_page,
+                search=search,
+                role_id=role_id,
+                sort=sort,
+                order=order,
+            )
+            return Paginated(
+                page=page,
+                per_page=per_page,
+                total=total,
+                results=[_member_read(member, auth_user, roles) for (member, auth_user, roles) in rows],
+            )
 
         return await c.envelope(logger, "workspaces.members_list", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.members_autofill_roles")
+    async def _members_autofill_roles(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace_member", "update")
+            if not await workspace_service.get_by_id(session, workspace_id):
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            assigned = await workspace_service.autofill_member_roles(session, workspace_id)
+            await session.commit()
+            return {"assigned": assigned}
+
+        return await c.envelope(logger, "workspaces.members_autofill_roles", op, session_factory=_SF)
 
     @broker.subscriber("rpc.app.workspaces.member_add")
     async def _member_add(data: dict, msg: RabbitMessage) -> dict:

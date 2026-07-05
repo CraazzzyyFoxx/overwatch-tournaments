@@ -38,12 +38,13 @@ def _participant_row(
     participant_id: int = 555,
     challonge_id: int = 777,
     group_id: int | None = 10,
+    source_id: int | None = 55,
     name: str = "External Name",
 ) -> flows._ChallongeParticipantRow:
     return flows._ChallongeParticipantRow(
         participant_id=participant_id,
         challonge_id=challonge_id,
-        source_id=None,
+        source_id=source_id,
         group_id=group_id,
         group_name="A" if group_id is not None else None,
         challonge_tournament_id=9001,
@@ -78,15 +79,15 @@ class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
             patch.object(flows.tournament_flows, "get", AsyncMock(return_value=tournament)),
             patch.object(flows.service, "get_by_tournament", AsyncMock(return_value=[_team(42, "Internal")])),
             patch.object(flows, "_fetch_challonge_participant_rows", AsyncMock(return_value=[row])),
-            patch.object(flows, "_get_existing_challonge_mappings", AsyncMock(return_value={})),
+            patch.object(flows, "_get_existing_challonge_participant_mappings", AsyncMock(return_value={})),
         ):
             result = await flows.sync_challonge_team_mappings(session, 7, payload)
 
+        # The normalized challonge_participant_mapping is now the sole write target.
         added = session.add.call_args.args[0]
-        self.assertEqual(row.challonge_id, added.challonge_id)
+        self.assertEqual(row.challonge_id, added.challonge_participant_id)
         self.assertEqual(42, added.team_id)
-        self.assertEqual(row.group_id, added.group_id)
-        self.assertEqual(7, added.tournament_id)
+        self.assertEqual(row.source_id, added.source_id)
         self.assertEqual(1, result.created)
         self.assertEqual(0, result.updated)
         self.assertEqual(0, result.unchanged)
@@ -97,10 +98,9 @@ class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
         tournament = SimpleNamespace(id=7, name="Tournament 7", groups=[])
         row = _participant_row()
         existing = SimpleNamespace(
-            challonge_id=row.challonge_id,
+            source_id=row.source_id,
+            challonge_participant_id=row.challonge_id,
             team_id=42,
-            group_id=row.group_id,
-            tournament_id=7,
         )
         payload = schemas.ChallongeTeamSyncRequest(
             mappings=[
@@ -118,8 +118,8 @@ class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
             patch.object(flows, "_fetch_challonge_participant_rows", AsyncMock(return_value=[row])),
             patch.object(
                 flows,
-                "_get_existing_challonge_mappings",
-                AsyncMock(return_value={(row.group_id, row.challonge_id): existing}),
+                "_get_existing_challonge_participant_mappings",
+                AsyncMock(return_value={(row.source_id, row.challonge_id): existing}),
             ),
         ):
             result = await flows.sync_challonge_team_mappings(session, 7, payload)
@@ -134,10 +134,9 @@ class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
         tournament = SimpleNamespace(id=7, name="Tournament 7", groups=[])
         row = _participant_row()
         existing = SimpleNamespace(
-            challonge_id=row.challonge_id,
+            source_id=row.source_id,
+            challonge_participant_id=row.challonge_id,
             team_id=24,
-            group_id=row.group_id,
-            tournament_id=7,
         )
         payload = schemas.ChallongeTeamSyncRequest(
             mappings=[
@@ -155,8 +154,8 @@ class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
             patch.object(flows, "_fetch_challonge_participant_rows", AsyncMock(return_value=[row])),
             patch.object(
                 flows,
-                "_get_existing_challonge_mappings",
-                AsyncMock(return_value={(row.group_id, row.challonge_id): existing}),
+                "_get_existing_challonge_participant_mappings",
+                AsyncMock(return_value={(row.source_id, row.challonge_id): existing}),
             ),
         ):
             result = await flows.sync_challonge_team_mappings(session, 7, payload)

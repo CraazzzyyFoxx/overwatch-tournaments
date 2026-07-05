@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 )
@@ -28,6 +29,8 @@ const (
 
 type ctxKey struct{}
 
+type cidKey struct{}
+
 // With returns a context carrying the request-scoped logger.
 func With(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, ctxKey{}, logger)
@@ -40,6 +43,21 @@ func From(ctx context.Context) *slog.Logger {
 		return l
 	}
 	return slog.Default()
+}
+
+// WithCorrelationID returns a context carrying the request's correlation id.
+func WithCorrelationID(ctx context.Context, cid string) context.Context {
+	return context.WithValue(ctx, cidKey{}, cid)
+}
+
+// CorrelationIDFromContext returns the correlation id bound by Middleware, or
+// "" when none is present. Used by the RPC client to forward the id in
+// RabbitMQ message headers.
+func CorrelationIDFromContext(ctx context.Context) string {
+	if cid, ok := ctx.Value(cidKey{}).(string); ok {
+		return cid
+	}
+	return ""
 }
 
 // Middleware assigns/propagates a correlation id, binds a request-scoped logger
@@ -58,13 +76,25 @@ func Middleware(next http.Handler, base *slog.Logger, authn *auth.Authenticator)
 		w.Header().Set(CorrelationIDHeader, cid)
 
 		reqLog := base.With(slog.String("correlation_id", cid))
-		if span := sentry.SpanFromContext(r.Context()); span != nil {
+		// trace_id: prefer the OTel span (opened by the tracing middleware, which
+		// wraps this one) so Loki's derived TraceID field links to Tempo; fall
+		// back to the Sentry span when tracing is disabled. At partial sampling
+		// most logged trace_ids have no stored trace — the field is still useful
+		// for grepping a request's log lines together.
+		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+			reqLog = reqLog.With(slog.String("trace_id", sc.TraceID().String()))
+		} else if span := sentry.SpanFromContext(r.Context()); span != nil {
 			reqLog = reqLog.With(slog.String("trace_id", span.TraceID.String()))
 		}
-		r = r.WithContext(With(r.Context(), reqLog))
+		orig := r
+		r = r.WithContext(WithCorrelationID(With(r.Context(), reqLog), cid))
 
 		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
+		// WithContext made a shallow copy, so the mux set Pattern on OUR copy.
+		// Copy it back to the caller's request pointer so outer middleware
+		// (tracing) can name its span by the matched route.
+		orig.Pattern = r.Pattern
 
 		attrs := []slog.Attr{
 			slog.String("method", r.Method),

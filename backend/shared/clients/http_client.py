@@ -145,8 +145,9 @@ class ResilientHttpClient:
         async def _make_request() -> httpx.Response:
             return await self._client.request(method, path, **kwargs)
 
-        # Wrap the request in the circuit breaker
-        return await self.circuit_breaker.call(_make_request())
+        # Wrap the request in the circuit breaker. Pass the factory (not a ready
+        # coroutine) so nothing is created when the circuit is open.
+        return await self.circuit_breaker.call(_make_request)
 
     async def get(self, path: str, **kwargs) -> httpx.Response:
         """Make a GET request."""

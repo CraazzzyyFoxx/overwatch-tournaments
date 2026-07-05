@@ -13,7 +13,6 @@ from .team import *
 from .encounter import *
 from .standing import *
 from .statistics import *
-from .user import *
 from .achievement import *
 from .analytics import *
 from .workspace import *

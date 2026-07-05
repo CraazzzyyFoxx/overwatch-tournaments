@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid
 from shared.domain.player_sub_roles import canonical_to_registration_role
-from shared.models.overwatch_rank import UserRankSnapshot
+from shared.models.ranks.overwatch_rank import UserRankSnapshot
 
 
 async def fetch_latest_ow_ranks_by_account(

@@ -21,14 +21,13 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftPickStatus, DraftStatus
-from shared.models.draft import DraftPick, DraftSession
+from shared.models.balancer.draft import DraftPick, DraftSession
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
     acquire_distributed_lock,
     release_distributed_lock,
     renew_distributed_lock,
 )
-
 from src.services.draft import realtime as draft_rt
 from src.services.draft import selection
 

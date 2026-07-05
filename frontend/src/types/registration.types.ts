@@ -87,7 +87,6 @@ export interface Registration {
   id: number;
   tournament_id: number;
   workspace_id: number;
-  auth_user_id: number | null;
   user_id: number | null;
   battle_tag: string | null;
   smurf_tags_json: string[] | null;

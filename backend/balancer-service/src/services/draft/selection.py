@@ -24,8 +24,9 @@ from shared.core.enums import (
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-from src.services.draft import ranks
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
+from shared.repository.workspace import get_or_create_workspace_member
+from src.services.draft import loaders, ranks
 from src.services.draft import suggestions as sug
 
 
@@ -40,13 +41,30 @@ def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
     return ApiHTTPException(status_code=status_code, detail=[ApiExc(code=code, msg=msg)])
 
 
+async def _actor_member_id(
+    session: AsyncSession, draft_session: DraftSession, actor_user_id: int | None
+) -> int | None:
+    """Resolve an acting captain's domain player id to a workspace_member id.
+
+    dbarch03 anchors ``draft_pick.picked_by`` on ``workspace_member``; the actor
+    is identified by their public player id, so map it (idempotently create) to a
+    member in this draft's workspace.
+    """
+    if actor_user_id is None:
+        return None
+    member = await get_or_create_workspace_member(
+        session, workspace_id=draft_session.workspace_id, player_id=actor_user_id
+    )
+    return member.id
+
+
 async def _finalize(
     session: AsyncSession,
     pick_id: int,
     *,
     status: DraftPickStatus,
     player_id: int | None,
-    picked_by_user_id: int | None,
+    picked_by_member_id: int | None,
     is_autopick: bool,
     is_admin_override: bool,
     expected_version: int,
@@ -62,7 +80,7 @@ async def _finalize(
         .values(
             status=status.value,
             picked_player_id=player_id,
-            picked_by_user_id=picked_by_user_id,
+            picked_by_workspace_member_id=picked_by_member_id,
             is_autopick=is_autopick,
             is_admin_override=is_admin_override,
             version=DraftPick.version + 1,
@@ -233,11 +251,13 @@ async def _team_avg_drafted_rank(session: AsyncSession, draft_session_id: int) -
     """
     players = (
         await session.scalars(
-            sa.select(DraftPlayer).where(
+            sa.select(DraftPlayer)
+            .where(
                 DraftPlayer.session_id == draft_session_id,
                 DraftPlayer.drafted_by_team_id.isnot(None),
                 DraftPlayer.status == DraftPlayerStatus.PICKED.value,
             )
+            .options(*loaders.player_options())  # role_rank reads role_ranks
         )
     ).all()
     picks = (
@@ -284,7 +304,13 @@ async def _validate_current_pick(draft_session: DraftSession, pick: DraftPick) -
 
 
 async def _load_available_player(session: AsyncSession, draft_session_id: int, player_id: int) -> DraftPlayer:
-    player = await session.get(DraftPlayer, player_id)
+    # Eager-load the identity/role relationships the compat read properties touch
+    # (secondary_roles_json/role_ranks via _role_is_legal + ranks.role_rank).
+    # populate_existing forces the loader options to apply even when the row is
+    # already in the identity map (e.g. pre-loaded by a caller's own query).
+    player = await session.get(
+        DraftPlayer, player_id, options=loaders.player_options(), populate_existing=True
+    )
     if player is None or player.session_id != draft_session_id:
         raise _err("player_not_found", "Player not in this draft", status_code=404)
     if player.status != DraftPlayerStatus.AVAILABLE.value:
@@ -328,7 +354,11 @@ async def select(
     is_admin: bool,
 ) -> DraftResult:
     await _validate_current_pick(draft_session, pick)
-    team = await session.get(DraftTeam, pick.draft_team_id)
+    # captain_user_id (read in _is_on_clock_captain) resolves via captain_member;
+    # eager-load it so the property read never triggers an async lazy load.
+    team = await session.get(
+        DraftTeam, pick.draft_team_id, options=loaders.team_options(), populate_existing=True
+    )
     player_ids = set(actor_player_ids)
     if actor_user_id is not None:
         player_ids.add(actor_user_id)
@@ -353,7 +383,7 @@ async def select(
         pick.id,
         status=DraftPickStatus.COMPLETED,
         player_id=player.id,
-        picked_by_user_id=actor_user_id,
+        picked_by_member_id=await _actor_member_id(session, draft_session, actor_user_id),
         is_autopick=False,
         is_admin_override=False,
         expected_version=expected_version,
@@ -378,10 +408,13 @@ async def autopick(
     await _validate_current_pick(draft_session, pick)
     available = (
         await session.scalars(
-            sa.select(DraftPlayer).where(
+            sa.select(DraftPlayer)
+            .where(
                 DraftPlayer.session_id == draft_session.id,
                 DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
             )
+            # Fit construction reads secondary_roles_json/user_id/role_ranks.
+            .options(*loaders.player_options())
         )
     ).all()
     counts = await _team_role_counts(session, pick.draft_team_id)
@@ -414,7 +447,7 @@ async def autopick(
         pick.id,
         status=DraftPickStatus.AUTOPICKED if chosen_id is not None else DraftPickStatus.SKIPPED,
         player_id=chosen_id,
-        picked_by_user_id=None,
+        picked_by_member_id=None,
         is_autopick=True,
         is_admin_override=False,
         expected_version=expected_version,
@@ -426,7 +459,12 @@ async def autopick(
         next_pick = await _advance(session, draft_session)
         await session.refresh(draft_session)
         return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
-    player = await session.get(DraftPlayer, chosen_id)
+    # ranks.role_rank(player, ...) reads role_ranks -> roles; the row is already in
+    # the identity map from the eager-loaded `available` query, so get() returns it
+    # with roles loaded. populate_existing guards the case it was cached unloaded.
+    player = await session.get(
+        DraftPlayer, chosen_id, options=loaders.player_options(), populate_existing=True
+    )
     resolved_role = chosen_role or DraftRole(player.primary_role)
     pick.target_role = resolved_role.value
     pick.target_rank_value = ranks.role_rank(player, resolved_role)
@@ -456,7 +494,7 @@ async def override(
         pick.id,
         status=DraftPickStatus.COMPLETED,
         player_id=player.id,
-        picked_by_user_id=actor_user_id,
+        picked_by_member_id=await _actor_member_id(session, draft_session, actor_user_id),
         is_autopick=False,
         is_admin_override=True,
         expected_version=expected_version,

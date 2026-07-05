@@ -1,0 +1,87 @@
+groups:
+  - name: scrape-targets
+    interval: 30s
+    rules:
+      # Catch-all: any scrape target going dark. Gateway has its own dedicated
+      # GatewayDown alert (critical); this one covers everything else.
+      - alert: TargetDown
+        expr: up{job!="gateway"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.job }} ({{ $labels.instance }}) for 3 minutes."
+
+  - name: host
+    interval: 30s
+    rules:
+      - alert: HostDiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk space below 15% on {{ $labels.mountpoint }}"
+          description: "Filesystem {{ $labels.mountpoint }} ({{ $labels.device }}) has less than 15% free space."
+
+      - alert: HostDiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) < 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk space below 5% on {{ $labels.mountpoint }}"
+          description: "Filesystem {{ $labels.mountpoint }} ({{ $labels.device }}) is almost full. Services will start failing (logs, Postgres, Docker)."
+
+      - alert: HostMemoryHigh
+        expr: |
+          (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory usage above 90%"
+          description: "The host has been using more than 90% of RAM for 10 minutes. OOM kills are likely next."
+
+      - alert: HostCpuHigh
+        expr: |
+          1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage above 90%"
+          description: "Average CPU usage across all cores has exceeded 90% for 15 minutes."
+
+  - name: postgres
+    interval: 30s
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is unreachable"
+          description: "postgres-exporter cannot connect to PostgreSQL. Check the database and POSTGRES_EXPORTER_DSN (must point at Postgres :5432, not pgBouncer :6432)."
+
+      - alert: PostgresConnectionsHigh
+        expr: |
+          sum(pg_stat_activity_count) > 0.8 * sum(pg_settings_max_connections)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections above 80% of max_connections"
+          description: "{{ $value }} active connections. New connections will start being rejected at max_connections."
+
+      - alert: PostgresDeadlocks
+        expr: increase(pg_stat_database_deadlocks{datname!~"template.*"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL deadlocks detected in {{ $labels.datname }}"
+          description: "{{ $value }} deadlocks in the last 10 minutes in database {{ $labels.datname }}."

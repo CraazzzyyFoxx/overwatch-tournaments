@@ -19,16 +19,18 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.core.enums import DraftRole  # noqa: E402
-from shared.models.draft import DraftPlayer  # noqa: E402
+from shared.models.balancer.draft import DraftPlayer, DraftPlayerRole  # noqa: E402
 from src.services.draft import ranks  # noqa: E402
 
 
 def _player(*, primary="dps", rank_value=3000, role_ranks=None) -> DraftPlayer:
+    # dbarch03: role_ranks is now a read-only property over the normalized
+    # ``roles`` child rows, so build those rows instead of passing a JSON bag.
     return DraftPlayer(
         session_id=1,
         primary_role=primary,
         rank_value=rank_value,
-        role_ranks=role_ranks or {},
+        roles=[DraftPlayerRole(role=role, rank_value=rv) for role, rv in (role_ranks or {}).items()],
     )
 
 

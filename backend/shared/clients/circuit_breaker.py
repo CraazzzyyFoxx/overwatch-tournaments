@@ -12,9 +12,10 @@ State transitions:
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Awaitable, TypeVar
+from typing import TypeVar
 
 from loguru import logger
 
@@ -46,7 +47,7 @@ class CircuitBreaker:
         breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30.0)
 
         try:
-            result = await breaker.call(some_async_function())
+            result = await breaker.call(lambda: some_async_function())
         except CircuitBreakerOpen:
             # Handle circuit open case
             pass
@@ -73,18 +74,21 @@ class CircuitBreaker:
         """Current state of the circuit breaker."""
         return self._state
 
-    async def call(self, coro: Awaitable[T]) -> T:
+    async def call(self, factory: Callable[[], Awaitable[T]]) -> T:
         """Execute an async operation through the circuit breaker.
 
         Args:
-            coro: The coroutine to execute
+            factory: A zero-argument callable that returns the awaitable to run.
+                A factory (rather than a ready coroutine) is required so nothing
+                is created when the circuit is open — otherwise the un-awaited
+                coroutine would leak and emit ``RuntimeWarning``.
 
         Returns:
-            The result of the coroutine
+            The result of the awaitable produced by ``factory``.
 
         Raises:
             CircuitBreakerOpen: If the circuit is open
-            Exception: Any exception raised by the coroutine
+            Exception: Any exception raised by the awaited operation
         """
         async with self._lock:
             # Check if we should transition from OPEN to HALF_OPEN
@@ -106,9 +110,11 @@ class CircuitBreaker:
                     raise CircuitBreakerOpen("Circuit breaker is in half-open state, max probes reached")
                 self._half_open_calls += 1
 
-        # Execute the operation outside the lock
+        # Build and execute the operation outside the lock. The factory is only
+        # invoked once the state check above has passed, so no coroutine is
+        # created (and left un-awaited) when the circuit is open.
         try:
-            result = await coro
+            result = await factory()
             await self._on_success()
             return result
         except Exception as e:

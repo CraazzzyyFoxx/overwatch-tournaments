@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
 from shared.core.enums import EncounterResultStatus
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.services.challonge_refs import resolve_encounter_challonge
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,22 +26,18 @@ async def _resolve_captain_identity(
     Returns side and linked players.user id.
     Raises 403 if user is not a captain of either team.
     """
-    result = await session.execute(
-        select(models.AuthUserPlayer)
-        .where(models.AuthUserPlayer.auth_user_id == auth_user.id)
-    )
-    links = result.scalars().all()
-    player_ids = {link.player_id for link in links}
+    result = await session.execute(select(models.User).where(models.User.auth_user_id == auth_user.id))
+    player = result.scalar_one_or_none()
 
-    if not player_ids:
+    if player is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No player profile linked to your account",
         )
 
-    if encounter.home_team and encounter.home_team.captain_id in player_ids:
+    if encounter.home_team and encounter.home_team.captain_id == player.id:
         return "home", encounter.home_team.captain_id
-    if encounter.away_team and encounter.away_team.captain_id in player_ids:
+    if encounter.away_team and encounter.away_team.captain_id == player.id:
         return "away", encounter.away_team.captain_id
 
     raise HTTPException(
@@ -159,8 +156,9 @@ async def confirm_result(
     )
     await session.commit()
 
-    # Auto-push to Challonge if linked
-    if encounter.challonge_id:
+    # Auto-push to Challonge if linked (derived from challonge_match_mapping).
+    challonge_links = await resolve_encounter_challonge(session, [encounter.id])
+    if challonge_links.get(encounter.id) is not None:
         await challonge_sync.auto_push_on_confirm(session, encounter.id)
 
     await standings_recalculation.enqueue_tournament_recalculation(tournament_id)
@@ -248,7 +246,8 @@ async def admin_confirm_result(
     )
     await session.commit()
 
-    if encounter.challonge_id:
+    challonge_links = await resolve_encounter_challonge(session, [encounter.id])
+    if challonge_links.get(encounter.id) is not None:
         await challonge_sync.auto_push_on_confirm(session, encounter.id)
 
     await standings_recalculation.enqueue_tournament_recalculation(tournament_id)

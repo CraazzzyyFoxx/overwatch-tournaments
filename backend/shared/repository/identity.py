@@ -18,6 +18,9 @@ class UserRepository(BaseRepository[models.User]):
     async def get_by_name(self, session: AsyncSession, name: str) -> models.User | None:
         return await self.get_by(session, name=name)
 
+    async def get_by_auth_user_id(self, session: AsyncSession, auth_user_id: int) -> models.User | None:
+        return await self.get_by(session, auth_user_id=auth_user_id)
+
 
 class SocialAccountRepository(BaseRepository[models.SocialAccount]):
     """Unified player social identities (battlenet/discord/twitch/boosty/…)."""

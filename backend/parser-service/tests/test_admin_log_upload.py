@@ -42,7 +42,7 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-from shared.models.log_processing import LogProcessingSource  # noqa: E402
+from shared.models.ingestion.log_processing import LogProcessingSource  # noqa: E402
 
 rpc_logs = importlib.import_module("src.rpc.logs")
 admin_reads = importlib.import_module("src.services.match_logs.admin_reads")

@@ -37,9 +37,13 @@ async def load_player_signal_profile(
             models.AnalyticsPerformance.local_reference_n.label("local_reference_n"),
             models.Player.role.label("role"),
             models.Player.rank.label("rank"),
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
         )
         .join(models.Player, models.Player.id == models.AnalyticsPerformance.player_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.AnalyticsPerformance.tournament_id == tournament_id,
@@ -116,22 +120,31 @@ async def load_player_signal_profile(
 
     history_query = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.AnalyticsPerformance.tournament_id.label("tournament_id"),
             models.AnalyticsPerformance.raw_value.label("raw_value"),
             models.AnalyticsPerformance.local_residual.label("local_residual"),
             models.AnalyticsPerformance.local_zscore.label("local_zscore"),
         )
+        .select_from(models.AnalyticsPerformance)
         .join(models.Player, models.Player.id == models.AnalyticsPerformance.player_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.AnalyticsPerformance.tournament_id <= tournament_id,
             models.AnalyticsPerformance.tournament_id >= max(1, tournament_id - history_depth),
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             *workspace_filter(workspace_id),
         )
-        .order_by(models.Player.user_id, models.Player.role, models.AnalyticsPerformance.tournament_id)
+        .order_by(
+            models.WorkspaceMember.player_id,
+            models.Player.role,
+            models.AnalyticsPerformance.tournament_id,
+        )
     )
     history_df = pd.DataFrame((await session.execute(history_query)).mappings().all())
     histories: dict[tuple[int, str], dict[str, list[float]]] = {}

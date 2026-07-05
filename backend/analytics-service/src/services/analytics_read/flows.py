@@ -133,7 +133,10 @@ def _player_to_pydantic(
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
         role=player.role,
         tournament_id=player.tournament_id,
-        user_id=player.user_id,
+        # Player.user_id was dropped in the contract step (iwrefac07); the
+        # identity anchor is workspace_member.player_id instead. Callers must
+        # eager-load Player.workspace_member on the query that produced ``player``.
+        user_id=player.workspace_member.player_id,
         team_id=player.team_id,
         is_newcomer=getattr(player, "is_newcomer", False),
         is_newcomer_role=getattr(player, "is_newcomer_role", False),
@@ -444,7 +447,7 @@ async def change_shift(
     analytics, calculated_shift = await service.change_shift(session, player_id, shift)
     player = await session.scalar(
         sa.select(models.Player)
-        .options(sa.orm.joinedload(models.Player.user))
+        .options(sa.orm.joinedload(models.Player.workspace_member))
         .where(models.Player.id == player_id)
     )
     if player is None:

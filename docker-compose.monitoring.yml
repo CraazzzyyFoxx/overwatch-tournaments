@@ -23,6 +23,8 @@ services:
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
       - "--web.enable-admin-api"
+      # Tempo's metrics_generator pushes span-metrics / service-graph series here.
+      - "--web.enable-remote-write-receiver"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
@@ -83,13 +85,83 @@ services:
     restart: unless-stopped
     environment:
       RABBIT_URL: "http://rabbitmq:15672"
-      RABBIT_USER: "${RABBITMQ_USER:-guest}"
-      RABBIT_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
+      # Same variable names as the broker in docker-compose.production.yml — one
+      # source of truth in .env. (Previously RABBITMQ_USER/RABBITMQ_PASSWORD,
+      # which nothing set, so the exporter silently fell back to guest/guest.)
+      RABBIT_USER: "${RABBITMQ_DEFAULT_USER:-guest}"
+      RABBIT_PASSWORD: "${RABBITMQ_DEFAULT_PASS:-guest}"
       RABBIT_CAPABILITIES: "bert,no_sort"
       PUBLISH_PORT: "9419"
       OUTPUT_FORMAT: "TTY"
       SKIP_QUEUES: "^$"
       INCLUDE_QUEUES: ".*"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # Host-level metrics (CPU / memory / disk / network). Reads the host via
+  # bind-mounts; no ports published — scraped over the compose network.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # Per-container CPU / memory / restarts for the whole Docker host.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 192M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # PostgreSQL metrics. POSTGRES_EXPORTER_DSN must point DIRECTLY at Postgres
+  # (port 5432), NOT at pgBouncer (:6432) — transaction pooling breaks the
+  # exporter's session-level queries. Example:
+  #   POSTGRES_EXPORTER_DSN=postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "${POSTGRES_EXPORTER_DSN}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - app-network
     deploy:

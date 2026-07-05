@@ -283,7 +283,7 @@ async def get_overview(
             ],
         )
 
-    users, total = await service.get_overview_users(session, params, grid)
+    users, total = await service.get_overview_users(session, params, grid, workspace_id=workspace_id)
     if not users:
         return pagination.Paginated(
             page=params.page,
@@ -293,12 +293,12 @@ async def get_overview(
         )
 
     user_ids = [user.id for user in users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
     tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     rows: list[schemas.UserOverviewRow] = []
     for user in users:
@@ -375,6 +375,7 @@ async def get_overview_stats(
     params: "schemas.UserOverviewStatsQueryParams",
     *,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> "schemas.UserOverviewStats":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -394,6 +395,7 @@ async def get_overview_stats(
         div_max=params.div_max,
         query=params.query,
         grid=grid,
+        workspace_id=workspace_id,
     )
     return schemas.UserOverviewStats(**payload)
 
@@ -404,6 +406,7 @@ async def get_catalog(
     *,
     grid: DivisionGrid,
     normalizer: DivisionGridNormalizer | None = None,
+    workspace_id: int | None = None,
 ) -> "schemas.UserCatalogResponse":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -426,6 +429,7 @@ async def get_catalog(
         per_letter=params.per_letter,
         max_letters=params.max_letters,
         grid=grid,
+        workspace_id=workspace_id,
     )
 
     flat_users = [user for _letter, bucket in letters_with_users for user in bucket]
@@ -437,12 +441,12 @@ async def get_catalog(
         )
 
     user_ids = [user.id for user in flat_users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
-    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
+    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     catalog_letters: list[schemas.UserCatalogLetter] = []
     for letter_label, users in letters_with_users:
@@ -1064,7 +1068,7 @@ async def get_tournaments(
         )
 
         for player in team.players:
-            if player.user_id == user.id:
+            if player.workspace_member is not None and player.workspace_member.player_id == user.id:
                 user_role = player.role
                 user_division = resolve_tournament_division(
                     player.rank,
@@ -1184,6 +1188,7 @@ async def get_tournament_with_stats(
             player.rank,
             tournament_grid=grid,
         ),
+        division_grid_version=_mappers._division_grid_version(team.tournament),
         closeness=round(statistics[2], 2) if statistics[2] else 0,
         role=player.role,
         maps=statistics[0] + statistics[1] if statistics[0] else 0,

@@ -141,10 +141,11 @@ async def execute(
     # Step 5: Get tournament_id and all players on qualifying teams
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             teams_with_count.c.match_id,
         )
+        .select_from(models.Player)
         .join(
             teams_with_count,
             models.Player.team_id == teams_with_count.c.team_id,
@@ -154,6 +155,10 @@ async def execute(
             models.Match.id == teams_with_count.c.match_id,
         )
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             models.Player.is_substitution.is_(False),
             sa.or_(

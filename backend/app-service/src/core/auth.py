@@ -2,10 +2,9 @@
 
 from typing import Any
 
+from shared.models.identity.auth_user import AuthUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared.models.auth_user import AuthUser
 
 
 async def _resolve_user_from_db(

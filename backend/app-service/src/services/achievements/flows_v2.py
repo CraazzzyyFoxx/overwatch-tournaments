@@ -5,7 +5,7 @@ Drop-in replacement for flows.py. Uses service_v2 under the hood.
 
 import typing
 
-from shared.models.achievement import AchievementRule
+from shared.models.achievements.achievement import AchievementRule
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import schemas

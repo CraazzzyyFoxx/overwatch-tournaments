@@ -265,7 +265,10 @@ def get_plackett_luce():
 
 
 def get_id_role(player: models.Player) -> str:
-    return f"{player.user_id}-{player.role}"
+    # Player.user_id was dropped in the contract step (iwrefac07); the identity
+    # anchor is workspace_member.player_id instead. Callers of this function
+    # (see service.py) already eager-load Player.workspace_member.
+    return f"{player.workspace_member.player_id}-{player.role}"
 
 
 def get_player_rating(pl: PlackettLuce, player: models.Player) -> PlackettLuceRating:
@@ -507,61 +510,3 @@ async def get_analytics_openskill(
         [OPEN_SKILL],
         workspace_id=workspace_id,
     )
-
-
-async def get_predictions_openskill(
-    session: AsyncSession,
-    tournament_id: int,
-    df: pd.DataFrame | None = None,
-    workspace_id: int | None = None,
-) -> None:
-    source_df = df if df is not None else await get_data_frame(
-        session,
-        workspace_id=workspace_id,
-    )
-    start_tid = await service.lookback_start_tournament_id(
-        session, tournament_id, OPENSKILL_LOOKBACK, workspace_id=workspace_id
-    )
-    matches = await service.get_matches(
-        session,
-        start_tid,
-        tournament_id,
-        workspace_id=workspace_id,
-    )
-    teams = await service.get_teams_with_players(session, tournament_id)
-    algorithm = await service.get_algorithm(session, OPEN_SKILL)
-    pl = get_plackett_luce()
-    _, players_rating, _ = prepare_openskill_data(source_df, pl, teams, matches)
-    predicted_teams: list[tuple[str, list[PlackettLuceRating]]] = []
-
-    for team in teams:
-        team_players = [players_rating[get_id_role(player)] for player in team.players]
-        predicted_teams.append((team.name, team_players))
-
-    predicted = pl.predict_rank([team_players for _, team_players in predicted_teams])
-
-    await session.execute(
-        sa.delete(models.AnalyticsPredictions).where(
-            sa.and_(
-                models.AnalyticsPredictions.tournament_id == tournament_id,
-                models.AnalyticsPredictions.algorithm_id == algorithm.id,
-            )
-        )
-    )
-    await session.commit()
-
-    for team_data, predict in zip(predicted_teams, predicted, strict=True):
-        team = next((item for item in teams if item.name == team_data[0]), None)
-        if team is None:
-            continue
-
-        session.add(
-            models.AnalyticsPredictions(
-                algorithm_id=algorithm.id,
-                tournament_id=tournament_id,
-                team_id=team.id,
-                predicted_place=predict[0],
-            )
-        )
-
-    await session.commit()

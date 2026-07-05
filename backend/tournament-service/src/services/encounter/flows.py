@@ -1,5 +1,13 @@
+import typing
+
+import sqlalchemy as sa
 from cashews import cache
-from shared.services.stage_refs import resolve_stage_refs_from_group
+from shared.services.challonge_refs import (
+    ChallongeRef,
+    resolve_encounter_challonge,
+    resolve_tournament_challonge,
+)
+from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models, schemas
@@ -7,12 +15,107 @@ from src.core import config, enums, errors, pagination, utils
 from src.services.map import flows as map_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
-from src.services.user import flows as user_flows
 
 from . import service
 
 
-async def to_pydantic(session: AsyncSession, encounter: models.Encounter, entities: list[str]) -> schemas.EncounterRead:
+async def _prefetch_stage_refs(
+    session: AsyncSession,
+    encounters: typing.Sequence[models.Encounter],
+) -> dict[tuple[int, int], StageRefs]:
+    """Batch counterpart of ``resolve_stage_refs_from_group`` for list pages.
+
+    ``to_pydantic`` self-heals legacy encounters (``stage_id`` NULL but
+    ``tournament_group_id`` set) via ``resolve_stage_refs_from_group``, which
+    fires queries PER encounter. List endpoints instead resolve every distinct
+    ``(tournament_id, tournament_group_id)`` pair up-front here (a constant
+    number of queries per page) and pass the mapping into ``to_pydantic``.
+
+    Replicates the resolution order of ``resolve_stage_refs_from_group`` for
+    the ``stage_id is None`` path exactly: group.stage_id with a stage item
+    name-matched to the group name (else the first item by order/id), falling
+    back to the tournament's first stage and its first item.
+    """
+    pairs = {
+        (encounter.tournament_id, encounter.tournament_group_id)
+        for encounter in encounters
+        if encounter.stage_id is None and encounter.tournament_group_id is not None
+    }
+    if not pairs:
+        return {}
+
+    groups_result = await session.execute(
+        sa.select(models.TournamentGroup).where(models.TournamentGroup.id.in_({group_id for _, group_id in pairs}))
+    )
+    groups_by_id = {group.id: group for group in groups_result.scalars().all()}
+
+    # Case-4 fallback tournaments: group is missing or has no stage_id.
+    fallback_tournament_ids = {
+        tournament_id
+        for tournament_id, group_id in pairs
+        if group_id not in groups_by_id or groups_by_id[group_id].stage_id is None
+    }
+    first_stage_by_tournament: dict[int, int] = {}
+    if fallback_tournament_ids:
+        stage_rows = await session.execute(
+            sa.select(models.Stage.tournament_id, models.Stage.id)
+            .where(models.Stage.tournament_id.in_(fallback_tournament_ids))
+            .order_by(models.Stage.tournament_id, models.Stage.order.asc(), models.Stage.id.asc())
+        )
+        for tournament_id, stage_id in stage_rows.all():
+            first_stage_by_tournament.setdefault(tournament_id, stage_id)
+
+    stage_ids = {group.stage_id for group in groups_by_id.values() if group.stage_id is not None}
+    stage_ids.update(first_stage_by_tournament.values())
+    items_by_stage: dict[int, list[models.StageItem]] = {}
+    if stage_ids:
+        items_result = await session.execute(
+            sa.select(models.StageItem)
+            .where(models.StageItem.stage_id.in_(stage_ids))
+            .order_by(models.StageItem.order.asc(), models.StageItem.id.asc())
+        )
+        for item in items_result.scalars().all():
+            items_by_stage.setdefault(item.stage_id, []).append(item)
+
+    def pick_default_item(stage_id: int, hint_name: str | None = None) -> int | None:
+        items = items_by_stage.get(stage_id)
+        if not items:
+            return None
+        if hint_name:
+            normalized = hint_name.strip().lower()
+            for item in items:
+                if item.name.strip().lower() == normalized:
+                    return item.id
+        return items[0].id
+
+    refs_by_pair: dict[tuple[int, int], StageRefs] = {}
+    for tournament_id, group_id in pairs:
+        group = groups_by_id.get(group_id)
+        if group is not None and group.stage_id is not None:
+            refs_by_pair[(tournament_id, group_id)] = StageRefs(
+                stage_id=group.stage_id,
+                stage_item_id=pick_default_item(group.stage_id, hint_name=group.name),
+                tournament_group_id=group_id,
+            )
+            continue
+        first_stage_id = first_stage_by_tournament.get(tournament_id)
+        refs_by_pair[(tournament_id, group_id)] = StageRefs(
+            stage_id=first_stage_id,
+            stage_item_id=pick_default_item(first_stage_id) if first_stage_id is not None else None,
+            tournament_group_id=group_id,
+        )
+    return refs_by_pair
+
+
+async def to_pydantic(
+    session: AsyncSession,
+    encounter: models.Encounter,
+    entities: list[str],
+    *,
+    prefetched_stage_refs: typing.Mapping[tuple[int, int], StageRefs] | None = None,
+    challonge_match_ids: typing.Mapping[int, int] | None = None,
+    tournament_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
+) -> schemas.EncounterRead:
     """
     Converts an Encounter model instance to a Pydantic schema (EncounterRead), including related entities.
 
@@ -20,6 +123,17 @@ async def to_pydantic(session: AsyncSession, encounter: models.Encounter, entiti
         session (AsyncSession): The SQLAlchemy async session.
         encounter (models.Encounter): The Encounter model instance to convert.
         entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
+        prefetched_stage_refs: Optional mapping of (tournament_id, tournament_group_id)
+            to already-resolved StageRefs (see ``_prefetch_stage_refs``). List call
+            sites pass it to avoid a per-encounter resolver query; single-item call
+            sites can omit it and fall back to the per-encounter resolver.
+        challonge_match_ids: Optional prefetched ``encounter_id -> challonge_match_id``
+            map DERIVED from ``challonge_match_mapping`` (see
+            ``shared.services.challonge_refs``). The KEPT ``challonge_id`` response
+            field (a bracket key for the frontend) is populated from it instead of
+            the deprecated ``encounter.challonge_id`` column; omitted → ``None``.
+        tournament_challonge_refs: Optional prefetched ``tournament_id -> (challonge_id,
+            slug)`` map used the same way for the nested ``tournament``.
 
     Returns:
         schemas.EncounterRead: The Pydantic schema representing the encounter.
@@ -39,16 +153,26 @@ async def to_pydantic(session: AsyncSession, encounter: models.Encounter, entiti
     effective_stage_id = encounter.stage_id
     effective_stage_item_id = encounter.stage_item_id
     if effective_stage_id is None and encounter.tournament_group_id is not None:
-        refs = await resolve_stage_refs_from_group(
-            session,
-            tournament_id=encounter.tournament_id,
-            tournament_group_id=encounter.tournament_group_id,
+        refs = (
+            prefetched_stage_refs.get((encounter.tournament_id, encounter.tournament_group_id))
+            if prefetched_stage_refs is not None
+            else None
         )
+        if refs is None:
+            refs = await resolve_stage_refs_from_group(
+                session,
+                tournament_id=encounter.tournament_id,
+                tournament_group_id=encounter.tournament_group_id,
+            )
         effective_stage_id = refs.stage_id
         effective_stage_item_id = refs.stage_item_id
 
     if "stage" in entities and encounter.stage is not None:
-        stage = schemas.StageSummaryRead.model_validate(encounter.stage, from_attributes=True)
+        # Nested stage challonge is derived at the top-level tournament read, not
+        # here — override to None so the legacy ``stage`` columns are never read.
+        stage = schemas.StageSummaryRead.model_validate(encounter.stage, from_attributes=True).model_copy(
+            update={"challonge_id": None, "challonge_slug": None}
+        )
     if "stage_item" in entities and encounter.stage_item is not None:
         stage_item = schemas.StageItemSummaryRead.model_validate(encounter.stage_item, from_attributes=True)
     if "tournament" in entities:
@@ -56,6 +180,11 @@ async def to_pydantic(session: AsyncSession, encounter: models.Encounter, entiti
             session,
             encounter.tournament,
             utils.prepare_entities(entities, "tournament"),
+            challonge_ref=(
+                tournament_challonge_refs.get(encounter.tournament_id)
+                if tournament_challonge_refs is not None
+                else None
+            ),
         )
     if "teams" in entities or "home_team" in entities:
         teams_entities = (
@@ -84,6 +213,12 @@ async def to_pydantic(session: AsyncSession, encounter: models.Encounter, entiti
     # is the effective (stage_id, stage_item_id) pair even if DB still has NULL.
     encounter_dict["stage_id"] = effective_stage_id
     encounter_dict["stage_item_id"] = effective_stage_item_id
+    # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
+    # read from the deprecated ``encounter.challonge_id`` column. Always set it so
+    # the value survives the column being dropped; ``None`` when not prefetched.
+    encounter_dict["challonge_id"] = (
+        challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
+    )
 
     return schemas.EncounterRead(
         **encounter_dict,
@@ -173,7 +308,15 @@ async def get_encounter(session: AsyncSession, encounter_id: int, entities: list
             status_code=404,
             detail=[errors.ApiExc(code="not_found", msg=f"Encounter with id {encounter_id} not found")],
         )
-    return await to_pydantic(session, encounter, entities)
+    challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id])
+    tournament_challonge_refs = await resolve_tournament_challonge(session, [encounter.tournament_id])
+    return await to_pydantic(
+        session,
+        encounter,
+        entities,
+        challonge_match_ids=challonge_match_ids,
+        tournament_challonge_refs=tournament_challonge_refs,
+    )
 
 
 @cache(
@@ -204,11 +347,26 @@ async def get_all_encounters(
         workspace_id=workspace_id,
         viewer_auth_user_id=viewer_auth_user_id,
     )
+    prefetched_stage_refs = await _prefetch_stage_refs(session, encounters)
+    challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id for encounter in encounters])
+    tournament_challonge_refs = await resolve_tournament_challonge(
+        session, [encounter.tournament_id for encounter in encounters]
+    )
     return pagination.Paginated(
         total=total,
         per_page=params.per_page,
         page=params.page,
-        results=[await to_pydantic(session, encounter, params.entities) for encounter in encounters],
+        results=[
+            await to_pydantic(
+                session,
+                encounter,
+                params.entities,
+                prefetched_stage_refs=prefetched_stage_refs,
+                challonge_match_ids=challonge_match_ids,
+                tournament_challonge_refs=tournament_challonge_refs,
+            )
+            for encounter in encounters
+        ],
     )
 
 
@@ -268,6 +426,11 @@ async def delete_saved_view(
     ttl=config.settings.encounters_cache_ttl,
     key="encounters_overview:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}:{params.only_count}:{params.query}:{params.fields}:{params.stage_id}:{params.stage_item_id}:{params.best_of}:{params.status}:{params.has_logs}:{params.closeness_min}:{params.closeness_max}:{params.scope}:{viewer_auth_user_id}",
     prefix="fastapi:",
+    # NB: no ``lock=True`` — cashews builds the herd-lock key WITHOUT the
+    # ``prefix``, and this codebase routes backends purely by key prefix (no
+    # default backend), so the lock raises NotConfiguredError (same bug class
+    # as lesson_cashews_prefixless_delete_match). TTL rollover herds are
+    # mitigated by the FILTER-consolidated aggregate query instead.
 )
 async def get_encounters_overview(
     session: AsyncSession,
@@ -300,6 +463,18 @@ async def get_encounters_overview(
         for index in range(10)
     ]
 
+    # One batched stage-ref resolution for all featured blocks instead of a
+    # per-encounter resolver query inside to_pydantic (legacy encounters with
+    # only tournament_group_id set).
+    featured_encounters = [*data["closest"], *data["upcoming"], *data["live"]]
+    featured_stage_refs = await _prefetch_stage_refs(session, featured_encounters)
+    featured_challonge_match_ids = await resolve_encounter_challonge(
+        session, [encounter.id for encounter in featured_encounters]
+    )
+    featured_tournament_challonge_refs = await resolve_tournament_challonge(
+        session, [encounter.tournament_id for encounter in featured_encounters]
+    )
+
     return schemas.EncounterOverviewRead(
         kpis=schemas.EncounterKpiRead(
             total_encounters=total,
@@ -330,6 +505,9 @@ async def get_encounters_overview(
                     session,
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                    prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["closest"]
             ],
@@ -338,6 +516,9 @@ async def get_encounters_overview(
                     session,
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                    prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["upcoming"]
             ],
@@ -346,6 +527,9 @@ async def get_encounters_overview(
                     session,
                     encounter,
                     ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"],
+                    prefetched_stage_refs=featured_stage_refs,
+                    challonge_match_ids=featured_challonge_match_ids,
+                    tournament_challonge_refs=featured_tournament_challonge_refs,
                 )
                 for encounter in data["live"]
             ],
@@ -455,6 +639,13 @@ async def get_match(
     return await to_pydantic_match(session, match, entities)
 
 
+@cache(
+    ttl=config.settings.match_cache_ttl,
+    # No tournament_id in the args, so this key can't participate in the
+    # targeted invalidation patterns — staleness is bounded by the short TTL.
+    key="match_stats:{match_id}:{entities}:{workspace_id}",
+    prefix="fastapi:",
+)
 async def get_match_with_stats(
     session: AsyncSession,
     match_id: int,
@@ -481,15 +672,20 @@ async def get_match_with_stats(
         entities.append("teams.players")
     match = await get_match(session, match_id, entities, workspace_id=workspace_id)
     max_round: int = 0
+    home_ids = [player.user_id for player in match.home_team.players]
+    away_ids = [player.user_id for player in match.away_team.players]
+    # One batched pair of aggregate queries for the whole roster instead of
+    # 2 queries per player (this is the hottest public read — the match page).
+    all_stats = await service.get_match_stats_for_users(session, match.id, [*home_ids, *away_ids])
     home_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}
     away_team_stats: dict[int, tuple[dict[int, dict[enums.LogStatsName, int]], dict[int, list[dict]]]] = {}
-    for player in match.home_team.players:
-        player_data = await service.get_match_stats_for_user(session, match.id, player.user_id)
-        home_team_stats[player.user_id] = player_data
+    for user_id in home_ids:
+        player_data = all_stats[user_id]
+        home_team_stats[user_id] = player_data
         max_round = max(max_round, max(player_data[0].keys()) if player_data[0] else 0)
-    for player in match.away_team.players:
-        player_data = await service.get_match_stats_for_user(session, match.id, player.user_id)
-        away_team_stats[player.user_id] = player_data
+    for user_id in away_ids:
+        player_data = all_stats[user_id]
+        away_team_stats[user_id] = player_data
         max_round = max(max_round, max(player_data[0].keys()) if player_data[0] else 0)
 
     home_team = create_team_with_match_stats(match.home_team, home_team_stats)
@@ -500,100 +696,3 @@ async def get_match_with_stats(
         home_team=home_team,
         away_team=away_team,
     )
-
-
-async def get_encounters_by_user(
-    session: AsyncSession, user_id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None
-) -> pagination.Paginated[schemas.EncounterReadWithUserStats]:
-    """
-    Retrieves a paginated list of encounters involving a specific user, including user statistics.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        user_id (int): The ID of the user.
-        params (pagination.PaginationSortParams): Pagination and sorting parameters.
-
-    Returns:
-        pagination.Paginated[schemas.EncounterReadWithUserStats]: A paginated list of Pydantic schemas representing the encounters with user statistics.
-    """
-    match_entities = utils.prepare_entities(params.entities, "matches")
-
-    if "teams" in params.entities:
-        match_entities = utils.remove_from_entities(match_entities, "teams")
-
-    if "matches" in params.entities:
-        match_entities.extend(utils.find_entities(params.entities, "matches"))
-        params.entities = utils.remove_from_entities(params.entities, "matches")
-
-    params.entities = [*match_entities, *params.entities]
-
-    user = await user_flows.get(session, user_id, [])
-    encounters, total = await service.get_by_user(session, user.id, params, workspace_id=workspace_id)
-    encounters_read: list[schemas.EncounterReadWithUserStats] = []
-    encounters_cache: dict[int, models.Encounter] = {}
-    matches_cache: dict[int, list[schemas.MatchReadWithUserStats]] = {}
-
-    for encounter, match, performance, heroes in encounters:
-        encounters_cache.setdefault(encounter.id, encounter)
-        matches_cache.setdefault(encounter.id, [])
-
-        if match:
-            match_read_ = await to_pydantic_match(session, match, match_entities)
-            match_read = schemas.MatchReadWithUserStats(
-                **match_read_.model_dump(),
-                performance=performance,
-                heroes=heroes if heroes else [],  # type: ignore
-            )
-            matches_cache[encounter.id].append(match_read)
-
-    for encounter_id, encounter in encounters_cache.items():
-        encounter_read_ = await to_pydantic(session, encounter, params.entities)
-        encounter_read = schemas.EncounterReadWithUserStats(
-            **encounter_read_.model_dump(exclude={"matches"}),
-            matches=matches_cache.get(encounter_id, []),
-        )
-        encounters_read.append(encounter_read)
-
-    return pagination.Paginated(
-        total=total,
-        per_page=params.per_page,
-        page=params.page,
-        results=encounters_read,
-    )
-
-
-async def get_encounters_by_team(
-    session: AsyncSession, team_id: int, entities: list[str]
-) -> list[schemas.EncounterRead]:
-    """
-    Retrieves all encounters involving a specific team and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
-
-    Returns:
-        list[schemas.EncounterRead]: A list of Pydantic schemas representing the encounters.
-    """
-    encounters = await service.get_by_team(session, team_id, entities)
-    return [await to_pydantic(session, encounter, entities) for encounter in encounters]
-
-
-async def get_encounters_by_team_group(
-    session: AsyncSession, team_id: int, group_id: int, entities: list[str]
-) -> list[schemas.EncounterRead]:
-    """
-    Retrieves all encounters involving a specific team within a specific tournament group and converts them to Pydantic schemas.
-
-    Parameters:
-        session (AsyncSession): The SQLAlchemy async session.
-        team_id (int): The ID of the team.
-        group_id (int): The ID of the tournament group.
-        entities (list[str]): A list of related entities to include (e.g., ["tournament", "teams"]).
-
-    Returns:
-        list[schemas.EncounterRead]: A list of Pydantic schemas representing the encounters.
-    """
-    encounters = await service.get_by_team_group(session, team_id, group_id, entities)
-    return [await to_pydantic(session, encounter, entities) for encounter in encounters]
