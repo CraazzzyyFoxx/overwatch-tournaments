@@ -1,13 +1,6 @@
 import { apiFetch } from "@/lib/api-fetch";
 import type { User } from "@/types/user.types";
 
-async function fileToBase64(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
 /** Self-service account management for the current user (own player's social
  *  identities + own avatar). Adding social accounts is OAuth-only (start the
  *  link flow), so there is no manual "add" method here. Management is hide-only:
@@ -32,11 +25,25 @@ const meService = {
     return res.json();
   },
 
+  /** Self-service unlink of an OAuth connection (Discord/Twitch/Battle.net).
+   *  Removes the OAuth link and un-verifies the matching social account (the row
+   *  itself is kept — re-verify by re-linking). The provider key matches the
+   *  social account's `provider` (OAUTH_TO_SOCIAL is 1:1). Returns 204 (no body);
+   *  the backend rejects unlinking your last provider when no password is set. */
+  async unlinkOAuth(provider: string): Promise<void> {
+    await apiFetch(`/api/auth/oauth/${provider}/unlink`, { method: "DELETE" });
+  },
+
   async setAvatar(file: File): Promise<unknown> {
-    const content_b64 = await fileToBase64(file);
+    // The gateway's POST /api/auth/me/avatar handler expects a multipart form
+    // with a "file" field — it base64-encodes the upload into the RPC body
+    // itself. Send FormData (apiFetch detects it and lets the browser set the
+    // multipart Content-Type + boundary); a JSON body is rejected with 400.
+    const formData = new FormData();
+    formData.append("file", file);
     const res = await apiFetch("/api/auth/me/avatar", {
       method: "POST",
-      body: { content_b64, content_type: file.type || "application/octet-stream" },
+      body: formData,
     });
     return res.json();
   },

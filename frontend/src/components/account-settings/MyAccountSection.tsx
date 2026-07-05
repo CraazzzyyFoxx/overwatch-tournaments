@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, EyeOff, Loader2, Plus, Star } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, Plus, Star, Unlink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
@@ -41,6 +41,8 @@ export default function MyAccountSection() {
     queryClient.setQueryData(["me", "social"], user);
   };
 
+  // Failures surface via the global MutationCache.onError toast (see providers.tsx),
+  // so these only need to refresh the profile on success.
   const avatarUpload = useMutation({
     mutationFn: (file: File) => meService.setAvatar(file),
     onSuccess: () => {
@@ -63,6 +65,16 @@ export default function MyAccountSection() {
     mutationFn: ({ id, visible }: { id: number; visible: boolean }) =>
       meService.setSocialVisibility(id, visible),
     onSuccess: writeSocial,
+  });
+  // Self-service OAuth unlink. Returns no body (204), so refetch the list rather
+  // than writing it back; errors (e.g. "set a password first") surface via the
+  // global mutation toast.
+  const unlinkAccount = useMutation({
+    mutationFn: (provider: string) => meService.unlinkOAuth(provider),
+    onSuccess: () => {
+      void revalidateUser();
+      void queryClient.invalidateQueries({ queryKey: ["me", "social"] });
+    },
   });
 
   const linkHref = (provider: string) => {
@@ -143,6 +155,24 @@ export default function MyAccountSection() {
                     >
                       {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     </Button>
+                    {account.is_verified && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-slate-400 hover:text-red-400"
+                        title="Disconnect this OAuth account"
+                        disabled={unlinkAccount.isPending}
+                        onClick={() => {
+                          const label = getSocialProviderConfig(account.provider).label;
+                          if (window.confirm(`Disconnect your ${label} account? You can reconnect it later via OAuth.`)) {
+                            unlinkAccount.mutate(account.provider);
+                          }
+                        }}
+                        aria-label={`Disconnect ${account.username}`}
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 );
               })}
@@ -161,8 +191,9 @@ export default function MyAccountSection() {
               ))}
             </div>
             <p className="text-[11px] text-slate-500">
-              Accounts can only be added through OAuth, which also verifies them. Hiding removes an account from
-              your public profile; only an administrator can fully delete it.
+              Accounts can only be added through OAuth, which also verifies them. Disconnect removes the OAuth link
+              (the account stays, unverified, until you reconnect); hiding removes it from your public profile. Only
+              an administrator can fully delete an account.
             </p>
           </>
         )}

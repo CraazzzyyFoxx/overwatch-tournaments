@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  AUTH_CONNECTIONS_SETTINGS_HREF,
+  AUTH_ACCOUNT_SETTINGS_HREF,
   getAuthProfileHref,
   getSingleLinkedPlayer,
   hasLinkedAnalyticsProfile
@@ -20,8 +20,8 @@ describe("auth profile links", () => {
     expect(hasLinkedAnalyticsProfile({ primaryLinkedPlayer })).toBe(true);
   });
 
-  it("falls back to connections when no linked player exists", () => {
-    expect(getAuthProfileHref(undefined)).toBe(AUTH_CONNECTIONS_SETTINGS_HREF);
+  it("falls back to the account settings modal when no linked player exists", () => {
+    expect(getAuthProfileHref(undefined)).toBe(AUTH_ACCOUNT_SETTINGS_HREF);
     expect(hasLinkedAnalyticsProfile(undefined)).toBe(false);
   });
 });
