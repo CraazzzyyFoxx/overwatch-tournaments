@@ -62,6 +62,19 @@
   white-space: nowrap;
 }
 
+.topLink {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--teal);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topLink:hover {
+  text-decoration: underline;
+}
+
 .search {
   margin-left: auto;
   position: relative;

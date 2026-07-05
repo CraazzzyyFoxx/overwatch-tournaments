@@ -127,6 +127,14 @@ export function DocsExplorer() {
             {ALEMBIC_HEAD}
           </span>
         </div>
+        <a
+          className={styles.topLink}
+          href="/docs/design-book.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Design book →
+        </a>
         <div className={styles.search}>
           <span className={styles.searchIcon}>⌕</span>
           <input
