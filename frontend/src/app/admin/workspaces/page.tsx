@@ -19,6 +19,7 @@ import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { deriveWorkspacePalette } from "@/lib/workspace-theme";
+import { PLATFORM_ZONE } from "@/lib/host";
 import workspaceService from "@/services/workspace.service";
 import { Workspace } from "@/types/workspace.types";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -38,6 +39,9 @@ interface WorkspaceUpdateFormData {
   brand_secondary?: string | null;
   brand_background?: string | null;
   brand_surface?: string | null;
+  subdomain?: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
 }
 
 function BrandColorField({
@@ -189,6 +193,9 @@ export default function WorkspacesPage() {
       brand_secondary: ws.brand_secondary,
       brand_background: ws.brand_background,
       brand_surface: ws.brand_surface,
+      subdomain: ws.subdomain,
+      seo_title: ws.seo_title,
+      seo_description: ws.seo_description,
     });
     setIconFile(null);
     setIconPreview(ws.icon_url || null);
@@ -559,6 +566,47 @@ export default function WorkspacesPage() {
                 clamped to a dark shade to keep text readable.
               </p>
             )}
+          </div>
+
+          {/* Domain & SEO — subdomain routing + public metadata */}
+          <div className="space-y-3 rounded-md border p-3">
+            <div>
+              <Label htmlFor="edit-subdomain">Subdomain</Label>
+              <Input
+                id="edit-subdomain"
+                value={editForm.subdomain ?? ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+                  })
+                }
+                placeholder="my-team"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {editForm.subdomain
+                  ? `${editForm.subdomain}.${PLATFORM_ZONE}`
+                  : "Leave blank to use the platform URL only"}
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="edit-seo-title">SEO title</Label>
+              <Input
+                id="edit-seo-title"
+                value={editForm.seo_title ?? ""}
+                onChange={(e) => setFormData({ ...formData, seo_title: e.target.value })}
+                placeholder="Displayed in browser tabs and search results"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-seo-description">SEO description</Label>
+              <Input
+                id="edit-seo-description"
+                value={editForm.seo_description ?? ""}
+                onChange={(e) => setFormData({ ...formData, seo_description: e.target.value })}
+                placeholder="Optional meta description shown in search results"
+              />
+            </div>
           </div>
         </div>
       </EntityFormDialog>
