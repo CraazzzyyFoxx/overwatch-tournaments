@@ -148,6 +148,15 @@ function isNavGroupActive(
   });
 }
 
+function workspaceInitials(name: string): string {
+  return name
+    .split(/[\s-]+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
 interface HeaderProps {
   /**
    * True on a tenant (white-label) host — injected server-side from the
@@ -156,9 +165,14 @@ interface HeaderProps {
    * hidden. Absent/false on the apex/platform host.
    */
   tenantMode?: boolean;
+  /**
+   * The host workspace (name + icon) on a tenant host, resolved server-side.
+   * Rendered as a branded logo linking home in place of the switcher.
+   */
+  tenantWorkspace?: { name: string; iconUrl: string | null };
 }
 
-const Header = ({ tenantMode }: HeaderProps) => {
+const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
   const { user } = useAuthProfile();
   const pathname = usePathname() ?? "";
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -202,7 +216,35 @@ const Header = ({ tenantMode }: HeaderProps) => {
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
-      {!tenantMode && <WorkspaceSwitcher />}
+      {tenantMode ? (
+        tenantWorkspace ? (
+          <Link
+            href="/"
+            aria-label={`${tenantWorkspace.name} — home`}
+            className="flex items-center gap-2 rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {tenantWorkspace.iconUrl ? (
+              // Plain <img> (not next/image) to avoid remote-domain config for
+              // arbitrary workspace icon hosts — same pattern as the switcher.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={tenantWorkspace.iconUrl}
+                alt=""
+                className="size-7 shrink-0 rounded-md object-cover"
+              />
+            ) : (
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[var(--aqt-teal)] text-xs font-semibold text-black">
+                {workspaceInitials(tenantWorkspace.name)}
+              </span>
+            )}
+            <span className="hidden max-w-[12rem] truncate text-sm font-semibold sm:inline">
+              {tenantWorkspace.name}
+            </span>
+          </Link>
+        ) : null
+      ) : (
+        <WorkspaceSwitcher />
+      )}
       <NavigationMenu className="hidden md:flex">
         {Object.keys(components)
           .filter((title) => title !== "Organization" || canAccessOrganization)
