@@ -490,9 +490,22 @@ export default function WorkspacesPage() {
         description={`Editing "${selected?.name}"`}
         onSubmit={(e) => {
           e.preventDefault();
-          if (selected) {
-            updateMutation.mutate({ id: selected.id, data: formData as WorkspaceUpdateFormData });
-          }
+          if (!selected) return;
+          const form = formData as WorkspaceUpdateFormData;
+          // A blank colour field means "keep the default" → send null (the
+          // backend rejects "" via the #RRGGBB pattern, and the derive util
+          // treats a missing token as the default palette value).
+          const hexOrNull = (v: string | null | undefined) => v?.trim() || null;
+          updateMutation.mutate({
+            id: selected.id,
+            data: {
+              ...form,
+              brand_primary: hexOrNull(form.brand_primary),
+              brand_secondary: hexOrNull(form.brand_secondary),
+              brand_background: hexOrNull(form.brand_background),
+              brand_surface: hexOrNull(form.brand_surface),
+            },
+          });
         }}
         isSubmitting={updateMutation.isPending}
         submittingLabel="Saving..."

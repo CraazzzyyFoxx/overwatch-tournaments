@@ -70,6 +70,21 @@ class WorkspaceUpdate(BaseModel):
     seo_description: str | None = None
     default_division_grid_version_id: int | None = None
 
+    @field_validator(
+        "brand_primary",
+        "brand_secondary",
+        "brand_background",
+        "brand_surface",
+        mode="before",
+    )
+    @classmethod
+    def _blank_hex_to_none(cls, value: object) -> object:
+        # An empty/whitespace colour means "keep the default" — normalize it to
+        # None (which clears the token) instead of failing the #RRGGBB pattern.
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
     @field_validator("subdomain")
     @classmethod
     def _validate_subdomain(cls, value: str | None) -> str | None:

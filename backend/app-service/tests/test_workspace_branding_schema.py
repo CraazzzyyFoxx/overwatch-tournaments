@@ -41,6 +41,24 @@ def test_update_allows_explicit_none_to_clear():
     assert model.model_dump(exclude_unset=True) == {"brand_primary": None}
 
 
+@pytest.mark.parametrize("blank", ["", "   ", "\t", "\n"])
+def test_update_blank_hex_becomes_none(blank):
+    # A blank colour means "keep the default" — it must clear the token to None
+    # rather than fail the #RRGGBB pattern.
+    model = schemas.WorkspaceUpdate(brand_primary=blank, brand_surface=blank)
+    assert model.brand_primary is None
+    assert model.brand_surface is None
+    assert model.model_dump(exclude_unset=True) == {
+        "brand_primary": None,
+        "brand_surface": None,
+    }
+
+
+def test_update_strips_whitespace_around_hex():
+    model = schemas.WorkspaceUpdate(brand_primary="  #14b8a6  ")
+    assert model.brand_primary == "#14b8a6"
+
+
 def test_read_exposes_branding_fields():
     fields = schemas.WorkspaceRead.model_fields
     for name in (
