@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
-import { SITE_URL_OBJ } from "@/config/site";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
 
-export default function robots(): MetadataRoute.Robots {
-  const base = SITE_URL_OBJ.toString().replace(/\/$/, "");
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const metadata = await resolveSiteMetadata();
+  const base = metadata.origin;
   return {
     rules: [
       {

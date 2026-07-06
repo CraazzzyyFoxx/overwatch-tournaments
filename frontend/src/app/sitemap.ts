@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import userService from "@/services/user.service";
 import { SortDirection } from "@/types/pagination.types";
-import { SITE_URL_OBJ } from "@/config/site";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
 import { toUserSlug } from "@/app/(site)/users/components/users-overview/utils";
 
 // Regenerated daily. NOTE: emits up to SITE_USER_CAP player profiles in a single
@@ -11,9 +11,10 @@ export const revalidate = 86400;
 
 const SITE_USER_CAP = 5000;
 
-const abs = (path: string) => new URL(path, SITE_URL_OBJ).toString();
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const metadata = await resolveSiteMetadata();
+  const abs = (path: string) => new URL(path, metadata.origin).toString();
+
   const staticEntries: MetadataRoute.Sitemap = [
     { url: abs("/"), changeFrequency: "daily", priority: 1 },
     { url: abs("/users"), changeFrequency: "daily", priority: 0.8 }
