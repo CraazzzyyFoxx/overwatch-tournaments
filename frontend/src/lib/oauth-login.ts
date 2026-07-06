@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
 import type { OAuthProviderName } from "@/types/auth.types";
+import { PLATFORM_ZONE } from "@/lib/host";
 
 // Browser-binding CSRF cookie for the OAuth start->callback round trip. The
 // signed state (produced by the backend) carries origin/redirect/action and
@@ -46,7 +47,7 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
     // Readable on the apex callback host regardless of which subdomain
     // started the flow. Omitted outside production so localhost (no
     // registrable platform-zone domain) still works.
-    ...(process.env.NODE_ENV === "production" ? { domain: ".owt.craazzzyyfoxx.me" } : {})
+    ...(process.env.NODE_ENV === "production" ? { domain: `.${PLATFORM_ZONE}` } : {})
   });
 
   return response;
