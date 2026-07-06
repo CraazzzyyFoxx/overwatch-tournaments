@@ -23,7 +23,9 @@ RESERVED_SUBDOMAINS = frozenset({"www", "api", "auth", "admin", "app", "assets",
 
 _LABEL_RE = re.compile(r"^[a-z0-9-]+$")
 
-_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$")
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
 
 
 def validate_subdomain_label(label: str) -> str:
@@ -70,7 +72,8 @@ def normalize_custom_domain(domain: str) -> str:
 
     Raises ValueError if invalid.
     """
-    d = domain.strip().lower().rstrip(".").split(":", 1)[0]
+    host = domain.strip().lower().split(":", 1)[0]
+    d = host.rstrip(".")
     if not d or "." not in d or not _DOMAIN_RE.fullmatch(d):
         raise ValueError("Invalid custom domain")
     if is_platform_host(d):

@@ -62,6 +62,8 @@ def test_subdomain_from_host_rejects_invalid_or_reserved(host):
     [
         ("Tourney.Customer.com", "tourney.customer.com"),
         ("example.org.", "example.org"),
+        ("Tourney.Customer.com:8443", "tourney.customer.com"),
+        ("example.com.:8080", "example.com"),
     ],
 )
 def test_normalize_custom_domain_ok(raw, norm):
@@ -76,6 +78,8 @@ def test_normalize_custom_domain_ok(raw, norm):
         "team.owt.craazzzyyfoxx.me",
         "nodot",
         "has space.com",
+        "example-.com",
+        "customer.com-",
     ],
 )
 def test_normalize_custom_domain_rejects(bad):
@@ -87,3 +91,4 @@ def test_is_platform_host():
     assert is_platform_host("owt.craazzzyyfoxx.me")
     assert is_platform_host("team-a.owt.craazzzyyfoxx.me")
     assert not is_platform_host("tourney.customer.com")
+    assert is_platform_host("owt.craazzzyyfoxx.me:443")
