@@ -29,6 +29,22 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
         result = await session.execute(sa.select(models.Workspace).where(models.Workspace.subdomain == subdomain))
         return result.scalar_one_or_none()
 
+    async def get_by_verified_custom_domain(self, session: AsyncSession, domain: str) -> models.Workspace | None:
+        """Resolve a custom domain to its workspace, but only once verified (Phase 2).
+
+        Fail-closed: an unverified (or unclaimed) ``custom_domain`` never
+        resolves, so a domain mid-verification can't be used to spoof a
+        workspace. Bare lookup, mirroring ``get_by_subdomain``, for the same
+        request-resolution hot path.
+        """
+        result = await session.execute(
+            sa.select(models.Workspace).where(
+                models.Workspace.custom_domain == domain,
+                models.Workspace.custom_domain_verified_at.is_not(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_with_default_grid(self, session: AsyncSession, workspace_id: int) -> models.Workspace | None:
         return await self.get(session, workspace_id, options=self.default_grid_options())
 

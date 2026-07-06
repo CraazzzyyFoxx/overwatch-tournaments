@@ -41,6 +41,15 @@ async def get_by_subdomain(session: AsyncSession, subdomain: str) -> models.Work
     return await _workspace_repo.get_by_subdomain(session, subdomain)
 
 
+async def get_by_custom_domain(session: AsyncSession, domain: str) -> models.Workspace | None:
+    """Resolve a verified custom domain to its workspace (Phase 2 of ``by_host``).
+
+    Delegates to the verified-only repo query — an unverified ``custom_domain``
+    never resolves here.
+    """
+    return await _workspace_repo.get_by_verified_custom_domain(session, domain)
+
+
 async def get_all(session: AsyncSession) -> typing.Sequence[models.Workspace]:
     return await _workspace_repo.list_ordered(session)
 
