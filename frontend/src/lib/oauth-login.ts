@@ -41,17 +41,19 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
     return NextResponse.redirect(apexLogin);
   }
 
-  // Only present when this is a bounced custom-domain flow arriving on the
-  // apex (see above). Trust it as the state `origin` only when it resolves
-  // to a tenant host, so an attacker can't point the post-login redirect at
-  // an arbitrary open origin via this query param.
-  const originParam = searchParams.get("origin");
+  // Only the apex legitimately receives a bounced `origin` (from a custom-domain
+  // start, Task 7). Never honor it on a subdomain — a crafted ?origin= there
+  // would otherwise be signed into the state.
   let flowOrigin = origin;
-  if (originParam) {
-    try {
-      if (resolveHost(new URL(originParam).hostname).mode === "tenant") flowOrigin = originParam;
-    } catch {
-      // Malformed origin param — ignore and fall back to the apex origin.
+  if (currentHost === PLATFORM_ZONE) {
+    const originParam = searchParams.get("origin");
+    if (originParam) {
+      try {
+        const u = new URL(originParam);
+        if (resolveHost(u.hostname).mode === "tenant") flowOrigin = u.origin;
+      } catch {
+        // malformed origin param — fail safe to the apex origin
+      }
     }
   }
 
