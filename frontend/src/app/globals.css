@@ -1276,7 +1276,23 @@
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
   --aqt-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --aqt-onest: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --aqt-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+  /* Editorial Tactical hero (design-book): role-spectrum accent + ONE
+     restrained teal glow. The spectrum is the single sanctioned multi-hue
+     accent — everywhere else, one teal leads. */
+  --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
+  --aqt-hero-glow: radial-gradient(ellipse at 30% 45%, hsl(174 72% 46% / 0.1), transparent 60%);
+}
+
+/* Page-hero title accent — role-spectrum gradient text. Callers wrap the
+   emphasized word in <em>; kept as one rule so heroes stay declarative. */
+.aqt-hero-title em {
+  font-style: normal;
+  background: var(--aqt-spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 @keyframes aqtPulse {

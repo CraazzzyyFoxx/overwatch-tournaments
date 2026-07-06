@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/LanguageContext";
 import { getTournamentStatusMeta } from "@/lib/tournament-status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
+import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface HeroTotals {
@@ -48,9 +49,8 @@ function formatDateRange(start: Date | string, end: Date | string, locale: "en" 
 
 /**
  * The tournament identity hero — id-line, title, live status + format pills and
- * the four bracket stat blocks. Mirrors the design mock's `tn-hero`, sourced
- * from the active tournament + analytics totals. The `controlsSlot` (analytics
- * picker) lives in the right rail, directly under the KPI stat blocks.
+ * the four bracket stat blocks, on the shared Editorial-Tactical hero. The
+ * `controlsSlot` (analytics picker) lives in the right rail, under the KPIs.
  */
 export default function TournamentHero({
   tournament,
@@ -59,105 +59,97 @@ export default function TournamentHero({
   controlsSlot,
 }: TournamentHeroProps) {
   const { t, locale } = useTranslation();
-  const statusMeta = tournament ? getTournamentStatusMeta(tournament.status) : null;
-  const stage = tournament ? stageProgress(tournament, tournament.status) : null;
-  const dates = tournament
-    ? formatDateRange(tournament.start_date, tournament.end_date, locale)
-    : "";
+
+  if (!tournament) {
+    return (
+      <PageHero
+        title={
+          <span className="text-[color:var(--aqt-fg-muted)]">
+            {t("analytics.briefing.pickPrompt")}
+          </span>
+        }
+      />
+    );
+  }
+
+  const statusMeta = getTournamentStatusMeta(tournament.status);
+  const stage = stageProgress(tournament, tournament.status);
+  const dates = formatDateRange(tournament.start_date, tournament.end_date, locale);
   const statusText = stage?.label ? `${statusMeta?.label} · ${stage.label}` : statusMeta?.label;
 
-  return (
-    <div className={styles.cHero}>
-      <span className={styles.cHeroHex} aria-hidden="true" />
-      <span className={styles.cHeroGlowRose} aria-hidden="true" />
-      <span className={styles.cHeroGlowTeal} aria-hidden="true" />
-
-      <div className={styles.cHeroInner}>
-        <div className={styles.cHeroLeft}>
-          {tournament ? (
-            <>
-              <div className={styles.cHeroId}>
-                <span className={styles.cHeroIdNum}>#{tournament.number}</span>
-                {dates ? (
-                  <>
-                    <span className={styles.cHeroSep}>·</span>
-                    <span>{dates}</span>
-                  </>
-                ) : null}
-                {algorithmName ? (
-                  <>
-                    <span className={styles.cHeroSep}>·</span>
-                    <span>
-                      {t("analytics.community.standings.rankedBy", { algorithm: algorithmName })}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-
-              <h1 className={styles.cHeroTitle}>{tournament.name}</h1>
-
-              <div className={styles.cHeroMeta}>
-                {statusMeta ? (
-                  <span className={cn(styles.cStatusPill, statusMeta.textClassName)}>
-                    <span
-                      className={cn(
-                        styles.cStatusDot,
-                        statusMeta.isActive && styles.cStatusDotLive
-                      )}
-                    />
-                    {statusText}
-                  </span>
-                ) : null}
-                <span className={styles.cMetaPill}>
-                  <span className={styles.cMetaPillK}>{t("analytics.hero.pillFormat")}</span>
-                  <span className={styles.cMetaPillV}>
-                    {tournament.is_league
-                      ? t("analytics.hero.formatLeague")
-                      : t("analytics.hero.formatCup")}
-                  </span>
-                </span>
-                {tournament.team_formation ? (
-                  <span className={styles.cMetaPill}>
-                    <span className={styles.cMetaPillK}>{t("analytics.hero.pillTeamsBy")}</span>
-                    <span className={styles.cMetaPillV}>{tournament.team_formation}</span>
-                  </span>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <div className={styles.cHeroPrompt}>{t("analytics.briefing.pickPrompt")}</div>
-          )}
-        </div>
-
-        <div className={styles.cHeroRight}>
-          {totals ? (
-            <div className={styles.cHeroStats}>
-              <div className={styles.cHeroStat}>
-                <span className={styles.cHeroStatL}>{t("analytics.hero.statTeams")}</span>
-                <span className={styles.cHeroStatV}>{totals.teams}</span>
-                <span className={styles.cHeroStatS}>{t("analytics.hero.statTeamsSub")}</span>
-              </div>
-              <div className={styles.cHeroStat}>
-                <span className={styles.cHeroStatL}>{t("analytics.hero.statPlayers")}</span>
-                <span className={styles.cHeroStatV}>{totals.players}</span>
-                <span className={styles.cHeroStatS}>{t("analytics.hero.statPlayersSub")}</span>
-              </div>
-              <div className={styles.cHeroStat}>
-                <span className={styles.cHeroStatL}>{t("analytics.hero.statGroups")}</span>
-                <span className={styles.cHeroStatV}>{totals.groups}</span>
-                <span className={styles.cHeroStatS}>{t("analytics.hero.statGroupsSub")}</span>
-              </div>
-              <div className={styles.cHeroStat}>
-                <span className={styles.cHeroStatL}>{t("analytics.hero.statStages")}</span>
-                <span className={styles.cHeroStatV}>{totals.stages}</span>
-                <span className={styles.cHeroStatS}>{t("analytics.hero.statStagesSub")}</span>
-              </div>
-            </div>
-          ) : null}
-
-          {controlsSlot ? <div className={styles.cHeroControls}>{controlsSlot}</div> : null}
-        </div>
-      </div>
-    </div>
+  const eyebrow = (
+    <HeroCoord className="inline-flex flex-wrap items-center gap-2">
+      <span className="text-[color:var(--aqt-fg-muted)]">#{tournament.number}</span>
+      {dates ? (
+        <>
+          <span className="opacity-50">·</span>
+          <span>{dates}</span>
+        </>
+      ) : null}
+      {algorithmName ? (
+        <>
+          <span className="opacity-50">·</span>
+          <span>{t("analytics.community.standings.rankedBy", { algorithm: algorithmName })}</span>
+        </>
+      ) : null}
+    </HeroCoord>
   );
+
+  const meta = (
+    <>
+      {statusMeta ? (
+        <span className={cn(styles.cStatusPill, statusMeta.textClassName)}>
+          <span className={cn(styles.cStatusDot, statusMeta.isActive && styles.cStatusDotLive)} />
+          {statusText}
+        </span>
+      ) : null}
+      <span className={styles.cMetaPill}>
+        <span className={styles.cMetaPillK}>{t("analytics.hero.pillFormat")}</span>
+        <span className={styles.cMetaPillV}>
+          {tournament.is_league
+            ? t("analytics.hero.formatLeague")
+            : t("analytics.hero.formatCup")}
+        </span>
+      </span>
+      {tournament.team_formation ? (
+        <span className={styles.cMetaPill}>
+          <span className={styles.cMetaPillK}>{t("analytics.hero.pillTeamsBy")}</span>
+          <span className={styles.cMetaPillV}>{tournament.team_formation}</span>
+        </span>
+      ) : null}
+    </>
+  );
+
+  const aside =
+    totals || controlsSlot ? (
+      <div className="flex flex-col gap-6">
+        {totals ? (
+          <div className="grid grid-cols-2 gap-x-7 gap-y-5 xl:grid-cols-4">
+            <HeroStat
+              label={t("analytics.hero.statTeams")}
+              value={totals.teams}
+              sub={t("analytics.hero.statTeamsSub")}
+            />
+            <HeroStat
+              label={t("analytics.hero.statPlayers")}
+              value={totals.players}
+              sub={t("analytics.hero.statPlayersSub")}
+            />
+            <HeroStat
+              label={t("analytics.hero.statGroups")}
+              value={totals.groups}
+              sub={t("analytics.hero.statGroupsSub")}
+            />
+            <HeroStat
+              label={t("analytics.hero.statStages")}
+              value={totals.stages}
+              sub={t("analytics.hero.statStagesSub")}
+            />
+          </div>
+        ) : null}
+        {controlsSlot ? <div>{controlsSlot}</div> : null}
+      </div>
+    ) : undefined;
+
+  return <PageHero eyebrow={eyebrow} title={tournament.name} meta={meta} aside={aside} />;
 }

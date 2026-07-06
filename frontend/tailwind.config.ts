@@ -32,6 +32,8 @@ const config = {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
         display: ["var(--font-barlow-condensed)", "system-ui", "sans-serif"],
+        // Editorial Tactical display face (page-hero titles); see design-book.
+        onest: ["var(--font-onest)", "var(--font-inter)", "system-ui", "sans-serif"],
       },
       colors: {
         // Redesign (OWT) accent palette — references global --aqt-* tokens.

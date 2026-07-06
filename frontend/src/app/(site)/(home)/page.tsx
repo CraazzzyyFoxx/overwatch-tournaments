@@ -6,6 +6,7 @@ import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
 import StatisticsCard from "@/components/StatisticsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import statisticsService from "@/services/statistics.service";
 import workspaceService from "@/services/workspace.service";
 import tournamentService from "@/services/tournament.service";
@@ -28,9 +29,6 @@ const WORKSPACE_HUES = [174, 210, 38, 270, 142, 320, 0, 60];
 function getWorkspaceHue(id: number): number {
   return WORKSPACE_HUES[id % WORKSPACE_HUES.length];
 }
-
-// SVG hex-grid data URL used as a subtle background pattern
-const HEX_GRID_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40%2C1 79%2C23.2 79%2C69.2 40%2C91.4 1%2C69.2 1%2C23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E")`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root page
@@ -128,87 +126,21 @@ export default async function Home() {
 
 function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
   return (
-    <div
-      className="relative overflow-hidden rounded-xl border border-white/[0.07] p-8 md:p-10"
-      style={{ background: "hsl(222 30% 6%)" }}
-    >
-      {/* Hex grid */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: HEX_GRID_BG, backgroundSize: "80px 92.4px" }}
-      />
-      {/* Teal left spotlight */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-15%",
-          left: "-5%",
-          width: "65%",
-          height: "130%",
-          background:
-            "radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18) 0%, transparent 62%)",
-        }}
-      />
-      {/* Blue top-right accent */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-25%",
-          right: "0%",
-          width: "55%",
-          height: "100%",
-          background:
-            "radial-gradient(ellipse at 70% 30%, hsl(210 80% 55% / 0.1) 0%, transparent 58%)",
-        }}
-      />
-      {/* Subtle center glow */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "20%",
-          left: "25%",
-          width: "50%",
-          height: "60%",
-          background:
-            "radial-gradient(ellipse at 50% 50%, hsl(174 72% 46% / 0.05) 0%, transparent 70%)",
-        }}
-      />
-      {/* Bottom fade to page */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-        style={{
-          background: "linear-gradient(to bottom, transparent, hsl(222 30% 6% / 0.6))",
-        }}
-      />
-
-      <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p
-            className="text-[11px] font-semibold tracking-[0.14em] uppercase mb-3"
-            style={{ color: "hsl(215 12% 40%)" }}
-          >
-            Overwatch Tournament Platform
-          </p>
-          <h1
-            className="font-display font-bold uppercase mb-4"
-            style={{
-              fontSize: "clamp(2.4rem, 5vw, 3.5rem)",
-              lineHeight: 1.1,
-              letterSpacing: "0.03em",
-              color: "hsl(210 20% 95%)",
-            }}
-          >
-            What&apos;s happening{" "}
-            <span style={{ color: "hsl(162 72% 50%)" }}>now</span>
-          </h1>
-          <p className="text-sm leading-relaxed" style={{ color: "hsl(215 12% 52%)", maxWidth: "26rem" }}>
-            {tenantMode
-              ? "Tournaments, player stats and rankings for this community."
-              : "Tournaments, player stats and rankings across all communities on the platform."}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+    <PageHero
+      align="center"
+      eyebrow={<HeroCoord>OWT // Overwatch Tournament Platform</HeroCoord>}
+      title={
+        <>
+          What&apos;s happening <em>now</em>
+        </>
+      }
+      lede={
+        tenantMode
+          ? "Tournaments, player stats and rankings for this community."
+          : "Tournaments, player stats and rankings across all communities on the platform."
+      }
+      actions={
+        <>
           <Button asChild size="lg" className="shadow-lg shadow-primary/20">
             <Link href="/tournaments">
               <Trophy className="mr-2 h-5 w-5" />
@@ -221,9 +153,9 @@ function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
               Analytics
             </Link>
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 

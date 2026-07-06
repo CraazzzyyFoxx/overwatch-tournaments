@@ -24,6 +24,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
@@ -910,21 +911,15 @@ export default function EncountersRedesignClient({
 
 function Hero({ overview }: { overview: EncounterOverview }) {
   return (
-    <section className={styles.hero}>
-      <div className={styles.hex} />
-      <div className={styles.glow1} />
-      <div className={styles.glow2} />
-      <div className={styles.heroGrid}>
-        <div>
-          <p className={styles.crumb}>All tournaments · Encounters</p>
-          <h1 className={styles.title}>
-            Every fight, <em className={styles.titleAccent}>quantified</em>
-          </h1>
-          <p className={styles.subtitle}>
-            All series across all tournaments and leagues on the platform — sliceable by stage,
-            tournament, closeness and logs availability.
-          </p>
-        </div>
+    <PageHero
+      eyebrow={<HeroCoord>All tournaments · Encounters</HeroCoord>}
+      title={
+        <>
+          Every fight, <em>quantified</em>
+        </>
+      }
+      lede="All series across all tournaments and leagues on the platform — sliceable by stage, tournament, closeness and logs availability."
+      aside={
         <div className={styles.heroStats}>
           <HeroStat
             label="Total encounters"
@@ -970,8 +965,8 @@ function Hero({ overview }: { overview: EncounterOverview }) {
             foot={`${countLabel(overview.kpis.upcoming_count)} upcoming`}
           />
         </div>
-      </div>
-    </section>
+      }
+    />
   );
 }
 

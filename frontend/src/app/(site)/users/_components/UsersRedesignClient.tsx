@@ -10,6 +10,7 @@ import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "l
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
@@ -403,23 +404,22 @@ const UsersRedesignClient = () => {
   return (
     <div className={styles.surface}>
       {/* ===== Hero ===== */}
-      <section className={styles.hero}>
-        <div className={styles.hex} />
-        <div className={styles.glow1} />
-        <div className={styles.glow2} />
-        <div className={styles.heroGrid}>
-          <div>
-            <p className={styles.crumb}>
-              <Link href="/">Roster</Link> · Users
-            </p>
-            <h1 className={styles.title}>
-              The <em className={styles.titleAccent}>players</em> behind the tags
-            </h1>
-            <p className={styles.subtitle}>
-              Every competitor across every tournament — sliceable by role, division and hero
-              pool. Switch between deep analytics and a fast browsing catalog.
-            </p>
-          </div>
+      <PageHero
+        eyebrow={
+          <HeroCoord>
+            <Link href="/" className="transition-colors hover:text-[color:var(--aqt-teal)]">
+              Roster
+            </Link>{" "}
+            · Users
+          </HeroCoord>
+        }
+        title={
+          <>
+            The <em>players</em> behind the tags
+          </>
+        }
+        lede="Every competitor across every tournament — sliceable by role, division and hero pool. Switch between deep analytics and a fast browsing catalog."
+        aside={
           <div className={styles.heroStats}>
             <div className={styles.heroStat}>
               <span className={styles.statLabel}>Total players</span>
@@ -461,8 +461,8 @@ const UsersRedesignClient = () => {
               </span>
             </div>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       {/* ===== View switcher + toolbar ===== */}
       <section className={styles.toolbar}>
