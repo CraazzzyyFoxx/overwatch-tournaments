@@ -32,6 +32,11 @@ class Workspace(db.TimeStampIntegerMixin):
     brand_secondary: Mapped[str | None] = mapped_column(String(), nullable=True)
     brand_background: Mapped[str | None] = mapped_column(String(), nullable=True)
     brand_surface: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # White-label multi-domain (Phase 1: subdomains). See
+    # docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md.
+    subdomain: Mapped[str | None] = mapped_column(String(63), unique=True, index=True, nullable=True)
+    seo_title: Mapped[str | None] = mapped_column(String(), nullable=True)
+    seo_description: Mapped[str | None] = mapped_column(String(), nullable=True)
     default_division_grid_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("division_grid_version.id", ondelete="SET NULL"),
         nullable=True,
