@@ -51,3 +51,20 @@ def test_read_exposes_branding_fields():
         "brand_surface",
     ):
         assert name in fields
+
+
+def test_update_accepts_valid_subdomain():
+    model = schemas.WorkspaceUpdate(subdomain="Team-A")
+    assert model.subdomain == "team-a"  # normalized
+
+
+@pytest.mark.parametrize("bad", ["team_a", "www", "-x", "a" * 64])
+def test_update_rejects_bad_subdomain(bad):
+    with pytest.raises(ValidationError):
+        schemas.WorkspaceUpdate(subdomain=bad)
+
+
+def test_read_exposes_domain_seo_fields():
+    fields = schemas.WorkspaceRead.model_fields
+    for name in ("subdomain", "seo_title", "seo_description"):
+        assert name in fields
