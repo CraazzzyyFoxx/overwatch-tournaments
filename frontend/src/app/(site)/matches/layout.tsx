@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
 import React from "react";
 import { SITE_NAME } from "@/config/site";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: `Matches | ${SITE_NAME}`,
-  description: `View matches on ${SITE_NAME}.`,
-  metadataBase: new URL("https://aqt.craazzzyyfoxx.me"),
-  openGraph: {
-    title: `Matches | ${SITE_NAME}`,
-    description: `View matches on ${SITE_NAME}.`,
-    url: "https://aqt.craazzzyyfoxx.me",
-    type: "website",
-    siteName: SITE_NAME,
-    locale: "en_US"
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { name, origin } = await resolveSiteMetadata();
+  const title = `Matches | ${SITE_NAME}`;
+  const description = `View matches on ${SITE_NAME}.`;
+  return {
+    title,
+    description,
+    metadataBase: new URL(origin),
+    openGraph: {
+      title,
+      description,
+      url: origin,
+      type: "website",
+      siteName: name,
+      locale: "en_US"
+    }
+  };
+}
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <>{children}</>;
