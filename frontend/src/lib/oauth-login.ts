@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
 import type { OAuthProviderName } from "@/types/auth.types";
-import { PLATFORM_ZONE } from "@/lib/host";
+import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
 
 // Browser-binding CSRF cookie for the OAuth start->callback round trip. The
 // signed state (produced by the backend) carries origin/redirect/action and
@@ -20,9 +20,40 @@ function generateCsrfToken(): string {
 }
 
 export async function startOAuthLogin(request: Request, provider: OAuthProviderName): Promise<NextResponse> {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams, origin, hostname: currentHost } = new URL(request.url);
   const nextParam = searchParams.get("next");
   const action = searchParams.get("action") === "link" ? "link" : "login";
+
+  // Custom domains (a tenant host that is neither the apex nor a `.owt`
+  // subdomain) can't complete the round trip themselves: the CSRF cookie
+  // below is set with `Domain=.owt` so only the apex and its subdomains can
+  // read it back on the callback. Bounce the whole start to the apex,
+  // carrying the real origin and `next` along as query params, and let the
+  // apex (re-invoking this same function) set the cookie and call
+  // getOAuthUrl instead. No cookie is set on this redirect.
+  const onCustomDomain =
+    resolveHost(currentHost).mode === "tenant" && currentHost !== PLATFORM_ZONE && !currentHost.endsWith(`.${PLATFORM_ZONE}`);
+  if (onCustomDomain) {
+    const apexLogin = new URL(`https://${PLATFORM_ZONE}/auth/${provider}/login`);
+    apexLogin.searchParams.set("action", action);
+    apexLogin.searchParams.set("origin", `https://${currentHost}`);
+    if (nextParam) apexLogin.searchParams.set("next", nextParam);
+    return NextResponse.redirect(apexLogin);
+  }
+
+  // Only present when this is a bounced custom-domain flow arriving on the
+  // apex (see above). Trust it as the state `origin` only when it resolves
+  // to a tenant host, so an attacker can't point the post-login redirect at
+  // an arbitrary open origin via this query param.
+  const originParam = searchParams.get("origin");
+  let flowOrigin = origin;
+  if (originParam) {
+    try {
+      if (resolveHost(new URL(originParam).hostname).mode === "tenant") flowOrigin = originParam;
+    } catch {
+      // Malformed origin param — ignore and fall back to the apex origin.
+    }
+  }
 
   let redirect = action === "link" ? "/account" : "/";
   if (nextParam) {
@@ -35,7 +66,7 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
   }
 
   const csrf = generateCsrfToken();
-  const { url } = await authService.getOAuthUrl(provider, { origin, redirect, action, csrf });
+  const { url } = await authService.getOAuthUrl(provider, { origin: flowOrigin, redirect, action, csrf });
 
   const response = NextResponse.redirect(url);
   response.cookies.set(CSRF_COOKIE, csrf, {
