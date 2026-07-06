@@ -96,9 +96,7 @@ class StandingsServiceStageItemTests(TestCase):
         self.assertEqual([1, 2], [standing.position for standing in standings])
         self.assertEqual([0, 0], [standing.matches for standing in standings])
         self.assertEqual([0.0, 0.0], [standing.points for standing in standings])
-        self.assertEqual([stage_item.id, stage_item.id], [
-            standing.stage_item_id for standing in standings
-        ])
+        self.assertEqual([stage_item.id, stage_item.id], [standing.stage_item_id for standing in standings])
 
     def test_swiss_standings_award_configured_bye_points(self) -> None:
         tournament = models.Tournament(

@@ -65,10 +65,7 @@ class ActiveJobConflict(RuntimeError):
 def _progress_has_failed_stage(progress: dict[str, typing.Any] | None) -> bool:
     if not isinstance(progress, dict):
         return False
-    return any(
-        isinstance(stage, dict) and stage.get("state") == JOB_STATUS_FAILED
-        for stage in progress.values()
-    )
+    return any(isinstance(stage, dict) and stage.get("state") == JOB_STATUS_FAILED for stage in progress.values())
 
 
 async def _reconcile_failed_active_jobs(
@@ -97,15 +94,11 @@ async def _reconcile_failed_active_jobs(
         await session.commit()
 
 
-async def get_active_job(
-    session: AsyncSession, workspace_id: int | None
-) -> models.AnalyticsJob | None:
+async def get_active_job(session: AsyncSession, workspace_id: int | None) -> models.AnalyticsJob | None:
     """Return any ``pending``/``running`` job for ``workspace_id`` (or None)."""
     await _reconcile_failed_active_jobs(session, workspace_id)
     query = sa.select(models.AnalyticsJob).where(
-        models.AnalyticsJob.status.in_(
-            [JOB_STATUS_PENDING, JOB_STATUS_RUNNING]
-        )
+        models.AnalyticsJob.status.in_([JOB_STATUS_PENDING, JOB_STATUS_RUNNING])
     )
     if workspace_id is None:
         query = query.where(models.AnalyticsJob.workspace_id.is_(None))
@@ -157,12 +150,8 @@ async def create_job(
     return job
 
 
-async def get_job(
-    session: AsyncSession, job_id: int
-) -> models.AnalyticsJob | None:
-    return await session.scalar(
-        sa.select(models.AnalyticsJob).where(models.AnalyticsJob.id == job_id)
-    )
+async def get_job(session: AsyncSession, job_id: int) -> models.AnalyticsJob | None:
+    return await session.scalar(sa.select(models.AnalyticsJob).where(models.AnalyticsJob.id == job_id))
 
 
 async def list_jobs(
@@ -178,17 +167,13 @@ async def list_jobs(
     else:
         query = query.where(models.AnalyticsJob.workspace_id == workspace_id)
     if active_only:
-        query = query.where(
-            models.AnalyticsJob.status.in_([JOB_STATUS_PENDING, JOB_STATUS_RUNNING])
-        )
+        query = query.where(models.AnalyticsJob.status.in_([JOB_STATUS_PENDING, JOB_STATUS_RUNNING]))
     query = query.order_by(models.AnalyticsJob.id.desc()).limit(int(limit))
     result = await session.scalars(query)
     return result.all()
 
 
-async def mark_job_running(
-    session: AsyncSession, job_id: int
-) -> models.AnalyticsJob | None:
+async def mark_job_running(session: AsyncSession, job_id: int) -> models.AnalyticsJob | None:
     """Flip ``pending → running`` and stamp ``started_at``."""
     job = await get_job(session, job_id)
     if job is None or job.status != JOB_STATUS_PENDING:
@@ -200,9 +185,7 @@ async def mark_job_running(
     return job
 
 
-async def mark_job_succeeded(
-    session: AsyncSession, job_id: int
-) -> models.AnalyticsJob | None:
+async def mark_job_succeeded(session: AsyncSession, job_id: int) -> models.AnalyticsJob | None:
     job = await get_job(session, job_id)
     if job is None:
         return None
@@ -213,9 +196,7 @@ async def mark_job_succeeded(
     return job
 
 
-async def mark_job_failed(
-    session: AsyncSession, job_id: int, *, error: str
-) -> models.AnalyticsJob | None:
+async def mark_job_failed(session: AsyncSession, job_id: int, *, error: str) -> models.AnalyticsJob | None:
     job = await get_job(session, job_id)
     if job is None:
         return None

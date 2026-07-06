@@ -56,13 +56,8 @@ def _weight(signal: TournamentSignal) -> float:
     return signal.recency_decay * signal.coverage_weight * signal.newcomer_weight
 
 
-def _raw_signal(
-    signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS
-) -> float:
-    return (
-        weights.get("map_diff", 0.0) * signal.map_diff
-        + weights.get("placement_score", 0.0) * signal.placement_score
-    )
+def _raw_signal(signal: TournamentSignal, weights: Mapping[str, float] = RAW_SIGNAL_WEIGHTS) -> float:
+    return weights.get("map_diff", 0.0) * signal.map_diff + weights.get("placement_score", 0.0) * signal.placement_score
 
 
 def _ema(values: Sequence[float], period: int) -> float:
@@ -144,9 +139,7 @@ def score_history(
     sample_matches = sum(max(signal.match_count, 0) for signal in signals)
     log_coverage = fmean(signal.log_available for signal in signals)
 
-    weighted_raw = sum(
-        weight * raw for weight, raw in zip(evidence_weights, raws, strict=True)
-    )
+    weighted_raw = sum(weight * raw for weight, raw in zip(evidence_weights, raws, strict=True))
     stable_shift = clamp(
         shift_scale * weighted_raw / (STABLE_SHRINKAGE_PRIOR + effective_evidence),
         -STABLE_SHIFT_CLAMP,
@@ -181,9 +174,7 @@ def score_history(
     )
 
     confidence = clamp(
-        0.55 * min(1.0, effective_evidence / 3.0)
-        + 0.25 * min(1.0, sample_matches / 10.0)
-        + 0.20 * log_coverage,
+        0.55 * min(1.0, effective_evidence / 3.0) + 0.25 * min(1.0, sample_matches / 10.0) + 0.20 * log_coverage,
         0.0,
         1.0,
     )

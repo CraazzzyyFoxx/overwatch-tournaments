@@ -111,13 +111,11 @@ async def _h2h_history_uncached(
         prior_home_wins = sum(
             1
             for h in history
-            if h.get("home_team_id") == row.home_team_id
-            and (h.get("home_score") or 0) > (h.get("away_score") or 0)
+            if h.get("home_team_id") == row.home_team_id and (h.get("home_score") or 0) > (h.get("away_score") or 0)
         ) + sum(
             1
             for h in history
-            if h.get("away_team_id") == row.home_team_id
-            and (h.get("away_score") or 0) > (h.get("home_score") or 0)
+            if h.get("away_team_id") == row.home_team_id and (h.get("away_score") or 0) > (h.get("home_score") or 0)
         )
         played = len(history)
         h2h_winrate = (prior_home_wins / played) if played > 0 else 0.5

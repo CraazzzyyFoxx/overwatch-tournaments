@@ -5,12 +5,12 @@ Social-identity CRUD lives in ``shared.services.social_identity`` (the unified
 """
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.schemas.admin import user as admin_schemas
 

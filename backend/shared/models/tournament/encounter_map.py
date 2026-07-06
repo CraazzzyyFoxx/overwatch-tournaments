@@ -35,12 +35,8 @@ class EncounterMapPool(db.TimeStampIntegerMixin):
     __tablename__ = "encounter_map_pool"
     __table_args__ = ({"schema": "tournament"},)
 
-    encounter_id: Mapped[int] = mapped_column(
-        ForeignKey(Encounter.id, ondelete="CASCADE"), index=True
-    )
-    map_id: Mapped[int] = mapped_column(
-        ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True
-    )
+    encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
+    map_id: Mapped[int] = mapped_column(ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
     picked_by: Mapped[enums.MapPickSide | None] = mapped_column(
         MAP_PICK_SIDE_ENUM,
@@ -60,12 +56,8 @@ class MapVetoConfig(db.TimeStampIntegerMixin):
     __tablename__ = "map_veto_config"
     __table_args__ = ({"schema": "tournament"},)
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    stage_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Stage.id, ondelete="CASCADE"), nullable=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    stage_id: Mapped[int | None] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"), nullable=True)
     # Draft/ban step list (e.g. ["ban_home", "pick_away", "decider"]). This is a
     # template-shaped ordered list of opaque step tokens, not a set of FK ids, so
     # it stays JSON (see dbarch05 rationale). ``map_pool_ids`` (formerly a JSON
@@ -93,21 +85,13 @@ class MapVetoConfigMap(db.TimeStampIntegerMixin):
 
     __tablename__ = "map_veto_config_map"
     __table_args__ = (
-        UniqueConstraint(
-            "map_veto_config_id", "map_id", name="uq_map_veto_config_map_config_map"
-        ),
+        UniqueConstraint("map_veto_config_id", "map_id", name="uq_map_veto_config_map_config_map"),
         {"schema": "tournament"},
     )
 
-    map_veto_config_id: Mapped[int] = mapped_column(
-        ForeignKey(MapVetoConfig.id, ondelete="CASCADE"), index=True
-    )
-    map_id: Mapped[int] = mapped_column(
-        ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True
-    )
-    sort_order: Mapped[int] = mapped_column(
-        Integer(), nullable=False, server_default="0", default=0
-    )
+    map_veto_config_id: Mapped[int] = mapped_column(ForeignKey(MapVetoConfig.id, ondelete="CASCADE"), index=True)
+    map_id: Mapped[int] = mapped_column(ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
     config: Mapped[MapVetoConfig] = relationship(back_populates="map_pool")
     map: Mapped[Map] = relationship()

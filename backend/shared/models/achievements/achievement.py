@@ -99,17 +99,13 @@ class AchievementRule(db.TimeStampIntegerMixin):
         {"schema": "achievements"},
     )
 
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
-    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     slug: Mapped[str] = mapped_column(String(), index=True)
     name: Mapped[str] = mapped_column(String())
     description_ru: Mapped[str] = mapped_column(String())
     description_en: Mapped[str] = mapped_column(String())
     image_url: Mapped[str | None] = mapped_column(String(), nullable=True)
-    hero_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Hero.id, ondelete="SET NULL"), nullable=True
-    )
+    hero_id: Mapped[int | None] = mapped_column(ForeignKey(Hero.id, ondelete="SET NULL"), nullable=True)
 
     category: Mapped[AchievementCategory] = mapped_column(String())
     scope: Mapped[AchievementScope] = mapped_column(String())
@@ -151,21 +147,13 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
         {"schema": "achievements"},
     )
 
-    achievement_rule_id: Mapped[int] = mapped_column(
-        ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True
-    )
-    workspace_member_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True
-    )
+    achievement_rule_id: Mapped[int] = mapped_column(ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True)
+    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True)
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True, index=True
     )
-    match_id: Mapped[int | None] = mapped_column(
-        ForeignKey("matches.match.id", ondelete="CASCADE"), nullable=True
-    )
-    qualified_at: Mapped[db.datetime] = mapped_column(
-        db.DateTime(timezone=True), server_default=func.now()
-    )
+    match_id: Mapped[int | None] = mapped_column(ForeignKey("matches.match.id", ondelete="CASCADE"), nullable=True)
+    qualified_at: Mapped[db.datetime] = mapped_column(db.DateTime(timezone=True), server_default=func.now())
     evidence_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     rule_version: Mapped[int] = mapped_column(Integer())
     # FK added by dbarch01 (NOT VALID + VALIDATE); SET NULL so deleting an
@@ -197,23 +185,13 @@ class AchievementOverride(db.TimeStampIntegerMixin):
         {"schema": "achievements"},
     )
 
-    achievement_rule_id: Mapped[int] = mapped_column(
-        ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True
-    )
-    workspace_member_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True
-    )
-    tournament_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True
-    )
-    match_id: Mapped[int | None] = mapped_column(
-        ForeignKey("matches.match.id", ondelete="CASCADE"), nullable=True
-    )
+    achievement_rule_id: Mapped[int] = mapped_column(ForeignKey("achievements.rule.id", ondelete="CASCADE"), index=True)
+    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True)
+    tournament_id: Mapped[int | None] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True)
+    match_id: Mapped[int | None] = mapped_column(ForeignKey("matches.match.id", ondelete="CASCADE"), nullable=True)
     action: Mapped[AchievementOverrideAction] = mapped_column(String())
     reason: Mapped[str] = mapped_column(String())
-    granted_by: Mapped[int] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL")
-    )
+    granted_by: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"))
 
     rule: Mapped[AchievementRule] = relationship()
     workspace_member: Mapped["WorkspaceMember"] = relationship()
@@ -225,22 +203,14 @@ class EvaluationRun(db.TimeStampUUIDMixin):
     __tablename__ = "evaluation_run"
     __table_args__ = ({"schema": "achievements"},)
 
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
-    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     trigger: Mapped[EvaluationRunTrigger] = mapped_column(String())
-    tournament_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="SET NULL"), nullable=True
-    )
+    tournament_id: Mapped[int | None] = mapped_column(ForeignKey(Tournament.id, ondelete="SET NULL"), nullable=True)
     rules_evaluated: Mapped[int] = mapped_column(Integer(), server_default="0")
     results_created: Mapped[int] = mapped_column(Integer(), server_default="0")
     results_removed: Mapped[int] = mapped_column(Integer(), server_default="0")
-    started_at: Mapped[db.datetime] = mapped_column(
-        db.DateTime(timezone=True), server_default=func.now()
-    )
-    finished_at: Mapped[db.datetime | None] = mapped_column(
-        db.DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[db.datetime] = mapped_column(db.DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[db.datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
     status: Mapped[EvaluationRunStatus] = mapped_column(String(), server_default="running")
     error_message: Mapped[str | None] = mapped_column(String(), nullable=True)
 

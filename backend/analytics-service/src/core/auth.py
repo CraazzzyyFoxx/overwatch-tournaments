@@ -3,22 +3,19 @@
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.identity.auth_user import AuthUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
 from src import models
 
 # ── Shared auth dependencies (DB-backed) ─────────────────────────────
 
-async def _resolve_user_from_db(
-    user_id: int, payload: dict[str, Any], *, session: AsyncSession
-) -> AuthUser | None:
-    result = await session.execute(
-        select(AuthUser).where(AuthUser.id == user_id)
-    )
+
+async def _resolve_user_from_db(user_id: int, payload: dict[str, Any], *, session: AsyncSession) -> AuthUser | None:
+    result = await session.execute(select(AuthUser).where(AuthUser.id == user_id))
     user = result.scalar_one_or_none()
     if user is not None:
         workspace_rbac: dict[int, dict] = {}
@@ -39,6 +36,7 @@ async def _resolve_user_from_db(
 
 
 # ── Parser-specific: service token scopes ─────────────────────────────
+
 
 async def _require_workspace_permission(
     current_user: AuthUser,

@@ -21,7 +21,6 @@ os.environ.setdefault("CHALLONGE_USERNAME", "test")
 os.environ.setdefault("CHALLONGE_API_KEY", "test")
 
 from shared.core.enums import MapPickSide, MapPoolEntryStatus  # noqa: E402
-
 from src.services.encounter.map_veto import (  # noqa: E402
     auto_complete_decider_entry,
     build_map_pool_state,

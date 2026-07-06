@@ -56,10 +56,7 @@ def build_hero_entries(
         if entry is None:
             continue
         seen.add(slug)
-        hero_entries.append(
-            models.BalancerRegistrationRoleHero(hero_id=entry.id, priority=len(hero_entries) + 1)
-        )
+        hero_entries.append(models.BalancerRegistrationRoleHero(hero_id=entry.id, priority=len(hero_entries) + 1))
         if len(hero_entries) >= max_heroes:
             break
     return hero_entries
-

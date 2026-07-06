@@ -32,8 +32,8 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
-from shared.rpc.identity import ensure_workspace_permission
 
+from shared.rpc.identity import ensure_workspace_permission
 from src.core import auth
 from src.rpc._helpers import _dump, _identity, _path_int, _payload, _run
 from src.schemas.admin import stage as admin_schemas
@@ -42,11 +42,6 @@ from src.services.admin import stage as stage_service
 from src.services.computation import jobs as computation_jobs
 
 # --- helpers -----------------------------------------------------------------
-
-
-
-
-
 
 
 def register(broker: Any, logger: Any) -> None:

@@ -112,9 +112,7 @@ def _iter_python_files() -> list[Path]:
         if not root.exists():
             continue
         files.extend(
-            path
-            for path in root.rglob("*.py")
-            if "tests" not in path.parts and "__pycache__" not in path.parts
+            path for path in root.rglob("*.py") if "tests" not in path.parts and "__pycache__" not in path.parts
         )
     return files
 

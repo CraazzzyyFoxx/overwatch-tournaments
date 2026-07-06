@@ -2,9 +2,9 @@ import typing
 from collections import defaultdict
 
 import sqlalchemy as sa
-from shared.services.tournament_utils import sort_bracket_matches
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.services.tournament_utils import sort_bracket_matches
 from src import models, schemas
 from src.core import utils
 from src.services.team import flows as team_flows
@@ -148,6 +148,5 @@ async def get_by_tournament(
             await service.get_completed_match_history_by_tournament(session, tournament.id)
         )
     return [
-        await to_pydantic(session, standing, entities, histories_by_team=histories_by_team)
-        for standing in standings
+        await to_pydantic(session, standing, entities, histories_by_team=histories_by_team) for standing in standings
     ]

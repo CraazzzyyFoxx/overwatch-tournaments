@@ -101,10 +101,7 @@ WITH NO DATA
 """
 
 # Unique index is required for REFRESH MATERIALIZED VIEW CONCURRENTLY.
-_CREATE_INDEX = (
-    "CREATE UNIQUE INDEX ix_mv_hero_global_stats_name_hero "
-    "ON matches.mv_hero_global_stats (name, hero_id)"
-)
+_CREATE_INDEX = "CREATE UNIQUE INDEX ix_mv_hero_global_stats_name_hero ON matches.mv_hero_global_stats (name, hero_id)"
 
 
 def upgrade() -> None:

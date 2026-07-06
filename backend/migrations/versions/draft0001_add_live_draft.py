@@ -135,9 +135,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("session_id", "user_id", name="uq_draft_player_session_user"),
         schema="balancer",
     )
-    op.create_index(
-        op.f("ix_balancer_draft_player_user_id"), "draft_player", ["user_id"], schema="balancer"
-    )
+    op.create_index(op.f("ix_balancer_draft_player_user_id"), "draft_player", ["user_id"], schema="balancer")
     op.create_index(
         op.f("ix_balancer_draft_player_source_balancer_player_id"),
         "draft_player",
@@ -185,9 +183,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("session_id", "overall_no", name="uq_draft_pick_session_overall"),
         schema="balancer",
     )
-    op.create_index(
-        op.f("ix_balancer_draft_pick_draft_team_id"), "draft_pick", ["draft_team_id"], schema="balancer"
-    )
+    op.create_index(op.f("ix_balancer_draft_pick_draft_team_id"), "draft_pick", ["draft_team_id"], schema="balancer")
     op.create_index(
         op.f("ix_balancer_draft_pick_picked_player_id"), "draft_pick", ["picked_player_id"], schema="balancer"
     )

@@ -11,9 +11,7 @@ _VALID_TRANSITIONS: dict[TournamentStatus, frozenset[TournamentStatus]] = {
     TournamentStatus.ARCHIVED: frozenset({TournamentStatus.COMPLETED}),
 }
 
-_FINISHED_STATUSES: frozenset[TournamentStatus] = frozenset(
-    {TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED}
-)
+_FINISHED_STATUSES: frozenset[TournamentStatus] = frozenset({TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED})
 
 
 def can_transition(current: TournamentStatus, target: TournamentStatus) -> bool:

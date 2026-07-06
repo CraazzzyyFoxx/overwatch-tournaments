@@ -1,9 +1,11 @@
 # Anak`s Tournaments Statistics
 
-![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/CraazzzyyFoxx/1362ebafcd51d3f65dae7935b1d322eb/raw/pytest.json)
-[![Issues](https://img.shields.io/github/issues/CraazzzyyFoxx/anak-tournaments)](https://github.com/CraazzzyyFoxx/anak-tournaments)
+[![Lint Backend](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/lint-backend.yml/badge.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/lint-backend.yml)
+[![Test Backend](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml/badge.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/CraazzzyyFoxx/e00b7692443a542b0e505c090cf83d35/raw/owt-coverage.json)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
+[![Issues](https://img.shields.io/github/issues/CraazzzyyFoxx/overwatch-tournaments)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/issues)
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://anakq.xyz/api/redoc)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/LICENSE)
 
 > **OWT** provides comprehensive statistics about Anakq's sub-tournaments —
 > the history of past tournaments and player statistics such as tournaments participated in, divisions, teams,
@@ -171,7 +173,7 @@ All data provided by the API is owned by Anakq and their community.
 
 Copyright © 2024-2025 [CraazzzyyFoxx](https://github.com/CraazzzyyFoxx).
 
-This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/CraazzzyyFoxx/anak-tournaments/blob/master/LICENSE) with additional attribution terms (AGPL §7). In short:
+This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/LICENSE) with additional attribution terms (AGPL §7). In short:
 
 - **Self-hosting the unmodified project is allowed** — run it as-is for any purpose, including over a network.
 - **Self-hosting a modified version is allowed**, but the running site must display a visible link back to this original project and its author.

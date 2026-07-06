@@ -49,13 +49,11 @@ Create Date: 2026-07-02
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "iwrefac08"
-down_revision: Union[str, None] = "iwrefac07"
+down_revision: str | None = "iwrefac07"
 branch_labels = None
 depends_on = None
 
@@ -233,9 +231,7 @@ def downgrade() -> None:
         table_name="override",
         schema="achievements",
     )
-    op.drop_constraint(
-        "fk_override_workspace_member", "override", schema="achievements", type_="foreignkey"
-    )
+    op.drop_constraint("fk_override_workspace_member", "override", schema="achievements", type_="foreignkey")
     op.alter_column(
         "override",
         "workspace_member_id",

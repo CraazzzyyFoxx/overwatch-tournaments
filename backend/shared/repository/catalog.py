@@ -88,20 +88,17 @@ class HeroRepository(BaseRepository[models.Hero]):
 
         if workspace_id is not None:
             if tournament_id is None:
-                playtime_cte = (
-                    playtime_cte.join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-                    .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+                playtime_cte = playtime_cte.join(models.Match, models.Match.id == models.MatchStatistics.match_id).join(
+                    models.Encounter, models.Encounter.id == models.Match.encounter_id
                 )
-            playtime_cte = (
-                playtime_cte.join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-                .where(models.Tournament.workspace_id == workspace_id)
-            )
+            playtime_cte = playtime_cte.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
 
         playtime_cte = playtime_cte.cte("playtime_cte")
 
         overall_playtime = (
-            sa.select(sa.func.sum(playtime_cte.c.playtime).label("total_playtime"))
-            .select_from(playtime_cte)
+            sa.select(sa.func.sum(playtime_cte.c.playtime).label("total_playtime")).select_from(playtime_cte)
         ).scalar_subquery()
 
         query = (
@@ -165,8 +162,8 @@ class MapRepository(BaseRepository[models.Map]):
         gamemode: str,
         with_gamemode: bool = False,
     ) -> models.Map | None:
-        query = sa.select(models.Map).join(models.Gamemode).where(
-            models.Map.name == name, models.Gamemode.name == gamemode
+        query = (
+            sa.select(models.Map).join(models.Gamemode).where(models.Map.name == name, models.Gamemode.name == gamemode)
         )
         if with_gamemode:
             query = query.options(selectinload(models.Map.gamemode))

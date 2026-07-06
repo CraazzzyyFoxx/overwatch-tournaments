@@ -5,17 +5,17 @@ import typing
 
 from loguru import logger
 
-from src.services.balancer.algorithm.player_loader import load_players_from_dict
-from src.services.balancer.algorithm.result_serializer import _build_response_payload
-from src.services.balancer.config.defaults import AlgorithmConfig
 from src.services.balancer.algorithm.captain_assignment_service import assign_captains
-from src.services.balancer.config.provider import normalize_config_overrides
 from src.services.balancer.algorithm.determinism import build_balancer_seed, derive_balancer_seed
 from src.services.balancer.algorithm.feasibility_analyzer import analyze_feasibility
 from src.services.balancer.algorithm.moo_backend import run_moo_optimizer
+from src.services.balancer.algorithm.player_loader import load_players_from_dict
 from src.services.balancer.algorithm.progress import ProgressCallback, emit_progress
 from src.services.balancer.algorithm.rating_normalizer import RatingNormalizer
+from src.services.balancer.algorithm.result_serializer import _build_response_payload
 from src.services.balancer.algorithm.role_assignment_service import find_feasible_role_assignment
+from src.services.balancer.config.defaults import AlgorithmConfig
+from src.services.balancer.config.provider import normalize_config_overrides
 
 
 def _filter_valid_players_and_role_counts(
@@ -166,9 +166,16 @@ def _prepare_balance_context(
         message=f"Forming {num_teams} teams",
     )
 
-    return config, valid_players, num_teams, has_applied_overrides, role_assignment, derive_balancer_seed(
-        base_seed,
-        "moo_optimizer",
+    return (
+        config,
+        valid_players,
+        num_teams,
+        has_applied_overrides,
+        role_assignment,
+        derive_balancer_seed(
+            base_seed,
+            "moo_optimizer",
+        ),
     )
 
 

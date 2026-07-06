@@ -11,7 +11,9 @@ from .catalog import PERMISSION_CATALOG, WORKSPACE_SYSTEM_ROLE_NAMES, permission
 
 
 async def ensure_permission_catalog(session: AsyncSession) -> dict[str, Permission]:
-    result = await session.execute(sa.select(Permission).where(Permission.name.in_([p.name for p in PERMISSION_CATALOG])))
+    result = await session.execute(
+        sa.select(Permission).where(Permission.name.in_([p.name for p in PERMISSION_CATALOG]))
+    )
     existing = {permission.name: permission for permission in result.scalars().all()}
 
     for spec in PERMISSION_CATALOG:
@@ -172,9 +174,7 @@ async def _workspace_roles_by_ids(
     if not role_ids:
         return []
     result = await session.execute(
-        sa.select(Role)
-        .where(Role.workspace_id == workspace_id, Role.id.in_(role_ids))
-        .order_by(Role.id)
+        sa.select(Role).where(Role.workspace_id == workspace_id, Role.id.in_(role_ids)).order_by(Role.id)
     )
     roles = list(result.scalars().all())
     if len({role.id for role in roles}) != len(set(role_ids)):
@@ -190,7 +190,9 @@ async def replace_user_workspace_roles(
     role_ids: list[int] | None,
 ) -> list[Role]:
     if role_ids is None:
-        roles = [await assign_workspace_system_role(session, user_id=user_id, workspace_id=workspace_id, role_name="member")]
+        roles = [
+            await assign_workspace_system_role(session, user_id=user_id, workspace_id=workspace_id, role_name="member")
+        ]
         return roles
 
     roles = await _workspace_roles_by_ids(session, workspace_id=workspace_id, role_ids=role_ids)
@@ -256,9 +258,7 @@ async def workspace_names_blocking_player_unlink(
     result = await session.execute(
         sa.select(Workspace.name)
         .select_from(
-            user_roles.join(Role, Role.id == user_roles.c.role_id).join(
-                Workspace, Workspace.id == Role.workspace_id
-            )
+            user_roles.join(Role, Role.id == user_roles.c.role_id).join(Workspace, Workspace.id == Role.workspace_id)
         )
         .where(
             user_roles.c.user_id == user_id,
@@ -287,4 +287,3 @@ async def legacy_workspace_role_name_for_user(
         if role_name in role_names:
             return role_name
     return "member"
-

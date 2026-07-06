@@ -22,12 +22,11 @@ SAFETY / SHAPE:
 DOWNGRADE is a no-op: the inserted ``member`` grants are indistinguishable from
 pre-existing ones, so they are intentionally not removed (data backfill).
 """
-from typing import Union
 
 from alembic import op
 
 revision: str = "wsmbr01"
-down_revision: Union[str, None] = "dbarch06"
+down_revision: str | None = "dbarch06"
 branch_labels = None
 depends_on = None
 

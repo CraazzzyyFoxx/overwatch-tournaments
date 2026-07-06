@@ -108,8 +108,16 @@ def build_paths(client: httpx.Client) -> list[tuple[str, dict[str, Any]]]:
     if ws_id:
         add(f"{PREFIX}/workspaces/{ws_id}")
     if user_id:
-        for sub in ("profile", "tournaments", "maps", "heroes", "teammates",
-                    "encounters", "maps/summary", "matches/summary"):
+        for sub in (
+            "profile",
+            "tournaments",
+            "maps",
+            "heroes",
+            "teammates",
+            "encounters",
+            "maps/summary",
+            "matches/summary",
+        ):
             add(f"{PREFIX}/users/{user_id}/{sub}", _ws())
         add(f"{PREFIX}/achievements/user/{user_id}", _ws())
         add(f"{PREFIX}/users/{user_id}/compare", _ws())

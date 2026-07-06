@@ -12,9 +12,7 @@ __all__ = ("EventOutbox",)
 
 class EventOutbox(db.Base):
     __tablename__ = "event_outbox"
-    __table_args__ = (
-        Index("ix_event_outbox_status_next_attempt", "status", "next_attempt_at"),
-    )
+    __table_args__ = (Index("ix_event_outbox_status_next_attempt", "status", "next_attempt_at"),)
 
     id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
     event_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

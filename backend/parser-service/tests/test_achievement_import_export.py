@@ -31,7 +31,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 from shared.models.achievements.achievement import AchievementRule  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-
 from src.services.achievement.import_export import (  # noqa: E402
     PortableAchievementRule,
     build_export_payload,
@@ -101,7 +100,11 @@ class CopyImageTests(IsolatedAsyncioTestCase):
 
         with patch(
             "src.services.achievement.import_export.upload_asset",
-            AsyncMock(return_value=SimpleNamespace(success=True, public_url="http://cdn/bucket/assets/achievements/target/alpha.webp", error=None)),
+            AsyncMock(
+                return_value=SimpleNamespace(
+                    success=True, public_url="http://cdn/bucket/assets/achievements/target/alpha.webp", error=None
+                )
+            ),
         ) as upload_mock:
             copied_url, warning = await copy_workspace_achievement_image(
                 s3,
@@ -213,15 +216,19 @@ class ImportRulesTests(IsolatedAsyncioTestCase):
             ),
         ]
 
-        with patch(
-            "src.services.achievement.import_export.load_rules_for_workspace",
-            AsyncMock(return_value=[existing]),
-        ), patch(
-            "src.services.achievement.import_export.hero_exists",
-            AsyncMock(return_value=True),
-        ), patch(
-            "src.services.achievement.import_export.copy_workspace_achievement_image",
-            AsyncMock(return_value=("http://cdn/bucket/assets/achievements/target/existing.webp", None)),
+        with (
+            patch(
+                "src.services.achievement.import_export.load_rules_for_workspace",
+                AsyncMock(return_value=[existing]),
+            ),
+            patch(
+                "src.services.achievement.import_export.hero_exists",
+                AsyncMock(return_value=True),
+            ),
+            patch(
+                "src.services.achievement.import_export.copy_workspace_achievement_image",
+                AsyncMock(return_value=("http://cdn/bucket/assets/achievements/target/existing.webp", None)),
+            ),
         ):
             result = await import_portable_rules(
                 session,

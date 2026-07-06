@@ -47,6 +47,7 @@ VALID_ROLE_SUBTYPES = LEGACY_ROLE_SUBTYPES
 
 ROLE_ORDER = ("tank", "dps", "support")
 
+
 class RoleSubroleEntry(TypedDict):
     """Structured role + optional sub-role token — mirrors Pydantic/SQL model shape."""
 

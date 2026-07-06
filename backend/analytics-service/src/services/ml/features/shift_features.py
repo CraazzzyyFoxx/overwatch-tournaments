@@ -23,9 +23,9 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.division_grid import DEFAULT_GRID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.division_grid import DEFAULT_GRID
 from src import models
 from src.core.workspace import workspace_scope_filter
 from src.services.analytics.canonical_division import (
@@ -192,10 +192,7 @@ async def _openskill_shift_frame(
             workspace_ids=workspace_ids,
         )
         return pd.DataFrame(
-            [
-                {"player_id": int(player_id), "os_shift": float(shift)}
-                for player_id, shift in shift_map.items()
-            ],
+            [{"player_id": int(player_id), "os_shift": float(shift)} for player_id, shift in shift_map.items()],
             columns=["player_id", "os_shift"],
         )
 
@@ -263,10 +260,7 @@ async def build_shift_feature_frame(
                 workspace_id=workspace_id,
                 workspace_ids=workspace_ids,
             )
-            shift_map = {
-                int(row.player_id): float(row.os_shift)
-                for row in shift_frame.itertuples(index=False)
-            }
+            shift_map = {int(row.player_id): float(row.os_shift) for row in shift_frame.itertuples(index=False)}
         except Exception:
             logger.exception(
                 "Failed to compute OpenSkill shift map for tournament_id=%d",
@@ -312,11 +306,7 @@ async def build_shift_feature_frame(
         )
         merged = merged.merge(linear_t, on="player_id", how="left")
         merged["current_div"] = merged["div"]
-        merged["os_shift"] = (
-            merged["player_id"]
-            .map(lambda pid, lookup=shift_map: lookup.get(int(pid)))
-            .astype(float)
-        )
+        merged["os_shift"] = merged["player_id"].map(lambda pid, lookup=shift_map: lookup.get(int(pid))).astype(float)
         if not performance_features.empty:
             merged = merged.merge(
                 performance_features[performance_features["tournament_id"] == tid],

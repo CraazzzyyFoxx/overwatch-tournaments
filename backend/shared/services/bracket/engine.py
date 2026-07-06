@@ -50,9 +50,7 @@ def generate_bracket(
 
     if stage_type == StageType.SWISS:
         if swiss_standings is None:
-            swiss_standings = [
-                swiss.SwissStanding(team_id=tid, points=0.0) for tid in team_ids
-            ]
+            swiss_standings = [swiss.SwissStanding(team_id=tid, points=0.0) for tid in team_ids]
         return swiss.generate_round(
             standings=swiss_standings,
             played_pairs=swiss_played_pairs or set(),

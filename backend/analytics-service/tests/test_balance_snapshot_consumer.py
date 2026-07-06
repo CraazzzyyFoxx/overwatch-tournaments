@@ -25,7 +25,6 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ["DEBUG"] = "true"
 
 from shared.schemas.events import BalanceExportedEvent, BalancePlayerSnapshotData  # noqa: E402
-
 from src import models  # noqa: E402
 from src.worker.balance_snapshot import write_balance_snapshot  # noqa: E402
 

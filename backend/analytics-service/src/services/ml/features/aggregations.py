@@ -84,13 +84,13 @@ async def _build_match_features_with_strength_uncached(
             matches[col] = np.nan
         return matches
 
-    own = snapshots.rename(
-        columns={"avg_mu": "team_avg_mu", "max_mu": "team_max_mu", "min_mu": "team_min_mu"}
-    )[["encounter_id", "team_id", "team_avg_mu", "team_max_mu", "team_min_mu"]]
+    own = snapshots.rename(columns={"avg_mu": "team_avg_mu", "max_mu": "team_max_mu", "min_mu": "team_min_mu"})[
+        ["encounter_id", "team_id", "team_avg_mu", "team_max_mu", "team_min_mu"]
+    ]
 
-    opp = snapshots.rename(
-        columns={"avg_mu": "opp_avg_mu", "max_mu": "opp_max_mu", "min_mu": "opp_min_mu"}
-    )[["encounter_id", "team_id", "opp_avg_mu", "opp_max_mu", "opp_min_mu"]]
+    opp = snapshots.rename(columns={"avg_mu": "opp_avg_mu", "max_mu": "opp_max_mu", "min_mu": "opp_min_mu"})[
+        ["encounter_id", "team_id", "opp_avg_mu", "opp_max_mu", "opp_min_mu"]
+    ]
 
     merged = matches.merge(own, on=["encounter_id", "team_id"], how="left")
 
@@ -167,9 +167,7 @@ async def _build_tournament_feature_frame_uncached(
         return df
 
     mu = (
-        matches.groupby(["tournament_id", "player_id"], dropna=False)[
-            ["team_avg_mu", "opp_avg_mu", "mu_gap"]
-        ]
+        matches.groupby(["tournament_id", "player_id"], dropna=False)[["team_avg_mu", "opp_avg_mu", "mu_gap"]]
         .mean()
         .reset_index()
     )

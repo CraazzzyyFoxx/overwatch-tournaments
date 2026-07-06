@@ -97,8 +97,12 @@ class SelectAndClaimLeaseTests(IsolatedAsyncioTestCase):
         session = self._session(rows)
 
         returned = await service.select_and_claim_due(
-            session, limit=50, scope="all", interval_seconds=900,
-            jitter_fraction=0.2, now=now,
+            session,
+            limit=50,
+            scope="all",
+            interval_seconds=900,
+            jitter_fraction=0.2,
+            now=now,
         )
 
         self.assertEqual(len(returned), 50)
@@ -115,8 +119,12 @@ class SelectAndClaimLeaseTests(IsolatedAsyncioTestCase):
         session = self._session(rows)
 
         await service.select_and_claim_due(
-            session, limit=5, scope="all", interval_seconds=900,
-            jitter_fraction=0.0, now=now,
+            session,
+            limit=5,
+            scope="all",
+            interval_seconds=900,
+            jitter_fraction=0.0,
+            now=now,
         )
         for row in rows:
             self.assertEqual(row.next_eligible_at, now + timedelta(seconds=900))

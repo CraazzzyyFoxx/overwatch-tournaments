@@ -16,12 +16,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core import enums
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.services.registration._common import (
     VALID_BALANCER_STATUSES,
@@ -201,6 +201,7 @@ async def create_manual_registration(
     max_heroes = None
     if config and config.get("enabled", True) is not False:
         from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
+
         hero_catalog = await resolve_hero_catalog(session)
         raw_max = config.get("max_heroes")
         max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
@@ -310,6 +311,7 @@ async def update_registration_profile(
         max_heroes = None
         if config and config.get("enabled", True) is not False:
             from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
+
             hero_catalog = await resolve_hero_catalog(session)
             raw_max = config.get("max_heroes")
             max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES

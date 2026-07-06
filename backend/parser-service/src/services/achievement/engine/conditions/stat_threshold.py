@@ -32,6 +32,7 @@ async def execute(
     context: EvalContext,
 ) -> ResultSet:
     from . import resolve_stat_name
+
     stat_name = resolve_stat_name(params["stat"])
     op = params["op"]
     value = params["value"]

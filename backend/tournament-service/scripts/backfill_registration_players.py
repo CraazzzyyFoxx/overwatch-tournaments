@@ -31,13 +31,13 @@ sys.path.insert(0, str(_BACKEND))
 sys.path.insert(0, str(_BACKEND / "tournament-service"))
 
 import sqlalchemy as sa  # noqa: E402
-from shared.core import enums  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
+from shared.core import enums  # noqa: E402
 from src import models  # noqa: E402
 from src.core import config  # noqa: E402
 from src.services.registration.service import ensure_player_identity  # noqa: E402

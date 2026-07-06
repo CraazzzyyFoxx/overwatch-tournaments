@@ -66,8 +66,10 @@ def build_message_feedback(
     # где все вложения уже обработаны ранее, трогать не нужно — иначе рестарт
     # повторно навешивает реакции (и перетирает снятые вручную). На живых
     # сообщениях по-прежнему подтверждаем ✅.
-    if not wait_for_result and results and all(
-        result.state is AttachmentFeedbackState.ALREADY_PROCESSED for result in results
+    if (
+        not wait_for_result
+        and results
+        and all(result.state is AttachmentFeedbackState.ALREADY_PROCESSED for result in results)
     ):
         return MessageFeedbackSummary(reactions=None, reply_text=None)
 

@@ -78,9 +78,7 @@ async def resolve_tournament_challonge(
     return result
 
 
-async def resolve_stage_challonge(
-    session: AsyncSession, stage_ids: Iterable[int | None]
-) -> dict[int, ChallongeRef]:
+async def resolve_stage_challonge(session: AsyncSession, stage_ids: Iterable[int | None]) -> dict[int, ChallongeRef]:
     """Map ``stage_id -> (challonge_id, slug)`` from the stage-scoped source.
 
     Filters ``source_type IN ('tournament','stage')`` to reproduce the legacy
@@ -111,9 +109,7 @@ async def resolve_stage_challonge(
     return result
 
 
-async def resolve_encounter_challonge(
-    session: AsyncSession, encounter_ids: Iterable[int | None]
-) -> dict[int, int]:
+async def resolve_encounter_challonge(session: AsyncSession, encounter_ids: Iterable[int | None]) -> dict[int, int]:
     """Map ``encounter_id -> challonge_match_id`` from ``challonge_match_mapping``."""
     ids = _unique_ints(encounter_ids)
     if not ids:

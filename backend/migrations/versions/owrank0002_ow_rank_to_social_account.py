@@ -56,9 +56,7 @@ _REV_MAP = f"""
 
 def upgrade() -> None:
     for table in ("rank_snapshot", "battle_tag_state", "fetch_log"):
-        op.execute(
-            f'ALTER TABLE {RANK_SCHEMA}.{table} ADD COLUMN social_account_id INTEGER'
-        )
+        op.execute(f"ALTER TABLE {RANK_SCHEMA}.{table} ADD COLUMN social_account_id INTEGER")
         op.execute(
             f"""
             UPDATE {RANK_SCHEMA}.{table} t
@@ -90,9 +88,7 @@ def upgrade() -> None:
         op.execute(f"ALTER TABLE {RANK_SCHEMA}.{table} DROP COLUMN battle_tag_id")
 
     # rank_snapshot: NOT NULL + FK (CASCADE) + composite series index.
-    op.execute(
-        f"ALTER TABLE {RANK_SCHEMA}.rank_snapshot ALTER COLUMN social_account_id SET NOT NULL"
-    )
+    op.execute(f"ALTER TABLE {RANK_SCHEMA}.rank_snapshot ALTER COLUMN social_account_id SET NOT NULL")
     op.create_foreign_key(
         "rank_snapshot_social_account_id_fkey",
         "rank_snapshot",
@@ -111,9 +107,7 @@ def upgrade() -> None:
     )
 
     # battle_tag_state: NOT NULL + UNIQUE + FK (CASCADE).
-    op.execute(
-        f"ALTER TABLE {RANK_SCHEMA}.battle_tag_state ALTER COLUMN social_account_id SET NOT NULL"
-    )
+    op.execute(f"ALTER TABLE {RANK_SCHEMA}.battle_tag_state ALTER COLUMN social_account_id SET NOT NULL")
     op.create_unique_constraint(
         "battle_tag_state_social_account_id_key",
         "battle_tag_state",
@@ -146,9 +140,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for table in ("rank_snapshot", "battle_tag_state", "fetch_log"):
-        op.execute(
-            f'ALTER TABLE {RANK_SCHEMA}.{table} ADD COLUMN battle_tag_id INTEGER'
-        )
+        op.execute(f"ALTER TABLE {RANK_SCHEMA}.{table} ADD COLUMN battle_tag_id INTEGER")
         op.execute(
             f"""
             UPDATE {RANK_SCHEMA}.{table} t
@@ -173,9 +165,7 @@ def downgrade() -> None:
     for table in ("rank_snapshot", "battle_tag_state", "fetch_log"):
         op.execute(f"ALTER TABLE {RANK_SCHEMA}.{table} DROP COLUMN social_account_id")
 
-    op.execute(
-        f"ALTER TABLE {RANK_SCHEMA}.rank_snapshot ALTER COLUMN battle_tag_id SET NOT NULL"
-    )
+    op.execute(f"ALTER TABLE {RANK_SCHEMA}.rank_snapshot ALTER COLUMN battle_tag_id SET NOT NULL")
     op.create_foreign_key(
         "rank_snapshot_battle_tag_id_fkey",
         "rank_snapshot",
@@ -193,9 +183,7 @@ def downgrade() -> None:
         schema=RANK_SCHEMA,
     )
 
-    op.execute(
-        f"ALTER TABLE {RANK_SCHEMA}.battle_tag_state ALTER COLUMN battle_tag_id SET NOT NULL"
-    )
+    op.execute(f"ALTER TABLE {RANK_SCHEMA}.battle_tag_state ALTER COLUMN battle_tag_id SET NOT NULL")
     op.create_unique_constraint(
         "battle_tag_state_battle_tag_id_key",
         "battle_tag_state",

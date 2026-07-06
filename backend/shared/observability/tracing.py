@@ -49,9 +49,7 @@ def setup_tracing(
                 resource=Resource(attributes={SERVICE_NAME: service_name}),
                 sampler=_build_sampler(sampler_name, sampler_arg),
             )
-            provider.add_span_processor(
-                BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True))
-            )
+            provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)))
             trace.set_tracer_provider(provider)
 
         if not getattr(HTTPXClientInstrumentor, "_is_instrumented_by_opentelemetry", False):

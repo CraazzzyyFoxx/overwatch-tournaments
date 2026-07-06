@@ -42,13 +42,11 @@ Create Date: 2026-07-01
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "iwrefac05"
-down_revision: Union[str, None] = "iwrefac04"
+down_revision: str | None = "iwrefac04"
 branch_labels = None
 depends_on = None
 
@@ -286,7 +284,5 @@ def downgrade() -> None:
             postgresql_concurrently=True,
             if_exists=True,
         )
-        op.drop_constraint(
-            "fk_registration_workspace_member", "registration", schema="balancer", type_="foreignkey"
-        )
+        op.drop_constraint("fk_registration_workspace_member", "registration", schema="balancer", type_="foreignkey")
         op.drop_column("registration", "workspace_member_id", schema="balancer")

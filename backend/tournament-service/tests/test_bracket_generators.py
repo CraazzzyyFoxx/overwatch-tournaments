@@ -179,21 +179,13 @@ class DoubleEliminationInvariants(TestCase):
 
         # The lower-bracket seeds never appear in an upper-bracket match.
         upper_team_ids = {
-            tid
-            for p in s.pairings
-            if p.round_number > 0
-            for tid in (p.home_team_id, p.away_team_id)
-            if tid is not None
+            tid for p in s.pairings if p.round_number > 0 for tid in (p.home_team_id, p.away_team_id) if tid is not None
         }
         self.assertNotIn(3, upper_team_ids)
         self.assertNotIn(4, upper_team_ids)
 
         # The UB R1 loser drops into the lower bracket.
-        loser_edges = [
-            e
-            for e in s.advancement_edges
-            if e.source_local_id == ub_r1[0].local_id and e.role == "loser"
-        ]
+        loser_edges = [e for e in s.advancement_edges if e.source_local_id == ub_r1[0].local_id and e.role == "loser"]
         self.assertEqual(1, len(loser_edges))
 
     def test_lower_bracket_seeds_4_4_structure(self) -> None:
@@ -233,9 +225,7 @@ class RoundRobinInvariants(TestCase):
         self.assertEqual(6, len(s.pairings))
         self.assertEqual(3, s.total_rounds)
 
-        pairs = {
-            frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings
-        }
+        pairs = {frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings}
         self.assertEqual(6, len(pairs))
 
     def test_odd_team_count_5_teams(self) -> None:
@@ -244,9 +234,7 @@ class RoundRobinInvariants(TestCase):
         self.assertEqual(10, len(s.pairings))
         self.assertEqual(5, s.total_rounds)
 
-        pairs = {
-            frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings
-        }
+        pairs = {frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings}
         self.assertEqual(10, len(pairs))
 
     def test_no_bye_team_in_pairings(self) -> None:
@@ -258,9 +246,7 @@ class RoundRobinInvariants(TestCase):
 
 class SwissInvariants(TestCase):
     def test_first_round_pairs_all_teams(self) -> None:
-        standings = [
-            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 9)
-        ]
+        standings = [swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 9)]
         s = swiss.generate_round(standings, played_pairs=set(), round_number=1)
         # 8 teams → 4 matches
         self.assertEqual(4, len(s.pairings))
@@ -287,31 +273,23 @@ class SwissInvariants(TestCase):
             swiss.SwissStanding(team_id=4, points=0.0),
         ]
         s = swiss.generate_round(standings, played_pairs=set(), round_number=1)
-        pairs = {
-            frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings
-        }
+        pairs = {frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings}
         self.assertEqual({frozenset({1, 3}), frozenset({2, 4})}, pairs)
 
     def test_avoids_rematch_when_possible(self) -> None:
-        standings = [
-            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)
-        ]
+        standings = [swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)]
         played = {frozenset({1, 3})}  # Try to block the canonical pairing
         s = swiss.generate_round(standings, played_pairs=played, round_number=2)
         # Each team still gets paired
         self.assertEqual(2, len(s.pairings))
-        pair_set = {
-            frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings
-        }
+        pair_set = {frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings}
         appearance_counts = _appearance_counts(s)
         self.assertEqual({1: 1, 2: 1, 3: 1, 4: 1}, appearance_counts)
         # The "1 vs 3" rematch must be avoided
         self.assertNotIn(frozenset({1, 3}), pair_set)
 
     def test_avoids_duplicate_team_when_canonical_pairing_is_blocked(self) -> None:
-        standings = [
-            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)
-        ]
+        standings = [swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)]
         s = swiss.generate_round(
             standings,
             played_pairs={frozenset({1, 3})},
@@ -321,17 +299,13 @@ class SwissInvariants(TestCase):
         self.assertEqual({1: 1, 2: 1, 3: 1, 4: 1}, _appearance_counts(s))
 
     def test_finds_global_non_rematch_matching(self) -> None:
-        standings = [
-            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)
-        ]
+        standings = [swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 5)]
         s = swiss.generate_round(
             standings,
             played_pairs={frozenset({2, 4})},
             round_number=2,
         )
-        pair_set = {
-            frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings
-        }
+        pair_set = {frozenset({p.home_team_id, p.away_team_id}) for p in s.pairings}
 
         self.assertEqual({1: 1, 2: 1, 3: 1, 4: 1}, _appearance_counts(s))
         self.assertNotIn(frozenset({2, 4}), pair_set)
@@ -358,10 +332,7 @@ class SwissInvariants(TestCase):
         ]
 
         skeleton = swiss.generate_round(standings, played_pairs=set(), round_number=2)
-        pairs = {
-            frozenset({pairing.home_team_id, pairing.away_team_id})
-            for pairing in skeleton.pairings
-        }
+        pairs = {frozenset({pairing.home_team_id, pairing.away_team_id}) for pairing in skeleton.pairings}
 
         self.assertEqual({frozenset({1, 3}), frozenset({2, 4})}, pairs)
 
@@ -406,9 +377,7 @@ class SwissInvariants(TestCase):
         self.assertEqual(2, skeleton.bye_team_id)
 
     def test_does_not_repeat_bye_while_other_teams_have_not_received_one(self) -> None:
-        standings = [
-            swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 6)
-        ]
+        standings = [swiss.SwissStanding(team_id=i, points=0.0) for i in range(1, 6)]
         played_pairs = {
             frozenset({1, 3}),
             frozenset({2, 4}),

@@ -36,9 +36,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["battle_tag_id"], ["players.battle_tag.id"], ondelete="SET NULL"),
         schema="overwatch_rank",
     )
-    op.create_index(
-        "ix_fetch_log_created_at", "fetch_log", ["created_at"], schema="overwatch_rank"
-    )
+    op.create_index("ix_fetch_log_created_at", "fetch_log", ["created_at"], schema="overwatch_rank")
     op.create_index(
         "ix_fetch_log_status_created",
         "fetch_log",

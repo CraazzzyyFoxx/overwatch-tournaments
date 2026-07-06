@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 backend_root = Path(__file__).resolve().parents[2]
@@ -59,9 +60,7 @@ TOP_HEROES_ON = {"top_heroes": {"enabled": True}}
 
 
 def _payload(roles: list[dict]) -> schemas.RegistrationCreate:
-    return schemas.RegistrationCreate(
-        roles=[schemas.RoleWithSubrole(**role) for role in roles]
-    )
+    return schemas.RegistrationCreate(roles=[schemas.RoleWithSubrole(**role) for role in roles])
 
 
 CATALOG = {
@@ -84,9 +83,7 @@ class ValidateRolesTests(TestCase):
         assert exc.value.status_code == 422
 
     def test_subrole_not_in_config_rejected(self) -> None:
-        form = _form(
-            {"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}}
-        )
+        form = _form({"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}})
         with pytest.raises(HTTPException) as exc:
             validation.validate_registration_input(
                 form,
@@ -95,9 +92,7 @@ class ValidateRolesTests(TestCase):
         assert exc.value.status_code == 422
 
     def test_subrole_in_config_accepted(self) -> None:
-        form = _form(
-            {"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}}
-        )
+        form = _form({"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}})
         validation.validate_registration_input(
             form,
             _payload([{"role": "dps", "subrole": "hitscan", "is_primary": True}]),
@@ -135,9 +130,7 @@ class ValidateRolesTests(TestCase):
         )
 
     def test_subrole_is_normalized_before_check(self) -> None:
-        form = _form(
-            {"primary_role": {"enabled": True, "subroles": {"support": ["main_heal"]}}}
-        )
+        form = _form({"primary_role": {"enabled": True, "subroles": {"support": ["main_heal"]}}})
         # "Main Heal" normalizes to main_heal and passes.
         validation.validate_registration_input(
             form,
@@ -307,11 +300,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
 
     def test_caps_dedups_and_drops_unknown(self) -> None:
         entries = reg_service.build_registration_roles(
-            [
-                schemas.RoleWithSubrole(
-                    role="dps", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"]
-                )
-            ],
+            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
             hero_catalog=HERO_CATALOG,
             max_heroes=2,
         )

@@ -12,41 +12,14 @@ on:
 jobs:
   test-backend:
     runs-on: ubuntu-latest
+    # Safety net: DB-integration tests skip when the database is unreachable
+    # (connection refused is instant on Linux). If that ever regresses into a
+    # hang, fail fast instead of burning a full-length runner slot.
+    timeout-minutes: 20
     env:
-      ENVIRONMENT: production
-      APP_PORT: ${{ secrets.APP_PORT }}
-      TRAEFIK_PORT: ${{ secrets.TRAEFIK_PORT }}
-      USERNAME: ${{ secrets.USERNAME }}
-      HASHED_PASSWORD: ${{ secrets.HASHED_PASSWORD }}
-
-      NEXT_API_URL: ${{ secrets.NEXT_API_URL }}
-      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      NEXT_PUBLIC_CACHE_POLICY: ${{ secrets.NEXT_PUBLIC_CACHE_POLICY }}
-
-      PROJECT_URL: ${{ secrets.PROJECT_URL }}
-
-      REDIS_URL: ${{ secrets.REDIS_URL }}
-      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
-
-      SUPERUSER_EMAIL: ${{ secrets.SUPERUSER_EMAIL }}
-      SUPERUSER_PASSWORD: ${{ secrets.SUPERUSER_PASSWORD }}
-      ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
-      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
-
-      CHALLONGE_API_KEY: ${{ secrets.CHALLONGE_API_KEY }}
-      CHALLONGE_USERNAME: ${{ secrets.CHALLONGE_USERNAME }}
-
-      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
-      S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
-      S3_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT_URL }}
-      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      # Optional PAT (gist scope) used only to publish the coverage badge on
+      # pushes to master. Absent on forks/PRs — the badge step is skipped then.
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,45 +30,52 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "0.4.15"
           enable-cache: true
-      - run: docker compose down -v --remove-orphans
+      # Each service is its own uv-workspace package with its own `src`, so the
+      # suites run one package at a time (a single pytest over all of them would
+      # collide on the duplicate top-level `src`). Integration tests that need a
+      # seeded database probe the connection and skip when it is unreachable, so
+      # no Postgres/Redis/RabbitMQ services are required here — unit and
+      # validation tests run, DB-integration tests skip cleanly.
+      - name: Run backend test suites (with coverage)
         working-directory: backend
-      - name: Run tests
-        run: uv run bash scripts/test.sh "Coverage for ${{ github.sha }}"
+        run: |
+          set -e
+          for svc in shared app-service parser-service balancer-service tournament-service analytics-service identity-service discord-service; do
+            if [ "$svc" = "shared" ]; then src="shared"; else src="$svc/src"; fi
+            echo "::group::pytest $svc"
+            uv run coverage run --parallel-mode --source="$src" -m pytest "$svc/tests"
+            echo "::endgroup::"
+          done
+          uv run coverage combine
+          uv run coverage report
+          uv run coverage json -o coverage.json
+      - name: Compute coverage percentage
+        id: cov
+        if: ${{ github.event_name == 'push' }}
         working-directory: backend
-      - run: docker compose down -v --remove-orphans
-      - name: Store coverage files
+        run: |
+          pct=$(uv run python -c "import json; print(round(json.load(open('coverage.json'))['totals']['percent_covered']))")
+          echo "pct=$pct" >> "$GITHUB_OUTPUT"
+      # Publishes the shields.io endpoint JSON to the coverage gist. Runs only on
+      # master pushes and only when the GIST_TOKEN secret is configured, so PRs
+      # and un-configured repos stay green.
+      - name: Publish coverage badge to gist
+        if: ${{ github.event_name == 'push' && env.GIST_TOKEN != '' }}
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: e00b7692443a542b0e505c090cf83d35
+          filename: owt-coverage.json
+          label: coverage
+          message: ${{ steps.cov.outputs.pct }}%
+          valColorRange: ${{ steps.cov.outputs.pct }}
+          minColorRange: 50
+          maxColorRange: 90
+      - name: Store coverage report
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html
-          path: backend/htmlcov
-          include-hidden-files: true
-
-  test-tournament-service:
-    runs-on: ubuntu-latest
-    env:
-      DEBUG: "true"
-      PROJECT_URL: http://localhost
-      REDIS_URL: redis://localhost:6379/0
-      RABBITMQ_URL: amqp://guest:guest@localhost:5672
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: "0.4.15"
-          enable-cache: true
-      - name: Run tournament-service tests
-        run: uv run --package tournament-service pytest tournament-service/tests
-        working-directory: backend
+          name: coverage-json
+          path: backend/coverage.json
+          if-no-files-found: ignore

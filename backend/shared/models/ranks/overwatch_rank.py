@@ -52,14 +52,10 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
 
     # Not individually indexed: the composite indexes below cover these columns
     # as their leftmost prefix.
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("players.user.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("players.user.id", ondelete="CASCADE"))
     # The battle.net ``players.social_account`` row (provider=battlenet) this
     # rank belongs to. One trackable OW identity = one battlenet social account.
-    social_account_id: Mapped[int] = mapped_column(
-        ForeignKey("players.social_account.id", ondelete="CASCADE")
-    )
+    social_account_id: Mapped[int] = mapped_column(ForeignKey("players.social_account.id", ondelete="CASCADE"))
     # Denormalized full "Name#1234" so history survives account deletion.
     battle_tag: Mapped[str] = mapped_column(String(255))
 
@@ -80,12 +76,8 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
     # Relevant `competitive` sub-object from /summary (not the whole profile).
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB(), nullable=True)
 
-    captured_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=db.func.now(), index=True
-    )
-    source: Mapped[str] = mapped_column(
-        String(32), server_default=enums.RankCollectionSource.scheduled.value
-    )
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=db.func.now(), index=True)
+    source: Mapped[str] = mapped_column(String(32), server_default=enums.RankCollectionSource.scheduled.value)
 
 
 class BattleTagRankState(db.TimeStampIntegerMixin):
@@ -116,24 +108,16 @@ class BattleTagRankState(db.TimeStampIntegerMixin):
     player_id_slug: Mapped[str] = mapped_column(String(255))
 
     # Not individually indexed: covered by the composite indexes below.
-    last_checked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_success_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_snapshot_id: Mapped[int | None] = mapped_column(
         ForeignKey(f"{RANK_SCHEMA}.rank_snapshot.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    status: Mapped[str] = mapped_column(
-        String(32), server_default=enums.RankCollectionStatus.pending.value
-    )
+    status: Mapped[str] = mapped_column(String(32), server_default=enums.RankCollectionStatus.pending.value)
     consecutive_failures: Mapped[int] = mapped_column(Integer(), server_default="0")
-    next_eligible_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    next_eligible_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 0 = background sweep (all users); higher = registration-driven priority.
     priority_tier: Mapped[int] = mapped_column(SmallInteger(), server_default="0")

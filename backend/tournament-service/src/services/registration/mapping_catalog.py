@@ -369,8 +369,7 @@ def coerce_custom_field_value(
 
     if field_def.type == "checkbox":
         custom_booleans = {
-            normalize_header(key): bool(mapped)
-            for key, mapped in ((value_mapping or {}).get("booleans") or {}).items()
+            normalize_header(key): bool(mapped) for key, mapped in ((value_mapping or {}).get("booleans") or {}).items()
         }
         normalized = normalize_header(text)
         value = custom_booleans.get(normalized, parse_boolean_value(text))

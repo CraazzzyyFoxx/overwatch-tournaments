@@ -11,9 +11,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import schemas
 from src.core import db
 from src.schemas.admin import rank_collection as rc_schemas

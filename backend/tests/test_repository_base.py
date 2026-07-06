@@ -84,9 +84,7 @@ def test_list_applies_query_and_total_queries() -> None:
     repo = BaseRepository(models.Hero)
     params = PaginationSortSearchParams(query="ana", fields=["name"], sort="name")
 
-    rows, total = asyncio.run(
-        repo.list(session, params, filters=[models.Hero.type == enums.HeroClass.support])
-    )
+    rows, total = asyncio.run(repo.list(session, params, filters=[models.Hero.type == enums.HeroClass.support]))
 
     assert rows == [hero]
     assert total == 1

@@ -18,8 +18,9 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
+
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.config import (
     ANALYTICS_INFER_QUEUE,
     ANALYTICS_JOB_QUEUE,
@@ -31,7 +32,6 @@ from shared.schemas.events import (
     AnalyticsJobRequested,
     AnalyticsTrainRequest,
 )
-
 from src import models
 from src.core import config, db
 from src.schemas.v2 import (
@@ -75,9 +75,7 @@ async def _require_actor(
             )
         return
     # compute: workspace-scoped permission
-    if workspace_id is not None and not user.has_workspace_permission(
-        workspace_id, "analytics", "update"
-    ):
+    if workspace_id is not None and not user.has_workspace_permission(workspace_id, "analytics", "update"):
         raise HTTPException(
             status_code=403,
             detail="analytics.update permission required for this workspace.",
@@ -99,9 +97,7 @@ def register(broker: Any, logger: Any) -> None:
                 tournament_id=body.tournament_id,
                 kind=body.kind,
                 algorithms=body.algorithms,
-                training_workspace_ids=(
-                    body.training_workspace_ids if body.kind == JOB_KIND_TRAIN_ML else None
-                ),
+                training_workspace_ids=(body.training_workspace_ids if body.kind == JOB_KIND_TRAIN_ML else None),
                 requested_by_user_id=int(user.id),
             )
         except ActiveJobConflict as exc:
@@ -209,12 +205,8 @@ def register(broker: Any, logger: Any) -> None:
                 await publish_message(broker, event.model_dump(), ANALYTICS_TRAIN_QUEUE)
             except Exception:
                 logger.exception("Failed to publish train request to RabbitMQ")
-                raise HTTPException(
-                    status_code=502, detail="Failed to dispatch training job to queue"
-                )
-            return JobAcceptedResponse(
-                message="Training job dispatched.", job="train", correlation_id=event.event_id
-            )
+                raise HTTPException(status_code=502, detail="Failed to dispatch training job to queue")
+            return JobAcceptedResponse(message="Training job dispatched.", job="train", correlation_id=event.event_id)
 
         return await c.envelope(logger, "train", op, session_factory=sf)
 
@@ -238,11 +230,7 @@ def register(broker: Any, logger: Any) -> None:
                 await publish_message(broker, event.model_dump(), ANALYTICS_INFER_QUEUE)
             except Exception:
                 logger.exception("Failed to publish infer request to RabbitMQ")
-                raise HTTPException(
-                    status_code=502, detail="Failed to dispatch inference job to queue"
-                )
-            return JobAcceptedResponse(
-                message="Inference job dispatched.", job="infer", correlation_id=event.event_id
-            )
+                raise HTTPException(status_code=502, detail="Failed to dispatch inference job to queue")
+            return JobAcceptedResponse(message="Inference job dispatched.", job="infer", correlation_id=event.event_id)
 
         return await c.envelope(logger, "infer", op, session_factory=sf)

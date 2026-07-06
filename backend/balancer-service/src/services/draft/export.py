@@ -100,9 +100,7 @@ async def export(session: AsyncSession, draft_session: DraftSession) -> tuple[Dr
         await session.scalars(
             sa.select(DraftPick).where(
                 DraftPick.session_id == draft_session.id,
-                DraftPick.status.in_(
-                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
-                ),
+                DraftPick.status.in_([DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]),
             )
         )
     ).all()

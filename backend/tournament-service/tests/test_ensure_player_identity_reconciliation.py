@@ -52,7 +52,6 @@ from shared.core.social import SocialProvider  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.social import SocialAccount  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
-
 from src.services.registration import service as reg_service  # noqa: E402
 
 

@@ -5,20 +5,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.balancer import WorkspaceBalancerConfig
 from src import models
-from src.services.balancer.config.provider import normalize_tournament_config_payload, serialize_saved_config_payload
-from src.services.balancer.config.public_contract import normalize_balance_response_payload
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.team import InternalBalancerTeamsPayload
 from src.services import team as team_flows
 from src.services.admin.balance_analytics import enqueue_balance_exported_event
 from src.services.admin.balancer_dual_write import sync_balance_variants_and_slots
+from src.services.balancer.config.provider import normalize_tournament_config_payload, serialize_saved_config_payload
+from src.services.balancer.config.public_contract import normalize_balance_response_payload
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,7 @@ async def get_tournament_config(
     tournament_id: int,
 ) -> models.BalancerTournamentConfig | None:
     result = await session.execute(
-        sa.select(models.BalancerTournamentConfig).where(
-            models.BalancerTournamentConfig.tournament_id == tournament_id
-        )
+        sa.select(models.BalancerTournamentConfig).where(models.BalancerTournamentConfig.tournament_id == tournament_id)
     )
     return result.scalar_one_or_none()
 
@@ -84,9 +82,7 @@ async def get_workspace_balancer_config(
     workspace_id: int,
 ) -> WorkspaceBalancerConfig | None:
     result = await session.execute(
-        sa.select(WorkspaceBalancerConfig).where(
-            WorkspaceBalancerConfig.workspace_id == workspace_id
-        )
+        sa.select(WorkspaceBalancerConfig).where(WorkspaceBalancerConfig.workspace_id == workspace_id)
     )
     return result.scalar_one_or_none()
 

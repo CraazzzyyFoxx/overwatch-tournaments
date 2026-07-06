@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
-from shared.core.errors import BaseAPIException as HTTPException
 from pydantic import BaseModel
 
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.crud import CrudDispatcher, EntityConfig
 from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
 
@@ -35,7 +35,7 @@ MEMBER: dict[str, Any] = {
 
 
 class _FakeSession:
-    async def __aenter__(self) -> "_FakeSession":
+    async def __aenter__(self) -> _FakeSession:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
@@ -71,17 +71,17 @@ async def _serialize(session: Any, obj: Any) -> dict[str, Any]:
 
 
 def _team_cfg(**overrides: Any) -> EntityConfig:
-    base: dict[str, Any] = dict(
-        entity="team",
-        model=_Dummy,
-        permission_resource="team",
-        serializer=_serialize,
-        create_schema=_CreateSchema,
-        update_schema=_UpdateSchema,
-        resolve_ws_from_id=_ws7,
-        resolve_ws_for_create=_ws7_for_create,
-        actions=frozenset({"create", "get", "update", "delete"}),
-    )
+    base: dict[str, Any] = {
+        "entity": "team",
+        "model": _Dummy,
+        "permission_resource": "team",
+        "serializer": _serialize,
+        "create_schema": _CreateSchema,
+        "update_schema": _UpdateSchema,
+        "resolve_ws_from_id": _ws7,
+        "resolve_ws_for_create": _ws7_for_create,
+        "actions": frozenset({"create", "get", "update", "delete"}),
+    }
     base.update(overrides)
     return EntityConfig(**base)
 
@@ -193,16 +193,16 @@ def _hero_cfg(**overrides: Any) -> EntityConfig:
     async def list_fn(session: Any, data: dict[str, Any]) -> dict[str, Any]:
         return {"results": [{"id": 1, "name": "hero"}], "total": 1}
 
-    base: dict[str, Any] = dict(
-        entity="hero",
-        model=_Dummy,
-        permission_resource="hero",
-        serializer=_serialize,
-        public_read=True,
-        service_get=svc_get,
-        list_fn=list_fn,
-        actions=frozenset({"get", "list"}),
-    )
+    base: dict[str, Any] = {
+        "entity": "hero",
+        "model": _Dummy,
+        "permission_resource": "hero",
+        "serializer": _serialize,
+        "public_read": True,
+        "service_get": svc_get,
+        "list_fn": list_fn,
+        "actions": frozenset({"get", "list"}),
+    }
     base.update(overrides)
     return EntityConfig(**base)
 

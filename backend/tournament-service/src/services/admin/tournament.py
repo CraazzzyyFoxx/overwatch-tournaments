@@ -3,16 +3,16 @@
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.admin import tournament as admin_schemas
 from src.services.admin import stage as stage_service
@@ -79,9 +79,7 @@ async def _link_tournament_challonge_source(
         source.slug = slug
 
 
-async def _unlink_tournament_challonge_source(
-    session: AsyncSession, tournament: models.Tournament
-) -> None:
+async def _unlink_tournament_challonge_source(session: AsyncSession, tournament: models.Tournament) -> None:
     """Drop the tournament-scoped ``challonge_source`` row(s) when the link is cleared."""
     await session.execute(
         delete(models.ChallongeSource).where(

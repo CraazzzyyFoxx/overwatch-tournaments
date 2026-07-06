@@ -1,4 +1,5 @@
 from pydantic import RedisDsn
+
 from shared.core.config import BaseServiceSettings
 
 

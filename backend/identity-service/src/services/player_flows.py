@@ -9,12 +9,12 @@ the RPC envelope maps; a later phase removes it.
 from __future__ import annotations
 
 from loguru import logger
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.identity.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.user import User
 from src import models, schemas
 from src.services.player_link_service import PlayerLinkService
 

@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
-from shared.rbac import legacy_workspace_role_name_for_user
-from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rbac import legacy_workspace_role_name_for_user
+from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from src import models, schemas
 from src.core import key_derivation
 from src.core.config import settings
@@ -237,9 +237,7 @@ async def list_api_keys(
     query = params.apply_pagination_sort(query, models.ApiKey)
     rows = (await session.execute(query)).scalars().all()
     total = (await session.execute(count_query)).scalar_one()
-    counts = await _api_key_status_counts(
-        session, auth_user_id=user.id, workspace_id=params.workspace_id
-    )
+    counts = await _api_key_status_counts(session, auth_user_id=user.id, workspace_id=params.workspace_id)
     return {
         "results": [_serialize_api_key(row) for row in rows],
         "total": total,

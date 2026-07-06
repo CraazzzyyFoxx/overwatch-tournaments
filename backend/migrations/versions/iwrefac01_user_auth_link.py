@@ -1,4 +1,5 @@
 """identity refactor: players.user.auth_user_id (collapse auth.user_player)"""
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -15,9 +16,14 @@ def upgrade() -> None:
         schema="players",
     )
     op.create_foreign_key(
-        "fk_players_user_auth_user", "user", "user",
-        ["auth_user_id"], ["id"],
-        source_schema="players", referent_schema="auth", ondelete="SET NULL",
+        "fk_players_user_auth_user",
+        "user",
+        "user",
+        ["auth_user_id"],
+        ["id"],
+        source_schema="players",
+        referent_schema="auth",
+        ondelete="SET NULL",
     )
     # Backfill from the PRIMARY link only (one auth_user -> at most one player).
     op.execute(
@@ -29,8 +35,11 @@ def upgrade() -> None:
         """
     )
     op.create_index(
-        "uq_players_user_auth_user_id", "user", ["auth_user_id"],
-        unique=True, schema="players",
+        "uq_players_user_auth_user_id",
+        "user",
+        ["auth_user_id"],
+        unique=True,
+        schema="players",
         postgresql_where=sa.text("auth_user_id IS NOT NULL"),
     )
 

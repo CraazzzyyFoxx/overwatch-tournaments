@@ -123,9 +123,7 @@ def downgrade() -> None:
 
     bind = op.get_bind()
     rows = bind.execute(
-        sa.text(
-            "SELECT id, role_ranks, role_top_heroes, additional_info FROM balancer.draft_player"
-        )
+        sa.text("SELECT id, role_ranks, role_top_heroes, additional_info FROM balancer.draft_player")
     ).fetchall()
     for pid, role_ranks, role_top_heroes, additional in rows:
         role_ranks = _as_dict(role_ranks)

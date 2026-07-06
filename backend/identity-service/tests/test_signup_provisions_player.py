@@ -49,7 +49,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.models.identity.user import User  # noqa: E402
-
 from src.schemas.auth import UserRegister  # noqa: E402
 from src.services import auth_flows  # noqa: E402
 

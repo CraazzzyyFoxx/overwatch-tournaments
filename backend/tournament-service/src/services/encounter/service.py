@@ -3,12 +3,12 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models, schemas
 from src.core import enums, pagination, utils
 from src.core.workspace import workspace_filter
@@ -261,16 +261,12 @@ def _apply_encounter_filters(
         if viewer_auth_user_id is None:
             query = query.where(sa.false())
         else:
-            linked_player_ids = sa.select(models.User.id).where(
-                models.User.auth_user_id == viewer_auth_user_id
-            )
+            linked_player_ids = sa.select(models.User.id).where(models.User.auth_user_id == viewer_auth_user_id)
             query = query.join(
                 models.Player,
                 sa.and_(
                     models.Player.tournament_id == models.Encounter.tournament_id,
-                    models.Player.workspace_member.has(
-                        models.WorkspaceMember.player_id.in_(linked_player_ids)
-                    ),
+                    models.Player.workspace_member.has(models.WorkspaceMember.player_id.in_(linked_player_ids)),
                     sa.or_(
                         models.Player.team_id == models.Encounter.home_team_id,
                         models.Player.team_id == models.Encounter.away_team_id,
@@ -821,21 +817,37 @@ async def get_overview_data(
     closest_rows = await session.execute(
         encounter_base()
         .where(models.Encounter.closeness.isnot(None))
-        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
-        .order_by(models.Encounter.closeness.desc(), models.Encounter.updated_at.desc().nullslast(), models.Encounter.id.desc())
+        .options(
+            *encounter_entities(
+                ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]
+            )
+        )
+        .order_by(
+            models.Encounter.closeness.desc(),
+            models.Encounter.updated_at.desc().nullslast(),
+            models.Encounter.id.desc(),
+        )
         .limit(4)
     )
     upcoming_rows = await session.execute(
         encounter_base()
         .where(_upcoming_condition(now))
-        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
+        .options(
+            *encounter_entities(
+                ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]
+            )
+        )
         .order_by(models.Encounter.scheduled_at.asc(), models.Encounter.id.desc())
         .limit(4)
     )
     live_rows = await session.execute(
         encounter_base()
         .where(_live_condition(now))
-        .options(*encounter_entities(["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]))
+        .options(
+            *encounter_entities(
+                ["tournament", "stage", "stage_item", "home_team", "away_team", "matches", "matches.map"]
+            )
+        )
         .order_by(models.Encounter.started_at.desc().nullslast(), models.Encounter.id.desc())
         .limit(4)
     )
@@ -875,8 +887,14 @@ async def get_overview_data(
         .where(
             models.Encounter.status == enums.EncounterStatus.COMPLETED,
             sa.or_(
-                sa.and_(models.Encounter.home_score > models.Encounter.away_score, home_standing.position > away_standing.position),
-                sa.and_(models.Encounter.away_score > models.Encounter.home_score, away_standing.position > home_standing.position),
+                sa.and_(
+                    models.Encounter.home_score > models.Encounter.away_score,
+                    home_standing.position > away_standing.position,
+                ),
+                sa.and_(
+                    models.Encounter.away_score > models.Encounter.home_score,
+                    away_standing.position > home_standing.position,
+                ),
             ),
         )
     )

@@ -1,6 +1,7 @@
 """
 RBAC (Role-Based Access Control) models
 """
+
 from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
@@ -34,6 +35,7 @@ user_roles = Table(
 
 class Role(db.TimeStampIntegerMixin):
     """Role model for RBAC"""
+
     __tablename__ = "roles"
     __table_args__ = (
         Index(
@@ -60,14 +62,8 @@ class Role(db.TimeStampIntegerMixin):
     )
 
     # Relations
-    users: Mapped[list["AuthUser"]] = relationship(
-        secondary=user_roles,
-        back_populates="roles"
-    )
-    permissions: Mapped[list["Permission"]] = relationship(
-        secondary="auth.role_permissions",
-        back_populates="roles"
-    )
+    users: Mapped[list["AuthUser"]] = relationship(secondary=user_roles, back_populates="roles")
+    permissions: Mapped[list["Permission"]] = relationship(secondary="auth.role_permissions", back_populates="roles")
     workspace: Mapped["Workspace | None"] = relationship()
 
     def __repr__(self):
@@ -76,19 +72,19 @@ class Role(db.TimeStampIntegerMixin):
 
 class Permission(db.TimeStampIntegerMixin):
     """Permission model for RBAC"""
+
     __tablename__ = "permissions"
     __table_args__ = ({"schema": "auth"},)
 
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     resource: Mapped[str] = mapped_column(String(100), nullable=False, index=True)  # e.g., "tournament", "user", "team"
-    action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # e.g., "create", "read", "update", "delete"
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )  # e.g., "create", "read", "update", "delete"
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     # Relations
-    roles: Mapped[list["Role"]] = relationship(
-        secondary="auth.role_permissions",
-        back_populates="permissions"
-    )
+    roles: Mapped[list["Role"]] = relationship(secondary="auth.role_permissions", back_populates="permissions")
 
     def __repr__(self):
         return f"<Permission id={self.id} name={self.name} resource={self.resource} action={self.action}>"
@@ -117,20 +113,14 @@ class UserPermissionDeny(db.TimeStampIntegerMixin):
         {"schema": "auth"},
     )
 
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False
-    )
-    permission_id: Mapped[int] = mapped_column(
-        ForeignKey("auth.permissions.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), nullable=False)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("auth.permissions.id", ondelete="CASCADE"), nullable=False)
     workspace_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
     )
     # FK added by dbarch01 (NOT VALID + VALIDATE); SET NULL keeps the deny row
     # alive when the operator's auth user is deleted.
-    created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
-    )
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     permission: Mapped["Permission"] = relationship()

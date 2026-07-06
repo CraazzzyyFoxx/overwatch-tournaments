@@ -3,14 +3,14 @@ from collections import defaultdict
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
-from shared.models import mv_hero_global_stats
-from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.core.social import SocialProvider, normalize_social_handle
+from shared.division_grid import DivisionGrid, division_case_expr, division_filter_predicates
+from shared.models import mv_hero_global_stats
+from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from src import models
 from src.core import config, enums, pagination, utils
 
@@ -32,6 +32,7 @@ def _team_load_options(entities: list[str]) -> list[_AbstractLoad]:
     if "placement" in entities:
         opts.append(selectinload(models.Team.standings))
     return opts
+
 
 if typing.TYPE_CHECKING:
     from src import schemas as app_schemas
@@ -173,19 +174,15 @@ def _build_eligible_hero_stats_cte(
     )
 
     if tournament_id is not None or workspace_id is not None:
-        base_select = (
-            base_select
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        base_select = base_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id).join(
+            models.Encounter, models.Encounter.id == models.Match.encounter_id
         )
         if tournament_id is not None:
             base_select = base_select.where(models.Encounter.tournament_id == tournament_id)
         if workspace_id is not None:
-            base_select = (
-                base_select
-                .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-                .where(models.Tournament.workspace_id == workspace_id)
-            )
+            base_select = base_select.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
 
     return base_select.cte(cte_name)
 
@@ -405,9 +402,9 @@ def _overview_achievements_count_expr(
         user_ids=None,
         name="overview_effective_achievement_rows",
     )
-    query = sa.select(
-        sa.func.count(sa.distinct(effective_rows.c.achievement_rule_id))
-    ).where(effective_rows.c.user_id == user_id_column)
+    query = sa.select(sa.func.count(sa.distinct(effective_rows.c.achievement_rule_id))).where(
+        effective_rows.c.user_id == user_id_column
+    )
 
     if role is None and div_min is None and div_max is None and tournament_id is None:
         return query.scalar_subquery()
@@ -890,9 +887,7 @@ async def _overview_ordered_ids(
     instead of being recomputed for every page and every concurrent viewer.
     """
     id_query = _apply_workspace_member_filter(sa.select(models.User.id), workspace_id)
-    total_query = _apply_workspace_member_filter(
-        sa.select(sa.func.count(sa.distinct(models.User.id))), workspace_id
-    )
+    total_query = _apply_workspace_member_filter(sa.select(sa.func.count(sa.distinct(models.User.id))), workspace_id)
     sort_expr = _overview_sort_expr(sort_key, grid)
     if descending:
         id_query = id_query.order_by(sort_expr.desc(), models.User.id.asc())
@@ -1082,7 +1077,7 @@ async def get_overview_tournaments_count(
         query = query.where(models.Tournament.workspace_id == workspace_id)
 
     result = await session.execute(query)
-    return {user_id: count for user_id, count in result.all()}
+    return dict(result.all())
 
 
 async def get_overview_achievements_count(
@@ -1098,16 +1093,13 @@ async def get_overview_achievements_count(
         workspace_id=workspace_id,
         name="overview_achievement_count_rows",
     )
-    query = (
-        sa.select(
-            effective_rows.c.user_id,
-            sa.func.count(sa.distinct(effective_rows.c.achievement_rule_id)).label("achievements_count"),
-        )
-        .group_by(effective_rows.c.user_id)
-    )
+    query = sa.select(
+        effective_rows.c.user_id,
+        sa.func.count(sa.distinct(effective_rows.c.achievement_rule_id)).label("achievements_count"),
+    ).group_by(effective_rows.c.user_id)
 
     result = await session.execute(query)
-    return {user_id: count for user_id, count in result.all()}
+    return dict(result.all())
 
 
 async def get_overview_averages(
@@ -1215,7 +1207,9 @@ async def get_overview_averages(
     placement_stage_result = await session.execute(placement_stage_query)
     closeness_result = await session.execute(closeness_query)
 
-    payload: dict[int, tuple[float | None, float | None, float | None, float | None]] = dict.fromkeys(user_ids, (None, None, None, None))
+    payload: dict[int, tuple[float | None, float | None, float | None, float | None]] = dict.fromkeys(
+        user_ids, (None, None, None, None)
+    )
 
     for user_id, avg_placement in placement_result.all():
         _, _, _, current_closeness = payload.get(user_id, (None, None, None, None))
@@ -1378,7 +1372,7 @@ def _compare_metrics_query(
     tournament_id: int | None = None,
     grid: DivisionGrid,
 ) -> sa.Select:
-    gk = dict(role=role, div_min=div_min, div_max=div_max, tournament_id=tournament_id, grid=grid)
+    gk = {"role": role, "div_min": div_min, "div_max": div_max, "tournament_id": tournament_id, "grid": grid}
     maps_won_expr = _overview_maps_won_expr(models.User.id, **gk)
     maps_lost_expr = _overview_maps_lost_expr(models.User.id, **gk)
     maps_total_expr = sa.func.coalesce(maps_won_expr, 0) + sa.func.coalesce(maps_lost_expr, 0)
@@ -1399,7 +1393,9 @@ def _compare_metrics_query(
         _overview_avg_closeness_expr(uid, **gk).label("avg_closeness"),
         _overview_match_stat_avg_10_expr(uid, enums.LogStatsName.Eliminations, **gk).label("eliminations_avg_10"),
         _overview_match_stat_avg_10_expr(uid, enums.LogStatsName.FinalBlows, **gk).label("final_blows_avg_10"),
-        _overview_match_stat_avg_10_expr(uid, enums.LogStatsName.HeroDamageDealt, **gk).label("hero_damage_dealt_avg_10"),
+        _overview_match_stat_avg_10_expr(uid, enums.LogStatsName.HeroDamageDealt, **gk).label(
+            "hero_damage_dealt_avg_10"
+        ),
         _overview_match_stat_avg_10_expr(uid, enums.LogStatsName.HealingDealt, **gk).label("healing_dealt_avg_10"),
         _overview_match_stat_avg(uid, enums.LogStatsName.Performance, False, **gk).label("mvp_score_avg"),
     )
@@ -1452,9 +1448,7 @@ async def get_overview_stats(
             grid=grid,
         )
 
-    candidate_user_ids: list[int] = [
-        row[0] for row in (await session.execute(base_query.distinct())).all()
-    ]
+    candidate_user_ids: list[int] = [row[0] for row in (await session.execute(base_query.distinct())).all()]
     total_players = len(candidate_user_ids)
 
     if not candidate_user_ids:
@@ -1481,9 +1475,8 @@ async def get_overview_stats(
     # join over that (very large) table, which times out for big workspaces. The
     # candidate set is already workspace-scoped, so this counts scoped players who
     # have parsed logs anywhere; the slight cross-workspace leniency is acceptable.
-    with_logs_query = (
-        sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id)))
-        .where(models.MatchStatistics.user_id.in_(candidate_user_ids))
+    with_logs_query = sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id))).where(
+        models.MatchStatistics.user_id.in_(candidate_user_ids)
     )
     with_logs_count = (await session.execute(with_logs_query)).scalar_one() or 0
 
@@ -1550,9 +1543,9 @@ async def get_overview_stats(
         .distinct()
     )
     if workspace_id is not None:
-        roles_query = roles_query.join(
-            models.Tournament, models.Tournament.id == models.Player.tournament_id
-        ).where(models.Tournament.workspace_id == workspace_id)
+        roles_query = roles_query.join(models.Tournament, models.Tournament.id == models.Player.tournament_id).where(
+            models.Tournament.workspace_id == workspace_id
+        )
     user_roles: dict[int, set[enums.HeroClass]] = defaultdict(set)
     for user_id, player_role in (await session.execute(roles_query)).all():
         user_roles[user_id].add(player_role)
@@ -1647,9 +1640,7 @@ async def get_catalog_users(
         letters_with_users = [(letter_key, bucket[:per_letter])] if bucket else []
     else:
         sorted_letters = sorted(grouped.keys(), key=lambda x: (x != "#", x))
-        letters_with_users = [
-            (lbl, grouped[lbl][:per_letter]) for lbl in sorted_letters[:max_letters]
-        ]
+        letters_with_users = [(lbl, grouped[lbl][:per_letter]) for lbl in sorted_letters[:max_letters]]
 
     return letters_with_users, len(all_users), available_letters
 
@@ -1668,9 +1659,7 @@ async def get_compare_population(
     # Pre-resolving the candidate set bounds that fan-out to known user_ids
     # instead of letting PG re-evaluate the cohort EXISTS per metric per row.
     candidate_user_ids = user_ids
-    has_scope_filter = (
-        role is not None or div_min is not None or div_max is not None or tournament_id is not None
-    )
+    has_scope_filter = role is not None or div_min is not None or div_max is not None or tournament_id is not None
 
     if candidate_user_ids is None and has_scope_filter:
         scope_query = sa.select(models.User.id).where(
@@ -1981,9 +1970,7 @@ async def get_users_hero_compare_stats(
     return playtime_payload, stats_payload
 
 
-async def search_by_name(
-    session: AsyncSession, query: str, fields: list[str]
-) -> typing.Sequence[models.SocialAccount]:
+async def search_by_name(session: AsyncSession, query: str, fields: list[str]) -> typing.Sequence[models.SocialAccount]:
     """Search battlenet ``social_account`` rows by handle (autocomplete).
 
     ``fields`` is accepted for API compatibility; search is always on the unified
@@ -2100,15 +2087,16 @@ async def get_by_discord(session: AsyncSession, discord: str, entities: list[str
         .join(models.SocialAccount, models.User.id == models.SocialAccount.user_id)
         .where(
             models.SocialAccount.provider == SocialProvider.DISCORD,
-            models.SocialAccount.username_normalized
-            == normalize_social_handle(SocialProvider.DISCORD, discord),
+            models.SocialAccount.username_normalized == normalize_social_handle(SocialProvider.DISCORD, discord),
         )
     )
     result = await session.scalars(query)
     return result.unique().first()
 
 
-async def get_overall_statistics(session: AsyncSession, user_id: int, workspace_id: int | None = None) -> tuple[int, int, int]:
+async def get_overall_statistics(
+    session: AsyncSession, user_id: int, workspace_id: int | None = None
+) -> tuple[int, int, int]:
     """
     Retrieves overall statistics for a user, including maps won, maps lost, and average closeness.
 
@@ -2148,10 +2136,8 @@ async def get_overall_statistics(session: AsyncSession, user_id: int, workspace_
     )
 
     if workspace_id is not None:
-        query = (
-            query
-            .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
-            .where(models.Tournament.workspace_id == workspace_id)
+        query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
+            models.Tournament.workspace_id == workspace_id
         )
 
     matches = await session.execute(query)
@@ -2159,7 +2145,10 @@ async def get_overall_statistics(session: AsyncSession, user_id: int, workspace_
 
 
 async def get_teams(
-    session: AsyncSession, user_id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None,
+    session: AsyncSession,
+    user_id: int,
+    params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[models.Team], int]:
     """
     Retrieves a paginated list of teams associated with a user, optionally including related entities.
@@ -2303,7 +2292,9 @@ async def get_tournament_role(
 
 
 async def get_tournaments_with_stats(
-    session: AsyncSession, user_id: int, workspace_id: int | None = None,
+    session: AsyncSession,
+    user_id: int,
+    workspace_id: int | None = None,
 ) -> typing.Sequence[tuple[models.Team, int, int, int]]:
     """
     Retrieves a user's tournament history with statistics, including maps won, maps lost, and average closeness.
@@ -2584,7 +2575,10 @@ async def get_statistics_by_heroes_all_values_filtered(
 
 
 async def get_best_teammates(
-    session: AsyncSession, user_id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None,
+    session: AsyncSession,
+    user_id: int,
+    params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.User, float, int, int, float | None, float | None]], int]:
     """
     Retrieves a user's best teammates, including win rate, tournaments played together, and performance statistics.
@@ -2629,11 +2623,9 @@ async def get_best_teammates(
     )
 
     if workspace_id is not None:
-        shared_teams_select = (
-            shared_teams_select
-            .join(models.Tournament, models.Tournament.id == self_player.tournament_id)
-            .where(models.Tournament.workspace_id == workspace_id)
-        )
+        shared_teams_select = shared_teams_select.join(
+            models.Tournament, models.Tournament.id == self_player.tournament_id
+        ).where(models.Tournament.workspace_id == workspace_id)
 
     shared_teams = shared_teams_select.cte("shared_teams")
 

@@ -6,13 +6,13 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from loguru import logger
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+
 from shared.models.platform.realtime import WorkspaceEvent
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import event_to_envelope, publish_event_to_redis_url
-from sqlalchemy import event
-from sqlalchemy.orm import Session
-
 from src.core import config
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 

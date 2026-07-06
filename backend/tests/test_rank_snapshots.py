@@ -9,12 +9,26 @@ from shared.services.rank_snapshots import normalize_ow_ranks_to_grid
 def _grid_with_ow_mapping() -> DivisionGrid:
     tiers = [
         DivisionTier(
-            id=1, slug="gold-3", number=3, name="Gold 3", rank_min=2000, rank_max=2499,
-            icon_url="", ow_rank_min=2000, ow_rank_max=2499,
+            id=1,
+            slug="gold-3",
+            number=3,
+            name="Gold 3",
+            rank_min=2000,
+            rank_max=2499,
+            icon_url="",
+            ow_rank_min=2000,
+            ow_rank_max=2499,
         ),
         DivisionTier(
-            id=2, slug="diamond-5", number=5, name="Diamond 5", rank_min=3000, rank_max=3499,
-            icon_url="", ow_rank_min=3000, ow_rank_max=3499,
+            id=2,
+            slug="diamond-5",
+            number=5,
+            name="Diamond 5",
+            rank_min=3000,
+            rank_max=3499,
+            icon_url="",
+            ow_rank_min=3000,
+            ow_rank_max=3499,
         ),
     ]
     return DivisionGrid(version_id=None, tiers=tiers)
@@ -36,8 +50,15 @@ def test_drops_ranks_outside_any_tier() -> None:
 def test_grid_without_ow_mapping_yields_nothing() -> None:
     tiers = [
         DivisionTier(
-            id=1, slug="gold-3", number=3, name="Gold 3", rank_min=2000, rank_max=2499,
-            icon_url="", ow_rank_min=None, ow_rank_max=None,
+            id=1,
+            slug="gold-3",
+            number=3,
+            name="Gold 3",
+            rank_min=2000,
+            rank_max=2499,
+            icon_url="",
+            ow_rank_min=None,
+            ow_rank_max=None,
         )
     ]
     grid = DivisionGrid(version_id=None, tiers=tiers)

@@ -25,10 +25,10 @@ from typing import Any
 import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import BaseModel
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
-
 from src import models
 from src.core import auth
 from src.rpc._helpers import _bool, _dump, _identity, _payload, _q1, _require_id, _run
@@ -51,15 +51,6 @@ class AdminMapPoolAssign(BaseModel):
 
 
 # --- helpers -----------------------------------------------------------------
-
-
-
-
-
-
-
-
-
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -265,8 +256,6 @@ def register(broker: Any, logger: Any) -> None:
                 active_only=active_only,
                 limit=limit,
             )
-            return [
-                _dump(TournamentComputationJobRead.model_validate(job, from_attributes=True)) for job in jobs_list
-            ]
+            return [_dump(TournamentComputationJobRead.model_validate(job, from_attributes=True)) for job in jobs_list]
 
         return await _run(logger, op)

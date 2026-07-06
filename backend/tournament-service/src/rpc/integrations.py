@@ -38,11 +38,11 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.clients.s3 import S3Client
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import WorkspaceRepository
 from shared.rpc.identity import ensure_workspace_permission
-
 from src import models, schemas
 from src.core import auth, config
 from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
@@ -58,14 +58,6 @@ _workspace_repo = WorkspaceRepository()
 
 
 # --- helpers -----------------------------------------------------------------
-
-
-
-
-
-
-
-
 
 
 # --- module-level S3 client (lazy start) -------------------------------------
@@ -147,7 +139,6 @@ async def _get_source_workspace_or_404(
 
 
 # --- envelope wrapper ---------------------------------------------------------
-
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -428,9 +419,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace_id = _path_int(data, "workspace_id")
             await require_workspace_permission(workspace_id, session=session, user=user, action="read")
             grids = await division_grid_service.get_workspace_grids(session, workspace_id)
-            return [
-                _dump(schemas.DivisionGridRead.model_validate(grid, from_attributes=True)) for grid in grids
-            ]
+            return [_dump(schemas.DivisionGridRead.model_validate(grid, from_attributes=True)) for grid in grids]
 
         return await _run(logger, op)
 
@@ -477,9 +466,7 @@ def register(broker: Any, logger: Any) -> None:
                 user=user,
             )
             return _dump(
-                await division_grid_marketplace.list_marketplace_grids(
-                    session, source_workspace_id=source_workspace.id
-                )
+                await division_grid_marketplace.list_marketplace_grids(session, source_workspace_id=source_workspace.id)
             )
 
         return await _run(logger, op)
@@ -564,9 +551,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
-            await require_workspace_permission(
-                version.grid.workspace_id, session=session, user=user, action="update"
-            )
+            await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="update")
             body = schemas.DivisionGridVersionUpdate.model_validate(_payload(data))
             version = await division_grid_service.update_version(session, version_id, body)
             await session.commit()  # route commits explicitly (service does not).
@@ -580,9 +565,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
-            await require_workspace_permission(
-                version.grid.workspace_id, session=session, user=user, action="delete"
-            )
+            await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="delete")
             await division_grid_service.delete_version(session, version_id)
             await session.commit()  # route commits explicitly (service does not).
             return None  # route returns 204 (no body).
@@ -595,9 +578,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
-            await require_workspace_permission(
-                version.grid.workspace_id, session=session, user=user, action="publish"
-            )
+            await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="publish")
             version = await division_grid_service.publish_version(session, version_id)
             await session.commit()  # route commits explicitly (service does not).
             return _dump(schemas.DivisionGridVersionRead.model_validate(version, from_attributes=True))
@@ -610,9 +591,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             version_id = _require_id(data)
             version = await division_grid_service.get_version(session, version_id)
-            await require_workspace_permission(
-                version.grid.workspace_id, session=session, user=user, action="create"
-            )
+            await require_workspace_permission(version.grid.workspace_id, session=session, user=user, action="create")
             cloned = await division_grid_service.clone_version(session, version_id)
             await session.commit()  # route commits explicitly (service does not).
             return _dump(schemas.DivisionGridVersionRead.model_validate(cloned, from_attributes=True))
@@ -652,9 +631,7 @@ def register(broker: Any, logger: Any) -> None:
             target_version = await division_grid_service.get_version(session, target_version_id)
             _require_version_read_access(user, target_version)
             body = schemas.DivisionGridMappingWrite.model_validate(_payload(data))
-            mapping = await division_grid_service.upsert_mapping(
-                session, source_version_id, target_version_id, body
-            )
+            mapping = await division_grid_service.upsert_mapping(session, source_version_id, target_version_id, body)
             await session.commit()  # route commits explicitly (service does not).
             return _dump(schemas.DivisionGridMappingRead.model_validate(mapping, from_attributes=True))
 

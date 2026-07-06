@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from shared.repository import RefreshTokenRepository
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.repository import RefreshTokenRepository
 from src import models
 
 SessionStatus = Literal["active", "revoked", "expired"]

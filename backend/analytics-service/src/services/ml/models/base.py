@@ -65,9 +65,7 @@ def align_features(df: pd.DataFrame, feature_order: typing.Sequence[str]) -> pd.
     return out
 
 
-def artifact_path(
-    algorithm_id: int, version: str, filename: str, *, root: str | None = None
-) -> Path:
+def artifact_path(algorithm_id: int, version: str, filename: str, *, root: str | None = None) -> Path:
     """Build the filesystem path for an artifact file.
 
     ``<ANALYTICS_MODELS_DIR>/<algorithm_id>/<version>/<filename>``.
@@ -84,9 +82,7 @@ def save_artifact(obj: typing.Any, path: Path) -> str:
     (``file://`` scheme). Parent directories are created as needed.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
-    )
+    fd, tmp_path = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
     try:
         os.close(fd)
         joblib.dump(obj, tmp_path)

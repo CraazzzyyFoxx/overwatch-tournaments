@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from enum import Enum
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
@@ -36,8 +38,6 @@ from shared.services.division_grid_normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 

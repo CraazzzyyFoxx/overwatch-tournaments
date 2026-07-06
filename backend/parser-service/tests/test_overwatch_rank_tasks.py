@@ -26,7 +26,6 @@ os.environ.setdefault("CHALLONGE_API_KEY", "x")
 tasks = importlib.import_module("src.services.overwatch_rank.tasks")
 from shared.core import enums  # noqa: E402
 from shared.schemas.settings import RankCollectionConfig  # noqa: E402
-
 from src.services.overwatch_rank.client import OverFastRateLimited  # noqa: E402
 from src.services.overwatch_rank.schemas import RankFetchResult  # noqa: E402
 
@@ -127,9 +126,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
     async def test_rate_limited_sets_cooldown_and_records_failure(self) -> None:
         redis = FakeRedis()
         session = SimpleNamespace(commit=AsyncMock())
-        client = SimpleNamespace(
-            fetch_summary=AsyncMock(side_effect=OverFastRateLimited(retry_after=42))
-        )
+        client = SimpleNamespace(fetch_summary=AsyncMock(side_effect=OverFastRateLimited(retry_after=42)))
         with (
             patch.object(
                 tasks.settings_provider,

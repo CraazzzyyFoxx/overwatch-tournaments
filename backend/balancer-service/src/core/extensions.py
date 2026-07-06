@@ -1,7 +1,7 @@
 from loguru import logger
 
-from src.core import config
 from shared.observability import setup_sentry
+from src.core import config
 
 
 def configure_extensions() -> None:

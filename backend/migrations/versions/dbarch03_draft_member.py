@@ -57,13 +57,11 @@ Create Date: 2026-07-04
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch03"
-down_revision: Union[str, None] = "dbarch02"
+down_revision: str | None = "dbarch02"
 branch_labels = None
 depends_on = None
 
@@ -250,9 +248,7 @@ def upgrade() -> None:
         sa.Column("hero_id", sa.BigInteger(), nullable=False),
         sa.Column("priority", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["draft_player_role_id"], ["balancer.draft_player_role.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["draft_player_role_id"], ["balancer.draft_player_role.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["hero_id"], ["overwatch.hero.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("draft_player_role_id", "priority", name="uq_draft_player_role_hero_priority"),
         sa.UniqueConstraint("draft_player_role_id", "hero_id", name="uq_draft_player_role_hero_hero"),
@@ -412,9 +408,7 @@ def downgrade() -> None:
         old_index=None,
         new_index=None,
     )
-    op.drop_constraint(
-        "uq_draft_player_session_member", "draft_player", schema="balancer", type_="unique"
-    )
+    op.drop_constraint("uq_draft_player_session_member", "draft_player", schema="balancer", type_="unique")
     _revert_anchor(
         table="draft_player",
         old_col="user_id",

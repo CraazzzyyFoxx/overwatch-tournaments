@@ -9,10 +9,14 @@ later phase removes it.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from loguru import logger
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import http_status as status
 from shared.core import pagination
 from shared.core.errors import BaseAPIException as HTTPException
@@ -20,10 +24,6 @@ from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.rbac import user_has_only_workspace_owner_role
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models, schemas
 from src.services import auth_service
 from src.services.player_link_service import PlayerLinkService
@@ -67,9 +67,7 @@ def _ensure_actor_can_grant_permissions(
         if workspace_id is None:
             allowed = current_user.has_permission(permission.resource, permission.action)
         else:
-            allowed = current_user.has_workspace_permission(
-                workspace_id, permission.resource, permission.action
-            )
+            allowed = current_user.has_workspace_permission(workspace_id, permission.resource, permission.action)
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -272,7 +270,9 @@ async def list_roles(
     count_query = select(func.count(Role.id))
 
     if params.workspace_id is not None:
-        if not _has_workspace_permission(current_user, params.workspace_id, "role", "read") and not _has_global_permission(current_user, "role", "read"):
+        if not _has_workspace_permission(
+            current_user, params.workspace_id, "role", "read"
+        ) and not _has_global_permission(current_user, "role", "read"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         query = query.where(Role.workspace_id == params.workspace_id)
         count_query = count_query.where(Role.workspace_id == params.workspace_id)
@@ -312,7 +312,9 @@ async def get_role(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
 
     if role.workspace_id is not None:
-        if not _has_workspace_permission(current_user, role.workspace_id, "role", "read") and not _has_global_permission(current_user, "role", "read"):
+        if not _has_workspace_permission(
+            current_user, role.workspace_id, "role", "read"
+        ) and not _has_global_permission(current_user, "role", "read"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     else:
         if not _has_global_permission(current_user, "role", "read"):
@@ -558,9 +560,7 @@ async def assign_role_to_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    result = await session.execute(
-        select(Role).where(Role.id == data.role_id).options(selectinload(Role.permissions))
-    )
+    result = await session.execute(select(Role).where(Role.id == data.role_id).options(selectinload(Role.permissions)))
     role = result.scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
@@ -746,9 +746,11 @@ def _sort_session_summaries(
     _min_dt = datetime.min.replace(tzinfo=UTC)
 
     if key_name == "status":
+
         def key(summary: dict) -> tuple:
             return (summary.get("status") or "",)
     else:
+
         def key(summary: dict) -> tuple:
             return (summary.get(key_name) or _min_dt,)
 
@@ -853,9 +855,7 @@ def _workspace_scope_filter(workspace_id: int | None):
     return UserPermissionDeny.workspace_id == workspace_id
 
 
-async def list_user_denies(
-    session: AsyncSession, current_user: models.AuthUser, user_id: int
-) -> list[dict]:
+async def list_user_denies(session: AsyncSession, current_user: models.AuthUser, user_id: int) -> list[dict]:
     """List the permissions explicitly denied for a user (global + per-workspace)."""
     _require_permission(current_user, "auth_user", "read")
     result = await session.execute(

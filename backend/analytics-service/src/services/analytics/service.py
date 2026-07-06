@@ -1,11 +1,11 @@
 import typing
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import enums
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.models.division_grid import DivisionGridMapping, DivisionGridMappingRule, DivisionGridVersion
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.core.workspace import workspace_scope_filter
 
@@ -155,27 +155,26 @@ async def get_analytics(
             models.Player.is_newcomer.label("is_newcomer"),
             models.Player.is_newcomer_role.label("is_newcomer_role"),
             models.Tournament.id.label("tournament_id"),
-            (
-                sa.func.coalesce(points_home.c.wins, 0) + sa.func.coalesce(points_away.c.wins, 0)
-            ).label("wins"),
-            (
-                sa.func.coalesce(points_home.c.losses, 0) + sa.func.coalesce(points_away.c.losses, 0)
-            ).label("losses"),
-            (
-                sa.func.coalesce(matches_home.c.match_count, 0)
-                + sa.func.coalesce(matches_away.c.match_count, 0)
-            ).label("match_count"),
+            (sa.func.coalesce(points_home.c.wins, 0) + sa.func.coalesce(points_away.c.wins, 0)).label("wins"),
+            (sa.func.coalesce(points_home.c.losses, 0) + sa.func.coalesce(points_away.c.losses, 0)).label("losses"),
+            (sa.func.coalesce(matches_home.c.match_count, 0) + sa.func.coalesce(matches_away.c.match_count, 0)).label(
+                "match_count"
+            ),
             standings.c.overall_position.label("overall_position"),
             team_counts.c.team_count.label("team_count"),
             performance_points.c.performance_points.label("performance_points"),
-            sa.func.lag(models.Player.rank, 1).over(
+            sa.func.lag(models.Player.rank, 1)
+            .over(
                 partition_by=(models.WorkspaceMember.player_id, models.Player.role),
                 order_by=models.Tournament.id,
-            ).label("previous_cost"),
-            sa.func.lag(models.Player.rank, 2).over(
+            )
+            .label("previous_cost"),
+            sa.func.lag(models.Player.rank, 2)
+            .over(
                 partition_by=(models.WorkspaceMember.player_id, models.Player.role),
                 order_by=models.Tournament.id,
-            ).label("pre_previous_cost"),
+            )
+            .label("pre_previous_cost"),
         )
         .select_from(models.Team)
         .join(models.Player, models.Team.id == models.Player.team_id)
@@ -313,8 +312,7 @@ async def get_tournament_version_ids(
 ) -> dict[int, int | None]:
     """Maps tournament_id -> division_grid_version_id for all analytics-relevant tournaments."""
     result = await session.execute(
-        sa.select(models.Tournament.id, models.Tournament.division_grid_version_id)
-        .where(
+        sa.select(models.Tournament.id, models.Tournament.division_grid_version_id).where(
             models.Tournament.id >= 1,
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
@@ -392,9 +390,7 @@ async def get_players_by_tournament_id(
     return result.scalars().all()  # type: ignore
 
 
-async def get_teams_with_players(
-    session: AsyncSession, tournament_id: int
-) -> typing.Sequence[models.Team]:
+async def get_teams_with_players(session: AsyncSession, tournament_id: int) -> typing.Sequence[models.Team]:
     """Return teams of a tournament with players and player users eagerly loaded.
 
     Inlined replacement for parser-service ``team_service.get_by_tournament(

@@ -16,9 +16,9 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models, schemas
 from src.core import db
 from src.schemas.v2 import AnomalyFeedbackBody, AnomalyFeedbackRow
@@ -27,9 +27,7 @@ from src.services.analytics_read import flows as analytics_flows
 from . import _common as c
 
 
-async def _validate_tournament_workspace(
-    session: Any, tournament_id: int, workspace_id: int | None
-) -> None:
+async def _validate_tournament_workspace(session: Any, tournament_id: int, workspace_id: int | None) -> None:
     """Workspace guard for the deprecated OpenSkill v1 endpoint.
 
     Replicated locally (this was the old ``routes/analytics`` helper) so the
@@ -44,9 +42,7 @@ async def _validate_tournament_workspace(
     if tournament_workspace_id is None:
         raise HTTPException(status_code=404, detail="Tournament not found")
     if tournament_workspace_id != workspace_id:
-        raise HTTPException(
-            status_code=400, detail="workspace_id does not match tournament workspace"
-        )
+        raise HTTPException(status_code=400, detail="workspace_id does not match tournament workspace")
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -114,14 +110,11 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             c.require_permission(c.actor(data), "analytics", "update")
             tournament_id = c.require_query_int(data, "tournament_id")
-            await _validate_tournament_workspace(
-                session, tournament_id, c.q1(data, "workspace_id", int)
-            )
+            await _validate_tournament_workspace(session, tournament_id, c.q1(data, "workspace_id", int))
             raise HTTPException(
                 status_code=410,
                 detail=(
-                    "Open Skill v1 is no longer available. "
-                    "Run the unified analytics job to compute OpenSkill + ML."
+                    "Open Skill v1 is no longer available. Run the unified analytics job to compute OpenSkill + ML."
                 ),
             )
 

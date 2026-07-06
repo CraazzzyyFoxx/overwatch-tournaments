@@ -2,14 +2,14 @@ import typing
 
 import sqlalchemy as sa
 from loguru import logger
-from shared.services.stage_refs import (
-    StageRefs,
-    resolve_stage_refs_from_group,
-)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.services.stage_refs import (
+    StageRefs,
+    resolve_stage_refs_from_group,
+)
 from src import models
 from src.core import enums, utils
 from src.services.map import service as map_service

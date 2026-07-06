@@ -38,9 +38,7 @@ async def get_by_names(session: AsyncSession, names: list[str]) -> dict[str, mod
     ``initial_create``). On duplicate names the first row wins."""
     if not names:
         return {}
-    result = await session.execute(
-        sa.select(models.Map).where(models.Map.name.in_(list(set(names))))
-    )
+    result = await session.execute(sa.select(models.Map).where(models.Map.name.in_(list(set(names)))))
     maps: dict[str, models.Map] = {}
     for map in result.scalars().all():
         maps.setdefault(map.name, map)

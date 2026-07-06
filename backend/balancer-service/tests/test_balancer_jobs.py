@@ -54,8 +54,18 @@ class CreateJobTests(IsolatedAsyncioTestCase):
         created: dict = {}
 
         class FakeStore:
-            async def create_job(self, input_data, config_overrides, *, job_id, workspace_id,
-                                 created_by, credential_type, api_key_id, tournament_id=None):
+            async def create_job(
+                self,
+                input_data,
+                config_overrides,
+                *,
+                job_id,
+                workspace_id,
+                created_by,
+                credential_type,
+                api_key_id,
+                tournament_id=None,
+            ):
                 created.update(
                     input_data=input_data,
                     config_overrides=config_overrides,
@@ -168,8 +178,18 @@ class CreateJobTests(IsolatedAsyncioTestCase):
         created: dict = {}
 
         class FakeStore:
-            async def create_job(self, input_data, config_overrides, *, job_id, workspace_id,
-                                 created_by, credential_type, api_key_id, tournament_id=None):
+            async def create_job(
+                self,
+                input_data,
+                config_overrides,
+                *,
+                job_id,
+                workspace_id,
+                created_by,
+                credential_type,
+                api_key_id,
+                tournament_id=None,
+            ):
                 created.update(job_id=job_id, credential_type=credential_type, api_key_id=api_key_id)
                 return job_id
 
@@ -202,7 +222,9 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             patch(f"{JOBS}._payload_parser", FakeParser()),
             patch(f"{JOBS}.is_api_key_principal", return_value=True),
             patch(f"{JOBS}.get_api_key_id", return_value=42),
-            patch(f"{JOBS}.get_effective_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}),
+            patch(
+                f"{JOBS}.get_effective_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}
+            ),
             patch(f"{JOBS}.validate_api_key_config_policy"),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
         ):
@@ -240,8 +262,9 @@ def _make_fake_store(payload: dict, *, fail_marks: bool = False, optimizing_mess
             self.meta["status"] = "running"
             return self.meta
 
-        async def append_event(self, job_id, *, status, stage, message, level="info",
-                               progress=None, update_meta=False, meta=None):
+        async def append_event(
+            self, job_id, *, status, stage, message, level="info", progress=None, update_meta=False, meta=None
+        ):
             if optimizing_messages is not None and stage == "optimizing":
                 optimizing_messages.append(message)
             if meta is not None:
@@ -304,10 +327,12 @@ class ExecuteJobTests(IsolatedAsyncioTestCase):
         )
 
         async def fake_run_balance(input_data, config_overrides, progress_callback):
-            progress_callback({"status": "running", "stage": "optimizing", "message": "Phase 1",
-                               "progress": {"percent": 0.0}})
-            progress_callback({"status": "running", "stage": "optimizing", "message": "Phase 2",
-                               "progress": {"percent": 1.0}})
+            progress_callback(
+                {"status": "running", "stage": "optimizing", "message": "Phase 1", "progress": {"percent": 0.0}}
+            )
+            progress_callback(
+                {"status": "running", "stage": "optimizing", "message": "Phase 2", "progress": {"percent": 1.0}}
+            )
             return {"variants": [dict(_VARIANT)]}
 
         clock_values = iter([1.0, 1.1, 1.2])

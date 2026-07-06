@@ -9,7 +9,6 @@ have no request state, so the worker owns a module-level singleton instead.
 from __future__ import annotations
 
 from shared.clients import S3Client
-
 from src.core import config
 
 s3_client = S3Client(

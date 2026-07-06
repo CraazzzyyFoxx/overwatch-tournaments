@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from shared.balancer_registration_statuses import StatusMeta, build_unknown_status_meta
 from sqlalchemy.orm.attributes import NO_VALUE
 
+from shared.balancer_registration_statuses import StatusMeta, build_unknown_status_meta
 from src import models
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.registration import RegistrationFormRead
@@ -98,10 +98,7 @@ def serialize_registration(
         reviewed_at=registration.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
-        roles=[
-            serialize_registration_role(role, (ow_ranks_for_user or {}).get(role.role))
-            for role in sorted_roles
-        ],
+        roles=[serialize_registration_role(role, (ow_ranks_for_user or {}).get(role.role)) for role in sorted_roles],
     )
 
 

@@ -37,9 +37,7 @@ class Team(db.TimeStampIntegerMixin):
     captain_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     tournament: Mapped[Tournament] = relationship()
 
     players: Mapped[list["Player"]] = relationship(
@@ -72,16 +70,12 @@ class Player(db.TimeStampIntegerMixin):
     name: Mapped[str] = mapped_column(String())
     sub_role: Mapped[str | None] = mapped_column(String(128), nullable=True)
     rank: Mapped[int] = mapped_column(Integer())
-    role: Mapped[enums.HeroClass | None] = mapped_column(
-        Enum(enums.HeroClass), nullable=True
-    )
+    role: Mapped[enums.HeroClass | None] = mapped_column(Enum(enums.HeroClass), nullable=True)
     is_substitution: Mapped[bool] = mapped_column(Boolean(), server_default="false")
     related_player_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournament.player.id", ondelete="SET NULL"), nullable=True
     )
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     is_newcomer: Mapped[bool] = mapped_column(Boolean(), server_default="false")
     is_newcomer_role: Mapped[bool] = mapped_column(Boolean(), server_default="false")
 
@@ -89,9 +83,7 @@ class Player(db.TimeStampIntegerMixin):
     # Contract step of the workspace-anchoring migration (iwrefac07): ``user_id`` has
     # been dropped and this column is now the sole, NOT NULL anchor for a roster row's
     # identity. ``workspace_member`` lives in the public schema.
-    workspace_member_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace_member.id", ondelete="CASCADE")
-    )
+    workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"))
     workspace_member: Mapped["WorkspaceMember"] = relationship()
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
     team: Mapped["Team"] = relationship(back_populates="players")
@@ -119,14 +111,10 @@ class PlayerSubRole(db.TimeStampIntegerMixin):
         {"schema": "tournament"},
     )
 
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE")
-    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
     role: Mapped[str] = mapped_column(String(64))
     slug: Mapped[str] = mapped_column(String(128))
     label: Mapped[str] = mapped_column(String(128))
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer(), server_default="0", default=0)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean(), server_default="true", default=True
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean(), server_default="true", default=True)

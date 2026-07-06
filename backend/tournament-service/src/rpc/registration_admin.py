@@ -40,6 +40,8 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
+from sqlalchemy import select
+
 from shared.balancer_registration_statuses import get_status_metas_map
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
@@ -47,8 +49,6 @@ from shared.services.rank_snapshots import (
     fetch_latest_ow_ranks_by_account,
     normalize_ow_ranks_to_grid,
 )
-from sqlalchemy import select
-
 from src import models
 from src.core import auth
 from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
@@ -82,10 +82,6 @@ def _bulk_ids(payload: dict[str, Any], key: str = "registration_ids") -> list[in
     return ids
 
 
-
-
-
-
 def _require_scope(data: dict[str, Any]) -> str:
     """Validate the {scope} path param against the StatusScope literal (route 422 on mismatch)."""
     scope = data.get("scope")
@@ -99,8 +95,6 @@ def _require_slug(data: dict[str, Any]) -> str:
     if slug is None:
         raise HTTPException(status_code=422, detail="slug is required")
     return str(slug)
-
-
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -165,16 +159,10 @@ def register(broker: Any, logger: Any) -> None:
                 source_filter=source_filter,
                 include_deleted=include_deleted,
             )
-            status_meta_map = (
-                await get_status_metas_map(session, workspace_id=ws_id)
-                if registrations
-                else None
-            )
+            status_meta_map = await get_status_metas_map(session, workspace_id=ws_id) if registrations else None
             # Registrations are anchored on workspace_member (eager-loaded by
             # list_registrations); the player id is the member's player_id.
-            user_ids = [
-                r.workspace_member.player_id for r in registrations if r.workspace_member is not None
-            ]
+            user_ids = [r.workspace_member.player_id for r in registrations if r.workspace_member is not None]
             grid = await registration_service.get_tournament_grid(session, tournament_id)
             accounts_by_user = await fetch_latest_ow_ranks_by_account(session, user_ids)
             # Per registration, prefer the player's main (non-smurf) accounts and take the max rank.

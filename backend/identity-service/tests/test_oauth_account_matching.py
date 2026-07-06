@@ -32,7 +32,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.models.identity.user import User  # noqa: E402
-
 from src import schemas  # noqa: E402
 from src.services.oauth_service import OAuthService  # noqa: E402
 
@@ -131,9 +130,7 @@ def test_find_existing_auth_user_ignores_email_only_match() -> None:
         raw_data={"verified": True},
     )
 
-    auth_user, matched_player = asyncio.run(
-        OAuthService._find_existing_auth_user(session, oauth_info)
-    )
+    auth_user, matched_player = asyncio.run(OAuthService._find_existing_auth_user(session, oauth_info))
 
     assert auth_user is None
     assert matched_player is None

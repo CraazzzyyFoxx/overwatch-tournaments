@@ -416,9 +416,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = DraftPickSelectRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             public_user_ids = list(
-                await session.scalars(
-                    sa.select(models.User.id).where(models.User.auth_user_id == user.id)
-                )
+                await session.scalars(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
             )
             public_user_id = public_user_ids[0] if public_user_ids else None
             is_admin = user.is_workspace_admin(draft.workspace_id)
@@ -469,9 +467,7 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "import")
             payload = DraftPickOverrideRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
-            public_user_id = await session.scalar(
-                sa.select(models.User.id).where(models.User.auth_user_id == user.id)
-            )
+            public_user_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
             result = await selection.override(
                 session,
                 draft,

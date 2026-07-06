@@ -95,8 +95,6 @@ def test_legacy_achievement_models_removed():
             AchievementUser,
         )
 
-    table_names = {
-        (table.schema, table.name) for table in db.Base.metadata.tables.values()
-    }
+    table_names = {(table.schema, table.name) for table in db.Base.metadata.tables.values()}
     assert ("achievements", "user") not in table_names
     assert ("achievements", "achievement") not in table_names

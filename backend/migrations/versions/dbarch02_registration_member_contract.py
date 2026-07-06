@@ -59,13 +59,11 @@ Create Date: 2026-07-04
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch02"
-down_revision: Union[str, None] = "dbarch01"
+down_revision: str | None = "dbarch01"
 branch_labels = None
 depends_on = None
 

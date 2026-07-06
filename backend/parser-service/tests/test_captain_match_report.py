@@ -138,9 +138,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 422)
 
     async def test_non_captain_gets_forbidden(self) -> None:
-        encounter = _mk_encounter(
-            home_captain_player_id=100, away_captain_player_id=200
-        )
+        encounter = _mk_encounter(home_captain_player_id=100, away_captain_player_id=200)
         session = _mk_session(encounter, [999])
         user = _mk_user()
         with self.assertRaises(HTTPException) as ctx:
@@ -177,9 +175,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
         self.assertEqual(encounter.home_score, 2)
         self.assertEqual(encounter.away_score, 1)
         self.assertEqual(encounter.closeness, 4 / 5)
-        self.assertEqual(
-            encounter.result_status, enums.EncounterResultStatus.PENDING_CONFIRMATION
-        )
+        self.assertEqual(encounter.result_status, enums.EncounterResultStatus.PENDING_CONFIRMATION)
         self.assertEqual(encounter.submitted_by_id, 100)
         self.assertEqual(session._added, [])
 
@@ -202,9 +198,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 closeness_stars=2,
             )
 
-        executed_queries = [
-            str(call.args[0]).lower() for call in session.execute.await_args_list
-        ]
+        executed_queries = [str(call.args[0]).lower() for call in session.execute.await_args_list]
         self.assertFalse(
             any("delete" in q and "match" in q for q in executed_queries),
             f"did not expect DELETE against Match table, got: {executed_queries}",

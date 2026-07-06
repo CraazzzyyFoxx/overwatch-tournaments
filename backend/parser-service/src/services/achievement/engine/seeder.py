@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.models.achievements.achievement import (
     AchievementCategory,
     AchievementEvaluationResult,
@@ -23,7 +25,6 @@ from shared.models.achievements.achievement import (
     EvaluationRunTrigger,
 )
 from shared.models.catalog.hero import Hero
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from .catalog import CANONICAL_ACHIEVEMENT_CATALOG
 from .runner import run_evaluation
@@ -360,7 +361,10 @@ def _overall_rules(workspace_id: int) -> list[AchievementRule]:
             "versatile-player",
             scope=AchievementScope.glob,
             grain=AchievementGrain.user,
-            condition_tree={"type": "distinct_count", "params": {"field": "role", "op": ">=", "value": 3, "scope": "global"}},
+            condition_tree={
+                "type": "distinct_count",
+                "params": {"field": "role", "op": ">=", "value": 3, "scope": "global"},
+            },
             depends_on=["tournament.player"],
         ),
         _catalog_rule(
@@ -765,8 +769,14 @@ def _standing_rules(workspace_id: int) -> list[AchievementRule]:
             grain=AchievementGrain.user_tournament,
             condition_tree={
                 "AND": [
-                    {"type": "standing_record", "params": {"field": "wins", "op": "==", "value": 0, "groups_only": True}},
-                    {"type": "standing_record", "params": {"field": "draws", "op": "==", "value": 0, "groups_only": True}},
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "wins", "op": "==", "value": 0, "groups_only": True},
+                    },
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "draws", "op": "==", "value": 0, "groups_only": True},
+                    },
                 ]
             },
             depends_on=["tournament.standing", "tournament.player"],
@@ -789,9 +799,18 @@ def _standing_rules(workspace_id: int) -> list[AchievementRule]:
             grain=AchievementGrain.user_tournament,
             condition_tree={
                 "AND": [
-                    {"type": "standing_record", "params": {"field": "wins", "op": ">=", "value": 5, "groups_only": True}},
-                    {"type": "standing_record", "params": {"field": "losses", "op": "==", "value": 0, "groups_only": True}},
-                    {"type": "standing_record", "params": {"field": "draws", "op": "==", "value": 0, "groups_only": True}},
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "wins", "op": ">=", "value": 5, "groups_only": True},
+                    },
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "losses", "op": "==", "value": 0, "groups_only": True},
+                    },
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "draws", "op": "==", "value": 0, "groups_only": True},
+                    },
                 ]
             },
             depends_on=["tournament.standing", "tournament.player"],
@@ -816,9 +835,18 @@ def _standing_rules(workspace_id: int) -> list[AchievementRule]:
             grain=AchievementGrain.user_tournament,
             condition_tree={
                 "AND": [
-                    {"type": "standing_record", "params": {"field": "draws", "op": "==", "value": 5, "groups_only": True}},
-                    {"type": "standing_record", "params": {"field": "wins", "op": "==", "value": 0, "groups_only": True}},
-                    {"type": "standing_record", "params": {"field": "losses", "op": "==", "value": 0, "groups_only": True}},
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "draws", "op": "==", "value": 5, "groups_only": True},
+                    },
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "wins", "op": "==", "value": 0, "groups_only": True},
+                    },
+                    {
+                        "type": "standing_record",
+                        "params": {"field": "losses", "op": "==", "value": 0, "groups_only": True},
+                    },
                 ]
             },
             depends_on=["tournament.standing", "tournament.player"],
@@ -1094,9 +1122,7 @@ def _placeholder_rules(
     implemented_slugs: set[str],
 ) -> list[AchievementRule]:
     return [
-        _placeholder_rule(workspace_id, meta.slug)
-        for meta in _CANONICAL_RULES
-        if meta.slug not in implemented_slugs
+        _placeholder_rule(workspace_id, meta.slug) for meta in _CANONICAL_RULES if meta.slug not in implemented_slugs
     ]
 
 
@@ -1200,12 +1226,7 @@ async def seed_workspace(
         count += 1
 
     await session.flush()
-    logger.info(
-        "Seeded workspace {} with {} achievement rules (upsert), removed {}",
-        workspace_id,
-        count,
-        removed
-    )
+    logger.info("Seeded workspace {} with {} achievement rules (upsert), removed {}", workspace_id, count, removed)
     return count, removed
 
 
@@ -1219,9 +1240,7 @@ async def hard_reset_workspace(
         replace_catalog=True,
     )
 
-    workspace_rule_ids = sa.select(AchievementRule.id).where(
-        AchievementRule.workspace_id == workspace_id
-    )
+    workspace_rule_ids = sa.select(AchievementRule.id).where(AchievementRule.workspace_id == workspace_id)
     deleted_results = await session.execute(
         sa.delete(AchievementEvaluationResult).where(
             AchievementEvaluationResult.achievement_rule_id.in_(workspace_rule_ids)

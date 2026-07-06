@@ -176,9 +176,7 @@ class AchievementLibraryImportRequest(BaseModel):
 
 
 class AchievementRuleListQueryParams(
-    pagination.PaginationSortQueryParams[
-        typing.Literal["id", "name", "slug", "category", "created_at"]
-    ]
+    pagination.PaginationSortQueryParams[typing.Literal["id", "name", "slug", "category", "created_at"]]
 ):
     per_page: int = Field(default=50, ge=-1, le=500)
     sort: typing.Literal["id", "name", "slug", "category", "created_at"] = "id"

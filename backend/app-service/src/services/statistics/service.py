@@ -35,7 +35,8 @@ encounter_query = (
 
 
 async def get_top_champions(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, int]], int]:
     """
@@ -81,7 +82,8 @@ async def get_top_champions(
 
 
 async def get_top_winrate_players(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, float]], int]:
     """
@@ -101,10 +103,7 @@ async def get_top_winrate_players(
             models.User,
             (
                 sa.func.sum(encounter_query.c.home_score)
-                / (
-                    sa.func.sum(encounter_query.c.home_score)
-                    + sa.func.sum(encounter_query.c.away_score)
-                )
+                / (sa.func.sum(encounter_query.c.home_score) + sa.func.sum(encounter_query.c.away_score))
             ).label("value"),
         )
         .select_from(models.Player)
@@ -128,7 +127,8 @@ async def get_top_winrate_players(
 
 
 async def get_top_won_players(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Player, int]], int]:
     """
@@ -194,9 +194,7 @@ async def get_tournament_avg_match_stat_for_user(
     stats_query = (
         sa.select(
             models.MatchStatistics.user_id,
-            sa.func.avg(models.MatchStatistics.value)
-            .cast(sa.Numeric(10, 2))
-            .label("value"),
+            sa.func.avg(models.MatchStatistics.value).cast(sa.Numeric(10, 2)).label("value"),
             sa.func.dense_rank().over(order_by=order_by).label("rank"),
         )
         .select_from(models.MatchStatistics)
@@ -212,9 +210,9 @@ async def get_tournament_avg_match_stat_for_user(
         .group_by(models.MatchStatistics.user_id)
     ).cte("stats_query")
 
-    query = sa.select(
-        stats_query, sa.select(sa.func.count(stats_query.c.user_id)).scalar_subquery()
-    ).where(stats_query.c.user_id == user_id)
+    query = sa.select(stats_query, sa.select(sa.func.count(stats_query.c.user_id)).scalar_subquery()).where(
+        stats_query.c.user_id == user_id
+    )
 
     result = await session.execute(query)
 
@@ -248,9 +246,7 @@ async def get_tournament_avg_match_stat_for_user_bulk(
         sa.select(
             models.MatchStatistics.name,
             models.MatchStatistics.user_id,
-            sa.func.avg(models.MatchStatistics.value)
-            .cast(sa.Numeric(10, 2))
-            .label("value"),
+            sa.func.avg(models.MatchStatistics.value).cast(sa.Numeric(10, 2)).label("value"),
             sa.func.dense_rank()
             .over(
                 order_by=sa.desc(sa.func.avg(models.MatchStatistics.value)),
@@ -280,9 +276,7 @@ async def get_tournament_avg_match_stat_for_user_bulk(
 
     query = sa.select(
         stats_query,
-        sa.select(
-            sa.func.count(stats_query.c.user_id) / len(stats_names)
-        ).scalar_subquery(),
+        sa.select(sa.func.count(stats_query.c.user_id) / len(stats_names)).scalar_subquery(),
     ).where(stats_query.c.user_id == user_id)
 
     result = await session.execute(query)
@@ -308,10 +302,9 @@ async def get_tournament_winrate(
             - The total count of users.
             Returns None if no data is found.
     """
-    winrate = (
-        sa.func.sum(home_score_case)
-        / (sa.func.sum(home_score_case) + sa.func.sum(away_score_case))
-    ).label("winrate")
+    winrate = (sa.func.sum(home_score_case) / (sa.func.sum(home_score_case) + sa.func.sum(away_score_case))).label(
+        "winrate"
+    )
 
     stats_query = (
         sa.select(
@@ -333,9 +326,9 @@ async def get_tournament_winrate(
         .group_by(models.WorkspaceMember.player_id)
     ).subquery()
 
-    query = sa.select(
-        stats_query, sa.select(sa.func.max(stats_query.c.rank)).scalar_subquery()
-    ).where(stats_query.c.user_id == user_id)
+    query = sa.select(stats_query, sa.select(sa.func.max(stats_query.c.rank)).scalar_subquery()).where(
+        stats_query.c.user_id == user_id
+    )
 
     result = await session.execute(query)
     return result.first()

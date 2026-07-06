@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
 from shared.core import pagination
 
 __all__ = (

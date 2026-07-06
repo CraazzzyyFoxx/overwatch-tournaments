@@ -17,16 +17,23 @@ from src import models
 from src.core import enums, pagination
 from src.core.workspace import workspace_filter
 
-
 _HERO_JSON = sa.func.jsonb_build_object(
-    "id", models.Hero.id,
-    "created_at", models.Hero.created_at,
-    "updated_at", models.Hero.updated_at,
-    "name", models.Hero.name,
-    "slug", models.Hero.slug,
-    "image_path", models.Hero.image_path,
-    "color", models.Hero.color,
-    "type", models.Hero.type,
+    "id",
+    models.Hero.id,
+    "created_at",
+    models.Hero.created_at,
+    "updated_at",
+    models.Hero.updated_at,
+    "name",
+    models.Hero.name,
+    "slug",
+    models.Hero.slug,
+    "image_path",
+    models.Hero.image_path,
+    "color",
+    models.Hero.color,
+    "type",
+    models.Hero.type,
 )
 
 
@@ -191,9 +198,9 @@ async def get_user_encounters_paginated(
     )
 
     if workspace_id is not None:
-        total_query = total_query.join(
-            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
-        ).where(*workspace_filter(workspace_id))
+        total_query = total_query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
+            *workspace_filter(workspace_id)
+        )
         encounters_query = encounters_query.join(
             models.Tournament, models.Encounter.tournament_id == models.Tournament.id
         ).where(*workspace_filter(workspace_id))
@@ -209,15 +216,27 @@ async def get_user_encounters_paginated(
         if result == "win":
             q = q.where(
                 sa.or_(
-                    sa.and_(models.Encounter.home_team_id == models.Player.team_id, models.Encounter.home_score > models.Encounter.away_score),
-                    sa.and_(models.Encounter.away_team_id == models.Player.team_id, models.Encounter.away_score > models.Encounter.home_score),
+                    sa.and_(
+                        models.Encounter.home_team_id == models.Player.team_id,
+                        models.Encounter.home_score > models.Encounter.away_score,
+                    ),
+                    sa.and_(
+                        models.Encounter.away_team_id == models.Player.team_id,
+                        models.Encounter.away_score > models.Encounter.home_score,
+                    ),
                 )
             )
         elif result == "loss":
             q = q.where(
                 sa.or_(
-                    sa.and_(models.Encounter.home_team_id == models.Player.team_id, models.Encounter.home_score < models.Encounter.away_score),
-                    sa.and_(models.Encounter.away_team_id == models.Player.team_id, models.Encounter.away_score < models.Encounter.home_score),
+                    sa.and_(
+                        models.Encounter.home_team_id == models.Player.team_id,
+                        models.Encounter.home_score < models.Encounter.away_score,
+                    ),
+                    sa.and_(
+                        models.Encounter.away_team_id == models.Player.team_id,
+                        models.Encounter.away_score < models.Encounter.home_score,
+                    ),
                 )
             )
         elif result == "draw":
@@ -429,9 +448,9 @@ async def get_user_opponents(
     )
 
     if workspace_id is not None:
-        query = query.join(
-            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
-        ).where(*workspace_filter(workspace_id))
+        query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
+            *workspace_filter(workspace_id)
+        )
 
     query = query.group_by(opp_name).order_by(sa.func.count(models.Encounter.id).desc()).limit(limit)
 
@@ -470,18 +489,16 @@ async def get_user_stage_breakdown(
     )
 
     if workspace_id is not None:
-        query = query.join(
-            models.Tournament, models.Encounter.tournament_id == models.Tournament.id
-        ).where(*workspace_filter(workspace_id))
+        query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
+            *workspace_filter(workspace_id)
+        )
 
     query = query.group_by(stage_kind)
 
     return (await session.execute(query)).all()
 
 
-async def count_teams_by_tournament_bulk(
-    session: AsyncSession, tournaments_ids: list[int]
-) -> dict[int, int]:
+async def count_teams_by_tournament_bulk(session: AsyncSession, tournaments_ids: list[int]) -> dict[int, int]:
     """Number of teams per tournament — used to compute `count_teams`."""
     if not tournaments_ids:
         return {}
@@ -491,7 +508,7 @@ async def count_teams_by_tournament_bulk(
         .group_by(models.Team.tournament_id)
     )
     result = await session.execute(query)
-    return {tid: cnt for tid, cnt in result.all()}
+    return dict(result.all())
 
 
 async def get_player_by_user_and_tournament(

@@ -30,7 +30,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 from src.services.balancer.algorithm.entities import Player, Team  # noqa: E402
 from src.services.balancer.algorithm.rating_normalizer import RatingNormalizer  # noqa: E402
 
-
 MASK = {"Tank": 1, "Damage": 2, "Support": 2}
 
 
@@ -109,8 +108,11 @@ class TestRatingNormalizerApply:
 
     def test_apply_updates_max_rating_cache(self) -> None:
         player = Player(
-            name="P", ratings={"Tank": 2000, "Damage": 1500},
-            preferences=[], uuid="x", mask=MASK,
+            name="P",
+            ratings={"Tank": 2000, "Damage": 1500},
+            preferences=[],
+            uuid="x",
+            mask=MASK,
         )
         normalizer = RatingNormalizer(target_max=3500)
         normalizer.fit([player])
@@ -140,7 +142,7 @@ class TestRatingNormalizerRoundTrip:
         normalizer.apply(players)
         normalizer.restore_players(players)
 
-        for player, original in zip(players, originals):
+        for player, original in zip(players, originals, strict=False):
             for role, expected in original.items():
                 assert abs(player.ratings[role] - expected) <= 1
 

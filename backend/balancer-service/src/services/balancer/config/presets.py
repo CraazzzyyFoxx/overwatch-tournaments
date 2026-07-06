@@ -140,13 +140,13 @@ class ConfigBuilder:
         else:
             self.config = ConfigPresets.DEFAULT.copy()
 
-    def with_role_mask(self, role_mask: dict[str, int]) -> "ConfigBuilder":
+    def with_role_mask(self, role_mask: dict[str, int]) -> ConfigBuilder:
         if not role_mask or not any(value > 0 for value in role_mask.values()):
             raise ValueError("Role mask must have at least one role with count > 0")
         self.config["role_mask"] = role_mask
         return self
 
-    def with_population(self, population_size: int, generation_count: int) -> "ConfigBuilder":
+    def with_population(self, population_size: int, generation_count: int) -> ConfigBuilder:
         if not 10 <= population_size <= 1000:
             raise ValueError("Population size must be between 10 and 1000")
         if not 10 <= generation_count <= 5000:
@@ -159,7 +159,7 @@ class ConfigBuilder:
         self,
         mutation_rate: float | None = None,
         mutation_strength: int | None = None,
-    ) -> "ConfigBuilder":
+    ) -> ConfigBuilder:
         if mutation_rate is not None:
             if not 0 <= mutation_rate <= 1:
                 raise ValueError("Mutation rate must be between 0 and 1")
@@ -180,7 +180,7 @@ class ConfigBuilder:
         role_line_balance_weight: float | None = None,
         intra_team_std_weight: float | None = None,
         internal_role_spread_weight: float | None = None,
-    ) -> "ConfigBuilder":
+    ) -> ConfigBuilder:
         overrides = {
             "average_mmr_balance_weight": average_mmr_balance_weight,
             "role_discomfort_weight": role_discomfort_weight,
@@ -199,7 +199,7 @@ class ConfigBuilder:
             self.config[key] = value
         return self
 
-    def with_captains(self, use_captains: bool) -> "ConfigBuilder":
+    def with_captains(self, use_captains: bool) -> ConfigBuilder:
         self.config["use_captains"] = use_captains
         return self
 

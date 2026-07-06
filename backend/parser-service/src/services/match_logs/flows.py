@@ -4,6 +4,8 @@ import pandas as pd
 import sqlalchemy as sa
 from loguru import logger
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.clients.s3 import S3Client
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
@@ -15,8 +17,6 @@ from shared.schemas.events import (
     TournamentChangedEvent,
     TournamentStandingsInvalidatedEvent,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.core import enums, errors, pagination
 from src.core.config import settings
@@ -1005,9 +1005,7 @@ class MatchLogProcessor:
                 f"unmatched log names: {unmatched_log_names}."
             )
 
-            roster_players_in_log_user_ids = {
-                p.workspace_member.player_id for p in final_players_map.values()
-            }
+            roster_players_in_log_user_ids = {p.workspace_member.player_id for p in final_players_map.values()}
             missing_roster_players_from_log = [
                 rp
                 for rp in roster_players_not_substituted

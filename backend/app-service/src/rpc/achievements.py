@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from shared.rpc.query import build_query_model
 
+from shared.rpc.query import build_query_model
 from src.core import db, errors, pagination
 from src.rpc import _common as c
 from src.services.achievements import flows_v2 as achievements_flows

@@ -56,6 +56,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_user_permission_deny_user_id", table_name="user_permission_deny", schema="auth")
     op.drop_table("user_permission_deny", schema="auth")
-    op.execute(
-        sa.text("DELETE FROM auth.permissions WHERE name IN ('account.avatar', 'account.social')")
-    )
+    op.execute(sa.text("DELETE FROM auth.permissions WHERE name IN ('account.avatar', 'account.social')"))

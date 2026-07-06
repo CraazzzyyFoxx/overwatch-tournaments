@@ -15,7 +15,6 @@ from typing import Any
 
 from shared.division_grid import DivisionGrid
 from shared.domain.player_sub_roles import normalize_sub_role
-
 from src.schemas.registration import CustomFieldDefinition
 from src.services.registration._common import BATTLE_TAG_RE
 from src.services.registration.mapping_catalog import (
@@ -106,10 +105,7 @@ def map_role_subrole_tokens(value: str | None, value_mapping: dict[str, Any]) ->
     if value is None:
         return []
     normalized = normalize_header(value)
-    custom_map = {
-        normalize_header(k): v
-        for k, v in (value_mapping.get("role_subroles") or {}).items()
-    }
+    custom_map = {normalize_header(k): v for k, v in (value_mapping.get("role_subroles") or {}).items()}
     raw = custom_map.get(normalized)
     if isinstance(raw, list):
         return [e for e in (_valid_role_subrole_entry(item) for item in raw) if e is not None]
@@ -201,7 +197,9 @@ def suggest_mapping_from_headers(
     header_keys = build_header_keys(headers)
     normalized_headers = [normalize_header(header) for header in headers]
     specs = build_target_specs(custom_fields)
-    targets: dict[str, Any] = {spec.key: default_mapping_target(spec.default_parser, spec.default_mode) for spec in specs}
+    targets: dict[str, Any] = {
+        spec.key: default_mapping_target(spec.default_parser, spec.default_mode) for spec in specs
+    }
 
     def matching_columns(spec: Any) -> list[str]:
         return [
@@ -458,11 +456,7 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
 
     # Full flex only when primary is the "flex" token AND no additional roles are listed.
     # Having additional roles means the player has explicit preferences — not a true full flex.
-    is_full_flex = (
-        isinstance(source_primary, dict)
-        and source_primary.get("role") == "flex"
-        and not source_additional
-    )
+    is_full_flex = isinstance(source_primary, dict) and source_primary.get("role") == "flex" and not source_additional
 
     primary_code = _role_code(source_primary)
     declared_order: list[str] = []
@@ -497,17 +491,30 @@ def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict
         effective_subrole = explicit_subrole or token_subrole
 
         declared_in_source = primary_code == role_code or role_code in additional_role_codes
-        if rank_value is None and not is_active and not effective_subrole and priority is None and not declared_in_source and not is_full_flex:
+        if (
+            rank_value is None
+            and not is_active
+            and not effective_subrole
+            and priority is None
+            and not declared_in_source
+            and not is_full_flex
+        ):
             continue
 
         payloads.append(
             {
                 "role": role_code,
                 "subrole": effective_subrole,
-                "is_primary": is_full_flex or primary_code == role_code or (primary_code is None and fallback_priority == 0),
-                "priority": int(priority) if isinstance(priority, int) else source_priority.get(role_code, fallback_priority),
+                "is_primary": is_full_flex
+                or primary_code == role_code
+                or (primary_code is None and fallback_priority == 0),
+                "priority": int(priority)
+                if isinstance(priority, int)
+                else source_priority.get(role_code, fallback_priority),
                 "rank_value": rank_value,
-                "is_active": bool(is_active) if is_active is not None else (rank_value is not None or declared_in_source or is_full_flex),
+                "is_active": bool(is_active)
+                if is_active is not None
+                else (rank_value is not None or declared_in_source or is_full_flex),
             }
         )
 

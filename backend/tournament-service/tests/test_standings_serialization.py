@@ -208,6 +208,7 @@ class StandingLoadOptionTests(TestCase):
 class MatchHistorySortingTests(TestCase):
     def test_sorts_swiss_matches_naturally(self) -> None:
         from shared.services.tournament_utils import sort_bracket_matches
+
         matches = [
             _encounter(id=1, home_team_id=1, away_team_id=2, stage_id=1, stage_item_id=1, round=3),
             _encounter(id=2, home_team_id=1, away_team_id=3, stage_id=1, stage_item_id=1, round=1),
@@ -218,14 +219,14 @@ class MatchHistorySortingTests(TestCase):
 
     def test_sorts_double_elimination_chronologically(self) -> None:
         from shared.services.tournament_utils import sort_bracket_matches
+
         # UB R1 (1), LB R1 (-1), UB R2 (2), LB R2 (-2), UB Final (3), LB Final (-4), Grand Final (4), GF Reset (5)
         matches = [
             _encounter(id=4, home_team_id=1, away_team_id=2, stage_id=1, stage_item_id=1, round=4),  # Grand Final
-            _encounter(id=2, home_team_id=1, away_team_id=3, stage_id=1, stage_item_id=1, round=-2), # LB R2
+            _encounter(id=2, home_team_id=1, away_team_id=3, stage_id=1, stage_item_id=1, round=-2),  # LB R2
             _encounter(id=5, home_team_id=1, away_team_id=4, stage_id=1, stage_item_id=1, round=5),  # Grand Final Reset
             _encounter(id=1, home_team_id=1, away_team_id=5, stage_id=1, stage_item_id=1, round=2),  # UB R2
-            _encounter(id=3, home_team_id=1, away_team_id=6, stage_id=1, stage_item_id=1, round=-4), # LB Final (-4)
+            _encounter(id=3, home_team_id=1, away_team_id=6, stage_id=1, stage_item_id=1, round=-4),  # LB Final (-4)
         ]
         sorted_matches = sort_bracket_matches(matches)
         self.assertEqual([1, 2, 3, 4, 5], [m.id for m in sorted_matches])
-

@@ -26,9 +26,7 @@ async def process_standings_job(job_id: int) -> None:
             if current is None or current.status != "running":
                 return
             await session.scalar(
-                sa.select(models.Tournament.id)
-                .where(models.Tournament.id == current.tournament_id)
-                .with_for_update()
+                sa.select(models.Tournament.id).where(models.Tournament.id == current.tournament_id).with_for_update()
             )
             generation = int((current.payload_json or {}).get("generation", 0))
             standings = await standings_service.recalculate_for_tournament(

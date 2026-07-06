@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.services import division_grid_cache
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.services import division_grid_cache
 from src import models, schemas
 
 
@@ -37,9 +37,7 @@ def _validate_version_payload(tiers: list[schemas.DivisionGridTierWrite]) -> Non
 async def get_workspace_grids(session: AsyncSession, workspace_id: int) -> list[models.DivisionGrid]:
     result = await session.execute(
         sa.select(models.DivisionGrid)
-        .options(
-            selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers)
-        )
+        .options(selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers))
         .where(models.DivisionGrid.workspace_id == workspace_id)
         .order_by(models.DivisionGrid.id.asc())
     )
@@ -147,9 +145,7 @@ async def create_grid(
 async def get_grid(session: AsyncSession, workspace_id: int, grid_id: int) -> models.DivisionGrid:
     grid = await session.scalar(
         sa.select(models.DivisionGrid)
-        .options(
-            selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers)
-        )
+        .options(selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers))
         .where(models.DivisionGrid.id == grid_id, models.DivisionGrid.workspace_id == workspace_id)
     )
     if grid is None:
@@ -160,9 +156,7 @@ async def get_grid(session: AsyncSession, workspace_id: int, grid_id: int) -> mo
 async def get_grid_by_id(session: AsyncSession, grid_id: int) -> models.DivisionGrid:
     grid = await session.scalar(
         sa.select(models.DivisionGrid)
-        .options(
-            selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers)
-        )
+        .options(selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers))
         .where(models.DivisionGrid.id == grid_id)
     )
     if grid is None:
@@ -248,9 +242,7 @@ async def delete_version(session: AsyncSession, version_id: int) -> None:
     version = await get_version(session, version_id)
 
     workspace_uses = await session.scalar(
-        sa.select(sa.func.count()).where(
-            models.Workspace.default_division_grid_version_id == version_id
-        )
+        sa.select(sa.func.count()).where(models.Workspace.default_division_grid_version_id == version_id)
     )
     if workspace_uses:
         raise HTTPException(
@@ -259,9 +251,7 @@ async def delete_version(session: AsyncSession, version_id: int) -> None:
         )
 
     tournament_uses = await session.scalar(
-        sa.select(sa.func.count()).where(
-            models.Tournament.division_grid_version_id == version_id
-        )
+        sa.select(sa.func.count()).where(models.Tournament.division_grid_version_id == version_id)
     )
     if tournament_uses:
         raise HTTPException(
@@ -317,7 +307,9 @@ async def update_version(
     return updated
 
 
-async def clone_version(session: AsyncSession, version_id: int, *, label: str | None = None) -> models.DivisionGridVersion:
+async def clone_version(
+    session: AsyncSession, version_id: int, *, label: str | None = None
+) -> models.DivisionGridVersion:
     version = await get_version(session, version_id)
     cloned = await create_version(
         session,
@@ -426,9 +418,7 @@ async def upsert_mapping(
         mapping.name = data.name
         mapping.is_complete = is_complete
         await session.execute(
-            sa.delete(models.DivisionGridMappingRule).where(
-                models.DivisionGridMappingRule.mapping_id == mapping.id
-            )
+            sa.delete(models.DivisionGridMappingRule).where(models.DivisionGridMappingRule.mapping_id == mapping.id)
         )
         await session.flush()
 

@@ -13,9 +13,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import enums
 from shared.services import settings_provider
-from sqlalchemy.ext.asyncio import AsyncSession
 
 DEFAULT_MAPPING_VERSION = "ow2-default-v1"
 

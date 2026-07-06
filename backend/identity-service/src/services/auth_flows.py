@@ -11,11 +11,11 @@ from __future__ import annotations
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rbac import legacy_workspace_role_name_for_user
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.services.auth_service import AuthService
 from src.services.auth_token_helpers import _linked_players_payload, _load_user_denies
@@ -185,9 +185,7 @@ async def logout_all(session: AsyncSession, user: models.AuthUser) -> None:
 
 async def list_sessions(session: AsyncSession, user: models.AuthUser) -> list[schemas.SessionRead]:
     current_session_id = getattr(user, "_current_session_id", None)
-    summaries = await SessionService.list_user_sessions(
-        session, user.id, current_session_id=current_session_id
-    )
+    summaries = await SessionService.list_user_sessions(session, user.id, current_session_id=current_session_id)
     return [schemas.SessionRead.model_validate(summary) for summary in summaries]
 
 
@@ -198,9 +196,7 @@ async def revoke_session(session: AsyncSession, user: models.AuthUser, session_i
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current session cannot be revoked from the sessions list",
         )
-    summary = await SessionService.get_user_session(
-        session, user.id, session_id, current_session_id=current_session_id
-    )
+    summary = await SessionService.get_user_session(session, user.id, session_id, current_session_id=current_session_id)
     if summary is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     await AuthService.revoke_session_tokens(session, user.id, session_id)
@@ -258,9 +254,7 @@ async def get_me(session: AsyncSession, user_id: int) -> schemas.AuthUser:
     return schemas.AuthUser.model_validate(data)
 
 
-async def update_me(
-    session: AsyncSession, user: models.AuthUser, payload: schemas.UserUpdate
-) -> models.AuthUser:
+async def update_me(session: AsyncSession, user: models.AuthUser, payload: schemas.UserUpdate) -> models.AuthUser:
     if payload.first_name is not None:
         user.first_name = payload.first_name
     if payload.last_name is not None:
@@ -282,9 +276,7 @@ async def update_me(
     return user
 
 
-async def set_password(
-    session: AsyncSession, user: models.AuthUser, payload: schemas.PasswordSetRequest
-) -> None:
+async def set_password(session: AsyncSession, user: models.AuthUser, payload: schemas.PasswordSetRequest) -> None:
     if user.hashed_password:
         if not payload.current_password:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is required")

@@ -10,8 +10,8 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from shared.rpc.query import build_query_model
 
+from shared.rpc.query import build_query_model
 from src import models, schemas
 from src.core import db
 from src.core.workspace import resolve_workspace_context

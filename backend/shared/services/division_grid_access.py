@@ -249,15 +249,11 @@ async def build_workspace_division_grid_normalizer(
         workspace_id,
     )
     if resolved_target_version_id is None:
-        raise DivisionGridNormalizationError(
-            f"Workspace {workspace_id} does not have a default division grid version"
-        )
+        raise DivisionGridNormalizationError(f"Workspace {workspace_id} does not have a default division grid version")
 
     target_snapshot = await load_division_grid_snapshot(session, resolved_target_version_id)
     if target_snapshot is None:
-        raise DivisionGridNormalizationError(
-            f"Target division grid version {resolved_target_version_id} was not found"
-        )
+        raise DivisionGridNormalizationError(f"Target division grid version {resolved_target_version_id} was not found")
 
     target_grid = target_snapshot.to_runtime_grid()
     target_tiers_by_id = {tier.id: tier for tier in target_grid.tiers if tier.id is not None}
@@ -271,15 +267,11 @@ async def build_workspace_division_grid_normalizer(
     for source_version_id in resolved_source_version_ids:
         snapshot = await load_division_grid_snapshot(session, source_version_id)
         if snapshot is None:
-            raise DivisionGridNormalizationError(
-                f"Division grid versions are missing: {[source_version_id]}"
-            )
+            raise DivisionGridNormalizationError(f"Division grid versions are missing: {[source_version_id]}")
         source_grids_by_version_id[source_version_id] = snapshot.to_runtime_grid()
 
     foreign_source_version_ids = [
-        version_id
-        for version_id in resolved_source_version_ids
-        if version_id != resolved_target_version_id
+        version_id for version_id in resolved_source_version_ids if version_id != resolved_target_version_id
     ]
 
     primary_target_by_source_tier_id = {}
@@ -323,9 +315,7 @@ async def build_workspace_division_grid_normalizer(
         source_grid = source_grids_by_version_id[source_version_id]
         for source_tier in source_grid.tiers:
             if source_tier.id is None:
-                raise DivisionGridNormalizationError(
-                    f"Source tier id is missing for version {source_version_id}"
-                )
+                raise DivisionGridNormalizationError(f"Source tier id is missing for version {source_version_id}")
             weighted_targets = tuple(rules_by_source_tier_id.get(source_tier.id, []))
             if require_complete and not weighted_targets:
                 raise DivisionGridNormalizationError(

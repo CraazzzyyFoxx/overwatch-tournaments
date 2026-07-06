@@ -3,6 +3,7 @@ import time
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
 from redis.asyncio import Redis
+
 from shared.messaging.config import (
     ANALYTICS_INFER_QUEUE,
     ANALYTICS_JOB_QUEUE,
@@ -22,7 +23,6 @@ from shared.schemas.events import (
     AnalyticsJobRequested,
     AnalyticsTrainRequest,
 )
-
 from src.core import config, db
 from src.scheduler import register_jobs
 from src.services.jobs.runner import run_job

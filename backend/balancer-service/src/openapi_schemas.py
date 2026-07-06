@@ -9,7 +9,6 @@ balance_get) and bare-dict / 204 handlers are omitted.
 from __future__ import annotations
 
 from shared.rpc.openapi import Op
-
 from src import schemas
 from src.schemas import draft as draft_schemas
 from src.schemas.admin import balancer as admin_schemas
@@ -37,9 +36,13 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.draft.session_board": Op(response=draft_schemas.DraftBoardSnapshot),
     "rpc.balancer.draft.suggestions": Op(response=draft_schemas.DraftSuggestionsResponse),
     # ── draft: admin lifecycle (all -> DraftSessionRead) ───────────────────
-    "rpc.balancer.draft.session_create": Op(request=draft_schemas.DraftSessionCreateRequest, response=draft_schemas.DraftSessionRead),
+    "rpc.balancer.draft.session_create": Op(
+        request=draft_schemas.DraftSessionCreateRequest, response=draft_schemas.DraftSessionRead
+    ),
     "rpc.balancer.draft.seed": Op(request=draft_schemas.DraftSeedRequest, response=draft_schemas.DraftSessionRead),
-    "rpc.balancer.draft.session_patch": Op(request=draft_schemas.DraftSessionPatchRequest, response=draft_schemas.DraftSessionRead),
+    "rpc.balancer.draft.session_patch": Op(
+        request=draft_schemas.DraftSessionPatchRequest, response=draft_schemas.DraftSessionRead
+    ),
     "rpc.balancer.draft.start": Op(response=draft_schemas.DraftSessionRead),
     "rpc.balancer.draft.pause": Op(response=draft_schemas.DraftSessionRead),
     "rpc.balancer.draft.resume": Op(response=draft_schemas.DraftSessionRead),
@@ -47,7 +50,13 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.draft.rollback": Op(response=draft_schemas.DraftSessionRead),
     "rpc.balancer.draft.export": Op(response=draft_schemas.DraftSessionRead),
     # ── draft: pick actions (all -> DraftSessionRead) ──────────────────────
-    "rpc.balancer.draft.pick_select": Op(request=draft_schemas.DraftPickSelectRequest, response=draft_schemas.DraftSessionRead),
-    "rpc.balancer.draft.pick_autopick": Op(request=draft_schemas.DraftPickAutopickRequest, response=draft_schemas.DraftSessionRead),
-    "rpc.balancer.draft.pick_override": Op(request=draft_schemas.DraftPickOverrideRequest, response=draft_schemas.DraftSessionRead),
+    "rpc.balancer.draft.pick_select": Op(
+        request=draft_schemas.DraftPickSelectRequest, response=draft_schemas.DraftSessionRead
+    ),
+    "rpc.balancer.draft.pick_autopick": Op(
+        request=draft_schemas.DraftPickAutopickRequest, response=draft_schemas.DraftSessionRead
+    ),
+    "rpc.balancer.draft.pick_override": Op(
+        request=draft_schemas.DraftPickOverrideRequest, response=draft_schemas.DraftSessionRead
+    ),
 }

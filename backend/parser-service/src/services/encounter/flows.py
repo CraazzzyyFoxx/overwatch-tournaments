@@ -1,14 +1,14 @@
 import typing
 
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from shared.services.challonge_refs import (
     ChallongeRef,
     resolve_encounter_challonge,
     resolve_tournament_challonge,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
-
 from src import models, schemas
 from src.core import errors, utils
 from src.services.challonge import sync as challonge_sync
@@ -50,9 +50,7 @@ async def to_pydantic(
             update={"challonge_id": None, "challonge_slug": None}
         )
     if "stage_item" in entities and encounter.stage_item is not None:
-        stage_item = schemas.StageItemRead.model_validate(
-            encounter.stage_item, from_attributes=True
-        )
+        stage_item = schemas.StageItemRead.model_validate(encounter.stage_item, from_attributes=True)
     if "tournament" in entities and encounter.tournament is not None:
         tournament = await tournament_flows.to_pydantic(
             session,
@@ -70,23 +68,17 @@ async def to_pydantic(
             if "teams" in entities
             else utils.prepare_entities(entities, "home_team")
         )
-        home_team = await team_flows.to_pydantic(
-            session, encounter.home_team, team_entities
-        )
+        home_team = await team_flows.to_pydantic(session, encounter.home_team, team_entities)
     if "teams" in entities or "away_team" in entities:
         team_entities = (
             utils.prepare_entities(entities, "teams")
             if "teams" in entities
             else utils.prepare_entities(entities, "away_team")
         )
-        away_team = await team_flows.to_pydantic(
-            session, encounter.away_team, team_entities
-        )
+        away_team = await team_flows.to_pydantic(session, encounter.away_team, team_entities)
     if "matches" in entities:
         matches_read = [
-            await to_pydantic_match(
-                session, match, utils.prepare_entities(entities, "matches")
-            )
+            await to_pydantic_match(session, match, utils.prepare_entities(entities, "matches"))
             for match in encounter.matches
         ]
 
@@ -94,9 +86,7 @@ async def to_pydantic(
     # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
     # read from the deprecated ``encounter.challonge_id`` column. Always override so
     # the value survives the column being dropped; ``None`` when not prefetched.
-    encounter_dict["challonge_id"] = (
-        challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
-    )
+    encounter_dict["challonge_id"] = challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
     return schemas.EncounterRead(
         **encounter_dict,
         score=schemas.Score(home=encounter.home_score, away=encounter.away_score),
@@ -109,9 +99,7 @@ async def to_pydantic(
     )
 
 
-async def to_pydantic_match(
-    session: AsyncSession, match: models.Match, entities: list[str]
-) -> schemas.MatchRead:
+async def to_pydantic_match(session: AsyncSession, match: models.Match, entities: list[str]) -> schemas.MatchRead:
     home_team: schemas.TeamRead | None = None
     away_team: schemas.TeamRead | None = None
     encounter_read: schemas.EncounterRead | None = None
@@ -132,13 +120,9 @@ async def to_pydantic_match(
         )
         away_team = await team_flows.to_pydantic(session, match.away_team, team_entities)
     if "encounter" in entities and match.encounter is not None:
-        encounter_read = await to_pydantic(
-            session, match.encounter, utils.prepare_entities(entities, "encounter")
-        )
+        encounter_read = await to_pydantic(session, match.encounter, utils.prepare_entities(entities, "encounter"))
     if "map" in entities and match.map is not None:
-        map_read = await map_flows.to_pydantic(
-            session, match.map, utils.prepare_entities(entities, "map")
-        )
+        map_read = await map_flows.to_pydantic(session, match.map, utils.prepare_entities(entities, "map"))
 
     return schemas.MatchRead(
         **match.to_dict(),
@@ -150,18 +134,12 @@ async def to_pydantic_match(
     )
 
 
-async def get_encounter(
-    session: AsyncSession, encounter_id: int, entities: list[str]
-) -> schemas.EncounterRead:
+async def get_encounter(session: AsyncSession, encounter_id: int, entities: list[str]) -> schemas.EncounterRead:
     encounter = await service.get_encounter(session, encounter_id, entities)
     if not encounter:
         raise errors.ApiHTTPException(
             status_code=404,
-            detail=[
-                errors.ApiExc(
-                    code="not_found", msg=f"Encounter with id {encounter_id} not found"
-                )
-            ],
+            detail=[errors.ApiExc(code="not_found", msg=f"Encounter with id {encounter_id} not found")],
         )
     challonge_match_ids = await resolve_encounter_challonge(session, [encounter.id])
     tournament_challonge_refs = await resolve_tournament_challonge(session, [encounter.tournament_id])

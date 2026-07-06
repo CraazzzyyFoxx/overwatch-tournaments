@@ -10,7 +10,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "a7v1w5x6y7z8"
 down_revision = "z6u0v4w5x6y7"
 branch_labels = None
@@ -24,8 +23,22 @@ CANONICAL_BUILTINS = [
     ("registration", "withdrawn", "Undo2", "#94a3b8", "Withdrawn", "Registration withdrawn by participant or admin."),
     ("registration", "banned", "ShieldBan", "#ef4444", "Banned", "Registration blocked."),
     ("registration", "insufficient_data", "AlertTriangle", "#f97316", "Incomplete", "Registration data is incomplete."),
-    ("balancer", "not_in_balancer", "MinusCircle", "#94a3b8", "Not Added", "Registration is excluded from the balancer pool."),
-    ("balancer", "incomplete", "AlertTriangle", "#f97316", "Incomplete", "Registration needs role or rank fixes before balancing."),
+    (
+        "balancer",
+        "not_in_balancer",
+        "MinusCircle",
+        "#94a3b8",
+        "Not Added",
+        "Registration is excluded from the balancer pool.",
+    ),
+    (
+        "balancer",
+        "incomplete",
+        "AlertTriangle",
+        "#f97316",
+        "Incomplete",
+        "Registration needs role or rank fixes before balancing.",
+    ),
     ("balancer", "ready", "CheckCircle2", "#10b981", "Ready", "Registration is ready for the balancer pool."),
 ]
 

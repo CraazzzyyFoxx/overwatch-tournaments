@@ -33,9 +33,9 @@ def test_by_name_returns_social_accounts(rpc, db):
     # Unified field present and contains the battletag; legacy grouped fields gone.
     assert "social_accounts" in data
     assert "battle_tag" not in data and "discord" not in data and "twitch" not in data
-    assert any(
-        s["provider"] == "battlenet" and s["username"] == battle_tag for s in data["social_accounts"]
-    ), data["social_accounts"]
+    assert any(s["provider"] == "battlenet" and s["username"] == battle_tag for s in data["social_accounts"]), data[
+        "social_accounts"
+    ]
 
     # Every account exposes the unified fields.
     for account in data["social_accounts"]:

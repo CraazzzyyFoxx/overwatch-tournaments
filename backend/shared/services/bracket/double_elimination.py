@@ -395,9 +395,7 @@ def generate(
         # it to consumer logic.
 
     total_rounds = gf_round + (1 if include_reset else 0)
-    return BracketSkeleton(
-        pairings=pairings, total_rounds=total_rounds, advancement_edges=edges
-    )
+    return BracketSkeleton(pairings=pairings, total_rounds=total_rounds, advancement_edges=edges)
 
 
 def _ub_round_label(round_num: int, upper_rounds: int, match_idx: int) -> str:

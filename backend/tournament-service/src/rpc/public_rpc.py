@@ -31,12 +31,12 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.balancer_registration_statuses import get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.profile_visibility import resolve_profiles_open
-
 from src import models, schemas
 from src.rpc._helpers import (
     _dump,
@@ -76,7 +76,6 @@ from src.services.registration.validation import (
 # --- helpers -----------------------------------------------------------------
 
 
-
 def _optional_identity(data: dict[str, Any]) -> models.AuthUser | None:
     """Rehydrate identity for AuthOptional routes; None when anonymous.
 
@@ -86,14 +85,6 @@ def _optional_identity(data: dict[str, Any]) -> models.AuthUser | None:
     if not data.get("identity"):
         return None
     return rehydrate_user(data.get("identity"))
-
-
-
-
-
-
-
-
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -291,8 +282,8 @@ def register(broker: Any, logger: Any) -> None:
                 return None
             form = await reg_service.get_registration_form(session, tournament_id)
             show_ranks = form.show_ranks if form is not None else False
-            workspace_id = form.workspace_id if form is not None else await _resolve_tournament_workspace(
-                session, tournament_id
+            workspace_id = (
+                form.workspace_id if form is not None else await _resolve_tournament_workspace(session, tournament_id)
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
             return _dump(
@@ -374,9 +365,7 @@ def register(broker: Any, logger: Any) -> None:
             # confirmed closed. Unknown (not yet fetched) fails open.
             form = await reg_service.get_registration_form(session, tournament_id)
             if form is not None and form.require_open_profile:
-                verdict = (
-                    await resolve_profiles_open(session, [reg], scope=form.open_profile_scope)
-                ).get(reg.id)
+                verdict = (await resolve_profiles_open(session, [reg], scope=form.open_profile_scope)).get(reg.id)
                 if verdict is False:
                     raise HTTPException(
                         status_code=400,

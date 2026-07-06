@@ -12,25 +12,26 @@ Strategy:
 - Map old achievement.slug → new rule.slug (per workspace)
 - Copy AchievementUser rows → AchievementEvaluationResult
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "k1f3g5h9i0j1"
-down_revision: Union[str, None] = "j0e2f4g8h9i0"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "j0e2f4g8h9i0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     conn = op.get_bind()
 
     # Step 1: Find all workspace IDs that have tournaments with achievements
-    workspace_ids = conn.execute(
-        sa.text("""
+    workspace_ids = (
+        conn.execute(
+            sa.text("""
             SELECT DISTINCT t.workspace_id
             FROM achievements."user" au
             JOIN tournament.tournament t ON t.id = au.tournament_id
@@ -41,7 +42,10 @@ def upgrade() -> None:
             SELECT DISTINCT w.id
             FROM workspace w
         """)
-    ).scalars().all()
+        )
+        .scalars()
+        .all()
+    )
 
     if not workspace_ids:
         return

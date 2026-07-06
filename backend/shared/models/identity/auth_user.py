@@ -52,7 +52,9 @@ class AuthUser(db.TimeStampIntegerMixin):
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     player: Mapped["User | None"] = relationship(
-        back_populates="auth_user", uselist=False, viewonly=False,
+        back_populates="auth_user",
+        uselist=False,
+        viewonly=False,
     )
     roles: Mapped[list["Role"]] = relationship(secondary="auth.user_roles", back_populates="users", lazy="selectin")
     oauth_connections: Mapped[list["OAuthConnection"]] = relationship(
@@ -185,20 +187,14 @@ class AuthUser(db.TimeStampIntegerMixin):
         if cached_roles is not None:
             return any(role_name in ADMIN_EQUIVALENT_ROLE_NAMES for role_name in cached_roles)
 
-        return any(
-            role.name in ADMIN_EQUIVALENT_ROLE_NAMES and role.workspace_id is None
-            for role in self.roles
-        )
+        return any(role.name in ADMIN_EQUIVALENT_ROLE_NAMES and role.workspace_id is None for role in self.roles)
 
     def _has_admin_panel_role(self) -> bool:
         cached_roles = getattr(self, "_cached_role_names", None)
         if cached_roles is not None:
             return any(role_name in ADMIN_PANEL_ROLE_NAMES for role_name in cached_roles)
 
-        return any(
-            role.name in ADMIN_PANEL_ROLE_NAMES and role.workspace_id is None
-            for role in self.roles
-        )
+        return any(role.name in ADMIN_PANEL_ROLE_NAMES and role.workspace_id is None for role in self.roles)
 
     def _has_global_admin_panel_permission(self) -> bool:
         cached = getattr(self, "_cached_permissions", None)
@@ -216,9 +212,7 @@ class AuthUser(db.TimeStampIntegerMixin):
     def _has_workspace_admin_panel_permission(self, workspace_id: int | None = None) -> bool:
         ws_rbac: dict = getattr(self, "_cached_workspace_rbac", None) or {}
         if ws_rbac:
-            workspace_payloads = (
-                [ws_rbac.get(workspace_id)] if workspace_id is not None else ws_rbac.values()
-            )
+            workspace_payloads = [ws_rbac.get(workspace_id)] if workspace_id is not None else ws_rbac.values()
             for ws_data in workspace_payloads:
                 if ws_data and _permission_payload_grants_admin_panel_access(ws_data.get("permissions", [])):
                     return True

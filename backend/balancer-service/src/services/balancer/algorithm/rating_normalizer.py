@@ -13,7 +13,7 @@ rating range.
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from src.services.balancer.algorithm.entities import Player, Team
 
@@ -84,9 +84,7 @@ class RatingNormalizer:
     @staticmethod
     def _rescale_players(players: list[Player], factor: float) -> None:
         for player in players:
-            rescaled = {
-                role: int(round(rating * factor)) for role, rating in player.ratings.items()
-            }
+            rescaled = {role: int(round(rating * factor)) for role, rating in player.ratings.items()}
             player.ratings = rescaled
             player._max_rating = max(rescaled.values()) if rescaled else 0
 

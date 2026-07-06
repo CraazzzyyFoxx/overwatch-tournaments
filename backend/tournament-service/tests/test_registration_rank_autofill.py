@@ -285,10 +285,7 @@ def test_priority_unmapped_ow_is_skipped() -> None:
 def test_priority_returns_none_when_all_sources_empty() -> None:
     assert reg_admin._build_priority_rank_data(_OW_FIRST, None, None, None, _FakeGrid()) is None
     # OW present but unmapped, no balancer/analytics → still nothing usable.
-    assert (
-        reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(5000), None, None, _FakeGrid())
-        is None
-    )
+    assert reg_admin._build_priority_rank_data(_BALANCER_FIRST, _ow_signals(5000), None, None, _FakeGrid()) is None
 
 
 def test_priority_custom_order_analytics_only_ignores_disabled_sources() -> None:
@@ -302,9 +299,7 @@ def test_priority_custom_order_analytics_only_ignores_disabled_sources() -> None
 
 def test_priority_custom_order_reordered_prefers_first_in_order() -> None:
     # analytics before division_history → analytics wins even though balancer has a value.
-    data = reg_admin._build_priority_rank_data(
-        ("analytics", "division_history"), None, 3200, 2800, _FakeGrid()
-    )
+    data = reg_admin._build_priority_rank_data(("analytics", "division_history"), None, 3200, 2800, _FakeGrid())
 
     assert data is not None
     assert data.rank_value == 2800

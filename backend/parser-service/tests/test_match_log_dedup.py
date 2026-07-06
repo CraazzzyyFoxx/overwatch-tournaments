@@ -37,7 +37,9 @@ class MatchLogDedupTests(IsolatedAsyncioTestCase):
             patch.object(flows.tournament_flows, "get", AsyncMock(return_value=tournament)),
             patch.object(flows.s3_service, "get_log_by_filename", AsyncMock(return_value=raw_bytes)),
             patch.object(record_service, "is_already_processed", AsyncMock(return_value=True)),
-            patch.object(record_service, "finish_duplicate_record", AsyncMock(), create=True) as finish_duplicate_record,
+            patch.object(
+                record_service, "finish_duplicate_record", AsyncMock(), create=True
+            ) as finish_duplicate_record,
             patch.object(flows, "MatchLogProcessor") as processor_cls,
         ):
             await flows.process_match_log(session, 42, "match.log", s3, is_raise=True)

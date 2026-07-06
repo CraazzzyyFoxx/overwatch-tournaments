@@ -9,7 +9,5 @@ def test_authuserplayer_class_no_longer_importable():
 
 
 def test_auth_user_player_table_absent_from_metadata():
-    table_names = {
-        (table.schema, table.name) for table in db.Base.metadata.tables.values()
-    }
+    table_names = {(table.schema, table.name) for table in db.Base.metadata.tables.values()}
     assert ("auth", "user_player") not in table_names

@@ -1,13 +1,13 @@
 """Admin service layer for team and player CRUD operations"""
 
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.domain.player_sub_roles import normalize_sub_role
-from shared.repository import get_or_create_workspace_member
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.player_sub_roles import normalize_sub_role
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.schemas.admin import team as admin_schemas
 from src.services.tournament.events import enqueue_tournament_changed
@@ -51,9 +51,7 @@ async def _resolve_workspace_member_id(
     the member row is created idempotently if one does not already exist for this
     (workspace, player) pair.
     """
-    result = await session.execute(
-        select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
+    result = await session.execute(select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id))
     workspace_id = result.scalar_one_or_none()
     if workspace_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")

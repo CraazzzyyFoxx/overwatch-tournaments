@@ -74,9 +74,7 @@ async def enqueue_balance_exported_event(
     avg_sr_overall = sum(all_ratings) / len(all_ratings) if all_ratings else 0.0
     sr_range = max(all_ratings) - min(all_ratings) if len(all_ratings) > 1 else 0.0
     sr_std_dev = (
-        math.sqrt(sum((r - avg_sr_overall) ** 2 for r in all_ratings) / len(all_ratings))
-        if all_ratings
-        else 0.0
+        math.sqrt(sum((r - avg_sr_overall) ** 2 for r in all_ratings) / len(all_ratings)) if all_ratings else 0.0
     )
 
     # Resolve variant if exists

@@ -92,9 +92,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         current_result = Mock()
         current_result.scalar_one_or_none.return_value = current_input
         team_result = Mock()
-        team_result.scalar_one_or_none.return_value = SimpleNamespace(
-            id=22, tournament_id=stage.tournament_id
-        )
+        team_result.scalar_one_or_none.return_value = SimpleNamespace(id=22, tournament_id=stage.tournament_id)
         existing_result = Mock()
         existing_result.scalar_one_or_none.return_value = other_input
         session = SimpleNamespace(
@@ -107,14 +105,17 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             team_id=22,
         )
 
-        with patch.object(
-            stage_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            AsyncMock(),
-        ) as recalculate, patch.object(
-            stage_service,
-            "_publish_tournament_changed",
-            AsyncMock(),
+        with (
+            patch.object(
+                stage_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ) as recalculate,
+            patch.object(
+                stage_service,
+                "_publish_tournament_changed",
+                AsyncMock(),
+            ),
         ):
             result = await stage_service.update_stage_item_input(session, current_input.id, data)
 
@@ -140,9 +141,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
         current_result = Mock()
         current_result.scalar_one_or_none.return_value = current_input
         team_result = Mock()
-        team_result.scalar_one_or_none.return_value = SimpleNamespace(
-            id=33, tournament_id=stage.tournament_id
-        )
+        team_result.scalar_one_or_none.return_value = SimpleNamespace(id=33, tournament_id=stage.tournament_id)
         existing_result = Mock()
         existing_result.scalar_one_or_none.return_value = None
         session = SimpleNamespace(
@@ -155,14 +154,17 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             team_id=33,
         )
 
-        with patch.object(
-            stage_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            AsyncMock(),
-        ) as recalculate, patch.object(
-            stage_service,
-            "_publish_tournament_changed",
-            AsyncMock(),
+        with (
+            patch.object(
+                stage_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ) as recalculate,
+            patch.object(
+                stage_service,
+                "_publish_tournament_changed",
+                AsyncMock(),
+            ),
         ):
             result = await stage_service.update_stage_item_input(session, current_input.id, data)
 
@@ -222,9 +224,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             patch.object(stage_service, "_check_upstream_stages_completed", AsyncMock(return_value=[])),
             patch.object(stage_service, "activate_stage", AsyncMock(return_value=stage)) as activate_stage,
         ):
-            result_stage, result_encounters = await stage_service.activate_and_generate(
-                session, stage.id, force=True
-            )
+            result_stage, result_encounters = await stage_service.activate_and_generate(session, stage.id, force=True)
 
         self.assertIs(result_stage, stage)
         # parser-service no longer generates encounters — bracket generation
@@ -350,11 +350,7 @@ class AdminStageServiceTests(IsolatedAsyncioTestCase):
             seeding = stage_service._build_seeding(items, top, "snake", 0)
             team_ids = [gid * 100 + pos for gid, pos in seeding]
             skeleton = single_elimination.generate(team_ids)
-            r1 = [
-                (p.home_team_id, p.away_team_id)
-                for p in skeleton.pairings
-                if p.round_number == 1
-            ]
+            r1 = [(p.home_team_id, p.away_team_id) for p in skeleton.pairings if p.round_number == 1]
             for home, away in r1:
                 self.assertNotEqual(
                     home // 100,

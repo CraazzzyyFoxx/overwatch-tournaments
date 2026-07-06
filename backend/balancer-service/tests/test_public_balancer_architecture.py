@@ -30,7 +30,6 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 os.environ["DEBUG"] = "false"
 
-from src.services.balancer.config.defaults import AlgorithmConfig  # noqa: E402
 from src.core.job_store import BalancerJobStore  # noqa: E402
 from src.services.balancer.algorithm.captain_assignment_service import CaptainAssignmentService  # noqa: E402
 from src.services.balancer.algorithm.entities import Player  # noqa: E402
@@ -38,7 +37,7 @@ from src.services.balancer.algorithm.moo_backend import _serialize_native_reques
 from src.services.balancer.algorithm.player_loader import load_players_from_dict  # noqa: E402
 from src.services.balancer.algorithm.role_assignment_service import RoleAssignmentService  # noqa: E402
 from src.services.balancer.algorithm.runtime import balance_teams_moo  # noqa: E402
-from src.services.balancer.config.provider import get_balancer_config_payload  # noqa: E402
+from src.services.balancer.config.defaults import AlgorithmConfig  # noqa: E402
 from src.services.balancer.request_parser import BalancerRequestParser  # noqa: E402
 
 
@@ -156,9 +155,7 @@ class MooBackendRuntimeTests(TestCase):
                             "teams": [
                                 {
                                     "id": 1,
-                                    "roster": {
-                                        payload["players"][0]["seed_role"]: [payload["players"][0]["uuid"]]
-                                    },
+                                    "roster": {payload["players"][0]["seed_role"]: [payload["players"][0]["uuid"]]},
                                 }
                             ]
                         }
@@ -203,9 +200,7 @@ class BalancerRequestParserTests(TestCase):
     def test_ignores_legacy_input_role_mapping_override(self) -> None:
         parser = BalancerRequestParser()
 
-        payload = parser.parse_config_overrides(
-            '{"population_size": 50, "input_role_mapping": {"tank": "Tank"}}'
-        )
+        payload = parser.parse_config_overrides('{"population_size": 50, "input_role_mapping": {"tank": "Tank"}}')
 
         self.assertEqual(payload, {"population_size": 50})
 
@@ -495,7 +490,6 @@ class SolverDomainServiceTests(TestCase):
         self.assertEqual(role_assignment, {"tank-main": "tank", "flex-carry": "dps"})
 
 
-
 class MooDeterminismTests(TestCase):
     def test_balance_teams_moo_returns_same_best_variant_for_same_input(self) -> None:
         input_data = {
@@ -550,10 +544,7 @@ class MooDeterminismTests(TestCase):
 
         with patch("src.services.balancer.algorithm.moo_backend.platform.system", return_value="Linux"):
             with patch("src.services.balancer.algorithm.moo_backend._load_native_module", return_value=native_module):
-                runs = [
-                    balance_teams_moo(input_data, config_overrides)[0]["teams"]
-                    for _ in range(3)
-                ]
+                runs = [balance_teams_moo(input_data, config_overrides)[0]["teams"] for _ in range(3)]
 
         self.assertEqual(runs[0], runs[1])
         self.assertEqual(runs[1], runs[2])

@@ -10,11 +10,11 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import enums
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.schemas.settings import RankCollectionConfig
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 from . import mapping
@@ -56,9 +56,7 @@ def _seed_next_eligible(interval_seconds: int) -> sa.ColumnElement[datetime]:
     once (thundering herd on first enable); a per-row random offset distributes
     the initial cycle evenly instead.
     """
-    return sa.func.now() + sa.func.make_interval(
-        0, 0, 0, 0, 0, 0, sa.func.random() * interval_seconds
-    )
+    return sa.func.now() + sa.func.make_interval(0, 0, 0, 0, 0, 0, sa.func.random() * interval_seconds)
 
 
 async def log_fetch(
@@ -97,9 +95,7 @@ async def ensure_state(
 ) -> models.BattleTagRankState:
     """Get-or-create the collection state for a battle tag, bumping priority."""
     state = await session.scalar(
-        sa.select(models.BattleTagRankState).where(
-            models.BattleTagRankState.social_account_id == social_account_id
-        )
+        sa.select(models.BattleTagRankState).where(models.BattleTagRankState.social_account_id == social_account_id)
     )
     if state is None:
         state = models.BattleTagRankState(
@@ -167,9 +163,7 @@ async def resolve_registration_targets(
     """Collection pool for one approved registration (registered tags + N extra)."""
     registered_normalized: set[str] = set()
     registration = (
-        await session.get(models.BalancerRegistration, registration_id)
-        if registration_id is not None
-        else None
+        await session.get(models.BalancerRegistration, registration_id) if registration_id is not None else None
     )
     if registration is not None:
         if registration.battle_tag:
@@ -180,14 +174,10 @@ async def resolve_registration_targets(
     elif fallback_battle_tag:
         registered_normalized.add(normalize_social_handle(SocialProvider.BATTLENET, fallback_battle_tag))
 
-    return await resolve_user_registration_targets(
-        session, user_id, registered_normalized, extra_accounts
-    )
+    return await resolve_user_registration_targets(session, user_id, registered_normalized, extra_accounts)
 
 
-async def seed_states_for_all_battle_tags(
-    session: AsyncSession, *, interval_seconds: int
-) -> int:
+async def seed_states_for_all_battle_tags(session: AsyncSession, *, interval_seconds: int) -> int:
     """Insert a (tier 0) state row for every battle tag that lacks one.
 
     New rows are seeded with a jittered ``next_eligible_at`` spread across
@@ -215,9 +205,7 @@ async def seed_states_for_all_battle_tags(
     return result.rowcount or 0
 
 
-async def _registration_collection_targets(
-    session: AsyncSession, extra_accounts: int
-) -> set[int]:
+async def _registration_collection_targets(session: AsyncSession, extra_accounts: int) -> set[int]:
     """``social_account_id`` set to collect under ``registrations_only``.
 
     For active-tournament registrations: the tags the player *entered* (main +
@@ -366,8 +354,8 @@ async def count_in_scope(session: AsyncSession, *, scope: str) -> int:
     currently-due subset, which would self-amplify into bursts during a backlog).
     """
     state = models.BattleTagRankState
-    query = sa.select(sa.func.count()).select_from(state).where(
-        state.status != enums.RankCollectionStatus.disabled.value
+    query = (
+        sa.select(sa.func.count()).select_from(state).where(state.status != enums.RankCollectionStatus.disabled.value)
     )
     if scope == "registrations_only":
         query = query.where(state.priority_tier > 0)
@@ -407,9 +395,7 @@ async def select_and_claim_due(
 
     rows = (await session.scalars(query)).all()
     for row in rows:
-        row.next_eligible_at = now + timedelta(
-            seconds=_jittered_interval(interval_seconds, jitter_fraction)
-        )
+        row.next_eligible_at = now + timedelta(seconds=_jittered_interval(interval_seconds, jitter_fraction))
     return rows
 
 
@@ -448,9 +434,7 @@ async def record_result(
         last_snapshot: models.UserRankSnapshot | None = None
         if user_id is not None:
             for parsed in result.ranks:
-                rank_value = mapping.map_division_tier_to_rank_value(
-                    parsed.division, parsed.tier, lookup
-                )
+                rank_value = mapping.map_division_tier_to_rank_value(parsed.division, parsed.tier, lookup)
                 snapshot = models.UserRankSnapshot(
                     user_id=user_id,
                     social_account_id=social_account_id,

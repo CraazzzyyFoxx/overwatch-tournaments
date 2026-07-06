@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DEFAULT_GRID
 from shared.domain.player_sub_roles import normalize_sub_role
 from shared.services.division_grid_resolution import resolve_tournament_division
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import enums, errors, utils
 from src.services.challonge import service as challonge_service
@@ -22,9 +22,7 @@ from . import service
 def resolve_team_placement(team: models.Team) -> int | None:
     standings = getattr(team, "standings", None) or []
     positive_positions = [
-        standing.overall_position
-        for standing in standings
-        if getattr(standing, "overall_position", 0) > 0
+        standing.overall_position for standing in standings if getattr(standing, "overall_position", 0) > 0
     ]
     if positive_positions:
         return min(positive_positions)
@@ -61,14 +59,9 @@ async def to_pydantic(
         tournament = await tournament_flows.to_pydantic(session, team.tournament, [])
     if "players" in entities:
         players_entities = utils.prepare_entities(entities, "players")
-        players_read = [
-            await to_pydantic_player(session, player, players_entities)
-            for player in team.players
-        ]
+        players_read = [await to_pydantic_player(session, player, players_entities) for player in team.players]
     if "captain" in entities and team.captain is not None:
-        captain = await user_flows.to_pydantic(
-            session, team.captain, utils.prepare_entities(entities, "captain")
-        )
+        captain = await user_flows.to_pydantic(session, team.captain, utils.prepare_entities(entities, "captain"))
     if "placement" in entities:
         placement = resolve_team_placement(team)
 
@@ -104,9 +97,7 @@ async def to_pydantic_player(
             session, player.workspace_member.player, utils.prepare_entities(entities, "user")
         )
     if "tournament" in entities and player.tournament is not None:
-        tournament = await tournament_flows.to_pydantic(
-            session, player.tournament, []
-        )
+        tournament = await tournament_flows.to_pydantic(session, player.tournament, [])
     if "team" in entities and player.team is not None:
         team = await to_pydantic(session, player.team, [])
 
@@ -130,7 +121,6 @@ async def to_pydantic_player(
         team=team,
         user=user,
     )
-
 
 
 async def get(session: AsyncSession, id: int, entities: list[str]) -> models.Team:
@@ -287,9 +277,7 @@ async def create(
     )
 
 
-async def _bulk_resolve_users_by_battle_tags(
-    session: AsyncSession, battle_tags: list[str]
-) -> dict[str, models.User]:
+async def _bulk_resolve_users_by_battle_tags(session: AsyncSession, battle_tags: list[str]) -> dict[str, models.User]:
     """Resolve every tag in 1-2 queries and fail like ``find_by_battle_tag``.
 
     Raises the same 400 ``not_found`` error as ``user_flows.find_by_battle_tag``
@@ -488,11 +476,7 @@ def _build_team_suggestion_index(
                 continue
             candidates.setdefault(normalized, set()).add(team.id)
 
-    return {
-        normalized: next(iter(team_ids))
-        for normalized, team_ids in candidates.items()
-        if len(team_ids) == 1
-    }
+    return {normalized: next(iter(team_ids)) for normalized, team_ids in candidates.items() if len(team_ids) == 1}
 
 
 def _suggest_team_id(
@@ -536,11 +520,7 @@ async def _get_or_create_challonge_source_id(
         challonge_tournament_id=challonge_tournament_id,
         slug=slug,
         source_type=(
-            "group"
-            if group is not None and group.is_groups
-            else "playoff"
-            if group is not None
-            else "tournament"
+            "group" if group is not None and group.is_groups else "playoff" if group is not None else "tournament"
         ),
     )
     session.add(source)
@@ -658,9 +638,7 @@ async def _fetch_challonge_participant_rows(
 
     # No return_exceptions: a failed source aborts the whole sync, exactly like
     # the old serial loop did.
-    participants_per_plan = await asyncio.gather(
-        *(_fetch_participants(plan.challonge_tournament_id) for plan in plans)
-    )
+    participants_per_plan = await asyncio.gather(*(_fetch_participants(plan.challonge_tournament_id) for plan in plans))
 
     rows: list[_ChallongeParticipantRow] = []
     for plan, participants in zip(plans, participants_per_plan, strict=True):
@@ -763,21 +741,17 @@ def _validate_challonge_team_mappings(
         key = (mapping.participant_id, mapping.group_id)
         if key in seen:
             errors_out.append(
-                f"Duplicate mapping for participant {mapping.participant_id} "
-                f"in group {mapping.group_id}."
+                f"Duplicate mapping for participant {mapping.participant_id} in group {mapping.group_id}."
             )
             continue
         seen.add(key)
 
         if key not in rows_by_request_key:
             errors_out.append(
-                f"Challonge participant {mapping.participant_id} "
-                f"in group {mapping.group_id} was not found."
+                f"Challonge participant {mapping.participant_id} in group {mapping.group_id} was not found."
             )
         if mapping.team_id not in team_ids:
-            errors_out.append(
-                f"Team {mapping.team_id} does not belong to this tournament."
-            )
+            errors_out.append(f"Team {mapping.team_id} does not belong to this tournament.")
 
     return errors_out
 
@@ -797,10 +771,7 @@ async def sync_challonge_team_mappings(
         tournament,
         create_sources=True,
     )
-    rows_by_request_key = {
-        (row.participant_id, row.group_id): row
-        for row in participant_rows
-    }
+    rows_by_request_key = {(row.participant_id, row.group_id): row for row in participant_rows}
 
     validation_errors = _validate_challonge_team_mappings(
         payload.mappings,
@@ -810,10 +781,7 @@ async def sync_challonge_team_mappings(
     if validation_errors:
         raise errors.ApiHTTPException(
             status_code=400,
-            detail=[
-                errors.ApiExc(code="invalid_challonge_mapping", msg=message)
-                for message in validation_errors
-            ],
+            detail=[errors.ApiExc(code="invalid_challonge_mapping", msg=message) for message in validation_errors],
         )
 
     # challonge_participant_mapping (source_id + participant id -> team_id) is now

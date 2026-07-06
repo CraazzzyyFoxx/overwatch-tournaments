@@ -7,14 +7,14 @@ redirect). Provider code-exchange does outbound HTTP from identity-svc.
 
 from __future__ import annotations
 
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.social import SocialAccount
-from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.services.auth_service import AuthService
 from src.services.oauth_service import OAuthService
@@ -128,21 +128,16 @@ async def unlink(
         del_query = del_query.where(OAuthConnection.provider_user_id == provider_user_id)
     result = await session.execute(del_query)
     if result.rowcount == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"{provider.title()} account not linked"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{provider.title()} account not linked")
 
     provider_social = OAUTH_TO_SOCIAL.get(provider)
     if provider_social is not None:
         player = await session.scalar(select(models.User).where(models.User.auth_user_id == user.id))
         if player is not None:
-            unverify = (
-                update(SocialAccount)
-                .where(
-                    SocialAccount.user_id == player.id,
-                    SocialAccount.provider == provider_social,
-                    SocialAccount.is_verified.is_(True),
-                )
+            unverify = update(SocialAccount).where(
+                SocialAccount.user_id == player.id,
+                SocialAccount.provider == provider_social,
+                SocialAccount.is_verified.is_(True),
             )
             if provider_user_id is not None:
                 unverify = unverify.where(SocialAccount.provider_user_id == provider_user_id)

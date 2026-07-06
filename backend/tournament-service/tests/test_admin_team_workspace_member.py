@@ -50,9 +50,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
             "get_or_create_workspace_member",
             AsyncMock(return_value=created_member),
         ) as get_or_create:
-            member_id = await admin_team_service._resolve_workspace_member_id(
-                session, tournament_id=88, player_id=7
-            )
+            member_id = await admin_team_service._resolve_workspace_member_id(session, tournament_id=88, player_id=7)
 
         self.assertEqual(777, member_id)
         get_or_create.assert_awaited_once_with(session, workspace_id=55, player_id=7)
@@ -60,13 +58,9 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
     async def test_resolve_workspace_member_id_raises_when_tournament_missing(self) -> None:
         session = SimpleNamespace(execute=AsyncMock(return_value=_result(None)))
 
-        with patch.object(
-            admin_team_service, "get_or_create_workspace_member", AsyncMock()
-        ) as get_or_create:
+        with patch.object(admin_team_service, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
             with self.assertRaises(Exception) as ctx:
-                await admin_team_service._resolve_workspace_member_id(
-                    session, tournament_id=404, player_id=7
-                )
+                await admin_team_service._resolve_workspace_member_id(session, tournament_id=404, player_id=7)
 
         self.assertEqual(404, ctx.exception.status_code)
         get_or_create.assert_not_awaited()

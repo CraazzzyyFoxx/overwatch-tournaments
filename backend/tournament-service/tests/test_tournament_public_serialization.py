@@ -76,8 +76,7 @@ class TournamentLoadOptionTests(TestCase):
 
     def test_division_grid_version_is_explicit_load_option(self) -> None:
         paths = "\n".join(
-            str(getattr(option, "path", ""))
-            for option in service.tournament_entities(["division_grid_version"])
+            str(getattr(option, "path", "")) for option in service.tournament_entities(["division_grid_version"])
         )
 
         self.assertIn("Tournament.division_grid_version", paths)

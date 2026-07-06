@@ -13,9 +13,9 @@ import typing
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.query import build_query_model
-
 from src import schemas
 from src.core import db, enums, pagination
 from src.core.workspace import get_division_grid, resolve_workspace_context
@@ -168,7 +168,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             qp = build_query_model(schemas.UserMapsSearchQueryParams[_MAPS_SORT], data.get("query"))
             return await map_flows.get_top_user(
-                session, c.require_id(data), schemas.UserMapsSearchParams.from_query_params(qp), workspace_id=_ws_id(data)
+                session,
+                c.require_id(data),
+                schemas.UserMapsSearchParams.from_query_params(qp),
+                workspace_id=_ws_id(data),
             )
 
         return await c.envelope(logger, "users.maps", op, session_factory=_SF)
@@ -178,7 +181,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             qp = build_query_model(schemas.UserMapsSearchQueryParams[_MAPS_SORT], data.get("query"))
             return await map_flows.get_top_user_summary(
-                session, c.require_id(data), schemas.UserMapsSearchParams.from_query_params(qp), workspace_id=_ws_id(data)
+                session,
+                c.require_id(data),
+                schemas.UserMapsSearchParams.from_query_params(qp),
+                workspace_id=_ws_id(data),
             )
 
         return await c.envelope(logger, "users.maps_summary", op, session_factory=_SF)
@@ -233,7 +239,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             qp = build_query_model(pagination.PaginationSortQueryParams[_TEAMMATES_SORT], data.get("query"))
             return await user_flows.get_best_teammates(
-                session, c.require_id(data), pagination.PaginationSortParams.from_query_params(qp), workspace_id=_ws_id(data)
+                session,
+                c.require_id(data),
+                pagination.PaginationSortParams.from_query_params(qp),
+                workspace_id=_ws_id(data),
             )
 
         return await c.envelope(logger, "users.teammates", op, session_factory=_SF)

@@ -3,7 +3,6 @@
 import asyncio
 
 from shared.core.social import SocialProvider
-
 from src import models
 from src.services.user import flows
 

@@ -38,10 +38,7 @@ class S3Client:
         public_url: str | None = None,
     ) -> None:
         if not access_key or not secret_key or not endpoint_url:
-            raise ValueError(
-                "S3 configuration is incomplete. "
-                "Set S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT_URL."
-            )
+            raise ValueError("S3 configuration is incomplete. Set S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT_URL.")
         self._config = {
             "aws_access_key_id": access_key,
             "aws_secret_access_key": secret_key,
@@ -217,9 +214,7 @@ class S3Client:
                     errors = response.get("Errors", [])
                     deleted += len(chunk) - len(errors)
                     for err in errors:
-                        logger.warning(
-                            f"Failed to delete object '{err.get('Key')}': {err.get('Message')}"
-                        )
+                        logger.warning(f"Failed to delete object '{err.get('Key')}': {err.get('Message')}")
         except ClientError:
             logger.exception(f"Error deleting objects with prefix '{prefix}'")
         return deleted

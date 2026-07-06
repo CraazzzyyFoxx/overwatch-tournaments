@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -14,8 +16,6 @@ from shared.schemas.events import (
     TournamentChangedReason,
     TournamentStateChangedEvent,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.services.computation.jobs import request_standings_recalculation
 from src.services.tournament.realtime_commit import register_tournament_realtime_update
@@ -95,9 +95,7 @@ async def get_registration_player_id(
     if registration.workspace_member_id is None:
         return None
     return await session.scalar(
-        sa.select(models.WorkspaceMember.player_id).where(
-            models.WorkspaceMember.id == registration.workspace_member_id
-        )
+        sa.select(models.WorkspaceMember.player_id).where(models.WorkspaceMember.id == registration.workspace_member_id)
     )
 
 

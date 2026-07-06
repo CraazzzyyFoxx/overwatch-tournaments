@@ -95,23 +95,17 @@ class ComputeMatchQualityTests(TestCase):
 
     def test_derived_sigma_makes_even_match_more_balanced(self) -> None:
         encounters = self._encounters()
-        scores = pd.DataFrame(
-            {"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]}
-        )
+        scores = pd.DataFrame({"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]})
 
         result = mq.compute_match_quality(encounters, scores).set_index("encounter_id")
 
         # sigma_pool is derived from gaps {10, 400}; the 10-gap match should be
         # far more skill-balanced than the 400-gap one.
-        self.assertGreater(
-            result.loc[1, "skill_balance"], result.loc[2, "skill_balance"]
-        )
+        self.assertGreater(result.loc[1, "skill_balance"], result.loc[2, "skill_balance"])
 
     def test_weights_are_overridable(self) -> None:
         encounters = self._encounters().head(1)
-        scores = pd.DataFrame(
-            {"encounter_id": [1], "home_score": [3], "away_score": [2]}
-        )
+        scores = pd.DataFrame({"encounter_id": [1], "home_score": [3], "away_score": [2]})
 
         all_skill = mq.compute_match_quality(
             encounters,
@@ -142,9 +136,7 @@ class ComputeMatchQualityTests(TestCase):
                 "p_home_wins": [0.5, 0.5, 0.9],
             }
         )
-        scores = pd.DataFrame(
-            {"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]}
-        )
+        scores = pd.DataFrame({"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]})
 
         result = mq.compute_match_quality(encounters, scores)
 

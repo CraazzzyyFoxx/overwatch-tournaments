@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from shared.division_grid import DivisionGrid, DivisionTier
 from shared.services.division_grid_normalization import DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_tier, resolve_workspace_tier
-
 from src import models
 
 

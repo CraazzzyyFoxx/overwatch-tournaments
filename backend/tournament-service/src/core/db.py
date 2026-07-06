@@ -1,5 +1,4 @@
 from shared.core.db import Base, TimeStampIntegerMixin, TimeStampUUIDMixin, create_database
-
 from src.core import config
 
 __all__ = (

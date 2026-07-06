@@ -59,9 +59,7 @@ class SocialAccount(db.TimeStampIntegerMixin):
         {"schema": "players"},
     )
 
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("players.user.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("players.user.id", ondelete="CASCADE"))
     provider: Mapped[str] = mapped_column(String(64))
     username: Mapped[str] = mapped_column(String(255))
     username_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -106,11 +104,7 @@ class SocialAccountVisibility(db.TimeStampIntegerMixin):
         {"schema": "players"},
     )
 
-    account_id: Mapped[int] = mapped_column(
-        ForeignKey("players.social_account.id", ondelete="CASCADE")
-    )
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True
-    )
+    account_id: Mapped[int] = mapped_column(ForeignKey("players.social_account.id", ondelete="CASCADE"))
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True)
 
     account: Mapped["SocialAccount"] = relationship(back_populates="visibilities")

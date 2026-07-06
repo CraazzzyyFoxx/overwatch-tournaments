@@ -61,7 +61,6 @@ from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: 
 from shared.models.tournament import Tournament  # noqa: E402
 from shared.rbac import get_workspace_system_role  # noqa: E402
 from shared.services.division_grid_access import get_default_division_grid_version_id  # noqa: E402
-
 from src.services.registration import service as reg_service  # noqa: E402
 
 
@@ -198,10 +197,12 @@ def test_first_registration_creates_member_and_player_role(db_session) -> None:
             has_role = None
             if player_role is not None:
                 has_role = await db_session.scalar(
-                    sa.select(sa.exists().where(
-                        user_roles.c.user_id == auth_user_id,
-                        user_roles.c.role_id == player_role.id,
-                    ))
+                    sa.select(
+                        sa.exists().where(
+                            user_roles.c.user_id == auth_user_id,
+                            user_roles.c.role_id == player_role.id,
+                        )
+                    )
                 )
             return member, player_role, has_role
 
@@ -257,9 +258,7 @@ def test_workspace_scoped_self_register_deny_returns_403(db_session) -> None:
             raised = exc
 
         registration_count = await db_session.scalar(
-            sa.text(
-                "select count(*) from balancer.registration where tournament_id = :tid"
-            ),
+            sa.text("select count(*) from balancer.registration where tournament_id = :tid"),
             {"tid": tournament.id},
         )
         return workspace.id, tournament.id, raised, registration_count
@@ -329,13 +328,17 @@ def test_second_registration_does_not_duplicate_member(db_session) -> None:
                 )
             )
             members = (
-                await db_session.execute(
-                    sa.select(WorkspaceMember).where(
-                        WorkspaceMember.workspace_id == workspace_id,
-                        WorkspaceMember.player_id == member_a.player_id,
+                (
+                    await db_session.execute(
+                        sa.select(WorkspaceMember).where(
+                            WorkspaceMember.workspace_id == workspace_id,
+                            WorkspaceMember.player_id == member_a.player_id,
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return members
 
         members = asyncio.run(_verify())

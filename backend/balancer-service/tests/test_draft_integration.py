@@ -816,4 +816,3 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.AVAILABLE.value)
             self.assertIsNone(chosen.drafted_by_team_id)
-

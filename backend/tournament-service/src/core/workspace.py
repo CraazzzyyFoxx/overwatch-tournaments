@@ -21,14 +21,14 @@ Usage in services:
 """
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
     get_effective_division_grid,
     get_effective_division_grid_version,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 

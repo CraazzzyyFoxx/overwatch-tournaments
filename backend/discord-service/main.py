@@ -9,6 +9,8 @@ import httpx
 from faststream.rabbit import RabbitBroker, RabbitQueue
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
+from sqlalchemy import select
+
 from shared.messaging.config import (
     DISCORD_COMMANDS_QUEUE,
     MATCH_LOG_RESULT_EXCHANGE,
@@ -25,8 +27,6 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent, UploadMatchLogEvent
-from sqlalchemy import select
-
 from src.core.config import settings
 from src.core.db import async_session_maker
 from src.feedback import (
@@ -340,7 +340,8 @@ async def process_message(message: discord.Message, tournament_id: int, wait_for
             # Only process log files
             if attachment.filename.lower().endswith((".txt", ".log", ".json")):
                 result = await process_attachment(
-                    tournament_id, attachment,
+                    tournament_id,
+                    attachment,
                     uploader_discord_name=message.author.name,
                     wait_for_result=wait_for_result,
                 )

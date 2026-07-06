@@ -6,14 +6,14 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import normalize_social_handle
-from shared.repository import get_or_create_workspace_member
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import normalize_social_handle
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
 
@@ -165,31 +165,25 @@ async def execute_merge(
         # target's member row in that row's own tournament's workspace (source and
         # target may resolve to different / not-yet-existing members there). This
         # replaces the old generic REFERENCE_CONFIG reassign for Player entirely.
-        affected_counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = (
-            await _repoint_player_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
-            )
+        affected_counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await _repoint_player_workspace_members(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
         )
         # achievements.evaluation_result / achievements.override moved to
         # workspace_member_id (P6): each row's workspace is its own rule's
         # workspace, so — like Player above — the merge must repoint each row
         # at the target's workspace_member in that same workspace rather than
         # a flat user_id reassign.
-        affected_counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = (
-            await _merge_achievement_evaluation_results(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
-            )
+        affected_counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await _merge_achievement_evaluation_results(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
         )
-        affected_counts[OVERRIDE_MEMBER_REFERENCE_KEY] = (
-            await _repoint_achievement_override_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
-            )
+        affected_counts[OVERRIDE_MEMBER_REFERENCE_KEY] = await _repoint_achievement_override_workspace_members(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
         )
         for reference_key, model, column_name in REFERENCE_CONFIG:
             affected_counts[reference_key] = await _reassign_reference(
@@ -208,12 +202,10 @@ async def execute_merge(
         # mechanism that moves registrations during a merge (the generic
         # REFERENCE_CONFIG loop no longer touches the table) — same repoint
         # pattern as Player/achievements above.
-        affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = (
-            await _repoint_registration_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
-            )
+        affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = await _repoint_registration_workspace_members(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
         )
 
         affected_counts["players.user.auth_user_id"] = await _merge_auth_user_links(
@@ -311,12 +303,16 @@ async def apply_identity_selection(
 
 async def _ensure_single_primary(session: AsyncSession, user_id: int, provider: str) -> None:
     rows = (
-        await session.execute(
-            select(models.SocialAccount)
-            .where(models.SocialAccount.user_id == user_id, models.SocialAccount.provider == provider)
-            .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+        (
+            await session.execute(
+                select(models.SocialAccount)
+                .where(models.SocialAccount.user_id == user_id, models.SocialAccount.provider == provider)
+                .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not rows:
         return
     primaries = [row for row in rows if row.is_primary]
@@ -349,9 +345,7 @@ async def _load_merge_context(
 
 async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.User:
     result = await session.execute(
-        select(models.User)
-        .where(models.User.id == user_id)
-        .options(selectinload(models.User.social_accounts))
+        select(models.User).where(models.User.id == user_id).options(selectinload(models.User.social_accounts))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -365,7 +359,9 @@ async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.Use
 async def _count_auth_links(session: AsyncSession, user_id: int) -> int:
     """0 or 1 — a player links to at most one auth user via ``auth_user_id``."""
     result = await session.execute(
-        select(func.count()).select_from(models.User).where(
+        select(func.count())
+        .select_from(models.User)
+        .where(
             models.User.id == user_id,
             models.User.auth_user_id.is_not(None),
         )
@@ -375,9 +371,7 @@ async def _count_auth_links(session: AsyncSession, user_id: int) -> int:
 
 async def _count_affected_rows(session: AsyncSession, source_user_id: int) -> dict[str, int]:
     counts = empty_affected_counts()
-    counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await _count_player_rows_for_source(
-        session, source_user_id
-    )
+    counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await _count_player_rows_for_source(session, source_user_id)
     counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
         session, models.AchievementEvaluationResult, source_user_id
     )
@@ -490,11 +484,7 @@ async def _reassign_reference(
     target_user_id: int,
 ) -> int:
     column = getattr(model, column_name)
-    result = await session.execute(
-        update(model)
-        .where(column == source_user_id)
-        .values({column_name: target_user_id})
-    )
+    result = await session.execute(update(model).where(column == source_user_id).values({column_name: target_user_id}))
     return int(result.rowcount or 0)
 
 
@@ -534,9 +524,7 @@ async def _repoint_player_workspace_members(
     moved = 0
     for player_id, _tournament_id, workspace_id in rows:
         if workspace_id not in workspace_member_id_by_workspace:
-            member = await get_or_create_workspace_member(
-                session, workspace_id=workspace_id, player_id=target_user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
             workspace_member_id_by_workspace[workspace_id] = member.id
 
         result = await session.execute(
@@ -550,9 +538,7 @@ async def _repoint_player_workspace_members(
 
 
 async def _delete_source_user_row(session: AsyncSession, source_user_id: int) -> None:
-    await session.execute(
-        delete(models.User).where(models.User.id == source_user_id)
-    )
+    await session.execute(delete(models.User).where(models.User.id == source_user_id))
 
 
 async def _merge_achievement_evaluation_results(
@@ -600,9 +586,7 @@ async def _merge_achievement_evaluation_results(
     moved = 0
     for row_id, rule_id, tournament_id, match_id, workspace_id in rows:
         if workspace_id not in target_member_id_by_workspace:
-            member = await get_or_create_workspace_member(
-                session, workspace_id=workspace_id, player_id=target_user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
             target_member_id_by_workspace[workspace_id] = member.id
         target_member_id = target_member_id_by_workspace[workspace_id]
 
@@ -612,9 +596,7 @@ async def _merge_achievement_evaluation_results(
                     select(models.AchievementEvaluationResult.id).where(
                         models.AchievementEvaluationResult.workspace_member_id == target_member_id,
                         models.AchievementEvaluationResult.achievement_rule_id == rule_id,
-                        models.AchievementEvaluationResult.tournament_id.is_not_distinct_from(
-                            tournament_id
-                        ),
+                        models.AchievementEvaluationResult.tournament_id.is_not_distinct_from(tournament_id),
                         models.AchievementEvaluationResult.match_id.is_not_distinct_from(match_id),
                     )
                 )
@@ -622,9 +604,7 @@ async def _merge_achievement_evaluation_results(
         )
         if duplicate_exists:
             result = await session.execute(
-                delete(models.AchievementEvaluationResult).where(
-                    models.AchievementEvaluationResult.id == row_id
-                )
+                delete(models.AchievementEvaluationResult).where(models.AchievementEvaluationResult.id == row_id)
             )
         else:
             result = await session.execute(
@@ -673,9 +653,7 @@ async def _repoint_achievement_override_workspace_members(
     moved = 0
     for row_id, workspace_id in rows:
         if workspace_id not in target_member_id_by_workspace:
-            member = await get_or_create_workspace_member(
-                session, workspace_id=workspace_id, player_id=target_user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
             target_member_id_by_workspace[workspace_id] = member.id
 
         result = await session.execute(
@@ -737,9 +715,7 @@ async def _repoint_registration_workspace_members(
     moved = 0
     for registration_id, tournament_id, workspace_id in rows:
         if workspace_id not in target_member_id_by_workspace:
-            member = await get_or_create_workspace_member(
-                session, workspace_id=workspace_id, player_id=target_user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
             target_member_id_by_workspace[workspace_id] = member.id
         target_member_id = target_member_id_by_workspace[workspace_id]
 

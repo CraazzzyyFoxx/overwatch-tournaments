@@ -47,9 +47,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
             "get_or_create_workspace_member",
             AsyncMock(return_value=created_member),
         ) as get_or_create:
-            member_id = await team_service._resolve_workspace_member_id(
-                session, tournament_id=88, player_id=7
-            )
+            member_id = await team_service._resolve_workspace_member_id(session, tournament_id=88, player_id=7)
 
         self.assertEqual(777, member_id)
         get_or_create.assert_awaited_once_with(session, workspace_id=55, player_id=7)
@@ -94,9 +92,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
         session.execute.side_effect = [workspace_result, insert_result]
         session.flush = Mock()
 
-        member_id = team_service._resolve_workspace_member_id_sync(
-            session, tournament_id=88, player_id=7
-        )
+        member_id = team_service._resolve_workspace_member_id_sync(session, tournament_id=88, player_id=7)
 
         self.assertEqual(4242, member_id)
         session.flush.assert_called_once()
@@ -114,9 +110,7 @@ class TeamServiceWorkspaceMemberTests(IsolatedAsyncioTestCase):
         session = Mock()
         session.execute.side_effect = [workspace_result, insert_result, existing_result]
 
-        member_id = team_service._resolve_workspace_member_id_sync(
-            session, tournament_id=88, player_id=7
-        )
+        member_id = team_service._resolve_workspace_member_id_sync(session, tournament_id=88, player_id=7)
 
         self.assertEqual(111, member_id)
 

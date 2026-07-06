@@ -25,6 +25,7 @@ async def execute_global_stat_sum(
 ) -> ResultSet:
     """Lifetime stat sum meets threshold. Grain: user."""
     from . import resolve_stat_name
+
     stat = resolve_stat_name(params["stat"])
     op = params["op"]
     value = params["value"]

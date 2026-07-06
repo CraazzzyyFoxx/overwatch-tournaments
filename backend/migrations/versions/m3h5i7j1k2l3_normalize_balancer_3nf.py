@@ -21,17 +21,16 @@ Create Date: 2026-04-09 23:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "m3h5i7j1k2l3"
-down_revision: Union[str, None] = "l2g4h6i0j1k2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "l2g4h6i0j1k2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -84,9 +83,7 @@ def upgrade() -> None:
         schema="balancer",
     )
     op.create_index("ix_balancer_player_role_entry_player_id", "player_role_entry", ["player_id"], schema="balancer")
-    op.create_index(
-        "ix_player_role_entry_role_active", "player_role_entry", ["role", "is_active"], schema="balancer"
-    )
+    op.create_index("ix_player_role_entry_role_active", "player_role_entry", ["role", "is_active"], schema="balancer")
 
     # -----------------------------------------------------------------------
     # 3. balancer.balance_variant
@@ -205,7 +202,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("tournament_id", "auth_user_id", name="uq_balancer_registration_user"),
         schema="balancer",
     )
-    op.create_index("ix_balancer_registration_tournament_status", "registration", ["tournament_id", "status"], schema="balancer")
+    op.create_index(
+        "ix_balancer_registration_tournament_status", "registration", ["tournament_id", "status"], schema="balancer"
+    )
     op.create_index("ix_balancer_registration_auth_user_id", "registration", ["auth_user_id"], schema="balancer")
     op.create_index(
         "ix_registration_battle_tag",
@@ -246,7 +245,9 @@ def upgrade() -> None:
         schema="players",
     )
     op.create_index("ix_players_external_account_user_id", "external_account", ["user_id"], schema="players")
-    op.create_index("ix_players_external_account_provider", "external_account", ["provider", "username"], schema="players")
+    op.create_index(
+        "ix_players_external_account_provider", "external_account", ["provider", "username"], schema="players"
+    )
 
     # -----------------------------------------------------------------------
     # 8. analytics.balance_snapshot
@@ -279,7 +280,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("tournament_id", "balance_id", name="uq_analytics_balance_snapshot"),
         schema="analytics",
     )
-    op.create_index("ix_analytics_balance_snapshot_tournament_id", "balance_snapshot", ["tournament_id"], schema="analytics")
+    op.create_index(
+        "ix_analytics_balance_snapshot_tournament_id", "balance_snapshot", ["tournament_id"], schema="analytics"
+    )
 
     # -----------------------------------------------------------------------
     # 9. analytics.balance_player_snapshot
@@ -310,9 +313,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_analytics_balance_player_snap_tournament", "balance_player_snapshot", ["tournament_id"], schema="analytics"
     )
-    op.create_index(
-        "ix_analytics_balance_player_snap_user", "balance_player_snapshot", ["user_id"], schema="analytics"
-    )
+    op.create_index("ix_analytics_balance_player_snap_user", "balance_player_snapshot", ["user_id"], schema="analytics")
 
     # -----------------------------------------------------------------------
     # 10. Data migration: populate player_role_entry from role_entries_json

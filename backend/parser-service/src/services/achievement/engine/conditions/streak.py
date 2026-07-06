@@ -51,10 +51,13 @@ async def execute_consecutive(
                 models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(models.Standing, sa.and_(
-                models.Standing.team_id == models.Team.id,
-                models.Standing.tournament_id == models.Player.tournament_id,
-            ))
+            .join(
+                models.Standing,
+                sa.and_(
+                    models.Standing.team_id == models.Team.id,
+                    models.Standing.tournament_id == models.Player.tournament_id,
+                ),
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
             .where(
@@ -85,10 +88,13 @@ async def execute_consecutive(
                 models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(models.Standing, sa.and_(
-                models.Standing.team_id == models.Team.id,
-                models.Standing.tournament_id == models.Player.tournament_id,
-            ))
+            .join(
+                models.Standing,
+                sa.and_(
+                    models.Standing.team_id == models.Team.id,
+                    models.Standing.tournament_id == models.Player.tournament_id,
+                ),
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
             .where(
@@ -115,10 +121,13 @@ async def execute_consecutive(
                 models.WorkspaceMember.id == models.Player.workspace_member_id,
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(models.Standing, sa.and_(
-                models.Standing.team_id == models.Team.id,
-                models.Standing.tournament_id == models.Player.tournament_id,
-            ))
+            .join(
+                models.Standing,
+                sa.and_(
+                    models.Standing.team_id == models.Team.id,
+                    models.Standing.tournament_id == models.Player.tournament_id,
+                ),
+            )
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
             .where(
@@ -133,10 +142,14 @@ async def execute_consecutive(
         return set()
 
     # Apply consecutive grouping trick: group_id = t_num - row_number()
-    rn = sa.func.row_number().over(
-        partition_by=qualifying.c.user_id,
-        order_by=qualifying.c.t_num,
-    ).label("rn")
+    rn = (
+        sa.func.row_number()
+        .over(
+            partition_by=qualifying.c.user_id,
+            order_by=qualifying.c.t_num,
+        )
+        .label("rn")
+    )
 
     with_rn = (
         sa.select(
@@ -218,11 +231,13 @@ async def execute_stable_streak(
     for user_id, _tournament_id, t_num, source_version_id, role, rank in rows:
         division = context.resolve_division(rank, source_version_id=source_version_id)
         div_num = division.number if division else None
-        user_rows[user_id].append({
-            "t_num": t_num,
-            "role": str(role) if role else None,
-            "division": div_num,
-        })
+        user_rows[user_id].append(
+            {
+                "t_num": t_num,
+                "role": str(role) if role else None,
+                "division": div_num,
+            }
+        )
 
     qualifying_users: ResultSet = set()
     for user_id, entries in user_rows.items():

@@ -19,9 +19,10 @@ from __future__ import annotations
 import typing
 
 import pandas as pd
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DEFAULT_GRID, DivisionGrid
 from shared.services.division_grid_access import load_division_grid_snapshot
-from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = (
     "canonical_division_number",

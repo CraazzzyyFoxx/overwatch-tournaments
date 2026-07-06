@@ -19,13 +19,16 @@ jobs:
     - uses: actions/labeler@v5
       if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled' }}
     - run: echo "Done adding labels"
-  # Run this after labeler applied labels
+  # Advisory only: nudges to add a semantic label (feature/bug/…). Those can't be
+  # derived from paths, so this must never block a PR — continue-on-error keeps
+  # the workflow green whether or not a semantic label is present.
   check-labels:
     needs:
       - labeler
     permissions:
       pull-requests: read
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: docker://agilepathway/pull-request-label-checker:latest
         with:

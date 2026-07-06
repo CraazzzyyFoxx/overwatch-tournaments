@@ -37,9 +37,7 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         ]
         update_result_1 = Mock(rowcount=1)
         update_result_2 = Mock(rowcount=1)
-        session = SimpleNamespace(
-            execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2])
-        )
+        session = SimpleNamespace(execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2]))
 
         members_by_workspace = {1: SimpleNamespace(id=901), 2: SimpleNamespace(id=902)}
 
@@ -50,9 +48,7 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
         ) as get_or_create:
-            moved = await user_merge._repoint_player_workspace_members(
-                session, source_user_id=5, target_user_id=77
-            )
+            moved = await user_merge._repoint_player_workspace_members(session, source_user_id=5, target_user_id=77)
 
         self.assertEqual(2, get_or_create.await_count)
         # First execute() call is the SELECT; the next two are the per-row UPDATEs.
@@ -68,17 +64,13 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
             (201, 30, 5),
             (202, 31, 5),
         ]
-        session = SimpleNamespace(
-            execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)])
-        )
+        session = SimpleNamespace(execute=AsyncMock(side_effect=[rows_result, Mock(rowcount=1), Mock(rowcount=1)]))
         member = SimpleNamespace(id=555)
 
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
         ) as get_or_create:
-            moved = await user_merge._repoint_player_workspace_members(
-                session, source_user_id=8, target_user_id=88
-            )
+            moved = await user_merge._repoint_player_workspace_members(session, source_user_id=8, target_user_id=88)
 
         get_or_create.assert_awaited_once_with(session, workspace_id=5, player_id=88)
         self.assertEqual(2, moved)
@@ -88,12 +80,8 @@ class RepointPlayerWorkspaceMembersTests(IsolatedAsyncioTestCase):
         rows_result.all.return_value = []
         session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock()
-        ) as get_or_create:
-            moved = await user_merge._repoint_player_workspace_members(
-                session, source_user_id=9, target_user_id=99
-            )
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
+            moved = await user_merge._repoint_player_workspace_members(session, source_user_id=9, target_user_id=99)
 
         get_or_create.assert_not_awaited()
         session.execute.assert_awaited_once()
@@ -124,9 +112,7 @@ class MergeAchievementEvaluationResultsTests(IsolatedAsyncioTestCase):
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
         ) as get_or_create:
-            moved = await user_merge._merge_achievement_evaluation_results(
-                session, source_user_id=5, target_user_id=77
-            )
+            moved = await user_merge._merge_achievement_evaluation_results(session, source_user_id=5, target_user_id=77)
 
         get_or_create.assert_awaited_once_with(session, workspace_id=1, player_id=77)
         self.assertEqual(1, moved)
@@ -141,12 +127,8 @@ class MergeAchievementEvaluationResultsTests(IsolatedAsyncioTestCase):
         )
         member = SimpleNamespace(id=901)
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
-        ):
-            moved = await user_merge._merge_achievement_evaluation_results(
-                session, source_user_id=5, target_user_id=77
-            )
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)):
+            moved = await user_merge._merge_achievement_evaluation_results(session, source_user_id=5, target_user_id=77)
 
         # Second execute() call must be a DELETE, not an UPDATE.
         second_call_sql = str(session.execute.await_args_list[1].args[0])
@@ -172,9 +154,7 @@ class MergeAchievementEvaluationResultsTests(IsolatedAsyncioTestCase):
         with patch.object(
             user_merge, "get_or_create_workspace_member", AsyncMock(side_effect=fake_get_or_create)
         ) as get_or_create:
-            moved = await user_merge._merge_achievement_evaluation_results(
-                session, source_user_id=5, target_user_id=77
-            )
+            moved = await user_merge._merge_achievement_evaluation_results(session, source_user_id=5, target_user_id=77)
 
         self.assertEqual(2, get_or_create.await_count)
         self.assertEqual(2, moved)
@@ -184,12 +164,8 @@ class MergeAchievementEvaluationResultsTests(IsolatedAsyncioTestCase):
         rows_result.all.return_value = []
         session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock()
-        ) as get_or_create:
-            moved = await user_merge._merge_achievement_evaluation_results(
-                session, source_user_id=5, target_user_id=77
-            )
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
+            moved = await user_merge._merge_achievement_evaluation_results(session, source_user_id=5, target_user_id=77)
 
         get_or_create.assert_not_awaited()
         self.assertEqual(0, moved)
@@ -208,9 +184,7 @@ class RepointAchievementOverrideWorkspaceMembersTests(IsolatedAsyncioTestCase):
         ]
         update_result_1 = Mock(rowcount=1)
         update_result_2 = Mock(rowcount=1)
-        session = SimpleNamespace(
-            execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2])
-        )
+        session = SimpleNamespace(execute=AsyncMock(side_effect=[rows_result, update_result_1, update_result_2]))
         members_by_workspace = {1: SimpleNamespace(id=501), 2: SimpleNamespace(id=502)}
 
         async def fake_get_or_create(_session, *, workspace_id, player_id):
@@ -232,9 +206,7 @@ class RepointAchievementOverrideWorkspaceMembersTests(IsolatedAsyncioTestCase):
         rows_result.all.return_value = []
         session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock()
-        ) as get_or_create:
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
             moved = await user_merge._repoint_achievement_override_workspace_members(
                 session, source_user_id=5, target_user_id=77
             )
@@ -311,9 +283,7 @@ class RepointRegistrationWorkspaceMembersTests(IsolatedAsyncioTestCase):
         )
         member = SimpleNamespace(id=901)
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)
-        ):
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock(return_value=member)):
             moved = await user_merge._repoint_registration_workspace_members(
                 session, source_user_id=5, target_user_id=77
             )
@@ -327,9 +297,7 @@ class RepointRegistrationWorkspaceMembersTests(IsolatedAsyncioTestCase):
         rows_result.all.return_value = []
         session = SimpleNamespace(execute=AsyncMock(return_value=rows_result))
 
-        with patch.object(
-            user_merge, "get_or_create_workspace_member", AsyncMock()
-        ) as get_or_create:
+        with patch.object(user_merge, "get_or_create_workspace_member", AsyncMock()) as get_or_create:
             moved = await user_merge._repoint_registration_workspace_members(
                 session, source_user_id=9, target_user_id=99
             )
@@ -401,17 +369,11 @@ class ExecuteMergeWorkspaceMemberWiringTests(IsolatedAsyncioTestCase):
         with (
             patch.object(user_merge, "preview_merge", AsyncMock(return_value=preview)),
             patch.object(user_merge, "_load_merge_context", AsyncMock(return_value=context)),
-            patch.object(
-                user_merge, "apply_identity_selection", AsyncMock(return_value={"moved": [], "deduped": []})
-            ),
+            patch.object(user_merge, "apply_identity_selection", AsyncMock(return_value={"moved": [], "deduped": []})),
             patch.object(user_merge, "_reassign_reference", AsyncMock(side_effect=fake_reassign)),
-            patch.object(
-                user_merge, "_repoint_player_workspace_members", AsyncMock(side_effect=fake_repoint)
-            ),
+            patch.object(user_merge, "_repoint_player_workspace_members", AsyncMock(side_effect=fake_repoint)),
             patch.object(user_merge, "_merge_achievement_evaluation_results", AsyncMock(return_value=0)),
-            patch.object(
-                user_merge, "_repoint_achievement_override_workspace_members", AsyncMock(return_value=0)
-            ),
+            patch.object(user_merge, "_repoint_achievement_override_workspace_members", AsyncMock(return_value=0)),
             patch.object(
                 user_merge,
                 "_repoint_registration_workspace_members",

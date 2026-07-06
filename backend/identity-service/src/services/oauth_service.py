@@ -13,6 +13,10 @@ from urllib.parse import urlencode
 import httpx
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import OAUTH_TO_SOCIAL
@@ -20,10 +24,6 @@ from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.rbac import user_roles
 from shared.models.identity.social import SocialAccount
 from shared.services import social_identity
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import key_derivation
 from src.core.config import settings
@@ -603,9 +603,7 @@ class OAuthService:
         if player.auth_user_id is None:
             return None
 
-        result = await session.execute(
-            select(models.AuthUser).where(models.AuthUser.id == player.auth_user_id)
-        )
+        result = await session.execute(select(models.AuthUser).where(models.AuthUser.id == player.auth_user_id))
         auth_user = result.scalar_one_or_none()
         if auth_user is not None:
             logger.info(
@@ -648,9 +646,7 @@ class OAuthService:
 
         if len(auth_user_ids) == 1:
             auth_user_id = next(iter(auth_user_ids))
-            result = await session.execute(
-                select(models.AuthUser).where(models.AuthUser.id == auth_user_id)
-            )
+            result = await session.execute(select(models.AuthUser).where(models.AuthUser.id == auth_user_id))
             auth_user = result.scalar_one_or_none()
             if auth_user is not None:
                 logger.info(

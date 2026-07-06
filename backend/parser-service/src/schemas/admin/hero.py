@@ -2,8 +2,8 @@ import typing
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
-from shared.core import enums
 
+from shared.core import enums
 from src.core import pagination
 
 __all__ = (

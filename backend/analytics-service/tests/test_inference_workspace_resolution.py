@@ -52,19 +52,11 @@ class RunForTournamentWorkspaceResolutionTests(IsolatedAsyncioTestCase):
                 "get_tournament_workspace_id",
                 AsyncMock(return_value=1),
             ) as resolve,
-            patch.object(
-                runner, "run_performance_for_tournament", AsyncMock(return_value=0)
-            ) as perf,
-            patch.object(
-                runner, "run_shift_for_tournament", AsyncMock(return_value=0)
-            ) as shift,
-            patch.object(
-                runner, "run_standings_for_tournament", AsyncMock(return_value=0)
-            ) as standings,
+            patch.object(runner, "run_performance_for_tournament", AsyncMock(return_value=0)) as perf,
+            patch.object(runner, "run_shift_for_tournament", AsyncMock(return_value=0)) as shift,
+            patch.object(runner, "run_standings_for_tournament", AsyncMock(return_value=0)) as standings,
         ):
-            await runner.run_for_tournament(
-                session, 7, workspace_id=None, model_kinds=KINDS
-            )
+            await runner.run_for_tournament(session, 7, workspace_id=None, model_kinds=KINDS)
 
         resolve.assert_awaited_once_with(session, 7)
         for sub in (perf, shift, standings):
@@ -74,22 +66,12 @@ class RunForTournamentWorkspaceResolutionTests(IsolatedAsyncioTestCase):
         session = SimpleNamespace()
 
         with (
-            patch.object(
-                runner, "get_tournament_workspace_id", AsyncMock()
-            ) as resolve,
-            patch.object(
-                runner, "run_performance_for_tournament", AsyncMock(return_value=0)
-            ) as perf,
-            patch.object(
-                runner, "run_shift_for_tournament", AsyncMock(return_value=0)
-            ) as shift,
-            patch.object(
-                runner, "run_standings_for_tournament", AsyncMock(return_value=0)
-            ) as standings,
+            patch.object(runner, "get_tournament_workspace_id", AsyncMock()) as resolve,
+            patch.object(runner, "run_performance_for_tournament", AsyncMock(return_value=0)) as perf,
+            patch.object(runner, "run_shift_for_tournament", AsyncMock(return_value=0)) as shift,
+            patch.object(runner, "run_standings_for_tournament", AsyncMock(return_value=0)) as standings,
         ):
-            await runner.run_for_tournament(
-                session, 7, workspace_id=2, model_kinds=KINDS
-            )
+            await runner.run_for_tournament(session, 7, workspace_id=2, model_kinds=KINDS)
 
         resolve.assert_not_awaited()
         for sub in (perf, shift, standings):

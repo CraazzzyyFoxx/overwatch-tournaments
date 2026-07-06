@@ -3,14 +3,14 @@ import typing
 from datetime import date
 
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.services.challonge_refs import (
     ChallongeRef,
     resolve_stage_challonge,
     resolve_tournament_challonge,
 )
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import errors
 from src.services.challonge import service as challonge_service
@@ -57,9 +57,7 @@ async def to_pydantic(
             )
             for stage in sorted(tournament.stages, key=lambda item: item.order)
         ]
-    tournament_challonge_id, tournament_challonge_slug = (
-        challonge_ref if challonge_ref is not None else (None, None)
-    )
+    tournament_challonge_id, tournament_challonge_slug = challonge_ref if challonge_ref is not None else (None, None)
     return schemas.TournamentRead(
         id=tournament.id,
         workspace_id=tournament.workspace_id,
@@ -135,9 +133,7 @@ async def get_read(session: AsyncSession, id: int, entities: list[str]) -> schem
     challonge_ref = (await resolve_tournament_challonge(session, [tournament.id])).get(tournament.id)
     stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
     if "stages" in entities:
-        stage_challonge_refs = await resolve_stage_challonge(
-            session, [stage.id for stage in tournament.stages]
-        )
+        stage_challonge_refs = await resolve_stage_challonge(session, [stage.id for stage in tournament.stages])
     return await to_pydantic(
         session,
         tournament,
@@ -269,9 +265,7 @@ async def create_with_groups(
 
     resolved_division_grid_version_id = division_grid_version_id
     if resolved_division_grid_version_id is None:
-        resolved_division_grid_version_id = await get_workspace_division_grid_version_id(
-            session, workspace_id
-        )
+        resolved_division_grid_version_id = await get_workspace_division_grid_version_id(session, workspace_id)
     if resolved_division_grid_version_id is None:
         raise errors.ApiHTTPException(
             status_code=400,

@@ -3,6 +3,10 @@
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
@@ -10,10 +14,6 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_workspace_division_grid_version_id
 from shared.services.tournament_computation import request_bracket_job
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.admin import tournament as admin_schemas
 from src.services.admin import stage as stage_service
@@ -74,9 +74,7 @@ async def _link_tournament_challonge_source(
         source.slug = slug
 
 
-async def _unlink_tournament_challonge_source(
-    session: AsyncSession, tournament: models.Tournament
-) -> None:
+async def _unlink_tournament_challonge_source(session: AsyncSession, tournament: models.Tournament) -> None:
     """Drop the tournament-scoped ``challonge_source`` row(s) when the link is cleared."""
     await session.execute(
         delete(models.ChallongeSource).where(
@@ -247,9 +245,7 @@ def _stage_has_ready_inputs(stage: models.Stage) -> bool:
         return False
 
     for item in stage_items:
-        team_count = sum(
-            1 for stage_input in getattr(item, "inputs", []) if stage_input.team_id is not None
-        )
+        team_count = sum(1 for stage_input in getattr(item, "inputs", []) if stage_input.team_id is not None)
         if team_count < 2:
             return False
     return True
@@ -273,9 +269,7 @@ async def _maybe_auto_start_group_stage(
 
     stages = sorted(getattr(tournament, "stages", []) or [], key=lambda stage: stage.order)
     group_stages = [
-        stage
-        for stage in stages
-        if stage.stage_type in GROUP_STAGE_TYPES and not getattr(stage, "is_completed", False)
+        stage for stage in stages if stage.stage_type in GROUP_STAGE_TYPES and not getattr(stage, "is_completed", False)
     ]
     if not group_stages:
         return
@@ -324,9 +318,7 @@ async def toggle_finished(session: AsyncSession, tournament_id: int) -> models.T
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
     tournament.is_finished = not tournament.is_finished
-    tournament.status = (
-        TournamentStatus.COMPLETED if tournament.is_finished else TournamentStatus.LIVE
-    )
+    tournament.status = TournamentStatus.COMPLETED if tournament.is_finished else TournamentStatus.LIVE
 
     await session.commit()
     return await get_tournament(session, tournament_id)

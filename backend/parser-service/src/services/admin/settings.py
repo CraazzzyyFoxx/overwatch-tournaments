@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.repository import SettingsRepository
 from shared.schemas.settings import SETTINGS_SCHEMAS
 from shared.services import settings_provider
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.core import errors
 
@@ -57,9 +57,7 @@ async def upsert_setting(
 ) -> models.Settings:
     """Validate against the per-key schema, persist, and invalidate the cache."""
     _validate_value(key, value)
-    setting = await _repo.upsert(
-        session, key, value, description=description, updated_by=updated_by
-    )
+    setting = await _repo.upsert(session, key, value, description=description, updated_by=updated_by)
     await session.commit()
     await settings_provider.invalidate_setting(key)
     return setting

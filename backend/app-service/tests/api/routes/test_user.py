@@ -28,9 +28,7 @@ from sqlalchemy.orm import Session
 
 from src import models
 from src.core import enums
-
 from tests.conftest import RpcHarness, build_query
-
 
 _COMPARE_FIXTURE_IDS = {
     "subject_user": 9_100_000_001,

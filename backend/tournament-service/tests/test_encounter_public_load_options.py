@@ -25,8 +25,7 @@ from src.services.encounter import service  # noqa: E402
 class EncounterLoadOptionTests(TestCase):
     def test_stage_load_options_stay_summary_only(self) -> None:
         paths = "\n".join(
-            str(getattr(option, "path", ""))
-            for option in service.encounter_entities(["stage", "stage_item"])
+            str(getattr(option, "path", "")) for option in service.encounter_entities(["stage", "stage_item"])
         )
 
         self.assertIn("Encounter.stage", paths)

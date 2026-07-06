@@ -11,11 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.query import build_query_model
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import DivisionGridNormalizationError
-
 from src import schemas
 from src.core.workspace import get_division_grid
 from src.rpc._helpers import _bool, _q, _q1, _read, _require_id
@@ -167,7 +167,10 @@ def register(broker: Any, logger: Any) -> None:
             qp = build_query_model(schemas.EncounterSearchQueryParams, data.get("query"))
             params = schemas.EncounterSearchParams.from_query_params(qp)
             return await encounter_flows.get_encounters_overview(
-                session, params, workspace_id=_q1(data, "workspace_id", int), viewer_auth_user_id=_identity_user_id(data)
+                session,
+                params,
+                workspace_id=_q1(data, "workspace_id", int),
+                viewer_auth_user_id=_identity_user_id(data),
             )
 
         return await _read(logger, op, exclude_none=True)
@@ -201,7 +204,10 @@ def register(broker: Any, logger: Any) -> None:
             qp = build_query_model(schemas.EncounterSearchQueryParams, data.get("query"))
             params = schemas.EncounterSearchParams.from_query_params(qp)
             return await encounter_flows.get_all_encounters(
-                session, params, workspace_id=_q1(data, "workspace_id", int), viewer_auth_user_id=_identity_user_id(data)
+                session,
+                params,
+                workspace_id=_q1(data, "workspace_id", int),
+                viewer_auth_user_id=_identity_user_id(data),
             )
 
         return await _read(logger, op, exclude_none=True)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from shared.core.enums import StageItemType, StageType
 
+from shared.core.enums import StageItemType, StageType
 from src import models
 
 BRACKET_STAGE_TYPES = (
@@ -50,9 +50,7 @@ def encounter_is_upper_bracket(
         sa.and_(
             stage.stage_type == StageType.SINGLE_ELIMINATION,
             sa.or_(
-                stage_item.type.in_(
-                    (StageItemType.SINGLE_BRACKET, StageItemType.BRACKET_UPPER)
-                ),
+                stage_item.type.in_((StageItemType.SINGLE_BRACKET, StageItemType.BRACKET_UPPER)),
                 stage_item.id.is_(None),
             ),
         ),

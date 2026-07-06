@@ -35,6 +35,7 @@ holding one ACCESS-EXCLUSIVE-shaped transaction for its whole duration:
     migration does not use the NOT VALID CHECK + VALIDATE two-step, per
     review guidance that reserves that pattern for those two tables).
 """
+
 import sqlalchemy as sa
 from alembic import op
 

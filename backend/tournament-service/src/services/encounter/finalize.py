@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from shared.core.enums import EncounterResultStatus, EncounterStatus
-from shared.services.bracket import advancement
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterResultStatus, EncounterStatus
+from shared.services.bracket import advancement
 from src import models
 
 FinalizeSource = Literal["captain", "admin", "challonge", "log"]

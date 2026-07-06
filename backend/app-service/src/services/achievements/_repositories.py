@@ -24,9 +24,7 @@ async def get_tournaments_bulk(
     return list(result.unique().scalars().all())
 
 
-async def get_matches_bulk(
-    session: AsyncSession, match_ids: typing.Sequence[int]
-) -> typing.Sequence[models.Match]:
+async def get_matches_bulk(session: AsyncSession, match_ids: typing.Sequence[int]) -> typing.Sequence[models.Match]:
     if not match_ids:
         return []
     query = (

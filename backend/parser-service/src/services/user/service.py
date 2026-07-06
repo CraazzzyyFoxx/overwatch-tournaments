@@ -2,11 +2,11 @@ import typing
 
 import sqlalchemy as sa
 from loguru import logger
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.core.social import SocialProvider, normalize_social_handle
+from shared.services import social_identity
 from src import models, schemas
 from src.core import utils
 
@@ -39,8 +39,7 @@ async def get_by_battle_tag(session: AsyncSession, battle_tag: str, entities: li
         .join(models.SocialAccount, models.User.id == models.SocialAccount.user_id)
         .where(
             models.SocialAccount.provider == SocialProvider.BATTLENET,
-            models.SocialAccount.username_normalized
-            == normalize_social_handle(SocialProvider.BATTLENET, battle_tag),
+            models.SocialAccount.username_normalized == normalize_social_handle(SocialProvider.BATTLENET, battle_tag),
         )
     )
     result = await session.execute(query)
@@ -75,11 +74,7 @@ async def find_by_csv(session: AsyncSession, data_in: schemas.UserCSV) -> models
         )
 
     if clauses:
-        query = (
-            sa.select(models.User)
-            .outerjoin(acc, models.User.id == acc.user_id)
-            .where(sa.or_(*clauses))
-        )
+        query = sa.select(models.User).outerjoin(acc, models.User.id == acc.user_id).where(sa.or_(*clauses))
         player = (await session.scalars(query)).unique().first()
         if player:
             return player
@@ -150,9 +145,7 @@ async def find_by_battle_tag(session: AsyncSession, battle_tag: str, entities: l
     return None
 
 
-async def find_users_by_battle_tags(
-    session: AsyncSession, battle_tags: list[str]
-) -> dict[str, models.User]:
+async def find_users_by_battle_tags(session: AsyncSession, battle_tags: list[str]) -> dict[str, models.User]:
     """Batch equivalent of :func:`find_by_battle_tag` for a set of tags.
 
     Resolves every tag in at most two queries (name pass, then battlenet social
@@ -214,9 +207,7 @@ async def find_users_by_battle_tags(
     return resolved
 
 
-async def get_taken_handles(
-    session: AsyncSession, provider: str, usernames: list[str]
-) -> set[str]:
+async def get_taken_handles(session: AsyncSession, provider: str, usernames: list[str]) -> set[str]:
     """Normalized handles among ``usernames`` already registered for ``provider``
     (for any user), in a single query. Batch counterpart of the per-item
     ``find_by_handle`` existence probes in ``create_or_ignore_*``."""
@@ -233,21 +224,15 @@ async def get_taken_handles(
 
 
 async def get_battle_tag(session: AsyncSession, battle_tag: str) -> models.SocialAccount | None:
-    return await social_identity.find_by_handle(
-        session, provider=SocialProvider.BATTLENET, username=battle_tag
-    )
+    return await social_identity.find_by_handle(session, provider=SocialProvider.BATTLENET, username=battle_tag)
 
 
 async def get_discord(session: AsyncSession, discord: str) -> models.SocialAccount | None:
-    return await social_identity.find_by_handle(
-        session, provider=SocialProvider.DISCORD, username=discord
-    )
+    return await social_identity.find_by_handle(session, provider=SocialProvider.DISCORD, username=discord)
 
 
 async def get_twitch(session: AsyncSession, twitch: str) -> models.SocialAccount | None:
-    return await social_identity.find_by_handle(
-        session, provider=SocialProvider.TWITCH, username=twitch
-    )
+    return await social_identity.find_by_handle(session, provider=SocialProvider.TWITCH, username=twitch)
 
 
 async def get_all(session: AsyncSession, entities: list[str]) -> typing.Sequence[models.User]:

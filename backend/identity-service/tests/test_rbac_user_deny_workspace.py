@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 
@@ -190,9 +191,7 @@ def test_add_user_deny_scopes_new_row_to_workspace(monkeypatch: pytest.MonkeyPat
         list_rows=[(permission, 7)],
     )
 
-    result = asyncio.run(
-        rbac_flows.add_user_deny(session, _current_user(), 9, 3, workspace_id=7)
-    )
+    result = asyncio.run(rbac_flows.add_user_deny(session, _current_user(), 9, 3, workspace_id=7))
 
     assert session.commit_called is True
     assert len(session.added) == 1
@@ -214,9 +213,7 @@ def test_add_user_deny_scopes_new_row_to_workspace(monkeypatch: pytest.MonkeyPat
 
 def test_add_user_deny_defaults_to_global_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     user = SimpleNamespace(id=9)
-    permission = SimpleNamespace(
-        id=4, name="account.social", resource="account", action="social", description=None
-    )
+    permission = SimpleNamespace(id=4, name="account.social", resource="account", action="social", description=None)
 
     async def fake_invalidate_rbac(_user_id):
         return None

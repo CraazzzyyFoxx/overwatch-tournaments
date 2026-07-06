@@ -44,9 +44,7 @@ async def main() -> int:
 
     print(f"Connecting to {host}:{port}/{db} as {user} …")
     try:
-        conn = await asyncpg.connect(
-            host=host, port=port, database=db, user=user, password=password, timeout=15
-        )
+        conn = await asyncpg.connect(host=host, port=port, database=db, user=user, password=password, timeout=15)
     except Exception as exc:  # connectivity / auth failure
         print(f"!! CONNECT FAILED: {type(exc).__name__}: {exc}")
         return 1
@@ -56,9 +54,7 @@ async def main() -> int:
         print(f"connectivity OK (SELECT 1 -> {one})\n")
 
         print("=== algorithms ===")
-        algos = await conn.fetch(
-            "SELECT id, name, produces_shifts FROM analytics.algorithms ORDER BY id"
-        )
+        algos = await conn.fetch("SELECT id, name, produces_shifts FROM analytics.algorithms ORDER BY id")
         shift_algo_id = None
         for r in algos:
             print(f"  id={r['id']:>3}  produces_shifts={r['produces_shifts']!s:<5}  {r['name']}")
@@ -70,9 +66,7 @@ async def main() -> int:
         latest = await conn.fetchval("SELECT max(id) FROM tournament.tournament")
         total = await conn.fetchval("SELECT count(*) FROM tournament.tournament")
         print(f"  latest tournament id = {latest}   total tournaments = {total}")
-        recent = await conn.fetch(
-            "SELECT id, name, start_date FROM tournament.tournament ORDER BY id DESC LIMIT 15"
-        )
+        recent = await conn.fetch("SELECT id, name, start_date FROM tournament.tournament ORDER BY id DESC LIMIT 15")
         for r in recent:
             print(f"  #{r['id']:>4}  {str(r['start_date'])[:10]}  {r['name']}")
         print()
@@ -174,9 +168,7 @@ async def main() -> int:
             """
         )
         for r in labelled:
-            print(
-                f"  t#{r['tournament_id']:>4}  players={r['players']:>3}  with_prev_move={r['with_prev_move']:>3}"
-            )
+            print(f"  t#{r['tournament_id']:>4}  players={r['players']:>3}  with_prev_move={r['with_prev_move']:>3}")
 
         return 0
     finally:

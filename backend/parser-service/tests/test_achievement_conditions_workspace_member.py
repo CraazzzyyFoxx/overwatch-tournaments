@@ -50,12 +50,8 @@ aggregate = importlib.import_module("src.services.achievement.engine.conditions.
 division = importlib.import_module("src.services.achievement.engine.conditions.division")
 player_conditions = importlib.import_module("src.services.achievement.engine.conditions.player")
 team_conditions = importlib.import_module("src.services.achievement.engine.conditions.team")
-teammate_recurrence = importlib.import_module(
-    "src.services.achievement.engine.conditions.teammate_recurrence"
-)
-tournament_winrate = importlib.import_module(
-    "src.services.achievement.engine.conditions.tournament_winrate"
-)
+teammate_recurrence = importlib.import_module("src.services.achievement.engine.conditions.teammate_recurrence")
+tournament_winrate = importlib.import_module("src.services.achievement.engine.conditions.tournament_winrate")
 
 EvalContext = context_module.EvalContext
 
@@ -202,9 +198,7 @@ class AggregateDistinctCountRoleTests(IsolatedAsyncioTestCase):
         session = _CapturingSession()
         ctx = EvalContext(workspace_id=1)
 
-        await aggregate.execute_distinct_count(
-            session, {"field": "role", "op": ">=", "value": 1}, ctx
-        )
+        await aggregate.execute_distinct_count(session, {"field": "role", "op": ">=", "value": 1}, ctx)
 
         sql = _compiled(session.statements[0])
         self.assertIn("GROUP BY workspace_member.player_id", sql)
@@ -218,9 +212,7 @@ class TournamentWinrateGroupByTests(IsolatedAsyncioTestCase):
         session = _CapturingSession()
         ctx = EvalContext(workspace_id=1)
 
-        await tournament_winrate.execute_tournament_winrate(
-            session, {"op": ">=", "value": 0.5}, ctx
-        )
+        await tournament_winrate.execute_tournament_winrate(session, {"op": ">=", "value": 0.5}, ctx)
 
         sql = _compiled(session.statements[0])
         self.assertIn(

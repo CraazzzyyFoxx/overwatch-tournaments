@@ -87,9 +87,7 @@ def upgrade() -> None:
         sa.Column("priority_tier", sa.SmallInteger(), server_default="0", nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["battle_tag_id"], ["players.battle_tag.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["last_snapshot_id"], ["overwatch_rank.rank_snapshot.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["last_snapshot_id"], ["overwatch_rank.rank_snapshot.id"], ondelete="SET NULL"),
         sa.UniqueConstraint("battle_tag_id", name="uq_battle_tag_state_battle_tag_id"),
         schema="overwatch_rank",
     )

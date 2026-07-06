@@ -23,10 +23,6 @@ class Settings(db.TimeStampIntegerMixin):
     __tablename__ = "settings"
 
     key: Mapped[str] = mapped_column(String(), unique=True, index=True)
-    value: Mapped[dict] = mapped_column(
-        JSON, nullable=False, server_default="{}", default=dict
-    )
+    value: Mapped[dict] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
-    updated_by: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
-    )
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)

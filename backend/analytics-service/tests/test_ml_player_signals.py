@@ -24,9 +24,7 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-local_performance = importlib.import_module(
-    "src.services.ml.features.local_performance"
-)
+local_performance = importlib.import_module("src.services.ml.features.local_performance")
 extractors = importlib.import_module("src.services.ml.features.extractors")
 anomalies = importlib.import_module("src.services.ml.models.anomalies")
 

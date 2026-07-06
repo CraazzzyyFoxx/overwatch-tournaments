@@ -66,9 +66,7 @@ class BuildMatchupsTests(TestCase):
         self.assertTrue(str(matchups["home_team_id"].dtype).startswith("int"))
 
     def test_all_teams_known_keeps_every_row_in_order(self) -> None:
-        feature_frame = pd.DataFrame(
-            {"home_team_id": [1.0, 2.0], "away_team_id": [3.0, 4.0]}
-        )
+        feature_frame = pd.DataFrame({"home_team_id": [1.0, 2.0], "away_team_id": [3.0, 4.0]})
 
         matchups = runner._build_matchups(feature_frame, np.array([0.4, 0.8]))
 
@@ -189,9 +187,7 @@ class SharpenProbabilitiesTests(TestCase):
 
     def test_scalar_returns_float_array_returns_ndarray(self) -> None:
         self.assertIsInstance(standings_v2._sharpen_probabilities(0.6, 2.0), float)
-        self.assertIsInstance(
-            standings_v2._sharpen_probabilities(np.array([0.6, 0.4]), 2.0), np.ndarray
-        )
+        self.assertIsInstance(standings_v2._sharpen_probabilities(np.array([0.6, 0.4]), 2.0), np.ndarray)
 
 
 class SimulateStandingsSharpeningTests(TestCase):
@@ -235,9 +231,7 @@ class SimulateStandingsSharpeningTests(TestCase):
         teams = list(strengths)
         matchups = self._round_robin_matchups(strengths)
 
-        default = standings_v2.simulate_standings(
-            matchups, teams, n_iter=1500, rng=np.random.default_rng(7)
-        )
+        default = standings_v2.simulate_standings(matchups, teams, n_iter=1500, rng=np.random.default_rng(7))
         explicit = standings_v2.simulate_standings(
             matchups, teams, n_iter=1500, rng=np.random.default_rng(7), prob_sharpening=1.0
         )

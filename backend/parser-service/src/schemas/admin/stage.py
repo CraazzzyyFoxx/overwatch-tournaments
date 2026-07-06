@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
+
 from shared.core.enums import StageItemInputType, StageItemType, StageType
 
 __all__ = (
@@ -65,13 +66,9 @@ class StageItemInputCreate(BaseModel):
             raise ValueError("FINAL inputs require team_id")
         if self.input_type == StageItemInputType.TENTATIVE:
             if self.source_stage_item_id is None or self.source_position is None:
-                raise ValueError(
-                    "TENTATIVE inputs require source_stage_item_id and source_position"
-                )
+                raise ValueError("TENTATIVE inputs require source_stage_item_id and source_position")
             if self.team_id is not None:
-                raise ValueError(
-                    "TENTATIVE inputs must not have team_id (it is resolved on activation)"
-                )
+                raise ValueError("TENTATIVE inputs must not have team_id (it is resolved on activation)")
             if self.source_position < 1:
                 raise ValueError("source_position is 1-based (>= 1)")
         return self

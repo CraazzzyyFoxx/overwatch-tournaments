@@ -7,9 +7,9 @@ from typing import Any
 import orjson
 from loguru import logger
 
-from src.services.balancer.config.defaults import AlgorithmConfig
 from src.services.balancer.algorithm.determinism import build_balancer_seed, derive_balancer_seed
 from src.services.balancer.algorithm.entities import Player, Team
+from src.services.balancer.config.defaults import AlgorithmConfig
 
 
 def _load_native_module():
@@ -142,16 +142,10 @@ def _log_native_repair_diagnostics(payload: dict[str, Any]) -> None:
     crossover_repaired = int(diagnostics.get("crossover_children_requiring_repair", 0) or 0)
     crossover_changed = int(diagnostics.get("crossover_children_changed_by_repair", 0) or 0)
     mutation_only_children = int(diagnostics.get("mutation_only_children", 0) or 0)
-    mutation_only_repaired = int(
-        diagnostics.get("mutation_only_children_requiring_repair", 0) or 0
-    )
+    mutation_only_repaired = int(diagnostics.get("mutation_only_children_requiring_repair", 0) or 0)
 
-    crossover_repair_rate = (
-        crossover_repaired / crossover_children if crossover_children > 0 else 0.0
-    )
-    mutation_repair_rate = (
-        mutation_only_repaired / mutation_only_children if mutation_only_children > 0 else 0.0
-    )
+    crossover_repair_rate = crossover_repaired / crossover_children if crossover_children > 0 else 0.0
+    mutation_repair_rate = mutation_only_repaired / mutation_only_children if mutation_only_children > 0 else 0.0
 
     logger.info(
         "Rust MOO repair diagnostics: crossover repaired {}/{} ({:.1%}), "

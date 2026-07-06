@@ -142,9 +142,7 @@ class MatchRepository(BaseRepository[models.Match]):
 
     async def list_by_encounter(self, session: AsyncSession, encounter_id: int) -> Sequence[models.Match]:
         result = await session.execute(
-            sa.select(models.Match)
-            .where(models.Match.encounter_id == encounter_id)
-            .order_by(models.Match.id.asc())
+            sa.select(models.Match).where(models.Match.encounter_id == encounter_id).order_by(models.Match.id.asc())
         )
         return result.scalars().all()
 

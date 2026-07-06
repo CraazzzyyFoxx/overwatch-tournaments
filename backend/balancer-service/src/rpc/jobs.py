@@ -19,10 +19,10 @@ import io
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from starlette.datastructures import Headers, UploadFile
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import MissingIdentityError
 from src.core.auth import _resolve_user_from_token
 from src.rpc import _common as c

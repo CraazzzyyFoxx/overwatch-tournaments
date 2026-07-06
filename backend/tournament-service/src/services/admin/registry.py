@@ -14,10 +14,10 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.rpc.crud import CrudDispatcher, EntityConfig
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.crud import CrudDispatcher, EntityConfig
 from src import schemas
 from src.core import auth, db
 from src.schemas.admin import encounter as enc_schemas
@@ -62,7 +62,9 @@ async def _ws_body(data: dict[str, Any]) -> int:
 
 
 async def _ws_via_tournament_body(session: AsyncSession, data: dict[str, Any]) -> int:
-    return await auth.get_tournament_workspace_id(session, _int_or_400(_body(data).get("tournament_id"), "tournament_id"))
+    return await auth.get_tournament_workspace_id(
+        session, _int_or_400(_body(data).get("tournament_id"), "tournament_id")
+    )
 
 
 async def _ws_via_team_body(session: AsyncSession, data: dict[str, Any]) -> int:
@@ -149,9 +151,11 @@ async def _list_player_sub_roles(session: AsyncSession, data: dict[str, Any]) ->
     role_raw = q.get("role")
     role = (role_raw[0] if isinstance(role_raw, list) else role_raw) or None
     inc_raw = q.get("include_inactive")
-    inc = (inc_raw[0] if isinstance(inc_raw, list) else inc_raw)
+    inc = inc_raw[0] if isinstance(inc_raw, list) else inc_raw
     include_inactive = str(inc).lower() in ("1", "true", "yes", "on") if inc is not None else False
-    rows = await psr_service.list_sub_roles(session, workspace_id=workspace_id, role=role, include_inactive=include_inactive)
+    rows = await psr_service.list_sub_roles(
+        session, workspace_id=workspace_id, role=role, include_inactive=include_inactive
+    )
     return [_dump(psr_schemas.PlayerSubRoleRead.model_validate(r, from_attributes=True)) for r in rows]
 
 
@@ -215,7 +219,9 @@ REGISTRY: dict[str, EntityConfig] = {
         resolve_ws_from_id=auth.get_stage_workspace_id,
         resolve_ws_for_create=_ws_via_tournament_path,
         resolve_ws_for_list=_ws_via_tournament_path,
-        service_create=lambda s, p, d: stage_service.create_stage(s, _int_or_400(d.get("tournament_id"), "tournament_id"), p),
+        service_create=lambda s, p, d: stage_service.create_stage(
+            s, _int_or_400(d.get("tournament_id"), "tournament_id"), p
+        ),
         service_get=lambda s, i, d: stage_service.get_stage(s, i),
         service_update=lambda s, i, p, d: stage_service.update_stage(s, i, p),
         service_delete=lambda s, i, d: stage_service.delete_stage(s, i),
@@ -232,7 +238,9 @@ REGISTRY: dict[str, EntityConfig] = {
         update_schema=stage_schemas.StageItemUpdate,
         resolve_ws_from_id=auth.get_stage_item_workspace_id,
         resolve_ws_for_create=_ws_via_stage_path,
-        service_create=lambda s, p, d: stage_service.create_stage_item(s, _int_or_400(d.get("stage_id"), "stage_id"), p),
+        service_create=lambda s, p, d: stage_service.create_stage_item(
+            s, _int_or_400(d.get("stage_id"), "stage_id"), p
+        ),
         service_update=lambda s, i, p, d: stage_service.update_stage_item(s, i, p),
         not_found_detail="Stage item not found",
         actions=frozenset({"create", "update"}),
@@ -246,7 +254,9 @@ REGISTRY: dict[str, EntityConfig] = {
         update_schema=stage_schemas.StageItemInputUpdate,
         resolve_ws_from_id=auth.get_stage_item_input_workspace_id,
         resolve_ws_for_create=_ws_via_stage_item_path,
-        service_create=lambda s, p, d: stage_service.create_stage_item_input(s, _int_or_400(d.get("stage_item_id"), "stage_item_id"), p),
+        service_create=lambda s, p, d: stage_service.create_stage_item_input(
+            s, _int_or_400(d.get("stage_item_id"), "stage_item_id"), p
+        ),
         service_update=lambda s, i, p, d: stage_service.update_stage_item_input(s, i, p),
         not_found_detail="Stage item input not found",
         actions=frozenset({"create", "update"}),

@@ -19,7 +19,6 @@ from shared.core.pagination import (
     PaginationSortSearchQueryParams,
 )
 from shared.rpc.openapi import Op, QueryParam
-
 from src import schemas
 from src.schemas.admin.gamemode import GamemodeCreate, GamemodeUpdate
 from src.schemas.admin.hero import HeroCreate, HeroUpdate
@@ -58,44 +57,92 @@ _TID = QueryParam("tournament_id", "integer")
 OPERATIONS: dict[str, Op] = {
     # ── generic CRUD read engine (rpc.app.read.{get,list}#<entity>) ────────
     "rpc.app.read.get#hero": Op(response=schemas.HeroRead),
-    "rpc.app.read.list#hero": Op(response=Paginated[schemas.HeroRead], query=PaginationSortSearchQueryParams[_HERO_SORT]),
+    "rpc.app.read.list#hero": Op(
+        response=Paginated[schemas.HeroRead], query=PaginationSortSearchQueryParams[_HERO_SORT]
+    ),
     "rpc.app.read.get#map": Op(response=schemas.MapRead),
     "rpc.app.read.list#map": Op(response=Paginated[schemas.MapRead], query=PaginationSortSearchQueryParams[_MAP_SORT]),
     "rpc.app.read.get#gamemode": Op(response=schemas.GamemodeRead),
-    "rpc.app.read.list#gamemode": Op(response=Paginated[schemas.GamemodeRead], query=PaginationSortSearchQueryParams[_GAMEMODE_SORT]),
+    "rpc.app.read.list#gamemode": Op(
+        response=Paginated[schemas.GamemodeRead], query=PaginationSortSearchQueryParams[_GAMEMODE_SORT]
+    ),
     "rpc.app.read.get#achievement": Op(response=schemas.AchievementRead),
-    "rpc.app.read.list#achievement": Op(response=Paginated[schemas.AchievementRead], query=PaginationSortQueryParams[_ACH_SORT]),
+    "rpc.app.read.list#achievement": Op(
+        response=Paginated[schemas.AchievementRead], query=PaginationSortQueryParams[_ACH_SORT]
+    ),
     # ── lookups ────────────────────────────────────────────────────────────
     "rpc.app.heroes.lookup": Op(response=schemas.LookupItem, response_array=True),
     "rpc.app.maps.lookup": Op(response=schemas.LookupItem, response_array=True),
     "rpc.app.gamemodes.lookup": Op(response=schemas.LookupItem, response_array=True),
     # ── heroes (bespoke) ───────────────────────────────────────────────────
-    "rpc.app.heroes.playtime": Op(response=Paginated[schemas.HeroPlaytime], query=schemas.HeroPlaytimeQueryPaginationParams),
-    "rpc.app.heroes.leaderboard": Op(response=Paginated[schemas.HeroLeaderboardEntry], query=schemas.HeroLeaderboardQueryParams),
+    "rpc.app.heroes.playtime": Op(
+        response=Paginated[schemas.HeroPlaytime], query=schemas.HeroPlaytimeQueryPaginationParams
+    ),
+    "rpc.app.heroes.leaderboard": Op(
+        response=Paginated[schemas.HeroLeaderboardEntry], query=schemas.HeroLeaderboardQueryParams
+    ),
     # ── statistics ─────────────────────────────────────────────────────────
     "rpc.app.statistics.dashboard": Op(response=schemas.DashboardStats),
-    "rpc.app.statistics.champion": Op(response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]),
-    "rpc.app.statistics.winrate": Op(response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]),
-    "rpc.app.statistics.won_maps": Op(response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]),
+    "rpc.app.statistics.champion": Op(
+        response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]
+    ),
+    "rpc.app.statistics.winrate": Op(
+        response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]
+    ),
+    "rpc.app.statistics.won_maps": Op(
+        response=Paginated[schemas.PlayerStatistics], query=PaginationSortQueryParams[_STAT_SORT]
+    ),
     # ── users (bespoke reads) ──────────────────────────────────────────────
     "rpc.app.users.get_profile": Op(response=schemas.UserProfile),
-    "rpc.app.users.search": Op(response=schemas.UserSearch, response_array=True, query_params=(QueryParam("query"), QueryParam("fields", array=True))),
+    "rpc.app.users.search": Op(
+        response=schemas.UserSearch,
+        response_array=True,
+        query_params=(QueryParam("query"), QueryParam("fields", array=True)),
+    ),
     "rpc.app.users.overview": Op(response=Paginated[schemas.UserOverviewRow], query=schemas.UserOverviewQueryParams),
     "rpc.app.users.overview_stats": Op(response=schemas.UserOverviewStats, query=schemas.UserOverviewStatsQueryParams),
     "rpc.app.users.overview_catalog": Op(response=schemas.UserCatalogResponse, query=schemas.UserCatalogQueryParams),
     "rpc.app.users.compare": Op(response=schemas.UserCompareResponse, query=schemas.UserCompareQueryParams),
-    "rpc.app.users.compare_heroes": Op(response=schemas.UserHeroCompareResponse, query=schemas.UserHeroCompareQueryParams),
+    "rpc.app.users.compare_heroes": Op(
+        response=schemas.UserHeroCompareResponse, query=schemas.UserHeroCompareQueryParams
+    ),
     "rpc.app.users.by_name": Op(response=schemas.UserRead),
     "rpc.app.users.tournaments": Op(response=schemas.UserTournament, response_array=True),
     "rpc.app.users.tournament": Op(response=schemas.UserTournamentWithStats),
     "rpc.app.users.maps": Op(response=Paginated[schemas.UserMap], query=schemas.UserMapsSearchQueryParams),
     "rpc.app.users.maps_summary": Op(response=schemas.UserMapsSummary, query=schemas.UserMapsSearchQueryParams),
-    "rpc.app.users.encounters": Op(response=Paginated[schemas.EncounterReadWithUserStats], query=PaginationSortQueryParams[_ENC_SORT], query_params=(QueryParam("result"), QueryParam("stage"), QueryParam("mvp1", "boolean"), QueryParam("has_logs", "boolean"), QueryParam("opponent"))),
+    "rpc.app.users.encounters": Op(
+        response=Paginated[schemas.EncounterReadWithUserStats],
+        query=PaginationSortQueryParams[_ENC_SORT],
+        query_params=(
+            QueryParam("result"),
+            QueryParam("stage"),
+            QueryParam("mvp1", "boolean"),
+            QueryParam("has_logs", "boolean"),
+            QueryParam("opponent"),
+        ),
+    ),
     "rpc.app.users.matches_summary": Op(response=schemas.UserMatchesSummary),
-    "rpc.app.users.heroes": Op(response=Paginated[schemas.HeroWithUserStats], query=PaginationQueryParams, query_params=(QueryParam("stats", array=True), _TID, _WS)),
-    "rpc.app.users.teammates": Op(response=Paginated[schemas.UserBestTeammate], query=PaginationSortQueryParams[_MATE_SORT]),
+    "rpc.app.users.heroes": Op(
+        response=Paginated[schemas.HeroWithUserStats],
+        query=PaginationQueryParams,
+        query_params=(QueryParam("stats", array=True), _TID, _WS),
+    ),
+    "rpc.app.users.teammates": Op(
+        response=Paginated[schemas.UserBestTeammate], query=PaginationSortQueryParams[_MATE_SORT]
+    ),
     # ── achievements (bespoke) ─────────────────────────────────────────────
-    "rpc.app.achievements.user": Op(response=schemas.UserAchievementRead, response_array=True, query_params=(_TID, QueryParam("without_tournament", "boolean"), _ENTITIES, _WS, QueryParam("include_locked", "boolean"))),
+    "rpc.app.achievements.user": Op(
+        response=schemas.UserAchievementRead,
+        response_array=True,
+        query_params=(
+            _TID,
+            QueryParam("without_tournament", "boolean"),
+            _ENTITIES,
+            _WS,
+            QueryParam("include_locked", "boolean"),
+        ),
+    ),
     "rpc.app.achievements.users": Op(response=Paginated[schemas.AchievementEarned], query=PaginationQueryParams),
     # ── workspaces ─────────────────────────────────────────────────────────
     "rpc.app.workspaces.get": Op(response=schemas.WorkspaceRead),

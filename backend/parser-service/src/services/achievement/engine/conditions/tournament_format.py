@@ -42,10 +42,9 @@ async def execute(
     """Check tournament format. Grain: user_tournament."""
     fmt = params.get("format", "double_elim")
 
-    stage_tournaments = (
-        sa.select(models.Stage.tournament_id)
-        .group_by(models.Stage.tournament_id)
-    ).subquery("stage_tournaments")
+    stage_tournaments = (sa.select(models.Stage.tournament_id).group_by(models.Stage.tournament_id)).subquery(
+        "stage_tournaments"
+    )
 
     stage_bracket_tournaments = (
         sa.select(models.Stage.tournament_id)

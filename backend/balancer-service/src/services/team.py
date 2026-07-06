@@ -47,9 +47,7 @@ async def bulk_create_from_balancer(
     It now front-loads a handful of batch queries and makes only in-memory
     decisions plus INSERTs in the build loop.
     """
-    tournament_result = await session.execute(
-        sa.select(models.Tournament).where(models.Tournament.id == tournament_id)
-    )
+    tournament_result = await session.execute(sa.select(models.Tournament).where(models.Tournament.id == tournament_id))
     tournament = tournament_result.scalar_one_or_none()
     if tournament is None:
         logger.warning("Tournament %s not found, skipping bulk_create_from_balancer", tournament_id)
@@ -70,13 +68,17 @@ async def bulk_create_from_balancer(
     existing_teams: dict[str, models.Team] = {}
     if team_names:
         team_rows = (
-            await session.execute(
-                sa.select(models.Team).where(
-                    models.Team.tournament_id == tournament_id,
-                    sa.func.lower(models.Team.name).in_(list(team_names)),
+            (
+                await session.execute(
+                    sa.select(models.Team).where(
+                        models.Team.tournament_id == tournament_id,
+                        sa.func.lower(models.Team.name).in_(list(team_names)),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for team in team_rows:
             existing_teams.setdefault(team.name.lower(), team)
 
@@ -108,13 +110,17 @@ async def bulk_create_from_balancer(
 
         # 4. Batch-load existing workspace members for these users.
         member_rows = (
-            await session.execute(
-                sa.select(models.WorkspaceMember).where(
-                    models.WorkspaceMember.workspace_id == tournament.workspace_id,
-                    models.WorkspaceMember.player_id.in_(user_id_list),
+            (
+                await session.execute(
+                    sa.select(models.WorkspaceMember).where(
+                        models.WorkspaceMember.workspace_id == tournament.workspace_id,
+                        models.WorkspaceMember.player_id.in_(user_id_list),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for member_row in member_rows:
             members_by_player[member_row.player_id] = member_row
 

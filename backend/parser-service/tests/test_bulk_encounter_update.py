@@ -76,13 +76,16 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
         enqueue_mock = AsyncMock(return_value=True)
         advance_mock = AsyncMock()
 
-        with patch.object(
-            encounter_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            enqueue_mock,
-        ), patch(
-            "shared.services.bracket.advancement.advance_winner",
-            advance_mock,
+        with (
+            patch.object(
+                encounter_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                enqueue_mock,
+            ),
+            patch(
+                "shared.services.bracket.advancement.advance_winner",
+                advance_mock,
+            ),
         ):
             result = await encounter_service.bulk_update_encounters(
                 session,
@@ -119,13 +122,16 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
         async def capture_enqueue(tid):
             enqueue_calls.append(tid)
 
-        with patch.object(
-            encounter_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            side_effect=capture_enqueue,
-        ), patch(
-            "shared.services.bracket.advancement.advance_winner",
-            AsyncMock(),
+        with (
+            patch.object(
+                encounter_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                side_effect=capture_enqueue,
+            ),
+            patch(
+                "shared.services.bracket.advancement.advance_winner",
+                AsyncMock(),
+            ),
         ):
             await encounter_service.bulk_update_encounters(
                 session,
@@ -144,13 +150,16 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
         encounters[0].away_score = 2
         session = _mk_session(encounters)
 
-        with patch.object(
-            encounter_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            AsyncMock(),
-        ), patch(
-            "shared.services.bracket.advancement.advance_winner",
-            AsyncMock(),
+        with (
+            patch.object(
+                encounter_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ),
+            patch(
+                "shared.services.bracket.advancement.advance_winner",
+                AsyncMock(),
+            ),
         ):
             await encounter_service.bulk_update_encounters(
                 session,
@@ -173,13 +182,16 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
 
         advance_mock = AsyncMock()
 
-        with patch.object(
-            encounter_service.standings_recalculation,
-            "enqueue_tournament_recalculation",
-            AsyncMock(),
-        ), patch(
-            "shared.services.bracket.advancement.advance_winner",
-            advance_mock,
+        with (
+            patch.object(
+                encounter_service.standings_recalculation,
+                "enqueue_tournament_recalculation",
+                AsyncMock(),
+            ),
+            patch(
+                "shared.services.bracket.advancement.advance_winner",
+                advance_mock,
+            ),
         ):
             await encounter_service.bulk_update_encounters(
                 session,
@@ -213,9 +225,7 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
         with self.assertRaises(Exception) as ctx:
             await encounter_service.bulk_update_encounters(
                 session,
-                admin_schemas.BulkEncounterUpdate(
-                    encounter_ids=[1], status="garbage"
-                ),
+                admin_schemas.BulkEncounterUpdate(encounter_ids=[1], status="garbage"),
             )
         self.assertIn("Invalid status", str(ctx.exception))
 
@@ -225,9 +235,7 @@ class BulkUpdateTests(IsolatedAsyncioTestCase):
         with self.assertRaises(Exception) as ctx:
             await encounter_service.bulk_update_encounters(
                 session,
-                admin_schemas.BulkEncounterUpdate(
-                    encounter_ids=[999], status="completed"
-                ),
+                admin_schemas.BulkEncounterUpdate(encounter_ids=[999], status="completed"),
             )
         self.assertIn("No encounters found", str(ctx.exception))
 

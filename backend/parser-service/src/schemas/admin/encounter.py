@@ -74,10 +74,7 @@ class BulkEncounterUpdate(BaseModel):
     @model_validator(mode="after")
     def _validate_some_update(self) -> "BulkEncounterUpdate":
         has_update = (
-            self.status is not None
-            or self.home_score is not None
-            or self.away_score is not None
-            or self.reset_scores
+            self.status is not None or self.home_score is not None or self.away_score is not None or self.reset_scores
         )
         if not has_update:
             raise ValueError(

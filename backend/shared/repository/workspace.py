@@ -24,18 +24,14 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
 
     async def list_ordered(self, session: AsyncSession) -> Sequence[models.Workspace]:
         result = await session.execute(
-            sa.select(models.Workspace)
-            .options(*self.default_grid_options())
-            .order_by(models.Workspace.id.asc())
+            sa.select(models.Workspace).options(*self.default_grid_options()).order_by(models.Workspace.id.asc())
         )
         return result.scalars().all()
 
     @staticmethod
     def default_grid_options() -> list[object]:
         return [
-            selectinload(models.Workspace.default_division_grid_version).selectinload(
-                models.DivisionGridVersion.tiers
-            )
+            selectinload(models.Workspace.default_division_grid_version).selectinload(models.DivisionGridVersion.tiers)
         ]
 
 
@@ -151,18 +147,12 @@ async def get_or_create_workspace_member(
         # import-time coupling on this widely-imported module.
         from shared.rbac import assign_default_member_role_if_roleless
 
-        auth_user_id = await session.scalar(
-            sa.select(models.User.auth_user_id).where(models.User.id == player_id)
-        )
+        auth_user_id = await session.scalar(sa.select(models.User.auth_user_id).where(models.User.id == player_id))
         if auth_user_id is not None:
-            await assign_default_member_role_if_roleless(
-                session, user_id=auth_user_id, workspace_id=workspace_id
-            )
+            await assign_default_member_role_if_roleless(session, user_id=auth_user_id, workspace_id=workspace_id)
         return member
 
-    existing = await WorkspaceMemberRepository().get_by_player(
-        session, workspace_id=workspace_id, player_id=player_id
-    )
+    existing = await WorkspaceMemberRepository().get_by_player(session, workspace_id=workspace_id, player_id=player_id)
     if existing is None:
         raise RuntimeError(
             f"get_or_create_workspace_member: no row after ON CONFLICT DO NOTHING "

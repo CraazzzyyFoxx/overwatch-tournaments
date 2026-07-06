@@ -3,9 +3,9 @@ import re
 
 from loguru import logger
 from pydantic import ValidationError
-from shared.core.social import SocialProvider, normalize_social_handle
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.social import SocialProvider, normalize_social_handle
 from src import models, schemas
 from src.core import config, errors
 
@@ -15,6 +15,7 @@ from . import service
 def _usernames(player: models.User, provider: str) -> list[str]:
     """Usernames the player already has for a provider (from the unified table)."""
     return [a.username for a in player.social_accounts if a.provider == provider]
+
 
 battle_tag_validator = re.compile(config.settings.battle_tag_regex, re.UNICODE)
 
@@ -32,9 +33,7 @@ async def to_pydantic(session: AsyncSession, user: models.User, entities: list[s
     if any(name in entities for name in _IDENTITY_ENTITIES):
         social_accounts = [
             schemas.SocialAccountRead.model_validate(account, from_attributes=True)
-            for account in sorted(
-                user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
-            )
+            for account in sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id))
         ]
     return schemas.UserRead(
         id=user.id,

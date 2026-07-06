@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 from loguru import logger
 from redis.asyncio import Redis
+
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import publish_envelope_to_redis

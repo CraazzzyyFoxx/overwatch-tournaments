@@ -109,20 +109,17 @@ class GetAnalyticsWindowAndSelfJoinTests(IsolatedAsyncioTestCase):
         # CTEs group by the substitute identity column and still expose it
         # labeled "user_id" for the self-join predicates below.
         self.assertIn(
-            "GROUP BY workspace_member.player_id, tournament.player.role, "
-            "tournament.player.team_id",
+            "GROUP BY workspace_member.player_id, tournament.player.role, tournament.player.team_id",
             sql,
         )
         # Self-join of the outer query against both home/away CTEs keys off
         # workspace_member.player_id, not the retained FK column.
         self.assertIn(
-            "LEFT OUTER JOIN player_points_home ON workspace_member.player_id = "
-            "player_points_home.user_id",
+            "LEFT OUTER JOIN player_points_home ON workspace_member.player_id = player_points_home.user_id",
             sql,
         )
         self.assertIn(
-            "LEFT OUTER JOIN player_points_away ON workspace_member.player_id = "
-            "player_points_away.user_id",
+            "LEFT OUTER JOIN player_points_away ON workspace_member.player_id = player_points_away.user_id",
             sql,
         )
         # Window functions partition by the substitute identity column.
@@ -142,15 +139,13 @@ class GetAnalyticsWindowAndSelfJoinTests(IsolatedAsyncioTestCase):
         # Final ORDER BY uses the substitute column, same position as before.
         self.assertTrue(
             sql.rstrip().endswith(
-                "ORDER BY workspace_member.player_id, tournament.player.role, "
-                "tournament.tournament.id"
+                "ORDER BY workspace_member.player_id, tournament.player.role, tournament.tournament.id"
             )
         )
         # performance_points CTE's Player<->MatchStatistics join must route
         # through workspace_member, not the retained Player.user_id column.
         self.assertIn(
-            "JOIN matches.statistics ON matches.statistics.user_id = "
-            "workspace_member.player_id",
+            "JOIN matches.statistics ON matches.statistics.user_id = workspace_member.player_id",
             sql,
         )
         # No cartesian/ambiguous-FROM regression: exactly one Player-anchored
@@ -170,9 +165,7 @@ class GetTeamsWithPlayersEagerLoadTests(IsolatedAsyncioTestCase):
 
         stmt = session.statements[0]
         loader_paths = {
-            "-".join(str(p) for p in opt.path.natural_path)
-            for opt in stmt._with_options
-            if hasattr(opt, "path")
+            "-".join(str(p) for p in opt.path.natural_path) for opt in stmt._with_options if hasattr(opt, "path")
         }
         joined = " ".join(loader_paths)
         self.assertIn("workspace_member", joined)
@@ -194,9 +187,7 @@ class AnalyticsReadStreaksSubqueryTests(IsolatedAsyncioTestCase):
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
         self.assertIn("anon_1.user_id = workspace_member.player_id", sql)
-        self.assertIn(
-            'JOIN players."user" ON players."user".id = anon_1.user_id', sql
-        )
+        self.assertIn('JOIN players."user" ON players."user".id = anon_1.user_id', sql)
 
 
 class PlayerProfileHistoryTests(IsolatedAsyncioTestCase):
@@ -212,8 +203,7 @@ class PlayerProfileHistoryTests(IsolatedAsyncioTestCase):
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
         self.assertIn(
-            "JOIN workspace_member ON workspace_member.id = "
-            "tournament.player.workspace_member_id",
+            "JOIN workspace_member ON workspace_member.id = tournament.player.workspace_member_id",
             sql,
         )
 
@@ -231,10 +221,7 @@ class ShiftFeaturesRankHistoryTests(IsolatedAsyncioTestCase):
 
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
-        self.assertTrue(
-            "ORDER BY workspace_member.player_id, tournament.player.role, "
-            "tournament.tournament.id" in sql
-        )
+        self.assertTrue("ORDER BY workspace_member.player_id, tournament.player.role, tournament.tournament.id" in sql)
 
 
 class MvpDominanceJoinTests(IsolatedAsyncioTestCase):
@@ -276,9 +263,7 @@ class ExtractorsJoinTests(IsolatedAsyncioTestCase):
             "matches.statistics.user_id",
             sql,
         )
-        self.assertIn(
-            "tournament.player.team_id = matches.statistics.team_id", sql
-        )
+        self.assertIn("tournament.player.team_id = matches.statistics.team_id", sql)
 
     async def test_extract_round_residuals_routes_through_workspace_member(self) -> None:
         session = _CapturingSession()
@@ -301,14 +286,11 @@ class BacktestRealisedShiftTests(IsolatedAsyncioTestCase):
     async def test_query_labels_and_orders_by_workspace_member(self) -> None:
         session = _CapturingSession()
 
-        await backtest._realised_shift_map(
-            session, 1, history_through_tournament_id=5
-        )
+        await backtest._realised_shift_map(session, 1, history_through_tournament_id=5)
 
         sql = _compiled(session.statements[0])
         self.assertIn("workspace_member.player_id AS user_id", sql)
         self.assertIn(
-            "ORDER BY workspace_member.player_id, tournament.player.role, "
-            "tournament.tournament.id",
+            "ORDER BY workspace_member.player_id, tournament.player.role, tournament.tournament.id",
             sql,
         )

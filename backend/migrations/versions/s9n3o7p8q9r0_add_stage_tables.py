@@ -9,22 +9,25 @@ Create Date: 2026-04-10 13:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "s9n3o7p8q9r0"
-down_revision: Union[str, None] = "r8m2n6o7p8q9"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "r8m2n6o7p8q9"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     # Create enum types via raw SQL to avoid SQLAlchemy auto-create conflicts
-    op.execute("CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss')")
-    op.execute("CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket')")
+    op.execute(
+        "CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss')"
+    )
+    op.execute(
+        "CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket')"
+    )
     op.execute("CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'tentative', 'empty')")
 
     # tournament.stage
@@ -48,7 +51,9 @@ def upgrade() -> None:
         schema="tournament",
     )
     # Cast column to use the enum type
-    op.execute("ALTER TABLE tournament.stage ALTER COLUMN stage_type TYPE tournament.stagetype USING stage_type::tournament.stagetype")
+    op.execute(
+        "ALTER TABLE tournament.stage ALTER COLUMN stage_type TYPE tournament.stagetype USING stage_type::tournament.stagetype"
+    )
 
     op.create_index("ix_tournament_stage_tournament_id", "stage", ["tournament_id"], schema="tournament")
 
@@ -66,7 +71,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["stage_id"], ["tournament.stage.id"], ondelete="CASCADE"),
         schema="tournament",
     )
-    op.execute("ALTER TABLE tournament.stage_item ALTER COLUMN type TYPE tournament.stageitemtype USING type::tournament.stageitemtype")
+    op.execute(
+        "ALTER TABLE tournament.stage_item ALTER COLUMN type TYPE tournament.stageitemtype USING type::tournament.stageitemtype"
+    )
     op.create_index("ix_tournament_stage_item_stage_id", "stage_item", ["stage_id"], schema="tournament")
 
     # tournament.stage_item_input
@@ -87,23 +94,35 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["source_stage_item_id"], ["tournament.stage_item.id"], ondelete="SET NULL"),
         schema="tournament",
     )
-    op.execute("ALTER TABLE tournament.stage_item_input ALTER COLUMN input_type TYPE tournament.stageiteminputtype USING input_type::tournament.stageiteminputtype")
-    op.create_index("ix_tournament_stage_item_input_stage_item_id", "stage_item_input", ["stage_item_id"], schema="tournament")
+    op.execute(
+        "ALTER TABLE tournament.stage_item_input ALTER COLUMN input_type TYPE tournament.stageiteminputtype USING input_type::tournament.stageiteminputtype"
+    )
+    op.create_index(
+        "ix_tournament_stage_item_input_stage_item_id", "stage_item_input", ["stage_item_id"], schema="tournament"
+    )
     op.create_index("ix_tournament_stage_item_input_team_id", "stage_item_input", ["team_id"], schema="tournament")
 
     # Add stage_id and stage_item_id to encounter
     op.add_column("encounter", sa.Column("stage_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.add_column("encounter", sa.Column("stage_item_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.create_foreign_key(
-        "fk_encounter_stage_id", "encounter", "stage",
-        ["stage_id"], ["id"],
-        source_schema="tournament", referent_schema="tournament",
+        "fk_encounter_stage_id",
+        "encounter",
+        "stage",
+        ["stage_id"],
+        ["id"],
+        source_schema="tournament",
+        referent_schema="tournament",
         ondelete="SET NULL",
     )
     op.create_foreign_key(
-        "fk_encounter_stage_item_id", "encounter", "stage_item",
-        ["stage_item_id"], ["id"],
-        source_schema="tournament", referent_schema="tournament",
+        "fk_encounter_stage_item_id",
+        "encounter",
+        "stage_item",
+        ["stage_item_id"],
+        ["id"],
+        source_schema="tournament",
+        referent_schema="tournament",
         ondelete="SET NULL",
     )
     op.create_index("ix_encounter_stage_id", "encounter", ["stage_id"], schema="tournament")
@@ -113,15 +132,23 @@ def upgrade() -> None:
     op.add_column("standing", sa.Column("stage_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.add_column("standing", sa.Column("stage_item_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.create_foreign_key(
-        "fk_standing_stage_id", "standing", "stage",
-        ["stage_id"], ["id"],
-        source_schema="tournament", referent_schema="tournament",
+        "fk_standing_stage_id",
+        "standing",
+        "stage",
+        ["stage_id"],
+        ["id"],
+        source_schema="tournament",
+        referent_schema="tournament",
         ondelete="SET NULL",
     )
     op.create_foreign_key(
-        "fk_standing_stage_item_id", "standing", "stage_item",
-        ["stage_item_id"], ["id"],
-        source_schema="tournament", referent_schema="tournament",
+        "fk_standing_stage_item_id",
+        "standing",
+        "stage_item",
+        ["stage_item_id"],
+        ["id"],
+        source_schema="tournament",
+        referent_schema="tournament",
         ondelete="SET NULL",
     )
     op.create_index("ix_standing_stage_id", "standing", ["stage_id"], schema="tournament")
