@@ -28,7 +28,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 The site name and main icon/logo are configurable via environment variables.
 
 - Copy `frontend/.env.example` to `frontend/.env` (or `frontend/.env.local`)
-- Set `NEXT_PUBLIC_SITE_NAME` (e.g. "Moonrise Tournaments")
+- Set `NEXT_PUBLIC_SITE_NAME` (e.g. "Overwatch Tournaments")
 - Set `NEXT_PUBLIC_SITE_ICON` (e.g. "/logo.webp")
 - (Optional) Set `NEXT_PUBLIC_SITE_FAVICON` (e.g. "/favicon.ico")
 - For a host-run dev server, set `NEXT_INTERNAL_API_URL` to the gateway

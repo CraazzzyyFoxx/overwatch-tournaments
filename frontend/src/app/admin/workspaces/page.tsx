@@ -600,7 +600,7 @@ export default function WorkspacesPage() {
             </div>
             <div>
               <Label htmlFor="edit-seo-description">SEO description</Label>
-              <Input
+              <Textarea
                 id="edit-seo-description"
                 value={editForm.seo_description ?? ""}
                 onChange={(e) => setFormData({ ...formData, seo_description: e.target.value })}

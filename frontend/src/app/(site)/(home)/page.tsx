@@ -45,7 +45,7 @@ export default async function Home() {
   return (
     <div className="space-y-8">
       {/* Cinematic page intro */}
-      <PageIntroSection />
+      <PageIntroSection tenantMode={tenantMode} />
 
       {/* Live / upcoming events */}
       <section>
@@ -126,7 +126,7 @@ export default async function Home() {
 // Page intro (cinematic header)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageIntroSection() {
+function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
   return (
     <div
       className="relative overflow-hidden rounded-xl border border-white/[0.07] p-8 md:p-10"
@@ -202,8 +202,9 @@ function PageIntroSection() {
             <span style={{ color: "hsl(162 72% 50%)" }}>now</span>
           </h1>
           <p className="text-sm leading-relaxed" style={{ color: "hsl(215 12% 52%)", maxWidth: "26rem" }}>
-            Tournaments, player stats and rankings across all communities on the
-            platform.
+            {tenantMode
+              ? "Tournaments, player stats and rankings for this community."
+              : "Tournaments, player stats and rankings across all communities on the platform."}
           </p>
         </div>
 
