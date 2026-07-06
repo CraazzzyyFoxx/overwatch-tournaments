@@ -3,6 +3,7 @@ import { authService } from "@/services/auth.service";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
+import { getAccessToken } from "@/lib/auth-cookies";
 import type { OAuthProviderName } from "@/types/auth.types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -154,8 +155,7 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     const forwardedHeaders = getForwardedClientHeaders(request);
 
     if (action === "link") {
-      const accessToken =
-        cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
+      const accessToken = getAccessToken(cookieStore);
 
       if (!accessToken) {
         const loginUrl = new URL("/", SITE_URL);
