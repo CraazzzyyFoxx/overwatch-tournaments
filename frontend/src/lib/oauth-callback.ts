@@ -34,6 +34,7 @@ const KNOWN_PROVIDERS: ReadonlySet<OAuthProviderName> = new Set<OAuthProviderNam
 function isAllowedOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
     if (u.hostname === PLATFORM_ZONE) return true;
     return resolveHost(u.hostname).mode === "tenant";
   } catch {

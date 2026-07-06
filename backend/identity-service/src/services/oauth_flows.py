@@ -80,16 +80,14 @@ def _validate_origin(origin: str) -> None:
     - anything else (malformed URL, no host, ``javascript:``, empty string,
       etc.) is rejected with a 400 here.
     """
-    try:
-        hostname = urlparse(origin).hostname
-    except ValueError:
-        hostname = None
-    if not hostname:
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin")
-    if is_platform_host(hostname):
+    host = parsed.hostname
+    if is_platform_host(host):
         return
     try:
-        normalize_custom_domain(hostname)
+        normalize_custom_domain(host)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin") from None
 

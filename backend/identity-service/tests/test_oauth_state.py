@@ -214,6 +214,9 @@ def test_get_url_accepts_well_formed_custom_domain_origin(monkeypatch: pytest.Mo
         "",
         "not-a-url",
         "javascript:alert(1)",
+        "javascript://evil.com",
+        "data://evil.com",
+        "file://evil.com",
         "https://",
         "https:///no-host",
         "https://nodot",  # has a hostname, but not an FQDN -- rejected by normalize_custom_domain
