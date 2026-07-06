@@ -17,10 +17,10 @@ import json
 from datetime import date
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
-from shared.rpc.identity import ensure_workspace_permission
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 from src import schemas
 from src.core import db
 from src.services.encounter import flows as encounter_flows

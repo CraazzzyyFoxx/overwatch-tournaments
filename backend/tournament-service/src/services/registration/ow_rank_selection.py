@@ -28,9 +28,7 @@ def select_main_account_ow_ranks(
     battle tags. For each role the result is the max raw SR among non-smurf accounts; roles with no
     non-smurf value fall back to the max among smurf accounts. Returns ``{registration_role: raw_sr}``.
     """
-    smurf_keys = {
-        key for tag in (smurf_tags or []) if (key := normalize_battle_tag_key(tag)) is not None
-    }
+    smurf_keys = {key for tag in (smurf_tags or []) if (key := normalize_battle_tag_key(tag)) is not None}
 
     main_by_role: dict[str, int] = {}
     smurf_by_role: dict[str, int] = {}

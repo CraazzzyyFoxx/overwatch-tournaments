@@ -15,11 +15,11 @@ from __future__ import annotations
 import typing
 from typing import Any
 
-from shared.models.achievement import AchievementRule
-from shared.rpc.crud import CrudDispatcher, EntityConfig
-from shared.rpc.query import build_query_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementRule
+from shared.rpc.crud import CrudDispatcher, EntityConfig
+from shared.rpc.query import build_query_model
 from src import models
 from src.core import db, pagination
 from src.rpc import _common as c

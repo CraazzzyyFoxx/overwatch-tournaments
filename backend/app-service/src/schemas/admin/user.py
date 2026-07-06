@@ -8,12 +8,9 @@ from src.core import pagination
 __all__ = (
     "UserCreate",
     "UserUpdate",
-    "DiscordIdentityCreate",
-    "DiscordIdentityUpdate",
-    "BattleTagIdentityCreate",
-    "BattleTagIdentityUpdate",
-    "TwitchIdentityCreate",
-    "TwitchIdentityUpdate",
+    "SocialAccountCreate",
+    "SocialAccountUpdate",
+    "SocialVisibilityUpdate",
     "UserListQueryParams",
     "UserListParams",
 )
@@ -45,46 +42,27 @@ class UserListParams(pagination.PaginationSortParams):
     search: str | None = None
 
 
-# ─── Discord Identity ────────────────────────────────────────────────────────
+# ─── Social account (unified identity) ───────────────────────────────────────
 
 
-class DiscordIdentityCreate(BaseModel):
-    """Schema for creating a Discord identity"""
+class SocialAccountCreate(BaseModel):
+    """Add a social identity to a user. ``username`` is the full handle
+    (battletag ``Name#1234``, discord name, twitch login, etc.)."""
 
-    name: str  # Discord username
-
-
-class DiscordIdentityUpdate(BaseModel):
-    """Schema for updating a Discord identity"""
-
-    name: str
+    provider: str
+    username: str
+    url: str | None = None
 
 
-# ─── BattleTag Identity ──────────────────────────────────────────────────────
+class SocialAccountUpdate(BaseModel):
+    """Update a social identity's display handle and/or url."""
+
+    username: str | None = None
+    url: str | None = None
 
 
-class BattleTagIdentityCreate(BaseModel):
-    """Schema for creating a BattleTag identity"""
+class SocialVisibilityUpdate(BaseModel):
+    """Toggle visibility of an account in a scope (``workspace_id`` None = global)."""
 
-    battle_tag: str  # Full battle tag (e.g., "Player#1234")
-
-
-class BattleTagIdentityUpdate(BaseModel):
-    """Schema for updating a BattleTag identity"""
-
-    battle_tag: str
-
-
-# ─── Twitch Identity ─────────────────────────────────────────────────────────
-
-
-class TwitchIdentityCreate(BaseModel):
-    """Schema for creating a Twitch identity"""
-
-    name: str  # Twitch username
-
-
-class TwitchIdentityUpdate(BaseModel):
-    """Schema for updating a Twitch identity"""
-
-    name: str
+    workspace_id: int | None = None
+    visible: bool = True

@@ -5,15 +5,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.auth_user import AuthUser
+from shared.models.identity.auth_user import AuthUser
 
 
-async def _resolve_user_from_db(
-    user_id: int, payload: dict[str, Any], *, session: AsyncSession
-) -> AuthUser | None:
-    result = await session.execute(
-        select(AuthUser).where(AuthUser.id == user_id)
-    )
+async def _resolve_user_from_db(user_id: int, payload: dict[str, Any], *, session: AsyncSession) -> AuthUser | None:
+    result = await session.execute(select(AuthUser).where(AuthUser.id == user_id))
     user = result.scalar_one_or_none()
     if user is not None:
         # Build workspace RBAC lookup from validate payload

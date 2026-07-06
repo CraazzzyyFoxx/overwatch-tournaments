@@ -1,4 +1,5 @@
 import json
+
 import pandas as pd
 
 
@@ -38,7 +39,7 @@ filtered_df = df[
 )
 
 # Чтение JSON-файла
-with open("backup.json", "r", encoding="utf-8") as f:
+with open("backup.json", encoding="utf-8") as f:
     json_data = json.load(f)
 
 # Получение данных о игроках из JSON
@@ -78,8 +79,6 @@ role_mapping = {
     "ОффТанк (Заря, Дива, Хог, Сигма)": "Off Tank",
     "МейнТанк (Рейнхард, Винстон, Ориса, Хэммонд)": "Main Tank",
     "Лайт хил (Мерси, Зен, Люсио, Брига)": "Support Light",
-    "Мейн хил (Ана, Батист, Мойра)": "Support Main",
-    "Проджектайл ДД (Генджи, Фара, Ханзо, Торбьерн, Джанкрет, Эхо, Мей, Рипер, Сомбра, Симметра, Трейсер)": "Dps Projectile",
     "Хитскан ДД (Кэс, Вдова, Солдат76, Эш)": "Dps Hitscan",
     "Лайт хил (Мерси, Иллари, Зен, Люсио, Брига, Мойра)": "Support Light",
     "Мейн хил (Юнона, Ана, Батист, Мойра)": "Support Main",
@@ -90,13 +89,13 @@ filtered_df["Main role"] = filtered_df["Main role"].map(role_mapping)
 result_df = pd.DataFrame(columns=["Battle.Tag", "Main Role from Sheet", "Role from Balancer"])
 
 json_roles = {}
-for player_id, player_data in json_data["players"].items():
+for _player_id, player_data in json_data["players"].items():
     battle_tag = clean_str(player_data["identity"]["name"])
     if player_data["identity"]["isFullFlex"]:
         json_roles[battle_tag] = "Flex"
     else:
         for role_class, role_data in player_data["stats"]["classes"].items():
-            if role_data["priority"] == 0 and role_data["isActive"] == True:
+            if role_data["priority"] == 0 and role_data["isActive"]:
                 if role_class == "tank":
                     json_roles[battle_tag] = "Tank"
                 elif role_class == "support":
@@ -118,7 +117,7 @@ for player_id, player_data in json_data["players"].items():
 rows_to_add = []
 
 # Проверка на совпадение ролей и заполнение result_df
-for index, row in filtered_df.iterrows():
+for _index, row in filtered_df.iterrows():
     battle_tag = row["Battle.tag"].lower()
 
     if battle_tag in json_roles:

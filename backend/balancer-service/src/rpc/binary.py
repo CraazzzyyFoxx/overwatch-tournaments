@@ -12,9 +12,9 @@ import json
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
 from src.core import db
 from src.core.auth import _get_tournament_workspace_id

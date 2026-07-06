@@ -10,19 +10,20 @@ import re
 import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from loguru import logger
 from redis import asyncio as redis_async
-from shared.core import enums
-from shared.services.distributed_lock import distributed_lock
-from shared.services.encounter_naming import build_encounter_name
-from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import enums
+from shared.services.challonge_refs import resolve_encounter_challonge
+from shared.services.distributed_lock import distributed_lock
+from shared.services.encounter_naming import build_encounter_name
+from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src import models, schemas
 from src.core import config
 from src.services.challonge import service as challonge_service
@@ -41,6 +42,7 @@ class _ImportSource:
     stage: models.Stage | None = None
     group: models.TournamentGroup | None = None
     stage_item_id: int | None = None
+    slug: str | None = None
 
 
 @dataclass(frozen=True)
@@ -244,67 +246,23 @@ def _first_loaded_stage_item_id(stage: models.Stage | None) -> int | None:
     return sorted(items, key=lambda item: (item.order, item.id))[0].id
 
 
-def _collect_legacy_import_sources(tournament: models.Tournament) -> list[_ImportSource]:
-    sources: list[_ImportSource] = []
-    seen: set[int] = set()
-
-    if tournament.challonge_id is not None:
-        stage = next(
-            (
-                stage
-                for stage in tournament.stages or []
-                if stage.challonge_id == tournament.challonge_id
-            ),
-            None,
-        )
-        sources.append(
-            _ImportSource(
-                challonge_id=tournament.challonge_id,
-                source_type="tournament",
-                stage=stage,
-                stage_item_id=_first_loaded_stage_item_id(stage),
-            )
-        )
-        seen.add(tournament.challonge_id)
-
-    for stage in tournament.stages or []:
-        if stage.challonge_id is None or stage.challonge_id in seen:
-            continue
-        sources.append(
-            _ImportSource(
-                challonge_id=stage.challonge_id,
-                source_type="stage",
-                stage=stage,
-                stage_item_id=_first_loaded_stage_item_id(stage),
-            )
-        )
-        seen.add(stage.challonge_id)
-
-    for group in tournament.groups or []:
-        if group.challonge_id is None or group.challonge_id in seen:
-            continue
-        stage = getattr(group, "stage", None)
-        sources.append(
-            _ImportSource(
-                challonge_id=group.challonge_id,
-                source_type="group" if group.is_groups else "playoff",
-                stage=stage,
-                group=group,
-                stage_item_id=_first_loaded_stage_item_id(stage),
-            )
-        )
-        seen.add(group.challonge_id)
-
-    return sources
-
-
 async def discover_sources(
     session: AsyncSession,
     tournament: models.Tournament,
     *,
     dry_run: bool = False,
 ) -> list[_ImportSource]:
-    """Discover normalized Challonge sources, backfilling rows from legacy fields."""
+    """Discover Challonge sources from the normalized ``challonge_source`` table.
+
+    Reads exclusively from ``challonge_source`` — the deprecated
+    ``tournament``/``stage`` ``challonge_id`` columns are no longer consulted.
+    Group/playoff sources are linked back to their ``TournamentGroup`` via
+    ``stage_id`` (the only join available; ``challonge_source`` is scoped by
+    ``stage_id``, never ``group_id``) so downstream match-routing keeps working.
+    ``dry_run`` is accepted for signature compatibility; no rows are ever written
+    here now (the admin link / import entry-points own source creation).
+    """
+    del dry_run  # sources are no longer lazily created from legacy columns
     result = await session.execute(
         select(models.ChallongeSource)
         .where(models.ChallongeSource.tournament_id == tournament.id)
@@ -314,50 +272,41 @@ async def discover_sources(
             .selectinload(models.StageItem.inputs),
             selectinload(models.ChallongeSource.stage_item),
         )
+        .order_by(models.ChallongeSource.id.asc())
     )
     source_rows = list(result.scalars().all())
-    rows_by_challonge_id = {
-        row.challonge_tournament_id: row for row in source_rows
-    }
+    if not source_rows:
+        return []
+
+    # Resolve the TournamentGroup for group/playoff sources through stage_id.
+    group_stage_ids = [
+        row.stage_id for row in source_rows if row.stage_id is not None and row.source_type in ("group", "playoff")
+    ]
+    groups_by_stage_id: dict[int, models.TournamentGroup] = {}
+    if group_stage_ids:
+        group_result = await session.execute(
+            select(models.TournamentGroup).where(models.TournamentGroup.stage_id.in_(group_stage_ids))
+        )
+        for group in group_result.scalars().all():
+            if group.stage_id is not None:
+                groups_by_stage_id.setdefault(group.stage_id, group)
 
     sources: list[_ImportSource] = []
-    seen: set[int] = set()
-    for legacy in _collect_legacy_import_sources(tournament):
-        row = rows_by_challonge_id.get(legacy.challonge_id)
-        if row is None and not dry_run:
-            row = models.ChallongeSource(
-                tournament_id=tournament.id,
-                stage_id=legacy.stage.id if legacy.stage is not None else None,
-                stage_item_id=legacy.stage_item_id,
-                challonge_tournament_id=legacy.challonge_id,
-                slug=_source_challonge_slug(tournament, legacy),
-                source_type=legacy.source_type,
-            )
-            session.add(row)
-            await session.flush()
-            rows_by_challonge_id[legacy.challonge_id] = row
-
-        sources.append(
-            replace(
-                legacy,
-                source_id=getattr(row, "id", None),
-                source_type=getattr(row, "source_type", legacy.source_type),
-                stage=getattr(row, "stage", None) or legacy.stage,
-                stage_item_id=getattr(row, "stage_item_id", None) or legacy.stage_item_id,
-            )
-        )
-        seen.add(legacy.challonge_id)
-
     for row in source_rows:
-        if row.challonge_tournament_id in seen:
-            continue
+        group = (
+            groups_by_stage_id.get(row.stage_id)
+            if row.source_type in ("group", "playoff") and row.stage_id is not None
+            else None
+        )
         sources.append(
             _ImportSource(
                 challonge_id=row.challonge_tournament_id,
                 source_id=row.id,
                 source_type=row.source_type,
                 stage=row.stage,
-                stage_item_id=row.stage_item_id,
+                group=group,
+                stage_item_id=row.stage_item_id or _first_loaded_stage_item_id(row.stage),
+                slug=row.slug,
             )
         )
 
@@ -365,22 +314,8 @@ async def discover_sources(
 
 
 def _next_stage_order(tournament: models.Tournament) -> int:
-    orders = [
-        int(getattr(stage, "order", 0) or 0)
-        for stage in (tournament.stages or [])
-    ]
+    orders = [int(getattr(stage, "order", 0) or 0) for stage in (tournament.stages or [])]
     return max(orders, default=-1) + 1
-
-
-def _source_challonge_slug(
-    tournament: models.Tournament,
-    source: _ImportSource,
-) -> str | None:
-    if source.group is not None:
-        return getattr(source.group, "challonge_slug", None)
-    if source.stage is not None:
-        return getattr(source.stage, "challonge_slug", None)
-    return tournament.challonge_slug
 
 
 def _playoff_stage_type(matches: list[schemas.ChallongeMatch]) -> enums.StageType:
@@ -444,6 +379,7 @@ async def _ensure_stage_item(
 
     if items_unloaded:
         from sqlalchemy import select as sa_select  # noqa: PLC0415
+
         result = await session.execute(
             sa_select(models.StageItem)
             .where(models.StageItem.stage_id == stage.id)
@@ -479,17 +415,16 @@ async def _create_stage_with_item(
     description: str | None,
     stage_type: enums.StageType,
     item_type: enums.StageItemType,
-    challonge_id: int | None,
-    challonge_slug: str | None,
 ) -> models.Stage:
+    # Stage-level Challonge identity now lives in ``challonge_source`` (derived at
+    # read time), so the deprecated ``stage.challonge_id``/``challonge_slug``
+    # columns are no longer written here.
     stage = models.Stage(
         tournament_id=tournament.id,
         name=name,
         description=description,
         stage_type=stage_type,
         order=_next_stage_order(tournament),
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
     )
     session.add(stage)
     await session.flush()
@@ -517,7 +452,6 @@ async def _ensure_group_stage(
     *,
     stage_type: enums.StageType,
     item_type: enums.StageItemType,
-    challonge_slug: str | None,
 ) -> None:
     stage = getattr(group, "stage", None)
     group_name = getattr(
@@ -533,8 +467,6 @@ async def _ensure_group_stage(
             description=getattr(group, "description", None),
             stage_type=stage_type,
             item_type=item_type,
-            challonge_id=group.challonge_id if group.is_groups else None,
-            challonge_slug=challonge_slug,
         )
         group.stage = stage
         group.stage_id = stage.id
@@ -568,9 +500,11 @@ async def _create_group_with_stage(
         description=None,
         stage_type=stage_type,
         item_type=_stage_item_type_for_stage(stage_type),
-        challonge_id=challonge_id if is_groups else None,
-        challonge_slug=challonge_slug,
     )
+    # ``group.challonge_id``/``challonge_slug`` are retained deliberately (the
+    # group exception): ``challonge_id`` stores Challonge's per-group
+    # ``match.group_id`` used to route matches to the local group (see
+    # ``_resolve_group_for_match``) and has no ``challonge_source`` equivalent.
     group = models.TournamentGroup(
         tournament_id=tournament.id,
         name=name,
@@ -608,7 +542,9 @@ async def _ensure_stage_structure_for_matches(
     matches: list[schemas.ChallongeMatch],
 ) -> dict[str, int]:
     stats = {"stages_created": 0, "groups_created": 0}
-    challonge_slug = _source_challonge_slug(tournament, source)
+    # ``source.slug`` comes from the ``challonge_source`` row (derived in
+    # discover_sources); the deprecated legacy-column lookup has been removed.
+    challonge_slug = source.slug
 
     if source.group is not None:
         before_stage_count = len(tournament.stages or [])
@@ -616,17 +552,8 @@ async def _ensure_stage_structure_for_matches(
             session,
             tournament,
             source.group,
-            stage_type=(
-                enums.StageType.ROUND_ROBIN
-                if source.group.is_groups
-                else _playoff_stage_type(matches)
-            ),
-            item_type=(
-                enums.StageItemType.GROUP
-                if source.group.is_groups
-                else enums.StageItemType.SINGLE_BRACKET
-            ),
-            challonge_slug=challonge_slug,
+            stage_type=(enums.StageType.ROUND_ROBIN if source.group.is_groups else _playoff_stage_type(matches)),
+            item_type=(enums.StageItemType.GROUP if source.group.is_groups else enums.StageItemType.SINGLE_BRACKET),
         )
         stats["stages_created"] += max(0, len(tournament.stages or []) - before_stage_count)
         return stats
@@ -643,11 +570,7 @@ async def _ensure_stage_structure_for_matches(
     names_by_group_id = _group_names_for_challonge_ids(group_ids)
     for group_id in sorted(group_ids):
         group = next(
-            (
-                candidate
-                for candidate in tournament.groups or []
-                if candidate.challonge_id == group_id
-            ),
+            (candidate for candidate in tournament.groups or [] if candidate.challonge_id == group_id),
             None,
         )
         if group is None:
@@ -670,7 +593,6 @@ async def _ensure_stage_structure_for_matches(
                 group,
                 stage_type=enums.StageType.ROUND_ROBIN,
                 item_type=enums.StageItemType.GROUP,
-                challonge_slug=challonge_slug,
             )
             stats["stages_created"] += max(0, len(tournament.stages or []) - before_stage_count)
 
@@ -702,7 +624,6 @@ async def _ensure_stage_structure_for_matches(
             playoff_group,
             stage_type=_playoff_stage_type(ungrouped_matches),
             item_type=enums.StageItemType.SINGLE_BRACKET,
-            challonge_slug=challonge_slug,
         )
         stats["stages_created"] += max(0, len(tournament.stages or []) - before_stage_count)
 
@@ -766,9 +687,7 @@ async def _build_team_name_index(
     Collisions (two teams with the same normalized name) are marked _AMBIGUOUS.
     balancer_name is used as a fallback only when name produces no entry.
     """
-    result = await session.execute(
-        select(models.Team).where(models.Team.tournament_id == tournament_id)
-    )
+    result = await session.execute(select(models.Team).where(models.Team.tournament_id == tournament_id))
     teams = list(result.scalars().all())
     index: dict[str, int] = {}
 
@@ -833,26 +752,24 @@ async def _auto_map_participants(
     session: AsyncSession,
     tournament: models.Tournament,
     fetches: list[tuple[_ImportSource, _SourceFetch]],
-    existing_rows: list[models.ChallongeTeam],
     existing_source_mappings: list[models.ChallongeParticipantMapping],
     name_index: dict[str, int],
     *,
     dry_run: bool = False,
-) -> list[models.ChallongeTeam]:
-    """Auto-create ChallongeTeam rows by matching participant names to local teams.
+) -> list[models.ChallongeParticipantMapping]:
+    """Auto-create ``ChallongeParticipantMapping`` rows by matching participant
+    names to local teams.
 
-    Manual/existing rows always win. Ambiguous name matches are skipped.
-    group_player_id aliases are created as tournament-wide (group_id=None) mappings.
+    The mapping table is now the SOLE persistence target (the legacy
+    ``challonge_team`` table is no longer written). Existing mappings always win;
+    ambiguous name matches are skipped. Both the participant id and every
+    ``group_player_id`` alias are mapped, scoped to the source.
     """
-    existing_keys: set[tuple[int | None, int]] = {
-        (r.group_id, r.challonge_id) for r in existing_rows
-    }
     existing_source_keys: set[tuple[int, int]] = {
-        (mapping.source_id, mapping.challonge_participant_id)
-        for mapping in existing_source_mappings
+        (mapping.source_id, mapping.challonge_participant_id) for mapping in existing_source_mappings
     }
-    created: list[tuple[models.ChallongeTeam, str]] = []
-    created_source_mappings: list[models.ChallongeParticipantMapping] = []
+    # (mapping, participant_name, source_group_id) — group id only for the sync log.
+    created: list[tuple[models.ChallongeParticipantMapping, str, int | None]] = []
 
     total_participants = sum(len(f.participants) for _, f in fetches)
     logger.info(
@@ -860,10 +777,12 @@ async def _auto_map_participants(
         tournament_id=tournament.id,
         total_participants=total_participants,
         name_index_size=len(name_index),
-        existing_rows=len(existing_rows),
+        existing_mappings=len(existing_source_mappings),
     )
 
     for source, fetch in fetches:
+        if source.source_id is None:
+            continue
         source_group_id = source.group.id if source.group is not None else None
 
         for participant in fetch.participants:
@@ -888,91 +807,45 @@ async def _auto_map_participants(
                 )
                 continue
 
-            main_key = (source_group_id, participant.id)
-            if main_key not in existing_keys:
-                row = models.ChallongeTeam(
-                    challonge_id=participant.id,
-                    group_id=source_group_id,
+            for challonge_participant_id in (participant.id, *participant.group_player_ids):
+                source_key = (source.source_id, challonge_participant_id)
+                if source_key in existing_source_keys:
+                    continue
+                mapping = models.ChallongeParticipantMapping(
+                    source_id=source.source_id,
+                    challonge_participant_id=challonge_participant_id,
                     team_id=team_id,
-                    tournament_id=tournament.id,
                 )
                 if not dry_run:
-                    session.add(row)
-                created.append((row, participant.name))
-                existing_keys.add(main_key)
-
-            if source.source_id is not None:
-                source_key = (source.source_id, participant.id)
-                if source_key not in existing_source_keys:
-                    source_mapping = models.ChallongeParticipantMapping(
-                        source_id=source.source_id,
-                        challonge_participant_id=participant.id,
-                        team_id=team_id,
-                    )
-                    if not dry_run:
-                        session.add(source_mapping)
-                    created_source_mappings.append(source_mapping)
-                    existing_source_keys.add(source_key)
-
-            for gpid in participant.group_player_ids:
-                alias_key = (None, gpid)
-                if alias_key not in existing_keys:
-                    alias_row = models.ChallongeTeam(
-                        challonge_id=gpid,
-                        group_id=None,
-                        team_id=team_id,
-                        tournament_id=tournament.id,
-                    )
-                    if not dry_run:
-                        session.add(alias_row)
-                    created.append((alias_row, participant.name))
-                    existing_keys.add(alias_key)
-
-                if source.source_id is not None:
-                    source_alias_key = (source.source_id, gpid)
-                    if source_alias_key not in existing_source_keys:
-                        source_alias = models.ChallongeParticipantMapping(
-                            source_id=source.source_id,
-                            challonge_participant_id=gpid,
-                            team_id=team_id,
-                        )
-                        if not dry_run:
-                            session.add(source_alias)
-                        created_source_mappings.append(source_alias)
-                        existing_source_keys.add(source_alias_key)
+                    session.add(mapping)
+                created.append((mapping, participant.name, source_group_id))
+                existing_source_keys.add(source_key)
 
     if dry_run:
         logger.info(
             "Auto-mapping dry-run complete",
             tournament_id=tournament.id,
-            auto_mapped=len(created) + len(created_source_mappings),
+            auto_mapped=len(created),
         )
         return []
 
-    if created or created_source_mappings:
+    if created:
         await session.flush()
-        for row, participant_name in created:
+        for mapping, participant_name, source_group_id in created:
             await _log_sync(
                 session,
                 tournament.id,
                 "import",
                 "participant",
-                row.team_id,
-                row.challonge_id,
+                mapping.team_id,
+                mapping.challonge_participant_id,
                 "success",
-                source_id=next(
-                    (
-                        source.source_id
-                        for source, _fetch in fetches
-                        if source.group is not None and source.group.id == row.group_id
-                    ),
-                    None,
-                ),
+                source_id=mapping.source_id,
                 operation="auto_map_participant",
                 payload={
                     "action": "auto_mapped",
                     "participant_name": participant_name,
-                    "group_id": row.group_id,
+                    "group_id": source_group_id,
                 },
             )
 
@@ -981,7 +854,7 @@ async def _auto_map_participants(
         tournament_id=tournament.id,
         auto_mapped=len(created),
     )
-    return [row for row, _ in created]
+    return [mapping for mapping, _name, _group_id in created]
 
 
 async def _build_team_lookup(
@@ -991,12 +864,6 @@ async def _build_team_lookup(
     *,
     dry_run: bool = False,
 ) -> _TeamLookup:
-    ct_result = await session.execute(
-        select(models.ChallongeTeam).where(
-            models.ChallongeTeam.tournament_id == tournament.id
-        )
-    )
-    existing_rows = list(ct_result.scalars().all())
     source_mapping_result = await session.execute(
         select(models.ChallongeParticipantMapping)
         .join(
@@ -1008,47 +875,41 @@ async def _build_team_lookup(
     existing_source_mappings = list(source_mapping_result.scalars().all())
 
     name_index = await _build_team_name_index(session, tournament.id)
-    created_rows = await _auto_map_participants(
+    created_mappings = await _auto_map_participants(
         session,
         tournament,
         fetches,
-        existing_rows,
         existing_source_mappings,
         name_index,
         dry_run=dry_run,
     )
 
-    all_rows = existing_rows + created_rows
-    by_key = {(r.group_id, r.challonge_id): r.team_id for r in all_rows}
-    source_keys_by_source_id = {
-        source.source_id: _source_lookup_key(source)
-        for source, _fetch in fetches
-        if source.source_id is not None
-    }
-    by_source_key = {
-        (
-            source_keys_by_source_id.get(mapping.source_id, mapping.source_id),
-            mapping.challonge_participant_id,
-        ): mapping.team_id
-        for mapping in existing_source_mappings
-    }
-    for row in created_rows:
-        for source, _fetch in fetches:
-            if source.group is not None and source.group.id != row.group_id:
-                continue
-            if source.source_id is not None:
-                by_source_key[(_source_lookup_key(source), row.challonge_id)] = row.team_id
-                break
+    all_mappings = existing_source_mappings + created_mappings
 
-    team_ids = sorted(
-        {r.team_id for r in all_rows}
-        | {mapping.team_id for mapping in existing_source_mappings}
-    )
+    # Per-source lookup key and the group id (for group/playoff sources) so the
+    # legacy (group_id, challonge_id) fallback in _TeamLookup.resolve can be rebuilt
+    # purely from participant mappings — no ChallongeTeam rows involved.
+    source_key_by_source_id: dict[int, int] = {}
+    group_id_by_source_id: dict[int, int | None] = {}
+    for source, _fetch in fetches:
+        if source.source_id is not None:
+            source_key_by_source_id[source.source_id] = _source_lookup_key(source)
+            group_id_by_source_id[source.source_id] = source.group.id if source.group is not None else None
+
+    by_source_key: dict[tuple[int, int], int] = {}
+    by_key: dict[tuple[int | None, int], int] = {}
+    for mapping in all_mappings:
+        source_key = source_key_by_source_id.get(mapping.source_id, mapping.source_id)
+        by_source_key[(source_key, mapping.challonge_participant_id)] = mapping.team_id
+        by_key.setdefault((None, mapping.challonge_participant_id), mapping.team_id)
+        group_id = group_id_by_source_id.get(mapping.source_id)
+        if group_id is not None:
+            by_key[(group_id, mapping.challonge_participant_id)] = mapping.team_id
+
+    team_ids = sorted({mapping.team_id for mapping in all_mappings})
     teams_by_id: dict[int, models.Team] = {}
     if team_ids:
-        team_result = await session.execute(
-            select(models.Team).where(models.Team.id.in_(team_ids))
-        )
+        team_result = await session.execute(select(models.Team).where(models.Team.id.in_(team_ids)))
         teams_by_id = {team.id: team for team in team_result.scalars().all()}
 
     logger.info(
@@ -1151,16 +1012,8 @@ async def _ensure_stage_item_team_inputs(
     if not inputs_loaded:
         stage_inputs = await _load_stage_inputs(session, stage.id)
 
-    existing_team_ids = {
-        stage_input.team_id
-        for stage_input in stage_inputs
-        if stage_input.team_id is not None
-    }
-    used_slots = {
-        stage_input.slot
-        for stage_input in stage_inputs
-        if stage_input.stage_item_id == stage_item_id
-    }
+    existing_team_ids = {stage_input.team_id for stage_input in stage_inputs if stage_input.team_id is not None}
+    used_slots = {stage_input.slot for stage_input in stage_inputs if stage_input.stage_item_id == stage_item_id}
     next_slot = 1
     created = 0
 
@@ -1232,10 +1085,7 @@ async def _upsert_encounter_from_challonge(
     if encounter is None and missing_team_mapping:
         return _UpsertResult(
             action="error",
-            error=(
-                "Missing Challonge team mapping for participant(s): "
-                + ", ".join(missing_team_mapping)
-            ),
+            error=("Missing Challonge team mapping for participant(s): " + ", ".join(missing_team_mapping)),
         )
 
     home_team = team_lookup.teams_by_id.get(home_team_id) if home_team_id is not None else None
@@ -1272,12 +1122,13 @@ async def _upsert_encounter_from_challonge(
             tournament_group_id=refs.tournament_group_id,
             stage_id=refs.stage_id,
             stage_item_id=refs.stage_item_id,
-            challonge_id=match.id,
             status=status,
         )
         session.add(encounter)
         await session.flush()
         match_lookup.set(source, match.id, encounter)
+        # challonge_match_mapping is the sole persistence of the encounter↔match
+        # link now (the legacy encounter.challonge_id column is no longer written).
         await _ensure_match_mapping(session, source, match.id, encounter, match_lookup)
         return _UpsertResult(action="created", encounter=encounter)
 
@@ -1302,10 +1153,7 @@ async def _upsert_encounter_from_challonge(
         if (
             status != enums.EncounterStatus.COMPLETED
             or local_score != remote_score
-            or (
-                None not in remote_teams
-                and local_teams != remote_teams
-            )
+            or (None not in remote_teams and local_teams != remote_teams)
         ):
             await _ensure_match_mapping(session, source, match.id, encounter, match_lookup)
             return _UpsertResult(
@@ -1375,11 +1223,7 @@ def _iter_challonge_link_specs(
                 source_key=source_key,
                 source_challonge_id=prereq_id,
                 target_challonge_id=match.id,
-                role=(
-                    enums.EncounterLinkRole.LOSER
-                    if is_loser
-                    else enums.EncounterLinkRole.WINNER
-                ),
+                role=(enums.EncounterLinkRole.LOSER if is_loser else enums.EncounterLinkRole.WINNER),
                 target_slot=slot,
             )
         )
@@ -1407,25 +1251,16 @@ async def _sync_challonge_advancement_links(
     source_encounter_ids = [
         encounter.id
         for spec in specs_by_source_role.values()
-        if (
-            source := sources_by_key.get(spec.source_key)
-        ) is not None
-        and (
-            encounter := match_lookup.get(source, spec.source_challonge_id)
-        ) is not None
+        if (source := sources_by_key.get(spec.source_key)) is not None
+        and (encounter := match_lookup.get(source, spec.source_challonge_id)) is not None
     ]
     if not source_encounter_ids:
         return {"bracket_links_created": 0, "bracket_links_updated": 0}
 
     existing_result = await session.execute(
-        select(models.EncounterLink).where(
-            models.EncounterLink.source_encounter_id.in_(source_encounter_ids)
-        )
+        select(models.EncounterLink).where(models.EncounterLink.source_encounter_id.in_(source_encounter_ids))
     )
-    existing_by_source_role = {
-        (link.source_encounter_id, link.role): link
-        for link in existing_result.scalars().all()
-    }
+    existing_by_source_role = {(link.source_encounter_id, link.role): link for link in existing_result.scalars().all()}
 
     created = 0
     updated = 0
@@ -1452,10 +1287,7 @@ async def _sync_challonge_advancement_links(
             created += 1
             continue
 
-        if (
-            existing.target_encounter_id != target.id
-            or existing.target_slot != spec.target_slot
-        ):
+        if existing.target_encounter_id != target.id or existing.target_slot != spec.target_slot:
             existing.target_encounter_id = target.id
             existing.target_slot = spec.target_slot
             updated += 1
@@ -1506,9 +1338,7 @@ async def _build_match_lookup(
     )
     mappings = list(mapping_result.scalars().all())
     source_keys_by_source_id = {
-        source.source_id: _source_lookup_key(source)
-        for source in sources
-        if source.source_id is not None
+        source.source_id: _source_lookup_key(source) for source in sources if source.source_id is not None
     }
     by_source_key: dict[tuple[int, int], models.Encounter] = {}
     mapped_keys: set[tuple[int, int]] = set()
@@ -1519,24 +1349,18 @@ async def _build_match_lookup(
         source_key = source_keys_by_source_id.get(mapping.source_id, mapping.source_id)
         by_source_key[(source_key, mapping.challonge_match_id)] = mapping.encounter
 
-    enc_result = await session.execute(
-        select(models.Encounter)
-        .where(
-            models.Encounter.tournament_id == tournament_id,
-            models.Encounter.challonge_id.isnot(None),
-        )
-    )
-    by_challonge_id = {e.challonge_id: e for e in enc_result.scalars().all()}
+    # Existing encounters are located via challonge_match_mapping (by_source_key)
+    # only — the deprecated encounter.challonge_id column is no longer consulted.
+    # by_challonge_id stays as an in-run cache populated by _MatchLookup.set for
+    # encounters created/mapped during this import.
     return _MatchLookup(
         by_source_key=by_source_key,
-        by_challonge_id=by_challonge_id,
+        by_challonge_id={},
         mapped_keys=mapped_keys,
     )
 
 
-async def import_tournament(
-    session: AsyncSession, tournament_id: int, *, dry_run: bool = False
-) -> dict:
+async def import_tournament(session: AsyncSession, tournament_id: int, *, dry_run: bool = False) -> dict:
     """Full import from Challonge: upsert encounters with scores and status."""
     async with _sync_job_lock(tournament_id, "import") as job_id:
         result = await session.execute(
@@ -1601,7 +1425,10 @@ async def import_tournament(
             try:
                 if not dry_run:
                     structure_stats = await _ensure_stage_structure_for_matches(
-                        session, tournament, source, fetch_result.matches,
+                        session,
+                        tournament,
+                        source,
+                        fetch_result.matches,
                     )
                     stats["groups_created"] += structure_stats["groups_created"]
                     stats["stages_created"] += structure_stats["stages_created"]
@@ -1611,7 +1438,8 @@ async def import_tournament(
                 tb = traceback.format_exc()
                 logger.exception(
                     "Stage structure failed for challonge_id=%s tournament=%s",
-                    source.challonge_id, tournament_id,
+                    source.challonge_id,
+                    tournament_id,
                 )
                 if not dry_run:
                     await _log_sync(
@@ -1627,9 +1455,7 @@ async def import_tournament(
                         error_message=tb,
                     )
 
-        team_lookup = await _build_team_lookup(
-            session, tournament, fetches, dry_run=dry_run
-        )
+        team_lookup = await _build_team_lookup(session, tournament, fetches, dry_run=dry_run)
         match_lookup = await _build_match_lookup(session, tournament_id, sources)
 
         processed_match_keys: set[tuple[int, int]] = set()
@@ -1745,7 +1571,8 @@ async def import_tournament(
                     tb = traceback.format_exc()
                     logger.exception(
                         "Match upsert failed challonge_match_id=%s tournament=%s",
-                        cm.id, tournament_id,
+                        cm.id,
+                        tournament_id,
                     )
                     await _log_sync(
                         session,
@@ -1798,13 +1625,20 @@ async def _resolve_export_target(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
 ) -> tuple[_ImportSource | None, int | None]:
-    mapping_result = await session.execute(
-        select(models.ChallongeMatchMapping)
-        .where(models.ChallongeMatchMapping.encounter_id == encounter.id)
-        .options(selectinload(models.ChallongeMatchMapping.source))
-    )
-    mapping = mapping_result.scalars().first()
+    # ``match_mappings`` is an optional bulk prefetch (export path) keyed by
+    # encounter_id — mirrors the import path's _build_match_lookup pattern so
+    # the export loop doesn't issue one mapping query per encounter.
+    if match_mappings is not None:
+        mapping = match_mappings.get(encounter.id)
+    else:
+        mapping_result = await session.execute(
+            select(models.ChallongeMatchMapping)
+            .where(models.ChallongeMatchMapping.encounter_id == encounter.id)
+            .options(selectinload(models.ChallongeMatchMapping.source))
+        )
+        mapping = mapping_result.scalars().first()
     if mapping is not None and mapping.source is not None:
         source_row = mapping.source
         return (
@@ -1817,23 +1651,15 @@ async def _resolve_export_target(
             mapping.challonge_match_id,
         )
 
+    # No challonge_match_mapping for this encounter: it is not linked to Challonge
+    # (the deprecated encounter.challonge_id fallback is no longer consulted, so
+    # there is no match id to resolve). Return the best-guess source with no match
+    # id — the caller treats a missing match id as "skip".
     if sources is None:
         sources = await discover_sources(session, tournament)
     candidates = [source for source in sources if _source_matches_encounter(source, encounter)]
     source = candidates[0] if candidates else (sources[0] if len(sources) == 1 else None)
-    if source is not None and source.source_id is not None and encounter.challonge_id is not None:
-        await _ensure_match_mapping(
-            session,
-            source,
-            encounter.challonge_id,
-            encounter,
-            _MatchLookup(
-                by_source_key={},
-                by_challonge_id={encounter.challonge_id: encounter},
-                mapped_keys=set(),
-            ),
-        )
-    return source, encounter.challonge_id
+    return source, None
 
 
 async def _resolve_winner_challonge_id(
@@ -1841,8 +1667,22 @@ async def _resolve_winner_challonge_id(
     source: _ImportSource,
     winner_team_id: int,
     encounter: models.Encounter,
+    *,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> int | None:
-    if source.source_id is not None:
+    """Resolve the winner's Challonge participant id from
+    ``challonge_participant_mapping`` (the legacy ``challonge_team`` fallback is
+    no longer consulted)."""
+    if source.source_id is None:
+        return None
+
+    # ``participant_mappings`` is an optional bulk prefetch (export path) keyed by
+    # (source_id, team_id); a missing key falls back to the query so stale mappings
+    # referencing undiscovered sources still resolve.
+    cached = participant_mappings.get((source.source_id, winner_team_id)) if participant_mappings is not None else None
+    if cached is not None:
+        source_mappings = cached
+    else:
         result = await session.execute(
             select(models.ChallongeParticipantMapping)
             .where(
@@ -1852,49 +1692,12 @@ async def _resolve_winner_challonge_id(
             .order_by(models.ChallongeParticipantMapping.id.asc())
         )
         source_mappings = list(result.scalars().all())
-        if len(source_mappings) == 1:
-            return source_mappings[0].challonge_participant_id
-        if source_mappings:
-            legacy_ids = [
-                row.challonge_id
-                for row in getattr(
-                    encounter.home_team
-                    if encounter.home_team_id == winner_team_id
-                    else encounter.away_team,
-                    "challonge",
-                    [],
-                )
-                if row.tournament_id == encounter.tournament_id
-                and row.team_id == winner_team_id
-                and row.group_id == encounter.tournament_group_id
-            ]
-            for mapping in source_mappings:
-                if mapping.challonge_participant_id in legacy_ids:
-                    return mapping.challonge_participant_id
-            return source_mappings[0].challonge_participant_id
-
-    legacy_rows = [
-        row
-        for row in getattr(
-            encounter.home_team if encounter.home_team_id == winner_team_id else encounter.away_team,
-            "challonge",
-            [],
-        )
-        if row.tournament_id == encounter.tournament_id and row.team_id == winner_team_id
-    ]
-    exact_group = next(
-        (row for row in legacy_rows if row.group_id == encounter.tournament_group_id),
-        None,
-    )
-    if exact_group is not None:
-        return exact_group.challonge_id
-    fallback = next((row for row in legacy_rows if row.group_id is None), None)
-    return fallback.challonge_id if fallback is not None else None
+    if source_mappings:
+        return source_mappings[0].challonge_participant_id
+    return None
 
 
-async def export_tournament(
-    session: AsyncSession, tournament_id: int
-) -> dict:
+async def export_tournament(session: AsyncSession, tournament_id: int) -> dict:
     """Full export: push all completed encounter results to Challonge."""
     async with _sync_job_lock(tournament_id, "export") as job_id:
         result = await session.execute(
@@ -1917,36 +1720,82 @@ async def export_tournament(
 
         stats = {"job_id": job_id, "matches_pushed": 0, "errors": 0, "skipped": 0}
 
+        # "Linked to Challonge" is now derived from challonge_match_mapping (scoped
+        # to this tournament's sources), not the deprecated encounter.challonge_id.
+        linked_encounter_ids = (
+            select(models.ChallongeMatchMapping.encounter_id)
+            .join(
+                models.ChallongeSource,
+                models.ChallongeSource.id == models.ChallongeMatchMapping.source_id,
+            )
+            .where(models.ChallongeSource.tournament_id == tournament_id)
+        )
         enc_result = await session.execute(
             select(models.Encounter)
             .where(
                 models.Encounter.tournament_id == tournament_id,
-                models.Encounter.challonge_id.isnot(None),
                 models.Encounter.status == enums.EncounterStatus.COMPLETED,
+                models.Encounter.id.in_(linked_encounter_ids),
             )
             .options(
-                selectinload(models.Encounter.home_team).selectinload(models.Team.challonge),
-                selectinload(models.Encounter.away_team).selectinload(models.Team.challonge),
+                selectinload(models.Encounter.home_team),
+                selectinload(models.Encounter.away_team),
             )
         )
         encounters = enc_result.scalars().all()
 
+        # Bulk prefetch of both mapping tables (same batching pattern as the
+        # import path) — the loop below would otherwise issue two lookup queries
+        # per encounter.
+        match_mappings: dict[int, models.ChallongeMatchMapping] = {}
+        encounter_ids = [encounter.id for encounter in encounters]
+        if encounter_ids:
+            mapping_rows = await session.execute(
+                select(models.ChallongeMatchMapping)
+                .where(models.ChallongeMatchMapping.encounter_id.in_(encounter_ids))
+                .options(selectinload(models.ChallongeMatchMapping.source))
+                .order_by(models.ChallongeMatchMapping.id.asc())
+            )
+            for mapping_row in mapping_rows.scalars():
+                match_mappings.setdefault(mapping_row.encounter_id, mapping_row)
+
+        participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] = {}
+        source_ids = [source.source_id for source in sources if source.source_id is not None]
+        if source_ids:
+            participant_rows = await session.execute(
+                select(models.ChallongeParticipantMapping)
+                .where(models.ChallongeParticipantMapping.source_id.in_(source_ids))
+                .order_by(models.ChallongeParticipantMapping.id.asc())
+            )
+            for participant_row in participant_rows.scalars():
+                participant_mappings.setdefault((participant_row.source_id, participant_row.team_id), []).append(
+                    participant_row
+                )
+
         for encounter in encounters:
             try:
-                pushed = await push_single_result(session, tournament, encounter, sources=sources)
+                pushed = await push_single_result(
+                    session,
+                    tournament,
+                    encounter,
+                    sources=sources,
+                    match_mappings=match_mappings,
+                    participant_mappings=participant_mappings,
+                )
                 if pushed:
                     stats["matches_pushed"] += 1
                 else:
                     stats["skipped"] += 1
             except Exception as e:
                 stats["errors"] += 1
+                failed_mapping = match_mappings.get(encounter.id)
                 await _log_sync(
                     session,
                     tournament_id,
                     "export",
                     "match",
                     encounter.id,
-                    encounter.challonge_id,
+                    failed_mapping.challonge_match_id if failed_mapping is not None else None,
                     "failed",
                     operation="push_result",
                     error_message=str(e),
@@ -1963,9 +1812,18 @@ async def push_single_result(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None = None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> bool:
     """Push a single encounter result to Challonge."""
-    return await _push_single_result_impl(session, tournament, encounter, sources=sources)
+    return await _push_single_result_impl(
+        session,
+        tournament,
+        encounter,
+        sources=sources,
+        match_mappings=match_mappings,
+        participant_mappings=participant_mappings,
+    )
 
 
 async def _push_single_result_impl(
@@ -1974,21 +1832,17 @@ async def _push_single_result_impl(
     encounter: models.Encounter,
     *,
     sources: list[_ImportSource] | None,
+    match_mappings: dict[int, models.ChallongeMatchMapping] | None = None,
+    participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
 ) -> bool:
-    if not encounter.challonge_id:
+    source, challonge_match_id = await _resolve_export_target(
+        session, tournament, encounter, sources=sources, match_mappings=match_mappings
+    )
+    # No challonge_match_mapping → the encounter is not linked to Challonge; skip.
+    if source is None or challonge_match_id is None:
         return False
 
-    source, challonge_match_id = await _resolve_export_target(
-        session, tournament, encounter, sources=sources
-    )
-    if source is None or challonge_match_id is None:
-        raise ValueError(f"Encounter {encounter.id} has no Challonge source mapping")
-
-    winner_team = (
-        encounter.home_team
-        if encounter.home_score > encounter.away_score
-        else encounter.away_team
-    )
+    winner_team = encounter.home_team if encounter.home_score > encounter.away_score else encounter.away_team
     if not winner_team:
         raise ValueError(f"Encounter {encounter.id} has no winner team")
 
@@ -1997,11 +1851,11 @@ async def _push_single_result_impl(
         source,
         winner_team.id,
         encounter,
+        participant_mappings=participant_mappings,
     )
     if winner_challonge_id is None:
         raise ValueError(
-            f"Winner team {winner_team.id} has no Challonge participant mapping "
-            f"for source {source.challonge_id}"
+            f"Winner team {winner_team.id} has no Challonge participant mapping for source {source.challonge_id}"
         )
 
     scores_csv = f"{encounter.home_score}-{encounter.away_score}"
@@ -2028,9 +1882,7 @@ async def _push_single_result_impl(
     return True
 
 
-async def auto_push_on_confirm(
-    session: AsyncSession, encounter_id: int
-) -> None:
+async def auto_push_on_confirm(session: AsyncSession, encounter_id: int) -> None:
     """Auto-push to Challonge when an encounter result is confirmed.
 
     Called from captain.confirm_result after status -> confirmed.
@@ -2047,14 +1899,16 @@ async def auto_push_on_confirm(
             selectinload(models.Encounter.tournament)
             .selectinload(models.Tournament.stages)
             .selectinload(models.Stage.items),
-            selectinload(models.Encounter.home_team)
-            .selectinload(models.Team.challonge),
-            selectinload(models.Encounter.away_team)
-            .selectinload(models.Team.challonge),
+            selectinload(models.Encounter.home_team),
+            selectinload(models.Encounter.away_team),
         )
     )
     encounter = enc_result.scalar_one_or_none()
-    if not encounter or not encounter.challonge_id:
+    if not encounter:
+        return
+    # "Linked to Challonge" is derived from challonge_match_mapping.
+    challonge_match_id = (await resolve_encounter_challonge(session, [encounter.id])).get(encounter.id)
+    if challonge_match_id is None:
         return
 
     tournament = encounter.tournament
@@ -2068,16 +1922,19 @@ async def auto_push_on_confirm(
     except Exception as e:
         logger.error(f"Auto-push failed for encounter {encounter_id}: {e}")
         await _log_sync(
-            session, tournament.id, "export", "match",
-            encounter.id, encounter.challonge_id,
-            "failed", error_message=str(e),
+            session,
+            tournament.id,
+            "export",
+            "match",
+            encounter.id,
+            challonge_match_id,
+            "failed",
+            error_message=str(e),
         )
         await session.commit()
 
 
-async def get_sync_log(
-    session: AsyncSession, tournament_id: int, limit: int = 50
-) -> list[models.ChallongeSyncLog]:
+async def get_sync_log(session: AsyncSession, tournament_id: int, limit: int = 50) -> list[models.ChallongeSyncLog]:
     result = await session.execute(
         select(models.ChallongeSyncLog)
         .where(models.ChallongeSyncLog.tournament_id == tournament_id)

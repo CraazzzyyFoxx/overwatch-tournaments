@@ -14,12 +14,12 @@ from typing import Any
 
 from loguru import logger
 from redis import asyncio as redis_async
+
 from shared.core import enums
 from shared.messaging.config import RANK_FETCH_PRIORITY_QUEUE, RANK_FETCH_QUEUE
 from shared.observability import publish_message
 from shared.schemas.events import FetchRankEvent, RegistrationApprovedEvent
 from shared.services import settings_provider
-
 from src.core import config, db
 from src.core.broker import require_broker
 
@@ -54,12 +54,12 @@ async def close_redis() -> None:
     _redis_client = None
 
 
-def _pending_key(battle_tag_id: int) -> str:
-    return f"ow_rank:fetch:pending:{battle_tag_id}"
+def _pending_key(social_account_id: int) -> str:
+    return f"ow_rank:fetch:pending:{social_account_id}"
 
 
-def _inflight_key(battle_tag_id: int) -> str:
-    return f"ow_rank:fetch:inflight:{battle_tag_id}"
+def _inflight_key(social_account_id: int) -> str:
+    return f"ow_rank:fetch:inflight:{social_account_id}"
 
 
 async def _set_once(redis: Any, key: str, ttl_seconds: int) -> bool:
@@ -90,7 +90,7 @@ async def enqueue_fetch(
     "collect now" always runs even if a fetch is already pending).
     """
     redis_client = redis or await get_redis()
-    pending = _pending_key(event.battle_tag_id)
+    pending = _pending_key(event.social_account_id)
     if force:
         await redis_client.set(pending, "1", ex=PENDING_TTL_SECONDS)
     elif not await _set_once(redis_client, pending, PENDING_TTL_SECONDS):
@@ -102,7 +102,7 @@ async def enqueue_fetch(
             require_broker(broker),
             event.model_dump(),
             queue,
-            logger=logger.bind(battle_tag_id=event.battle_tag_id, source=event.source),
+            logger=logger.bind(social_account_id=event.social_account_id, source=event.source),
         )
     except Exception:
         await redis_client.delete(pending)
@@ -138,14 +138,14 @@ async def handle_registration_approved(
             user_id=event.user_id,
             extra_accounts=cfg.extra_accounts_per_registration,
         )
-        for battle_tag_id, battle_tag in tags:
-            await service.ensure_state(session, battle_tag_id, battle_tag, priority_tier=2)
+        for social_account_id, battle_tag in tags:
+            await service.ensure_state(session, social_account_id, battle_tag, priority_tier=2)
         await session.commit()
 
     enqueued = 0
-    for battle_tag_id, battle_tag in tags:
+    for social_account_id, battle_tag in tags:
         fetch = FetchRankEvent(
-            battle_tag_id=battle_tag_id,
+            social_account_id=social_account_id,
             battle_tag=battle_tag,
             source="registration",
             registration_id=event.registration_id,
@@ -167,10 +167,10 @@ async def process_fetch_rank(
     event = FetchRankEvent.model_validate(data)
     redis_client = redis or await get_redis()
     client = client or rank_client
-    inflight = _inflight_key(event.battle_tag_id)
+    inflight = _inflight_key(event.social_account_id)
 
     if not await _set_once(redis_client, inflight, INFLIGHT_TTL_SECONDS):
-        logger.info("Rank fetch already in flight", battle_tag_id=event.battle_tag_id)
+        logger.info("Rank fetch already in flight", social_account_id=event.social_account_id)
         return
 
     try:
@@ -180,7 +180,7 @@ async def process_fetch_rank(
             if await redis_client.get(COOLDOWN_KEY):
                 await service.defer_tag(
                     session,
-                    battle_tag_id=event.battle_tag_id,
+                    social_account_id=event.social_account_id,
                     delay_seconds=cfg.backoff_base_seconds,
                 )
                 await session.commit()
@@ -197,7 +197,7 @@ async def process_fetch_rank(
                 await redis_client.set(COOLDOWN_KEY, "1", ex=int(exc.retry_after or 60))
                 await service.record_failure(
                     session,
-                    battle_tag_id=event.battle_tag_id,
+                    social_account_id=event.social_account_id,
                     battle_tag=event.battle_tag,
                     status=enums.RankCollectionStatus.rate_limited,
                     error="429 rate limited",
@@ -205,7 +205,7 @@ async def process_fetch_rank(
                 )
                 await service.log_fetch(
                     session,
-                    battle_tag_id=event.battle_tag_id,
+                    social_account_id=event.social_account_id,
                     battle_tag=event.battle_tag,
                     status=enums.RankCollectionStatus.rate_limited.value,
                     source=event.source,
@@ -216,7 +216,7 @@ async def process_fetch_rank(
 
             written = await service.record_result(
                 session,
-                battle_tag_id=event.battle_tag_id,
+                social_account_id=event.social_account_id,
                 battle_tag=event.battle_tag,
                 source=event.source,
                 result=result,
@@ -226,7 +226,7 @@ async def process_fetch_rank(
             )
             await service.log_fetch(
                 session,
-                battle_tag_id=event.battle_tag_id,
+                social_account_id=event.social_account_id,
                 battle_tag=event.battle_tag,
                 status=result.status.value,
                 source=event.source,
@@ -240,7 +240,7 @@ async def process_fetch_rank(
             cfg = await settings_provider.get_rank_collection_config(session)
             await service.record_failure(
                 session,
-                battle_tag_id=event.battle_tag_id,
+                social_account_id=event.social_account_id,
                 battle_tag=event.battle_tag,
                 status=enums.RankCollectionStatus.error,
                 error=str(exc),
@@ -248,7 +248,7 @@ async def process_fetch_rank(
             )
             await service.log_fetch(
                 session,
-                battle_tag_id=event.battle_tag_id,
+                social_account_id=event.social_account_id,
                 battle_tag=event.battle_tag,
                 status=enums.RankCollectionStatus.error.value,
                 source=event.source,
@@ -258,4 +258,4 @@ async def process_fetch_rank(
         raise
     finally:
         await redis_client.delete(inflight)
-        await redis_client.delete(_pending_key(event.battle_tag_id))
+        await redis_client.delete(_pending_key(event.social_account_id))

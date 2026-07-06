@@ -114,8 +114,7 @@ def _prepare_shift_training_frames(
         return train_df, val_df
 
     logger.info(
-        "Shift v2 validation holdout contains the only labelled rows; "
-        "reusing it for training without validation"
+        "Shift v2 validation holdout contains the only labelled rows; reusing it for training without validation"
     )
     return val_df, pd.DataFrame()
 
@@ -219,9 +218,7 @@ async def train_performance_v2_for_cutoff(
             logger.warning("Skipping role=%s: %s", role, exc)
             continue
 
-        path = artifact_path(
-            algorithm.id, PERFORMANCE_MODEL_VERSION, f"performance_{role}.joblib"
-        )
+        path = artifact_path(algorithm.id, PERFORMANCE_MODEL_VERSION, f"performance_{role}.joblib")
         storage_uri = save_artifact(result.model, path)
 
         artifact = await register_artifact(
@@ -339,9 +336,7 @@ async def train_standings_v2_for_cutoff(
         return None
 
     try:
-        result: StandingsTrainingResult = train_standings_v2(
-            train_df, val_df=val_df if not val_df.empty else None
-        )
+        result: StandingsTrainingResult = train_standings_v2(train_df, val_df=val_df if not val_df.empty else None)
     except ValueError as exc:
         logger.warning("Standings v2 training skipped: %s", exc)
         return None
@@ -361,9 +356,7 @@ async def train_standings_v2_for_cutoff(
         feature_importance=result.feature_importance,
         activate=True,
     )
-    return StandingsTrainingOutcome(
-        algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics
-    )
+    return StandingsTrainingOutcome(algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics)
 
 
 async def train_shift_v2_for_cutoff(
@@ -423,8 +416,14 @@ async def train_shift_v2_for_cutoff(
             val_df=val_df if not val_df.empty else None,
             w_team=settings.shift_w_team,
             w_os=settings.shift_w_os,
-            indiv_scale=settings.shift_indiv_scale,
-            indiv_clamp=settings.shift_indiv_clamp,
+            indiv_scale_top=settings.shift_indiv_scale_top,
+            indiv_scale_bottom=settings.shift_indiv_scale_bottom,
+            indiv_clamp_top=settings.shift_indiv_clamp_top,
+            indiv_clamp_bottom=settings.shift_indiv_clamp_bottom,
+            dominance_gain=settings.shift_dominance_gain,
+            dominance_cap=settings.shift_dominance_cap,
+            placement_floor=settings.shift_placement_floor,
+            clamp_top_grid_ref=settings.shift_clamp_top_grid_ref,
         )
     except ValueError as exc:
         logger.warning("Shift v2 training skipped: %s", exc)
@@ -445,6 +444,4 @@ async def train_shift_v2_for_cutoff(
         feature_importance=result.feature_importance,
         activate=True,
     )
-    return ShiftTrainingOutcome(
-        algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics
-    )
+    return ShiftTrainingOutcome(algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics)

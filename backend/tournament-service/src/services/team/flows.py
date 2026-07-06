@@ -1,8 +1,8 @@
 from cashews import cache
-from shared.division_grid import DivisionGrid
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.division_grid import DivisionGrid
+from shared.services.division_grid_resolution import resolve_tournament_division
 from src import models, schemas
 from src.core import config, errors, pagination, utils
 from src.core.workspace import get_division_grid
@@ -100,15 +100,25 @@ async def to_pydantic_player(
     team: schemas.TeamRead | None = None
 
     if "user" in entities:
+        # workspace_member_id is NOT NULL (contract step, iwrefac07) and is always
+        # eager-loaded regardless of the "user" entity flag (see workspace_member_id
+        # dereference below), so the old "workspace_member is not None" guard here
+        # was dead — dropped to match app-service's _mappers.py.
         user_entities = [e.replace("user.", "") for e in entities if e.startswith("user.")]
-        user = await user_flows.to_pydantic(session, player.user, user_entities)
+        user = await user_flows.to_pydantic(session, player.workspace_member.player, user_entities)
     if "tournament" in entities:
         tournament = await tournament_flows.to_pydantic(session, player.tournament, entities=[])
     if "team" in entities:
         team = await to_pydantic(session, player.team, entities=[])
 
+    player_dict = player.to_dict()
+    # Player.user_id was dropped in the contract step (iwrefac07); PlayerRead.user_id
+    # is resolved from workspace_member.player_id instead (workspace_member is always
+    # loaded by team_entities/player_entities regardless of the "user" entity flag).
+    player_dict["user_id"] = player.workspace_member.player_id
+
     return schemas.PlayerRead(
-        **player.to_dict(),
+        **player_dict,
         division=resolve_tournament_division(
             player.rank,
             tournament_grid=grid,
@@ -294,7 +304,11 @@ async def get_player(session: AsyncSession, player_id: int, entities: list[str])
     return await service.get_player(session, player_id, entities)
 
 
-@cache(ttl=config.settings.teams_cache_ttl, key="teams:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}", prefix="fastapi:")
+@cache(
+    ttl=config.settings.teams_cache_ttl,
+    key="teams:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}",
+    prefix="fastapi:",
+)
 async def get_all(
     session: AsyncSession,
     params: schemas.TeamFilterParams,

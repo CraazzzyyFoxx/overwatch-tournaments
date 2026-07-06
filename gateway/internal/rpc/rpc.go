@@ -20,6 +20,13 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 )
 
 const (
@@ -68,7 +75,7 @@ func New(url string, log *slog.Logger) *Client {
 		disconnect: make(chan struct{}),
 	}
 	close(c.disconnect) // start in the disconnected state
-	go c.run()
+	safego.Go(c.run)    // recover panics so a bad reply can't crash the process
 	return c
 }
 
@@ -167,7 +174,7 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 	c.disconnect = make(chan struct{})
 	c.mu.Unlock()
 
-	go c.dispatchReplies(deliveries)
+	safego.Go(func() { c.dispatchReplies(deliveries) })
 	return notify, nil
 }
 
@@ -224,6 +231,29 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 		return nil, err
 	}
 
+	// One PRODUCER span per RPC covering publish + reply wait, mirroring the
+	// Python consumer's "rabbitmq consume <queue>" span so Tempo links the two
+	// through the traceparent injected below. No-op when tracing is disabled.
+	ctx, span := otel.Tracer("gateway/rpc").Start(ctx, "rabbitmq publish "+queue,
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "rabbitmq"),
+			attribute.String("messaging.operation", "publish"),
+			attribute.String("messaging.destination.name", queue),
+			attribute.String("messaging.message.conversation_id", id),
+		),
+	)
+	defer span.End()
+
+	// AMQP headers: W3C trace context (the FastStream side does
+	// propagate.extract(message.headers)) + the request correlation id (read by
+	// observe_message_processing, so gateway and worker logs share one id).
+	headers := amqp.Table{}
+	otel.GetTextMapPropagator().Inject(ctx, headerCarrier(headers))
+	if cid := httplog.CorrelationIDFromContext(ctx); cid != "" {
+		headers[httplog.CorrelationIDHeader] = cid
+	}
+
 	waiter := make(chan amqp.Delivery, 1)
 	c.pendingMu.Lock()
 	c.pending[id] = waiter
@@ -234,23 +264,56 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 		c.pendingMu.Unlock()
 	}()
 
-	if err := ch.PublishWithContext(ctx, "", queue, false, false, amqp.Publishing{
+	pub := amqp.Publishing{
 		ContentType:   contentTypeJSON,
 		CorrelationId: id,
 		ReplyTo:       replyQ,
 		Body:          body,
-	}); err != nil {
-		return nil, fmt.Errorf("publish rpc request to %q: %w", queue, err)
+	}
+	if len(headers) > 0 {
+		pub.Headers = headers
+	}
+	if err := ch.PublishWithContext(ctx, "", queue, false, false, pub); err != nil {
+		err = fmt.Errorf("publish rpc request to %q: %w", queue, err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "publish failed")
+		return nil, err
 	}
 
 	select {
 	case d := <-waiter:
 		return d.Body, nil
 	case <-discCh:
+		span.RecordError(ErrDisconnected)
+		span.SetStatus(codes.Error, "connection lost")
 		return nil, ErrDisconnected
 	case <-ctx.Done():
-		return nil, fmt.Errorf("rpc to %q: %w", queue, ctx.Err())
+		err := fmt.Errorf("rpc to %q: %w", queue, ctx.Err())
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "context done")
+		return nil, err
 	}
+}
+
+// headerCarrier adapts an amqp.Table to the OpenTelemetry TextMapCarrier so
+// the propagator can write traceparent/tracestate into message headers.
+type headerCarrier amqp.Table
+
+func (c headerCarrier) Get(key string) string {
+	if v, ok := c[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func (c headerCarrier) Set(key, value string) { c[key] = value }
+
+func (c headerCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Close stops the reconnect loop and tears down the connection.

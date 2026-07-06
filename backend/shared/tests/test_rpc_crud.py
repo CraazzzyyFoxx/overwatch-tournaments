@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
-from shared.core.errors import BaseAPIException as HTTPException
 from pydantic import BaseModel
 
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.crud import CrudDispatcher, EntityConfig
 from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
 
@@ -35,7 +35,7 @@ MEMBER: dict[str, Any] = {
 
 
 class _FakeSession:
-    async def __aenter__(self) -> "_FakeSession":
+    async def __aenter__(self) -> _FakeSession:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
@@ -71,17 +71,17 @@ async def _serialize(session: Any, obj: Any) -> dict[str, Any]:
 
 
 def _team_cfg(**overrides: Any) -> EntityConfig:
-    base: dict[str, Any] = dict(
-        entity="team",
-        model=_Dummy,
-        permission_resource="team",
-        serializer=_serialize,
-        create_schema=_CreateSchema,
-        update_schema=_UpdateSchema,
-        resolve_ws_from_id=_ws7,
-        resolve_ws_for_create=_ws7_for_create,
-        actions=frozenset({"create", "get", "update", "delete"}),
-    )
+    base: dict[str, Any] = {
+        "entity": "team",
+        "model": _Dummy,
+        "permission_resource": "team",
+        "serializer": _serialize,
+        "create_schema": _CreateSchema,
+        "update_schema": _UpdateSchema,
+        "resolve_ws_from_id": _ws7,
+        "resolve_ws_for_create": _ws7_for_create,
+        "actions": frozenset({"create", "get", "update", "delete"}),
+    }
     base.update(overrides)
     return EntityConfig(**base)
 
@@ -169,9 +169,11 @@ class DispatcherTests(IsolatedAsyncioTestCase):
         self.assertEqual(res["error"]["code"], "bad_request")
 
     async def test_missing_identity(self) -> None:
+        # A missing/expired token is 401 unauthorized (not 403 forbidden), matching
+        # every other service so the frontend treats it as "session dead" -> relogin.
         dispatcher = self._dispatcher(_team_cfg())
         res = await dispatcher.do_update({"entity": "team", "id": 5, "payload": {"name": "X"}})
-        self.assertEqual(res["error"]["code"], "forbidden")
+        self.assertEqual(res["error"]["code"], "unauthorized")
 
     async def test_missing_id(self) -> None:
         dispatcher = self._dispatcher(_team_cfg())
@@ -191,16 +193,16 @@ def _hero_cfg(**overrides: Any) -> EntityConfig:
     async def list_fn(session: Any, data: dict[str, Any]) -> dict[str, Any]:
         return {"results": [{"id": 1, "name": "hero"}], "total": 1}
 
-    base: dict[str, Any] = dict(
-        entity="hero",
-        model=_Dummy,
-        permission_resource="hero",
-        serializer=_serialize,
-        public_read=True,
-        service_get=svc_get,
-        list_fn=list_fn,
-        actions=frozenset({"get", "list"}),
-    )
+    base: dict[str, Any] = {
+        "entity": "hero",
+        "model": _Dummy,
+        "permission_resource": "hero",
+        "serializer": _serialize,
+        "public_read": True,
+        "service_get": svc_get,
+        "list_fn": list_fn,
+        "actions": frozenset({"get", "list"}),
+    }
     base.update(overrides)
     return EntityConfig(**base)
 
@@ -234,8 +236,9 @@ class PublicReadTests(IsolatedAsyncioTestCase):
         res = await dispatcher.do_get({"entity": "hero"})  # no id
         self.assertEqual(res["error"]["code"], "unprocessable")
 
-    async def test_non_public_get_without_identity_forbidden(self) -> None:
-        # Regression guard: default public_read=False keeps the auth gate.
+    async def test_non_public_get_without_identity_unauthorized(self) -> None:
+        # Regression guard: default public_read=False keeps the auth gate; a missing
+        # identity is reported as 401 unauthorized (not 403 forbidden).
         async def svc_get(session: Any, obj_id: int, data: dict[str, Any]) -> _Dummy:
             raise AssertionError("hook must not run when identity is missing")
 
@@ -244,4 +247,20 @@ class PublicReadTests(IsolatedAsyncioTestCase):
             _session_factory,
         )
         res = await dispatcher.do_get({"entity": "team", "id": 5})  # no identity
-        self.assertEqual(res["error"]["code"], "forbidden")
+        self.assertEqual(res["error"]["code"], "unauthorized")
+
+    async def test_non_public_list_without_resolver_bad_request(self) -> None:
+        # Fail-closed: a non-public list entity that forgets its workspace resolver
+        # must be rejected, never fall through to list_fn without a permission check.
+        async def list_fn(session: Any, data: dict[str, Any]) -> dict[str, Any]:
+            raise AssertionError("list_fn must not run without a workspace resolver")
+
+        cfg = _team_cfg(
+            list_fn=list_fn,
+            resolve_ws_for_list=None,
+            actions=frozenset({"list"}),
+        )
+        dispatcher = self._dispatcher(cfg)
+        res = await dispatcher.do_list({"entity": "team", "identity": SUPERUSER})
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"]["code"], "bad_request")

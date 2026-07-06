@@ -38,11 +38,7 @@ def normalize_role_entries(role_entries: list[Any] | None) -> list[dict[str, Any
             prepared_entries.append(entry.model_dump())
 
     prepared_entries.sort(
-        key=lambda item: (
-            item.get("priority")
-            if item.get("priority") is not None
-            else DEFAULT_SORT_PRIORITY_SENTINEL
-        )
+        key=lambda item: (item.get("priority") if item.get("priority") is not None else DEFAULT_SORT_PRIORITY_SENTINEL)
     )
 
     for entry in prepared_entries:
@@ -69,9 +65,7 @@ def normalize_role_entries(role_entries: list[Any] | None) -> list[dict[str, Any
                 "role": role,
                 "subtype": subtype,
                 "priority": len(normalized_entries) + 1,
-                "division_number": (
-                    int(division_number) if division_number is not None else None
-                ),
+                "division_number": (int(division_number) if division_number is not None else None),
                 "rank_value": int(rank_value) if rank_value is not None else None,
                 "is_active": is_active,
             }

@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import errors
-from shared.models.achievement import (
+from shared.models.achievements.achievement import (
     AchievementRule,
     EvaluationRun,
     EvaluationRunStatus,
@@ -22,8 +24,6 @@ from shared.services.division_grid_normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 from .context import EvalContext
@@ -105,7 +105,9 @@ async def run_evaluation(
                 total_removed += len(diff.to_delete)
                 continue
 
-            rule_needs_normalized_divisions = tournament is None and _rule_requires_normalized_divisions(rule.condition_tree)
+            rule_needs_normalized_divisions = tournament is None and _rule_requires_normalized_divisions(
+                rule.condition_tree
+            )
             if rule_needs_normalized_divisions and normalizer is None:
                 try:
                     normalizer = await build_workspace_division_grid_normalizer(
@@ -146,9 +148,7 @@ async def run_evaluation(
                     total_created += len(diff.to_insert)
                     total_removed += len(diff.to_delete)
 
-                    logger.info(
-                        f"Rule '{rule.slug}': +{len(diff.to_insert)} -{len(diff.to_delete)}"
-                    )
+                    logger.info(f"Rule '{rule.slug}': +{len(diff.to_insert)} -{len(diff.to_delete)}")
             except Exception:
                 logger.exception(f"Failed to evaluate rule '{rule.slug}'")
                 continue
@@ -172,8 +172,7 @@ async def run_evaluation(
         raise
 
     logger.info(
-        f"Evaluation run {run_id} done: "
-        f"{run.rules_evaluated} rules, +{run.results_created} -{run.results_removed}"
+        f"Evaluation run {run_id} done: {run.rules_evaluated} rules, +{run.results_created} -{run.results_removed}"
     )
     return run
 

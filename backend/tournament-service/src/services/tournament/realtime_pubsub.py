@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pydantic import RedisDsn
 from redis.asyncio import Redis
+
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import publish_event
-
 from src.core import config, db
 
 

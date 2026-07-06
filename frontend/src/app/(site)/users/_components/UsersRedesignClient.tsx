@@ -10,7 +10,7 @@ import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "l
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
 import userService from "@/services/user.service";
@@ -202,6 +202,7 @@ const UsersRedesignClient = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const divisionGrid = useDivisionGrid();
+  const workspaceId = useCurrentWorkspaceId();
 
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const perPage = parsePositiveInt(searchParams.get("per_page"), 20);
@@ -248,7 +249,7 @@ const UsersRedesignClient = () => {
   }, [debouncedSearch, query, updateParams]);
 
   const { data, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: ["users-overview", page, perPage, query, sort, order, role, divMin, divMax],
+    queryKey: ["users-overview", workspaceId, page, perPage, query, sort, order, role, divMin, divMax],
     queryFn: () =>
       userService.getUsersOverview({
         page,
@@ -258,7 +259,8 @@ const UsersRedesignClient = () => {
         query: query || undefined,
         role,
         divMin,
-        divMax
+        divMax,
+        workspaceId
       }),
     placeholderData: (previousData) => previousData,
     staleTime: 30_000,
@@ -266,20 +268,21 @@ const UsersRedesignClient = () => {
   });
 
   const statsQuery = useQuery({
-    queryKey: ["users-overview-stats", query, role, divMin, divMax],
+    queryKey: ["users-overview-stats", workspaceId, query, role, divMin, divMax],
     queryFn: () =>
       userService.getUsersOverviewStats({
         query: query || undefined,
         role,
         divMin,
-        divMax
+        divMax,
+        workspaceId
       }),
     placeholderData: (previousData) => previousData,
     staleTime: 30_000
   });
 
   const catalogQuery = useQuery({
-    queryKey: ["users-overview-catalog", query, role, divMin, divMax, letter],
+    queryKey: ["users-overview-catalog", workspaceId, query, role, divMin, divMax, letter],
     queryFn: () =>
       userService.getUsersCatalog({
         query: query || undefined,
@@ -288,7 +291,8 @@ const UsersRedesignClient = () => {
         divMax,
         letter,
         perLetter: 12,
-        maxLetters: 27
+        maxLetters: 27,
+        workspaceId
       }),
     placeholderData: (previousData) => previousData,
     staleTime: 30_000,

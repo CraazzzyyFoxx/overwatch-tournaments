@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.outbox import EventOutbox
+from shared.models.platform.outbox import EventOutbox
 
 PENDING_STATUSES = ("pending", "failed")
 
@@ -93,6 +94,9 @@ async def publish_pending_outbox_events(
             row.attempts += 1
             row.last_error = str(exc)
             row.next_attempt_at = now + _retry_delay(row.attempts)
+            logger.warning(
+                f"Outbox publish failed for event {row.event_id} (type={row.event_type}, attempt={row.attempts}): {exc}"
+            )
         else:
             row.status = "published"
             row.published_at = now
@@ -107,4 +111,4 @@ async def publish_pending_outbox_events(
 
 
 def _retry_delay(attempts: int) -> timedelta:
-    return timedelta(seconds=min(2**max(attempts - 1, 0), 300))
+    return timedelta(seconds=min(2 ** max(attempts - 1, 0), 300))

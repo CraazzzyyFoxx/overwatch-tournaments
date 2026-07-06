@@ -14,6 +14,11 @@ htmlcov
 *.py[cod]
 *$py.class
 
+# Rust build artifacts (moo_core). Host target/ is ~2.3GB of Windows objects;
+# it must never enter the build context — the container rebuilds it from source
+# under a BuildKit cache mount.
+**/target/
+
 # IDE
 .idea
 .vscode

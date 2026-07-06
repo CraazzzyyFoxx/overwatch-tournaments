@@ -21,6 +21,12 @@ extensions:
 
 service:
   extensions: [health_check]
+  telemetry:
+    metrics:
+      # Bind the collector's own Prometheus metrics on all interfaces so the
+      # `otel-collector` scrape job can reach them (default is localhost-only,
+      # which is unreachable from the Prometheus container).
+      address: 0.0.0.0:8888
   pipelines:
     traces:
       receivers: [otlp]

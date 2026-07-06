@@ -95,23 +95,17 @@ class ComputeMatchQualityTests(TestCase):
 
     def test_derived_sigma_makes_even_match_more_balanced(self) -> None:
         encounters = self._encounters()
-        scores = pd.DataFrame(
-            {"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]}
-        )
+        scores = pd.DataFrame({"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]})
 
         result = mq.compute_match_quality(encounters, scores).set_index("encounter_id")
 
         # sigma_pool is derived from gaps {10, 400}; the 10-gap match should be
         # far more skill-balanced than the 400-gap one.
-        self.assertGreater(
-            result.loc[1, "skill_balance"], result.loc[2, "skill_balance"]
-        )
+        self.assertGreater(result.loc[1, "skill_balance"], result.loc[2, "skill_balance"])
 
     def test_weights_are_overridable(self) -> None:
         encounters = self._encounters().head(1)
-        scores = pd.DataFrame(
-            {"encounter_id": [1], "home_score": [3], "away_score": [2]}
-        )
+        scores = pd.DataFrame({"encounter_id": [1], "home_score": [3], "away_score": [2]})
 
         all_skill = mq.compute_match_quality(
             encounters,
@@ -127,6 +121,28 @@ class ComputeMatchQualityTests(TestCase):
     def test_empty_encounters_returns_empty(self) -> None:
         result = mq.compute_match_quality(pd.DataFrame(), pd.DataFrame())
         self.assertTrue(result.empty)
+
+    def test_duplicate_encounter_ids_collapse_to_one_row(self) -> None:
+        # Upstream merge fan-out can repeat an encounter; the writer inserts into
+        # analytics.match_quality keyed by (encounter_id, algorithm_id), so the
+        # scorer must emit exactly one row per encounter or the INSERT trips
+        # uq_analytics_match_quality on a within-batch duplicate.
+        encounters = pd.DataFrame(
+            {
+                "encounter_id": [1, 1, 2],
+                "home_avg_mu": [2000.0, 2000.0, 2000.0],
+                "away_avg_mu": [2010.0, 2010.0, 2400.0],
+                "home_won": [1.0, 1.0, 1.0],
+                "p_home_wins": [0.5, 0.5, 0.9],
+            }
+        )
+        scores = pd.DataFrame({"encounter_id": [1, 2], "home_score": [3, 3], "away_score": [2, 0]})
+
+        result = mq.compute_match_quality(encounters, scores)
+
+        self.assertEqual(2, len(result))
+        self.assertEqual([1, 2], sorted(result["encounter_id"].tolist()))
+        self.assertEqual(1, int((result["encounter_id"] == 1).sum()))
 
     def test_missing_mu_never_emits_nan(self) -> None:
         # Reproduces the production 500: an encounter whose teams have no mu

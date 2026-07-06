@@ -3,7 +3,7 @@
 Финальная методика (после разворота merit-рерайта):
 - **Points** — накопленный team W/L (не менялся; по данным — самый сильный предиктор реального перехода).
 - **Linear** — чисто team-result (`map_diff` + `placement_score`).
-- **OpenSkill + ML** — team-доминантный костяк (`shift_w_team`·Linear-team + `shift_w_os`·OpenSkill-mu) **плюс аддитивный, зажатый индивидуальный скилл** (Performance v2 `local_zscore` vs та же роль + соседний дивизион). NNLS-фита нет.
+- **OpenSkill + ML** — team-доминантный костяк (`shift_w_team`·Linear-team + `shift_w_os`·OpenSkill-mu) **плюс аддитивный, зажатый индивидуальный скилл** (Performance v2 `local_zscore` vs та же роль + соседний дивизион). Сила/потолок инд-члена **рангозависимы**: линейно затухают по канонич. номеру дивизиона (1=верх … 40=низ) — мало у потолка (тот же +N там — редкий, шумный, упёртый в кэп claim), полно внизу. NNLS-фита нет.
 - **smurf-флаг** дополнительно ловит сильного аутлайера по когорте (`local_zscore ≥ SMURF_STRONG_LOCAL_Z`) при любом ранге.
 - **Сетка дивизионов = сигнал, округлённый к ближайшему дивизиону** (без мёртвой зоны (−1,1)) → отображение согласовано с сигналом.
 
@@ -12,8 +12,13 @@
 |---|---|---|
 | `LINEAR_SHIFT_SCALE` (6.25) | масштаб team-result Linear | read-time → пересчитать v1 |
 | `SHIFT_W_TEAM` (0.7), `SHIFT_W_OS` (0.3) | веса костяка v2 | снапшот при train → retrain shift |
-| `SHIFT_INDIV_SCALE` (0.5), `SHIFT_INDIV_CLAMP` (1.5) | сила/потолок инд-скилла | снапшот при train → retrain shift |
+| `SHIFT_INDIV_SCALE_TOP` (0.2), `SHIFT_INDIV_SCALE_BOTTOM` (0.8) | сила инд-скилла у потолка / у низа (ramp по дивизиону) | снапшот при train → retrain shift |
+| `SHIFT_INDIV_CLAMP_TOP` (0.75), `SHIFT_INDIV_CLAMP_BOTTOM` (2.0) | потолок инд-члена у верха / у низа | снапшот при train → retrain shift |
+| `SHIFT_CLAMP_TOP_GRID_REF` (20.0) | выходной кламп: верх = `grid_n_div/REF` дивизионов (20-тир→±1, 40-тир→±2), низ = ±3; режет +3 у высоких рангов из ЛЮБОГО источника (вкл. os_shift) | снапшот при train → retrain shift |
+| `SHIFT_DOMINANCE_GAIN` (6.0), `SHIFT_DOMINANCE_CAP` (3.0) | raw MVP-dominance лифт: `(mvp_dominance−0.5)·gain` clamp `cap`, max-бленд с local-членом, ограничен ТОЛЬКО выходным клампом (минуя мягкий индив-кламп) → явный раздатчик доезжает до рангового потолка | снапшот при train → retrain shift |
+| `SHIFT_PLACEMENT_FLOOR` (0.0) | гейт ПОЛОЖИТЕЛЬНОГО инд-лифта итоговым местом команды: фактор ∈[floor,1] (1.0 чемпион → floor последнее место); 0.0 = последнему месту никакого +, даже при отличной личной игре | снапшот при train → retrain shift |
 | `SMURF_STRONG_LOCAL_Z` (1.5) | порог сильного аутлайера для флага | read при infer → backfill anomalies |
+| `SMURF_MVP_DOMINANCE` (0.75) | порог raw MVP-dominance (среднее MVP-место по матч-логу) для смурф-флага `raw_mvp_dominance` | read при infer → backfill anomalies |
 | `STANDINGS_PROB_SHARPENING` (1.5) | разброс предсказанных мест | снапшот при train standings |
 
 ## Пересчёт на prod-хосте (в tmux)
@@ -24,7 +29,7 @@ LATEST=73   # max tournament id
 # 0) доставить код и пересобрать образ (exec гоняет то, что в образе!)
 $COMPOSE build analytics analytics-worker && $COMPOSE up -d analytics analytics-worker
 $COMPOSE exec analytics-worker python -c \
- "import src.services.ml.models.shift_v2 as m; print('OK' if hasattr(m,'INDIV_MOD_CLAMP') else 'OLD IMAGE')"
+ "import src.services.ml.models.shift_v2 as m; print('OK' if hasattr(m,'INDIV_MOD_SCALE_TOP') else 'OLD IMAGE')"
 
 # 1a) (нужно для инд-скилла и smurf-флага) материализовать Performance v2 по истории
 $COMPOSE exec analytics-worker python -m src.services.ml.cli backfill --from 1 --to $LATEST --models performance
@@ -42,7 +47,7 @@ curl -X POST https://<api-host>/v2/jobs -H "Authorization: Bearer <token>" \
 ```
 
 ## Тюнинг
-Сила инд-скилла / порог флага — через env (`SHIFT_INDIV_SCALE`/`SHIFT_INDIV_CLAMP`/`SMURF_STRONG_LOCAL_Z`), затем `train --models shift` (для весов) + backfill. `LINEAR_SHIFT_SCALE` — только пересчёт v1 (compute-джоб), без retrain.
+Сила/потолок инд-скилла (рангозависимо) / порог флага / выходной кламп — через env (`SHIFT_INDIV_SCALE_TOP|BOTTOM`/`SHIFT_INDIV_CLAMP_TOP|BOTTOM`/`SHIFT_CLAMP_TOP_GRID_REF`/`SMURF_STRONG_LOCAL_Z`), затем `train --models shift` (для весов) + backfill. `LINEAR_SHIFT_SCALE` — только пересчёт v1 (compute-джоб), без retrain.
 
 ## Верификация (read-only, с лаптопа)
 ```bash

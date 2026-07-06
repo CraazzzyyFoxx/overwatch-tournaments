@@ -15,6 +15,7 @@ rule_files:
   - /etc/prometheus/rules/gateway.yml
   - /etc/prometheus/rules/rabbitmq.yml
   - /etc/prometheus/rules/redis.yml
+  - /etc/prometheus/rules/infrastructure.yml
 
 scrape_configs:
   # --------------------------------------------------------------------------
@@ -76,6 +77,38 @@ scrape_configs:
         target_label: instance
         replacement: discord-worker
 
+  - job_name: app-svc
+    static_configs:
+      - targets: ["app-svc:9109"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: app-svc
+
+  - job_name: identity-svc
+    static_configs:
+      - targets: ["identity-svc:9107"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: identity-svc
+
+  - job_name: analytics-svc
+    static_configs:
+      - targets: ["analytics-svc:9108"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: analytics-svc
+
+  - job_name: analytics-worker
+    static_configs:
+      - targets: ["analytics-worker:9106"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: analytics-worker
+
   # --------------------------------------------------------------------------
   # Gateway (Go edge) — usage metrics on a dedicated internal port
   # --------------------------------------------------------------------------
@@ -86,6 +119,33 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: gateway
+
+  # --------------------------------------------------------------------------
+  # Infrastructure: host (node-exporter), containers (cAdvisor), PostgreSQL
+  # --------------------------------------------------------------------------
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: host
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: host
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: postgres
 
   # --------------------------------------------------------------------------
   # Observability stack internals

@@ -82,13 +82,3 @@ export type OAuthProviderName = "discord" | "twitch" | "battlenet";
 export interface OAuthProviderAvailability {
   provider: OAuthProviderName;
 }
-
-export interface OAuthConnection {
-  provider: OAuthProviderName;
-  provider_user_id: string;
-  email?: string | null;
-  username: string;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  raw_data?: Record<string, unknown>;
-}

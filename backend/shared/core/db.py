@@ -11,6 +11,16 @@ from sqlalchemy.pool import NullPool
 
 from shared.core import errors
 
+# Explicit public surface so ``from .db import *`` (in ``shared/core/__init__.py``)
+# exports only these names and never leaks re-imported SQLAlchemy/stdlib helpers.
+__all__ = [
+    "Base",
+    "TimeStampIntegerMixin",
+    "TimeStampUUIDMixin",
+    "DatabaseEngines",
+    "create_database",
+]
+
 
 class Base(DeclarativeBase):
     entity_name: str = "unknown"
@@ -58,9 +68,7 @@ class TimeStampIntegerMixin(Base):
     __abstract__ = True
 
     id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), sort_order=-999, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), sort_order=-999, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, sort_order=-998, onupdate=func.now()
     )
@@ -69,12 +77,8 @@ class TimeStampIntegerMixin(Base):
 class TimeStampUUIDMixin(Base):
     __abstract__ = True
 
-    id: Mapped[str] = mapped_column(
-        Uuid(), primary_key=True, server_default=func.gen_random_uuid(), index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), sort_order=-999, server_default=func.now()
-    )
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, server_default=func.gen_random_uuid(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), sort_order=-999, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, sort_order=-998, onupdate=func.now()
     )
@@ -182,9 +186,7 @@ def create_database(
     if pgbouncer and statement_timeout > 0:
         _register_statement_timeout(async_engine, statement_timeout)
 
-    async_session = async_sessionmaker(
-        async_engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 
     return DatabaseEngines(
         async_engine=async_engine,

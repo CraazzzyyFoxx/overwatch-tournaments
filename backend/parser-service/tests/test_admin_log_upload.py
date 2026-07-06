@@ -12,7 +12,6 @@ helper ``src/services/match_logs/admin_reads._validate_attached_encounter``.
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 import os
@@ -42,7 +41,7 @@ os.environ.setdefault("S3_SECRET_KEY", "test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
-from shared.models.log_processing import LogProcessingSource  # noqa: E402
+from shared.models.ingestion.log_processing import LogProcessingSource  # noqa: E402
 
 rpc_logs = importlib.import_module("src.rpc.logs")
 admin_reads = importlib.import_module("src.services.match_logs.admin_reads")
@@ -205,32 +204,24 @@ class AdminLogUploadRpcTests(IsolatedAsyncioTestCase):
 
         self.assertTrue(envelope["ok"], envelope)
         self.assertEqual({"items": [], "total": 0}, envelope["data"])
-        compiled_queries = [
-            str(query.compile(compile_kwargs={"literal_binds": True})) for query in captured_queries
-        ]
+        compiled_queries = [str(query.compile(compile_kwargs={"literal_binds": True})) for query in captured_queries]
         self.assertTrue(any("attached_encounter_id = 9" in query for query in compiled_queries))
 
 
 class ValidateAttachedEncounterTests(IsolatedAsyncioTestCase):
     async def test_rejects_encounter_from_another_tournament(self) -> None:
         session = SimpleNamespace(
-            execute=AsyncMock(
-                return_value=_Result(SimpleNamespace(id=9, tournament_id=99, name="A vs B"))
-            )
+            execute=AsyncMock(return_value=_Result(SimpleNamespace(id=9, tournament_id=99, name="A vs B")))
         )
 
         with self.assertRaises(HTTPException) as ctx:
-            await admin_reads._validate_attached_encounter(
-                session, tournament_id=42, encounter_id=9
-            )
+            await admin_reads._validate_attached_encounter(session, tournament_id=42, encounter_id=9)
 
         self.assertEqual(400, ctx.exception.status_code)
         self.assertIn("does not belong", ctx.exception.detail)
 
     async def test_returns_none_when_no_encounter_attached(self) -> None:
         session = SimpleNamespace(execute=AsyncMock())
-        result = await admin_reads._validate_attached_encounter(
-            session, tournament_id=42, encounter_id=None
-        )
+        result = await admin_reads._validate_attached_encounter(session, tournament_id=42, encounter_id=None)
         self.assertIsNone(result)
         session.execute.assert_not_awaited()

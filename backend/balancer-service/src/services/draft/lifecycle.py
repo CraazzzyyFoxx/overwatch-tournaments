@@ -23,14 +23,24 @@ from shared.core.enums import (
     DraftPickStatus,
     DraftPlayerStatus,
     DraftRole,
-    DraftRoundRule,
     DraftStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole, BalancerRegistrationRoleHero
-from shared.models.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
-
-from src.services.draft.snake_order import generate_pick_order
+from shared.models.balancer.draft import (
+    DraftPick,
+    DraftPlayer,
+    DraftPlayerRole,
+    DraftPlayerRoleHero,
+    DraftSession,
+    DraftTeam,
+)
+from shared.models.registration.registration import (
+    BalancerRegistration,
+    BalancerRegistrationRole,
+    BalancerRegistrationRoleHero,
+)
+from shared.models.tenancy.workspace import WorkspaceMember
+from shared.repository.workspace import get_or_create_workspace_member
 
 _ACTIVE_STATUSES = (
     DraftStatus.SETUP.value,
@@ -53,7 +63,9 @@ class CaptainSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
-    anomaly_flags: dict = field(default_factory=dict)
+    role_ranks: dict = field(default_factory=dict)
+    role_top_heroes: dict = field(default_factory=dict)
+    additional_info: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -66,11 +78,65 @@ class PlayerSeed:
     is_flex: bool = False
     division_number: int | None = None
     rank_value: int | None = None
-    anomaly_flags: dict = field(default_factory=dict)
+    role_ranks: dict = field(default_factory=dict)
+    role_top_heroes: dict = field(default_factory=dict)
+    additional_info: dict = field(default_factory=dict)
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
     return ApiHTTPException(status_code=status_code, detail=[ApiExc(code=code, msg=msg)])
+
+
+def _build_hero_rows(entries: list[dict] | None) -> list[DraftPlayerRoleHero]:
+    """Top-hero rows for a role, from ``{hero_id, slug, image_path}`` seed dicts.
+
+    Only entries carrying a resolved ``hero_id`` become rows (the child table has
+    a real FK to ``overwatch.hero``); slug-only manual entries are skipped.
+    """
+    rows: list[DraftPlayerRoleHero] = []
+    for priority, entry in enumerate(entries or []):
+        hero_id = entry.get("hero_id") if isinstance(entry, dict) else None
+        if hero_id is not None:
+            rows.append(DraftPlayerRoleHero(hero_id=hero_id, priority=priority))
+    return rows
+
+
+def _build_role_rows(
+    primary_role: DraftRole | str,
+    secondary_roles: list[DraftRole] | None,
+    role_ranks: dict | None,
+    role_top_heroes: dict | None,
+) -> list[DraftPlayerRole]:
+    """Normalized ``DraftPlayerRole`` rows for a seeded player/captain.
+
+    The role set is the UNION of the primary role, the declared secondaries, and
+    any roles that only carry a rank or top-heroes. ``is_secondary`` reflects
+    membership in ``secondary_roles`` (so a captain with a multi-role rank
+    catalogue but no declared secondaries yields ``secondary_roles_json`` -> None,
+    exactly as the old JSON writer did). ``rank_value`` is taken per role from
+    ``role_ranks`` (absent -> NULL).
+    """
+    role_ranks = role_ranks or {}
+    role_top_heroes = role_top_heroes or {}
+    primary_value = primary_role.value if isinstance(primary_role, DraftRole) else str(primary_role)
+    secondary_values = [r.value if isinstance(r, DraftRole) else str(r) for r in (secondary_roles or [])]
+    secondary_set = set(secondary_values)
+
+    ordered: list[str] = [primary_value]
+    for value in (*secondary_values, *role_ranks.keys(), *role_top_heroes.keys()):
+        if value not in ordered:
+            ordered.append(value)
+
+    return [
+        DraftPlayerRole(
+            role=role,
+            rank_value=role_ranks.get(role),
+            is_secondary=role in secondary_set,
+            priority=priority,
+            hero_entries=_build_hero_rows(role_top_heroes.get(role)),
+        )
+        for priority, role in enumerate(ordered)
+    ]
 
 
 async def assert_no_active_draft(session: AsyncSession, tournament_id: int) -> None:
@@ -158,11 +224,27 @@ async def seed(
     await session.flush()
 
     ordered_captains = sorted(captains, key=lambda c: c.draft_position)
+
+    # Resolve domain player ids -> workspace_member rows for this session's
+    # workspace (dbarch03: draft identity is anchored on workspace_member). Done
+    # once up front so every team/player row reuses the same member id.
+    player_ids = {c.user_id for c in ordered_captains if c.user_id is not None}
+    player_ids |= {p.user_id for p in players if p.user_id is not None}
+    member_by_player: dict[int, int] = {}
+    for player_id in player_ids:
+        member = await get_or_create_workspace_member(
+            session, workspace_id=draft_session.workspace_id, player_id=player_id
+        )
+        member_by_player[player_id] = member.id
+
+    def _member_id(user_id: int | None) -> int | None:
+        return member_by_player.get(user_id) if user_id is not None else None
+
     team_by_position: dict[int, DraftTeam] = {}
     for cap in ordered_captains:
         team = DraftTeam(
             session_id=draft_session.id,
-            captain_user_id=cap.user_id,
+            captain_workspace_member_id=_member_id(cap.user_id),
             captain_auth_user_id=cap.auth_user_id,
             name=cap.name,
             draft_position=cap.draft_position,
@@ -174,13 +256,14 @@ async def seed(
     # Captains become PICKED players already on their roster.
     for cap in ordered_captains:
         team = team_by_position[cap.draft_position]
+        # Real role from the pool when available; TANK placeholder otherwise.
+        cap_primary = cap.primary_role or DraftRole.TANK
         session.add(
             DraftPlayer(
                 session_id=draft_session.id,
-                user_id=cap.user_id,
+                workspace_member_id=_member_id(cap.user_id),
                 battle_tag=cap.battle_tag,
-                # Real role from the pool when available; TANK placeholder otherwise.
-                primary_role=(cap.primary_role or DraftRole.TANK).value,
+                primary_role=cap_primary.value,
                 sub_role=cap.sub_role,
                 is_flex=cap.is_flex,
                 division_number=cap.division_number,
@@ -188,7 +271,8 @@ async def seed(
                 is_captain=True,
                 status=DraftPlayerStatus.PICKED.value,
                 drafted_by_team_id=team.id,
-                anomaly_flags=cap.anomaly_flags,
+                additional_info=cap.additional_info,
+                roles=_build_role_rows(cap_primary, [], cap.role_ranks, cap.role_top_heroes),
             )
         )
     # Pool players.
@@ -196,16 +280,16 @@ async def seed(
         session.add(
             DraftPlayer(
                 session_id=draft_session.id,
-                user_id=p.user_id,
+                workspace_member_id=_member_id(p.user_id),
                 battle_tag=p.battle_tag,
                 primary_role=p.primary_role.value,
-                secondary_roles_json=[r.value for r in p.secondary_roles] or None,
                 sub_role=p.sub_role,
                 is_flex=p.is_flex,
                 division_number=p.division_number,
                 rank_value=p.rank_value,
                 status=DraftPlayerStatus.AVAILABLE.value,
-                anomaly_flags=p.anomaly_flags,
+                additional_info=p.additional_info,
+                roles=_build_role_rows(p.primary_role, p.secondary_roles, p.role_ranks, p.role_top_heroes),
             )
         )
     await session.flush()
@@ -237,7 +321,9 @@ async def seed(
             elif rule == "weakest_first":
                 round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), t.draft_position))
             elif rule == "strongest_first":
-                round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), -t.draft_position), reverse=True)
+                round_seats = sorted(
+                    seats, key=lambda t: (team_captain_ranks.get(t.id, -1), -t.draft_position), reverse=True
+                )
             else:
                 # Dynamic rules (team_avg_asc, team_avg_desc) default to linear order at seeding time
                 round_seats = seats
@@ -277,6 +363,31 @@ def _to_draft_role(role: str | None) -> DraftRole | None:
     return None
 
 
+def _registration_auth_user_id(reg: BalancerRegistration) -> int | None:
+    """Resolve the registering account's auth identity for a pool registration.
+
+    ``BalancerRegistration`` no longer carries ``auth_user_id`` directly — identity
+    is anchored via ``workspace_member`` (registrations without a member — e.g.
+    admin-created manual rows — resolve to ``None``, same as before this column
+    existed for them).
+    """
+    member = reg.workspace_member
+    if member is None or member.player is None:
+        return None
+    return member.player.auth_user_id
+
+
+def _registration_player_id(reg: BalancerRegistration) -> int | None:
+    """The registration's domain player id (players.user.id) via its member.
+
+    ``workspace_member_id`` is the row's only identity anchor (dbarch02 dropped
+    ``user_id``); ``load_pool`` eager-loads the relationship, so this never
+    lazy-loads.
+    """
+    member = reg.workspace_member
+    return member.player_id if member is not None else None
+
+
 def _map_registration(reg: BalancerRegistration) -> dict:
     """Derive draft role/rank fields from a tournament registration's roles.
 
@@ -299,26 +410,35 @@ def _map_registration(reg: BalancerRegistration) -> dict:
     rank_value = (primary_entry.rank_value if primary_entry else None) or (max(ranks) if ranks else None)
     sub_role = primary_entry.subrole if primary_entry else None
 
-    # Save role-specific ranks/divisions inside metadata
-    roles_ranks = {}
+    # Per-role rank catalogue and top heroes, keyed by role.value, promoted to
+    # dedicated typed fields (no more burying them in an "anomaly_flags" bag).
+    role_ranks: dict[str, int] = {}
+    role_top_heroes: dict[str, list[dict]] = {}
     for r in active:
         role = _to_draft_role(r.role)
-        if role is not None:
-            roles_ranks[role.value] = {
-                "rank_value": r.rank_value,
-                "division_number": None,
-                "top_heroes": [
-                    {
-                        "slug": getattr(he.hero, "slug", ""),
-                        "image_path": getattr(he.hero, "image_path", None)
-                    }
-                    for he in getattr(r, "hero_entries", [])
-                    if he and getattr(he, "hero", None) is not None
-                ] if isinstance(getattr(r, "hero_entries", None), (list, set)) or (
-                    getattr(r, "hero_entries", None) is not None
-                    and not hasattr(getattr(r, "hero_entries", None), "_mock_return_value")
-                ) else [],
-            }
+        if role is None:
+            continue
+        if r.rank_value is not None:
+            role_ranks[role.value] = r.rank_value
+        hero_entries = getattr(r, "hero_entries", None)
+        heroes = (
+            [
+                {
+                    # hero_id is what the normalized draft_player_role_hero row needs
+                    # (real FK); slug/image_path are kept for the read-side snapshot.
+                    "hero_id": getattr(he.hero, "id", None),
+                    "slug": getattr(he.hero, "slug", ""),
+                    "image_path": getattr(he.hero, "image_path", None),
+                }
+                for he in (hero_entries or [])
+                if he and getattr(he, "hero", None) is not None
+            ]
+            if isinstance(hero_entries, (list, set))
+            or (hero_entries is not None and not hasattr(hero_entries, "_mock_return_value"))
+            else []
+        )
+        if heroes:
+            role_top_heroes[role.value] = heroes
 
     return {
         "primary_role": primary,
@@ -327,10 +447,9 @@ def _map_registration(reg: BalancerRegistration) -> dict:
         "rank_value": rank_value,
         "division_number": None,
         "is_flex": bool(reg.is_flex_computed),
-        "anomaly_flags": {
-            "roles_ranks": roles_ranks,
-            "notes": reg.notes,
-        },
+        "role_ranks": role_ranks,
+        "role_top_heroes": role_top_heroes,
+        "additional_info": {"notes": reg.notes} if reg.notes else {},
     }
 
 
@@ -353,7 +472,10 @@ async def load_pool(session: AsyncSession, tournament_id: int) -> list[BalancerR
             .options(
                 selectinload(BalancerRegistration.roles)
                 .selectinload(BalancerRegistrationRole.hero_entries)
-                .selectinload(BalancerRegistrationRoleHero.hero)
+                .selectinload(BalancerRegistrationRoleHero.hero),
+                # Needed by _registration_player_id / _registration_auth_user_id
+                # (the member is the registration's only identity anchor).
+                selectinload(BalancerRegistration.workspace_member).selectinload(WorkspaceMember.player),
             )
             .order_by(BalancerRegistration.battle_tag_normalized.asc())
         )
@@ -436,15 +558,17 @@ async def seed_from_pool(
             CaptainSeed(
                 name=team_names.get(rid) or reg.battle_tag or reg.display_name or f"Team {position}",
                 draft_position=position,
-                user_id=reg.user_id,
-                auth_user_id=reg.auth_user_id,
+                user_id=_registration_player_id(reg),
+                auth_user_id=_registration_auth_user_id(reg),
                 battle_tag=reg.battle_tag,
                 primary_role=mapped["primary_role"],
                 sub_role=mapped["sub_role"],
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
-                anomaly_flags=mapped.get("anomaly_flags") or {},
+                role_ranks=mapped.get("role_ranks") or {},
+                role_top_heroes=mapped.get("role_top_heroes") or {},
+                additional_info=mapped.get("additional_info") or {},
             )
         )
 
@@ -457,14 +581,16 @@ async def seed_from_pool(
         players.append(
             PlayerSeed(
                 primary_role=mapped["primary_role"],
-                user_id=reg.user_id,
+                user_id=_registration_player_id(reg),
                 battle_tag=reg.battle_tag,
                 secondary_roles=mapped["secondary_roles"],
                 sub_role=mapped["sub_role"],
                 is_flex=mapped["is_flex"],
                 division_number=mapped["division_number"],
                 rank_value=mapped["rank_value"],
-                anomaly_flags=mapped.get("anomaly_flags") or {},
+                role_ranks=mapped.get("role_ranks") or {},
+                role_top_heroes=mapped.get("role_top_heroes") or {},
+                additional_info=mapped.get("additional_info") or {},
             )
         )
 
@@ -554,11 +680,13 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
         sa.select(DraftPick)
         .where(
             DraftPick.session_id == draft_session.id,
-            DraftPick.status.in_([
-                DraftPickStatus.COMPLETED.value,
-                DraftPickStatus.AUTOPICKED.value,
-                DraftPickStatus.SKIPPED.value,
-            ]),
+            DraftPick.status.in_(
+                [
+                    DraftPickStatus.COMPLETED.value,
+                    DraftPickStatus.AUTOPICKED.value,
+                    DraftPickStatus.SKIPPED.value,
+                ]
+            ),
         )
         .order_by(DraftPick.overall_no.desc())
         .limit(1)
@@ -594,7 +722,7 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
 
     for pick in picks_to_revert:
         pick.picked_player_id = None
-        pick.picked_by_user_id = None
+        pick.picked_by_workspace_member_id = None
         pick.is_autopick = False
         pick.is_admin_override = False
         pick.target_role = None
@@ -620,4 +748,3 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
     await session.flush()
     await session.refresh(draft_session)
     return draft_session
-

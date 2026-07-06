@@ -9,8 +9,8 @@ from sqlalchemy.orm import selectinload
 
 from shared.division_grid import DivisionGrid, DivisionTier, load_runtime_grid
 from shared.models.division_grid import DivisionGridMapping, DivisionGridVersion
+from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
-from shared.models.workspace import Workspace
 
 
 class DivisionGridNormalizationError(RuntimeError):
@@ -41,21 +41,15 @@ class DivisionGridNormalizer:
 
         source_grid = self.source_grids_by_version_id.get(source_version_id)
         if source_grid is None:
-            raise DivisionGridNormalizationError(
-                f"Normalization source version {source_version_id} is not loaded"
-            )
+            raise DivisionGridNormalizationError(f"Normalization source version {source_version_id} is not loaded")
 
         source_tier = source_grid.resolve_division(rank)
         if source_tier.id is None:
-            raise DivisionGridNormalizationError(
-                f"Source tier id is missing for version {source_version_id}"
-            )
+            raise DivisionGridNormalizationError(f"Source tier id is missing for version {source_version_id}")
 
         target_tier = self.primary_target_by_source_tier_id.get(source_tier.id)
         if target_tier is None:
-            raise DivisionGridNormalizationError(
-                f"Primary mapping is missing for source tier {source_tier.id}"
-            )
+            raise DivisionGridNormalizationError(f"Primary mapping is missing for source tier {source_tier.id}")
         return target_tier
 
     def normalize_division_number(
@@ -75,21 +69,15 @@ class DivisionGridNormalizer:
 
         source_grid = self.source_grids_by_version_id.get(source_version_id)
         if source_grid is None:
-            raise DivisionGridNormalizationError(
-                f"Normalization source version {source_version_id} is not loaded"
-            )
+            raise DivisionGridNormalizationError(f"Normalization source version {source_version_id} is not loaded")
 
         source_tier = source_grid.resolve_division(rank)
         if source_tier.id is None:
-            raise DivisionGridNormalizationError(
-                f"Source tier id is missing for version {source_version_id}"
-            )
+            raise DivisionGridNormalizationError(f"Source tier id is missing for version {source_version_id}")
 
         weighted_targets = self.weighted_targets_by_source_tier_id.get(source_tier.id)
         if not weighted_targets:
-            raise DivisionGridNormalizationError(
-                f"Weighted mapping is missing for source tier {source_tier.id}"
-            )
+            raise DivisionGridNormalizationError(f"Weighted mapping is missing for source tier {source_tier.id}")
         return weighted_targets
 
 
@@ -101,9 +89,7 @@ async def get_workspace_default_division_grid_version_id(
         sa.select(Workspace.default_division_grid_version_id).where(Workspace.id == workspace_id)
     )
     if version_id is None:
-        raise DivisionGridNormalizationError(
-            f"Workspace {workspace_id} does not have a default division grid version"
-        )
+        raise DivisionGridNormalizationError(f"Workspace {workspace_id} does not have a default division grid version")
     return int(version_id)
 
 
@@ -125,9 +111,7 @@ async def build_division_grid_normalizer(
         .where(DivisionGridVersion.id == resolved_target_version_id)
     )
     if target_version is None:
-        raise DivisionGridNormalizationError(
-            f"Target division grid version {resolved_target_version_id} was not found"
-        )
+        raise DivisionGridNormalizationError(f"Target division grid version {resolved_target_version_id} was not found")
 
     target_grid = load_runtime_grid(target_version)
     target_tiers_by_id = {tier.id: tier for tier in target_grid.tiers if tier.id is not None}
@@ -140,7 +124,9 @@ async def build_division_grid_normalizer(
                 Tournament.division_grid_version_id.is_not(None),
             )
         )
-        resolved_source_version_ids = {int(version_id) for version_id in result.scalars().all() if version_id is not None}
+        resolved_source_version_ids = {
+            int(version_id) for version_id in result.scalars().all() if version_id is not None
+        }
 
     resolved_source_version_ids.add(resolved_target_version_id)
 
@@ -154,19 +140,12 @@ async def build_division_grid_normalizer(
 
     missing_versions = resolved_source_version_ids - set(source_versions_by_id.keys())
     if missing_versions:
-        raise DivisionGridNormalizationError(
-            f"Division grid versions are missing: {sorted(missing_versions)}"
-        )
+        raise DivisionGridNormalizationError(f"Division grid versions are missing: {sorted(missing_versions)}")
 
-    source_grids_by_version_id = {
-        version.id: load_runtime_grid(version)
-        for version in source_versions
-    }
+    source_grids_by_version_id = {version.id: load_runtime_grid(version) for version in source_versions}
 
     foreign_source_version_ids = [
-        version_id
-        for version_id in resolved_source_version_ids
-        if version_id != resolved_target_version_id
+        version_id for version_id in resolved_source_version_ids if version_id != resolved_target_version_id
     ]
 
     mappings_result = await session.execute(
@@ -219,9 +198,7 @@ async def build_division_grid_normalizer(
         source_grid = source_grids_by_version_id[source_version_id]
         for source_tier in source_grid.tiers:
             if source_tier.id is None:
-                raise DivisionGridNormalizationError(
-                    f"Source tier id is missing for version {source_version_id}"
-                )
+                raise DivisionGridNormalizationError(f"Source tier id is missing for version {source_version_id}")
             weighted_targets = tuple(rules_by_source_tier_id.get(source_tier.id, []))
             if require_complete and not weighted_targets:
                 raise DivisionGridNormalizationError(

@@ -1,16 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.repository import GamemodeRepository
-
 from src import models, schemas
 from src.core import errors, pagination
 
 _gamemode_repo = GamemodeRepository()
 
 
-async def to_pydantic(
-    session: AsyncSession, gamemode: models.Gamemode, entities: list[str]
-) -> schemas.GamemodeRead:
+async def to_pydantic(session: AsyncSession, gamemode: models.Gamemode, entities: list[str]) -> schemas.GamemodeRead:
     """
     Converts a Gamemode model instance to a Pydantic schema (GamemodeRead).
 
@@ -31,9 +28,7 @@ async def to_pydantic(
     )
 
 
-async def get(
-    session: AsyncSession, gamemode_id: int, entities: list[str]
-) -> schemas.GamemodeRead:
+async def get(session: AsyncSession, gamemode_id: int, entities: list[str]) -> schemas.GamemodeRead:
     """
     Retrieves a gamemode by its ID and converts it to a Pydantic schema.
 
@@ -81,15 +76,10 @@ async def get_all(
     Returns:
         pagination.Paginated[schemas.GamemodeRead]: A paginated list of Pydantic schemas representing the gamemodes.
     """
-    gamemodes, total = await _gamemode_repo.all(
-        session, params, with_maps="maps" in params.entities
-    )
+    gamemodes, total = await _gamemode_repo.all(session, params, with_maps="maps" in params.entities)
     return pagination.Paginated(
         total=total,
         per_page=params.per_page,
         page=params.page,
-        results=[
-            await to_pydantic(session, gamemode, params.entities)
-            for gamemode in gamemodes
-        ],
+        results=[await to_pydantic(session, gamemode, params.entities) for gamemode in gamemodes],
     )

@@ -140,13 +140,9 @@ def test_coerce_checkbox_uses_boolean_defaults_and_value_map():
     assert catalog.coerce_custom_field_value(field_def, "да").value is True
     assert catalog.coerce_custom_field_value(field_def, "no").value is False
     # Custom boolean mapping wins.
-    result = catalog.coerce_custom_field_value(
-        field_def, "oui", value_mapping={"booleans": {"oui": True}}
-    )
+    result = catalog.coerce_custom_field_value(field_def, "oui", value_mapping={"booleans": {"oui": True}})
     assert result.value is True
-    overridden = catalog.coerce_custom_field_value(
-        field_def, "yes", value_mapping={"booleans": {"yes": False}}
-    )
+    overridden = catalog.coerce_custom_field_value(field_def, "yes", value_mapping={"booleans": {"yes": False}})
     assert overridden.value is False
 
 
@@ -255,10 +251,26 @@ def test_validate_skips_column_checks_without_headers():
 def test_classify_row_disposition():
     known_keys = {"abc#1"}
     known_tags = {"def#2"}
-    assert catalog.classify_row_disposition(None, None, known_source_keys=known_keys, known_battle_tag_keys=known_tags) == "skip"
-    assert catalog.classify_row_disposition("abc#1", None, known_source_keys=known_keys, known_battle_tag_keys=known_tags) == "update"
-    assert catalog.classify_row_disposition("new#9", "def#2", known_source_keys=known_keys, known_battle_tag_keys=known_tags) == "update"
-    assert catalog.classify_row_disposition("new#9", "zzz#3", known_source_keys=known_keys, known_battle_tag_keys=known_tags) == "create"
+    assert (
+        catalog.classify_row_disposition(None, None, known_source_keys=known_keys, known_battle_tag_keys=known_tags)
+        == "skip"
+    )
+    assert (
+        catalog.classify_row_disposition("abc#1", None, known_source_keys=known_keys, known_battle_tag_keys=known_tags)
+        == "update"
+    )
+    assert (
+        catalog.classify_row_disposition(
+            "new#9", "def#2", known_source_keys=known_keys, known_battle_tag_keys=known_tags
+        )
+        == "update"
+    )
+    assert (
+        catalog.classify_row_disposition(
+            "new#9", "zzz#3", known_source_keys=known_keys, known_battle_tag_keys=known_tags
+        )
+        == "create"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -627,7 +639,10 @@ _ROLE_SUBROLE_MAP = {
         "хитскан дпс": {"role": "dps", "subrole": "hitscan"},
         "мейн хил": {"role": "support", "subrole": "main_heal"},
         "лайт хил (мерси, кирико)": {"role": "support", "subrole": "light_heal"},
-        "проджектайл дд (генджи, фара, ханзо, торбьерн, джанкрет, эхо, мей, рипер, сомбра, симметра, трейсер)": {"role": "dps", "subrole": "projectile"},
+        "проджектайл дд (генджи, фара, ханзо, торбьерн, джанкрет, эхо, мей, рипер, сомбра, симметра, трейсер)": {
+            "role": "dps",
+            "subrole": "projectile",
+        },
         "хитскан дд (маккри, вдова, солдат76, эш)": {"role": "dps", "subrole": "hitscan"},
         "support": {"role": "support", "subrole": None},
         "dps": {"role": "dps", "subrole": None},

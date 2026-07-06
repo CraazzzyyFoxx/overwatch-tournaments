@@ -15,6 +15,15 @@ async def get(session: AsyncSession, id: int) -> models.Gamemode | None:
     return result.scalar_one_or_none()
 
 
+async def get_existing_slugs(session: AsyncSession, slugs: list[str]) -> set[str]:
+    """Slugs among ``slugs`` that already exist, in one query (batch counterpart
+    of the per-item ``get_by_slug`` probes in ``initial_create``)."""
+    if not slugs:
+        return set()
+    result = await session.execute(sa.select(models.Gamemode.slug).where(models.Gamemode.slug.in_(list(set(slugs)))))
+    return set(result.scalars().all())
+
+
 async def get_by_slug(session: AsyncSession, slug: str) -> models.Gamemode | None:
     query = sa.select(
         models.Gamemode,

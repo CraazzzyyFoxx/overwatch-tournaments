@@ -20,10 +20,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums
-from shared.models.encounter import Encounter
-from shared.models.encounter_link import EncounterLink
-from shared.models.stage import Stage
-from shared.models.team import Team
+from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_link import EncounterLink
+from shared.models.tournament.stage import Stage
+from shared.models.tournament.team import Team
 from shared.services.bracket.types import AdvancementEdge
 from shared.services.encounter_naming import build_encounter_name_from_ids
 
@@ -51,16 +51,8 @@ async def persist_advancement_edges(
         if source_id is None or target_id is None:
             continue
 
-        role = (
-            enums.EncounterLinkRole.WINNER
-            if edge.role == "winner"
-            else enums.EncounterLinkRole.LOSER
-        )
-        slot = (
-            enums.EncounterLinkSlot.HOME
-            if edge.target_slot == "home"
-            else enums.EncounterLinkSlot.AWAY
-        )
+        role = enums.EncounterLinkRole.WINNER if edge.role == "winner" else enums.EncounterLinkRole.LOSER
+        slot = enums.EncounterLinkSlot.HOME if edge.target_slot == "home" else enums.EncounterLinkSlot.AWAY
         link = EncounterLink(
             source_encounter_id=source_id,
             target_encounter_id=target_id,
@@ -97,25 +89,11 @@ async def advance_winner(
     if encounter.home_score == encounter.away_score:
         return []
 
-    winner_id = (
-        encounter.home_team_id
-        if encounter.home_score > encounter.away_score
-        else encounter.away_team_id
-    )
-    loser_id = (
-        encounter.away_team_id
-        if encounter.home_score > encounter.away_score
-        else encounter.home_team_id
-    )
+    winner_id = encounter.home_team_id if encounter.home_score > encounter.away_score else encounter.away_team_id
+    loser_id = encounter.away_team_id if encounter.home_score > encounter.away_score else encounter.home_team_id
 
     links = (
-        (
-            await session.execute(
-                sa.select(EncounterLink).where(
-                    EncounterLink.source_encounter_id == encounter.id
-                )
-            )
-        )
+        (await session.execute(sa.select(EncounterLink).where(EncounterLink.source_encounter_id == encounter.id)))
         .scalars()
         .all()
     )
@@ -238,17 +216,11 @@ async def _build_encounter_name_for_ids(
     home_team_id: int | None,
     away_team_id: int | None,
 ) -> str:
-    team_ids = {
-        team_id
-        for team_id in (home_team_id, away_team_id)
-        if team_id is not None
-    }
+    team_ids = {team_id for team_id in (home_team_id, away_team_id) if team_id is not None}
     if not team_ids:
         return build_encounter_name_from_ids(home_team_id, away_team_id, {})
 
-    result = await session.execute(
-        sa.select(Team.id, Team.name).where(Team.id.in_(team_ids))
-    )
+    result = await session.execute(sa.select(Team.id, Team.name).where(Team.id.in_(team_ids)))
     team_names_by_id = dict(result.all())
     return build_encounter_name_from_ids(
         home_team_id,

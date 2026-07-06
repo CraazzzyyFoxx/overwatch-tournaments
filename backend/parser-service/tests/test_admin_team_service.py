@@ -32,7 +32,6 @@ class AdminTeamServiceTests(IsolatedAsyncioTestCase):
     def test_team_child_relationships_rely_on_database_delete_cascades(self) -> None:
         self.assertTrue(admin_team_service.models.Team.players.property.passive_deletes)
         self.assertTrue(admin_team_service.models.Team.standings.property.passive_deletes)
-        self.assertTrue(admin_team_service.models.Team.challonge.property.passive_deletes)
 
     async def test_create_team_defaults_balancer_name_to_name_when_omitted(self) -> None:
         tournament_result = Mock()
@@ -86,7 +85,10 @@ class AdminTeamServiceTests(IsolatedAsyncioTestCase):
             name="Test 1",
             balancer_name="Test 1",
             captain_id=1,
-            players=[SimpleNamespace(user_id=1), SimpleNamespace(user_id=2)],
+            players=[
+                SimpleNamespace(workspace_member=SimpleNamespace(player_id=1)),
+                SimpleNamespace(workspace_member=SimpleNamespace(player_id=2)),
+            ],
         )
         team_result = Mock()
         team_result.scalar_one_or_none.return_value = team

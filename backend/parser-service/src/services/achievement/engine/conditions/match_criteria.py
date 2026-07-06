@@ -19,7 +19,6 @@ from ..context import EvalContext
 from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
-
 # Fields on Match (per-map)
 MATCH_FIELD_MAP = {
     "match_time": models.Match.time,
@@ -67,13 +66,12 @@ async def _execute_encounter_field(
         sa.select(
             models.Match.encounter_id,
             sa.func.min(models.Match.id).label("match_id"),
-        )
-        .group_by(models.Match.encounter_id)
+        ).group_by(models.Match.encounter_id)
     ).subquery("first_match")
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             first_match.c.match_id,
         )
@@ -87,10 +85,17 @@ async def _execute_encounter_field(
                 models.Team.id == models.Encounter.away_team_id,
             ),
         )
-        .join(models.Player, sa.and_(
-            models.Player.team_id == models.Team.id,
-            models.Player.tournament_id == models.Encounter.tournament_id,
-        ))
+        .join(
+            models.Player,
+            sa.and_(
+                models.Player.team_id == models.Team.id,
+                models.Player.tournament_id == models.Encounter.tournament_id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             op_fn(column, value),
             models.Tournament.workspace_id == context.workspace_id,
@@ -117,7 +122,7 @@ async def _execute_match_field(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             models.Match.id.label("match_id"),
         )
@@ -131,10 +136,17 @@ async def _execute_match_field(
                 models.Team.id == models.Match.away_team_id,
             ),
         )
-        .join(models.Player, sa.and_(
-            models.Player.team_id == models.Team.id,
-            models.Player.tournament_id == models.Encounter.tournament_id,
-        ))
+        .join(
+            models.Player,
+            sa.and_(
+                models.Player.team_id == models.Team.id,
+                models.Player.tournament_id == models.Encounter.tournament_id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             op_fn(column, value),
             models.Tournament.workspace_id == context.workspace_id,

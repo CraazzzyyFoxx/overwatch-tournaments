@@ -344,6 +344,36 @@ ANALYTICS_INFER_DLQ = RabbitQueue(
 
 
 # ============================================================================
+# Balancer domain events (balancer worker -> analytics worker)
+# ============================================================================
+# Emitted via the transactional outbox when a balance is exported. Topic
+# exchange mirrors ``tournament.events``: a single durable queue bound to the
+# ``balancer.balance.exported`` routing key feeds the analytics snapshot writer,
+# which owns analytics.balance_snapshot + balance_player_snapshot.
+
+BALANCER_EVENTS_EXCHANGE = RabbitExchange(
+    "balancer.events",
+    type=ExchangeType.TOPIC,
+    durable=True,
+)
+
+ANALYTICS_BALANCE_SNAPSHOT_QUEUE = RabbitQueue(
+    "analytics_balance_snapshot",
+    durable=True,
+    routing_key="balancer.balance.exported",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "analytics_balance_snapshot.dlq",
+        "x-message-ttl": 600000,  # 10 minutes
+    },
+)
+
+ANALYTICS_BALANCE_SNAPSHOT_DLQ = RabbitQueue(
+    "analytics_balance_snapshot.dlq",
+    durable=True,
+)
+
+# ============================================================================
 # Achievement Evaluate Queue
 # ============================================================================
 

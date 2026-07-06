@@ -2,18 +2,9 @@ groups:
   - name: services-recording
     interval: 30s
     rules:
-      - record: service:http_requests:rate5m
-        expr: sum by (job, instance) (rate(http_requests_total[5m]))
-
-      - record: service:http_requests_5xx:rate5m
-        expr: sum by (job, instance) (rate(http_requests_total{status_code=~"5.."}[5m]))
-
-      - record: service:http_error_ratio_5m
-        expr: service:http_requests_5xx:rate5m / clamp_min(service:http_requests:rate5m, 0.001)
-
-      - record: service:http_latency_p95_5m
-        expr: histogram_quantile(0.95, sum by (job, instance, le) (rate(http_request_duration_seconds_bucket[5m])))
-
+      # (The former service:http_* recording rules were removed: the FastAPI HTTP
+      # services that emitted http_requests_total are decommissioned; HTTP-level
+      # metrics now come from the gateway — see gateway.yml.)
       - record: worker:messages_processed:rate5m
         expr: sum by (job, instance, queue, handler, status) (rate(worker_messages_processed_total[5m]))
 
@@ -41,24 +32,6 @@ groups:
   - name: services-alerts
     interval: 30s
     rules:
-      - alert: FastAPI5xxRateHigh
-        expr: service:http_error_ratio_5m{job=~"app-service|auth-service|parser-service|balancer-service"} > 0.05
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "HTTP 5xx ratio is elevated for {{ $labels.job }}"
-          description: "Service {{ $labels.job }} has a 5xx ratio above 5% for 5 minutes."
-
-      - alert: FastAPILatencyP95High
-        expr: service:http_latency_p95_5m{job=~"app-service|auth-service|parser-service|balancer-service"} > 1.5
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "p95 latency is high for {{ $labels.job }}"
-          description: "Service {{ $labels.job }} has p95 latency above 1.5s for 10 minutes."
-
       - alert: WorkerFailureRateHigh
         expr: worker:failure_ratio_5m > 0.2
         for: 5m

@@ -49,15 +49,11 @@ async def refresh_hero_global_stats(session: Any) -> bool:
     # text() bind-parser and ``to_regclass`` returns NULL (not an error) when the
     # view has not been created yet.
     await session.execute(sa.text("SET LOCAL statement_timeout = 0"))
-    got_lock = (
-        await session.execute(sa.text(f"SELECT pg_try_advisory_xact_lock({_ADVISORY_LOCK_KEY})"))
-    ).scalar()
+    got_lock = (await session.execute(sa.text(f"SELECT pg_try_advisory_xact_lock({_ADVISORY_LOCK_KEY})"))).scalar()
     if not got_lock:
         return False
     populated = (
-        await session.execute(
-            sa.text(f"SELECT relispopulated FROM pg_class WHERE oid = to_regclass('{_MV_QUALNAME}')")
-        )
+        await session.execute(sa.text(f"SELECT relispopulated FROM pg_class WHERE oid = to_regclass('{_MV_QUALNAME}')"))
     ).scalar()
     concurrently = "CONCURRENTLY " if populated else ""
     await session.execute(sa.text(f"REFRESH MATERIALIZED VIEW {concurrently}{_MV_QUALNAME}"))

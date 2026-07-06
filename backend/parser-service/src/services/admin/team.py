@@ -1,12 +1,13 @@
 """Admin service layer for team and player CRUD operations"""
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
-from shared.domain.player_sub_roles import normalize_sub_role
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.player_sub_roles import normalize_sub_role
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.schemas.admin import team as admin_schemas
 
@@ -33,6 +34,27 @@ def _prepare_player_update_data(
     return update_data
 
 
+async def _resolve_workspace_member_id(
+    session: AsyncSession,
+    *,
+    tournament_id: int,
+    player_id: int,
+) -> int:
+    """Resolve the ``workspace_member`` anchor for a roster player being created.
+
+    The workspace is derived from the player's tournament (``tournament.workspace_id``);
+    the member row is created idempotently if one does not already exist for this
+    (workspace, player) pair.
+    """
+    result = await session.execute(select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id))
+    workspace_id = result.scalar_one_or_none()
+    if workspace_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
+
+    member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+    return member.id
+
+
 async def _get_related_player(
     session: AsyncSession,
     *,
@@ -41,9 +63,7 @@ async def _get_related_player(
     if related_player_id is None:
         return None
 
-    result = await session.execute(
-        select(models.Player).where(models.Player.id == related_player_id)
-    )
+    result = await session.execute(select(models.Player).where(models.Player.id == related_player_id))
     return result.scalar_one_or_none()
 
 
@@ -89,16 +109,12 @@ async def _collect_substitution_descendants(
     player_id: int,
 ) -> list[models.Player]:
     descendants: list[models.Player] = []
-    result = await session.execute(
-        select(models.Player).where(models.Player.related_player_id == player_id)
-    )
+    result = await session.execute(select(models.Player).where(models.Player.related_player_id == player_id))
     children = result.scalars().all()
 
     for child in children:
         descendants.append(child)
-        descendants.extend(
-            await _collect_substitution_descendants(session, player_id=child.id)
-        )
+        descendants.extend(await _collect_substitution_descendants(session, player_id=child.id))
 
     return descendants
 
@@ -116,6 +132,7 @@ def _prepare_team_update_data(team: models.Team, data: admin_schemas.TeamUpdate)
         update_data["balancer_name"] = update_data.get("name") or team.name
     return update_data
 
+
 # ─── Team CRUD ───────────────────────────────────────────────────────────────
 
 
@@ -125,7 +142,9 @@ async def get_team(session: AsyncSession, team_id: int) -> models.Team:
         select(models.Team)
         .where(models.Team.id == team_id)
         .options(
-            selectinload(models.Team.players).selectinload(models.Player.user),
+            selectinload(models.Team.players)
+            .selectinload(models.Player.workspace_member)
+            .selectinload(models.WorkspaceMember.player),
             selectinload(models.Team.captain),
             selectinload(models.Team.tournament),
         )
@@ -143,7 +162,7 @@ async def get_player(session: AsyncSession, player_id: int) -> models.Player:
         select(models.Player)
         .where(models.Player.id == player_id)
         .options(
-            selectinload(models.Player.user),
+            selectinload(models.Player.workspace_member).selectinload(models.WorkspaceMember.player),
             selectinload(models.Player.tournament),
         )
     )
@@ -185,7 +204,9 @@ async def create_team(session: AsyncSession, data: admin_schemas.TeamCreate) -> 
 async def update_team(session: AsyncSession, team_id: int, data: admin_schemas.TeamUpdate) -> models.Team:
     """Update team fields"""
     result = await session.execute(
-        select(models.Team).where(models.Team.id == team_id).options(selectinload(models.Team.players))
+        select(models.Team)
+        .where(models.Team.id == team_id)
+        .options(selectinload(models.Team.players).selectinload(models.Player.workspace_member))
     )
     team = result.scalar_one_or_none()
 
@@ -198,7 +219,7 @@ async def update_team(session: AsyncSession, team_id: int, data: admin_schemas.T
         captain = result.scalar_one_or_none()
         if not captain:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Captain user not found")
-        if team.players and all(player.user_id != data.captain_id for player in team.players):
+        if team.players and all(player.workspace_member.player_id != data.captain_id for player in team.players):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Captain must belong to the current team roster",
@@ -260,6 +281,12 @@ async def add_player_to_team(session: AsyncSession, team_id: int, data: admin_sc
         tournament_id=team.tournament_id,
     )
 
+    player_data["workspace_member_id"] = await _resolve_workspace_member_id(
+        session,
+        tournament_id=team.tournament_id,
+        player_id=player_data.pop("user_id"),
+    )
+
     # Create player
     player = models.Player(**player_data)
 
@@ -309,8 +336,15 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
         tournament_id=team.tournament_id,
     )
 
+    player_data = _prepare_player_create_data(data)
+    player_data["workspace_member_id"] = await _resolve_workspace_member_id(
+        session,
+        tournament_id=team.tournament_id,
+        player_id=player_data.pop("user_id"),
+    )
+
     # Create player
-    player = models.Player(**_prepare_player_create_data(data))
+    player = models.Player(**player_data)
 
     session.add(player)
     await session.commit()
@@ -319,20 +353,14 @@ async def create_player(session: AsyncSession, data: admin_schemas.PlayerCreate)
 
 async def update_player(session: AsyncSession, player_id: int, data: admin_schemas.PlayerUpdate) -> models.Player:
     """Update player fields"""
-    result = await session.execute(
-        select(models.Player)
-        .where(models.Player.id == player_id)
-        .options(selectinload(models.Player.user), selectinload(models.Player.team))
-    )
+    result = await session.execute(select(models.Player).where(models.Player.id == player_id))
     player = result.scalar_one_or_none()
 
     if not player:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
 
     related_player_id = (
-        data.related_player_id
-        if "related_player_id" in data.model_fields_set
-        else player.related_player_id
+        data.related_player_id if "related_player_id" in data.model_fields_set else player.related_player_id
     )
     related_player = await _get_related_player(session, related_player_id=related_player_id)
     _validate_related_player_scope(

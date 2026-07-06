@@ -2,10 +2,14 @@
 
 from collections.abc import Sequence
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.schemas.events import TournamentChangedReason
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.engine import generate_bracket
@@ -19,10 +23,6 @@ from shared.services.bracket.swiss_settings import (
 )
 from shared.services.bracket.types import BracketSkeleton
 from shared.services.encounter_naming import build_encounter_name_from_ids
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.admin import stage as admin_schemas
 from src.services.standings import swiss_auto_round
@@ -159,8 +159,25 @@ async def create_stage(session: AsyncSession, tournament_id: int, data: admin_sc
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-    stage = models.Stage(tournament_id=tournament_id, **data.model_dump())
+    # The deprecated stage.challonge_id/slug columns are no longer written: a
+    # supplied Challonge link becomes a normalized challonge_source row scoped to
+    # the new stage instead.
+    payload = data.model_dump()
+    challonge_id = payload.pop("challonge_id", None)
+    challonge_slug = payload.pop("challonge_slug", None)
+    stage = models.Stage(tournament_id=tournament_id, **payload)
     session.add(stage)
+    await session.flush()
+    if challonge_id is not None:
+        session.add(
+            models.ChallongeSource(
+                tournament_id=tournament_id,
+                stage_id=stage.id,
+                challonge_tournament_id=challonge_id,
+                slug=challonge_slug,
+                source_type="stage",
+            )
+        )
     await _publish_tournament_changed(session, tournament_id, "structure_changed")
     await session.commit()
     return await get_stage(session, stage.id)
@@ -193,9 +210,12 @@ async def delete_stage(session: AsyncSession, stage_id: int) -> None:
 
 
 def _map_veto_signature(config: models.MapVetoConfig) -> tuple[tuple, tuple]:
+    # ``map_pool`` was normalized out of the old ``map_pool_ids`` JSON array
+    # (dbarch05) into the ``map_veto_config_map`` child table; the relationship
+    # is ordered by ``sort_order`` so the tuple mirrors the old array order.
     return (
         tuple(config.veto_sequence_json or []),
-        tuple(config.map_pool_ids or []),
+        tuple(entry.map_id for entry in config.map_pool),
     )
 
 
@@ -206,10 +226,12 @@ async def _merge_map_veto_configs(
     source_stage_ids: list[int],
 ) -> None:
     target_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id == target_stage.id,
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     target_configs = list(target_result.scalars().all())
     if len(target_configs) > 1:
@@ -219,10 +241,12 @@ async def _merge_map_veto_configs(
         )
 
     source_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id.in_(source_stage_ids),
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     source_configs = list(source_result.scalars().all())
     if not source_configs:
@@ -237,10 +261,7 @@ async def _merge_map_veto_configs(
     if len(signatures) > 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Source stages have different map veto configs; keep one "
-                "target config before merging"
-            ),
+            detail=("Source stages have different map veto configs; keep one target config before merging"),
         )
 
     keeper = source_configs[0]
@@ -256,9 +277,7 @@ async def _retarget_stage_rows(
     source_stage_ids: list[int],
     target_stage_id: int,
 ) -> None:
-    result = await session.execute(
-        select(model).where(model.stage_id.in_(source_stage_ids))
-    )
+    result = await session.execute(select(model).where(model.stage_id.in_(source_stage_ids)))
     for row in result.scalars().all():
         row.stage_id = target_stage_id
 
@@ -313,9 +332,7 @@ async def merge_group_stages(
             detail="Target stage cannot be included in source_stage_ids",
         )
 
-    stages_result = await session.execute(
-        select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids))
-    )
+    stages_result = await session.execute(select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids)))
     source_by_id = {stage.id: stage for stage in stages_result.scalars().all()}
     missing = [stage_id for stage_id in unique_source_stage_ids if stage_id not in source_by_id]
     if missing:
@@ -411,9 +428,7 @@ async def merge_group_stages(
     if next_target_name:
         target_stage.name = next_target_name
     target_stage.is_active = target_stage.is_active or any(stage.is_active for stage in source_stages)
-    target_stage.is_completed = target_stage.is_completed and all(
-        stage.is_completed for stage in source_stages
-    )
+    target_stage.is_completed = target_stage.is_completed and all(stage.is_completed for stage in source_stages)
 
     await session.flush()
     for source_stage in source_stages:
@@ -707,10 +722,12 @@ async def _get_swiss_generation_context(
             swiss_played_pairs.add(frozenset({encounter.home_team_id, encounter.away_team_id}))
 
     standing_result = await session.execute(
-        select(models.Standing).where(
+        select(models.Standing)
+        .where(
             models.Standing.stage_id == stage_id,
             models.Standing.stage_item_id == stage_item_id,
-        ).order_by(models.Standing.position, models.Standing.team_id)
+        )
+        .order_by(models.Standing.position, models.Standing.team_id)
     )
     raw_standings = list(standing_result.scalars().all())
     swiss_standings = [
@@ -1203,14 +1220,8 @@ async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> 
     # BRACKET_LOWER item. A "single bracket" double-elimination (one
     # SINGLE_BRACKET item) holds the whole UB+LB structure, so all advancing
     # teams seed that one item — the DE engine builds the rounds internally.
-    has_lower_bracket = any(
-        item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items
-    )
-    if (
-        stage.split_lower_bracket
-        and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-        and has_lower_bracket
-    ):
+    has_lower_bracket = any(item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items)
+    if stage.split_lower_bracket and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and has_lower_bracket:
         top_lb = advance // 2
         top = advance - top_lb  # odd count → extra team to the Upper bracket
     else:
@@ -1347,19 +1358,12 @@ async def generate_encounters(
 
     # Decide which advancing teams start in the upper vs the lower bracket.
     lower_bracket_team_ids: list[int] = []
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(
-        stage, "split_lower_bracket", False
-    ):
+    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(stage, "split_lower_bracket", False):
         if lb_item is not None:
             # Separate Upper + Lower bracket items: the lower item's teams
             # start in the lower bracket.
             lower_bracket_team_ids = _collect_item_team_ids(lb_item)
-            team_ids = [
-                tid
-                for item in sorted_items
-                if item is not lb_item
-                for tid in _collect_item_team_ids(item)
-            ]
+            team_ids = [tid for item in sorted_items if item is not lb_item for tid in _collect_item_team_ids(item)]
         else:
             # Single bracket item: seeds are ordered winners-first, so the first
             # half start in the upper bracket and the second half in the lower.

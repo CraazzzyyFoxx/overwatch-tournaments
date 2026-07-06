@@ -1,25 +1,54 @@
-docs:
-  - all:
-    - changed-files:
-      - any-glob-to-any-file:
-        - '**/*.md'
-      - all-globs-to-all-files:
-        - '!frontend/**'
-        - '!backend/**'
-        - '!.github/**'
-        - '!scripts/**'
-        - '!.gitignore'
-        - '!.pre-commit-config.yaml'
+# Path-based auto-labels (actions/labeler v5). Every label referenced here must
+# exist in the repo, otherwise the labeler job fails. These are organizational
+# zone labels; the semantic labels the check below looks for (feature/bug/…) are
+# applied by a human.
+
+backend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - backend/**
+
+frontend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - frontend/**
+
+gateway:
+  - changed-files:
+    - any-glob-to-any-file:
+      - gateway/**
+
+monitoring:
+  - changed-files:
+    - any-glob-to-any-file:
+      - monitoring/**
+
+github_actions:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/workflows/**
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/uv.lock'
+      - '**/pyproject.toml'
+      - '**/package.json'
+      - '**/bun.lock'
+      - '**/bun.lockb'
+      - '**/go.mod'
+      - '**/go.sum'
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - docs/**
 
 internal:
-  - all:
-    - changed-files:
-      - any-glob-to-any-file:
-        - .github/**
-        - scripts/**
-        - .gitignore
-        - .pre-commit-config.yaml
-      - all-globs-to-all-files:
-        - '!./**/*.md'
-        - '!frontend/**'
-        - '!backend/**'
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/**
+      - scripts/**
+      - .gitignore
+      - .pre-commit-config.yaml

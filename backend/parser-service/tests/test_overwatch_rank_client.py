@@ -104,3 +104,10 @@ class FetchSummaryStatusTests(IsolatedAsyncioTestCase):
         c = _make_client(httpx.ConnectError("boom"))
         with self.assertRaises(OverFastError):
             await c.fetch_summary("Name#1234")
+
+    async def test_malformed_battle_tag_is_rejected_without_request(self) -> None:
+        c = _make_client(httpx.Response(200, json={"competitive": {}}))
+        for bad in ("../../etc/passwd", "Name#1234/../secret", "Na me#1234", "Name-1234"):
+            result = await c.fetch_summary(bad)
+            self.assertEqual(result.status, enums.RankCollectionStatus.error)
+        c._http.get.assert_not_called()

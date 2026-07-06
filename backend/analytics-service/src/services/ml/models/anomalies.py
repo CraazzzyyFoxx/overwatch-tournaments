@@ -60,11 +60,12 @@ def detect_smurfs(
     local_z_threshold: float = 0.9,
     local_percentile_threshold: float = 80.0,
     strong_local_z_threshold: float = 1.5,
+    mvp_dominance_threshold: float = 0.75,
     min_role_size: int = 3,
 ) -> list[dict[str, typing.Any]]:
     """Flag likely smurfs / strong cohort outliers.
 
-    A player is flagged when EITHER:
+    A player is flagged when ANY of:
     - the classic under-ranked smurf rule fires — high-impact within the role,
       low-rank relative to the role pool, AND clearly outperforming their own
       local division band; OR
@@ -72,7 +73,12 @@ def detect_smurfs(
       division-normalised ``local_zscore`` is at/above ``strong_local_z_threshold``
       (someone playing far above their role+division peers should be surfaced even
       if they are not low-rank, since cross-division ``impact_score`` and the rank
-      gate otherwise hide mid/high-rank overperformers).
+      gate otherwise hide mid/high-rank overperformers); OR
+    - they are a **raw scoreboard dominator** — their match-log ``mvp_dominance``
+      (mean per-match MVP position) is at/above ``mvp_dominance_threshold``. This
+      catches a consistent top-of-the-scoreboard player that the
+      expectation-adjusted ``impact``/``local_zscore`` under-credit (e.g. a strong
+      player winning "as expected" on a favoured team).
     """
     if df.empty or not all(c in df.columns for c in _SMURF_FEATURES):
         return []
@@ -107,13 +113,12 @@ def detect_smurfs(
             rank = float(row["rank"] or 0.0)
             rank_suspicious = rank > 0 and rank <= rank_cutoff
             impact_suspicious = impact >= impact_cutoff
-            local_suspicious = (
-                local_z >= local_z_threshold
-                or local_pct >= local_percentile_threshold
-            )
+            local_suspicious = local_z >= local_z_threshold or local_pct >= local_percentile_threshold
             strong_local = local_z >= strong_local_z_threshold
+            mvp_dominance = pd.to_numeric(row.get("mvp_dominance"), errors="coerce")
+            raw_dominator = pd.notna(mvp_dominance) and float(mvp_dominance) >= mvp_dominance_threshold
             classic_smurf = impact_suspicious and rank_suspicious and local_suspicious
-            deterministic_review = classic_smurf or strong_local
+            deterministic_review = classic_smurf or strong_local or raw_dominator
             if deterministic_review:
                 confidence = float(
                     np.clip(
@@ -138,6 +143,8 @@ def detect_smurfs(
                     reasons.append("cohort_overperformance")
                 if strong_local and not classic_smurf:
                     reasons.append("strong_cohort_outlier")
+                if raw_dominator:
+                    reasons.append("raw_mvp_dominance")
                 out.append(
                     {
                         "player_id": int(row["player_id"]),
@@ -150,6 +157,7 @@ def detect_smurfs(
                             "rank": rank,
                             "local_zscore": local_z,
                             "local_percentile": local_pct,
+                            "mvp_dominance": (float(mvp_dominance) if pd.notna(mvp_dominance) else None),
                             "impact_cutoff": impact_cutoff,
                             "rank_cutoff": rank_cutoff,
                             "role": str(role),
@@ -190,10 +198,7 @@ def detect_trolls(
                 else:
                     current = 0.0
                 impact = float(row.get("impact_score") or 100.0)
-                if (
-                    current <= single_tournament_z_threshold
-                    and impact <= single_tournament_impact_threshold
-                ):
+                if current <= single_tournament_z_threshold and impact <= single_tournament_impact_threshold:
                     out.append(
                         {
                             "player_id": int(row["player_id"]),
@@ -313,11 +318,7 @@ def detect_sandbags(
         current = float(history[-1])
         prior_mean = float(np.nanmean(prior))
         drop = prior_mean - current
-        if (
-            current <= min_current_z
-            and drop >= min_drop_z
-            and prior_mean >= prior_mean_floor
-        ):
+        if current <= min_current_z and drop >= min_drop_z and prior_mean >= prior_mean_floor:
             confidence_base = max(float(row.get("confidence") or 0.5), 0.25)
             out.append(
                 {
@@ -355,9 +356,7 @@ def detect_throws(
         return []
 
     out: list[dict[str, typing.Any]] = []
-    grouped = round_residuals.sort_values(["player_id", "encounter_id", "round"]).groupby(
-        ["player_id", "encounter_id"]
-    )
+    grouped = round_residuals.sort_values(["player_id", "encounter_id", "round"]).groupby(["player_id", "encounter_id"])
     for (player_id, encounter_id), group in grouped:
         series = group["y_perf"].astype(float).to_numpy()
         if len(series) < 4 or np.isnan(series).all():
@@ -378,10 +377,7 @@ def detect_throws(
             # simple best split fallback so obvious mid-match collapses still
             # become low/medium-confidence review signals.
             candidates = range(2, max(2, len(series) - 1))
-            drops = [
-                (split, float(series[:split].mean() - series[split:].mean()))
-                for split in candidates
-            ]
+            drops = [(split, float(series[:split].mean() - series[split:].mean())) for split in candidates]
             if not drops:
                 continue
             cp, best_drop = max(drops, key=lambda item: item[1])

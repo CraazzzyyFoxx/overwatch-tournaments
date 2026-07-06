@@ -38,8 +38,6 @@ def _tournament() -> models.Tournament:
         number=10,
         name="Tournament 10",
         description=None,
-        challonge_id=None,
-        challonge_slug=None,
         is_league=False,
         is_finished=False,
         status=enums.TournamentStatus.LIVE,
@@ -78,8 +76,7 @@ class TournamentLoadOptionTests(TestCase):
 
     def test_division_grid_version_is_explicit_load_option(self) -> None:
         paths = "\n".join(
-            str(getattr(option, "path", ""))
-            for option in service.tournament_entities(["division_grid_version"])
+            str(getattr(option, "path", "")) for option in service.tournament_entities(["division_grid_version"])
         )
 
         self.assertIn("Tournament.division_grid_version", paths)

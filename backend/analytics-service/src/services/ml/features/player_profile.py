@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pandas as pd
 import sqlalchemy as sa
-from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import LogStatsName
 from src import models
 from src.core.workspace import workspace_filter
+
+from .mvp_dominance import compute_mvp_dominance
 
 __all__ = ("load_player_signal_profile",)
 
@@ -35,9 +37,13 @@ async def load_player_signal_profile(
             models.AnalyticsPerformance.local_reference_n.label("local_reference_n"),
             models.Player.role.label("role"),
             models.Player.rank.label("rank"),
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
         )
         .join(models.Player, models.Player.id == models.AnalyticsPerformance.player_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.AnalyticsPerformance.tournament_id == tournament_id,
@@ -53,11 +59,7 @@ async def load_player_signal_profile(
         sa.select(
             models.MatchStatistics.user_id.label("user_id"),
             sa.func.coalesce(
-                sa.func.avg(
-                    sa.case(
-                        (models.MatchStatistics.name == LogStatsName.KD, models.MatchStatistics.value)
-                    )
-                ),
+                sa.func.avg(sa.case((models.MatchStatistics.name == LogStatsName.KD, models.MatchStatistics.value))),
                 0.0,
             ).label("kd"),
             sa.func.coalesce(
@@ -103,39 +105,51 @@ async def load_player_signal_profile(
         base_df["weapon_accuracy"] = 0.0
         base_df["final_blows_p10"] = 0.0
 
+    # Raw match-log MVP dominance (separate from expectation-adjusted impact):
+    # catches a consistent scoreboard-topper that impact under-credits.
+    dominance_df = await compute_mvp_dominance(session, tournament_id)
+    if not dominance_df.empty:
+        base_df = base_df.merge(dominance_df, on="player_id", how="left")
+    else:
+        base_df["mvp_dominance"] = float("nan")
+        base_df["mvp_matches"] = 0
+
     history_query = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.AnalyticsPerformance.tournament_id.label("tournament_id"),
             models.AnalyticsPerformance.raw_value.label("raw_value"),
             models.AnalyticsPerformance.local_residual.label("local_residual"),
             models.AnalyticsPerformance.local_zscore.label("local_zscore"),
         )
+        .select_from(models.AnalyticsPerformance)
         .join(models.Player, models.Player.id == models.AnalyticsPerformance.player_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.AnalyticsPerformance.tournament_id <= tournament_id,
             models.AnalyticsPerformance.tournament_id >= max(1, tournament_id - history_depth),
-            models.Player.user_id.in_(user_ids),
+            models.WorkspaceMember.player_id.in_(user_ids),
             *workspace_filter(workspace_id),
         )
-        .order_by(models.Player.user_id, models.Player.role, models.AnalyticsPerformance.tournament_id)
+        .order_by(
+            models.WorkspaceMember.player_id,
+            models.Player.role,
+            models.AnalyticsPerformance.tournament_id,
+        )
     )
     history_df = pd.DataFrame((await session.execute(history_query)).mappings().all())
     histories: dict[tuple[int, str], dict[str, list[float]]] = {}
     if not history_df.empty:
         for (uid, role), grp in history_df.groupby(["user_id", "role"]):
             histories[(int(uid), str(role))] = {
-                "raw_value_history": [
-                    float(v) for v in grp["raw_value"].tolist() if v is not None
-                ],
-                "local_residual_history": [
-                    float(v) for v in grp["local_residual"].tolist() if v is not None
-                ],
-                "local_zscore_history": [
-                    float(v) for v in grp["local_zscore"].tolist() if v is not None
-                ],
+                "raw_value_history": [float(v) for v in grp["raw_value"].tolist() if v is not None],
+                "local_residual_history": [float(v) for v in grp["local_residual"].tolist() if v is not None],
+                "local_zscore_history": [float(v) for v in grp["local_zscore"].tolist() if v is not None],
             }
 
     def _history(row: pd.Series, key: str) -> list[float]:

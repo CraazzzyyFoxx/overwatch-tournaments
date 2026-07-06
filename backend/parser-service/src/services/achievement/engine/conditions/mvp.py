@@ -39,6 +39,7 @@ async def execute(
         AND: [match_win, match_mvp_check(stat=Performance, top_n=3, op===, value=0)]
     """
     from . import resolve_stat_name
+
     stat = resolve_stat_name(params.get("stat", "performance"))
     top_n = params.get("top_n", 3)
     op = params.get("op", "==")
@@ -78,7 +79,9 @@ async def execute(
     # Step 2: Rank players within each match by stat_value.
     # "auto" detects sort direction from enum config (Performance=asc, most others=desc).
     if sort_order == "auto":
-        from shared.core.enums import LogStatsName as _LSN, is_ascending_stat
+        from shared.core.enums import LogStatsName as _LSN
+        from shared.core.enums import is_ascending_stat
+
         try:
             _use_asc = is_ascending_stat(_LSN[stat])
         except KeyError:
@@ -93,10 +96,12 @@ async def execute(
             ps.c.match_id,
             ps.c.user_id,
             ps.c.team_id,
-            sa.func.row_number().over(
+            sa.func.row_number()
+            .over(
                 partition_by=ps.c.match_id,
                 order_by=rank_order,
-            ).label("rank"),
+            )
+            .label("rank"),
         )
     ).subquery("ranked")
 
@@ -117,8 +122,7 @@ async def execute(
         sa.select(
             ps.c.match_id,
             ps.c.team_id,
-        )
-        .group_by(ps.c.match_id, ps.c.team_id)
+        ).group_by(ps.c.match_id, ps.c.team_id)
     ).subquery("all_teams")
 
     # Left join to get in_top count (0 if not in team_top)
@@ -141,10 +145,11 @@ async def execute(
     # Step 5: Get tournament_id and all players on qualifying teams
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
             teams_with_count.c.match_id,
         )
+        .select_from(models.Player)
         .join(
             teams_with_count,
             models.Player.team_id == teams_with_count.c.team_id,
@@ -154,6 +159,10 @@ async def execute(
             models.Match.id == teams_with_count.c.match_id,
         )
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
             models.Player.is_substitution.is_(False),
             sa.or_(

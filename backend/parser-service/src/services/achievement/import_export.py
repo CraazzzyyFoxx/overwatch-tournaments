@@ -7,10 +7,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
+
 from shared.clients import S3Client
 from shared.clients.s3.upload import upload_asset
-from shared.models.achievement import AchievementRule
-
+from shared.models.achievements.achievement import AchievementRule
 from src import models
 from src.services.achievement.engine.validation import validate_rule_definition
 
@@ -142,6 +142,30 @@ def guess_content_type_from_key(key: str) -> str:
     }.get(suffix, "application/octet-stream")
 
 
+def workspace_achievement_asset_prefix(source_workspace_slug: str) -> str:
+    """The only S3 prefix a source workspace's achievement assets may live under."""
+    return f"assets/achievements/{source_workspace_slug}/"
+
+
+def _asset_key_is_within_workspace(key: str | None, workspace_prefix: str) -> bool:
+    """Reject anything that is not a safe object key strictly under the source
+    workspace's achievement-asset prefix.
+
+    This is the guard for review finding C3 (S3-IDOR): the client-supplied
+    ``image_url`` is turned into an S3 key and copied into the target workspace,
+    so an unvalidated key would let an importer read *any* object in the shared
+    bucket (match logs, avatars, other tenants' assets). The trailing slash on
+    ``workspace_prefix`` prevents sibling-prefix confusion (``source`` vs
+    ``source-evil``), and rejecting ``.``/``..``/empty path segments blocks
+    traversal-style keys.
+    """
+    if not key:
+        return False
+    if any(segment in ("", ".", "..") for segment in key.split("/")):
+        return False
+    return key.startswith(workspace_prefix)
+
+
 async def find_workspace_achievement_asset_key(
     s3: S3Client,
     *,
@@ -149,13 +173,30 @@ async def find_workspace_achievement_asset_key(
     slug: str,
     image_url: str | None,
 ) -> str | None:
+    """Resolve the S3 key of a source-workspace achievement asset.
+
+    The returned key is ALWAYS constrained to the source workspace's own
+    achievement-asset prefix and must be a real object owned by that workspace:
+    the authoritative allow-list is ``s3.list_objects(prefix)``. A client-supplied
+    ``image_url`` may only *select* among those existing keys — it can never
+    introduce an arbitrary key (see review finding C3).
+    """
+    workspace_prefix = workspace_achievement_asset_prefix(source_workspace_slug)
+    available_keys = set(await s3.list_objects(workspace_prefix))
+    if not available_keys:
+        return None
+
     key_from_url = extract_s3_key_from_public_url(getattr(s3, "_public_url", None), image_url)
-    if key_from_url:
+    if (
+        key_from_url
+        and _asset_key_is_within_workspace(key_from_url, workspace_prefix)
+        and key_from_url in available_keys
+    ):
         return key_from_url
 
-    prefix = f"assets/achievements/{source_workspace_slug}/{slug}."
-    keys = sorted(await s3.list_objects(prefix))
-    return keys[0] if keys else None
+    slug_prefix = f"{workspace_prefix}{slug}."
+    matching = sorted(key for key in available_keys if key.startswith(slug_prefix))
+    return matching[0] if matching else None
 
 
 async def copy_workspace_achievement_image(

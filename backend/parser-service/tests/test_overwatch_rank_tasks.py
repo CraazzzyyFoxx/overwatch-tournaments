@@ -26,7 +26,6 @@ os.environ.setdefault("CHALLONGE_API_KEY", "x")
 tasks = importlib.import_module("src.services.overwatch_rank.tasks")
 from shared.core import enums  # noqa: E402
 from shared.schemas.settings import RankCollectionConfig  # noqa: E402
-
 from src.services.overwatch_rank.client import OverFastRateLimited  # noqa: E402
 from src.services.overwatch_rank.schemas import RankFetchResult  # noqa: E402
 
@@ -74,7 +73,7 @@ class EnqueueTests(IsolatedAsyncioTestCase):
         from shared.schemas.events import FetchRankEvent
 
         redis = FakeRedis()
-        event = FetchRankEvent(battle_tag_id=5, battle_tag="A#1", source="scheduled")
+        event = FetchRankEvent(social_account_id=5, battle_tag="A#1", source="scheduled")
         with patch.object(tasks, "publish_message", AsyncMock()) as pub:
             first = await tasks.enqueue_fetch(event, broker=SimpleNamespace(), redis=redis)
             second = await tasks.enqueue_fetch(event, broker=SimpleNamespace(), redis=redis)
@@ -101,7 +100,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 7, "battle_tag": "N#1"},
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(session),
@@ -116,7 +115,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         client = SimpleNamespace(fetch_summary=AsyncMock())
         with patch.object(tasks.service, "record_result", AsyncMock()) as rec:
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 7, "battle_tag": "N#1"},
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(SimpleNamespace(commit=AsyncMock())),
@@ -127,9 +126,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
     async def test_rate_limited_sets_cooldown_and_records_failure(self) -> None:
         redis = FakeRedis()
         session = SimpleNamespace(commit=AsyncMock())
-        client = SimpleNamespace(
-            fetch_summary=AsyncMock(side_effect=OverFastRateLimited(retry_after=42))
-        )
+        client = SimpleNamespace(fetch_summary=AsyncMock(side_effect=OverFastRateLimited(retry_after=42)))
         with (
             patch.object(
                 tasks.settings_provider,
@@ -141,7 +138,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             patch.object(tasks.service, "log_fetch", AsyncMock()),
         ):
             await tasks.process_fetch_rank(
-                {"event_type": "fetch_rank", "battle_tag_id": 9, "battle_tag": "N#9"},
+                {"event_type": "fetch_rank", "social_account_id": 9, "battle_tag": "N#9"},
                 redis=redis,
                 client=client,
                 session_factory=_session_factory(session),

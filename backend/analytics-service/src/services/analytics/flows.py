@@ -5,15 +5,15 @@ import pandas as pd
 import sqlalchemy as sa
 from loguru import logger
 from openskill.models import PlackettLuce, PlackettLuceRating
-from shared.division_grid import DEFAULT_GRID, DivisionGrid
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.config import settings
+from src.core.workspace import get_tournament_workspace_id
 from src.schemas.analytics import AnalyticsMatch
 
 from . import service
+from .canonical_division import canonical_div_for, load_source_grids
 from .linear import TournamentSignal, score_history
 
 COEF_NOVICE_FIRST = 1 / 0.15
@@ -37,13 +37,6 @@ def division_delta_points(
     if current_div is None or pd.isna(current_div):
         return None
     return int(round((float(previous_div) - float(current_div)) * 100))
-
-
-def rating_to_division(grid: DivisionGrid, rating_mu: float) -> int:
-    return resolve_tournament_division(
-        int(round(rating_mu)),
-        tournament_grid=grid,
-    )
 
 
 async def get_data_frame(
@@ -89,8 +82,6 @@ async def get_data_frame(
                 "placement_score": 0.0,
                 "previous_cost": row["previous_cost"],
                 "pre_previous_cost": row["pre_previous_cost"],
-                "previous_div": row["previous_div"],
-                "pre_previous_div": row["pre_previous_div"],
                 "is_newcomer": bool(row["is_newcomer"]),
                 "is_newcomer_role": bool(row["is_newcomer_role"]),
                 "is_changed": False,
@@ -110,50 +101,22 @@ async def get_data_frame(
 
     df = pd.DataFrame(rows)
 
-    all_version_ids = {int(v) for v in df["version_id"].dropna().unique()}
-    grids = await service.get_grid_versions(session, all_version_ids)
+    # Normalize every division to the canonical OW grid so current/previous div
+    # are comparable across workspaces and grid versions.
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
 
-    def grid_for(version_id) -> DivisionGrid:
-        if version_id is None or pd.isna(version_id):
-            return DEFAULT_GRID
-        return grids.get(int(version_id), DEFAULT_GRID)
-
-    df["div"] = df.apply(
-        lambda r: resolve_tournament_division(
-            int(r["cost"]),
-            tournament_grid=grid_for(r["version_id"]),
-        ),
-        axis=1,
-    )
+    df["div"] = [
+        canonical_div_for(grids, version_id, cost)
+        for version_id, cost in zip(df["version_id"], df["cost"], strict=False)
+    ]
     df = df.sort_values(["id_role", "tournament_id"]).reset_index(drop=True)
     df["prev_version_id"] = df.groupby("id_role")["version_id"].shift(1)
-
-    cross = df[["prev_version_id", "version_id"]].dropna().drop_duplicates()
-    cross = cross[cross["prev_version_id"] != cross["version_id"]]
-    pairs = [(int(r["prev_version_id"]), int(r["version_id"])) for _, r in cross.iterrows()]
-    tier_mappings = await service.get_primary_division_mappings(session, pairs)
 
     def resolve_previous_div(row) -> int | None:
         prev_cost = row["previous_cost"]
         if prev_cost is None or pd.isna(prev_cost):
-            return row["previous_div"]
-        prev_vid = row["prev_version_id"]
-        curr_vid = row["version_id"]
-        raw = resolve_tournament_division(
-            int(prev_cost),
-            tournament_grid=grid_for(prev_vid),
-        )
-        if (
-            prev_vid is not None
-            and not pd.isna(prev_vid)
-            and curr_vid is not None
-            and not pd.isna(curr_vid)
-            and int(prev_vid) != int(curr_vid)
-        ):
-            mapping = tier_mappings.get((int(prev_vid), int(curr_vid)))
-            if mapping:
-                return mapping.get(raw, raw)
-        return raw
+            return None
+        return canonical_div_for(grids, row["prev_version_id"], int(prev_cost))
 
     df["previous_div"] = df.apply(resolve_previous_div, axis=1)
     df["is_changed"] = df["previous_div"] != df["div"]
@@ -169,10 +132,7 @@ async def get_data_frame(
     df["placement_score"] = df.apply(
         lambda row: 0.0
         if row["overall_position"] is None or row["team_count"] is None
-        else (
-            1.0
-            - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1)
-        ),
+        else (1.0 - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1)),
         axis=1,
     )
 
@@ -194,16 +154,8 @@ async def create_players_shifts_is_not_exists(
     final_df = final_df.replace({np.nan: None})
 
     for _, row in final_df.iterrows():
-        shift_one = (
-            int(row["normalized_shift_one"])
-            if row["normalized_shift_one"] is not None
-            else None
-        )
-        shift_two = (
-            int(row["normalized_shift_two"])
-            if row["normalized_shift_two"] is not None
-            else None
-        )
+        shift_one = int(row["normalized_shift_one"]) if row["normalized_shift_one"] is not None else None
+        shift_two = int(row["normalized_shift_two"]) if row["normalized_shift_two"] is not None else None
 
         analytics_player = players_by_id.get(row["player_id"])
         if analytics_player is not None:
@@ -255,9 +207,7 @@ def compute_points_shifts(df: pd.DataFrame) -> pd.Series:
     return output
 
 
-def compute_linear_metrics(
-    df: pd.DataFrame, *, shift_scale: float | None = None
-) -> pd.DataFrame:
+def compute_linear_metrics(df: pd.DataFrame, *, shift_scale: float | None = None) -> pd.DataFrame:
     if df.empty:
         return df
 
@@ -277,9 +227,7 @@ def compute_linear_metrics(
                         placement_score=float(history["placement_score"]),
                         recency_decay=float(0.85 ** (position - history_position)),
                         coverage_weight=float(0.7 + 0.3 * history["log_available"]),
-                        newcomer_weight=0.75
-                        if history["is_newcomer"] or history["is_newcomer_role"]
-                        else 1.0,
+                        newcomer_weight=0.75 if history["is_newcomer"] or history["is_newcomer_role"] else 1.0,
                         match_count=int(history["match_count"] or 0),
                         log_available=float(history["log_available"]),
                     )
@@ -302,7 +250,10 @@ def get_plackett_luce():
 
 
 def get_id_role(player: models.Player) -> str:
-    return f"{player.user_id}-{player.role}"
+    # Player.user_id was dropped in the contract step (iwrefac07); the identity
+    # anchor is workspace_member.player_id instead. Callers of this function
+    # (see service.py) already eager-load Player.workspace_member.
+    return f"{player.workspace_member.player_id}-{player.role}"
 
 
 def get_player_rating(pl: PlackettLuce, player: models.Player) -> PlackettLuceRating:
@@ -370,6 +321,7 @@ def prepare_openskill_data(
 
     return agents, players_rating, analytics_matches
 
+
 async def compute_openskill_shift_map(
     session: AsyncSession,
     tournament_id: int,
@@ -392,15 +344,9 @@ async def compute_openskill_shift_map(
         workspace_ids=workspace_ids,
     )
     teams = await service.get_teams_with_players(session, tournament_id)
-    version_ids = {int(v) for v in df["version_id"].dropna().unique()}
-    grids = await service.get_grid_versions(session, version_ids)
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
     pl = get_plackett_luce()
     _, players_rating, _ = prepare_openskill_data(df, pl, teams, matches)
-
-    def grid_for(version_id) -> DivisionGrid:
-        if version_id is None or pd.isna(version_id):
-            return DEFAULT_GRID
-        return grids.get(int(version_id), DEFAULT_GRID)
 
     final_df = df[df["tournament_id"] == tournament_id].replace({np.nan: None})
     shift_map: dict[int, float] = {}
@@ -408,7 +354,7 @@ async def compute_openskill_shift_map(
         rating = players_rating.get(row["id_role"])
         if rating is None:
             continue
-        predicted_div = rating_to_division(grid_for(row["version_id"]), rating.mu)
+        predicted_div = canonical_div_for(grids, row["version_id"], int(round(rating.mu)))
         shift_map[int(row["player_id"])] = round(float(row["div"] - predicted_div), 2)
 
     return shift_map, bool(matches)
@@ -481,6 +427,11 @@ async def recalculate_analytics(
     algorithm_names: typing.Iterable[str] | None = None,
     workspace_id: int | None = None,
 ) -> list[str]:
+    # Scope to the tournament's own workspace when not given one, so the v1
+    # Points/Linear recalc uses the same cohort the RPC job (workspace-scoped)
+    # would — see get_tournament_workspace_id.
+    if workspace_id is None:
+        workspace_id = await get_tournament_workspace_id(session, tournament_id)
     df = await get_data_frame(session, workspace_id=workspace_id)
     if df.empty:
         logger.warning("No analytics data found for tournament {}", tournament_id)
@@ -545,61 +496,3 @@ async def get_analytics_openskill(
         [OPEN_SKILL],
         workspace_id=workspace_id,
     )
-
-
-async def get_predictions_openskill(
-    session: AsyncSession,
-    tournament_id: int,
-    df: pd.DataFrame | None = None,
-    workspace_id: int | None = None,
-) -> None:
-    source_df = df if df is not None else await get_data_frame(
-        session,
-        workspace_id=workspace_id,
-    )
-    start_tid = await service.lookback_start_tournament_id(
-        session, tournament_id, OPENSKILL_LOOKBACK, workspace_id=workspace_id
-    )
-    matches = await service.get_matches(
-        session,
-        start_tid,
-        tournament_id,
-        workspace_id=workspace_id,
-    )
-    teams = await service.get_teams_with_players(session, tournament_id)
-    algorithm = await service.get_algorithm(session, OPEN_SKILL)
-    pl = get_plackett_luce()
-    _, players_rating, _ = prepare_openskill_data(source_df, pl, teams, matches)
-    predicted_teams: list[tuple[str, list[PlackettLuceRating]]] = []
-
-    for team in teams:
-        team_players = [players_rating[get_id_role(player)] for player in team.players]
-        predicted_teams.append((team.name, team_players))
-
-    predicted = pl.predict_rank([team_players for _, team_players in predicted_teams])
-
-    await session.execute(
-        sa.delete(models.AnalyticsPredictions).where(
-            sa.and_(
-                models.AnalyticsPredictions.tournament_id == tournament_id,
-                models.AnalyticsPredictions.algorithm_id == algorithm.id,
-            )
-        )
-    )
-    await session.commit()
-
-    for team_data, predict in zip(predicted_teams, predicted, strict=True):
-        team = next((item for item in teams if item.name == team_data[0]), None)
-        if team is None:
-            continue
-
-        session.add(
-            models.AnalyticsPredictions(
-                algorithm_id=algorithm.id,
-                tournament_id=tournament_id,
-                team_id=team.id,
-                predicted_place=predict[0],
-            )
-        )
-
-    await session.commit()

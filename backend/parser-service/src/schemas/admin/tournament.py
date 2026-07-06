@@ -1,4 +1,5 @@
 from datetime import date, datetime
+
 from pydantic import BaseModel
 
 from shared.core.enums import TournamentStatus

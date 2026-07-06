@@ -10,6 +10,7 @@ Run with: ``faststream run serve_rpc:app``.
 """
 
 from faststream import FastStream
+
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -17,7 +18,6 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
-
 from src.core import config
 from src.rpc import jobs_control, mutations
 from src.rpc import reads as rpc_reads

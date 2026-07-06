@@ -6,7 +6,7 @@ import typing
 from dataclasses import dataclass
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.core import pagination
 
@@ -107,6 +107,29 @@ class AchievementRulePortable(BaseModel):
     rule_version: int = 1
     min_tournament_id: int | None = None
 
+    @field_validator("image_url")
+    @classmethod
+    def _validate_image_url(cls, value: str | None) -> str | None:
+        """First-line defense for the S3-IDOR import path (review C3).
+
+        The authoritative key check lives server-side in
+        ``import_export.find_workspace_achievement_asset_key``; this rejects the
+        most obvious abuse (non-http(s) schemes, whitespace/control characters,
+        embedded traversal) before it reaches that resolver.
+        """
+        if value is None:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if not (candidate.startswith("http://") or candidate.startswith("https://")):
+            raise ValueError("image_url must be an absolute http(s) URL")
+        if any(ch.isspace() for ch in candidate) or "\x00" in candidate:
+            raise ValueError("image_url must not contain whitespace or control characters")
+        if ".." in candidate.split("/"):
+            raise ValueError("image_url must not contain path traversal segments")
+        return candidate
+
 
 class AchievementRuleExportWorkspace(BaseModel):
     id: int
@@ -153,9 +176,7 @@ class AchievementLibraryImportRequest(BaseModel):
 
 
 class AchievementRuleListQueryParams(
-    pagination.PaginationSortQueryParams[
-        typing.Literal["id", "name", "slug", "category", "created_at"]
-    ]
+    pagination.PaginationSortQueryParams[typing.Literal["id", "name", "slug", "category", "created_at"]]
 ):
     per_page: int = Field(default=50, ge=-1, le=500)
     sort: typing.Literal["id", "name", "slug", "category", "created_at"] = "id"

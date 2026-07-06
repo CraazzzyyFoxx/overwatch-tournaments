@@ -60,9 +60,7 @@ async def _player_anomalies(
     tournament_id: int,
 ) -> list[models.AnalyticsPlayerAnomaly]:
     result = await session.execute(
-        sa.select(models.AnalyticsPlayerAnomaly).where(
-            models.AnalyticsPlayerAnomaly.tournament_id == tournament_id
-        )
+        sa.select(models.AnalyticsPlayerAnomaly).where(models.AnalyticsPlayerAnomaly.tournament_id == tournament_id)
     )
     return list(result.scalars().all())
 
@@ -93,9 +91,7 @@ async def _first_encounter_by_player(
     )
 
     encounter_for_player: dict[int, int] = {}
-    for pid, enc in (await session.execute(home_query)).all() + (
-        await session.execute(away_query)
-    ).all():
+    for pid, enc in (await session.execute(home_query)).all() + (await session.execute(away_query)).all():
         if pid is None or enc is None:
             continue
         prev = encounter_for_player.get(int(pid))
@@ -137,29 +133,17 @@ async def run_match_quality_for_tournament(
         return 0
 
     encounter_for_player = await _first_encounter_by_player(session, tournament_id)
-    fallback_encounter = (
-        int(encounters["encounter_id"].astype(int).iloc[0])
-        if not encounters.empty
-        else None
-    )
+    fallback_encounter = int(encounters["encounter_id"].astype(int).iloc[0]) if not encounters.empty else None
     by_encounter_anomalies: dict[int, list[dict]] = {}
     seen: set[tuple[int, str, int | None]] = set()
 
     for anomaly in await _player_anomalies(session, tournament_id):
-        source_encounter_id = (
-            int(anomaly.source_encounter_id)
-            if anomaly.source_encounter_id is not None
-            else None
-        )
+        source_encounter_id = int(anomaly.source_encounter_id) if anomaly.source_encounter_id is not None else None
         key = (int(anomaly.player_id), str(anomaly.kind), source_encounter_id)
         if key in seen:
             continue
         seen.add(key)
-        encounter_id = (
-            source_encounter_id
-            or encounter_for_player.get(int(anomaly.player_id))
-            or fallback_encounter
-        )
+        encounter_id = source_encounter_id or encounter_for_player.get(int(anomaly.player_id)) or fallback_encounter
         if encounter_id is None:
             continue
         by_encounter_anomalies.setdefault(int(encounter_id), []).append(
@@ -199,9 +183,7 @@ async def run_match_quality_for_tournament(
         sa.delete(models.AnalyticsMatchQuality).where(
             models.AnalyticsMatchQuality.algorithm_id == algorithm.id,
             models.AnalyticsMatchQuality.encounter_id.in_(
-                sa.select(models.Encounter.id).where(
-                    models.Encounter.tournament_id == tournament_id
-                )
+                sa.select(models.Encounter.id).where(models.Encounter.tournament_id == tournament_id)
             ),
         )
     )

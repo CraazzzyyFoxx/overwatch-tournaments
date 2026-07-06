@@ -7,11 +7,34 @@ import {
   canShowAnalyticsAdminToolbar,
   confidenceWord,
   deriveImpact,
+  formatAnalyticsNumber,
   getAnalyticsRefreshKeys,
   getPreferredAnalyticsAlgorithmId,
   ordinal,
   resolveImpact,
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
+
+describe("formatAnalyticsNumber", () => {
+  it("keeps trailing zeros of whole numbers (impact 100 is not '1')", () => {
+    expect(formatAnalyticsNumber(100, 0)).toBe("100");
+    expect(formatAnalyticsNumber(90, 0)).toBe("90");
+    expect(formatAnalyticsNumber(50, 0)).toBe("50");
+    expect(formatAnalyticsNumber(10, 0)).toBe("10");
+  });
+
+  it("drops only fractional trailing zeros", () => {
+    expect(formatAnalyticsNumber(2.0)).toBe("2");
+    expect(formatAnalyticsNumber(1.5, 2)).toBe("1.5");
+    expect(formatAnalyticsNumber(1.23, 2)).toBe("1.23");
+    expect(formatAnalyticsNumber(2.28, 2)).toBe("2.28");
+  });
+
+  it("handles null, NaN and negative zero", () => {
+    expect(formatAnalyticsNumber(null)).toBe("0");
+    expect(formatAnalyticsNumber(Number.NaN)).toBe("0");
+    expect(formatAnalyticsNumber(-0.001, 2)).toBe("0");
+  });
+});
 
 type TestPlayer = {
   points: number;

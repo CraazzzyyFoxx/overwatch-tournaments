@@ -154,7 +154,6 @@ def _build_default_grid() -> DivisionGrid:
     return DivisionGrid(version_id=None, tiers=tuple(tiers))
 
 
-
 DEFAULT_GRID: DivisionGrid = _build_default_grid()
 
 

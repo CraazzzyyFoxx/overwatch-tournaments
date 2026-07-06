@@ -1,20 +1,59 @@
-"""Player linking service with ownership checks."""
+"""Player linking service with ownership checks.
+
+Single-link model (identity/workspace refactor): a player↔auth-user link is
+stored as ``players.user.auth_user_id`` (nullable, unique FK to ``auth.user.id``)
+rather than the former ``auth.user_player`` M2M table. Because the FK is unique,
+an auth user links to at most one player, so the historical ``is_primary``
+bookkeeping is meaningless. The ``is_primary`` parameter is kept on the public
+signatures purely as a transition shim so the RPC wire schema, gateway, and
+frontend do not have to change in this task; it is ignored internally and every
+returned/linked player is treated as primary. Removing it from the wire schema
+is later work.
+"""
 
 from collections.abc import Iterable
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
-from shared.models.oauth import OAuthConnection
-from shared.models.user import User, UserBattleTag, UserDiscord
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider
+from shared.models.identity.auth_user import AuthUser
+from shared.models.identity.oauth import OAuthConnection
+from shared.models.identity.social import SocialAccount
+from shared.models.identity.user import User
+from shared.models.tenancy.workspace import WorkspaceMember
+from shared.rbac import assign_default_member_role_if_roleless, workspace_names_blocking_player_unlink
 from src import models
 
 
 def _normalized(values: Iterable[str | None]) -> set[str]:
     return {value.strip().casefold() for value in values if value and value.strip()}
+
+
+async def ensure_player_for_auth_user(session: AsyncSession, auth_user: AuthUser) -> User:
+    """Idempotently provision the ``players.user`` identity backbone.
+
+    Returns the existing linked player (via ``User.auth_user_id``) if one
+    already exists, else creates a new bare player (name = username/email,
+    no battletag yet — that is reconciled later at registration) and flushes
+    it so the caller can rely on ``player.id`` before commit.
+
+    Call this on every signup path (password + OAuth) right after the new
+    ``auth.user`` row is flushed. Idempotency covers "OAuth existing user
+    logs in again" — calling this more than once for the same auth_user is
+    always safe and never creates a duplicate player.
+    """
+    existing = await session.scalar(select(User).where(User.auth_user_id == auth_user.id))
+    if existing is not None:
+        return existing
+
+    player = User(name=auth_user.username or auth_user.email, auth_user_id=auth_user.id)
+    session.add(player)
+    await session.flush()
+    return player
 
 
 class PlayerLinkService:
@@ -45,8 +84,7 @@ class PlayerLinkService:
 
     @staticmethod
     async def _get_player(session: AsyncSession, player_id: int) -> User:
-        result = await session.execute(select(User).where(User.id == player_id))
-        player = result.scalar_one_or_none()
+        player = await session.get(User, player_id)
         if player is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -72,8 +110,13 @@ class PlayerLinkService:
                 )
             )
 
-            result = await session.execute(select(UserDiscord).where(UserDiscord.user_id == player_id))
-            player_discord_names = _normalized([discord.name for discord in result.scalars().all()])
+            result = await session.execute(
+                select(SocialAccount.username).where(
+                    SocialAccount.user_id == player_id,
+                    SocialAccount.provider == SocialProvider.DISCORD,
+                )
+            )
+            player_discord_names = _normalized(result.scalars().all())
 
             if player_discord_names and not oauth_names.isdisjoint(player_discord_names):
                 discord_match = True
@@ -89,8 +132,13 @@ class PlayerLinkService:
                 )
             )
 
-            result = await session.execute(select(UserBattleTag).where(UserBattleTag.user_id == player_id))
-            player_battletags = _normalized([battle_tag.battle_tag for battle_tag in result.scalars().all()])
+            result = await session.execute(
+                select(SocialAccount.username).where(
+                    SocialAccount.user_id == player_id,
+                    SocialAccount.provider == SocialProvider.BATTLENET,
+                )
+            )
+            player_battletags = _normalized(result.scalars().all())
 
             if oauth_battletags and player_battletags and not oauth_battletags.isdisjoint(player_battletags):
                 battlenet_match = True
@@ -107,15 +155,18 @@ class PlayerLinkService:
         current_user: models.AuthUser,
         player_id: int,
         is_primary: bool,
-    ) -> models.AuthUserPlayer:
-        await PlayerLinkService._get_player(session, player_id)
+    ) -> User:
+        """Link a game player to ``current_user`` after ownership verification.
+
+        ``is_primary`` is accepted for wire compatibility but ignored (single
+        link => always primary). Returns the linked ``players.user`` row.
+        """
         await PlayerLinkService._verify_player_ownership(session, current_user.id, player_id)
 
         return await PlayerLinkService._link_player_to_auth_user(
             session,
             auth_user_id=current_user.id,
             player_id=player_id,
-            is_primary=is_primary,
         )
 
     @staticmethod
@@ -124,60 +175,49 @@ class PlayerLinkService:
         *,
         auth_user_id: int,
         player_id: int,
-        is_primary: bool,
-    ) -> models.AuthUserPlayer:
-        await PlayerLinkService._get_player(session, player_id)
+    ) -> User:
+        """Set ``players.user.auth_user_id`` for the single-link model.
 
-        result = await session.execute(
-            select(models.AuthUserPlayer).where(models.AuthUserPlayer.player_id == player_id)
-        )
-        existing_global_link = result.scalar_one_or_none()
-        if existing_global_link and existing_global_link.auth_user_id != auth_user_id:
+        Idempotent when the player is already linked to the same auth user;
+        rejects with 409 when it belongs to a different account.
+        """
+        player = await PlayerLinkService._get_player(session, player_id)
+
+        if player.auth_user_id is not None and player.auth_user_id != auth_user_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Player is already linked to another account",
             )
 
-        result = await session.execute(
-            select(models.AuthUserPlayer).where(
-                models.AuthUserPlayer.auth_user_id == auth_user_id,
-                models.AuthUserPlayer.player_id == player_id,
-            )
+        player.auth_user_id = auth_user_id
+        await session.flush()
+        # Autofill the baseline ``member`` role for every workspace this player is
+        # already anchored to (tournament participation created the member rows
+        # before the account existed). Now that the row is auth-linked it becomes
+        # a visible RBAC member and must not be role-less. Additive/idempotent.
+        await PlayerLinkService._autofill_member_roles_for_player(
+            session, auth_user_id=auth_user_id, player_id=player_id
         )
-        existing_user_link = result.scalar_one_or_none()
-
-        if existing_user_link:
-            if is_primary and not existing_user_link.is_primary:
-                result = await session.execute(
-                    select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user_id)
-                )
-                for link in result.scalars().all():
-                    link.is_primary = link.player_id == player_id
-                await session.commit()
-            return existing_user_link
-
-        # First link is always primary.
-        result = await session.execute(
-            select(models.AuthUserPlayer).where(models.AuthUserPlayer.auth_user_id == auth_user_id)
-        )
-        existing_links = result.scalars().all()
-        final_is_primary = is_primary or len(existing_links) == 0
-
-        if final_is_primary:
-            for link in existing_links:
-                link.is_primary = False
-
-        player_link = models.AuthUserPlayer(
-            auth_user_id=auth_user_id,
-            player_id=player_id,
-            is_primary=final_is_primary,
-        )
-        session.add(player_link)
         await session.commit()
-        await session.refresh(player_link)
+        await session.refresh(player)
 
         logger.info(f"Linked player {player_id} to auth user {auth_user_id}")
-        return player_link
+        return player
+
+    @staticmethod
+    async def _autofill_member_roles_for_player(
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        player_id: int,
+    ) -> None:
+        """Grant the baseline ``member`` role in each workspace where ``player_id``
+        has a membership row but the (now-linked) auth user holds no role yet."""
+        workspace_ids = (
+            await session.scalars(select(WorkspaceMember.workspace_id).where(WorkspaceMember.player_id == player_id))
+        ).all()
+        for workspace_id in workspace_ids:
+            await assign_default_member_role_if_roleless(session, user_id=auth_user_id, workspace_id=workspace_id)
 
     @staticmethod
     async def admin_link_player(
@@ -185,12 +225,12 @@ class PlayerLinkService:
         auth_user_id: int,
         player_id: int,
         is_primary: bool,
-    ) -> models.AuthUserPlayer:
+    ) -> User:
+        """Admin link (no ownership check). ``is_primary`` accepted but ignored."""
         return await PlayerLinkService._link_player_to_auth_user(
             session,
             auth_user_id=auth_user_id,
             player_id=player_id,
-            is_primary=is_primary,
         )
 
     @staticmethod
@@ -199,45 +239,45 @@ class PlayerLinkService:
         current_user: models.AuthUser,
         player_id: int,
     ) -> None:
-        await PlayerLinkService._unlink_player_from_auth_user(
-            session,
-            auth_user_id=current_user.id,
-            player_id=player_id,
-        )
+        player = await PlayerLinkService._get_player(session, player_id)
+        if player.auth_user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Player link not found",
+            )
+        await PlayerLinkService._unlink_player_from_auth_user(session, player_id=player_id)
 
     @staticmethod
     async def _unlink_player_from_auth_user(
         session: AsyncSession,
         *,
-        auth_user_id: int,
         player_id: int,
     ) -> None:
-        result = await session.execute(
-            select(models.AuthUserPlayer).where(
-                models.AuthUserPlayer.auth_user_id == auth_user_id,
-                models.AuthUserPlayer.player_id == player_id,
-            )
-        )
-        player_link = result.scalar_one_or_none()
-        if player_link is None:
+        """Clear ``players.user.auth_user_id`` for the single-link model.
+
+        Refuses (409) when the auth user still holds a real workspace
+        membership role: ``workspace_member`` is anchored on this player, so
+        clearing the link would strand that membership row auth-less — hidden
+        from the members list and unmanageable via the auth-keyed lookup. The
+        409 names the blocking workspaces so the user knows which to leave
+        first. Baseline ``player`` participation does not block the unlink (see
+        ``workspace_names_blocking_player_unlink``).
+        """
+        player = await PlayerLinkService._get_player(session, player_id)
+        auth_user_id = player.auth_user_id
+        if auth_user_id is None:
+            return  # already unlinked — idempotent no-op
+        blocking_workspaces = await workspace_names_blocking_player_unlink(session, user_id=auth_user_id)
+        if blocking_workspaces:
+            listed = ", ".join(blocking_workspaces)
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Player link not found",
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Cannot unlink this player: the account is a member of the "
+                    f"following workspace(s): {listed}. Leave those workspaces first."
+                ),
             )
-
-        was_primary = player_link.is_primary
-        await session.delete(player_link)
-
-        if was_primary:
-            result = await session.execute(
-                select(models.AuthUserPlayer)
-                .where(models.AuthUserPlayer.auth_user_id == auth_user_id)
-                .order_by(models.AuthUserPlayer.created_at.asc())
-            )
-            next_link = result.scalars().first()
-            if next_link is not None:
-                next_link.is_primary = True
-
+        player.auth_user_id = None
         await session.commit()
         logger.info(f"Unlinked player {player_id} from auth user {auth_user_id}")
 
@@ -247,17 +287,13 @@ class PlayerLinkService:
         auth_user_id: int,
         player_id: int,
     ) -> None:
-        await PlayerLinkService._unlink_player_from_auth_user(
-            session,
-            auth_user_id=auth_user_id,
-            player_id=player_id,
-        )
+        """Admin unlink (no ownership check). ``auth_user_id`` accepted for
+        signature compatibility; the single-link column is cleared regardless."""
+        await PlayerLinkService._unlink_player_from_auth_user(session, player_id=player_id)
 
     @staticmethod
-    async def get_linked_players(session: AsyncSession, current_user: models.AuthUser) -> list[models.AuthUserPlayer]:
-        result = await session.execute(
-            select(models.AuthUserPlayer)
-            .where(models.AuthUserPlayer.auth_user_id == current_user.id)
-            .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.created_at.asc())
-        )
-        return list(result.scalars().all())
+    async def get_linked_players(session: AsyncSession, current_user: models.AuthUser) -> list[User]:
+        """Return the 0-or-1 player linked to ``current_user`` via
+        ``players.user.auth_user_id`` (a list, for API-shape compatibility)."""
+        player = await session.scalar(select(User).where(User.auth_user_id == current_user.id))
+        return [player] if player is not None else []

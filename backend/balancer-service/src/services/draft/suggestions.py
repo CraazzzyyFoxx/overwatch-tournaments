@@ -30,6 +30,13 @@ class FitPlayer:
     preference_order: tuple[DraftRole, ...] = ()
     is_flex: bool = False
     user_id: int | None = None
+    # Per-role ranks (role -> SR). ``rank_value`` is the fallback when a role
+    # has no specific entry, so candidates are scored at the rank of the role
+    # they'd actually fill — not their primary-role rank.
+    rank_by_role: Mapping[DraftRole, int] = field(default_factory=dict)
+
+    def rank_for(self, role: DraftRole) -> int:
+        return self.rank_by_role.get(role, self.rank_value)
 
 
 @dataclass(frozen=True)
@@ -67,11 +74,12 @@ def player_fit(
 ) -> FitResult:
     impact = cfg.role_impact.get(role, 1.0)
     discomfort = role_discomfort(player, role)
-    rating_term = player.rank_value * impact
+    role_rank = player.rank_for(role)
+    rating_term = role_rank * impact
     comfort_term = cfg.discomfort_weight * discomfort
 
     if strategy == DraftAutopickStrategy.BEST_AVAILABLE:
-        score = float(player.rank_value)
+        score = float(role_rank)
         need_term = 0.0
     elif strategy == DraftAutopickStrategy.ROLE_NEED:
         need_term = cfg.role_need_bonus * remaining_capacity
@@ -118,9 +126,9 @@ def _candidates(
 
 
 def _sort_key(result: FitResult, available_by_id: Mapping[int, FitPlayer]) -> tuple:
-    # Higher fit, then higher rank, then lower player_id, then role value asc — fully
-    # deterministic so autopick is reproducible.
-    rank = available_by_id[result.player_id].rank_value
+    # Higher fit, then higher rank (for the result's role), then lower player_id,
+    # then role value asc — fully deterministic so autopick is reproducible.
+    rank = available_by_id[result.player_id].rank_for(result.role)
     return (-result.fit_score, -rank, result.player_id, result.role.value)
 
 

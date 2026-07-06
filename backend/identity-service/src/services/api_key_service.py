@@ -1,20 +1,24 @@
 from __future__ import annotations
 
-import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
-from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rbac import legacy_workspace_role_name_for_user
+from shared.repository import ApiKeyRepository, WorkspaceMemberRepository, WorkspaceRepository
 from src import models, schemas
+from src.core import key_derivation
 from src.core.config import settings
 from src.services.auth_service import AuthService
+
+# Domain-separated subkey for hashing API-key secrets (never the raw JWT secret).
+_API_KEY_SECRET_KEY = key_derivation.api_key_secret_key(settings.JWT_SECRET_KEY)
 
 API_KEY_PREFIX = "aqt_sk"
 DEFAULT_API_KEY_SCOPES = ["balancer.jobs"]
@@ -52,11 +56,18 @@ def _now() -> datetime:
 
 
 def _hash_secret(secret: str) -> str:
-    return hmac.new(
-        settings.JWT_SECRET_KEY.encode("utf-8"),
-        secret.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    """Hash an API-key secret for storage (domain-separated subkey, new writes)."""
+    return key_derivation.hmac_sha256_hex(_API_KEY_SECRET_KEY, secret)
+
+
+def _verify_secret(secret: str, stored_hash: str) -> bool:
+    """Constant-time verify against the derived hash, then the legacy raw-secret
+    hash — so API keys created before domain separation keep validating without
+    a re-issue. New keys are always stored with the derived hash."""
+    if hmac.compare_digest(stored_hash, _hash_secret(secret)):
+        return True
+    legacy = key_derivation.legacy_hmac_sha256_hex(settings.JWT_SECRET_KEY, secret)
+    return hmac.compare_digest(stored_hash, legacy)
 
 
 def _split_key(raw_key: str) -> tuple[str, str] | None:
@@ -137,7 +148,10 @@ async def _has_workspace_import_access(
     member = await _get_workspace_member(session, user_id=user.id, workspace_id=workspace_id)
     if member is None:
         return False
-    if member.role in {"admin", "owner"}:
+    # ``workspace_member`` no longer stores a denormalized ``role``; derive the
+    # legacy role name from RBAC (``user_roles``, keyed on ``auth_user_id``).
+    legacy_role = await legacy_workspace_role_name_for_user(session, user_id=user.id, workspace_id=workspace_id)
+    if legacy_role in {"admin", "owner"}:
         return True
 
     workspace_rbac = await AuthService.get_workspace_roles_and_permissions_db(session, user.id, [workspace_id])
@@ -223,9 +237,7 @@ async def list_api_keys(
     query = params.apply_pagination_sort(query, models.ApiKey)
     rows = (await session.execute(query)).scalars().all()
     total = (await session.execute(count_query)).scalar_one()
-    counts = await _api_key_status_counts(
-        session, auth_user_id=user.id, workspace_id=params.workspace_id
-    )
+    counts = await _api_key_status_counts(session, auth_user_id=user.id, workspace_id=params.workspace_id)
     return {
         "results": [_serialize_api_key(row) for row in rows],
         "total": total,
@@ -304,7 +316,7 @@ async def validate_api_key(session: AsyncSession, raw_key: str) -> schemas.Token
     api_key = await _api_key_repo.get_by_public_id(session, public_id)
     if api_key is None:
         return None
-    if not hmac.compare_digest(api_key.secret_hash, _hash_secret(secret)):
+    if not _verify_secret(secret, api_key.secret_hash):
         return None
     if api_key.revoked_at is not None:
         return None

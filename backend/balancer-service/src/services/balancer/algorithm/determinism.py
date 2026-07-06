@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 
-from src.services.balancer.config.defaults import AlgorithmConfig
 from src.services.balancer.algorithm.entities import Player
+from src.services.balancer.config.defaults import AlgorithmConfig
 
 
 def build_balancer_seed(

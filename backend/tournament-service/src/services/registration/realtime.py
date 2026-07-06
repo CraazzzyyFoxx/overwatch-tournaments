@@ -16,11 +16,11 @@ from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
+
 from shared.services.balancer_realtime import (
     BALANCER_REGISTRATIONS_CHANGED,
     publish_balancer_event,
 )
-
 from src.core import config, db
 
 __all__ = ("emit_balancer_registrations_changed",)

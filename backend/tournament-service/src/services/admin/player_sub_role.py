@@ -1,9 +1,9 @@
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
-from shared.domain.player_sub_roles import normalize_role, normalize_sub_role
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.player_sub_roles import normalize_role, normalize_sub_role
 from src import models
 from src.schemas.admin import player_sub_role as schemas
 

@@ -8,6 +8,7 @@ replaces pg ``LISTEN/NOTIFY``, which pgBouncer transaction pooling breaks.
 from typing import Any, Literal
 
 from loguru import logger as default_logger
+
 from shared.messaging.config import MATCH_LOG_RESULT_EXCHANGE
 from shared.observability import publish_message
 from shared.schemas.events import MatchLogProcessedEvent

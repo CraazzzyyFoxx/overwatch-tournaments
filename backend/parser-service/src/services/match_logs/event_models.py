@@ -6,7 +6,7 @@ the pipeline works with attributes instead of positional magic indices.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
 
 from src.core import enums
 
@@ -39,7 +39,7 @@ class KillEvent(_StrictBase):
     is_environmental: bool
 
     @classmethod
-    def from_data(cls, data: list[str]) -> "KillEvent":
+    def from_data(cls, data: list[str]) -> KillEvent:
         if len(data) < 10:
             raise ValueError(f"KillEvent: expected ≥10 fields, got {len(data)}: {data}")
         ability_raw = data[6]
@@ -74,7 +74,7 @@ class MatchEventRow(_StrictBase):
     related_player: str | None = None
 
     @classmethod
-    def from_data(cls, data: list[str], event_type: enums.MatchEvent) -> "MatchEventRow":
+    def from_data(cls, data: list[str], event_type: enums.MatchEvent) -> MatchEventRow:
         if len(data) < 3:
             raise ValueError(f"MatchEventRow: expected ≥3 fields for {event_type}, got {len(data)}: {data}")
 
@@ -111,7 +111,7 @@ class PlayerStatRow(_StrictBase):
     stat_values: dict[enums.LogStatsName, float]
 
     @classmethod
-    def from_data(cls, data: list[str]) -> "PlayerStatRow":
+    def from_data(cls, data: list[str]) -> PlayerStatRow:
         if len(data) < 4:
             raise ValueError(f"PlayerStatRow: expected ≥4 fields, got {len(data)}: {data}")
 
@@ -140,6 +140,7 @@ class PlayerStatRow(_StrictBase):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_float(raw: str, field: str) -> float:
     try:

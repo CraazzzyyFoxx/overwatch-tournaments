@@ -4,9 +4,10 @@ import hashlib
 from datetime import UTC, datetime
 
 from loguru import logger
-from shared.models.log_processing import LogProcessingRecord, LogProcessingSource, LogProcessingStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared.models.ingestion.log_processing import LogProcessingRecord, LogProcessingSource, LogProcessingStatus
 
 
 def compute_content_hash(raw_bytes: bytes) -> str:

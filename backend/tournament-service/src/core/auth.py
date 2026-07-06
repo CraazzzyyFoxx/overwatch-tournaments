@@ -1,41 +1,23 @@
-"""Authentication dependencies for tournament-service."""
+"""Authentication dependencies for tournament-service.
+
+The ``get_*_workspace_id`` resolvers and ``require_*`` helpers below are the
+cross-module authorization contract: RPC handlers resolve the workspace from
+the actual object being acted on (never from a client-supplied field) and then
+check the caller's permission in that workspace.
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
 import sqlalchemy as sa
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.auth_user import AuthUser
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
 from src import models
 
 
-async def _resolve_user_from_db(user_id: int, payload: dict[str, Any], *, session: AsyncSession) -> AuthUser | None:
-    result = await session.execute(select(AuthUser).where(AuthUser.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is not None:
-        workspace_rbac: dict[int, dict] = {}
-        for ws in payload.get("workspaces", []):
-            ws_id = ws.get("workspace_id")
-            if ws_id is not None:
-                workspace_rbac[ws_id] = {
-                    "roles": ws.get("rbac_roles", []),
-                    "permissions": ws.get("rbac_permissions", []),
-                }
-        user.set_rbac_cache(
-            role_names=payload.get("roles", []),
-            permissions=payload.get("permissions", []),
-            workspaces=payload.get("workspaces", []),
-            workspace_rbac=workspace_rbac,
-        )
-    return user
-
-
-async def _require_workspace_permission(
+async def require_workspace_permission(
     current_user: AuthUser,
     *,
     workspace_id: int,
@@ -51,7 +33,7 @@ async def _require_workspace_permission(
     return current_user
 
 
-async def _get_tournament_workspace_id(session: AsyncSession, tournament_id: int) -> int:
+async def get_tournament_workspace_id(session: AsyncSession, tournament_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
     )
@@ -63,7 +45,7 @@ async def _get_tournament_workspace_id(session: AsyncSession, tournament_id: int
     return int(workspace_id)
 
 
-async def _get_team_workspace_id(session: AsyncSession, team_id: int) -> int:
+async def get_team_workspace_id(session: AsyncSession, team_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Team, models.Team.tournament_id == models.Tournament.id)
@@ -74,7 +56,7 @@ async def _get_team_workspace_id(session: AsyncSession, team_id: int) -> int:
     return int(workspace_id)
 
 
-async def _get_player_workspace_id(session: AsyncSession, player_id: int) -> int:
+async def get_player_workspace_id(session: AsyncSession, player_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Player, models.Player.tournament_id == models.Tournament.id)
@@ -85,7 +67,7 @@ async def _get_player_workspace_id(session: AsyncSession, player_id: int) -> int
     return int(workspace_id)
 
 
-async def _get_player_sub_role_workspace_id(session: AsyncSession, sub_role_id: int) -> int:
+async def get_player_sub_role_workspace_id(session: AsyncSession, sub_role_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.PlayerSubRole.workspace_id).where(models.PlayerSubRole.id == sub_role_id)
     )
@@ -94,7 +76,7 @@ async def _get_player_sub_role_workspace_id(session: AsyncSession, sub_role_id: 
     return int(workspace_id)
 
 
-async def _get_stage_workspace_id(session: AsyncSession, stage_id: int) -> int:
+async def get_stage_workspace_id(session: AsyncSession, stage_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Stage, models.Stage.tournament_id == models.Tournament.id)
@@ -105,7 +87,7 @@ async def _get_stage_workspace_id(session: AsyncSession, stage_id: int) -> int:
     return int(workspace_id)
 
 
-async def _get_stage_item_workspace_id(session: AsyncSession, stage_item_id: int) -> int:
+async def get_stage_item_workspace_id(session: AsyncSession, stage_item_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Stage, models.Stage.tournament_id == models.Tournament.id)
@@ -117,7 +99,7 @@ async def _get_stage_item_workspace_id(session: AsyncSession, stage_item_id: int
     return int(workspace_id)
 
 
-async def _get_stage_item_input_workspace_id(session: AsyncSession, input_id: int) -> int:
+async def get_stage_item_input_workspace_id(session: AsyncSession, input_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Stage, models.Stage.tournament_id == models.Tournament.id)
@@ -130,7 +112,7 @@ async def _get_stage_item_input_workspace_id(session: AsyncSession, input_id: in
     return int(workspace_id)
 
 
-async def _get_encounter_workspace_id(session: AsyncSession, encounter_id: int) -> int:
+async def get_encounter_workspace_id(session: AsyncSession, encounter_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Encounter, models.Encounter.tournament_id == models.Tournament.id)
@@ -141,7 +123,7 @@ async def _get_encounter_workspace_id(session: AsyncSession, encounter_id: int) 
     return int(workspace_id)
 
 
-async def _get_match_workspace_id(session: AsyncSession, match_id: int) -> int:
+async def get_match_workspace_id(session: AsyncSession, match_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Encounter, models.Encounter.tournament_id == models.Tournament.id)
@@ -153,7 +135,7 @@ async def _get_match_workspace_id(session: AsyncSession, match_id: int) -> int:
     return int(workspace_id)
 
 
-async def _get_standing_workspace_id(session: AsyncSession, standing_id: int) -> int:
+async def get_standing_workspace_id(session: AsyncSession, standing_id: int) -> int:
     workspace_id = await session.scalar(
         sa.select(models.Tournament.workspace_id)
         .join(models.Standing, models.Standing.tournament_id == models.Tournament.id)
@@ -164,9 +146,13 @@ async def _get_standing_workspace_id(session: AsyncSession, standing_id: int) ->
     return int(workspace_id)
 
 
-async def _get_registration_workspace_id(session: AsyncSession, registration_id: int) -> int:
+async def get_registration_workspace_id(session: AsyncSession, registration_id: int) -> int:
+    # BalancerRegistration has no denormalized workspace_id column — derive it via
+    # the owning tournament (registrations are always tournament-scoped).
     workspace_id = await session.scalar(
-        sa.select(models.BalancerRegistration.workspace_id).where(models.BalancerRegistration.id == registration_id)
+        sa.select(models.Tournament.workspace_id)
+        .join(models.BalancerRegistration, models.BalancerRegistration.tournament_id == models.Tournament.id)
+        .where(models.BalancerRegistration.id == registration_id)
     )
     if workspace_id is None:
         raise HTTPException(
@@ -184,8 +170,8 @@ async def require_tournament_id_permission(
     resource: str,
     action: str,
 ) -> AuthUser:
-    workspace_id = await _get_tournament_workspace_id(session, tournament_id)
-    return await _require_workspace_permission(
+    workspace_id = await get_tournament_workspace_id(session, tournament_id)
+    return await require_workspace_permission(
         current_user,
         workspace_id=workspace_id,
         resource=resource,
@@ -211,7 +197,7 @@ async def require_encounter_ids_permission(
     if not workspace_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounters not found")
     for workspace_id in workspace_ids:
-        await _require_workspace_permission(
+        await require_workspace_permission(
             current_user,
             workspace_id=workspace_id,
             resource=resource,

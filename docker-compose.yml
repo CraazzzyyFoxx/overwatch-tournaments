@@ -58,6 +58,9 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      # Dev-only: allow the default guest user to authenticate from other
+      # containers (rabbitmq-exporter). Prod uses non-guest credentials.
+      - ./monitoring/rabbitmq/dev-loopback.conf:/etc/rabbitmq/conf.d/10-dev-monitoring.conf:ro
     networks:
       - app-network
     healthcheck:
@@ -528,6 +531,13 @@ services:
       - ./backend/env/common.env
       - ./backend/env/auth.env
       - ./backend/env/gateway.env
+    environment:
+      # OpenTelemetry tracing into the shared otel-collector (same block as the
+      # Python services), so gateway spans join the distributed traces in Tempo.
+      - TRACING_ENABLED=true
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
     volumes:
       # Structured JSON logs tailed by Promtail into Loki (LOG_FILE=/logs/gateway.log).
       - ./logs/gateway:/logs
@@ -586,6 +596,8 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
       - "--web.enable-lifecycle"
+      # Tempo's metrics_generator pushes span-metrics / service-graph series here.
+      - "--web.enable-remote-write-receiver"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro

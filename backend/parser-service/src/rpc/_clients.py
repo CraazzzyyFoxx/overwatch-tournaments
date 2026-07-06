@@ -9,8 +9,8 @@ handlers import ``s3_client`` directly.
 from __future__ import annotations
 
 from redis.asyncio import Redis
-from shared.clients import S3Client
 
+from shared.clients import S3Client
 from src.core import config
 
 s3_client = S3Client(

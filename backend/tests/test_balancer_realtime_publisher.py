@@ -26,9 +26,7 @@ class PublishBalancerEventTests(IsolatedAsyncioTestCase):
     async def test_targets_tournament_balancer_topic_and_folds_tournament_id(self) -> None:
         session = MagicMock()
         redis = MagicMock()
-        with patch.object(
-            balancer_realtime, "publish_event", AsyncMock(return_value="envelope")
-        ) as publish_event:
+        with patch.object(balancer_realtime, "publish_event", AsyncMock(return_value="envelope")) as publish_event:
             result = await balancer_realtime.publish_balancer_event(
                 session,
                 redis,

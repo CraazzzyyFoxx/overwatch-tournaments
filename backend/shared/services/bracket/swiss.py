@@ -92,10 +92,7 @@ def _build_team_meta(sorted_teams: list[SwissStanding]) -> dict[int, _TeamMeta]:
 
 def _pair_bucket(anchor: _TeamMeta, candidate: _TeamMeta) -> int:
     if anchor.group_index == candidate.group_index:
-        if (
-            (anchor.is_top_half and candidate.is_bottom_half)
-            or (anchor.is_bottom_half and candidate.is_top_half)
-        ):
+        if (anchor.is_top_half and candidate.is_bottom_half) or (anchor.is_bottom_half and candidate.is_top_half):
             return 0
         return 1
     return 2
@@ -167,11 +164,7 @@ def _find_pairings(
             if pair_key in played_pairs:
                 continue
 
-            next_remaining = tuple(
-                team_id
-                for team_id in remaining[1:]
-                if team_id != candidate_team_id
-            )
+            next_remaining = tuple(team_id for team_id in remaining[1:] if team_id != candidate_team_id)
             remainder = _search(next_remaining)
             if remainder is None:
                 continue
@@ -200,18 +193,14 @@ def generate_round(
         round_number: Round number for generated pairings.
         bye_history: Optional set of team_ids that already received a bye.
     """
-    sorted_teams = sorted(
-        standings, key=lambda standing: (standing.points, standing.buchholz), reverse=True
-    )
+    sorted_teams = sorted(standings, key=lambda standing: (standing.points, standing.buchholz), reverse=True)
     team_ids = [standing.team_id for standing in sorted_teams]
     bye_history = bye_history or set()
 
     bye_candidate: int | None = None
     pair_order: list[tuple[int, int]] | None = None
     for candidate in _bye_candidates(team_ids, bye_history):
-        pairing_standings = [
-            standing for standing in sorted_teams if standing.team_id != candidate
-        ]
+        pairing_standings = [standing for standing in sorted_teams if standing.team_id != candidate]
         pairing_team_ids = [standing.team_id for standing in pairing_standings]
         metadata = _build_team_meta(pairing_standings)
         pair_order = _find_pairings(
@@ -224,9 +213,7 @@ def generate_round(
             break
 
     if pair_order is None:
-        raise SwissPairingImpossibleError(
-            "Unable to generate a complete Swiss round without rematches"
-        )
+        raise SwissPairingImpossibleError("Unable to generate a complete Swiss round without rematches")
 
     pairings = [
         Pairing(

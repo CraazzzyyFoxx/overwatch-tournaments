@@ -12,12 +12,12 @@ import typing
 
 import pandas as pd
 import sqlalchemy as sa
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import models
 from src.core.config import settings
-from src.core.workspace import get_division_grid
+from src.core.workspace import get_division_grid, get_tournament_workspace_id
+from src.services.analytics.canonical_division import canonical_division_number
 
 from ..features.aggregations import build_match_features_with_strength
 from ..features.local_performance import attach_local_performance
@@ -55,11 +55,7 @@ __all__ = (
 
 
 async def _algorithm_id(session: AsyncSession, name: str) -> int | None:
-    return await session.scalar(
-        sa.select(models.AnalyticsAlgorithm.id).where(
-            models.AnalyticsAlgorithm.name == name
-        )
-    )
+    return await session.scalar(sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == name))
 
 
 def _explanation_rows(
@@ -85,11 +81,7 @@ def _explanation_rows(
     top_features_by_player: dict[int, list[dict[str, typing.Any]]] = {}
 
     # Aggregate per-(player, role) feature means so SHAP has a single sample.
-    agg = (
-        feature_frame.groupby(["player_id", "role"], dropna=False)
-        .mean(numeric_only=True)
-        .reset_index()
-    )
+    agg = feature_frame.groupby(["player_id", "role"], dropna=False).mean(numeric_only=True).reset_index()
 
     for role, model in models_by_role.items():
         role_rows = agg[agg["role"].str.lower() == role.lower()]
@@ -147,9 +139,7 @@ async def run_performance_for_tournament(
     """
     algorithm_id = await _algorithm_id(session, PERFORMANCE_ALGORITHM_NAME)
     if algorithm_id is None:
-        logger.warning(
-            "No %s algorithm row found; run training first", PERFORMANCE_ALGORITHM_NAME
-        )
+        logger.warning("No %s algorithm row found; run training first", PERFORMANCE_ALGORITHM_NAME)
         return 0
 
     artifacts = await load_active_artifacts(session, model_kind=PERFORMANCE_MODEL_KIND)
@@ -164,16 +154,12 @@ async def run_performance_for_tournament(
         try:
             models_by_role[art.role.lower()] = load_artifact(art.storage_uri)
         except FileNotFoundError:
-            logger.warning(
-                "Missing artifact file for role=%s (uri=%s)", art.role, art.storage_uri
-            )
+            logger.warning("Missing artifact file for role=%s (uri=%s)", art.role, art.storage_uri)
 
     if not models_by_role:
         return 0
 
-    feature_frame = await build_match_features_with_strength(
-        session, tournament_id, workspace_id=workspace_id
-    )
+    feature_frame = await build_match_features_with_strength(session, tournament_id, workspace_id=workspace_id)
     if feature_frame.empty:
         logger.info("No matches for tournament_id=%d; nothing to write", tournament_id)
         return 0
@@ -195,15 +181,12 @@ async def run_performance_for_tournament(
     if per_player.empty:
         return 0
     per_player["impact_score"] = impact_score_within_role(per_player)
-    grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
-    player_ranks = (
-        feature_frame.groupby("player_id", dropna=False)["rank"].first().to_dict()
-    )
+    # Canonical OW division per player so the local-performance cohort bands are
+    # comparable across workspaces.
+    source_grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
+    player_ranks = feature_frame.groupby("player_id", dropna=False)["rank"].first().to_dict()
     per_player["division"] = per_player["player_id"].map(
-        lambda player_id: resolve_tournament_division(
-            int(player_ranks.get(player_id, 0) or 0),
-            tournament_grid=grid,
-        )
+        lambda player_id: canonical_division_number(source_grid, int(player_ranks.get(player_id, 0) or 0))
     )
     per_player = attach_local_performance(per_player)
     # Small (tournament, role) cohorts get a smooth normal-CDF impact score
@@ -212,12 +195,8 @@ async def run_performance_for_tournament(
 
     # Optional: SHAP top-5 contributions denormalised into ``top_features``.
     if include_shap:
-        rows, top_features_by_player = _explanation_rows(
-            per_player, feature_frame, models_by_role, algorithm_id
-        )
-        per_player["top_features"] = per_player["player_id"].map(
-            lambda pid: top_features_by_player.get(int(pid))
-        )
+        rows, top_features_by_player = _explanation_rows(per_player, feature_frame, models_by_role, algorithm_id)
+        per_player["top_features"] = per_player["player_id"].map(lambda pid: top_features_by_player.get(int(pid)))
     else:
         rows = []
         per_player["top_features"] = None
@@ -240,24 +219,12 @@ async def run_performance_for_tournament(
             "log_coverage": float(row["log_coverage"]) if pd.notna(row["log_coverage"]) else 0.0,
             "local_mean": float(row["local_mean"]) if pd.notna(row["local_mean"]) else 0.0,
             "local_std": float(row["local_std"]) if pd.notna(row["local_std"]) else 1.0,
-            "local_residual": float(row["local_residual"])
-            if pd.notna(row["local_residual"])
-            else 0.0,
-            "local_zscore": float(row["local_zscore"])
-            if pd.notna(row["local_zscore"])
-            else 0.0,
-            "local_percentile": float(row["local_percentile"])
-            if pd.notna(row["local_percentile"])
-            else 50.0,
-            "local_reference_n": int(row["local_reference_n"])
-            if pd.notna(row["local_reference_n"])
-            else 0,
-            "local_band_min_div": int(row["local_band_min_div"])
-            if pd.notna(row["local_band_min_div"])
-            else None,
-            "local_band_max_div": int(row["local_band_max_div"])
-            if pd.notna(row["local_band_max_div"])
-            else None,
+            "local_residual": float(row["local_residual"]) if pd.notna(row["local_residual"]) else 0.0,
+            "local_zscore": float(row["local_zscore"]) if pd.notna(row["local_zscore"]) else 0.0,
+            "local_percentile": float(row["local_percentile"]) if pd.notna(row["local_percentile"]) else 50.0,
+            "local_reference_n": int(row["local_reference_n"]) if pd.notna(row["local_reference_n"]) else 0,
+            "local_band_min_div": int(row["local_band_min_div"]) if pd.notna(row["local_band_min_div"]) else None,
+            "local_band_max_div": int(row["local_band_max_div"]) if pd.notna(row["local_band_max_div"]) else None,
             "top_features": row["top_features"],
         }
         for _, row in per_player.iterrows()
@@ -312,9 +279,7 @@ async def run_shift_for_tournament(
         logger.warning("Missing shift v2 artifact file at %s", artifact.storage_uri)
         return 0
 
-    feature_frame = await build_shift_feature_frame(
-        session, [tournament_id], workspace_id=workspace_id
-    )
+    feature_frame = await build_shift_feature_frame(session, [tournament_id], workspace_id=workspace_id)
     if feature_frame.empty:
         return 0
 
@@ -359,9 +324,7 @@ def _build_matchups(feature_frame: pd.DataFrame, p_home) -> pd.DataFrame:
     aligning ``p_home`` positionally so the surviving probabilities stay tied
     to their rows.
     """
-    paired = feature_frame.assign(p_home_wins=p_home).dropna(
-        subset=["home_team_id", "away_team_id"]
-    )
+    paired = feature_frame.assign(p_home_wins=p_home).dropna(subset=["home_team_id", "away_team_id"])
     return pd.DataFrame(
         {
             "home_team_id": paired["home_team_id"].astype(int).to_numpy(),
@@ -381,8 +344,8 @@ async def run_standings_for_tournament(
 ) -> int:
     """Compute Monte Carlo standings distribution and upsert results.
 
-    Also writes ``round(mean_position)`` into the legacy
-    ``analytics.predictions`` table so v1 integer-place consumers stay live.
+    Writes only ``analytics.standings_distribution``; the read API derives the
+    scalar ``predicted_place`` from ``round(mean_position)`` on demand.
     Returns the number of team rows persisted.
 
     ``prob_sharpening`` controls how decisively calibrated win-probabilities are
@@ -393,9 +356,7 @@ async def run_standings_for_tournament(
         prob_sharpening = settings.standings_prob_sharpening
     algorithm_id = await _algorithm_id(session, STANDINGS_ALGORITHM_NAME)
     if algorithm_id is None:
-        logger.warning(
-            "No %s algorithm row; run training first", STANDINGS_ALGORITHM_NAME
-        )
+        logger.warning("No %s algorithm row; run training first", STANDINGS_ALGORITHM_NAME)
         return 0
     artifact = await load_active_artifact(
         session,
@@ -412,9 +373,7 @@ async def run_standings_for_tournament(
         logger.warning("Missing standings v2 artifact at %s", artifact.storage_uri)
         return 0
 
-    feature_frame = await build_standings_training_frame(
-        session, [tournament_id], workspace_id=workspace_id
-    )
+    feature_frame = await build_standings_training_frame(session, [tournament_id], workspace_id=workspace_id)
     if feature_frame.empty:
         return 0
 
@@ -426,12 +385,8 @@ async def run_standings_for_tournament(
             tournament_id,
         )
         return 0
-    teams = sorted(
-        {int(t) for t in matchups["home_team_id"].tolist() + matchups["away_team_id"].tolist()}
-    )
-    distribution = simulate_standings(
-        matchups, teams, n_iter=n_iter, prob_sharpening=prob_sharpening
-    )
+    teams = sorted({int(t) for t in matchups["home_team_id"].tolist() + matchups["away_team_id"].tolist()})
+    distribution = simulate_standings(matchups, teams, n_iter=n_iter, prob_sharpening=prob_sharpening)
     if distribution.empty:
         return 0
 
@@ -460,24 +415,6 @@ async def run_standings_for_tournament(
     ]
     await session.execute(sa.insert(models.AnalyticsStandingsDistribution), rows)
 
-    # Legacy ``AnalyticsPredictions.predicted_place`` mirror.
-    await session.execute(
-        sa.delete(models.AnalyticsPredictions).where(
-            models.AnalyticsPredictions.tournament_id == tournament_id,
-            models.AnalyticsPredictions.algorithm_id == algorithm_id,
-        )
-    )
-    legacy_rows = [
-        {
-            "tournament_id": tournament_id,
-            "team_id": int(r["team_id"]),
-            "algorithm_id": algorithm_id,
-            "predicted_place": int(round(float(r["mean_position"]))),
-        }
-        for _, r in distribution.iterrows()
-    ]
-    await session.execute(sa.insert(models.AnalyticsPredictions), legacy_rows)
-
     await session.commit()
     return len(rows)
 
@@ -493,15 +430,17 @@ async def run_for_tournament(
 
     Returns ``{kind: rows_written}``.
     """
-    kinds = set(
-        model_kinds
-        or ("performance", "player_anomalies", "shift", "standings", "match_quality")
-    )
+    kinds = set(model_kinds or ("performance", "player_anomalies", "shift", "standings", "match_quality"))
+    # Scope to the tournament's own workspace when not given one. The CLI
+    # (``ml.cli infer/backfill``) defaults to ``None``; without this it would
+    # build feature cohorts and pick the division grid globally (all
+    # workspaces) and diverge from the RPC recalculate job, which always passes
+    # ``job.workspace_id``. A tournament belongs to exactly one workspace.
+    if workspace_id is None:
+        workspace_id = await get_tournament_workspace_id(session, tournament_id)
     summary: dict[str, int] = {}
     if "performance" in kinds:
-        summary["performance"] = await run_performance_for_tournament(
-            session, tournament_id, workspace_id=workspace_id
-        )
+        summary["performance"] = await run_performance_for_tournament(session, tournament_id, workspace_id=workspace_id)
     if "player_anomalies" in kinds or "match_quality" in kinds:
         summary["player_anomalies"] = await run_player_anomalies_for_tournament(
             session,
@@ -509,13 +448,9 @@ async def run_for_tournament(
             workspace_id=workspace_id,
         )
     if "shift" in kinds:
-        summary["shift"] = await run_shift_for_tournament(
-            session, tournament_id, workspace_id=workspace_id
-        )
+        summary["shift"] = await run_shift_for_tournament(session, tournament_id, workspace_id=workspace_id)
     if "standings" in kinds:
-        summary["standings"] = await run_standings_for_tournament(
-            session, tournament_id, workspace_id=workspace_id
-        )
+        summary["standings"] = await run_standings_for_tournament(session, tournament_id, workspace_id=workspace_id)
     if "match_quality" in kinds:
         # Lazy import to avoid pulling ruptures unless used.
         from .match_quality_runner import run_match_quality_for_tournament

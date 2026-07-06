@@ -17,10 +17,10 @@ from __future__ import annotations
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.orm import selectinload
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.core import db, pagination
 from src.schemas.analytics_read import BalancePlayerSnapshotRead, BalanceQualityRead
@@ -68,9 +68,7 @@ def register(broker: Any, logger: Any) -> None:
                     per_page=c.q1(data, "per_page", int, 10),
                 )
             )
-            return await analytics_flows.get_algorithms(
-                session, params, tournament_id=c.q1(data, "tournament_id", int)
-            )
+            return await analytics_flows.get_algorithms(session, params, tournament_id=c.q1(data, "tournament_id", int))
 
         return await c.envelope(logger, "list_algorithms", op, session_factory=sf)
 
@@ -163,9 +161,7 @@ def register(broker: Any, logger: Any) -> None:
                 models.AnalyticsStandingsDistribution.tournament_id == tournament_id
             )
             if algorithm_id is not None:
-                query = query.where(
-                    models.AnalyticsStandingsDistribution.algorithm_id == algorithm_id
-                )
+                query = query.where(models.AnalyticsStandingsDistribution.algorithm_id == algorithm_id)
             rows = (await session.execute(query)).scalars().all()
             return [StandingsRow.model_validate(r, from_attributes=True) for r in rows]
 

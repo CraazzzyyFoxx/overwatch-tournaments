@@ -16,15 +16,15 @@ Create Date: 2026-04-18 05:00:00.000000
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "phasec0001"
-down_revision: Union[str, Sequence[str], None] = "phasea0001"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "phasea0001"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -87,9 +87,7 @@ def upgrade() -> None:
         ),
         sa.Column("role", sa.String(), nullable=False),
         sa.Column("target_slot", sa.String(), nullable=False),
-        sa.UniqueConstraint(
-            "source_encounter_id", "role", name="uq_encounter_link_source_role"
-        ),
+        sa.UniqueConstraint("source_encounter_id", "role", name="uq_encounter_link_source_role"),
         schema="tournament",
     )
 
@@ -125,12 +123,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_encounter_link_target", table_name="encounter_link", schema="tournament"
-    )
-    op.drop_index(
-        "ix_encounter_link_source", table_name="encounter_link", schema="tournament"
-    )
+    op.drop_index("ix_encounter_link_target", table_name="encounter_link", schema="tournament")
+    op.drop_index("ix_encounter_link_source", table_name="encounter_link", schema="tournament")
     op.drop_table("encounter_link", schema="tournament")
     op.execute("DROP TYPE IF EXISTS tournament.encounterlinkslot")
     op.execute("DROP TYPE IF EXISTS tournament.encounterlinkrole")

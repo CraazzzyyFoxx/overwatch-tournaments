@@ -179,7 +179,11 @@ export function formatAnalyticsNumber(
     return "0";
   }
 
-  const rounded = value.toFixed(fractionDigits).replace(/\.?0+$/, "");
+  // Round to ``fractionDigits`` then drop trailing zeros — but only in the
+  // FRACTIONAL part. ``Number(...).toString()`` does exactly that without the
+  // old ``/\.?0+$/`` regex bug, which also stripped trailing zeros from whole
+  // numbers (e.g. "100" -> "1") when ``fractionDigits`` was 0.
+  const rounded = String(Number(value.toFixed(fractionDigits)));
   if (rounded === "-0") {
     return "0";
   }

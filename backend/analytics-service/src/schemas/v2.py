@@ -106,8 +106,7 @@ class TrainRequestBody(BaseModel):
     workspace_ids: list[int] | None = Field(
         default=None,
         description=(
-            "Training data scope. None means all workspaces; a list limits "
-            "the training sample to those workspace IDs."
+            "Training data scope. None means all workspaces; a list limits the training sample to those workspace IDs."
         ),
     )
 

@@ -15,11 +15,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from pydantic import ValidationError
 
-from shared.models.auth_user import AuthUser
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
 from shared.rpc.identity import (
     MissingIdentityError,
     ensure_workspace_permission,
@@ -63,7 +63,9 @@ def is_api_key_identity(data: dict[str, Any]) -> bool:
     return (data.get("identity") or {}).get("credential_type") == "api_key"
 
 
-def require_workspace_permission(data: dict[str, Any], user: AuthUser, workspace_id: int, resource: str, action: str) -> None:
+def require_workspace_permission(
+    data: dict[str, Any], user: AuthUser, workspace_id: int, resource: str, action: str
+) -> None:
     """Imperative form of ``src/core/auth.py::_require_workspace_permission``.
 
     API keys are rejected from balancer admin endpoints (same 403 as the HTTP

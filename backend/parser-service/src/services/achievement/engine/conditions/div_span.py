@@ -44,10 +44,15 @@ async def execute_div_span(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.role,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(

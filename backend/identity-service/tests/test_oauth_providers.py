@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 

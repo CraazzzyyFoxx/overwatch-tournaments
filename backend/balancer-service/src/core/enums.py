@@ -1,7 +1,7 @@
 # Import all enums from shared library and re-export
-from shared.core.enums import *
-
 from enum import StrEnum
+
+from shared.core.enums import *
 
 
 # App-specific enum

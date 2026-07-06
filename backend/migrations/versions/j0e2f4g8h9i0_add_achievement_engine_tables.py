@@ -5,17 +5,17 @@ Revises: i9d1e3f7g8h9
 Create Date: 2026-04-09 22:00:00.000000
 
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "j0e2f4g8h9i0"
-down_revision: Union[str, None] = "i9d1e3f7g8h9"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "i9d1e3f7g8h9"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -89,13 +89,9 @@ def upgrade() -> None:
         sa.Column("rule_version", sa.Integer(), nullable=False),
         sa.Column("run_id", sa.Uuid(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["achievement_rule_id"], ["achievements.rule.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["achievement_rule_id"], ["achievements.rule.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["players.user.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["match_id"], ["matches.match.id"], ondelete="CASCADE"),
         sa.UniqueConstraint(
             "achievement_rule_id",
@@ -150,13 +146,9 @@ def upgrade() -> None:
         sa.Column("reason", sa.String(), nullable=False),
         sa.Column("granted_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["achievement_rule_id"], ["achievements.rule.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["achievement_rule_id"], ["achievements.rule.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["players.user.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["match_id"], ["matches.match.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["granted_by"], ["auth.user.id"], ondelete="SET NULL"),
         schema="achievements",
@@ -207,9 +199,7 @@ def upgrade() -> None:
         sa.Column("error_message", sa.String(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspace.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="SET NULL"),
         schema="achievements",
     )
     op.create_index(

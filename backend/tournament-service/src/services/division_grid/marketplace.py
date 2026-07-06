@@ -7,12 +7,12 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.clients import S3Client
-from shared.services import division_grid_cache
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.clients import S3Client
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.services import division_grid_cache
 from src import models, schemas
 
 MAX_GRID_SLUG_LENGTH = 128
@@ -221,9 +221,11 @@ async def list_marketplace_workspaces(
     target_workspace_id: int,
     user: models.AuthUser,
 ) -> list[schemas.DivisionGridMarketplaceWorkspaceRead]:
-    visible_workspace_ids = None if user.is_superuser else [
-        workspace_id for workspace_id in user.get_workspace_ids() if workspace_id != target_workspace_id
-    ]
+    visible_workspace_ids = (
+        None
+        if user.is_superuser
+        else [workspace_id for workspace_id in user.get_workspace_ids() if workspace_id != target_workspace_id]
+    )
     if visible_workspace_ids == []:
         return []
 
@@ -269,9 +271,7 @@ async def get_marketplace_grids_by_ids(
 
     result = await session.execute(
         sa.select(models.DivisionGrid)
-        .options(
-            selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers)
-        )
+        .options(selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers))
         .where(
             models.DivisionGrid.workspace_id == source_workspace_id,
             models.DivisionGrid.id.in_(source_grid_ids),
@@ -292,9 +292,7 @@ async def list_marketplace_grids(
 ) -> list[schemas.DivisionGridMarketplaceGridRead]:
     result = await session.execute(
         sa.select(models.DivisionGrid)
-        .options(
-            selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers)
-        )
+        .options(selectinload(models.DivisionGrid.versions).selectinload(models.DivisionGridVersion.tiers))
         .where(models.DivisionGrid.workspace_id == source_workspace_id)
         .order_by(models.DivisionGrid.name.asc(), models.DivisionGrid.id.asc())
     )
@@ -339,7 +337,9 @@ def _select_default_imported_version(
 
     first_grid_versions = sorted(source_grids[0].versions, key=lambda version: version.version)
     published_versions = [version for version in first_grid_versions if version.status == "published"]
-    candidate = published_versions[-1] if published_versions else (first_grid_versions[-1] if first_grid_versions else None)
+    candidate = (
+        published_versions[-1] if published_versions else (first_grid_versions[-1] if first_grid_versions else None)
+    )
     if candidate is None:
         return None
     return version_id_map.get(candidate.id)

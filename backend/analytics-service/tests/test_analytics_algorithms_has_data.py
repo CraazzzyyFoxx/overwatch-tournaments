@@ -56,18 +56,14 @@ class AlgorithmHasDataTests(IsolatedAsyncioTestCase):
         session = SimpleNamespace()
 
         with (
-            patch.object(
-                analytics_flows.service, "get_algorithms", AsyncMock(return_value=algorithms)
-            ),
+            patch.object(analytics_flows.service, "get_algorithms", AsyncMock(return_value=algorithms)),
             patch.object(
                 analytics_flows.service,
                 "get_algorithm_ids_with_shift_data",
                 AsyncMock(return_value={1, 3}),
             ),
         ):
-            result = await analytics_flows.get_algorithms(
-                session, _params(), tournament_id=7
-            )
+            result = await analytics_flows.get_algorithms(session, _params(), tournament_id=7)
 
         has_data = {row.name: row.has_data for row in result.results}
         self.assertEqual({"Linear": True, "Points": False, "OpenSkill + ML": True}, has_data)
@@ -78,12 +74,8 @@ class AlgorithmHasDataTests(IsolatedAsyncioTestCase):
 
         ids_mock = AsyncMock(return_value=set())
         with (
-            patch.object(
-                analytics_flows.service, "get_algorithms", AsyncMock(return_value=algorithms)
-            ),
-            patch.object(
-                analytics_flows.service, "get_algorithm_ids_with_shift_data", ids_mock
-            ),
+            patch.object(analytics_flows.service, "get_algorithms", AsyncMock(return_value=algorithms)),
+            patch.object(analytics_flows.service, "get_algorithm_ids_with_shift_data", ids_mock),
         ):
             result = await analytics_flows.get_algorithms(session, _params())
 

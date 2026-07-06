@@ -21,10 +21,11 @@ from __future__ import annotations
 from typing import Any
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.realtime_publisher import publish_event
-from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = (
     "BALANCER_BALANCE_SAVED",

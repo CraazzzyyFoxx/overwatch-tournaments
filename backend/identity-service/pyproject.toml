@@ -45,31 +45,3 @@ dependencies = [
 [tool.mypy]
 strict = true
 exclude = ["venv", ".venv", "alembic"]
-
-[tool.ruff]
-target-version = "py312"
-line-length = 120
-exclude = ["alembic", "app/src/schemas/__init__.py", "app/src/models/__init__.py"]
-
-[tool.ruff.lint]
-select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-#    "ARG001", # unused arguments in functions
-]
-ignore = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
-    "W191",  # indentation contains tabs
-    "B904",  # Allow raising exceptions without from e, for HTTPException
-    "F403", # 'from module import *' used; unable to detect undefined names
-]
-
-[tool.ruff.lint.pyupgrade]
-# Preserve types, even if a file imports `from __future__ import annotations`.
-keep-runtime-typing = true

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PARSER_SERVICE_ROOT = REPO_BACKEND_ROOT / "parser-service"
@@ -30,9 +30,9 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 from shared.core.enums import StageType  # noqa: E402
-from shared.models.achievement import AchievementGrain, AchievementRule  # noqa: E402
+from shared.models.achievements.achievement import AchievementGrain, AchievementRule  # noqa: E402
 from shared.services.achievement_effective import override_applies_to_scope  # noqa: E402
-
+from src.services.achievement.engine import differ as differ_module  # noqa: E402
 from src.services.achievement.engine.conditions import (  # noqa: E402
     get_registered_types,
     resolve_stat_name,
@@ -97,6 +97,118 @@ class DiffScopeTests(IsolatedAsyncioTestCase):
             evaluation_slice=EvaluationSlice(tournament_id=10),
         )
 
+        self.assertEqual([], diff.to_delete)
+
+
+class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
+    """P6: ``AchievementEvaluationResult`` moved onto ``workspace_member_id``.
+
+    ``new_results`` still carries the player identity (what the condition
+    evaluator returns), so the insert path must resolve/create the
+    workspace_member for the rule's own workspace before persisting — and the
+    existing-rows read must key off the player identity it recovers via the
+    workspace_member join, so an already-qualified player is not re-inserted.
+    """
+
+    async def test_insert_path_resolves_workspace_member_for_new_player(self) -> None:
+        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
+
+        async def execute_side_effect(query):
+            sql = str(query)
+            if "SELECT achievements.evaluation_result.id" in sql:
+                return []  # no existing rows
+            return None
+
+        added_rows: list[object] = []
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_side_effect),
+            add=added_rows.append,
+        )
+
+        fake_member = SimpleNamespace(id=777)
+        get_or_create = AsyncMock(return_value=fake_member)
+
+        with patch.object(differ_module, "get_or_create_workspace_member", get_or_create):
+            diff = await diff_and_apply(
+                session=session,
+                rule=rule,
+                new_results={(55, None, None)},
+                run_id="run-1",
+            )
+
+        get_or_create.assert_awaited_once_with(session, workspace_id=3, player_id=55)
+        self.assertEqual(1, len(added_rows))
+        self.assertEqual(777, added_rows[0].workspace_member_id)
+        self.assertFalse(hasattr(added_rows[0], "user_id") and added_rows[0].user_id)
+        self.assertEqual(1, len(diff.to_insert))
+        self.assertEqual(55, diff.to_insert[0]["user_id"])
+
+    async def test_insert_path_memoizes_workspace_member_per_player_across_rows(self) -> None:
+        """Two new rows for the same player (different tournaments) must only
+        resolve/create the workspace_member once."""
+        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
+
+        async def execute_side_effect(query):
+            sql = str(query)
+            if "SELECT achievements.evaluation_result.id" in sql:
+                return []
+            return None
+
+        added_rows: list[object] = []
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_side_effect),
+            add=added_rows.append,
+        )
+
+        fake_member = SimpleNamespace(id=888)
+        get_or_create = AsyncMock(return_value=fake_member)
+
+        with patch.object(differ_module, "get_or_create_workspace_member", get_or_create):
+            diff = await diff_and_apply(
+                session=session,
+                rule=rule,
+                new_results={(55, 10), (55, 20)},
+                run_id="run-1",
+            )
+
+        get_or_create.assert_awaited_once_with(session, workspace_id=3, player_id=55)
+        self.assertEqual(2, len(added_rows))
+        self.assertTrue(all(row.workspace_member_id == 888 for row in added_rows))
+        self.assertEqual(2, len(diff.to_insert))
+
+    async def test_existing_rows_key_off_player_identity_via_workspace_member_join(self) -> None:
+        """A stored row's player identity is recovered through the
+        workspace_member join; a new result for the same player must not be
+        re-inserted (no spurious get_or_create call, no duplicate insert)."""
+        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
+
+        async def execute_side_effect(query):
+            sql = str(query)
+            if "SELECT achievements.evaluation_result.id" in sql:
+                # (row_id, player_id, tournament_id, match_id) — player_id
+                # recovered via the workspace_member join, not a raw column.
+                return [(101, 55, 10, None)]
+            return None
+
+        added_rows: list[object] = []
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_side_effect),
+            add=added_rows.append,
+        )
+
+        get_or_create = AsyncMock()
+
+        with patch.object(differ_module, "get_or_create_workspace_member", get_or_create):
+            diff = await diff_and_apply(
+                session=session,
+                rule=rule,
+                new_results={(55, 10)},
+                run_id="run-1",
+            )
+
+        get_or_create.assert_not_awaited()
+        self.assertEqual([], added_rows)
+        self.assertEqual([], diff.to_insert)
         self.assertEqual([], diff.to_delete)
 
 
@@ -165,9 +277,7 @@ class ValidationTests(TestCase):
     def test_reached_playoffs_scope_drives_grain(self) -> None:
         self.assertEqual(
             AchievementGrain.user,
-            infer_grain(
-                {"type": "reached_playoffs", "params": {"scope": "global", "op": "==", "value": 0}}
-            ),
+            infer_grain({"type": "reached_playoffs", "params": {"scope": "global", "op": "==", "value": 0}}),
         )
         self.assertEqual(
             AchievementGrain.user_tournament,
@@ -176,17 +286,13 @@ class ValidationTests(TestCase):
 
     def test_log_stat_rank_requires_stat(self) -> None:
         self.assertTrue(validate_condition_tree({"type": "log_stat_rank", "params": {}}))
-        self.assertEqual(
-            [], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}})
-        )
+        self.assertEqual([], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}}))
 
     def test_standing_count_requires_op_and_value(self) -> None:
         self.assertTrue(validate_condition_tree({"type": "standing_count", "params": {}}))
         self.assertEqual(
             [],
-            validate_condition_tree(
-                {"type": "standing_count", "params": {"op": ">=", "value": 2}}
-            ),
+            validate_condition_tree({"type": "standing_count", "params": {"op": ">=", "value": 2}}),
         )
 
     def test_default_rule_catalog_matches_legacy_consts(self) -> None:
@@ -208,7 +314,8 @@ class ValidationTests(TestCase):
                 rules[slug].name,
                 rules[slug].description_ru,
                 rules[slug].description_en,
-            ) != EXPECTED_LEGACY_RULES[slug]
+            )
+            != EXPECTED_LEGACY_RULES[slug]
         ]
         self.assertEqual([], metadata_mismatches)
 

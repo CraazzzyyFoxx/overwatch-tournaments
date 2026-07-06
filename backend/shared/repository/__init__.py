@@ -5,7 +5,6 @@ from .identity import (
     AuthUserRepository,
     OAuthConnectionRepository,
     RefreshTokenRepository,
-    UserIdentityRepository,
     UserRepository,
 )
 from .registration import (
@@ -34,7 +33,13 @@ from .tournament import (
     TeamRepository,
     TournamentRepository,
 )
-from .workspace import PermissionRepository, RoleRepository, WorkspaceMemberRepository, WorkspaceRepository
+from .workspace import (
+    PermissionRepository,
+    RoleRepository,
+    WorkspaceMemberRepository,
+    WorkspaceRepository,
+    get_or_create_workspace_member,
+)
 
 __all__ = (
     "AchievementOverrideRepository",
@@ -67,8 +72,8 @@ __all__ = (
     "StandingRepository",
     "TeamRepository",
     "TournamentRepository",
-    "UserIdentityRepository",
     "UserRepository",
     "WorkspaceMemberRepository",
     "WorkspaceRepository",
+    "get_or_create_workspace_member",
 )

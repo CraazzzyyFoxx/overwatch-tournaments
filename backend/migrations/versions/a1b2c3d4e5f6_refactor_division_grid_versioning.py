@@ -13,7 +13,6 @@ from typing import Any
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
 down_revision = "z6u0v4w5x6y7"
@@ -223,21 +222,25 @@ def upgrade() -> None:
         raw_grid: dict[str, Any] | None,
     ) -> int:
         grid_id = bind.execute(
-            division_grid.insert().values(
+            division_grid.insert()
+            .values(
                 workspace_id=workspace_id,
                 slug=slug,
                 name=name,
                 description=description,
-            ).returning(division_grid.c.id)
+            )
+            .returning(division_grid.c.id)
         ).scalar_one()
         version_id = bind.execute(
-            division_grid_version.insert().values(
+            division_grid_version.insert()
+            .values(
                 grid_id=grid_id,
                 version=1,
                 label=label,
                 status="published",
                 published_at=sa.func.now(),
-            ).returning(division_grid_version.c.id)
+            )
+            .returning(division_grid_version.c.id)
         ).scalar_one()
 
         tiers = _tiers_from_raw(raw_grid)
@@ -269,9 +272,9 @@ def upgrade() -> None:
         raw_grid=system_grid_raw,
     )
 
-    workspace_rows = bind.execute(
-        sa.select(workspace.c.id, workspace.c.name, workspace.c.division_grid_json)
-    ).mappings().all()
+    workspace_rows = (
+        bind.execute(sa.select(workspace.c.id, workspace.c.name, workspace.c.division_grid_json)).mappings().all()
+    )
     workspace_version_map: dict[int, int] = {}
     for row in workspace_rows:
         if row["division_grid_json"]:
@@ -288,19 +291,21 @@ def upgrade() -> None:
 
         workspace_version_map[row["id"]] = version_id
         bind.execute(
-            workspace.update()
-            .where(workspace.c.id == row["id"])
-            .values(default_division_grid_version_id=version_id)
+            workspace.update().where(workspace.c.id == row["id"]).values(default_division_grid_version_id=version_id)
         )
 
-    tournament_rows = bind.execute(
-        sa.select(
-            tournament.c.id,
-            tournament.c.workspace_id,
-            tournament.c.name,
-            tournament.c.division_grid_json,
+    tournament_rows = (
+        bind.execute(
+            sa.select(
+                tournament.c.id,
+                tournament.c.workspace_id,
+                tournament.c.name,
+                tournament.c.division_grid_json,
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     for row in tournament_rows:
         version_id = workspace_version_map.get(row["workspace_id"], system_version_id)
         if row["division_grid_json"]:
@@ -314,9 +319,7 @@ def upgrade() -> None:
             )
 
         bind.execute(
-            tournament.update()
-            .where(tournament.c.id == row["id"])
-            .values(division_grid_version_id=version_id)
+            tournament.update().where(tournament.c.id == row["id"]).values(division_grid_version_id=version_id)
         )
 
     op.alter_column("workspace", "default_division_grid_version_id", nullable=False)

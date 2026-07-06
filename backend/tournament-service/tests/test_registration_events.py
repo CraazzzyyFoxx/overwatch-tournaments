@@ -22,7 +22,10 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-registration_service = importlib.import_module("src.services.registration.admin")
+# Patch targets must be the module that OWNS these functions (lifecycle), not the
+# `admin` facade: the lifecycle functions resolve collaborators from their own
+# module globals, so patching the facade would not intercept them.
+registration_service = importlib.import_module("src.services.registration.lifecycle")
 
 
 class RegistrationEventOutboxTests(IsolatedAsyncioTestCase):

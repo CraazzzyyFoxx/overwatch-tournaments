@@ -44,6 +44,10 @@ class BalancerJobStore:
     def _api_key_active_jobs_key(api_key_id: int) -> str:
         return f"balancer:api_key:{api_key_id}:active_jobs"
 
+    @staticmethod
+    def _session_active_jobs_key(user_id: int) -> str:
+        return f"balancer:user:{user_id}:active_jobs"
+
     async def _refresh_ttl(self, job_id: str) -> None:
         pipe = self._redis.pipeline()
         for key in (
@@ -291,7 +295,7 @@ class BalancerJobStore:
             meta=meta_snapshot,
             result=result,
         )
-        await self._release_api_key_active_job(job_id, meta_snapshot)
+        await self._release_active_job(job_id, meta_snapshot)
         return meta_snapshot
 
     async def mark_failed(
@@ -329,19 +333,25 @@ class BalancerJobStore:
             event=event,
             meta=meta_snapshot,
         )
-        await self._release_api_key_active_job(job_id, meta_snapshot)
+        await self._release_active_job(job_id, meta_snapshot)
         return meta_snapshot
 
-    async def _release_api_key_active_job(self, job_id: str, meta: dict[str, Any]) -> None:
-        if meta.get("credential_type") != "api_key":
-            return
-        api_key_id = meta.get("api_key_id")
+    async def _release_active_job(self, job_id: str, meta: dict[str, Any]) -> None:
+        """Release the concurrency slot reserved at creation for either principal
+        kind (review H5): API-key jobs by their key id, session jobs by the
+        creating user id. Mirrors ``ApiKeyUsageLimiter.active_jobs_key``."""
+        if meta.get("credential_type") == "api_key":
+            raw_id = meta.get("api_key_id")
+            key_builder = self._api_key_active_jobs_key
+        else:
+            raw_id = meta.get("created_by")
+            key_builder = self._session_active_jobs_key
         try:
-            api_key_id_int = int(api_key_id)
+            principal_id = int(raw_id)
         except (TypeError, ValueError):
             return
-        await self._redis.srem(self._api_key_active_jobs_key(api_key_id_int), job_id)
-        record_balancer_redis_writes("release_api_key_active_job", 1)
+        await self._redis.srem(key_builder(principal_id), job_id)
+        record_balancer_redis_writes("release_active_job", 1)
 
     async def get_events_since(self, job_id: str, after_event_id: int = 0) -> list[dict[str, Any]]:
         start_index = max(after_event_id, 0)

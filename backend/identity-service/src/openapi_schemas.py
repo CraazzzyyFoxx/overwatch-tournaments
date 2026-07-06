@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op
-
 from src import schemas
 
 OPERATIONS: dict[str, Op] = {
@@ -42,7 +41,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.identity.create_api_key": Op(request=schemas.ApiKeyCreate, response=schemas.ApiKeyCreateResponse),
     "rpc.identity.update_api_key": Op(request=schemas.ApiKeyUpdate, response=schemas.ApiKeyRead),
     # ── RBAC: permissions ──────────────────────────────────────────────────
-    "rpc.identity.rbac.list_permissions": Op(response=Paginated[schemas.PermissionRead], query=schemas.PermissionListQueryParams),
+    "rpc.identity.rbac.list_permissions": Op(
+        response=Paginated[schemas.PermissionRead], query=schemas.PermissionListQueryParams
+    ),
     "rpc.identity.rbac.create_permission": Op(request=schemas.PermissionCreate, response=schemas.PermissionRead),
     # ── RBAC: roles ────────────────────────────────────────────────────────
     "rpc.identity.rbac.list_roles": Op(response=Paginated[schemas.RoleRead], query=schemas.RoleListQueryParams),
@@ -50,15 +51,21 @@ OPERATIONS: dict[str, Op] = {
     "rpc.identity.rbac.create_role": Op(request=schemas.RoleCreate, response=schemas.RoleRead),
     "rpc.identity.rbac.update_role": Op(request=schemas.RoleUpdate, response=schemas.RoleRead),
     # ── RBAC: auth users ───────────────────────────────────────────────────
-    "rpc.identity.rbac.list_auth_users": Op(response=Paginated[schemas.AuthUserListRead], query=schemas.AuthUserListQueryParams),
+    "rpc.identity.rbac.list_auth_users": Op(
+        response=Paginated[schemas.AuthUserListRead], query=schemas.AuthUserListQueryParams
+    ),
     "rpc.identity.rbac.get_auth_user": Op(response=schemas.AuthUserDetailRead),
     "rpc.identity.rbac.get_user_roles": Op(response=schemas.RoleRead, response_array=True),
     "rpc.identity.rbac.assign_linked_player": Op(request=schemas.AuthUserPlayerLinkAssign),
     "rpc.identity.rbac.assign_role": Op(request=schemas.UserRoleAssign),
     "rpc.identity.rbac.remove_role": Op(request=schemas.UserRoleRemove),
     # ── RBAC: oauth connections / sessions (admin) ─────────────────────────
-    "rpc.identity.rbac.list_oauth_connections": Op(response=Paginated[schemas.OAuthConnectionAdminRead], query=schemas.OAuthConnectionListQueryParams),
-    "rpc.identity.rbac.list_sessions": Op(response=Paginated[schemas.AdminSessionRead], query=schemas.SessionListQueryParams),
+    "rpc.identity.rbac.list_oauth_connections": Op(
+        response=Paginated[schemas.OAuthConnectionAdminRead], query=schemas.OAuthConnectionListQueryParams
+    ),
+    "rpc.identity.rbac.list_sessions": Op(
+        response=Paginated[schemas.AdminSessionRead], query=schemas.SessionListQueryParams
+    ),
     # ── player linking ─────────────────────────────────────────────────────
     "rpc.identity.player.link": Op(request=schemas.PlayerLinkRequest, response=schemas.PlayerLinkResponse),
     "rpc.identity.player.linked": Op(response=schemas.LinkedPlayer, response_array=True),

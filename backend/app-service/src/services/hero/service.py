@@ -11,7 +11,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid, division_case_expr
-
 from src import models, schemas
 from src.core import enums, pagination
 
@@ -41,27 +40,27 @@ _LEADERBOARD_STATS = [
 
 # Maps LogStatsName → column name in stats_agg CTE (used for backend sorting)
 _STAT_COLUMN_MAP: dict[enums.LogStatsName, str] = {
-    enums.LogStatsName.Eliminations:      "per10_eliminations",
-    enums.LogStatsName.HealingDealt:      "per10_healing",
-    enums.LogStatsName.Deaths:            "per10_deaths",
-    enums.LogStatsName.HeroDamageDealt:   "per10_damage",
-    enums.LogStatsName.FinalBlows:        "per10_final_blows",
-    enums.LogStatsName.DamageBlocked:     "per10_damage_blocked",
-    enums.LogStatsName.SoloKills:         "per10_solo_kills",
-    enums.LogStatsName.ObjectiveKills:    "per10_obj_kills",
-    enums.LogStatsName.DefensiveAssists:  "per10_defensive_assists",
-    enums.LogStatsName.OffensiveAssists:  "per10_offensive_assists",
-    enums.LogStatsName.AllDamageDealt:    "per10_all_damage",
-    enums.LogStatsName.DamageTaken:       "per10_damage_taken",
-    enums.LogStatsName.SelfHealing:       "per10_self_healing",
-    enums.LogStatsName.UltimatesUsed:     "per10_ultimates_used",
-    enums.LogStatsName.Multikills:        "per10_multikills",
-    enums.LogStatsName.EnvironmentalKills:"per10_env_kills",
-    enums.LogStatsName.CriticalHits:      "per10_crit_hits",
-    enums.LogStatsName.WeaponAccuracy:    "avg_weapon_accuracy",
+    enums.LogStatsName.Eliminations: "per10_eliminations",
+    enums.LogStatsName.HealingDealt: "per10_healing",
+    enums.LogStatsName.Deaths: "per10_deaths",
+    enums.LogStatsName.HeroDamageDealt: "per10_damage",
+    enums.LogStatsName.FinalBlows: "per10_final_blows",
+    enums.LogStatsName.DamageBlocked: "per10_damage_blocked",
+    enums.LogStatsName.SoloKills: "per10_solo_kills",
+    enums.LogStatsName.ObjectiveKills: "per10_obj_kills",
+    enums.LogStatsName.DefensiveAssists: "per10_defensive_assists",
+    enums.LogStatsName.OffensiveAssists: "per10_offensive_assists",
+    enums.LogStatsName.AllDamageDealt: "per10_all_damage",
+    enums.LogStatsName.DamageTaken: "per10_damage_taken",
+    enums.LogStatsName.SelfHealing: "per10_self_healing",
+    enums.LogStatsName.UltimatesUsed: "per10_ultimates_used",
+    enums.LogStatsName.Multikills: "per10_multikills",
+    enums.LogStatsName.EnvironmentalKills: "per10_env_kills",
+    enums.LogStatsName.CriticalHits: "per10_crit_hits",
+    enums.LogStatsName.WeaponAccuracy: "avg_weapon_accuracy",
     enums.LogStatsName.CriticalHitAccuracy: "avg_crit_accuracy",
-    enums.LogStatsName.KD:                "kd",
-    enums.LogStatsName.KDA:               "kda",
+    enums.LogStatsName.KD: "kd",
+    enums.LogStatsName.KDA: "kda",
 }
 
 
@@ -98,7 +97,11 @@ async def get_heroes_stats(
 
 
 async def get_heroes_playtime_by_maps(
-    session: AsyncSession, maps_ids: list[int], user_id: int, tournament_id: int | None = None, workspace_id: int | None = None,
+    session: AsyncSession,
+    maps_ids: list[int],
+    user_id: int,
+    tournament_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> typing.Sequence[tuple[models.Hero, int, float]]:
     overall_play_time_subquery = (
         sa.select(sa.func.sum(models.MatchStatistics.value))
@@ -118,16 +121,12 @@ async def get_heroes_playtime_by_maps(
     )
 
     if tournament_id is not None:
-        overall_play_time_subquery = overall_play_time_subquery.where(
-            models.Encounter.tournament_id == tournament_id
-        )
+        overall_play_time_subquery = overall_play_time_subquery.where(models.Encounter.tournament_id == tournament_id)
 
     if workspace_id is not None:
-        overall_play_time_subquery = (
-            overall_play_time_subquery
-            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-            .where(models.Tournament.workspace_id == workspace_id)
-        )
+        overall_play_time_subquery = overall_play_time_subquery.join(
+            models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+        ).where(models.Tournament.workspace_id == workspace_id)
 
     query = (
         sa.select(
@@ -155,17 +154,11 @@ async def get_heroes_playtime_by_maps(
         query = query.where(models.Encounter.tournament_id == tournament_id)
 
     if workspace_id is not None:
-        query = (
-            query
-            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-            .where(models.Tournament.workspace_id == workspace_id)
+        query = query.join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id).where(
+            models.Tournament.workspace_id == workspace_id
         )
 
-    query = (
-        query
-        .group_by(models.Hero.id, models.Match.map_id)
-        .order_by(sa.text("playtime DESC"))
-    )
+    query = query.group_by(models.Hero.id, models.Match.map_id).order_by(sa.text("playtime DESC"))
 
     result = await session.execute(query)
     return result.all()  # type: ignore
@@ -223,22 +216,16 @@ async def get_user_hero_stats_by_maps(
             hero_match_q = hero_match_q.where(models.Encounter.tournament_id == tournament_id)
 
         if workspace_id is not None:
-            hero_match_q = (
-                hero_match_q
-                .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-                .where(models.Tournament.workspace_id == workspace_id)
-            )
+            hero_match_q = hero_match_q.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
 
-    hero_match = (
-        hero_match_q
-        .group_by(
-            models.MatchStatistics.hero_id,
-            models.MatchStatistics.team_id,
-            models.Match.id,
-            models.Match.map_id,
-        )
-        .cte("hero_match")
-    )
+    hero_match = hero_match_q.group_by(
+        models.MatchStatistics.hero_id,
+        models.MatchStatistics.team_id,
+        models.Match.id,
+        models.Match.map_id,
+    ).cte("hero_match")
 
     team_score = sa.case(
         (models.Match.home_team_id == hero_match.c.team_id, models.Match.home_score),
@@ -358,23 +345,18 @@ async def get_hero_leaderboard(
 
     if tournament_id is not None:
         base_select = (
-            base_select
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+            base_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id)
             .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
             .where(models.Encounter.tournament_id == tournament_id)
         )
 
     if workspace_id is not None:
         if tournament_id is None:
-            base_select = (
-                base_select
-                .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-                .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            base_select = base_select.join(models.Match, models.Match.id == models.MatchStatistics.match_id).join(
+                models.Encounter, models.Encounter.id == models.Match.encounter_id
             )
-        base_select = (
-            base_select
-            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-            .where(models.Tournament.workspace_id == workspace_id)
+        base_select = base_select.join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id).where(
+            models.Tournament.workspace_id == workspace_id
         )
 
     eligible_cte = base_select.cte("eligible")
@@ -387,44 +369,40 @@ async def get_hero_leaderboard(
 
     def _avg_pct(sum_col: sa.Column, count_col: sa.Column) -> sa.ColumnElement:  # type: ignore[type-arg]
         """AVG for percentage stats (WeaponAccuracy, CriticalHitAccuracy, etc.)"""
-        return sa.func.coalesce(
-            sum_col / sa.func.nullif(count_col, 0), 0
-        ).cast(sa.Numeric(10, 2))
+        return sa.func.coalesce(sum_col / sa.func.nullif(count_col, 0), 0).cast(sa.Numeric(10, 2))
 
     def _pct_count(stat_name: enums.LogStatsName, col_label: str) -> sa.Label:  # type: ignore[type-arg]
-        return sa.func.sum(
-            sa.case((eligible_cte.c.name == stat_name, 1), else_=0)
-        ).label(col_label)
+        return sa.func.sum(sa.case((eligible_cte.c.name == stat_name, 1), else_=0)).label(col_label)
 
     # Step 1: sum raw values per user
     sums_cte = (
         sa.select(
             eligible_cte.c.user_id,
-            sa.func.sum(
-                sa.case((eligible_cte.c.name == enums.LogStatsName.HeroTimePlayed, 1), else_=0)
-            ).label("games_played"),
-            _sum_stat(enums.LogStatsName.HeroTimePlayed,    "total_playtime"),
-            _sum_stat(enums.LogStatsName.Eliminations,      "sum_eliminations"),
-            _sum_stat(enums.LogStatsName.HealingDealt,      "sum_healing"),
-            _sum_stat(enums.LogStatsName.Deaths,            "sum_deaths"),
-            _sum_stat(enums.LogStatsName.HeroDamageDealt,   "sum_damage"),
-            _sum_stat(enums.LogStatsName.FinalBlows,        "sum_final_blows"),
-            _sum_stat(enums.LogStatsName.DamageBlocked,     "sum_damage_blocked"),
-            _sum_stat(enums.LogStatsName.SoloKills,         "sum_solo_kills"),
-            _sum_stat(enums.LogStatsName.ObjectiveKills,    "sum_obj_kills"),
-            _sum_stat(enums.LogStatsName.DefensiveAssists,  "sum_defensive_assists"),
-            _sum_stat(enums.LogStatsName.OffensiveAssists,  "sum_offensive_assists"),
-            _sum_stat(enums.LogStatsName.AllDamageDealt,    "sum_all_damage"),
-            _sum_stat(enums.LogStatsName.DamageTaken,       "sum_damage_taken"),
-            _sum_stat(enums.LogStatsName.SelfHealing,       "sum_self_healing"),
-            _sum_stat(enums.LogStatsName.UltimatesUsed,     "sum_ultimates_used"),
-            _sum_stat(enums.LogStatsName.Multikills,        "sum_multikills"),
-            _sum_stat(enums.LogStatsName.EnvironmentalKills,"sum_env_kills"),
-            _sum_stat(enums.LogStatsName.CriticalHits,      "sum_crit_hits"),
+            sa.func.sum(sa.case((eligible_cte.c.name == enums.LogStatsName.HeroTimePlayed, 1), else_=0)).label(
+                "games_played"
+            ),
+            _sum_stat(enums.LogStatsName.HeroTimePlayed, "total_playtime"),
+            _sum_stat(enums.LogStatsName.Eliminations, "sum_eliminations"),
+            _sum_stat(enums.LogStatsName.HealingDealt, "sum_healing"),
+            _sum_stat(enums.LogStatsName.Deaths, "sum_deaths"),
+            _sum_stat(enums.LogStatsName.HeroDamageDealt, "sum_damage"),
+            _sum_stat(enums.LogStatsName.FinalBlows, "sum_final_blows"),
+            _sum_stat(enums.LogStatsName.DamageBlocked, "sum_damage_blocked"),
+            _sum_stat(enums.LogStatsName.SoloKills, "sum_solo_kills"),
+            _sum_stat(enums.LogStatsName.ObjectiveKills, "sum_obj_kills"),
+            _sum_stat(enums.LogStatsName.DefensiveAssists, "sum_defensive_assists"),
+            _sum_stat(enums.LogStatsName.OffensiveAssists, "sum_offensive_assists"),
+            _sum_stat(enums.LogStatsName.AllDamageDealt, "sum_all_damage"),
+            _sum_stat(enums.LogStatsName.DamageTaken, "sum_damage_taken"),
+            _sum_stat(enums.LogStatsName.SelfHealing, "sum_self_healing"),
+            _sum_stat(enums.LogStatsName.UltimatesUsed, "sum_ultimates_used"),
+            _sum_stat(enums.LogStatsName.Multikills, "sum_multikills"),
+            _sum_stat(enums.LogStatsName.EnvironmentalKills, "sum_env_kills"),
+            _sum_stat(enums.LogStatsName.CriticalHits, "sum_crit_hits"),
             # Percentage stats — need sum + count for proper AVG
-            _sum_stat(enums.LogStatsName.WeaponAccuracy,       "sum_weapon_accuracy"),
-            _pct_count(enums.LogStatsName.WeaponAccuracy,      "count_weapon_accuracy"),
-            _sum_stat(enums.LogStatsName.CriticalHitAccuracy,  "sum_crit_accuracy"),
+            _sum_stat(enums.LogStatsName.WeaponAccuracy, "sum_weapon_accuracy"),
+            _pct_count(enums.LogStatsName.WeaponAccuracy, "count_weapon_accuracy"),
+            _sum_stat(enums.LogStatsName.CriticalHitAccuracy, "sum_crit_accuracy"),
             _pct_count(enums.LogStatsName.CriticalHitAccuracy, "count_crit_accuracy"),
         )
         .select_from(eligible_cte)
@@ -432,9 +410,9 @@ async def get_hero_leaderboard(
     ).cte("sums")
 
     def _per10(sum_col: sa.Column) -> sa.ColumnElement:  # type: ignore[type-arg]
-        return sa.func.coalesce(
-            sum_col * sa.literal(600.0) / sa.func.nullif(sums_cte.c.total_playtime, 0), 0
-        ).cast(sa.Numeric(10, 2))
+        return sa.func.coalesce(sum_col * sa.literal(600.0) / sa.func.nullif(sums_cte.c.total_playtime, 0), 0).cast(
+            sa.Numeric(10, 2)
+        )
 
     # Step 2: derive per-10-min values from sums
     stats_agg_cte = (
@@ -459,16 +437,19 @@ async def get_hero_leaderboard(
             _per10(sums_cte.c.sum_multikills).label("per10_multikills"),
             _per10(sums_cte.c.sum_env_kills).label("per10_env_kills"),
             _per10(sums_cte.c.sum_crit_hits).label("per10_crit_hits"),
-            _avg_pct(sums_cte.c.sum_weapon_accuracy,    sums_cte.c.count_weapon_accuracy).label("avg_weapon_accuracy"),
-            _avg_pct(sums_cte.c.sum_crit_accuracy,      sums_cte.c.count_crit_accuracy).label("avg_crit_accuracy"),
+            _avg_pct(sums_cte.c.sum_weapon_accuracy, sums_cte.c.count_weapon_accuracy).label("avg_weapon_accuracy"),
+            _avg_pct(sums_cte.c.sum_crit_accuracy, sums_cte.c.count_crit_accuracy).label("avg_crit_accuracy"),
             # Derived ratios (not per-10-min — deaths cancel out)
-            sa.func.coalesce(
-                sums_cte.c.sum_eliminations / sa.func.nullif(sums_cte.c.sum_deaths, 0), 0
-            ).cast(sa.Numeric(10, 2)).label("kd"),
+            sa.func.coalesce(sums_cte.c.sum_eliminations / sa.func.nullif(sums_cte.c.sum_deaths, 0), 0)
+            .cast(sa.Numeric(10, 2))
+            .label("kd"),
             sa.func.coalesce(
                 (sums_cte.c.sum_eliminations + sums_cte.c.sum_offensive_assists + sums_cte.c.sum_defensive_assists)
-                / sa.func.nullif(sums_cte.c.sum_deaths, 0), 0
-            ).cast(sa.Numeric(10, 2)).label("kda"),
+                / sa.func.nullif(sums_cte.c.sum_deaths, 0),
+                0,
+            )
+            .cast(sa.Numeric(10, 2))
+            .label("kda"),
         )
         .select_from(sums_cte)
         .where(sums_cte.c.total_playtime >= 600)
@@ -476,7 +457,7 @@ async def get_hero_leaderboard(
 
     player_rn_subq = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.name,
             models.Player.role,
             division_case_expr(models.Player.rank, grid).label("div"),
@@ -484,12 +465,13 @@ async def get_hero_leaderboard(
             models.Team.name.label("team"),
             sa.func.row_number()
             .over(
-                partition_by=models.Player.user_id,
+                partition_by=models.WorkspaceMember.player_id,
                 order_by=models.Player.tournament_id.desc(),
             )
             .label("rn"),
         )
         .join(models.Team, models.Team.id == models.Player.team_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(models.Player.is_substitution.is_(False))
     ).subquery("player_rn")
 

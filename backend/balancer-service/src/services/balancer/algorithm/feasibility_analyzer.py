@@ -20,8 +20,8 @@ can play. Maximum matching = max # players placeable WITHOUT being off-role.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from src.services.balancer.algorithm.entities import Player
 
@@ -63,14 +63,12 @@ def analyze_feasibility(
     mask: dict[str, int],
     num_teams: int,
 ) -> FeasibilityReport:
-    role_capacity: dict[str, int] = {
-        role: count * num_teams for role, count in mask.items() if count > 0
-    }
+    role_capacity: dict[str, int] = {role: count * num_teams for role, count in mask.items() if count > 0}
     total_slots = sum(role_capacity.values())
 
     players_list = list(players)
-    supply: dict[str, int] = {role: 0 for role in role_capacity}
-    flex_supply: dict[str, int] = {role: 0 for role in role_capacity}
+    supply: dict[str, int] = dict.fromkeys(role_capacity, 0)
+    flex_supply: dict[str, int] = dict.fromkeys(role_capacity, 0)
     flex_count = 0
 
     for player in players_list:

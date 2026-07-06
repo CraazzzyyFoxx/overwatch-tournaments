@@ -40,9 +40,12 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tracing"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/workspace"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ws"
 )
@@ -67,9 +70,26 @@ func run() error {
 	}
 	defer flush(2 * time.Second)
 	logger := observability.NewLogger(cfg)
+	// Make the gateway logger the slog default so background-goroutine panic
+	// recovery (safego) and any ctx-less log calls route to Loki + Sentry too.
+	slog.SetDefault(logger)
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// OpenTelemetry tracing (OTLP gRPC -> otel-collector -> Tempo), joining the
+	// distributed traces the Python services already emit. No-op when
+	// TRACING_ENABLED is false. The deferred shutdown flushes buffered spans
+	// after srv.Shutdown returns.
+	traceShutdown, err := tracing.Init(rootCtx, cfg.Tracing, cfg.Sentry.Release, cfg.Environment, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = traceShutdown(ctx)
+	}()
 
 	// Postgres pool for read-only queries (event replay + ACL membership).
 	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer)
@@ -102,6 +122,9 @@ func run() error {
 	mtr := metrics.New()
 	activeUsers := metrics.NewRecorder(rdb, logger)
 	authn := auth.New(cfg.JWTSecret)
+	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
+	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
+	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
 
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
 	hub := ws.NewHub()
@@ -114,6 +137,7 @@ func run() error {
 		replay.New(pool, cfg.WSReplayLimit),
 		cfg.WSIdleTimeout,
 		logger,
+		cfg.WSAllowedOrigins,
 		activeUsers.Record,
 	)
 
@@ -130,9 +154,10 @@ func run() error {
 	// Identity HTTP face (RPC into identity-svc). Additive: these specific
 	// /api/auth/* paths are served here; the rest still proxy to auth-service.
 	mux.HandleFunc("POST /api/auth/validate", identityHandler.Validate)
-	mux.HandleFunc("POST /api/auth/register", identityHandler.Register)
-	mux.HandleFunc("POST /api/auth/login", identityHandler.Login)
-	mux.HandleFunc("POST /api/auth/refresh", identityHandler.Refresh)
+	// Rate-limited (anti-brute-force): register/login/refresh + oauth callbacks.
+	mux.HandleFunc("POST /api/auth/register", authLimiter.Wrap(identityHandler.Register))
+	mux.HandleFunc("POST /api/auth/login", authLimiter.Wrap(identityHandler.Login))
+	mux.HandleFunc("POST /api/auth/refresh", authLimiter.Wrap(identityHandler.Refresh))
 	mux.HandleFunc("POST /api/auth/logout", identityHandler.Logout)
 	mux.HandleFunc("POST /api/auth/logout-all", identityHandler.LogoutAll)
 	mux.HandleFunc("GET /api/auth/sessions", identityHandler.Sessions)
@@ -149,8 +174,8 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/oauth/providers", identityHandler.OAuthProviders)
 	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
-	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", identityHandler.OAuthCallbackGet)
-	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", identityHandler.OAuthCallbackPost)
+	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackGet))
+	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
 	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
@@ -172,6 +197,9 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
+	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacListUserDenies)
+	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacAddUserDeny)
+	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/denies/{permission_id}", identityHandler.RbacRemoveUserDeny)
 	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/linked-players", identityHandler.RbacAssignLinkedPlayer)
 	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/linked-players/{player_id}", identityHandler.RbacRemoveLinkedPlayer)
 	mux.HandleFunc("GET /api/auth/rbac/oauth-connections", identityHandler.RbacListOAuthConnections)
@@ -183,7 +211,8 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/player/linked", identityHandler.PlayerLinked)
 	mux.HandleFunc("PATCH /api/auth/player/linked/{player_id}/primary", identityHandler.PlayerSetPrimary)
 	// Current-user avatar (multipart -> base64 RPC body; the JSON path can't do it).
-	identityBinary := identity.NewBinary(identityHandler)
+	// The resolver validates the bearer token before the multipart body is parsed.
+	identityBinary := identity.NewBinary(identityHandler, resolver.Resolve)
 	mux.HandleFunc("POST /api/auth/me/avatar", identityBinary.AvatarSet)
 	mux.HandleFunc("DELETE /api/auth/me/avatar", identityBinary.AvatarDelete)
 	// Guard the /api/auth namespace: the HTTP-over-RPC tunnel + auth-service proxy
@@ -309,23 +338,26 @@ func run() error {
 
 	mux.Handle("/", rev)
 
-	// Relay the realtime Redis bus to WebSocket subscribers.
+	// Relay the realtime Redis bus to WebSocket subscribers. safego recovers a
+	// panic here (unexpected Redis message format, etc.) instead of crashing the
+	// whole process.
 	subscriber := events.New(rdb, hub, logger)
-	go func() {
+	safego.Go(func() {
 		if err := subscriber.Run(rootCtx); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("realtime subscriber stopped", "err", err)
 		}
-	}()
+	})
 
 	// Usage metrics: drain active-user writes to Redis, refresh gauges from the
-	// hub + HyperLogLog, and serve /metrics on a dedicated internal port.
-	go activeUsers.Run(rootCtx)
-	go mtr.Sampler(rootCtx, activeUsers, hub, time.Minute)
-	go func() {
+	// hub + HyperLogLog, and serve /metrics on a dedicated internal port. All wrapped
+	// with safego so a metrics-path panic can't take the gateway down.
+	safego.Go(func() { activeUsers.Run(rootCtx) })
+	safego.Go(func() { mtr.Sampler(rootCtx, activeUsers, hub, time.Minute) })
+	safego.Go(func() {
 		if err := mtr.Serve(rootCtx, ":"+cfg.MetricsPort, logger); err != nil {
 			logger.Error("metrics server stopped", "err", err)
 		}
-	}()
+	})
 
 	// WebSocket handler with Sentry panic recovery. The read loop runs
 	// synchronously in ServeHTTP, so a panic unwinds through this deferred
@@ -340,15 +372,17 @@ func run() error {
 		wsHandler.ServeHTTP(w, r)
 	})
 
-	// REST middleware chain (outer to inner): Sentry -> httplog -> metrics -> mux.
-	// httplog wraps the metrics handler (which wraps mux); all share the same
-	// *http.Request, so r.Pattern — set by mux — is the matched route template for
-	// both the access log and the metrics labels. httplog also binds a
-	// request-scoped logger (correlation_id) used by the handlers' error logs.
-	// Sentry stays outermost for per-request hub + tracing + panic recovery
+	// REST middleware chain (outer to inner): Sentry -> tracing -> httplog ->
+	// metrics -> mux. metrics shares httplog's *http.Request, so r.Pattern — set
+	// by mux — is the matched route template for the access log and metrics
+	// labels; httplog copies Pattern back to the tracing middleware's request so
+	// the OTel span is named by route too. tracing sits outside httplog so the
+	// request logger picks up the OTel trace_id and rpc.Call/proxy see the span
+	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
 	instrumented := httplog.Middleware(mtr.Middleware(mux, authn, activeUsers), logger, authn)
-	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(instrumented)
+	traced := tracing.Middleware(instrumented)
+	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
 
 	// Outer router: WS + health are served directly (bypassing tracing); every
 	// other path falls through "/" to the traced REST surface.
@@ -361,10 +395,14 @@ func run() error {
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: root,
-		// Bound only the header read. No write/idle timeout: long-lived
-		// WebSockets and long balancer requests (Kong allowed 120s) must not be
-		// cut off mid-flight.
+		// Bound header + body reads to blunt slowloris (a client dribbling the
+		// request byte-by-byte). ReadTimeout only limits reading the REQUEST; it is
+		// reset once a WebSocket is hijacked (the ws library manages its own
+		// per-read deadlines) and does not cap long RPC processing or the response
+		// write, so long-lived WS and long balancer requests are unaffected.
+		// No write/idle timeout for that same reason.
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
 	}
 
 	serveErr := make(chan error, 1)

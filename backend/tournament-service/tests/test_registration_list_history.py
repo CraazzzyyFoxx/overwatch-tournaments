@@ -36,8 +36,10 @@ registration = importlib.import_module("src.schemas.registration_build")
 
 
 def _registration(reg_id: int, user_id: int) -> SimpleNamespace:
-    """A registration with a resolved analytics user_id (skips auth resolution)."""
-    return SimpleNamespace(id=reg_id, user_id=user_id, auth_user_id=None)
+    """A registration with a resolved player identity: since dbarch02 the ONLY
+    anchor is the (eager-loaded) workspace_member, whose player_id is the
+    analytics user id."""
+    return SimpleNamespace(id=reg_id, workspace_member=SimpleNamespace(player_id=user_id))
 
 
 def _row(
@@ -175,8 +177,8 @@ class BuildTournamentHistoryTests(IsolatedAsyncioTestCase):
         self.assertEqual({"5"}, set(division_grids))
 
     async def test_no_resolvable_players_returns_empty(self) -> None:
-        # Registration without user_id or auth_user_id -> nothing to resolve.
-        reg = SimpleNamespace(id=1, user_id=None, auth_user_id=None)
+        # Registration without a workspace_member -> no player identity at all.
+        reg = SimpleNamespace(id=1, workspace_member=None)
         session = SimpleNamespace(execute=AsyncMock(), scalars=AsyncMock())
 
         history_map, count_map, division_grids = await registration._build_tournament_history(
@@ -187,3 +189,21 @@ class BuildTournamentHistoryTests(IsolatedAsyncioTestCase):
         self.assertEqual({}, count_map)
         self.assertEqual({}, division_grids)
         session.execute.assert_not_awaited()
+
+    async def test_falls_back_to_workspace_member_player_id(self) -> None:
+        """A registration with a loaded ``workspace_member`` resolves via
+        ``workspace_member.player_id`` — the sole identity path since dbarch02."""
+        reg = SimpleNamespace(id=1, workspace_member=SimpleNamespace(player_id=100))
+        rows = [_row(50, 100, rank=None)]
+
+        ver_patch, snap_patch = _patches(version_map={})
+        with ver_patch, snap_patch:
+            history_map, count_map, division_grids = await registration._build_tournament_history(
+                _fake_session(rows, []),
+                [reg],
+                current_tournament_id=999,
+                workspace_id=1,
+            )
+
+        self.assertEqual([50], [e.tournament_id for e in history_map[1]])
+        self.assertEqual(1, count_map[1])

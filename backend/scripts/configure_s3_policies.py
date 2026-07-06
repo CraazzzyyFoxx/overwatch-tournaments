@@ -49,10 +49,7 @@ async def main() -> None:
             Bucket=settings.s3_bucket_name,
             Policy=policy_json,
         )
-        logger.info(
-            f"Bucket policy applied to '{settings.s3_bucket_name}': "
-            f"public read on avatars/* and assets/*"
-        )
+        logger.info(f"Bucket policy applied to '{settings.s3_bucket_name}': public read on avatars/* and assets/*")
 
         # Verify
         response = await client.get_bucket_policy(Bucket=settings.s3_bucket_name)

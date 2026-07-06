@@ -27,14 +27,10 @@ async def process_bracket_job(job_id: int) -> None:
                 return
 
             await session.scalar(
-                sa.select(models.Tournament.id)
-                .where(models.Tournament.id == current.tournament_id)
-                .with_for_update()
+                sa.select(models.Tournament.id).where(models.Tournament.id == current.tournament_id).with_for_update()
             )
             await session.scalar(
-                sa.select(models.Stage.id)
-                .where(models.Stage.id == current.stage_id)
-                .with_for_update()
+                sa.select(models.Stage.id).where(models.Stage.id == current.stage_id).with_for_update()
             )
             generated = await _execute_bracket_operation(session, current)
             await jobs.request_standings_recalculation(session, current.tournament_id)

@@ -6,6 +6,10 @@ import { Workspace } from "@/types/workspace.types";
 import workspaceService from "@/services/workspace.service";
 
 const WORKSPACE_COOKIE = "aqt-workspace-id";
+// Persist for a year so the active workspace survives browser restarts and is
+// present on the very first server render of each new session — otherwise SSR
+// reads no workspace and server components render unscoped (cross-workspace) data.
+const WORKSPACE_COOKIE_TTL_DAYS = 365;
 
 type WorkspaceState = {
   workspaces: Workspace[];
@@ -64,7 +68,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           const current = get().currentWorkspaceId;
           const nextId = resolveCurrentWorkspaceId(workspaces, current);
           if (nextId !== null) {
-            Cookies.set(WORKSPACE_COOKIE, String(nextId), { sameSite: "lax" });
+            Cookies.set(WORKSPACE_COOKIE, String(nextId), {
+              sameSite: "lax",
+              expires: WORKSPACE_COOKIE_TTL_DAYS
+            });
           } else {
             Cookies.remove(WORKSPACE_COOKIE);
           }
@@ -79,7 +86,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       setCurrentWorkspace: (id: number) => {
-        Cookies.set(WORKSPACE_COOKIE, String(id), { sameSite: "lax" });
+        Cookies.set(WORKSPACE_COOKIE, String(id), {
+          sameSite: "lax",
+          expires: WORKSPACE_COOKIE_TTL_DAYS
+        });
         set({ currentWorkspaceId: id });
       },
 

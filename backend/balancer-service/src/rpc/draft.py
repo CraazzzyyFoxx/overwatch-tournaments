@@ -18,12 +18,12 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftAutopickStrategy, DraftRole
-from shared.models.draft import DraftPick, DraftSession
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.balancer.draft import DraftPick, DraftSession
 from src import models
 from src.core import db
 from src.core.auth import (
@@ -46,7 +46,7 @@ from src.schemas.draft import (
 )
 from src.services.draft import board as board_svc
 from src.services.draft import export as export_svc
-from src.services.draft import lifecycle, selection
+from src.services.draft import lifecycle, loaders, selection
 from src.services.draft import realtime as draft_rt
 from src.services.draft import suggestions as sug
 
@@ -203,10 +203,13 @@ def register(broker: Any, logger: Any) -> None:
             current = await session.get(DraftPick, draft.current_pick_id)
             available = (
                 await session.scalars(
-                    sa.select(models.DraftPlayer).where(
+                    sa.select(models.DraftPlayer)
+                    .where(
                         models.DraftPlayer.session_id == draft.id,
                         models.DraftPlayer.status == "available",
                     )
+                    # Fit construction reads secondary_roles_json/user_id/role_ranks.
+                    .options(*loaders.player_options())
                 )
             ).all()
             counts = await selection._team_role_counts(session, current.draft_team_id)
@@ -219,6 +222,7 @@ def register(broker: Any, logger: Any) -> None:
                     preference_order=(DraftRole(p.primary_role),),
                     is_flex=p.is_flex,
                     user_id=p.user_id,
+                    rank_by_role={DraftRole(k): v for k, v in (p.role_ranks or {}).items()},
                 )
                 for p in available
             ]
@@ -312,6 +316,7 @@ def register(broker: Any, logger: Any) -> None:
                         is_flex=p.is_flex,
                         division_number=p.division_number,
                         rank_value=p.rank_value,
+                        role_ranks=({p.primary_role.value: p.rank_value} if p.rank_value is not None else {}),
                     )
                     for p in payload.players
                 ]
@@ -411,11 +416,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = DraftPickSelectRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             public_user_ids = list(
-                await session.scalars(
-                    sa.select(models.AuthUserPlayer.player_id)
-                    .where(models.AuthUserPlayer.auth_user_id == user.id)
-                    .order_by(models.AuthUserPlayer.is_primary.desc(), models.AuthUserPlayer.id.asc())
-                )
+                await session.scalars(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
             )
             public_user_id = public_user_ids[0] if public_user_ids else None
             is_admin = user.is_workspace_admin(draft.workspace_id)
@@ -466,9 +467,7 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "import")
             payload = DraftPickOverrideRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
-            public_user_id = await session.scalar(
-                sa.select(models.AuthUserPlayer.player_id).where(models.AuthUserPlayer.auth_user_id == user.id)
-            )
+            public_user_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
             result = await selection.override(
                 session,
                 draft,
@@ -476,6 +475,7 @@ def register(broker: Any, logger: Any) -> None:
                 player_id=payload.player_id,
                 expected_version=payload.expected_version,
                 actor_user_id=public_user_id,
+                target_role=payload.target_role,
             )
             await _publish_result(
                 session, _redis(logger), draft, result, made_event="draft.pick_made", actor_user_id=public_user_id

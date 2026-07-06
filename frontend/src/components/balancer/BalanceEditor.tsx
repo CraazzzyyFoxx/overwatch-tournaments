@@ -80,7 +80,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
 
   const membersQuery = useQuery({
     queryKey: ["workspace", "members", workspaceId],
-    queryFn: () => workspaceService.getMembers(workspaceId as number),
+    queryFn: () => workspaceService.getMembersAll(workspaceId as number),
     enabled: workspaceId !== null,
     staleTime: 5 * 60 * 1000,
   });

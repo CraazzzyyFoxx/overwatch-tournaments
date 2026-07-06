@@ -4,10 +4,10 @@ from typing import Any
 
 from cashews import cache
 from faststream.rabbit import RabbitMessage
+
 from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHANGED_EXCHANGE
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
-
 from src.core import db
 from src.core.caching import CACHE_PREFIXES
 from src.services import hero_stats_refresh
@@ -35,6 +35,9 @@ def tournament_standings_cache_patterns(tournament_id: int) -> tuple[str, ...]:
         # TTL is short (users_cache_ttl=60s) so the steady-state cost is low.
         "backend:user_profile:*",
         "backend:user_tournaments:*",
+        # Cached Users-Overview id order (H13) — a tournament change can reorder
+        # the tournaments_count / achievements_count / avg_placement leaderboard.
+        "backend:user_overview_order:*",
     )
 
 
@@ -43,11 +46,23 @@ async def invalidate_tournament_standings_cache(tournament_id: int) -> None:
         await cache.delete_match(pattern)
 
 
+async def invalidate_achievement_rarity_cache() -> None:
+    """Drop the per-workspace achievement-rarity aggregate (H11).
+
+    Rarity = distinct earners / total players; both numerator and denominator
+    move when tournament/match data changes. The key is workspace-scoped, but a
+    tournament-changed event doesn't carry the workspace, so all workspaces are
+    invalidated broadly (bounded anyway by ``achievements_cache_ttl``).
+    """
+    await cache.delete_match("backend:achievement_rarity_map:*")
+
+
 async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     event = TournamentChangedEvent.model_validate(data)
     if event.reason == "bracket_changed":
         return
     await invalidate_tournament_standings_cache(event.tournament_id)
+    await invalidate_achievement_rarity_cache()
 
 
 def register(broker: Any, logger: Any) -> None:

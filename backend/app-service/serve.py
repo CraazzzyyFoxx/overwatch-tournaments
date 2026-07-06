@@ -10,6 +10,7 @@ Run with: ``faststream run serve:app``.
 
 from cashews import cache
 from faststream import FastStream
+
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -17,7 +18,6 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
-
 from src.core import config, db
 from src.core.caching import configure_cache
 from src.rpc import (

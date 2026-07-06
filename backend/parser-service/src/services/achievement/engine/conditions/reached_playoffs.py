@@ -26,7 +26,7 @@ from .stat_threshold import OPERATORS
 def _base_query() -> sa.Select[tuple[int, int]]:
     return (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Standing.tournament_id,
         )
         .select_from(models.Standing)
@@ -38,6 +38,10 @@ def _base_query() -> sa.Select[tuple[int, int]]:
                 models.Player.team_id == models.Standing.team_id,
                 models.Player.tournament_id == models.Standing.tournament_id,
             ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
     )
 
@@ -72,11 +76,11 @@ async def execute_reached_playoffs(
         counts_query = (
             _base_query()
             .with_only_columns(
-                models.Player.user_id,
+                models.WorkspaceMember.player_id,
                 sa.func.count(models.Standing.tournament_id.distinct()).label("cnt"),
             )
             .where(*where_clauses)
-            .group_by(models.Player.user_id)
+            .group_by(models.WorkspaceMember.player_id)
         )
         result = await session.execute(counts_query)
         counts = {row[0]: row[1] for row in result}

@@ -20,9 +20,7 @@ async def to_pydantic(session: AsyncSession, map: models.Map, entities: list[str
 
 async def fetch_maps(gamemode: models.Gamemode) -> list[schemas.OverfastMap]:
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(
-            f"{config.settings.overfast_base_url}/maps?gamemode={gamemode.slug}"
-        )
+        response = await client.get(f"{config.settings.overfast_base_url}/maps?gamemode={gamemode.slug}")
         response.raise_for_status()
 
     return [schemas.OverfastMap.model_validate(map) for map in response.json()]
@@ -48,21 +46,33 @@ async def initial_create(session: AsyncSession) -> None:
         session,
         params=pagination.PaginationSortParams(per_page=-1, page=1),
     )
+    # Release the transaction opened by the reads above before the OverFast
+    # round-trips; expire_on_commit=False keeps the gamemodes usable.
+    await session.commit()
+
+    fetched: list[tuple[models.Gamemode, list[schemas.OverfastMap]]] = []
     for gamemode in gamemodes:
-        maps = await fetch_maps(gamemode)
+        fetched.append((gamemode, await fetch_maps(gamemode)))
+
+    # One existence query + one bulk write instead of a get-then-create/update
+    # pair per map. A map created for an earlier gamemode is found in the index
+    # and updated (name/image only), exactly like the old per-item re-SELECT.
+    maps_by_name = await service.get_by_names(session, [map.name for _, maps in fetched for map in maps])
+    new_maps: list[models.Map] = []
+    for gamemode, maps in fetched:
         for map in maps:
-            map_db = await service.get_by_name(session, map.name)
+            map_db = maps_by_name.get(map.name)
             if not map_db:
-                await service.create(
-                    session,
-                    gamemode=gamemode,
+                map_db = models.Map(
+                    gamemode_id=gamemode.id,
                     name=map.name,
                     image_path=map.screenshot,
                 )
+                maps_by_name[map.name] = map_db
+                new_maps.append(map_db)
             else:
-                await service.update(
-                    session,
-                    map_db,
-                    name=map.name,
-                    image_path=map.screenshot,
-                )
+                map_db.name = map.name
+                map_db.image_path = map.screenshot
+
+    session.add_all(new_maps)
+    await session.commit()

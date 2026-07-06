@@ -13,9 +13,9 @@ caught by that ``except`` clause (it is a strict subclass), silently degrading
 
 from __future__ import annotations
 
-from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 
 

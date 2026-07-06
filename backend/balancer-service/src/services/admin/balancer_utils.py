@@ -12,11 +12,10 @@ import csv
 import io
 import re
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -264,10 +263,7 @@ def build_header_keys(headers: list[str]) -> list[str]:
 def row_to_json(headers: list[str], row: list[str]) -> dict[str, str]:
     """Convert a CSV row to a dict using header-based keys with duplicate handling."""
     keys = build_header_keys(headers)
-    return {
-        key: row[index].strip() if index < len(row) else ""
-        for index, key in enumerate(keys)
-    }
+    return {key: row[index].strip() if index < len(row) else "" for index, key in enumerate(keys)}
 
 
 def fetch_csv_rows(text: str) -> list[list[str]]:

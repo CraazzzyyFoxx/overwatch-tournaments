@@ -1,11 +1,11 @@
 """Admin service layer for standing management"""
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.schemas.admin import standing as admin_schemas
 from src.services.computation.jobs import request_standings_recalculation

@@ -169,7 +169,10 @@ export const ru = {
         topHeroesRequired: "Выберите хотя бы одного топ-героя перед продолжением.",
         notesRequired: "Обязательное поле.",
         fieldRequired: "Заполните обязательное поле: {label}.",
-        invalidFormat: "Неверный формат: {label}."
+        invalidFormat: "Неверный формат: {label}.",
+        verifiedNoAccount: "Привяжите подтверждённый аккаунт {label} через OAuth, чтобы зарегистрироваться.",
+        verifiedRequired: "Выберите ваш подтверждённый аккаунт {label}.",
+        verifiedMismatch: "{label} должен совпадать с подтверждённым через OAuth аккаунтом в вашем профиле."
       }
     },
     accounts: {
@@ -180,7 +183,10 @@ export const ru = {
       discord: "Discord",
       twitch: "Twitch",
       addSmurfPlaceholder: "Добавить смурф BattleTag",
-      addSmurfButton: "Добавить"
+      addSmurfButton: "Добавить",
+      verifiedHint: "Выберите один из ваших подтверждённых через OAuth аккаунтов.",
+      verifiedNone: "Подтверждённый аккаунт {label} не привязан.",
+      verifiedLink: "Привязать {label} через OAuth"
     },
     roles: {
       title: "Выберите свою роль",
@@ -573,6 +579,7 @@ export const ru = {
       low_rank: "Зарегистрирован на низком ранге для таких результатов",
       cohort_overperformance: "Переиграл других игроков своей роли и дивизиона",
       strong_cohort_outlier: "Заметно выше игроков своей роли и дивизиона",
+      raw_mvp_dominance: "Стабильно вверху таблицы матча (MVP) для своего ранга",
       single_tournament_underperformance: "В этом турнире сыграл заметно ниже своего уровня",
       sustained_underperformance: "Стабильно ниже своего уровня в последних турнирах",
       sharp_recent_drop: "Резкий спад относительно обычных результатов",

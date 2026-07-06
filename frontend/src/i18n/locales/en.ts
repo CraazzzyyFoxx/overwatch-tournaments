@@ -169,7 +169,10 @@ export const en = {
         topHeroesRequired: "Select at least one top hero before continuing.",
         notesRequired: "Notes are required.",
         fieldRequired: "Fill in the required field: {label}.",
-        invalidFormat: "{label} format is invalid."
+        invalidFormat: "{label} format is invalid.",
+        verifiedNoAccount: "Link a verified {label} account via OAuth to register.",
+        verifiedRequired: "Select your verified {label} account.",
+        verifiedMismatch: "{label} must match an OAuth-verified account on your profile."
       }
     },
     accounts: {
@@ -180,7 +183,10 @@ export const en = {
       discord: "Discord",
       twitch: "Twitch",
       addSmurfPlaceholder: "Add smurf BattleTag",
-      addSmurfButton: "Add"
+      addSmurfButton: "Add",
+      verifiedHint: "Choose one of your OAuth-verified accounts.",
+      verifiedNone: "No verified {label} account is linked.",
+      verifiedLink: "Link {label} via OAuth"
     },
     roles: {
       title: "Choose Your Role",
@@ -571,6 +577,7 @@ export const en = {
       low_rank: "Registered at a low rank for results this strong",
       cohort_overperformance: "Outplayed others of the same role and division",
       strong_cohort_outlier: "Far above peers of the same role and division",
+      raw_mvp_dominance: "Consistently tops the match scoreboard (MVP) for their rank",
       single_tournament_underperformance: "Played well below their level this tournament",
       sustained_underperformance: "Consistently below their level across recent tournaments",
       sharp_recent_drop: "A sharp drop from their usual results",

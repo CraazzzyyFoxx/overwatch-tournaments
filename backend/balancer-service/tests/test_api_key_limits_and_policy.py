@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -142,7 +143,7 @@ def test_limiter_returns_429_with_retry_after_for_request_limit() -> None:
 
     assert exc_info.value.status_code == 429
     assert exc_info.value.headers["Retry-After"] == "60"
-    assert exc_info.value.detail == "API key limit exceeded: requests_per_minute"
+    assert exc_info.value.detail == "Balancer rate limit exceeded: requests_per_minute"
 
 
 def test_limiter_enforces_concurrent_jobs_and_releases_active_job() -> None:
@@ -154,11 +155,11 @@ def test_limiter_enforces_concurrent_jobs_and_releases_active_job() -> None:
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(limiter.reserve_job(user, "job-2"))
     assert exc_info.value.status_code == 429
-    assert exc_info.value.detail == "API key limit exceeded: concurrent_jobs"
+    assert exc_info.value.detail == "Balancer rate limit exceeded: concurrent_jobs"
 
-    asyncio.run(limiter.release_job(42, "job-1"))
+    asyncio.run(limiter.release_job("api_key", 42, "job-1"))
     asyncio.run(limiter.reserve_job(user, "job-2"))
-    assert "job-2" in redis.active_sets[limiter.active_jobs_key(42)]
+    assert "job-2" in redis.active_sets[limiter.active_jobs_key("api_key", 42)]
 
 
 def test_limiter_enforces_jobs_per_day_after_release() -> None:
@@ -166,13 +167,27 @@ def test_limiter_enforces_jobs_per_day_after_release() -> None:
     limiter = _limiter(FakeRedis())
 
     asyncio.run(limiter.reserve_job(user, "job-1"))
-    asyncio.run(limiter.release_job(42, "job-1"))
+    asyncio.run(limiter.release_job("api_key", 42, "job-1"))
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(limiter.reserve_job(user, "job-2"))
 
     assert exc_info.value.status_code == 429
-    assert exc_info.value.detail == "API key limit exceeded: jobs_per_day"
+    assert exc_info.value.detail == "Balancer rate limit exceeded: jobs_per_day"
+
+
+def test_limiter_applies_session_limits_to_non_api_key_principals() -> None:
+    """Session (non-API-key) users are now bucketed and capped too (review H5)."""
+    redis = FakeRedis()
+    session_user = SimpleNamespace(id=777, _credential_type="access_token")
+    limiter = _limiter(redis)
+
+    # Concurrency is bucketed under balancer:user:{id}:active_jobs.
+    asyncio.run(limiter.reserve_job(session_user, "job-a"))
+    assert "job-a" in redis.active_sets[limiter.active_jobs_key("user", 777)]
+
+    asyncio.run(limiter.release_job("user", 777, "job-a"))
+    assert "job-a" not in redis.active_sets[limiter.active_jobs_key("user", 777)]
 
 
 def test_workspace_policy_limits_api_key_to_own_workspace_and_jobs() -> None:

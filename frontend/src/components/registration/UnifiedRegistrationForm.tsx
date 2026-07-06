@@ -24,6 +24,7 @@ import {
   getBuiltInFieldValidationError,
   getBuiltInListValidationError,
   getCustomFieldValidationError,
+  getVerifiedFieldError,
 } from "@/components/registration/validation";
 
 interface UnifiedFormState {
@@ -158,6 +159,10 @@ export default function UnifiedRegistrationForm({
     isEnabled(fieldKey) && formConfig.built_in_fields?.[fieldKey]?.required === true;
   const getBuiltInConfig = (fieldKey: string) => formConfig.built_in_fields?.[fieldKey];
 
+  // Registrant's OAuth-verified accounts drive `require_verified` gating (public mode).
+  const verifiedAccounts =
+    mode === "public" ? (userProfile?.social_accounts ?? []).filter((a) => a.is_verified) : [];
+
   const topHeroesConfig = formConfig.built_in_fields?.top_heroes;
   const topHeroesEnabled = !!topHeroesConfig && topHeroesConfig.enabled !== false;
   const maxHeroes =
@@ -242,9 +247,10 @@ export default function UnifiedRegistrationForm({
       });
     } else if (mode === "public" && userProfile) {
       const init: Partial<UnifiedFormState> = {};
-      const bts = userProfile.battle_tag?.map((bt) => bt.battle_tag) ?? [];
-      const dcs = userProfile.discord?.map((d) => d.name) ?? [];
-      const tws = userProfile.twitch?.map((t) => t.name) ?? [];
+      const accounts = userProfile.social_accounts ?? [];
+      const bts = accounts.filter((a) => a.provider === "battlenet").map((a) => a.username);
+      const dcs = accounts.filter((a) => a.provider === "discord").map((a) => a.username);
+      const tws = accounts.filter((a) => a.provider === "twitch").map((a) => a.username);
       if (isEnabled("battle_tag") && bts.length > 0) init.battleTag = bts[0];
       if (isEnabled("discord_nick") && dcs.length > 0) init.discordNick = dcs[0];
       if (isEnabled("twitch_nick") && tws.length > 0) init.twitchNick = tws[0];
@@ -275,8 +281,32 @@ export default function UnifiedRegistrationForm({
     return [];
   };
 
+  const verifiedFieldValues: Record<string, string> = {
+    battle_tag: state.battleTag,
+    discord_nick: state.discordNick,
+    twitch_nick: state.twitchNick,
+  };
+  const getVerifiedError = (fieldKey: string): string | null =>
+    isEnabled(fieldKey)
+      ? getVerifiedFieldError(
+          fieldKey,
+          verifiedFieldValues[fieldKey] ?? "",
+          getBuiltInConfig(fieldKey),
+          verifiedAccounts,
+          t
+        )
+      : null;
+
   const validateCurrentStep = (): string | null => {
     if (state.step === 0) {
+      // ``require_verified`` gating takes priority — it implies the field is required.
+      const verifiedError =
+        getVerifiedError("battle_tag") ??
+        getVerifiedError("discord_nick") ??
+        getVerifiedError("twitch_nick");
+      if (verifiedError) {
+        return verifiedError;
+      }
       if (isRequired("battle_tag") && !state.battleTag.trim()) {
         return t("registration.wizard.validation.battleTagRequired");
       }
@@ -546,10 +576,11 @@ export default function UnifiedRegistrationForm({
     });
   };
 
-  // Suggestions mapping
-  const battleTagSuggestions = userProfile?.battle_tag?.map((bt) => bt.battle_tag) ?? [];
-  const discordSuggestions = userProfile?.discord?.map((d) => d.name) ?? [];
-  const twitchSuggestions = userProfile?.twitch?.map((t) => t.name) ?? [];
+  // Suggestions mapping (from the player's unified social accounts)
+  const profileAccounts = userProfile?.social_accounts ?? [];
+  const battleTagSuggestions = profileAccounts.filter((a) => a.provider === "battlenet").map((a) => a.username);
+  const discordSuggestions = profileAccounts.filter((a) => a.provider === "discord").map((a) => a.username);
+  const twitchSuggestions = profileAccounts.filter((a) => a.provider === "twitch").map((a) => a.username);
 
   // Setup options for admin selects
   const registrationStatusOptions = {
@@ -628,6 +659,12 @@ export default function UnifiedRegistrationForm({
             battleTagSuggestions={mode === "admin" ? [] : battleTagSuggestions}
             discordSuggestions={mode === "admin" ? [] : discordSuggestions}
             twitchSuggestions={mode === "admin" ? [] : twitchSuggestions}
+            accounts={mode === "admin" ? [] : (userProfile?.social_accounts ?? [])}
+            verifiedErrors={{
+              battle_tag: getVerifiedError("battle_tag"),
+              discord_nick: getVerifiedError("discord_nick"),
+              twitch_nick: getVerifiedError("twitch_nick"),
+            }}
           />
         )}
 

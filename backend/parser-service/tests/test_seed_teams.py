@@ -89,12 +89,11 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         teams = [_team(team_id=i, tournament_id=tournament_id, avg_sr=5000 - i * 50) for i in range(1, 17)]
         session = _mk_session(teams)
 
-        with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
+        with (
+            patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()),
         ):
-            await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
-            )
+            await stage_service.seed_teams(session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False)
 
         # 16 inputs added, all FINAL
         added = session._added_inputs
@@ -117,10 +116,22 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         # Team 7 (idx 6, row 1) → B
         # Team 8 (idx 7, row 1) → A
         expected_group_for_team = {
-            1: 100, 2: 101, 3: 102, 4: 103,
-            5: 103, 6: 102, 7: 101, 8: 100,
-            9: 100, 10: 101, 11: 102, 12: 103,
-            13: 103, 14: 102, 15: 101, 16: 100,
+            1: 100,
+            2: 101,
+            3: 102,
+            4: 103,
+            5: 103,
+            6: 102,
+            7: 101,
+            8: 100,
+            9: 100,
+            10: 101,
+            11: 102,
+            12: 103,
+            13: 103,
+            14: 102,
+            15: 101,
+            16: 100,
         }
         for inp in added:
             expected = expected_group_for_team[inp.team_id]
@@ -135,18 +146,14 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         delta regardless of number of groups."""
         tournament_id = 99
         stage = _build_stage(stage_id=1, tournament_id=tournament_id, num_groups=4)
-        teams = [
-            _team(team_id=i, tournament_id=tournament_id, avg_sr=5000 - i * 100)
-            for i in range(1, 17)
-        ]
+        teams = [_team(team_id=i, tournament_id=tournament_id, avg_sr=5000 - i * 100) for i in range(1, 17)]
         session = _mk_session(teams)
 
-        with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
+        with (
+            patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()),
         ):
-            await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
-            )
+            await stage_service.seed_teams(session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False)
 
         group_totals: dict[int, float] = {}
         team_by_id = {t.id: t for t in teams}
@@ -176,9 +183,7 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
 
         with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)):
             with self.assertRaises(Exception) as ctx:
-                await stage_service.seed_teams(
-                    session, stage.id, [1, 2, 1, 3], mode="snake_sr"
-                )
+                await stage_service.seed_teams(session, stage.id, [1, 2, 1, 3], mode="snake_sr")
         self.assertIn("duplicates", str(ctx.exception))
 
     async def test_rejects_cross_tournament_teams(self) -> None:
@@ -210,18 +215,14 @@ class SeedTeamsTests(IsolatedAsyncioTestCase):
         """7 teams across 3 groups should distribute as 3, 2, 2 (or similar)."""
         tournament_id = 99
         stage = _build_stage(stage_id=1, tournament_id=tournament_id, num_groups=3)
-        teams = [
-            _team(team_id=i, tournament_id=tournament_id, avg_sr=5000 - i * 100)
-            for i in range(1, 8)
-        ]
+        teams = [_team(team_id=i, tournament_id=tournament_id, avg_sr=5000 - i * 100) for i in range(1, 8)]
         session = _mk_session(teams)
 
-        with patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)), patch.object(
-            stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()
+        with (
+            patch.object(stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service.standings_recalculation, "enqueue_tournament_recalculation", AsyncMock()),
         ):
-            await stage_service.seed_teams(
-                session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False
-            )
+            await stage_service.seed_teams(session, stage.id, [t.id for t in teams], mode="snake_sr", notify=False)
 
         counts: dict[int, int] = {}
         for inp in session._added_inputs:

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from shared.division_grid import DivisionGrid
 from shared.services.division_grid_resolution import resolve_tournament_division
-
 from src import models, schemas
 from src.schemas.base import Score
 from src.schemas.division_grid import DivisionGridVersionRead
@@ -22,9 +21,7 @@ def resolve_team_placement(team: models.Team) -> int | None:
     """
     standings = getattr(team, "standings", None) or []
     positive_positions = [
-        standing.overall_position
-        for standing in standings
-        if getattr(standing, "overall_position", 0) > 0
+        standing.overall_position for standing in standings if getattr(standing, "overall_position", 0) > 0
     ]
     if positive_positions:
         return min(positive_positions)
@@ -34,9 +31,7 @@ def resolve_team_placement(team: models.Team) -> int | None:
 def _division_grid_version(tournament: models.Tournament) -> DivisionGridVersionRead | None:
     if getattr(tournament, "division_grid_version", None) is None:
         return None
-    return DivisionGridVersionRead.model_validate(
-        tournament.division_grid_version, from_attributes=True
-    )
+    return DivisionGridVersionRead.model_validate(tournament.division_grid_version, from_attributes=True)
 
 
 def to_user_tournament_summary(
@@ -54,9 +49,7 @@ def to_user_tournament_summary(
     )
 
 
-def to_user_tournament_player(
-    player: models.Player, *, grid: DivisionGrid
-) -> schemas.UserTournamentPlayer:
+def to_user_tournament_player(player: models.Player, *, grid: DivisionGrid) -> schemas.UserTournamentPlayer:
     """Player card inside UserTournament.players."""
     return schemas.UserTournamentPlayer(
         id=player.id,
@@ -65,7 +58,9 @@ def to_user_tournament_player(
         sub_role=player.sub_role,
         rank=player.rank,
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
-        user_id=player.user_id,
+        # workspace_member_id is NOT NULL (contract step, iwrefac07): the
+        # identity anchor is always workspace_member.player_id.
+        user_id=player.workspace_member.player_id,
         is_substitution=player.is_substitution,
         is_newcomer=player.is_newcomer,
         is_newcomer_role=player.is_newcomer_role,
@@ -81,11 +76,7 @@ def to_match_with_user_stats(
     heroes: list[dict] | None,
 ) -> schemas.MatchReadWithUserStats:
     """One match in a user-scoped encounter — includes the viewer's stats."""
-    map_read = (
-        schemas.MapRead.model_validate(match.map, from_attributes=True)
-        if match.map is not None
-        else None
-    )
+    map_read = schemas.MapRead.model_validate(match.map, from_attributes=True) if match.map is not None else None
     hero_objs = [schemas.HeroRead.model_validate(h) for h in (heroes or [])]
     return schemas.MatchReadWithUserStats(
         id=match.id,
@@ -137,9 +128,11 @@ def to_encounter_stage_item_summary(
 def _to_encounter_team_player_ref(
     player: models.Player,
 ) -> schemas.UserEncounterTeamPlayerRef:
+    # workspace_member_id is NOT NULL (contract step, iwrefac07): the identity
+    # anchor is always workspace_member.player_id.
     return schemas.UserEncounterTeamPlayerRef(
         id=player.id,
-        user_id=player.user_id,
+        user_id=player.workspace_member.player_id,
         role=player.role,
         name=player.name,
     )
@@ -153,26 +146,23 @@ def to_encounter_team_summary(
     return schemas.UserEncounterTeamSummary(
         id=team.id,
         name=team.name,
-        players=[
-            _to_encounter_team_player_ref(p)
-            for p in getattr(team, "players", []) or []
-        ],
+        players=[_to_encounter_team_player_ref(p) for p in getattr(team, "players", []) or []],
     )
 
 
-def _resolve_user_team_id(
-    encounter: models.Encounter, user_id: int
-) -> int | None:
+def _resolve_user_team_id(encounter: models.Encounter, user_id: int) -> int | None:
     """Pick which side (home/away) the viewer played on, based on rosters."""
     home = getattr(encounter, "home_team", None)
     if home is not None:
         for player in getattr(home, "players", []) or []:
-            if player.user_id == user_id:
+            member = player.workspace_member
+            if member is not None and member.player_id == user_id:
                 return home.id
     away = getattr(encounter, "away_team", None)
     if away is not None:
         for player in getattr(away, "players", []) or []:
-            if player.user_id == user_id:
+            member = player.workspace_member
+            if member is not None and member.player_id == user_id:
                 return away.id
     return None
 
@@ -192,11 +182,7 @@ def to_encounter_with_user_stats(
     """
     home_team_summary = to_encounter_team_summary(encounter.home_team)
     away_team_summary = to_encounter_team_summary(encounter.away_team)
-    user_team_id = (
-        _resolve_user_team_id(encounter, viewer_user_id)
-        if viewer_user_id is not None
-        else None
-    )
+    user_team_id = _resolve_user_team_id(encounter, viewer_user_id) if viewer_user_id is not None else None
     return schemas.EncounterReadWithUserStats(
         id=encounter.id,
         name=encounter.name,

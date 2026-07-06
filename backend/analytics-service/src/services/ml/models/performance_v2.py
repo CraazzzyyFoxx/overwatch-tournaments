@@ -93,9 +93,7 @@ def _oof_baseline_proba(X: np.ndarray, y_win: np.ndarray) -> np.ndarray:
     if n_splits < 2:
         return _make_logistic_baseline().fit(X, y_win).predict_proba(X)[:, 1]
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
-    return cross_val_predict(
-        _make_logistic_baseline(), X, y_win, cv=cv, method="predict_proba"
-    )[:, 1]
+    return cross_val_predict(_make_logistic_baseline(), X, y_win, cv=cv, method="predict_proba")[:, 1]
 
 
 def build_target(df: pd.DataFrame) -> tuple[pd.Series, typing.Any]:
@@ -181,7 +179,7 @@ class PerformanceModelV2(MLModel):
                 out[col] = []
             return out
 
-        has_logs = (df.get("hero_time_played", pd.Series(0, index=df.index)).fillna(0) > 0)
+        has_logs = df.get("hero_time_played", pd.Series(0, index=df.index)).fillna(0) > 0
         out["y_hat"] = float("nan")
         out["y_q10"] = float("nan")
         out["y_q90"] = float("nan")
@@ -299,12 +297,8 @@ def _train_performance_v2_with_device(
     booster.fit(X, role_df["_y"], **fit_kwargs)
 
     # 3. quantile boosters for confidence bands
-    booster_q10 = lgb.LGBMRegressor(
-        **_booster_params(objective="quantile", alpha=0.1, device=device)
-    )
-    booster_q90 = lgb.LGBMRegressor(
-        **_booster_params(objective="quantile", alpha=0.9, device=device)
-    )
+    booster_q10 = lgb.LGBMRegressor(**_booster_params(objective="quantile", alpha=0.1, device=device))
+    booster_q90 = lgb.LGBMRegressor(**_booster_params(objective="quantile", alpha=0.9, device=device))
     booster_q10.fit(X, role_df["_y"])
     booster_q90.fit(X, role_df["_y"])
 
@@ -313,16 +307,14 @@ def _train_performance_v2_with_device(
     coarse_booster: lgb.LGBMRegressor | None = None
     if all(col in role_df.columns for col in coarse_order):
         Xc = align_features(role_df, coarse_order)
-        coarse_booster = lgb.LGBMRegressor(
-            **_booster_params(objective="regression_l1", device=device)
-        )
+        coarse_booster = lgb.LGBMRegressor(**_booster_params(objective="regression_l1", device=device))
         coarse_booster.fit(Xc, role_df["_y"])
 
     # 5. metrics on training set (full backtest comes via training/backtest.py)
     yhat = booster.predict(X)
     residuals = role_df["_y"].to_numpy() - yhat
     mae = float(np.mean(np.abs(residuals)))
-    ss_res = float(np.sum(residuals ** 2))
+    ss_res = float(np.sum(residuals**2))
     var = float(np.var(role_df["_y"].to_numpy()))
     r2 = float(1 - ss_res / (len(role_df) * var)) if var > 0 else 0.0
     metrics = {"mae_train": mae, "r2_train": r2, "n_rows": float(len(role_df))}
@@ -336,11 +328,7 @@ def _train_performance_v2_with_device(
         val_resid = val_y - val_pred
         val_mae = float(np.mean(np.abs(val_resid)))
         val_var = float(np.var(val_y))
-        val_r2 = (
-            float(1 - np.sum(val_resid**2) / (len(val_y) * val_var))
-            if val_var > 0
-            else 0.0
-        )
+        val_r2 = float(1 - np.sum(val_resid**2) / (len(val_y) * val_var)) if val_var > 0 else 0.0
         metrics["mae_val"] = val_mae
         metrics["r2_val"] = val_r2 if math.isfinite(val_r2) else 0.0
         metrics["n_rows_val"] = float(len(val_y))
@@ -357,9 +345,7 @@ def _train_performance_v2_with_device(
         coarse_feature_order=coarse_order if coarse_booster is not None else [],
         baseline=baseline,
     )
-    return PerformanceTrainingResult(
-        role=role, model=model, metrics=metrics, feature_importance=importance
-    )
+    return PerformanceTrainingResult(role=role, model=model, metrics=metrics, feature_importance=importance)
 
 
 def train_performance_v2(
@@ -436,9 +422,7 @@ def aggregate_to_tournament(
         values = grp["_y_hat"].to_numpy()
         mask = ~np.isnan(values)
         if mask.any() and weight_sum > 0:
-            raw_value = float(
-                np.average(values[mask], weights=np.where(weights[mask] > 0, weights[mask], 1.0))
-            )
+            raw_value = float(np.average(values[mask], weights=np.where(weights[mask] > 0, weights[mask], 1.0)))
         elif mask.any():
             raw_value = float(np.nanmean(values))
         else:
@@ -466,16 +450,12 @@ def impact_score_within_role(per_player: pd.DataFrame) -> pd.Series:
     """Convert ``raw_value`` to ``impact_score`` 0-100 via per-(tournament, role) percentile."""
     if per_player.empty:
         return pd.Series(dtype=float)
-    out = per_player.groupby(
-        ["tournament_id", "role"], dropna=False
-    )["raw_value"].rank(pct=True) * 100.0
+    out = per_player.groupby(["tournament_id", "role"], dropna=False)["raw_value"].rank(pct=True) * 100.0
     out.name = "impact_score"
     return out
 
 
-def stabilize_small_cohort_impact(
-    per_player: pd.DataFrame, *, min_cohort: int = 8
-) -> pd.DataFrame:
+def stabilize_small_cohort_impact(per_player: pd.DataFrame, *, min_cohort: int = 8) -> pd.DataFrame:
     """Replace the noisy empirical percentile with a smooth one for tiny cohorts.
 
     An empirical percentile rank over a handful of players collapses to a few
@@ -491,9 +471,7 @@ def stabilize_small_cohort_impact(
     if per_player.empty or "local_zscore" not in per_player.columns:
         return per_player
     out = per_player.copy()
-    sizes = out.groupby(["tournament_id", "role"], dropna=False)["player_id"].transform(
-        "size"
-    )
+    sizes = out.groupby(["tournament_id", "role"], dropna=False)["player_id"].transform("size")
     small = sizes < min_cohort
     if small.any():
         z = pd.to_numeric(out.loc[small, "local_zscore"], errors="coerce").fillna(0.0)

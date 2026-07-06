@@ -15,16 +15,15 @@ Create Date: 2026-04-10 14:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "t0o4p8q9r0s1"
-down_revision: Union[str, None] = "s9n3o7p8q9r0"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "s9n3o7p8q9r0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -35,9 +34,13 @@ def upgrade() -> None:
         schema="tournament",
     )
     op.create_foreign_key(
-        "fk_group_stage_id", "group", "stage",
-        ["stage_id"], ["id"],
-        source_schema="tournament", referent_schema="tournament",
+        "fk_group_stage_id",
+        "group",
+        "stage",
+        ["stage_id"],
+        ["id"],
+        source_schema="tournament",
+        referent_schema="tournament",
         ondelete="SET NULL",
     )
 
@@ -50,12 +53,14 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Fetch all groups ordered by tournament_id and id
-    groups = conn.execute(sa.text("""
+    groups = conn.execute(
+        sa.text("""
         SELECT g.id, g.tournament_id, g.name, g.description,
                g.is_groups, g.challonge_id, g.challonge_slug
         FROM tournament."group" g
         ORDER BY g.tournament_id, g.id
-    """)).fetchall()
+    """)
+    ).fetchall()
 
     # Track order per tournament for stage ordering
     tournament_order: dict[int, int] = {}
@@ -81,18 +86,22 @@ def upgrade() -> None:
             item_type = "group"
         else:
             # Check if encounters for this group have negative rounds (lower bracket = DE)
-            has_negative = conn.execute(sa.text("""
+            has_negative = conn.execute(
+                sa.text("""
                 SELECT EXISTS(
                     SELECT 1 FROM tournament.encounter
                     WHERE tournament_group_id = :gid AND round < 0
                 )
-            """), {"gid": group_id}).scalar()
+            """),
+                {"gid": group_id},
+            ).scalar()
 
             stage_type = "double_elimination" if has_negative else "single_elimination"
             item_type = "single_bracket"
 
         # Create Stage
-        result = conn.execute(sa.text("""
+        result = conn.execute(
+            sa.text("""
             INSERT INTO tournament.stage
                 (tournament_id, name, description, stage_type, "order",
                  is_active, is_completed, challonge_id, challonge_slug, created_at)
@@ -100,55 +109,70 @@ def upgrade() -> None:
                 (:tid, :name, :desc, CAST(:stype AS tournament.stagetype), :ord,
                  false, false, :cid, :cslug, now())
             RETURNING id
-        """), {
-            "tid": tournament_id,
-            "name": name,
-            "desc": description,
-            "stype": stage_type,
-            "ord": order,
-            "cid": challonge_id,
-            "cslug": challonge_slug,
-        })
+        """),
+            {
+                "tid": tournament_id,
+                "name": name,
+                "desc": description,
+                "stype": stage_type,
+                "ord": order,
+                "cid": challonge_id,
+                "cslug": challonge_slug,
+            },
+        )
         stage_id = result.scalar_one()
 
         # Create StageItem
-        result = conn.execute(sa.text("""
+        result = conn.execute(
+            sa.text("""
             INSERT INTO tournament.stage_item
                 (stage_id, name, type, "order", created_at)
             VALUES
                 (:sid, :name, CAST(:itype AS tournament.stageitemtype), 0, now())
             RETURNING id
-        """), {
-            "sid": stage_id,
-            "name": name,
-            "itype": item_type,
-        })
+        """),
+            {
+                "sid": stage_id,
+                "name": name,
+                "itype": item_type,
+            },
+        )
         stage_item_id = result.scalar_one()
 
         # Link TournamentGroup -> Stage
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             UPDATE tournament."group"
             SET stage_id = :sid
             WHERE id = :gid
-        """), {"sid": stage_id, "gid": group_id})
+        """),
+            {"sid": stage_id, "gid": group_id},
+        )
 
         # Backfill stage_id, stage_item_id on Encounter
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             UPDATE tournament.encounter
             SET stage_id = :sid, stage_item_id = :siid
             WHERE tournament_group_id = :gid
-        """), {"sid": stage_id, "siid": stage_item_id, "gid": group_id})
+        """),
+            {"sid": stage_id, "siid": stage_item_id, "gid": group_id},
+        )
 
         # Backfill stage_id, stage_item_id on Standing
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             UPDATE tournament.standing
             SET stage_id = :sid, stage_item_id = :siid
             WHERE group_id = :gid
-        """), {"sid": stage_id, "siid": stage_item_id, "gid": group_id})
+        """),
+            {"sid": stage_id, "siid": stage_item_id, "gid": group_id},
+        )
 
     # 3. Create StageItemInput records for teams that have standings
     #    (teams assigned to each stage item)
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.stage_item_input
             (stage_item_id, slot, input_type, team_id, created_at)
         SELECT DISTINCT
@@ -159,7 +183,8 @@ def upgrade() -> None:
             now()
         FROM tournament.standing s
         WHERE s.stage_item_id IS NOT NULL
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

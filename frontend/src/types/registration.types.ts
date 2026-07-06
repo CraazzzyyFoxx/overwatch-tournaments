@@ -22,6 +22,12 @@ export interface BuiltInFieldConfig {
   validation?: FieldValidationConfig | null;
   /** `top_heroes` field only: max heroes selectable per role (default 5). */
   max_heroes?: number | null;
+  /**
+   * Identity fields (battle_tag/discord_nick/twitch_nick) only: when true the
+   * submitted handle must match one of the registrant's OAuth-verified social
+   * accounts for the field's provider. Implies the field is required.
+   */
+  require_verified?: boolean;
 }
 
 export interface SubroleOption {
@@ -81,7 +87,6 @@ export interface Registration {
   id: number;
   tournament_id: number;
   workspace_id: number;
-  auth_user_id: number | null;
   user_id: number | null;
   battle_tag: string | null;
   smurf_tags_json: string[] | null;

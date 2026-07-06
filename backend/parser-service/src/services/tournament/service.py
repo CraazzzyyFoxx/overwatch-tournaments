@@ -1,4 +1,5 @@
 import typing
+from dataclasses import dataclass
 from datetime import date, datetime
 
 import sqlalchemy as sa
@@ -9,7 +10,7 @@ from src.core import enums, utils
 
 
 def tournament_entities(
-        in_entities: list[str], child: typing.Any | None = None
+    in_entities: list[str], child: typing.Any | None = None
 ) -> list[sa.orm.strategy_options._AbstractLoad]:
     entities = []
     if "groups" in in_entities:
@@ -39,9 +40,7 @@ async def get_all(
     workspace_id: int | None = None,
 ) -> typing.Sequence[models.Tournament]:
     query = (
-        sa.select(models.Tournament)
-        .options(*tournament_entities(entities or []))
-        .order_by(models.Tournament.id.asc())
+        sa.select(models.Tournament).options(*tournament_entities(entities or [])).order_by(models.Tournament.id.asc())
     )
 
     if is_league is not None:
@@ -100,20 +99,19 @@ async def create(
     is_league: bool,
     name: str,
     description: str | None = None,
-    challonge_id: int | None = None,
-    challonge_slug: str | None = None,
     start_date: datetime | date | None = None,
     end_date: datetime | date | None = None,
     division_grid_version_id: int | None = None,
 ) -> models.Tournament:
+    # The deprecated tournament.challonge_id/slug columns are no longer written:
+    # the tournament↔Challonge link lives in the normalized challonge_source
+    # (source_type='tournament') created by the caller (admin link / import).
     tournament = models.Tournament(
         workspace_id=workspace_id,
         number=number,
         is_league=is_league,
         name=name,
         description=description,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
         start_date=start_date,
         end_date=end_date,
         division_grid_version_id=division_grid_version_id,
@@ -121,6 +119,91 @@ async def create(
     session.add(tournament)
     await session.commit()
     return tournament
+
+
+@dataclass(frozen=True)
+class GroupSpec:
+    """Plain-value description of one group to create (see ``create_groups``)."""
+
+    name: str
+    is_groups: bool
+    description: str | None = None
+    challonge_id: int | None = None
+    challonge_slug: str | None = None
+
+
+async def create_groups(
+    session: AsyncSession,
+    tournament: models.Tournament,
+    specs: list[GroupSpec],
+) -> list[models.TournamentGroup]:
+    """Create legacy TournamentGroups AND their corresponding Stage/StageItems.
+
+    Ensures every new group is immediately part of the new stage model so that
+    encounters attached to these groups render correctly on the public bracket
+    view (which filters by stage_id/stage_item_id).
+
+    Batched counterpart of ``create_group``: one max-order SELECT, two flushes
+    and a single commit for the whole set instead of one SELECT + commit per
+    group. Stage orders are assigned sequentially in ``specs`` order, exactly
+    as repeated ``create_group`` calls would have done.
+    """
+    if not specs:
+        return []
+
+    # 1. Determine stage order: highest existing stage order in this tournament + 1
+    max_order_row = await session.execute(
+        sa.select(sa.func.coalesce(sa.func.max(models.Stage.order), -1)).where(
+            models.Stage.tournament_id == tournament.id
+        )
+    )
+    next_order = int(max_order_row.scalar_one()) + 1
+
+    stages: list[models.Stage] = []
+    for offset, spec in enumerate(specs):
+        stage_type = enums.StageType.ROUND_ROBIN if spec.is_groups else enums.StageType.DOUBLE_ELIMINATION
+        # The deprecated stage.challonge_id/slug columns are no longer written
+        # (the stage↔Challonge link is derived from challonge_source). The group's
+        # own challonge_id/slug below is KEPT: it stores Challonge's per-group
+        # match.group_id used to route matches to the local group and has no
+        # challonge_source equivalent.
+        stages.append(
+            models.Stage(
+                tournament_id=tournament.id,
+                name=spec.name,
+                description=spec.description,
+                stage_type=stage_type,
+                order=next_order + offset,
+            )
+        )
+    session.add_all(stages)
+    await session.flush()
+
+    groups: list[models.TournamentGroup] = []
+    for spec, stage in zip(specs, stages, strict=True):
+        stage_item_type = enums.StageItemType.GROUP if spec.is_groups else enums.StageItemType.SINGLE_BRACKET
+        session.add(
+            models.StageItem(
+                stage_id=stage.id,
+                name=spec.name,
+                type=stage_item_type,
+                order=0,
+            )
+        )
+        group = models.TournamentGroup(
+            tournament=tournament,
+            name=spec.name,
+            description=spec.description,
+            is_groups=spec.is_groups,
+            challonge_id=spec.challonge_id,
+            challonge_slug=spec.challonge_slug,
+            stage_id=stage.id,
+        )
+        session.add(group)
+        groups.append(group)
+
+    await session.commit()
+    return groups
 
 
 async def create_group(
@@ -133,57 +216,18 @@ async def create_group(
     challonge_id: int | None = None,
     challonge_slug: str | None = None,
 ) -> models.TournamentGroup:
-    """Create a legacy TournamentGroup AND its corresponding Stage/StageItem.
-
-    Ensures every new group is immediately part of the new stage model so that
-    encounters attached to this group render correctly on the public bracket
-    view (which filters by stage_id/stage_item_id).
-    """
-    # 1. Determine stage order: highest existing stage order in this tournament + 1
-    max_order_row = await session.execute(
-        sa.select(sa.func.coalesce(sa.func.max(models.Stage.order), -1)).where(
-            models.Stage.tournament_id == tournament.id
-        )
+    """Single-group convenience wrapper around ``create_groups``."""
+    groups = await create_groups(
+        session,
+        tournament,
+        [
+            GroupSpec(
+                name=name,
+                is_groups=is_groups,
+                description=description,
+                challonge_id=challonge_id,
+                challonge_slug=challonge_slug,
+            )
+        ],
     )
-    next_order = int(max_order_row.scalar_one()) + 1
-
-    stage_type = (
-        enums.StageType.ROUND_ROBIN if is_groups else enums.StageType.DOUBLE_ELIMINATION
-    )
-    stage_item_type = (
-        enums.StageItemType.GROUP if is_groups else enums.StageItemType.SINGLE_BRACKET
-    )
-
-    stage = models.Stage(
-        tournament_id=tournament.id,
-        name=name,
-        description=description,
-        stage_type=stage_type,
-        order=next_order,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
-    )
-    session.add(stage)
-    await session.flush()
-
-    stage_item = models.StageItem(
-        stage_id=stage.id,
-        name=name,
-        type=stage_item_type,
-        order=0,
-    )
-    session.add(stage_item)
-    await session.flush()
-
-    group = models.TournamentGroup(
-        tournament=tournament,
-        name=name,
-        description=description,
-        is_groups=is_groups,
-        challonge_id=challonge_id,
-        challonge_slug=challonge_slug,
-        stage_id=stage.id,
-    )
-    session.add(group)
-    await session.commit()
-    return group
+    return groups[0]

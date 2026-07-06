@@ -93,9 +93,7 @@ async def _run_compute(
     job = await get_job(session, job_id)
     await _emit(session, redis, job, status="running")
     try:
-        algos: typing.Iterable[str] | None = (
-            list(job.algorithms) if job.algorithms else None
-        )
+        algos: typing.Iterable[str] | None = list(job.algorithms) if job.algorithms else None
         algorithms = await v1_flows.recalculate_analytics(
             session,
             tournament_id,
@@ -104,14 +102,20 @@ async def _run_compute(
         )
         summary["v1"] = algorithms
         await update_progress(
-            session, job_id, stage="v1_recalc", state="done",
+            session,
+            job_id,
+            stage="v1_recalc",
+            state="done",
             detail={"algorithms": algorithms},
         )
     except Exception as exc:
         logger.exception("v1 recalculate failed")
         await _rollback_after_failure(session)
         await update_progress(
-            session, job_id, stage="v1_recalc", state="failed",
+            session,
+            job_id,
+            stage="v1_recalc",
+            state="failed",
             detail={"error": str(exc)},
         )
         raise
@@ -127,14 +131,15 @@ async def _run_compute(
             workspace_id=workspace_id,
         )
         summary["v2"] = v2
-        await update_progress(
-            session, job_id, stage="v2_inference", state="done", detail=v2
-        )
+        await update_progress(session, job_id, stage="v2_inference", state="done", detail=v2)
     except Exception as exc:
         logger.exception("v2 inference failed")
         await _rollback_after_failure(session)
         await update_progress(
-            session, job_id, stage="v2_inference", state="failed",
+            session,
+            job_id,
+            stage="v2_inference",
+            state="failed",
             detail={"error": str(exc)},
         )
         raise
@@ -168,7 +173,10 @@ async def _run_train_ml(
         logger.exception("ML training failed")
         await _rollback_after_failure(session)
         await update_progress(
-            session, job_id, stage="train", state="failed",
+            session,
+            job_id,
+            stage="train",
+            state="failed",
             detail={"error": str(exc)},
         )
         raise

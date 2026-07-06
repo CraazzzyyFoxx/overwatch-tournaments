@@ -8,10 +8,10 @@ them too; for now we reuse the route's implementation to guarantee parity.
 
 from __future__ import annotations
 
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import schemas
 from src.services import api_key_service
 from src.services.auth_token_helpers import _build_access_token_payload, _resolve_access_token_user

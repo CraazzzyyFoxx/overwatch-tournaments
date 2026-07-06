@@ -9,10 +9,10 @@ from __future__ import annotations
 import uuid
 
 from loguru import logger
-from shared.models.achievement import EvaluationRunTrigger
+
+from shared.models.achievements.achievement import EvaluationRunTrigger
 from shared.observability.correlation import correlation_id_ctx
 from shared.schemas.events import AchievementEvaluateEvent
-
 from src.core import db
 
 from .runner import run_evaluation
@@ -38,7 +38,6 @@ async def handle_achievement_evaluate(data: dict) -> None:
             )
     except Exception:
         logger.exception(
-            f"Failed to evaluate achievements for "
-            f"workspace_id={event.workspace_id} tournament_id={event.tournament_id}"
+            f"Failed to evaluate achievements for workspace_id={event.workspace_id} tournament_id={event.tournament_id}"
         )
         raise

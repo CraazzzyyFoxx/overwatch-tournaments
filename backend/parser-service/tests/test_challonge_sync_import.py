@@ -158,34 +158,33 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.get_redis_patcher.start()
         self.addCleanup(self.get_redis_patcher.stop)
 
-    async def test_discover_sources_backfills_legacy_tournament_source(self) -> None:
-        tournament = SimpleNamespace(
-            id=7,
-            challonge_id=700,
-            challonge_slug="sample",
-            stages=[],
-            groups=[],
+    async def test_discover_sources_reads_challonge_source_rows(self) -> None:
+        # discover_sources now reads exclusively from challonge_source; it no
+        # longer backfills rows from the deprecated tournament/stage columns.
+        tournament = SimpleNamespace(id=7, stages=[], groups=[])
+        source_row = SimpleNamespace(
+            id=100,
+            challonge_tournament_id=700,
+            source_type="tournament",
+            stage=None,
+            stage_id=None,
+            stage_item_id=None,
+            slug="sample",
         )
         session = SimpleNamespace(
-            execute=AsyncMock(return_value=_Result(all_values=[])),
+            execute=AsyncMock(return_value=_Result(all_values=[source_row])),
             add=Mock(),
             flush=AsyncMock(),
         )
-
-        def add_side_effect(obj):
-            if isinstance(obj, sync.models.ChallongeSource):
-                obj.id = 100
-
-        session.add.side_effect = add_side_effect
 
         sources = await sync.discover_sources(session, tournament)
 
         self.assertEqual(1, len(sources))
         self.assertEqual(100, sources[0].source_id)
         self.assertEqual(700, sources[0].challonge_id)
-        added_source = session.add.call_args.args[0]
-        self.assertEqual(7, added_source.tournament_id)
-        self.assertEqual("sample", added_source.slug)
+        self.assertEqual("sample", sources[0].slug)
+        # No rows are ever written here anymore.
+        session.add.assert_not_called()
 
     async def test_import_creates_missing_encounter_from_challonge_match(self) -> None:
         stage_item = SimpleNamespace(id=30, order=0, inputs=[])
@@ -246,7 +245,9 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(sync, "discover_sources", AsyncMock(return_value=[source])),
             patch.object(sync.challonge_service, "fetch_matches", AsyncMock(return_value=[_challonge_match()])),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup(mappings, [home_team, away_team]))),
+            patch.object(
+                sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup(mappings, [home_team, away_team]))
+            ),
             patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {}, set()))),
             patch.object(
                 sync,
@@ -268,20 +269,19 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             result = await sync.import_tournament(session, tournament.id)
 
         created = next(
-            obj for call in session.add.call_args_list
-            for obj in call.args
-            if isinstance(obj, sync.models.Encounter)
+            obj for call in session.add.call_args_list for obj in call.args if isinstance(obj, sync.models.Encounter)
         )
         self.assertEqual(1, result["matches_synced"])
         self.assertEqual(1, result["matches_created"])
         self.assertEqual(0, result["errors"])
-        self.assertEqual(900, created.challonge_id)
+        # encounter.challonge_id is no longer written (link lives in challonge_match_mapping).
         self.assertEqual((home_team.id, away_team.id), (created.home_team_id, created.away_team_id))
         self.assertEqual((2, 1), (created.home_score, created.away_score))
         self.assertEqual(enums.EncounterStatus.COMPLETED, created.status)
         self.assertEqual((20, 30, 10), (created.stage_id, created.stage_item_id, created.tournament_group_id))
         created_inputs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in call.args
             if isinstance(obj, sync.models.StageItemInput)
         ]
@@ -363,6 +363,9 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             sync.models.TournamentGroup: 10,
             sync.models.EncounterLink: 800,
         }
+        # encounter.challonge_id is no longer written, so ids are assigned in
+        # creation order (matches are processed as [900, 902, 901]).
+        encounter_id_counter = [1400]
 
         def add_side_effect(obj):
             for model, next_id in list(next_ids.items()):
@@ -371,7 +374,8 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
                     next_ids[model] = next_id + 1
                     return
             if isinstance(obj, sync.models.Encounter):
-                obj.id = 500 + obj.challonge_id
+                obj.id = encounter_id_counter[0]
+                encounter_id_counter[0] += 1
 
         session.add.side_effect = add_side_effect
 
@@ -402,19 +406,12 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             result = await sync.import_tournament(session, tournament.id)
 
         added_objects = [obj for call in session.add.call_args_list for obj in call.args]
-        created_encounters = [
-            obj for obj in added_objects if isinstance(obj, sync.models.Encounter)
-        ]
-        created_links = [
-            obj for obj in added_objects if isinstance(obj, sync.models.EncounterLink)
-        ]
-        created_group = next(
-            obj for obj in added_objects if isinstance(obj, sync.models.TournamentGroup)
-        )
-        created_stage = next(
-            obj for obj in added_objects if isinstance(obj, sync.models.Stage)
-        )
-        pending = next(obj for obj in created_encounters if obj.challonge_id == 901)
+        created_encounters = [obj for obj in added_objects if isinstance(obj, sync.models.Encounter)]
+        created_links = [obj for obj in added_objects if isinstance(obj, sync.models.EncounterLink)]
+        created_group = next(obj for obj in added_objects if isinstance(obj, sync.models.TournamentGroup))
+        created_stage = next(obj for obj in added_objects if isinstance(obj, sync.models.Stage))
+        # The pending advancement match has no resolved teams yet.
+        pending = next(obj for obj in created_encounters if obj.home_team_id is None)
 
         self.assertEqual(3, result["matches_synced"])
         self.assertEqual(3, result["matches_created"])
@@ -426,10 +423,12 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual((None, None), (pending.home_team_id, pending.away_team_id))
         self.assertEqual(enums.EncounterStatus.PENDING, pending.status)
         self.assertEqual("TBD vs TBD", pending.name)
+        # Encounters are created in match-processing order [900, 902, 901] ->
+        # ids 1400, 1401, 1402. Match 901's prereqs are 900 (HOME) and 902 (AWAY).
         self.assertEqual(
             {
-                (1400, 1401, enums.EncounterLinkRole.WINNER, enums.EncounterLinkSlot.HOME),
-                (1402, 1401, enums.EncounterLinkRole.WINNER, enums.EncounterLinkSlot.AWAY),
+                (1400, 1402, enums.EncounterLinkRole.WINNER, enums.EncounterLinkSlot.HOME),
+                (1401, 1402, enums.EncounterLinkRole.WINNER, enums.EncounterLinkSlot.AWAY),
             },
             {
                 (
@@ -467,7 +466,11 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(sync, "discover_sources", AsyncMock(return_value=[source])),
             patch.object(sync.challonge_service, "fetch_matches", AsyncMock(return_value=[_challonge_match()])),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
             patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {}, set()))),
             patch.object(
@@ -481,11 +484,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, result["matches_synced"])
         self.assertEqual(1, result["errors"])
         self.assertFalse(
-            any(
-                isinstance(obj, sync.models.Encounter)
-                for call in session.add.call_args_list
-                for obj in call.args
-            )
+            any(isinstance(obj, sync.models.Encounter) for call in session.add.call_args_list for obj in call.args)
         )
         session.commit.assert_awaited_once_with()
         enqueue_recalculation.assert_not_awaited()
@@ -530,16 +529,18 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(
                 sync.challonge_service,
                 "fetch_matches",
-                AsyncMock(
-                    return_value=[
-                        _challonge_match(state="open", scores_csv="1-0")
-                    ]
-                ),
+                AsyncMock(return_value=[_challonge_match(state="open", scores_csv="1-0")]),
             ),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
-            patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))),
+            patch.object(
+                sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))
+            ),
             patch.object(
                 sync,
                 "resolve_stage_refs_from_group",
@@ -567,11 +568,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual((20, 30), (existing.stage_id, existing.stage_item_id))
         self.assertEqual(enums.EncounterStatus.OPEN, existing.status)
         self.assertFalse(
-            any(
-                isinstance(obj, sync.models.Encounter)
-                for call in session.add.call_args_list
-                for obj in call.args
-            )
+            any(isinstance(obj, sync.models.Encounter) for call in session.add.call_args_list for obj in call.args)
         )
         enqueue_recalculation.assert_awaited_once_with(tournament.id)
 
@@ -614,9 +611,15 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=[_challonge_match(state="complete", scores_csv="0-2")]),
             ),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
-            patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))),
+            patch.object(
+                sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))
+            ),
             patch.object(
                 sync,
                 "resolve_stage_refs_from_group",
@@ -712,11 +715,18 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             commit=AsyncMock(),
         )
 
-        with patch.object(
-            sync,
-            "push_single_result",
-            AsyncMock(return_value=True),
-        ) as push_single_result:
+        with (
+            patch.object(
+                sync,
+                "resolve_encounter_challonge",
+                AsyncMock(return_value={encounter.id: 777}),
+            ),
+            patch.object(
+                sync,
+                "push_single_result",
+                AsyncMock(return_value=True),
+            ) as push_single_result,
+        ):
             await sync.auto_push_on_confirm(session, encounter.id)
 
         push_single_result.assert_awaited_once_with(session, tournament, encounter)
@@ -843,9 +853,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual(1, result["matches_created"])
         self.assertEqual(0, result["errors"])
         created = next(
-            obj for call in session.add.call_args_list
-            for obj in call.args
-            if isinstance(obj, sync.models.Encounter)
+            obj for call in session.add.call_args_list for obj in call.args if isinstance(obj, sync.models.Encounter)
         )
         self.assertEqual((home_team.id, away_team.id), (created.home_team_id, created.away_team_id))
 

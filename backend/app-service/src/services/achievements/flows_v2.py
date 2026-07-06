@@ -5,9 +5,9 @@ Drop-in replacement for flows.py. Uses service_v2 under the hood.
 
 import typing
 
-from shared.models.achievement import AchievementRule
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementRule
 from src import schemas
 from src.core import errors, pagination
 from src.services.hero import flows as hero_flows
@@ -140,10 +140,7 @@ async def get_user_achievements(
             )
         else:
             cache[rule_id].count += 1
-            if (
-                result_row.tournament_id
-                and result_row.tournament_id not in cache[rule_id].tournaments_ids
-            ):
+            if result_row.tournament_id and result_row.tournament_id not in cache[rule_id].tournaments_ids:
                 cache[rule_id].tournaments_ids.append(result_row.tournament_id)
             if result_row.match_id and result_row.match_id not in cache[rule_id].matches_ids:
                 cache[rule_id].matches_ids.append(result_row.match_id)
@@ -174,34 +171,22 @@ async def get_user_achievements(
     # achievements. Previous loop did one round-trip per (achievement, tid),
     # which was O(N*M) — hot on the user-achievements endpoint.
     if "tournaments" in entities:
-        unique_tournament_ids = sorted({
-            tid for achievement in cache.values() for tid in achievement.tournaments_ids
-        })
+        unique_tournament_ids = sorted({tid for achievement in cache.values() for tid in achievement.tournaments_ids})
         if unique_tournament_ids:
-            tournaments = await _repositories.get_tournaments_bulk(
-                session, unique_tournament_ids
-            )
+            tournaments = await _repositories.get_tournaments_bulk(session, unique_tournament_ids)
             tournaments_map = {t.id: _mappers.to_tournament_link(t) for t in tournaments}
             for achievement in cache.values():
                 achievement.tournaments = [
-                    tournaments_map[tid]
-                    for tid in achievement.tournaments_ids
-                    if tid in tournaments_map
+                    tournaments_map[tid] for tid in achievement.tournaments_ids if tid in tournaments_map
                 ]
 
     if "matches" in entities:
-        unique_match_ids = sorted({
-            mid for achievement in cache.values() for mid in achievement.matches_ids
-        })
+        unique_match_ids = sorted({mid for achievement in cache.values() for mid in achievement.matches_ids})
         if unique_match_ids:
             matches = await _repositories.get_matches_bulk(session, unique_match_ids)
             matches_map = {m.id: _mappers.to_match_link(m) for m in matches}
             for achievement in cache.values():
-                achievement.matches = [
-                    matches_map[mid]
-                    for mid in achievement.matches_ids
-                    if mid in matches_map
-                ]
+                achievement.matches = [matches_map[mid] for mid in achievement.matches_ids if mid in matches_map]
 
     return list(cache.values())
 
@@ -236,9 +221,7 @@ async def get_achievement_users(
             schemas.AchievementEarned(
                 user=await user_flows.to_pydantic(session, user, []),
                 count=count,
-                last_tournament=_mappers.to_tournament_link(last_tournament)
-                if last_tournament
-                else None,
+                last_tournament=_mappers.to_tournament_link(last_tournament) if last_tournament else None,
                 last_match=_mappers.to_match_link(last_match) if last_match else None,
             )
         )

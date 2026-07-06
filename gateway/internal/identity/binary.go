@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
@@ -26,17 +25,24 @@ const (
 	queueAvatarDelete = "rpc.identity.me.avatar_delete"
 )
 
+// IdentityResolver validates a request's bearer token, returning the RBAC payload
+// (or ok=false when absent/invalid). Matches principal.Resolver.Resolve.
+type IdentityResolver func(r *http.Request) (map[string]any, bool)
+
 // Binary serves the identity endpoint the JSON callIdentity path can't: the
 // current-user avatar multipart upload, base64-encoded into the RPC body. Like
 // the other authed identity routes, it forwards the bearer access_token (the
 // worker resolves the active user from it via _with_active_user).
 type Binary struct {
 	*Handler
+	resolver IdentityResolver
 }
 
-// NewBinary wraps the identity Handler for the avatar upload/delete routes.
-func NewBinary(h *Handler) *Binary {
-	return &Binary{Handler: h}
+// NewBinary wraps the identity Handler for the avatar upload/delete routes. The
+// resolver (may be nil) validates the bearer token BEFORE the multipart body is
+// parsed, so an unauthenticated request is rejected without buffering the upload.
+func NewBinary(h *Handler, resolver IdentityResolver) *Binary {
+	return &Binary{Handler: h, resolver: resolver}
 }
 
 // AvatarSet: POST /api/auth/me/avatar. Multipart "file" -> base64 RPC body.
@@ -46,6 +52,16 @@ func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusForbidden, "Not authenticated")
 		return
 	}
+	// Validate the token up front (not just its presence) so an invalid bearer is
+	// rejected before we buffer/parse the multipart upload.
+	if b.resolver != nil {
+		if _, ok := b.resolver(r); !ok {
+			writeDetail(w, http.StatusUnauthorized, "Not authenticated")
+			return
+		}
+	}
+	// Cap the multipart body to bound memory/disk before parsing.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarUpload)
 	if err := r.ParseMultipartForm(maxAvatarUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
@@ -122,7 +138,8 @@ func (b *Binary) relayAvatar(w http.ResponseWriter, r *http.Request, queue strin
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if len(env.Data) > 0 && strings.TrimSpace(string(env.Data)) != "null" {
+	// Relay a literal JSON `null` rather than an empty body (see edge/dispatch.go).
+	if len(env.Data) > 0 {
 		_, _ = w.Write(env.Data)
 	}
 }

@@ -28,9 +28,7 @@ from sqlalchemy.orm import Session
 
 from src import models
 from src.core import enums
-
 from tests.conftest import RpcHarness, build_query
-
 
 _COMPARE_FIXTURE_IDS = {
     "subject_user": 9_100_000_001,
@@ -908,9 +906,9 @@ def test_get_user_by_name(rpc: RpcHarness, name: str, entities: list[str]) -> No
     content = env["data"]
     assert content["name"] == name.replace("-", "#")
     if "battle_tag" in entities:
-        assert content["battle_tag"] != []
+        assert any(s["provider"] == "battlenet" for s in content["social_accounts"])
     if "twitch" in entities:
-        assert content["twitch"] != []
+        assert any(s["provider"] == "twitch" for s in content["social_accounts"])
 
 
 @pytest.mark.parametrize(

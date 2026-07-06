@@ -2,49 +2,252 @@
   "title": "Workers & Queues",
   "uid": "workers-queues",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "tags": ["workers", "queues", "rabbitmq"],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(worker_messages_processed_total, job)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "refresh": 2,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "queue",
+        "label": "Queue",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(worker_messages_processed_total{job=~\"$job\"}, queue)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "refresh": 2,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
-      "type": "timeseries",
-      "title": "Processed Messages / sec",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "Broker Status",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "sum by (job, queue, status) (rate(worker_messages_processed_total[5m]))", "legendFormat": "{{ job }} / {{ queue }} / {{ status }}" }]
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        }
+      },
+      "targets": [{ "expr": "rabbitmq_up", "legendFormat": "Broker", "instant": true }]
     },
     {
       "id": 2,
-      "type": "timeseries",
-      "title": "Worker p95 Duration",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "Total Backlog",
+      "gridPos": { "x": 4, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum by (job, queue, handler, le) (rate(worker_processing_duration_seconds_bucket[5m])))", "legendFormat": "{{ job }} / {{ queue }} / {{ handler }}" }]
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 500 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "sum(rabbitmq_queue_messages{queue!~\".*\\\\.dlq\"})", "legendFormat": "Messages", "instant": true }]
     },
     {
       "id": 3,
-      "type": "timeseries",
-      "title": "Queue Backlog",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "type": "stat",
+      "title": "DLQ Messages",
+      "gridPos": { "x": 9, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "rabbitmq_queue_messages{queue!~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" },
-        { "expr": "rabbitmq_queue_messages{queue=~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" }
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "sum(rabbitmq_queue_messages{queue=~\".*\\\\.dlq\"}) or vector(0)", "legendFormat": "DLQ", "instant": true }]
     },
     {
       "id": 4,
+      "type": "stat",
+      "title": "Worst Error Ratio (5m)",
+      "gridPos": { "x": 14, "y": 0, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.05 }, { "color": "red", "value": 0.2 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "max(worker:failure_ratio_5m) or vector(0)", "legendFormat": "Error ratio", "instant": true }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Publish Failures (1h)",
+      "gridPos": { "x": 19, "y": 0, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "sum(increase(worker_publish_failures_total[1h])) or vector(0)", "legendFormat": "Failures", "instant": true }]
+    },
+    {
+      "id": 10,
       "type": "timeseries",
-      "title": "Inflight / Retries / Publish Failures",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "title": "Processed Messages / sec",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (job, queue, status) (rate(worker_messages_processed_total{job=~\"$job\", queue=~\"$queue\"}[5m]))", "legendFormat": "{{ job }} / {{ queue }} / {{ status }}" }]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Received vs Processed / sec (lag indicator)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "sum by (job, queue) (worker_inflight_messages)", "legendFormat": "inflight {{ job }} / {{ queue }}" },
-        { "expr": "sum by (job, queue) (rate(worker_retries_total[5m]))", "legendFormat": "retries {{ job }} / {{ queue }}" },
+        { "expr": "sum(rate(worker_messages_received_total{job=~\"$job\", queue=~\"$queue\"}[5m]))", "legendFormat": "received" },
+        { "expr": "sum(rate(worker_messages_processed_total{job=~\"$job\", queue=~\"$queue\"}[5m]))", "legendFormat": "processed" }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Processing Duration p50 / p95 / p99",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(worker_processing_duration_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}[5m])))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(worker_processing_duration_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}[5m])))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(worker_processing_duration_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}[5m])))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "p95 Duration by Handler",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (job, handler, le) (rate(worker_processing_duration_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}[5m])))", "legendFormat": "{{ job }} / {{ handler }}" }]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Failure Ratio by Handler",
+      "gridPos": { "x": 0, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+      "targets": [{ "expr": "worker:failure_ratio_5m{job=~\"$job\", queue=~\"$queue\"}", "legendFormat": "{{ job }} / {{ handler }}" }]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Retries & Publish Failures",
+      "gridPos": { "x": 8, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (job, queue) (rate(worker_retries_total{job=~\"$job\", queue=~\"$queue\"}[5m]))", "legendFormat": "retries {{ job }} / {{ queue }}" },
         { "expr": "sum by (queue) (increase(worker_publish_failures_total[5m]))", "legendFormat": "publish_failures {{ queue }}" }
       ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Inflight Messages",
+      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (job, queue) (worker_inflight_messages{job=~\"$job\", queue=~\"$queue\"})", "legendFormat": "{{ job }} / {{ queue }}" }]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Queue Depth (main queues)",
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rabbitmq_queue_messages{queue!~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" }]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Dead Letter Queue Depth",
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "targets": [{ "expr": "rabbitmq_queue_messages{queue=~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" }]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Consumers per Queue",
+      "gridPos": { "x": 0, "y": 36, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rabbitmq_queue_consumers{queue!~\".*\\\\.dlq\"}", "legendFormat": "{{ queue }}" }]
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Message Publish Rate",
+      "gridPos": { "x": 8, "y": 36, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(rabbitmq_queue_messages_published_total{queue!~\".*\\\\.dlq\"}[5m])", "legendFormat": "{{ queue }}" }]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Message Deliver Rate",
+      "gridPos": { "x": 16, "y": 36, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(rabbitmq_queue_messages_delivered_total{queue!~\".*\\\\.dlq\"}[5m])", "legendFormat": "{{ queue }}" }]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Balancer Job Duration p95 (by algorithm)",
+      "gridPos": { "x": 0, "y": 43, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (algorithm, le) (rate(balancer_job_total_seconds_bucket[5m])))", "legendFormat": "{{ algorithm }}" }]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Balancer Solver p95 (by algorithm)",
+      "gridPos": { "x": 8, "y": 43, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (algorithm, le) (rate(balancer_solver_seconds_bucket[5m])))", "legendFormat": "{{ algorithm }}" }]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Balancer Queue Wait p95 (by algorithm)",
+      "gridPos": { "x": 16, "y": 43, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (algorithm, le) (rate(balancer_job_queue_wait_seconds_bucket[5m])))", "legendFormat": "{{ algorithm }}" }]
     }
   ]
 }

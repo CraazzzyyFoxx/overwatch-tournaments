@@ -88,7 +88,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("recalculation_state", schema="tournament")
-    op.drop_index("ix_tournament_computation_job_requested_by_user_id", table_name="computation_job", schema="tournament")
+    op.drop_index(
+        "ix_tournament_computation_job_requested_by_user_id", table_name="computation_job", schema="tournament"
+    )
     op.drop_index("ix_tournament_computation_job_stage_item_id", table_name="computation_job", schema="tournament")
     op.drop_index("ix_tournament_computation_job_stage_id", table_name="computation_job", schema="tournament")
     op.drop_index("uq_tournament_computation_job_active_key", table_name="computation_job", schema="tournament")

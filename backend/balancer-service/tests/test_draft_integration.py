@@ -31,16 +31,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 
 from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
-from shared.models.draft import DraftPick  # noqa: E402
-from shared.models.realtime import WorkspaceEvent  # noqa: E402
+from shared.models.balancer.draft import DraftPick  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
+from shared.models.platform.realtime import WorkspaceEvent  # noqa: E402
+from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
-from shared.models.user import User  # noqa: E402
-from shared.models.workspace import Workspace  # noqa: E402
 from src import models  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
-from src.services.draft import lifecycle, selection  # noqa: E402
+from src.services.draft import lifecycle, loaders, selection  # noqa: E402
 from src.services.draft import realtime as draft_realtime  # noqa: E402
 
 
@@ -110,7 +110,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await self.engine.dispose()
             return
         async with self.Session() as s:
-            from shared.models.draft import DraftSession
+            from shared.models.balancer.draft import DraftSession
 
             ids = (
                 await s.scalars(sa.select(DraftSession.id).where(DraftSession.tournament_id == self.tournament_id))
@@ -122,11 +122,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.execute(sa.delete(models.Player).where(models.Player.tournament_id == self.tournament_id))
             await s.execute(sa.delete(models.Team).where(models.Team.tournament_id == self.tournament_id))
             await s.execute(sa.delete(Tournament).where(Tournament.id == self.tournament_id))
-            await s.execute(
-                sa.delete(models.AuthUserPlayer).where(
-                    models.AuthUserPlayer.auth_user_id.in_(self.captain_auth_user_ids)
-                )
-            )
+            # players.user.auth_user_id is a plain column on User (no separate
+            # link-table row to clean up); deleting the User rows below is enough.
             await s.execute(sa.delete(User).where(User.id.in_(self.captain_user_ids)))
             await s.execute(sa.delete(models.AuthUser).where(models.AuthUser.id.in_(self.captain_auth_user_ids)))
             await s.execute(sa.delete(Workspace).where(Workspace.id == self.workspace_id))
@@ -193,7 +190,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.start(s, draft)
             await s.commit()
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             available = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer).where(
@@ -223,6 +225,57 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
             self.assertEqual(chosen.drafted_by_team_id, current.draft_team_id)
 
+    async def test_select_off_role_records_role_and_its_rank(self) -> None:
+        async with self.Session() as s:
+            draft = await lifecycle.create_session(
+                s,
+                tournament_id=self.tournament_id,
+                workspace_id=self.workspace_id,
+                rounds=2,
+                team_size=3,
+            )
+            # Primary TANK@3000 who can flex DPS@2500.
+            special = lifecycle.PlayerSeed(
+                primary_role=DraftRole.TANK,
+                battle_tag="Flex#1",
+                secondary_roles=[DraftRole.DPS],
+                rank_value=3000,
+                role_ranks={"tank": 3000, "dps": 2500},
+            )
+            await lifecycle.seed(s, draft, captains=self._captains(), players=[special, *self._players()])
+            await s.commit()
+            await lifecycle.start(s, draft)
+            await s.commit()
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
+            chosen = await s.scalar(
+                sa.select(lifecycle.DraftPlayer).where(
+                    lifecycle.DraftPlayer.session_id == draft.id,
+                    lifecycle.DraftPlayer.battle_tag == "Flex#1",
+                )
+            )
+            res = await selection.select(
+                s,
+                draft,
+                current,
+                player_id=chosen.id,
+                expected_version=current.version,
+                target_role=DraftRole.DPS,
+                actor_user_id=team.captain_user_id,
+                actor_auth_user_id=None,
+                actor_player_ids=[team.captain_user_id],
+                is_admin=False,
+            )
+            await s.commit()
+            # The pick records the drafted off-role and its rank (not primary TANK@3000).
+            self.assertEqual(res.pick.target_role, DraftRole.DPS.value)
+            self.assertEqual(res.pick.target_rank_value, 2500)
+
     async def test_select_allows_captain_auth_user_without_team_import(self) -> None:
         async with self.Session() as s:
             draft = await lifecycle.create_session(
@@ -245,7 +298,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.commit()
 
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             chosen = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer)
@@ -280,7 +338,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.start(s, draft)
             await s.commit()
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             chosen = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer)
@@ -386,7 +449,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 current.id,
                 status=DraftPickStatus.COMPLETED,
                 player_id=None,
-                picked_by_user_id=None,
+                picked_by_member_id=None,
                 is_autopick=False,
                 is_admin_override=False,
                 expected_version=v,
@@ -397,7 +460,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 current.id,
                 status=DraftPickStatus.AUTOPICKED,
                 player_id=None,
-                picked_by_user_id=None,
+                picked_by_member_id=None,
                 is_autopick=True,
                 is_admin_override=False,
                 expected_version=v,
@@ -557,7 +620,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
     async def _build_balancer_pool(self, s, n: int) -> list[int]:
         """Create n approved, in-pool BalancerRegistration rows (with roles). Returns ids."""
-        from shared.models.balancer import BalancerRegistration, BalancerRegistrationRole
+        from shared.models.registration.registration import BalancerRegistration, BalancerRegistrationRole
 
         roles = ["tank", "dps", "support"]
         ids: list[int] = []
@@ -565,7 +628,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             tag = f"Pool{self._suffix}-{i}#1"
             reg = BalancerRegistration(
                 tournament_id=self.tournament_id,
-                workspace_id=self.workspace_id,
                 battle_tag=tag,
                 battle_tag_normalized=tag.lower(),
                 display_name=tag,
@@ -703,7 +765,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
             # Execute first pick
             current = await s.get(DraftPick, draft.current_pick_id)
-            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            team = await s.get(
+                lifecycle.DraftTeam,
+                current.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
             available = (
                 await s.scalars(
                     sa.select(lifecycle.DraftPlayer).where(
@@ -749,4 +816,3 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.AVAILABLE.value)
             self.assertIsNone(chosen.drafted_by_team_id)
-

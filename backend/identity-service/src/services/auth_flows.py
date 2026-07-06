@@ -11,14 +11,15 @@ from __future__ import annotations
 from uuid import UUID
 
 import sqlalchemy as sa
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rbac import legacy_workspace_role_name_for_user
 from src import models, schemas
 from src.services.auth_service import AuthService
-from src.services.auth_token_helpers import _linked_players_payload
-from src.services.session_cache import get_refresh_idem, set_refresh_idem
+from src.services.auth_token_helpers import _linked_players_payload, _load_user_denies
+from src.services.session_cache import get_refresh_idem, is_session_blacklisted, set_refresh_idem
 from src.services.session_service import SessionService
 
 
@@ -150,6 +151,11 @@ async def resolve_active_user(session: AsyncSession, raw_token: str) -> models.A
     except (TypeError, ValueError):
         raise credentials_exception
 
+    # A revoked session (logout / revoke / reuse-detection) blacklists its sid;
+    # reject the still-unexpired access token that carries it.
+    if isinstance(session_id, str) and await is_session_blacklisted(session_id):
+        raise credentials_exception
+
     user = await AuthService.get_user_with_rbac(session, user_id)
     if user is None:
         raise credentials_exception
@@ -179,9 +185,7 @@ async def logout_all(session: AsyncSession, user: models.AuthUser) -> None:
 
 async def list_sessions(session: AsyncSession, user: models.AuthUser) -> list[schemas.SessionRead]:
     current_session_id = getattr(user, "_current_session_id", None)
-    summaries = await SessionService.list_user_sessions(
-        session, user.id, current_session_id=current_session_id
-    )
+    summaries = await SessionService.list_user_sessions(session, user.id, current_session_id=current_session_id)
     return [schemas.SessionRead.model_validate(summary) for summary in summaries]
 
 
@@ -192,9 +196,7 @@ async def revoke_session(session: AsyncSession, user: models.AuthUser, session_i
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current session cannot be revoked from the sessions list",
         )
-    summary = await SessionService.get_user_session(
-        session, user.id, session_id, current_session_id=current_session_id
-    )
+    summary = await SessionService.get_user_session(session, user.id, session_id, current_session_id=current_session_id)
     if summary is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     await AuthService.revoke_session_tokens(session, user.id, session_id)
@@ -210,21 +212,26 @@ async def get_me(session: AsyncSession, user_id: int) -> schemas.AuthUser:
     data["roles"] = global_roles
     data["permissions"] = global_permissions
 
+    # ``workspace_member`` is anchored on ``player_id``; join through
+    # ``players.user.auth_user_id`` to reach it from the auth identity. The
+    # denormalized ``role`` column is gone, so each membership's legacy role
+    # name is derived from RBAC (``user_roles``, unchanged) below.
     workspace_rows = await session.execute(
         sa.select(
             models.WorkspaceMember.workspace_id,
             models.Workspace.slug,
-            models.WorkspaceMember.role,
         )
         .join(models.Workspace, models.Workspace.id == models.WorkspaceMember.workspace_id)
-        .where(models.WorkspaceMember.auth_user_id == user.id)
+        .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+        .where(models.User.auth_user_id == user.id)
     )
     ws_memberships = workspace_rows.all()
     ws_ids = [row[0] for row in ws_memberships]
     ws_rbac = await AuthService.get_workspace_roles_and_permissions_db(session, user.id, ws_ids)
 
     workspaces = []
-    for ws_id, slug, member_role in ws_memberships:
+    for ws_id, slug in ws_memberships:
+        member_role = await legacy_workspace_role_name_for_user(session, user_id=user.id, workspace_id=ws_id)
         ws_data = ws_rbac.get(ws_id, ([], []))
         perm_strings = []
         for perm in ws_data[1]:
@@ -242,12 +249,12 @@ async def get_me(session: AsyncSession, user_id: int) -> schemas.AuthUser:
 
     data["workspaces"] = [w.model_dump() for w in workspaces]
     data["linked_players"] = [player.model_dump() for player in _linked_players_payload(user)]
+    denies = await _load_user_denies(session, user.id)
+    data["denies"] = [f"{d['resource']}.{d['action']}" for d in denies]
     return schemas.AuthUser.model_validate(data)
 
 
-async def update_me(
-    session: AsyncSession, user: models.AuthUser, payload: schemas.UserUpdate
-) -> models.AuthUser:
+async def update_me(session: AsyncSession, user: models.AuthUser, payload: schemas.UserUpdate) -> models.AuthUser:
     if payload.first_name is not None:
         user.first_name = payload.first_name
     if payload.last_name is not None:
@@ -257,15 +264,19 @@ async def update_me(
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
         user.email = payload.email
+        # Changing the email invalidates any prior verification of the old
+        # address (review C1). Ownership of the new address is unproven until a
+        # verification flow confirms it, so drop the verified flag. Combined
+        # with fail-closed OAuth email-matching (oauth_service), this breaks the
+        # "swap email -> take over via OAuth" chain.
+        user.is_verified = False
 
     await session.commit()
     await session.refresh(user)
     return user
 
 
-async def set_password(
-    session: AsyncSession, user: models.AuthUser, payload: schemas.PasswordSetRequest
-) -> None:
+async def set_password(session: AsyncSession, user: models.AuthUser, payload: schemas.PasswordSetRequest) -> None:
     if user.hashed_password:
         if not payload.current_password:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is required")

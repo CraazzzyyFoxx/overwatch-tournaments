@@ -11,9 +11,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import schemas
 from src.core import db
 from src.schemas.admin import rank_collection as rc_schemas
@@ -48,7 +48,7 @@ def register(broker: Any, logger: Any) -> None:
             series = await read_service.get_rank_series(
                 session,
                 user_id=user_id,
-                battle_tag_id=c.q1(data, "battle_tag_id", int),
+                social_account_id=c.q1(data, "social_account_id", int),
                 platform=c.q1(data, "platform"),
                 role=c.q1(data, "role"),
                 date_from=date_from,
@@ -61,15 +61,15 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.parser.rank.battle_tag_history")
     async def _battle_tag_history(data: dict, msg: RabbitMessage) -> dict:
-        # GET /battle-tags/{battle_tag_id}/rank-history (public).
+        # GET /battle-tags/{battle_tag_id}/rank-history (public; path id = social_account_id).
         async def op(session: Any) -> Any:
-            battle_tag_id = c.require_id(data)
+            social_account_id = c.require_id(data)
             granularity = c.q1(data, "granularity", str, "daily")
             date_from, date_to = _resolve_date_range(granularity, _dt(data, "date_from"), _dt(data, "date_to"))
             service_granularity = "daily" if granularity == "daily" else "raw"
             series = await read_service.get_rank_series(
                 session,
-                battle_tag_id=battle_tag_id,
+                social_account_id=social_account_id,
                 platform=c.q1(data, "platform"),
                 role=c.q1(data, "role"),
                 date_from=date_from,
@@ -132,7 +132,7 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=403, detail="Role required: admin")
             body = rc_schemas.CollectTriggerRequest.model_validate(c.payload(data))
             enqueued = await rank_admin.trigger_collection(
-                session, user_id=body.user_id, battle_tag_ids=body.battle_tag_ids
+                session, user_id=body.user_id, social_account_ids=body.social_account_ids
             )
             return rc_schemas.CollectTriggerResponse(enqueued=enqueued)
 

@@ -73,7 +73,9 @@ def _player(
         rank=rank,
         role="Damage",
         tournament_id=7,
-        user_id=player_id + 1000,
+        # Player.user_id was dropped in the contract step (iwrefac07); the
+        # identity anchor is workspace_member.player_id instead.
+        workspace_member=SimpleNamespace(player_id=player_id + 1000),
         team_id=team_id,
         is_newcomer=is_newcomer,
         is_newcomer_role=is_newcomer_role,
@@ -275,36 +277,44 @@ class AnalyticsFlowsTests(IsolatedAsyncioTestCase):
 
 
 class PredictPlayerDivisionTests(IsolatedAsyncioTestCase):
-    """The DivisionGrid display must equal the shift signal rounded to a division
-    (no hidden (-1, 1) dead-zone, so the grid and the shown signal agree)."""
+    """A division is 100 signal points, so the forecast moves whole divisions
+    only: a Signal below 1.0 (< 100 points) is ignored — the forecast holds at
+    the current division and the direction is "flat" (no Climb/Drop). At/above a
+    full division the magnitude rounds, bounded to ±3."""
 
     @staticmethod
     def _player(division: int | None = 10) -> SimpleNamespace:
         return SimpleNamespace(division=division)
 
-    async def test_rounds_signal_to_nearest_division(self) -> None:
+    async def test_full_division_promotes_or_demotes(self) -> None:
         predict = analytics_flows._predict_player_division
-        # +0.7 used to be "flat"; now rounds to a one-division promote.
-        _, direction, delta = predict(self._player(), points=0.7, manual_shift=None)
+        # +1.2 (>= a full division) → promote one division.
+        div, direction, delta = predict(self._player(), points=1.2)
         self.assertEqual("promote", direction)
         self.assertEqual(-1, delta)
-        # Sub-half stays flat.
-        _, d2, delta2 = predict(self._player(), points=0.4, manual_shift=None)
-        self.assertEqual("flat", d2)
-        self.assertEqual(0, delta2)
-        # Negative → demote.
-        _, d3, delta3 = predict(self._player(), points=-0.7, manual_shift=None)
-        self.assertEqual("demote", d3)
-        self.assertEqual(1, delta3)
+        self.assertEqual(9, div)
+        # -1.6 → demote two divisions.
+        _, d_neg, delta_neg = predict(self._player(), points=-1.6)
+        self.assertEqual("demote", d_neg)
+        self.assertEqual(2, delta_neg)
+        # Exactly 1.0 (a full division) still moves.
+        _, d_one, delta_one = predict(self._player(), points=1.0)
+        self.assertEqual("promote", d_one)
+        self.assertEqual(-1, delta_one)
+
+    async def test_sub_division_signal_is_flat(self) -> None:
+        # A Signal below a full division (< 100 points) must show "flat", not
+        # Climb/Drop, and must hold the predicted division.
+        predict = analytics_flows._predict_player_division
+        for pts in (0.7, 0.99, 0.4, -0.7, -0.99, 0.0):
+            div, direction, delta = predict(self._player(), points=pts)
+            self.assertEqual("flat", direction, msg=f"points={pts}")
+            self.assertEqual(0, delta, msg=f"points={pts}")
+            self.assertEqual(10, div, msg=f"points={pts}")
 
     async def test_clamped_to_three_divisions(self) -> None:
         predict = analytics_flows._predict_player_division
-        div, _, delta = predict(self._player(20), points=9.0, manual_shift=None)
+        div, direction, delta = predict(self._player(20), points=9.0)
+        self.assertEqual("promote", direction)
         self.assertEqual(-3, delta)
         self.assertEqual(17, div)
-
-    async def test_manual_shift_overrides_signal(self) -> None:
-        predict = analytics_flows._predict_player_division
-        _, direction, delta = predict(self._player(), points=0.0, manual_shift=500)
-        self.assertEqual("promote", direction)
-        self.assertEqual(-1, delta)

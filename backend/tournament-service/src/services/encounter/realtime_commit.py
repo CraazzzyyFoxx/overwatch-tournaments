@@ -23,13 +23,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-from shared.models.realtime import WorkspaceEvent
-from shared.schemas.realtime import WorkspaceEventEnvelope
-from shared.services import realtime_topics
-from shared.services.realtime_publisher import event_to_envelope, publish_event_to_redis_url
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
+from shared.models.platform.realtime import WorkspaceEvent
+from shared.schemas.realtime import WorkspaceEventEnvelope
+from shared.services import realtime_topics
+from shared.services.realtime_publisher import event_to_envelope, publish_event_to_redis_url
 from src.core import config
 
 _MAP_VETO_REASON = "veto_changed"
@@ -87,9 +87,7 @@ async def _publish_persisted_event(topic: str, envelope: WorkspaceEventEnvelope)
 
 
 @event.listens_for(Session, "before_flush")
-def _stage_registered_map_veto_updates_before_flush(
-    session: Session, _flush_context: Any, _instances: Any
-) -> None:
+def _stage_registered_map_veto_updates_before_flush(session: Session, _flush_context: Any, _instances: Any) -> None:
     updates = pop_registered_map_veto_realtime_updates(session)
     if not updates:
         return

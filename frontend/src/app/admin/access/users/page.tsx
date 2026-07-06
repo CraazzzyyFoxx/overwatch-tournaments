@@ -17,10 +17,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
+import { UserDenyEditor } from "./UserDenyEditor";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +36,8 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
 import type { AuthAdminUser } from "@/types/rbac.types";
@@ -55,7 +55,6 @@ export default function AccessAdminUsersPage() {
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [selectedAnalyticsUserId, setSelectedAnalyticsUserId] = useState<number | null>(null);
   const [selectedAnalyticsUserName, setSelectedAnalyticsUserName] = useState("");
-  const [assignAsPrimary, setAssignAsPrimary] = useState(true);
 
   const rolesQuery = useQuery({
     queryKey: ["access-admin", "roles", "all"],
@@ -107,9 +106,9 @@ export default function AccessAdminUsersPage() {
       ]);
       setSelectedAnalyticsUserId(null);
       setSelectedAnalyticsUserName("");
-      setAssignAsPrimary(true);
       notify.success("Linked analytics account assigned");
-    }
+    },
+    onError: (error) => notify.apiError(error)
   });
 
   const removeLinkedPlayerMutation = useMutation({
@@ -121,7 +120,8 @@ export default function AccessAdminUsersPage() {
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       notify.success("Linked analytics account removed");
-    }
+    },
+    onError: (error) => notify.apiError(error)
   });
 
   const columns: ColumnDef<AuthAdminUser>[] = [
@@ -137,21 +137,12 @@ export default function AccessAdminUsersPage() {
       id: "linkedPlayers",
       header: "Linked Account",
       cell: ({ row }) => {
-        const linkedPlayers = row.original.linked_players ?? [];
-        if (linkedPlayers.length === 0) {
+        const linkedPlayer = getSingleLinkedPlayer(row.original.linked_players);
+        if (!linkedPlayer) {
           return <span className="text-sm text-muted-foreground">Not linked</span>;
         }
 
-        return (
-          <div className="flex flex-wrap gap-2">
-            {linkedPlayers.map((player) => (
-              <Badge key={player.player_id} variant={player.is_primary ? "default" : "outline"}>
-                {player.player_name}
-                {player.is_primary ? " (Primary)" : ""}
-              </Badge>
-            ))}
-          </div>
-        );
+        return <Badge variant="default">{linkedPlayer.player_name}</Badge>;
       }
     },
     {
@@ -215,6 +206,8 @@ export default function AccessAdminUsersPage() {
     return (rolesQuery.data ?? []).filter((role) => !currentRoleIds.has(role.id));
   }, [rolesQuery.data, userDetailQuery.data]);
 
+  const linkedPlayer = getSingleLinkedPlayer(userDetailQuery.data?.linked_players);
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -258,7 +251,6 @@ export default function AccessAdminUsersPage() {
             setSelectedRoleId("");
             setSelectedAnalyticsUserId(null);
             setSelectedAnalyticsUserName("");
-            setAssignAsPrimary(true);
           }
         }}
       >
@@ -299,6 +291,8 @@ export default function AccessAdminUsersPage() {
                   </div>
                 </div>
               </div>
+
+              <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
 
               <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
@@ -378,56 +372,45 @@ export default function AccessAdminUsersPage() {
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                        Linked Player Accounts
+                        Linked Player Account
                       </h3>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Links from this auth account to `players.user` records through
-                        `AuthUserPlayer`.
+                        The `players.user` record owned by this auth account (at most one).
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      {(userDetailQuery.data.linked_players ?? []).length > 0 ? (
-                        (userDetailQuery.data.linked_players ?? []).map((player) => (
-                          <div
-                            key={player.player_id}
-                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
-                          >
-                            <div>
-                              <p className="font-medium">{player.player_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Player ID: {player.player_id}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {player.is_primary ? (
-                                <Badge variant="secondary">Primary</Badge>
-                              ) : null}
-                              {canManageLinkedPlayers ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={removeLinkedPlayerMutation.isPending}
-                                  onClick={() =>
-                                    removeLinkedPlayerMutation.mutate({
-                                      userId: userDetailQuery.data!.id,
-                                      playerId: player.player_id
-                                    })
-                                  }
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Unlink
-                                </Button>
-                              ) : null}
-                            </div>
+                      {linkedPlayer ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3">
+                          <div>
+                            <p className="font-medium">{linkedPlayer.player_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Player ID: {linkedPlayer.player_id}
+                            </p>
                           </div>
-                        ))
+                          {canManageLinkedPlayers ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={removeLinkedPlayerMutation.isPending}
+                              onClick={() =>
+                                removeLinkedPlayerMutation.mutate({
+                                  userId: userDetailQuery.data!.id,
+                                  playerId: linkedPlayer.player_id
+                                })
+                              }
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Unlink
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">No linked player accounts.</p>
+                        <p className="text-sm text-muted-foreground">No linked player account.</p>
                       )}
                     </div>
 
-                    {canManageLinkedPlayers ? (
+                    {canManageLinkedPlayers && !linkedPlayer ? (
                       <div className="rounded-md border border-dashed border-border p-4">
                         <div className="space-y-3">
                           <p className="text-sm font-medium">Assign analytics account</p>
@@ -441,19 +424,6 @@ export default function AccessAdminUsersPage() {
                               setSelectedAnalyticsUserName(user?.name ?? "");
                             }}
                           />
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="assign-linked-player-primary"
-                              checked={assignAsPrimary}
-                              onCheckedChange={(checked) => setAssignAsPrimary(Boolean(checked))}
-                            />
-                            <Label
-                              htmlFor="assign-linked-player-primary"
-                              className="cursor-pointer"
-                            >
-                              Mark as primary
-                            </Label>
-                          </div>
                           <Button
                             disabled={
                               selectedAnalyticsUserId == null ||
@@ -464,7 +434,7 @@ export default function AccessAdminUsersPage() {
                               assignLinkedPlayerMutation.mutate({
                                 userId: userDetailQuery.data!.id,
                                 player_id: selectedAnalyticsUserId,
-                                is_primary: assignAsPrimary
+                                is_primary: true
                               });
                             }}
                           >

@@ -333,7 +333,7 @@ func buildAuthGuardedMux(t *testing.T) *http.ServeMux {
 	mux.HandleFunc("GET /api/auth/player/linked", h.PlayerLinked)
 	mux.HandleFunc("PATCH /api/auth/player/linked/{player_id}/primary", h.PlayerSetPrimary)
 	// Avatar (multipart).
-	bin := identity.NewBinary(h)
+	bin := identity.NewBinary(h, nil)
 	mux.HandleFunc("POST /api/auth/me/avatar", bin.AvatarSet)
 	mux.HandleFunc("DELETE /api/auth/me/avatar", bin.AvatarDelete)
 	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, _ *http.Request) {

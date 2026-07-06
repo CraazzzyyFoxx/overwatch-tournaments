@@ -19,16 +19,17 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
-from shared.messaging.config import PROCESS_MATCH_LOG_QUEUE, PROCESS_TOURNAMENT_LOGS_QUEUE
-from shared.models.log_processing import LogProcessingSource, LogProcessingStatus
-from shared.observability import publish_message
-from shared.schemas.events import ProcessMatchLogEvent, ProcessTournamentLogsEvent
 from sqlalchemy import desc, select
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.messaging.config import PROCESS_MATCH_LOG_QUEUE, PROCESS_TOURNAMENT_LOGS_QUEUE
+from shared.models.ingestion.log_processing import LogProcessingSource, LogProcessingStatus
+from shared.observability import publish_message
+from shared.schemas.events import ProcessMatchLogEvent, ProcessTournamentLogsEvent
 from src import models
 from src.core import auth, db
+from src.core.config import settings
 from src.schemas.admin.logs import (
     LogRecordRead,
     LogUploadError,
@@ -79,18 +80,14 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=422, detail="offset must be >= 0")
 
             if workspace_id is not None:
-                await auth._require_workspace_permission(
-                    user, workspace_id=workspace_id, resource="log", action="read"
-                )
+                await auth._require_workspace_permission(user, workspace_id=workspace_id, resource="log", action="read")
             elif tournament_id is not None:
                 await auth.require_tournament_id_permission(
                     session, user, tournament_id=tournament_id, resource="log", action="read"
                 )
             elif encounter_id is not None:
                 workspace_id = await auth._get_encounter_workspace_id(session, encounter_id)
-                await auth._require_workspace_permission(
-                    user, workspace_id=workspace_id, resource="log", action="read"
-                )
+                await auth._require_workspace_permission(user, workspace_id=workspace_id, resource="log", action="read")
             elif not user.has_permission("log", "read"):
                 raise HTTPException(status_code=403, detail="Permission denied: log.read required")
 
@@ -192,9 +189,23 @@ def register(broker: Any, logger: Any) -> None:
             errors: list[LogUploadError] = []
             attached_encounter_id = attached_encounter.id if attached_encounter else None
 
+            max_log_bytes = settings.max_match_log_bytes
             for file_obj, filename in zip(files, filenames, strict=True):
                 try:
-                    content = base64.b64decode(file_obj.get("content_b64") or "")
+                    raw_b64 = file_obj.get("content_b64") or ""
+                    # Reject before decoding: base64 inflates ~4/3, so cap the
+                    # encoded length first to avoid materializing a huge buffer.
+                    if len(raw_b64) > (max_log_bytes // 3 + 1) * 4:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Log file exceeds the maximum size of {max_log_bytes} bytes",
+                        )
+                    content = base64.b64decode(raw_b64)
+                    if len(content) > max_log_bytes:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Log file exceeds the maximum size of {max_log_bytes} bytes",
+                        )
                     record = await upload_service.store_uploaded_log_bytes(
                         session,
                         s3=_clients.s3_client,

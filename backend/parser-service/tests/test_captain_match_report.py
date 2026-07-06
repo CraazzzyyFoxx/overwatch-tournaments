@@ -77,6 +77,13 @@ def _mk_session(
     encounter: SimpleNamespace | None,
     captain_player_ids: list[int],
 ) -> SimpleNamespace:
+    """``captain_player_ids`` mirrors the linked-player lookup result.
+
+    ``players.user.auth_user_id`` links an auth user to at most one player, so
+    only the first id (if any) is used as the resolved player's id — callers
+    still pass a one-element list for readability at call sites.
+    """
+    linked_player_id = captain_player_ids[0] if captain_player_ids else None
     execute_count = 0
 
     async def fake_execute(_query):
@@ -89,16 +96,16 @@ def _mk_session(
             return result_mock
 
         if execute_count == 2:
-            scalars_mock = Mock()
-            scalars_mock.all.return_value = [
-                SimpleNamespace(player_id=pid) for pid in captain_player_ids
-            ]
             result_mock = Mock()
-            result_mock.scalars.return_value = scalars_mock
+            player = SimpleNamespace(id=linked_player_id) if linked_player_id is not None else None
+            result_mock.scalar_one_or_none.return_value = player
             return result_mock
 
         result_mock = Mock()
         result_mock.scalar_one_or_none.return_value = None
+        # resolve_encounter_challonge iterates ``result.all()`` directly (no
+        # challonge_match_mapping rows here -> encounter treated as unlinked).
+        result_mock.all.return_value = []
         scalars_mock = Mock()
         scalars_mock.all.return_value = []
         result_mock.scalars.return_value = scalars_mock
@@ -131,9 +138,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 422)
 
     async def test_non_captain_gets_forbidden(self) -> None:
-        encounter = _mk_encounter(
-            home_captain_player_id=100, away_captain_player_id=200
-        )
+        encounter = _mk_encounter(home_captain_player_id=100, away_captain_player_id=200)
         session = _mk_session(encounter, [999])
         user = _mk_user()
         with self.assertRaises(HTTPException) as ctx:
@@ -170,9 +175,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
         self.assertEqual(encounter.home_score, 2)
         self.assertEqual(encounter.away_score, 1)
         self.assertEqual(encounter.closeness, 4 / 5)
-        self.assertEqual(
-            encounter.result_status, enums.EncounterResultStatus.PENDING_CONFIRMATION
-        )
+        self.assertEqual(encounter.result_status, enums.EncounterResultStatus.PENDING_CONFIRMATION)
         self.assertEqual(encounter.submitted_by_id, 100)
         self.assertEqual(session._added, [])
 
@@ -195,9 +198,7 @@ class CaptainMatchReportValidation(IsolatedAsyncioTestCase):
                 closeness_stars=2,
             )
 
-        executed_queries = [
-            str(call.args[0]).lower() for call in session.execute.await_args_list
-        ]
+        executed_queries = [str(call.args[0]).lower() for call in session.execute.await_args_list]
         self.assertFalse(
             any("delete" in q and "match" in q for q in executed_queries),
             f"did not expect DELETE against Match table, got: {executed_queries}",

@@ -13,11 +13,11 @@ import math
 import typing
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import errors, pagination
 from shared.division_grid import DivisionGrid
 from shared.services.division_grid_resolution import resolve_tournament_division
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core.workspace import get_division_grid
 
@@ -83,8 +83,7 @@ def _resolve_placement(team: models.Team) -> int | None:
     positions = [
         standing.overall_position
         for standing in getattr(team, "standings", []) or []
-        if getattr(standing, "overall_position", None) is not None
-        and standing.overall_position > 0
+        if getattr(standing, "overall_position", None) is not None and standing.overall_position > 0
     ]
     return min(positions) if positions else None
 
@@ -105,17 +104,14 @@ def _team_to_pydantic(team: models.Team, *, include_tournament: bool = True) -> 
             (
                 _group_to_pydantic(standing.group)
                 for standing in getattr(team, "standings", []) or []
-                if getattr(standing, "group", None) is not None
-                and getattr(standing.group, "is_groups", False)
+                if getattr(standing, "group", None) is not None and getattr(standing.group, "is_groups", False)
             ),
             None,
         ),
     )
 
 
-def _player_to_pydantic(
-    player: models.Player, *, grid: DivisionGrid
-) -> schemas.PlayerRead:
+def _player_to_pydantic(player: models.Player, *, grid: DivisionGrid) -> schemas.PlayerRead:
     # NOTE: ``user`` is intentionally left as ``None`` for the analytics
     # response. The original ``app-service`` ``to_pydantic_player`` was called
     # with an empty ``entities`` list, which also produced ``user=None``. The
@@ -133,7 +129,10 @@ def _player_to_pydantic(
         division=resolve_tournament_division(player.rank, tournament_grid=grid),
         role=player.role,
         tournament_id=player.tournament_id,
-        user_id=player.user_id,
+        # Player.user_id was dropped in the contract step (iwrefac07); the
+        # identity anchor is workspace_member.player_id instead. Callers must
+        # eager-load Player.workspace_member on the query that produced ``player``.
+        user_id=player.workspace_member.player_id,
         team_id=player.team_id,
         is_newcomer=getattr(player, "is_newcomer", False),
         is_newcomer_role=getattr(player, "is_newcomer_role", False),
@@ -161,11 +160,7 @@ def _anomaly_to_pydantic(
             player_id=int(player_id),
             kind=str(payload.get("kind") or "unknown"),
             score=float(payload.get("score") or 0),
-            confidence=(
-                float(payload["confidence"])
-                if payload.get("confidence") is not None
-                else None
-            ),
+            confidence=(float(payload["confidence"]) if payload.get("confidence") is not None else None),
             reasons=reasons,
             encounter_id=int(raw_encounter_id) if raw_encounter_id is not None else None,
         )
@@ -196,17 +191,17 @@ def _predict_player_division(
     player: schemas.PlayerRead,
     *,
     points: float,
-    manual_shift: int | None,
 ) -> tuple[int | None, schemas.PredictedDirection, int]:
-    # Division move = the shift signal rounded to the nearest division, so the
-    # DivisionGrid display stays consistent with the displayed shift value.
-    # Positive points = promote (lower division number) → negative delta. Bounded
-    # to ±3 to match the shift clamp. (The old fixed ±1/±1.5 thresholds hid any
-    # signal in (-1, 1): the number was non-zero but the grid showed "flat".)
-    delta = max(-3, min(3, -round(float(points))))
-
-    if manual_shift:
-        delta = -1 if manual_shift > 0 else 1
+    # The forecast moves whole divisions only. A division is 100 signal points
+    # (``division_delta_points``), so a Signal below 1.0 (i.e. < 100 points) is
+    # less than a full division and is IGNORED — the forecast holds at the current
+    # division and the direction is "flat" (no Climb/Drop badge). At/above a full
+    # division the magnitude rounds to whole divisions, bounded to ±3 (the shift
+    # clamp). Positive points = promote (lower division number) → negative delta.
+    delta = -round(float(points))
+    if abs(float(points)) < 1.0:
+        delta = 0
+    delta = max(-3, min(3, delta))
 
     if delta < 0:
         direction: schemas.PredictedDirection = "promote"
@@ -258,18 +253,14 @@ async def get_algorithms(
     algorithms = await service.get_algorithms(session)
     ids_with_data: set[int] | None = None
     if tournament_id is not None:
-        ids_with_data = await service.get_algorithm_ids_with_shift_data(
-            session, tournament_id
-        )
+        ids_with_data = await service.get_algorithm_ids_with_shift_data(session, tournament_id)
     return pagination.Paginated(
         total=len(algorithms),
         results=[
             await to_pydantic(
                 session,
                 algorithm,
-                has_data=(algorithm.id in ids_with_data)
-                if ids_with_data is not None
-                else None,
+                has_data=(algorithm.id in ids_with_data) if ids_with_data is not None else None,
             )
             for algorithm in algorithms
         ],
@@ -278,16 +269,12 @@ async def get_algorithms(
     )
 
 
-async def get_algorithm(
-    session: AsyncSession, id: int
-) -> schemas.AnalyticsAlgorithmRead:
+async def get_algorithm(session: AsyncSession, id: int) -> schemas.AnalyticsAlgorithmRead:
     algorithm = await service.get_algorithm(session, id)
     if not algorithm:
         raise errors.ApiHTTPException(
             status_code=404,
-            detail=[
-                errors.ApiExc(code="not_found", msg="Analytics algorithm not found.")
-            ],
+            detail=[errors.ApiExc(code="not_found", msg="Analytics algorithm not found.")],
         )
     return await to_pydantic(session, algorithm)
 
@@ -302,44 +289,32 @@ async def get_analytics(
     if algorithm is None:
         raise errors.ApiHTTPException(
             status_code=404,
-            detail=[
-                errors.ApiExc(code="not_found", msg="Analytics algorithm not found.")
-            ],
+            detail=[errors.ApiExc(code="not_found", msg="Analytics algorithm not found.")],
         )
 
     output: list[schemas.TeamAnalytics] = []
     cache_teams: dict[int, models.Team] = {}
-    cache_players: dict[
-        int, list[tuple[models.Player, models.AnalyticsPlayer, models.AnalyticsShift]]
-    ] = {}
+    cache_players: dict[int, list[tuple[models.Player, models.AnalyticsPlayer, models.AnalyticsShift]]] = {}
     cache_teams_wins: dict[int, int] = {}
     cache_teams_losses: dict[int, int] = {}
     cache_teams_manual_shift: dict[int, int] = {}
 
-    data = await service.get_analytics(
-        session, tournament_id, algorithm, workspace_id=workspace_id
-    )
+    data = await service.get_analytics(session, tournament_id, algorithm, workspace_id=workspace_id)
     for team, player, shift, analytics in data:
         cache_teams[team.id] = team
         cache_players.setdefault(team.id, [])
         cache_teams_manual_shift.setdefault(team.id, 0)
-        cache_teams_manual_shift[team.id] += (
-            analytics.shift_one if analytics.shift_one else 0
-        )
+        cache_teams_manual_shift[team.id] += analytics.shift_one if analytics.shift_one else 0
         cache_players[team.id].append((player, analytics, shift))
         if team.id not in cache_teams_wins:
             cache_teams_wins[team.id] = analytics.wins
         if team.id not in cache_teams_losses:
             cache_teams_losses[team.id] = analytics.losses
 
-    avg_team_cost = round(
-        sum(t.avg_sr for t in cache_teams.values()) / max(len(cache_teams), 1)
-    )
+    avg_team_cost = round(sum(t.avg_sr for t in cache_teams.values()) / max(len(cache_teams), 1))
 
     grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
-    predicted_places = await service.get_predicted_places(
-        session, tournament_id, algorithm.id
-    )
+    predicted_places = await service.get_predicted_places(session, tournament_id, algorithm.id)
     anomalies_by_player = _build_anomalies_by_player(
         await service.get_match_quality_anomalies(session, tournament_id, algorithm.id)
     )
@@ -347,21 +322,16 @@ async def get_analytics(
     for team_id, team in cache_teams.items():
         players = cache_players[team_id]
         team_read = _team_to_pydantic(team)
-        balancer_shift = -math.ceil(
-            ((team.avg_sr - (team.avg_sr % 10)) - avg_team_cost) / 20
-        )
+        balancer_shift = -math.ceil(((team.avg_sr - (team.avg_sr % 10)) - avg_team_cost) / 20)
         manual_shift_points = cache_teams_manual_shift[team_id]
         manual_shift = round(manual_shift_points / 1000, 2)
         team_players: list[schemas.PlayerAnalytics] = []
 
         for player, analytics, shift in players:
             player_read = _player_to_pydantic(player, grid=grid)
-            predicted_division, predicted_direction, predicted_delta = (
-                _predict_player_division(
-                    player_read,
-                    points=shift.shift,
-                    manual_shift=analytics.shift,
-                )
+            predicted_division, predicted_direction, predicted_delta = _predict_player_division(
+                player_read,
+                points=shift.shift,
             )
             team_players.append(
                 schemas.PlayerAnalytics(
@@ -382,9 +352,7 @@ async def get_analytics(
                 )
             )
 
-        team_anomalies = [
-            anomaly for player in team_players for anomaly in player.anomalies
-        ]
+        team_anomalies = [anomaly for player in team_players for anomaly in player.anomalies]
         predicted_place = predicted_places.get(team_id)
         placement_delta = (
             predicted_place - team_read.placement
@@ -409,9 +377,7 @@ async def get_analytics(
             )
         )
 
-    placement_deltas = [
-        abs(team.placement_delta) for team in output if team.placement_delta is not None
-    ]
+    placement_deltas = [abs(team.placement_delta) for team in output if team.placement_delta is not None]
     summary = schemas.TournamentAnalyticsSummary(
         total_teams=len(output),
         total_players=sum(len(team.players) for team in output),
@@ -419,15 +385,10 @@ async def get_analytics(
         anomaly_count=sum(len(team.anomalies) for team in output),
         manual_shift_team_count=sum(1 for team in output if team.manual_shift_points != 0),
         newcomer_count=sum(
-            1
-            for team in output
-            for player in team.players
-            if player.is_newcomer or player.is_newcomer_role
+            1 for team in output for player in team.players if player.is_newcomer or player.is_newcomer_role
         ),
         divergent_team_count=sum(
-            1
-            for team in output
-            if team.placement_delta is not None and abs(team.placement_delta) >= 4
+            1 for team in output if team.placement_delta is not None and abs(team.placement_delta) >= 4
         ),
         avg_placement_delta=_average(float(delta) for delta in placement_deltas),
     )
@@ -439,13 +400,11 @@ async def get_analytics(
     )
 
 
-async def change_shift(
-    session: AsyncSession, player_id: int, shift: int
-) -> schemas.PlayerAnalytics:
+async def change_shift(session: AsyncSession, player_id: int, shift: int) -> schemas.PlayerAnalytics:
     analytics, calculated_shift = await service.change_shift(session, player_id, shift)
     player = await session.scalar(
         sa.select(models.Player)
-        .options(sa.orm.joinedload(models.Player.user))
+        .options(sa.orm.joinedload(models.Player.workspace_member))
         .where(models.Player.id == player_id)
     )
     if player is None:
@@ -469,9 +428,7 @@ async def change_shift(
     )
 
 
-async def get_streaks(
-    session: AsyncSession, tournament_id: int
-) -> list[schemas.PlayerStreak]:
+async def get_streaks(session: AsyncSession, tournament_id: int) -> list[schemas.PlayerStreak]:
     cache_pos: dict[str, list[int]] = {}
     cache_users: dict[str, schemas.UserReadMin | None] = {}
     output: list[schemas.PlayerStreak] = []

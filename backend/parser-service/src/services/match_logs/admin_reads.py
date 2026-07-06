@@ -14,12 +14,12 @@ caught by that ``except`` clause (it is a strict subclass). The rest of the
 from __future__ import annotations
 
 import httpx
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.core import config
 from src.schemas.admin.logs import QueueDepth
@@ -54,13 +54,27 @@ async def _fetch_queue_depths() -> list[QueueDepth]:
                         )
                     )
                 elif resp.status_code == 404:
-                    depths.append(QueueDepth(name=queue_name, messages_ready=-1, messages_unacknowledged=-1, consumers=0, status="not_found"))
+                    depths.append(
+                        QueueDepth(
+                            name=queue_name,
+                            messages_ready=-1,
+                            messages_unacknowledged=-1,
+                            consumers=0,
+                            status="not_found",
+                        )
+                    )
                 else:
-                    depths.append(QueueDepth(name=queue_name, messages_ready=-1, messages_unacknowledged=-1, consumers=0, status="error"))
+                    depths.append(
+                        QueueDepth(
+                            name=queue_name, messages_ready=-1, messages_unacknowledged=-1, consumers=0, status="error"
+                        )
+                    )
     except Exception as exc:
         logger.warning(f"Failed to fetch queue depths from RabbitMQ management API: {exc}")
         for queue_name in MONITORED_QUEUES:
-            depths.append(QueueDepth(name=queue_name, messages_ready=-1, messages_unacknowledged=-1, consumers=0, status="error"))
+            depths.append(
+                QueueDepth(name=queue_name, messages_ready=-1, messages_unacknowledged=-1, consumers=0, status="error")
+            )
     return depths
 
 

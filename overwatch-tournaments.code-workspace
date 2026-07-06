@@ -31,9 +31,6 @@
             "path": "backend/tournament-service"
         },
         {
-            "path": "backend/realtime-service"
-        },
-        {
             "path": "backend/analytics-service"
         }
         {

@@ -1,33 +1,23 @@
-# ruff: noqa: I001
-from .gamemode import *
-from .hero import *
-from .map import *
-from .user import *
-from .workspace import *
-from .division_grid import *
-from .tournament import *
-from .stage import *
-from .team import *
-from .encounter import *
-from .encounter_link import *
-from .encounter_map import *
-from .encounter_saved_view import *
-from .match import *
-from .standings import *
-from .achievement import *
+"""Aggregator for all shared SQLAlchemy models.
+
+Importing this package loads every model module, so string-based relationship
+resolution and ``configure_mappers()`` keep working against the single shared
+``db.Base.metadata``. Every model name importable as ``from shared.models
+import X`` before the domain-subpackage split remains importable.
+"""
+# ruff: noqa: F403
+
+from .achievements import *
 from .analytics import *
-from .auth_user import *
-from .api_key import *
-from .challonge_sync import *
-from .discord_channel import *
-from .rbac import *
-from .oauth import *
 from .balancer import *
-from .draft import *
-from .log_processing import *
-from .user_merge_audit import *
-from .outbox import *
-from .realtime import *
-from .overwatch_rank import *
-from .settings import *
-from .tournament_computation import *
+from .catalog import *
+from .division_grid import *
+from .identity import *
+from .ingestion import *
+from .matches import *
+from .platform import *
+from .preferences import *
+from .ranks import *
+from .registration import *
+from .tenancy import *
+from .tournament import *

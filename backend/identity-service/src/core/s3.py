@@ -8,7 +8,6 @@ worker lifecycle hooks in serve.py.
 from __future__ import annotations
 
 from shared.clients import S3Client
-
 from src.core.config import settings
 
 s3_client = S3Client(

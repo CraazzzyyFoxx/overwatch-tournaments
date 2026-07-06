@@ -34,10 +34,15 @@ async def execute_div_level(
 
     query = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.tournament_id,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -74,19 +79,28 @@ async def execute_div_change(
     # Use window function LAG to compare adjacent tournament divisions
     player_with_lag = (
         sa.select(
-            models.Player.user_id,
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.tournament_id,
             models.Player.rank,
             models.Player.role,
             models.Tournament.division_grid_version_id.label("source_version_id"),
-            sa.func.lag(models.Player.rank).over(
-                partition_by=[models.Player.user_id, models.Player.role],
+            sa.func.lag(models.Player.rank)
+            .over(
+                partition_by=[models.WorkspaceMember.player_id, models.Player.role],
                 order_by=models.Tournament.number,
-            ).label("prev_rank"),
-            sa.func.lag(models.Tournament.division_grid_version_id).over(
-                partition_by=[models.Player.user_id, models.Player.role],
+            )
+            .label("prev_rank"),
+            sa.func.lag(models.Tournament.division_grid_version_id)
+            .over(
+                partition_by=[models.WorkspaceMember.player_id, models.Player.role],
                 order_by=models.Tournament.number,
-            ).label("prev_source_version_id"),
+            )
+            .label("prev_source_version_id"),
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(

@@ -46,9 +46,7 @@ async def get_setting_value(session: AsyncSession, key: str) -> dict:
         except Exception as exc:  # pragma: no cover - cache is best-effort
             logger.debug("settings cache get failed for %s: %s", key, exc)
 
-    result = await session.execute(
-        sa.select(models.Settings.value).where(models.Settings.key == key)
-    )
+    result = await session.execute(sa.select(models.Settings.value).where(models.Settings.key == key))
     value = result.scalar_one_or_none() or {}
 
     if cache.is_setup():

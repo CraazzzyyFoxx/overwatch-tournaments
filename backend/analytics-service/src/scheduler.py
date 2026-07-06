@@ -33,11 +33,7 @@ async def _nightly_drift_check() -> None:
     """Compute feature drift and alert when over threshold."""
     async with db.async_session_maker() as session:
         latest = await session.scalar(
-            __import__("sqlalchemy").select(
-                __import__("sqlalchemy").func.max(
-                    __import__("src").models.Tournament.id
-                )
-            )
+            __import__("sqlalchemy").select(__import__("sqlalchemy").func.max(__import__("src").models.Tournament.id))
         )
         if not latest:
             logger.info("No tournaments yet — skipping drift check")

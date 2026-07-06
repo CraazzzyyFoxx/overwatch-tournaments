@@ -18,9 +18,9 @@ tallies the resulting final standings. Aggregates ``mean_position``,
 ``p10_position``, ``p90_position`` and ``prob_top{1,3,8}`` per team plus a
 16-bin position histogram for the UI.
 
-Outputs land in ``analytics.standings_distribution`` (Phase 3 runner) and
-``AnalyticsPredictions.predicted_place`` is filled from ``round(mean_position)``
-to keep v1 integer-place consumers working.
+Outputs land in ``analytics.standings_distribution`` (Phase 3 runner); the read
+API derives the scalar ``predicted_place`` from ``round(mean_position)`` on
+demand.
 """
 
 from __future__ import annotations
@@ -184,14 +184,10 @@ def _train_standings_v2_with_device(
         importances = first_est.feature_importances_
     except Exception:  # pragma: no cover
         importances = [0.0] * len(STANDINGS_FEATURE_ORDER)
-    feature_importance = {
-        col: float(v) for col, v in zip(STANDINGS_FEATURE_ORDER, importances, strict=False)
-    }
+    feature_importance = {col: float(v) for col, v in zip(STANDINGS_FEATURE_ORDER, importances, strict=False)}
 
     model = WinProbabilityModel(booster=calibrated, baseline=baseline)
-    return StandingsTrainingResult(
-        model=model, metrics=metrics, feature_importance=feature_importance
-    )
+    return StandingsTrainingResult(model=model, metrics=metrics, feature_importance=feature_importance)
 
 
 def train_standings_v2(
@@ -328,9 +324,7 @@ def simulate_standings(
             }
         )
 
-    sharp_p = _sharpen_probabilities(
-        matchups["p_home_wins"].to_numpy(dtype=float), prob_sharpening
-    )
+    sharp_p = _sharpen_probabilities(matchups["p_home_wins"].to_numpy(dtype=float), prob_sharpening)
     triples = [
         (int(row.home_team_id), int(row.away_team_id), float(p))
         for row, p in zip(matchups.itertuples(), sharp_p, strict=False)

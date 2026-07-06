@@ -16,7 +16,11 @@ from src.core import pagination
 
 
 async def get_top_maps(
-    session: AsyncSession, user_id: int, params: schemas.UserMapsSearchParams, *, workspace_id: int | None = None,
+    session: AsyncSession,
+    user_id: int,
+    params: schemas.UserMapsSearchParams,
+    *,
+    workspace_id: int | None = None,
 ) -> tuple[typing.Sequence[tuple[models.Map, int, int, int, int, float]], int]:
     """
     Retrieves a paginated list of top maps for a specific user, including statistics.
@@ -53,9 +57,10 @@ async def get_top_maps(
             ),
         )
         .join(models.Player, models.Player.team_id == models.Team.id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
         )
@@ -82,7 +87,9 @@ async def get_top_maps(
             sa.func.sum(user_win).label("win"),
             sa.func.sum(user_loss).label("loss"),
             sa.func.sum(user_draw).label("draw"),
-            (sa.func.sum(user_win) / sa.func.count(user_match_teams.c.match_id)).cast(sa.Numeric(10, 2)).label("winrate"),
+            (sa.func.sum(user_win) / sa.func.count(user_match_teams.c.match_id))
+            .cast(sa.Numeric(10, 2))
+            .label("winrate"),
         )
         .select_from(user_match_teams)
         .join(models.Map, models.Map.id == user_match_teams.c.map_id)
@@ -96,11 +103,9 @@ async def get_top_maps(
             subquery_query = subquery_query.where(models.Encounter.tournament_id == params.tournament_id)
 
         if workspace_id:
-            subquery_query = (
-                subquery_query
-                .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-                .where(models.Tournament.workspace_id == workspace_id)
-            )
+            subquery_query = subquery_query.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
 
     if params.gamemode_id:
         subquery_query = subquery_query.where(sa.and_(models.Map.gamemode_id == params.gamemode_id))
@@ -116,17 +121,14 @@ async def get_top_maps(
 
     total_query = sa.select(sa.func.count()).select_from(subquery)
 
-    query = (
-        sa.select(
-            models.Map,
-            subquery.c.count,
-            subquery.c.win,
-            subquery.c.loss,
-            subquery.c.draw,
-            subquery.c.winrate,
-        )
-        .join(subquery, subquery.c.map_id == models.Map.id)
-    )
+    query = sa.select(
+        models.Map,
+        subquery.c.count,
+        subquery.c.win,
+        subquery.c.loss,
+        subquery.c.draw,
+        subquery.c.winrate,
+    ).join(subquery, subquery.c.map_id == models.Map.id)
     if "gamemode" in params.entities:
         query = query.options(selectinload(models.Map.gamemode))
 

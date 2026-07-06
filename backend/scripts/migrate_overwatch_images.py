@@ -98,9 +98,7 @@ async def migrate(dry_run: bool = False) -> None:
     async with httpx.AsyncClient(**client_kwargs) as http_client, session_maker() as session:
         # --- MIGRATE HEROES ---
         logger.info("Checking overwatch.hero images...")
-        hero_rows = await session.execute(
-            sa.text("SELECT id, slug, name, image_path FROM overwatch.hero ORDER BY id")
-        )
+        hero_rows = await session.execute(sa.text("SELECT id, slug, name, image_path FROM overwatch.hero ORDER BY id"))
         heroes = hero_rows.all()
 
         hero_migrated = 0
@@ -158,9 +156,7 @@ async def migrate(dry_run: bool = False) -> None:
 
         # --- MIGRATE MAPS ---
         logger.info("Checking overwatch.map images...")
-        map_rows = await session.execute(
-            sa.text("SELECT id, name, image_path FROM overwatch.map ORDER BY id")
-        )
+        map_rows = await session.execute(sa.text("SELECT id, name, image_path FROM overwatch.map ORDER BY id"))
         maps = map_rows.all()
 
         map_migrated = 0

@@ -1,9 +1,8 @@
-from loguru import logger
 from httpx import AsyncClient, BasicAuth
+from loguru import logger
 
 from src import schemas
 from src.core import config, errors
-
 
 challonge_client = AsyncClient(
     base_url="https://api.challonge.com/v1/",
@@ -41,19 +40,13 @@ async def fetch_tournament(tournament_id: str) -> schemas.ChallongeTournament:
 async def fetch_participants(tournament_id: int) -> list[schemas.ChallongeParticipant]:
     resp = await challonge_client.get(f"tournaments/{tournament_id}/participants.json")
     _check_response(resp, "Tournament", tournament_id)
-    return [
-        schemas.ChallongeParticipant.model_validate(p["participant"])
-        for p in resp.json()
-    ]
+    return [schemas.ChallongeParticipant.model_validate(p["participant"]) for p in resp.json()]
 
 
 async def fetch_matches(tournament_id: int) -> list[schemas.ChallongeMatch]:
     resp = await challonge_client.get(f"tournaments/{tournament_id}/matches.json")
     _check_response(resp, "Tournament", tournament_id)
-    return [
-        schemas.ChallongeMatch.model_validate(m["match"])
-        for m in resp.json()
-    ]
+    return [schemas.ChallongeMatch.model_validate(m["match"]) for m in resp.json()]
 
 
 # ── Write methods ────────────────────────────────────────────────────────────
@@ -75,8 +68,7 @@ async def update_match(
         winner_id: Challonge participant ID of the winner.
     """
     logger.info(
-        f"Challonge: updating match {match_id} on tournament {tournament_id} "
-        f"scores={scores_csv} winner={winner_id}"
+        f"Challonge: updating match {match_id} on tournament {tournament_id} scores={scores_csv} winner={winner_id}"
     )
     resp = await challonge_client.put(
         f"tournaments/{tournament_id}/matches/{match_id}.json",

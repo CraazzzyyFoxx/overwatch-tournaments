@@ -53,9 +53,7 @@ class CalibrationReportTests(TestCase):
             confidences += [c] * k
             errors += [0.0] * n_hit + [1.0] * (k - n_hit)
 
-        report = calibration.compute_calibration_report(
-            confidences, errors, n_bins=10, accuracy_tolerance=0.5
-        )
+        report = calibration.compute_calibration_report(confidences, errors, n_bins=10, accuracy_tolerance=0.5)
 
         self.assertEqual(1000, report["n"])
         self.assertEqual(10, len(report["bins"]))
@@ -67,9 +65,7 @@ class CalibrationReportTests(TestCase):
         confidences = rng.uniform(0, 1, size=200)
         errors = (1.0 - confidences) * 2.0 + rng.normal(0, 0.05, size=200)
 
-        report = calibration.compute_calibration_report(
-            confidences.tolist(), errors.tolist()
-        )
+        report = calibration.compute_calibration_report(confidences.tolist(), errors.tolist())
 
         self.assertLess(report["confidence_error_corr"], 0.0)
 
@@ -79,9 +75,7 @@ class CalibrationReportTests(TestCase):
         confidences = [0.9] * 50
         errors = [2.0] * 50
 
-        report = calibration.compute_calibration_report(
-            confidences, errors, accuracy_tolerance=0.5
-        )
+        report = calibration.compute_calibration_report(confidences, errors, accuracy_tolerance=0.5)
 
         self.assertEqual(0.0, report["accuracy_rate"])
         self.assertGreater(report["ece"], 0.8)

@@ -6,7 +6,7 @@ replacing untyped dict objects with validated Pydantic models.
 
 import time
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -167,7 +167,6 @@ class RegistrationApprovedEvent(BaseEvent):
     tournament_id: int = Field(..., description="Tournament ID")
     workspace_id: int = Field(..., description="Workspace ID")
     registration_id: int = Field(..., description="Registration ID")
-    auth_user_id: int | None = Field(default=None, description="Auth user ID when linked")
     user_id: int | None = Field(default=None, description="Player user ID when linked")
     battle_tag: str | None = Field(default=None, description="Approved registration battle tag")
 
@@ -179,7 +178,6 @@ class RegistrationRejectedEvent(BaseEvent):
     tournament_id: int = Field(..., description="Tournament ID")
     workspace_id: int = Field(..., description="Workspace ID")
     registration_id: int = Field(..., description="Registration ID")
-    auth_user_id: int | None = Field(default=None, description="Auth user ID when linked")
     user_id: int | None = Field(default=None, description="Player user ID when linked")
     battle_tag: str | None = Field(default=None, description="Rejected registration battle tag")
 
@@ -258,7 +256,7 @@ class FetchRankEvent(BaseEvent):
     """
 
     event_type: str = Field(default="fetch_rank", frozen=True)
-    battle_tag_id: int = Field(..., description="players.battle_tag.id to fetch")
+    social_account_id: int = Field(..., description="players.social_account.id (battlenet) to fetch")
     battle_tag: str = Field(..., description="Full battle tag 'Name#1234'")
     source: Literal["scheduled", "registration", "manual"] = Field(
         default="scheduled", description="What triggered this fetch"
@@ -281,3 +279,53 @@ class AchievementEvaluateEvent(BaseEvent):
         ...,
         description="DB tables that changed (e.g. ['matches.statistics', 'tournament.encounter'])",
     )
+
+
+class BalancePlayerSnapshotData(BaseModel):
+    """One per-player row of an exported balance, denormalized into the event.
+
+    Carries everything analytics needs to write ``analytics.balance_player_snapshot``
+    without querying balancer's schema.
+    """
+
+    user_id: int | None = Field(default=None, description="players.user.id when the player is linked")
+    team_id: int | None = Field(default=None, description="Exported tournament.team.id")
+    assigned_role: str = Field(..., description="Role the player was assigned to (tank|dps|support)")
+    preferred_role: str | None = Field(default=None, description="Player's first preferred role")
+    assigned_rank: int = Field(..., description="Player rating used by the balance")
+    discomfort: int = Field(default=0, description="Role discomfort for the assignment")
+    division_number: int | None = Field(default=None, description="Resolved division for the assigned role")
+    is_captain: bool = Field(default=False, description="Whether the player is a team captain")
+    was_off_role: bool = Field(default=False, description="Assigned role differs from first preference")
+
+
+class BalanceExportedEvent(BaseEvent):
+    """Domain event emitted when a balance is exported to a tournament.
+
+    Published by: balancer-service (``export_balance``, via the transactional outbox
+    so the emission is atomic with the balance mutation).
+    Consumed by: analytics-service, which owns and writes
+    ``analytics.balance_snapshot`` + ``analytics.balance_player_snapshot``.
+
+    Every field the analytics snapshot needs is denormalized into the payload so the
+    consumer never reaches back into the balancer schema. Idempotent on the consumer
+    side via the ``(tournament_id, balance_id)`` unique constraint.
+    """
+
+    event_type: str = Field(default="balance_exported", frozen=True)
+    tournament_id: int = Field(..., description="Tournament the balance was exported to")
+    balance_id: int = Field(..., description="balancer.balance.id")
+    variant_id: int | None = Field(default=None, description="Selected balancer.balance_variant.id, if any")
+    workspace_id: int | None = Field(default=None, description="Workspace that owns the balance")
+    algorithm: str = Field(..., description="Balancer algorithm name")
+    division_scope: str | None = Field(default=None, description="Division scope used by the balance")
+    division_grid_json: dict[str, Any] | None = Field(default=None, description="Division grid snapshot")
+    team_count: int = Field(..., description="Number of teams in the balance")
+    player_count: int = Field(..., description="Number of assigned players")
+    avg_sr_overall: float = Field(..., description="Mean rating across all players")
+    sr_std_dev: float = Field(..., description="Std dev of player ratings")
+    sr_range: float = Field(..., description="max(rating) - min(rating)")
+    total_discomfort: int = Field(default=0, description="Sum of per-player role discomfort")
+    off_role_count: int = Field(default=0, description="Count of players assigned off their first preference")
+    objective_score: float | None = Field(default=None, description="Solver objective score when available")
+    players: list[BalancePlayerSnapshotData] = Field(default_factory=list, description="Per-player assignment rows")

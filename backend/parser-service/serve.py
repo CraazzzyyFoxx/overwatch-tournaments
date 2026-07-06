@@ -3,6 +3,8 @@ import base64
 import sqlalchemy as sa
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
+
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
     PROCESS_MATCH_LOG_QUEUE,
@@ -14,7 +16,7 @@ from shared.messaging.config import (
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
     UPLOAD_MATCH_LOG_QUEUE,
 )
-from shared.models.log_processing import LogProcessingSource
+from shared.models.ingestion.log_processing import LogProcessingSource
 from shared.observability import (
     make_rabbit_broker,
     metrics,
@@ -32,17 +34,26 @@ from shared.schemas.events import (
     ProcessTournamentLogsEvent,
     UploadMatchLogEvent,
 )
-
 from src import models
 from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
 from src.rpc import (
     _clients,
+)
+from src.rpc import (
     achievements as rpc_achievements,
+)
+from src.rpc import (
     bootstrap as rpc_bootstrap,
+)
+from src.rpc import (
     logs as rpc_logs,
+)
+from src.rpc import (
     misc as rpc_misc,
+)
+from src.rpc import (
     rank as rpc_rank,
 )
 from src.services.achievement.engine.consumer import handle_achievement_evaluate
@@ -148,13 +159,15 @@ async def process_upload_match_log(data: dict, msg: RabbitMessage) -> None:
             uploader_user_id: int | None = None
             if event.uploader_discord_name:
                 source = LogProcessingSource.discord
-                discord_user = await session.scalar(
-                    sa.select(models.UserDiscord)
-                    .where(models.UserDiscord.name == event.uploader_discord_name)
+                uploader_user_id = await session.scalar(
+                    sa.select(models.SocialAccount.user_id)
+                    .where(
+                        models.SocialAccount.provider == SocialProvider.DISCORD,
+                        models.SocialAccount.username_normalized
+                        == normalize_social_handle(SocialProvider.DISCORD, event.uploader_discord_name),
+                    )
                     .limit(1)
                 )
-                if discord_user is not None:
-                    uploader_user_id = discord_user.user_id
             else:
                 source = LogProcessingSource.manual
 
@@ -201,9 +214,7 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
         except Exception:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "failed", logger=log)
             metrics.count("parser.match_log.processed", 1, attributes={"status": "failed"})
-            log.exception(
-                f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}"
-            )
+            log.exception(f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}")
             try:
                 async with db.async_session_maker() as session:
                     failed_workspace_id = await session.scalar(

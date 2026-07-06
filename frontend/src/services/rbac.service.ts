@@ -20,6 +20,16 @@ type ListParams = {
   order?: string;
 };
 
+export type RbacUserDeny = {
+  permission_id: number;
+  name: string;
+  resource: string;
+  action: string;
+  description?: string | null;
+  /** Scope this deny to a single workspace; null/absent = global deny. */
+  workspace_id?: number | null;
+};
+
 function normalizeAuthAdminUser(user: AuthAdminUser): AuthAdminUser {
   return {
     ...user,
@@ -46,10 +56,14 @@ function listQuery(params?: Record<string, unknown>): string {
   return suffix ? `?${suffix}` : "";
 }
 
-async function rbacFetch<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+async function rbacFetch<T>(
+  path: string,
+  init?: { method?: string; body?: unknown; query?: Record<string, unknown> }
+): Promise<T> {
   const response = await apiFetch(`/api/auth${path}`, {
     method: init?.method,
     body: init?.body,
+    query: init?.query,
   });
 
   if (response.status === 204) {
@@ -162,6 +176,27 @@ export const rbacService = {
     return rbacFetch<void>("/rbac/users/remove-role", {
       method: "POST",
       body: payload,
+    });
+  },
+
+  // Per-user permission denies (negative RBAC). Each call returns the user's full deny list.
+  getUserDenies(userId: number) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies`);
+  },
+
+  /** `workspaceId` omitted/null denies the permission globally; a concrete id scopes the deny to that workspace. */
+  addUserDeny(userId: number, permissionId: number, workspaceId?: number | null) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies`, {
+      method: "POST",
+      body: { permission_id: permissionId, workspace_id: workspaceId ?? null },
+    });
+  },
+
+  /** Must match the scope of the deny being removed: omit `workspaceId` to remove the global deny. */
+  removeUserDeny(userId: number, permissionId: number, workspaceId?: number | null) {
+    return rbacFetch<RbacUserDeny[]>(`/rbac/users/${userId}/denies/${permissionId}`, {
+      method: "DELETE",
+      query: workspaceId ? { workspace_id: workspaceId } : undefined,
     });
   },
 

@@ -10,15 +10,32 @@ independently of the app.
 
 Services:
 
-- Prometheus — metrics collection and alerting rules
+- Prometheus — metrics collection and alerting rules (remote-write receiver enabled
+  for Tempo's span-metrics / service-graph series)
 - Alertmanager — alert routing to Discord
 - Grafana — dashboards for metrics, logs, and traces
 - Loki — log storage
 - Promtail — log shipping
-- Tempo — distributed tracing backend
+- Tempo — distributed tracing backend (metrics_generator pushes span-metrics into Prometheus)
 - OpenTelemetry Collector — trace ingestion (OTLP)
 - Redis Exporter — Redis metrics
-- RabbitMQ Exporter — RabbitMQ metrics
+- RabbitMQ Exporter — RabbitMQ metrics (management API)
+- Node Exporter — host CPU / memory / disk / network
+- cAdvisor — per-container CPU / memory / restarts
+- Postgres Exporter — PostgreSQL metrics
+
+## Dashboards
+
+Provisioned into the `Anak Tournaments` folder (deleting a JSON file under
+`monitoring/grafana/dashboards/` removes the dashboard — `disableDeletion: false`):
+
+| Dashboard | uid | What it shows |
+|---|---|---|
+| Application Logs (home) | `app-logs` | Log rates by level/service, errors-only stream, full-text `$search`, live stream |
+| Workers & Queues | `workers-queues` | Worker throughput/latency/errors, RabbitMQ queue depth + DLQ + consumers + publish/deliver rates, balancer job timings |
+| Gateway | `gateway-usage` | Edge RPS / 4xx-5xx / latency (total + per route), WS connections, DAU/WAU/MAU, Go runtime |
+| Tracing | `tracing-overview` | RED per service from Tempo span-metrics, service graph, TraceQL slow/error traces, logs-with-trace links |
+| Infrastructure | `infrastructure` | Host CPU/RAM/disk (+7d disk forecast), per-container resources, PostgreSQL, Redis |
 
 All monitoring services have CPU/memory limits set via `deploy.resources` so they cannot
 starve the host.
@@ -71,13 +88,23 @@ export GRAFANA_ADMIN_PASSWORD='change-me'
 export GRAFANA_PORT=3001
 export GRAFANA_ROOT_URL='http://localhost:3001'
 export TEMPO_URL='http://tempo:3200'
-
-export RABBITMQ_USER='your-rabbitmq-user'
-export RABBITMQ_PASSWORD='your-rabbitmq-password'
 ```
 
-If RabbitMQ in the application stack uses `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS`,
-set `RABBITMQ_USER` / `RABBITMQ_PASSWORD` to the same credentials before starting monitoring.
+The RabbitMQ exporter reads `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` — the **same
+variables the broker itself uses** — so with a repository-root `.env` no extra export is
+needed. Note that RabbitMQ restricts the default `guest` user to loopback connections:
+production must run the broker with non-guest credentials or the exporter (a separate
+container) will get 401s. (Dev compose mounts `monitoring/rabbitmq/dev-loopback.conf` to
+lift the restriction locally.)
+
+The Postgres exporter needs a DSN pointing **directly at PostgreSQL (port 5432), NOT at
+pgBouncer (:6432)** — transaction pooling breaks the exporter's session-level queries:
+
+```bash
+export POSTGRES_EXPORTER_DSN='postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable'
+```
+
+(Put it in the repository-root `.env` so `make monitoring-up` picks it up.)
 
 For Discord alert delivery, create a local secret file that is not committed to git:
 
@@ -178,12 +205,30 @@ service names, or the app services are not on the shared network.
 Fix: compare the targets with service names in `docker-compose.production.yml`, update
 `monitoring/prometheus/prometheus.yml`, and restart Prometheus.
 
-### RabbitMQ exporter is UP but returns no useful data
+### RabbitMQ exporter is UP but returns no useful data (`rabbitmq_up 0`)
 
-Cause: wrong RabbitMQ credentials.
+Cause: wrong RabbitMQ credentials, or the broker runs as `guest`/`guest` (RabbitMQ rejects
+`guest` on non-loopback connections, and the exporter is a separate container).
 
-Fix: set `RABBITMQ_USER` / `RABBITMQ_PASSWORD` to the application's values and restart
-`rabbitmq-exporter`.
+Fix: make sure `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` in the root `.env` match the
+broker's real (non-guest) credentials and restart `rabbitmq-exporter`.
+
+### Postgres exporter shows `pg_up 0`
+
+Cause: `POSTGRES_EXPORTER_DSN` is missing, points at pgBouncer (:6432), or the host address
+is wrong from inside the container.
+
+Fix: set a DSN that reaches PostgreSQL directly on 5432 (use `host.docker.internal` for a
+DB on the Docker host) and restart `postgres-exporter`.
+
+### Tracing dashboard is empty / service graph shows nothing
+
+Cause: Tempo's metrics_generator series are not reaching Prometheus.
+
+Fix: confirm Prometheus runs with `--web.enable-remote-write-receiver` and Tempo's
+`metrics_generator.storage.remote_write` targets `http://prometheus:9090/api/v1/write`;
+check `traces_spanmetrics_calls_total` in Prometheus after some sampled traffic
+(sampling is 10%, so quiet environments need a few requests).
 
 ### Alertmanager starts but Discord alerts are not delivered
 
@@ -197,6 +242,27 @@ Cause: Promtail does not see files in `logs/`.
 
 Fix: confirm fresh `.log` files exist under `logs/`, that `promtail` is running, and check
 `make monitoring-logs`.
+
+## Updating a running deployment
+
+After pulling monitoring/gateway changes on the production host
+(`/root/overwatch-tournaments`):
+
+```bash
+git pull
+# 1) .env sanity: RABBITMQ_DEFAULT_USER/PASS set (non-guest) + POSTGRES_EXPORTER_DSN added.
+# 2) Gateway (tracing needs a rebuild):
+docker compose -f docker-compose.production.yml build gateway
+docker compose -f docker-compose.production.yml up -d gateway
+docker compose -f docker-compose.production.yml restart nginx   # REQUIRED, else 502
+# 3) Monitoring stack:
+make monitoring-down && make monitoring-up
+```
+
+Then verify: Grafana shows exactly 5 dashboards in `OWT` (stale ones are
+auto-removed), Prometheus targets are UP (incl. app-svc/identity-svc/analytics-svc/
+analytics-worker/node/cadvisor/postgres), and the RabbitMQ panels on Workers & Queues
+have data.
 
 ## Files involved in deployment
 

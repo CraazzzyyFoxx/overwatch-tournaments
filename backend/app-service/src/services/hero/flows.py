@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid
 from shared.repository import HeroRepository
-
 from src import models, schemas
 from src.core import errors, pagination
 
@@ -71,9 +70,7 @@ async def get_hero_leaderboard(
     )
 
 
-async def to_pydantic(
-    session: AsyncSession, hero: models.Hero, entities: list[str]
-) -> schemas.HeroRead:
+async def to_pydantic(session: AsyncSession, hero: models.Hero, entities: list[str]) -> schemas.HeroRead:
     """
     Converts a Hero model instance to a Pydantic schema (HeroRead).
 

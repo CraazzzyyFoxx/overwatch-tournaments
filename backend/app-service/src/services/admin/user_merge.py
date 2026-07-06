@@ -6,40 +6,40 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import normalize_social_handle
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
 
-IDENTITY_CONFIG: dict[str, tuple[str, str, str]] = {
-    "discord": ("discord", "name", "discord_ids"),
-    "battle_tag": ("battle_tag", "battle_tag", "battle_tag_ids"),
-    "twitch": ("twitch", "name", "twitch_ids"),
-}
+PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY = "tournament.player.workspace_member_id"
+EVALUATION_RESULT_MEMBER_REFERENCE_KEY = "achievements.evaluation_result.workspace_member_id"
+OVERRIDE_MEMBER_REFERENCE_KEY = "achievements.override.workspace_member_id"
+REGISTRATION_MEMBER_REFERENCE_KEY = "balancer.registration.workspace_member_id"
 
+# achievements.evaluation_result / achievements.override moved to
+# workspace_member_id (P6), and balancer.registration followed (dbarch02
+# dropped its user_id column): none of them are generic user_id columns
+# anymore, so they are handled by dedicated workspace_member-aware
+# counters/mergers (mirroring PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY) instead
+# of living in this table. The legacy achievements.user.user_id row was
+# dropped too — its table was removed by l2g4h6i0j1k2, so it no longer needs
+# a generic reassign here.
 REFERENCE_CONFIG: tuple[tuple[str, type, str], ...] = (
-    ("tournament.player.user_id", models.Player, "user_id"),
     ("tournament.team.captain_id", models.Team, "captain_id"),
     ("matches.statistics.user_id", models.MatchStatistics, "user_id"),
     ("matches.kill_feed.killer_id", models.MatchKillFeed, "killer_id"),
     ("matches.kill_feed.victim_id", models.MatchKillFeed, "victim_id"),
     ("matches.assists.user_id", models.MatchEvent, "user_id"),
     ("matches.assists.related_user_id", models.MatchEvent, "related_user_id"),
-    ("achievements.evaluation_result.user_id", models.AchievementEvaluationResult, "user_id"),
-    ("achievements.override.user_id", models.AchievementOverride, "user_id"),
-    ("achievements.user.user_id", models.AchievementUser, "user_id"),
-    ("balancer.registration.user_id", models.BalancerRegistration, "user_id"),
     ("analytics.balance_player_snapshot.user_id", models.AnalyticsBalancePlayerSnapshot, "user_id"),
     ("log_processing.record.uploader_id", models.LogProcessingRecord, "uploader_id"),
 )
-
-OPTIONAL_REFERENCE_TABLES: dict[str, str] = {
-    "achievements.user.user_id": 'achievements."user"',
-}
 
 
 @dataclass
@@ -53,7 +53,11 @@ class MergeContext:
 
 def empty_affected_counts() -> dict[str, int]:
     counts = {key: 0 for key, _, _ in REFERENCE_CONFIG}
-    counts["auth.user_player.player_id"] = 0
+    counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = 0
+    counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = 0
+    counts[OVERRIDE_MEMBER_REFERENCE_KEY] = 0
+    counts[REGISTRATION_MEMBER_REFERENCE_KEY] = 0
+    counts["players.user.auth_user_id"] = 0
     return counts
 
 
@@ -70,19 +74,19 @@ def _build_preview_from_context(
     context: MergeContext,
     request: merge_schemas.UserMergePreviewRequest,
 ) -> merge_schemas.UserMergePreviewResponse:
-    target_identity_values = {
-        platform: {option.value for option in _build_identity_options(context.target, platform)}
-        for platform in IDENTITY_CONFIG
+    target_dup_keys = {
+        (account.provider, normalize_social_handle(account.provider, account.username))
+        for account in context.target.social_accounts
     }
     source_summary = _build_user_summary(
         context.source,
         auth_links=context.source_auth_links,
-        target_identity_values=target_identity_values,
+        target_dup_keys=target_dup_keys,
     )
     target_summary = _build_user_summary(
         context.target,
         auth_links=context.target_auth_links,
-        target_identity_values=None,
+        target_dup_keys=None,
     )
 
     has_auth_conflict = context.source_auth_links > 0 and context.target_auth_links > 0
@@ -155,16 +159,33 @@ async def execute_merge(
 
     try:
         await session.flush()
+        # tournament.player rows have no plain user-id column anymore (contract step,
+        # iwrefac07): a roster row's identity is its workspace_member_id, so moving a
+        # player's rows from source -> target means repointing each row at the
+        # target's member row in that row's own tournament's workspace (source and
+        # target may resolve to different / not-yet-existing members there). This
+        # replaces the old generic REFERENCE_CONFIG reassign for Player entirely.
+        affected_counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await _repoint_player_workspace_members(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
+        )
+        # achievements.evaluation_result / achievements.override moved to
+        # workspace_member_id (P6): each row's workspace is its own rule's
+        # workspace, so — like Player above — the merge must repoint each row
+        # at the target's workspace_member in that same workspace rather than
+        # a flat user_id reassign.
+        affected_counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await _merge_achievement_evaluation_results(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
+        )
+        affected_counts[OVERRIDE_MEMBER_REFERENCE_KEY] = await _repoint_achievement_override_workspace_members(
+            session,
+            source_user_id=context.source.id,
+            target_user_id=context.target.id,
+        )
         for reference_key, model, column_name in REFERENCE_CONFIG:
-            if not await _reference_is_available(session, reference_key):
-                continue
-            if reference_key == "achievements.evaluation_result.user_id":
-                affected_counts[reference_key] = await _merge_achievement_evaluation_results(
-                    session,
-                    source_user_id=context.source.id,
-                    target_user_id=context.target.id,
-                )
-                continue
             affected_counts[reference_key] = await _reassign_reference(
                 session,
                 model,
@@ -173,10 +194,24 @@ async def execute_merge(
                 target_user_id=context.target.id,
             )
 
-        affected_counts["auth.user_player.player_id"] = await _merge_auth_user_links(
+        # balancer.registration.workspace_member_id is ON DELETE SET NULL, and
+        # every registration still anchored on the source's workspace_member would
+        # otherwise be silently nulled out by the CASCADE from
+        # workspace_member.player_id once the source User row is deleted below.
+        # Since dbarch02 dropped registration.user_id, this repoint is the SOLE
+        # mechanism that moves registrations during a merge (the generic
+        # REFERENCE_CONFIG loop no longer touches the table) — same repoint
+        # pattern as Player/achievements above.
+        affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = await _repoint_registration_workspace_members(
             session,
             source_user_id=context.source.id,
             target_user_id=context.target.id,
+        )
+
+        affected_counts["players.user.auth_user_id"] = await _merge_auth_user_links(
+            session,
+            source=context.source,
+            target=context.target,
             source_auth_links=context.source_auth_links,
             target_auth_links=context.target_auth_links,
         )
@@ -189,7 +224,13 @@ async def execute_merge(
         await session.flush()
 
         audit = models.UserMergeAudit(
-            source_user_id=request.source_user_id,
+            # dbarch01 put an FK (players.user.id, ON DELETE SET NULL) on
+            # source_user_id, and the source row was hard-deleted above in
+            # this same transaction — referencing it here would violate the
+            # FK. The deleted id survives in
+            # preview_snapshot_json["source"]["id"] and is returned to the
+            # caller as deleted_source_user_id.
+            source_user_id=None,
             target_user_id=request.target_user_id,
             operator_auth_user_id=operator_auth_user_id,
             field_policy_json=request.field_policy.model_dump(mode="json"),
@@ -225,29 +266,62 @@ async def apply_identity_selection(
     source: models.User,
     target: models.User,
     identity_selection: merge_schemas.UserMergeIdentitySelection,
-) -> dict[str, dict[str, list[int]]]:
-    target_user_id = _resolve_merge_user_id(target)
-    result = {
-        "moved": {platform: [] for platform in IDENTITY_CONFIG},
-        "deduped": {platform: [] for platform in IDENTITY_CONFIG},
+) -> dict[str, list[int]]:
+    """Move the selected source social accounts to the target, deduping on
+    (provider, normalized handle). Moved accounts arrive non-primary; a single
+    primary per affected provider is then ensured. Unselected source accounts are
+    left on the source (and dropped when it is deleted)."""
+    target_user_id = target.id
+    selected_ids = set(identity_selection.social_account_ids)
+    moved: list[int] = []
+    deduped: list[int] = []
+    target_keys = {
+        (account.provider, normalize_social_handle(account.provider, account.username))
+        for account in target.social_accounts
     }
-    for platform, (attr_name, unique_field, selection_attr) in IDENTITY_CONFIG.items():
-        selected_ids = set(getattr(identity_selection, selection_attr))
-        source_items = list(getattr(source, attr_name))
-        target_items = list(getattr(target, attr_name))
-        target_values = {getattr(item, unique_field) for item in target_items}
-        for identity in source_items:
-            if identity.id not in selected_ids:
-                continue
-            unique_value = getattr(identity, unique_field)
-            if unique_value in target_values:
-                await session.delete(identity)
-                result["deduped"][platform].append(identity.id)
-                continue
-            identity.user_id = target_user_id
-            target_values.add(unique_value)
-            result["moved"][platform].append(identity.id)
-    return result
+    affected_providers: set[str] = set()
+
+    for account in list(source.social_accounts):
+        if account.id not in selected_ids:
+            continue
+        key = (account.provider, normalize_social_handle(account.provider, account.username))
+        if key in target_keys:
+            await session.delete(account)
+            deduped.append(account.id)
+            continue
+        account.user_id = target_user_id
+        account.is_primary = False
+        target_keys.add(key)
+        affected_providers.add(account.provider)
+        moved.append(account.id)
+
+    await session.flush()
+    for provider in affected_providers:
+        await _ensure_single_primary(session, target_user_id, provider)
+    return {"moved": moved, "deduped": deduped}
+
+
+async def _ensure_single_primary(session: AsyncSession, user_id: int, provider: str) -> None:
+    rows = (
+        (
+            await session.execute(
+                select(models.SocialAccount)
+                .where(models.SocialAccount.user_id == user_id, models.SocialAccount.provider == provider)
+                .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return
+    primaries = [row for row in rows if row.is_primary]
+    if len(primaries) == 1:
+        return
+    keep = primaries[0] if primaries else rows[0]
+    for row in rows:
+        row.is_primary = row is keep
+    await session.flush()
 
 
 async def _load_merge_context(
@@ -271,13 +345,7 @@ async def _load_merge_context(
 
 async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.User:
     result = await session.execute(
-        select(models.User)
-        .where(models.User.id == user_id)
-        .options(
-            selectinload(models.User.discord),
-            selectinload(models.User.battle_tag),
-            selectinload(models.User.twitch),
-        )
+        select(models.User).where(models.User.id == user_id).options(selectinload(models.User.social_accounts))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -289,9 +357,13 @@ async def _get_user_for_merge(session: AsyncSession, user_id: int) -> models.Use
 
 
 async def _count_auth_links(session: AsyncSession, user_id: int) -> int:
+    """0 or 1 — a player links to at most one auth user via ``auth_user_id``."""
     result = await session.execute(
-        select(func.count(models.AuthUserPlayer.id)).where(
-            models.AuthUserPlayer.player_id == user_id
+        select(func.count())
+        .select_from(models.User)
+        .where(
+            models.User.id == user_id,
+            models.User.auth_user_id.is_not(None),
         )
     )
     return int(result.scalar_one())
@@ -299,70 +371,86 @@ async def _count_auth_links(session: AsyncSession, user_id: int) -> int:
 
 async def _count_affected_rows(session: AsyncSession, source_user_id: int) -> dict[str, int]:
     counts = empty_affected_counts()
+    counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await _count_player_rows_for_source(session, source_user_id)
+    counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
+        session, models.AchievementEvaluationResult, source_user_id
+    )
+    counts[OVERRIDE_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
+        session, models.AchievementOverride, source_user_id
+    )
+    counts[REGISTRATION_MEMBER_REFERENCE_KEY] = await _count_workspace_member_rows_for_source(
+        session, models.BalancerRegistration, source_user_id
+    )
     for reference_key, model, column_name in REFERENCE_CONFIG:
-        if not await _reference_is_available(session, reference_key):
-            continue
         column = getattr(model, column_name)
         result = await session.execute(select(func.count()).select_from(model).where(column == source_user_id))
         counts[reference_key] = int(result.scalar_one())
-    result = await session.execute(
-        select(func.count()).select_from(models.AuthUserPlayer).where(
-            models.AuthUserPlayer.player_id == source_user_id
-        )
-    )
-    counts["auth.user_player.player_id"] = int(result.scalar_one())
+    counts["players.user.auth_user_id"] = await _count_auth_links(session, source_user_id)
     return counts
 
 
-async def _reference_is_available(session: AsyncSession, reference_key: str) -> bool:
-    table_name = OPTIONAL_REFERENCE_TABLES.get(reference_key)
-    if table_name is None:
-        return True
-    return await _table_exists(session, table_name)
-
-
-async def _table_exists(session: AsyncSession, table_name: str) -> bool:
+async def _count_workspace_member_rows_for_source(
+    session: AsyncSession,
+    model: type,
+    source_user_id: int,
+) -> int:
+    """Count rows of a ``workspace_member_id``-anchored model currently owned
+    by ``source_user_id`` (joining through ``WorkspaceMember.player_id``)."""
     result = await session.execute(
-        sa.text(f"SELECT to_regclass('{table_name}') IS NOT NULL")
+        select(func.count())
+        .select_from(model)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == model.workspace_member_id,
+        )
+        .where(models.WorkspaceMember.player_id == source_user_id)
     )
-    return bool(result.scalar())
+    return int(result.scalar_one())
+
+
+async def _count_player_rows_for_source(session: AsyncSession, source_user_id: int) -> int:
+    """Count ``tournament.player`` roster rows currently anchored on
+    ``source_user_id``'s ``workspace_member`` (i.e. the rows a merge would move)."""
+    result = await session.execute(
+        select(func.count())
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
+        .where(models.WorkspaceMember.player_id == source_user_id)
+    )
+    return int(result.scalar_one())
 
 
 def _build_user_summary(
     user: models.User,
     *,
     auth_links: int,
-    target_identity_values: dict[str, set[str]] | None,
+    target_dup_keys: set[tuple[str, str]] | None,
 ) -> merge_schemas.UserMergeUserSummary:
-    payload: dict[str, object] = {
-        "id": user.id,
-        "name": user.name,
-        "avatar_url": user.avatar_url,
-        "auth_links": auth_links,
-    }
-    for platform in IDENTITY_CONFIG:
-        payload[platform] = _build_identity_options(
-            user,
-            platform,
-            duplicate_values=None if target_identity_values is None else target_identity_values[platform],
-        )
-    return merge_schemas.UserMergeUserSummary(**payload)
+    return merge_schemas.UserMergeUserSummary(
+        id=user.id,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        social_accounts=_build_identity_options(user, target_dup_keys),
+        auth_links=auth_links,
+    )
 
 
 def _build_identity_options(
     user: models.User,
-    platform: str,
-    duplicate_values: set[str] | None = None,
+    duplicate_keys: set[tuple[str, str]] | None = None,
 ) -> list[merge_schemas.UserMergeIdentityOption]:
-    attr_name, unique_field, _ = IDENTITY_CONFIG[platform]
     items = []
-    for identity in getattr(user, attr_name):
-        value = getattr(identity, unique_field)
+    for account in sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)):
+        key = (account.provider, normalize_social_handle(account.provider, account.username))
         items.append(
             merge_schemas.UserMergeIdentityOption(
-                id=identity.id,
-                value=value,
-                duplicate_on_target=duplicate_values is not None and value in duplicate_values,
+                id=account.id,
+                provider=account.provider,
+                value=account.username,
+                duplicate_on_target=duplicate_keys is not None and key in duplicate_keys,
             )
         )
     return items
@@ -370,18 +458,6 @@ def _build_identity_options(
 
 def _pick_field_value(choice: str, source_value: str | None, target_value: str | None) -> str | None:
     return source_value if choice == "source" else target_value
-
-
-def _resolve_merge_user_id(user: object) -> int:
-    user_id = getattr(user, "id", None)
-    if isinstance(user_id, int):
-        return user_id
-    for attr_name, _, _ in IDENTITY_CONFIG.values():
-        for identity in getattr(user, attr_name, []) or []:
-            identity_user_id = getattr(identity, "user_id", None)
-            if isinstance(identity_user_id, int):
-                return identity_user_id
-    raise ValueError("Could not resolve merge target user id.")
 
 
 def _validate_merge_pair(source_user_id: int, target_user_id: int) -> None:
@@ -408,18 +484,61 @@ async def _reassign_reference(
     target_user_id: int,
 ) -> int:
     column = getattr(model, column_name)
-    result = await session.execute(
-        update(model)
-        .where(column == source_user_id)
-        .values({column_name: target_user_id})
-    )
+    result = await session.execute(update(model).where(column == source_user_id).values({column_name: target_user_id}))
     return int(result.rowcount or 0)
 
 
+async def _repoint_player_workspace_members(
+    session: AsyncSession,
+    *,
+    source_user_id: int,
+    target_user_id: int,
+) -> int:
+    """Move every ``tournament.player`` roster row owned by ``source_user_id`` to
+    ``target_user_id`` and return the number of rows moved.
+
+    Contract step (iwrefac07) dropped ``tournament.player.user_id``, so
+    ``workspace_member_id`` is a roster row's only identity anchor and this is
+    the sole mechanism that moves ``Player`` rows during a merge (previously
+    split between a generic ``user_id`` reassign and a workspace_member
+    follow-up). A row is found by joining to the ``workspace_member`` it
+    currently points at and checking that member's ``player_id`` against the
+    source; each row's workspace is that row's own tournament's workspace
+    (``tournament.workspace_id``), and it is repointed at the target's
+    ``workspace_member`` in that same workspace — idempotently created if it
+    doesn't exist yet.
+    """
+    rows = (
+        await session.execute(
+            select(models.Player.id, models.Player.tournament_id, models.Tournament.workspace_id)
+            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
+            .where(models.WorkspaceMember.player_id == source_user_id)
+        )
+    ).all()
+
+    workspace_member_id_by_workspace: dict[int, int] = {}
+    moved = 0
+    for player_id, _tournament_id, workspace_id in rows:
+        if workspace_id not in workspace_member_id_by_workspace:
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
+            workspace_member_id_by_workspace[workspace_id] = member.id
+
+        result = await session.execute(
+            update(models.Player)
+            .where(models.Player.id == player_id)
+            .values(workspace_member_id=workspace_member_id_by_workspace[workspace_id])
+        )
+        moved += int(result.rowcount or 0)
+
+    return moved
+
+
 async def _delete_source_user_row(session: AsyncSession, source_user_id: int) -> None:
-    await session.execute(
-        delete(models.User).where(models.User.id == source_user_id)
-    )
+    await session.execute(delete(models.User).where(models.User.id == source_user_id))
 
 
 async def _merge_achievement_evaluation_results(
@@ -428,43 +547,215 @@ async def _merge_achievement_evaluation_results(
     source_user_id: int,
     target_user_id: int,
 ) -> int:
-    source_result = sa.orm.aliased(models.AchievementEvaluationResult)
-    target_result = sa.orm.aliased(models.AchievementEvaluationResult)
-    duplicate_source_ids = (
-        select(source_result.id)
-        .where(
-            source_result.user_id == source_user_id,
-            sa.exists(
-                select(target_result.id).where(
-                    target_result.user_id == target_user_id,
-                    target_result.achievement_rule_id == source_result.achievement_rule_id,
-                    target_result.tournament_id.is_not_distinct_from(source_result.tournament_id),
-                    target_result.match_id.is_not_distinct_from(source_result.match_id),
+    """Repoint every ``achievements.evaluation_result`` row owned by
+    ``source_user_id`` onto the target's ``workspace_member`` and return the
+    number of rows moved (deletes + updates).
+
+    P6 moved this table onto ``workspace_member_id``: a row's workspace is
+    its own rule's workspace (``AchievementRule.workspace_id``), so — like
+    ``_repoint_player_workspace_members`` — the target's member is
+    resolved/created per workspace rather than assumed global. Rows that
+    would collide with an existing target row on the unique key
+    ``(achievement_rule_id, workspace_member_id, tournament_id, match_id)``
+    are dropped instead of updated (the target already qualified).
+    """
+    source_member = sa.orm.aliased(models.WorkspaceMember, name="source_member")
+    rows = (
+        await session.execute(
+            select(
+                models.AchievementEvaluationResult.id,
+                models.AchievementEvaluationResult.achievement_rule_id,
+                models.AchievementEvaluationResult.tournament_id,
+                models.AchievementEvaluationResult.match_id,
+                models.AchievementRule.workspace_id,
+            )
+            .select_from(models.AchievementEvaluationResult)
+            .join(
+                source_member,
+                source_member.id == models.AchievementEvaluationResult.workspace_member_id,
+            )
+            .join(
+                models.AchievementRule,
+                models.AchievementRule.id == models.AchievementEvaluationResult.achievement_rule_id,
+            )
+            .where(source_member.player_id == source_user_id)
+        )
+    ).all()
+
+    target_member_id_by_workspace: dict[int, int] = {}
+    moved = 0
+    for row_id, rule_id, tournament_id, match_id, workspace_id in rows:
+        if workspace_id not in target_member_id_by_workspace:
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
+            target_member_id_by_workspace[workspace_id] = member.id
+        target_member_id = target_member_id_by_workspace[workspace_id]
+
+        duplicate_exists = await session.scalar(
+            select(
+                sa.exists(
+                    select(models.AchievementEvaluationResult.id).where(
+                        models.AchievementEvaluationResult.workspace_member_id == target_member_id,
+                        models.AchievementEvaluationResult.achievement_rule_id == rule_id,
+                        models.AchievementEvaluationResult.tournament_id.is_not_distinct_from(tournament_id),
+                        models.AchievementEvaluationResult.match_id.is_not_distinct_from(match_id),
+                    )
                 )
-            ),
+            )
         )
-    )
-    delete_result = await session.execute(
-        delete(models.AchievementEvaluationResult).where(
-            models.AchievementEvaluationResult.id.in_(duplicate_source_ids)
+        if duplicate_exists:
+            result = await session.execute(
+                delete(models.AchievementEvaluationResult).where(models.AchievementEvaluationResult.id == row_id)
+            )
+        else:
+            result = await session.execute(
+                update(models.AchievementEvaluationResult)
+                .where(models.AchievementEvaluationResult.id == row_id)
+                .values(workspace_member_id=target_member_id)
+            )
+        moved += int(result.rowcount or 0)
+
+    return moved
+
+
+async def _repoint_achievement_override_workspace_members(
+    session: AsyncSession,
+    *,
+    source_user_id: int,
+    target_user_id: int,
+) -> int:
+    """Move every ``achievements.override`` row owned by ``source_user_id``
+    onto the target's ``workspace_member`` and return the number of rows
+    moved.
+
+    Mirrors ``_merge_achievement_evaluation_results`` (each row's workspace
+    comes from its own rule), but ``AchievementOverride`` carries no unique
+    constraint on ``(rule, workspace_member, tournament, match)``, so rows
+    are simply repointed — no dedupe/delete branch is needed.
+    """
+    source_member = sa.orm.aliased(models.WorkspaceMember, name="source_override_member")
+    rows = (
+        await session.execute(
+            select(models.AchievementOverride.id, models.AchievementRule.workspace_id)
+            .select_from(models.AchievementOverride)
+            .join(
+                source_member,
+                source_member.id == models.AchievementOverride.workspace_member_id,
+            )
+            .join(
+                models.AchievementRule,
+                models.AchievementRule.id == models.AchievementOverride.achievement_rule_id,
+            )
+            .where(source_member.player_id == source_user_id)
         )
-    )
-    update_result = await session.execute(
-        update(models.AchievementEvaluationResult)
-        .where(models.AchievementEvaluationResult.user_id == source_user_id)
-        .values(user_id=target_user_id)
-    )
-    return int(delete_result.rowcount or 0) + int(update_result.rowcount or 0)
+    ).all()
+
+    target_member_id_by_workspace: dict[int, int] = {}
+    moved = 0
+    for row_id, workspace_id in rows:
+        if workspace_id not in target_member_id_by_workspace:
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
+            target_member_id_by_workspace[workspace_id] = member.id
+
+        result = await session.execute(
+            update(models.AchievementOverride)
+            .where(models.AchievementOverride.id == row_id)
+            .values(workspace_member_id=target_member_id_by_workspace[workspace_id])
+        )
+        moved += int(result.rowcount or 0)
+
+    return moved
+
+
+async def _repoint_registration_workspace_members(
+    session: AsyncSession,
+    *,
+    source_user_id: int,
+    target_user_id: int,
+) -> int:
+    """Move every ``balancer.registration`` row anchored on ``source_user_id``'s
+    ``workspace_member`` onto the target's ``workspace_member`` and return the
+    number of rows moved.
+
+    Mirrors ``_repoint_player_workspace_members`` (each row's workspace comes
+    from its own tournament, via ``Tournament.workspace_id``, so the target's
+    member is resolved/created per workspace). Registrations that are not
+    member-anchored (``workspace_member_id IS NULL`` -- sheet-import rows) are
+    excluded by the join and are correctly left untouched/NULL.
+
+    ``balancer.registration.workspace_member_id`` has a live unique constraint
+    on ``(tournament_id, workspace_member_id)``, so a row is skipped (left
+    pointed at the source's member) if the target already has a live
+    registration in that same tournament -- repointing it would collide. Such
+    a row loses its member anchor when the source's ``User`` row is deleted
+    afterwards (``workspace_member`` cascades, and this FK is
+    ``ON DELETE SET NULL``), degrading to an unlinked registration rather than
+    raising an ``IntegrityError`` or silently dropping the target's row.
+    """
+    rows = (
+        await session.execute(
+            select(
+                models.BalancerRegistration.id,
+                models.BalancerRegistration.tournament_id,
+                models.Tournament.workspace_id,
+            )
+            .select_from(models.BalancerRegistration)
+            .join(
+                models.Tournament,
+                models.Tournament.id == models.BalancerRegistration.tournament_id,
+            )
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.BalancerRegistration.workspace_member_id,
+            )
+            .where(models.WorkspaceMember.player_id == source_user_id)
+        )
+    ).all()
+
+    target_member_id_by_workspace: dict[int, int] = {}
+    moved = 0
+    for registration_id, tournament_id, workspace_id in rows:
+        if workspace_id not in target_member_id_by_workspace:
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=target_user_id)
+            target_member_id_by_workspace[workspace_id] = member.id
+        target_member_id = target_member_id_by_workspace[workspace_id]
+
+        collides_with_target = await session.scalar(
+            select(
+                sa.exists(
+                    select(models.BalancerRegistration.id).where(
+                        models.BalancerRegistration.tournament_id == tournament_id,
+                        models.BalancerRegistration.workspace_member_id == target_member_id,
+                        models.BalancerRegistration.deleted_at.is_(None),
+                        models.BalancerRegistration.id != registration_id,
+                    )
+                )
+            )
+        )
+        if collides_with_target:
+            continue
+
+        result = await session.execute(
+            update(models.BalancerRegistration)
+            .where(models.BalancerRegistration.id == registration_id)
+            .values(workspace_member_id=target_member_id)
+        )
+        moved += int(result.rowcount or 0)
+
+    return moved
 
 
 async def _merge_auth_user_links(
     session: AsyncSession,
     *,
-    source_user_id: int,
-    target_user_id: int,
+    source: models.User,
+    target: models.User,
     source_auth_links: int,
     target_auth_links: int,
 ) -> int:
+    """Move ``players.user.auth_user_id`` from the losing (source) player to the
+    surviving (target) player. A player keeps at most one ``auth_user_id`` (the
+    column is unique), so the source must be unlinked before the target can be
+    linked — never both set to the same auth_user_id at once."""
     if source_auth_links == 0:
         return 0
     if target_auth_links > 0:
@@ -472,12 +763,12 @@ async def _merge_auth_user_links(
             status_code=status.HTTP_409_CONFLICT,
             detail="Merge blocked: target profile already has auth links.",
         )
-    result = await session.execute(
-        update(models.AuthUserPlayer)
-        .where(models.AuthUserPlayer.player_id == source_user_id)
-        .values(player_id=target_user_id)
-    )
-    return int(result.rowcount or 0)
+    auth_user_id = source.auth_user_id
+    source.auth_user_id = None
+    await session.flush()
+    target.auth_user_id = auth_user_id
+    await session.flush()
+    return 1
 
 
 async def _invalidate_merge_caches(
@@ -502,11 +793,7 @@ async def _invalidate_merge_caches(
                 f"backend:*teammates*{user_id}*",
             }
         )
-    for identity in preview.source.discord + preview.target.discord:
-        patterns.add(f"backend:*{identity.value}*")
-    for identity in preview.source.twitch + preview.target.twitch:
-        patterns.add(f"backend:*{identity.value}*")
-    for identity in preview.source.battle_tag + preview.target.battle_tag:
+    for identity in preview.source.social_accounts + preview.target.social_accounts:
         patterns.add(f"backend:*{identity.value}*")
         patterns.add(f"backend:*{identity.value.replace('#', '-')}*")
     for pattern in patterns:

@@ -1,2 +1,1 @@
 """Durable tournament computation jobs."""
-

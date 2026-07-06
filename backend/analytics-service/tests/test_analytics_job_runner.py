@@ -121,11 +121,7 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
                 await job_runner._run_compute(session, None, job)
 
         session.rollback.assert_awaited()
-        failed_updates = [
-            call
-            for call in update_progress.await_args_list
-            if call.kwargs.get("state") == "failed"
-        ]
+        failed_updates = [call for call in update_progress.await_args_list if call.kwargs.get("state") == "failed"]
         self.assertEqual(1, len(failed_updates))
         self.assertEqual("v1_recalc", failed_updates[0].kwargs["stage"])
 
@@ -155,12 +151,6 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
 class AnalyticsJobServiceTests(TestCase):
     def test_failed_progress_stage_marks_job_as_reconcilable(self) -> None:
         self.assertTrue(
-            job_service._progress_has_failed_stage(
-                {"v2_inference": {"state": "failed", "detail": {"error": "boom"}}}
-            )
+            job_service._progress_has_failed_stage({"v2_inference": {"state": "failed", "detail": {"error": "boom"}}})
         )
-        self.assertFalse(
-            job_service._progress_has_failed_stage(
-                {"v2_inference": {"state": "running"}}
-            )
-        )
+        self.assertFalse(job_service._progress_has_failed_stage({"v2_inference": {"state": "running"}}))

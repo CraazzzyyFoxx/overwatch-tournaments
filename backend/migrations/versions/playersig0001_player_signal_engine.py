@@ -49,12 +49,8 @@ def upgrade() -> None:
         sa.Column("reasons", sa.JSON(), nullable=False),
         sa.Column("evidence", sa.JSON(), nullable=True),
         sa.Column("source_encounter_id", sa.Integer(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["tournament.player.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["player_id"], ["tournament.player.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["source_encounter_id"],
             ["tournament.encounter.id"],

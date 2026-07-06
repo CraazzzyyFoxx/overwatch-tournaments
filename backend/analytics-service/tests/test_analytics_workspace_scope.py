@@ -49,9 +49,7 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
 
         self.assertTrue(frame.empty)
         get_analytics.assert_awaited_once_with(session, workspace_id=5, workspace_ids=None)
-        get_tournament_version_ids.assert_awaited_once_with(
-            session, workspace_id=5, workspace_ids=None
-        )
+        get_tournament_version_ids.assert_awaited_once_with(session, workspace_id=5, workspace_ids=None)
 
     async def test_compute_openskill_shift_map_passes_workspace_scope_to_match_history(self) -> None:
         session = SimpleNamespace()
@@ -114,9 +112,7 @@ class AnalyticsWorkspaceScopeTests(IsolatedAsyncioTestCase):
             workspace_id=5,
             workspace_ids=None,
         )
-        get_matches.assert_awaited_once_with(
-            session, 3, 7, workspace_id=5, workspace_ids=None
-        )
+        get_matches.assert_awaited_once_with(session, 3, 7, workspace_id=5, workspace_ids=None)
 
 
 class LookbackWindowTests(IsolatedAsyncioTestCase):
@@ -147,5 +143,3 @@ class LookbackWindowTests(IsolatedAsyncioTestCase):
         start = await service.lookback_start_tournament_id(session, 73, 10)
 
         self.assertEqual(73, start)
-
-

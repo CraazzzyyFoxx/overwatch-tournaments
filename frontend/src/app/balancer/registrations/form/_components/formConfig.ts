@@ -22,6 +22,8 @@ export interface BuiltInFieldDef {
   supportsRequired?: boolean;
   /** `top_heroes`: shows a numeric "max heroes" input (default 5). */
   supportsMaxHeroes?: boolean;
+  /** Identity fields: shows a "Verified" toggle (require an OAuth-verified account). */
+  supportsVerified?: boolean;
 }
 
 export const DEFAULT_BATTLE_TAG_REGEX = String.raw`([\w0-9]{2,12}#[0-9]{4,})`;
@@ -38,6 +40,7 @@ export const BUILT_IN_FIELDS: BuiltInFieldDef[] = [
     defaultEnabled: true,
     defaultRequired: true,
     supportsValidation: true,
+    supportsVerified: true,
     defaultValidation: {
       regex: DEFAULT_BATTLE_TAG_REGEX,
       error_message: "BattleTag must match Player#1234.",
@@ -62,6 +65,7 @@ export const BUILT_IN_FIELDS: BuiltInFieldDef[] = [
     defaultEnabled: true,
     defaultRequired: false,
     supportsValidation: true,
+    supportsVerified: true,
     defaultValidation: {
       regex: DEFAULT_DISCORD_REGEX,
       error_message: "Discord username must contain 2-32 lowercase letters, digits, underscores, or dots.",
@@ -74,6 +78,7 @@ export const BUILT_IN_FIELDS: BuiltInFieldDef[] = [
     defaultEnabled: true,
     defaultRequired: false,
     supportsValidation: true,
+    supportsVerified: true,
     defaultValidation: {
       regex: DEFAULT_TWITCH_REGEX,
       error_message: "Twitch channel name must contain 4-25 lowercase letters, digits, or underscores.",

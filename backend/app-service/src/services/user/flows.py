@@ -1,9 +1,10 @@
-import asyncio
 import typing
-from datetime import UTC, datetime
 from statistics import mean
 
+import sqlalchemy as sa
 from cashews import cache
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import (
@@ -14,18 +15,14 @@ from shared.services.division_grid_resolution import (
     resolve_tournament_division,
     resolve_workspace_division,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
-from src.core import config, enums, errors, pagination, utils
+from src.core import config, enums, errors, pagination
 from src.core.workspace import get_division_grid_version
 from src.services.hero import flows as hero_flows
 from src.services.map import flows as map_flows
 from src.services.statistics import service as statistics_service
 
-from . import _mappers, _repositories
-
-from . import service
+from . import _mappers, _repositories, service
 
 tournament_stats = [
     enums.LogStatsName.HeroDamageDealt,
@@ -51,9 +48,7 @@ overview_hero_metrics_order = [
 _METRIC_DIRECTION_MAP: dict[str, bool] = {
     key: higher_is_better for key, _label, higher_is_better in service.COMPARE_METRIC_DEFINITIONS
 }
-_METRIC_LABEL_MAP: dict[str, str] = {
-    key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS
-}
+_METRIC_LABEL_MAP: dict[str, str] = {key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS}
 
 
 def _build_baseline_average_row(rows: list[dict[str, typing.Any]]) -> dict[str, float | None]:
@@ -115,51 +110,53 @@ def _compute_better_worse(
     return "better" if subject < baseline else "worse"
 
 
-async def to_pydantic(session: AsyncSession, user: models.User, entities: list[str]) -> schemas.UserRead:
+_IDENTITY_ENTITIES = ("social_accounts", "battle_tag", "discord", "twitch")
+
+
+async def to_pydantic(
+    session: AsyncSession, user: models.User, entities: list[str], *, visible_only: bool = False
+) -> schemas.UserRead:
+    """Convert a `User` to ``UserRead``. Identities come from the unified
+    ``user.social_accounts`` relationship and are only accessed (and serialized)
+    when an identity entity was requested — and therefore eager-loaded — so this
+    never triggers a lazy load outside the async greenlet. The legacy entity
+    tokens (``battle_tag``/``discord``/``twitch``) are still honored as triggers
+    for backward compatibility with existing callers.
+
+    ``visible_only`` is set by public-facing reads (profile, list): accounts the
+    owner has hidden from the public profile (no global visibility row) are
+    dropped. Admin/self reads leave it False so they see every account.
     """
-    Converts a `User` model instance to a Pydantic `UserRead` schema, optionally including related entities.
+    social_accounts: list[schemas.SocialAccountRead] = []
+    if any(name in entities for name in _IDENTITY_ENTITIES):
+        accounts = sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id))
+        if visible_only:
+            accounts = [account for account in accounts if _is_globally_visible(account)]
+        social_accounts = [_social_account_read(account) for account in accounts]
+    return schemas.UserRead(id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts)
 
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-        user: The `User` model instance to convert.
-        entities: A list of strings representing the names of related entities to include.
 
-    Returns:
-        A `UserRead` schema instance.
-    """
-    battle_tags = []
-    twitch = []
-    discord = []
+def _is_globally_visible(account: models.SocialAccount) -> bool:
+    """True when the account is shown on the public profile (has a global,
+    workspace-less visibility row). Fail-open when ``visibilities`` isn't
+    eager-loaded so a read path that forgot to load it never silently hides
+    everything — mirrors the ``visible_global=True`` default in the read model."""
+    if "visibilities" in sa.inspect(account).unloaded:
+        return True
+    return any(v.workspace_id is None for v in account.visibilities)
 
-    unresolved = datetime(1, 1, 1, tzinfo=UTC)
-    if "battle_tag" in entities:
-        battle_tags = [schemas.UserBattleTagRead.model_validate(tag, from_attributes=True) for tag in user.battle_tag]
-    if "twitch" in entities:
-        twitch = [
-            schemas.UserTwitchRead.model_validate(twitch, from_attributes=True)
-            for twitch in sorted(
-                user.twitch,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
-            )
-        ]
-    if "discord" in entities:
-        discord = [
-            schemas.UserDiscordRead.model_validate(discord, from_attributes=True)
-            for discord in sorted(
-                user.discord,
-                key=lambda x: unresolved if x.updated_at is None else x.updated_at,
-                reverse=True,
-            )
-        ]
 
-    return schemas.UserRead(
-        id=user.id,
-        name=user.name,
-        battle_tag=battle_tags,
-        twitch=twitch,
-        discord=discord,
-    )
+def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccountRead:
+    """Serialize a social account, including display-visibility scopes when the
+    ``visibilities`` relationship is eager-loaded (admin profile dialog). When it
+    isn't loaded we leave the defaults (``visible_global=True``) and never touch
+    the relationship — avoiding a lazy load outside the async greenlet."""
+    read = schemas.SocialAccountRead.model_validate(account, from_attributes=True)
+    if "visibilities" not in sa.inspect(account).unloaded:
+        scopes = list(account.visibilities)
+        read.visible_global = any(v.workspace_id is None for v in scopes)
+        read.visible_workspace_ids = sorted({v.workspace_id for v in scopes if v.workspace_id is not None})
+    return read
 
 
 async def get(session: AsyncSession, user_id: int, entities: list[str]) -> models.User:
@@ -212,7 +209,7 @@ async def get_by_battle_tag(session: AsyncSession, battle_tag: str, entities: li
                 )
             ],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_by_discord(session: AsyncSession, discord: str, entities: list[str]) -> schemas.UserRead:
@@ -236,7 +233,7 @@ async def get_by_discord(session: AsyncSession, discord: str, entities: list[str
             status_code=400,
             detail=[errors.ApiExc(code="not_found", msg=f"User with discord {discord} not found.")],
         )
-    return await to_pydantic(session, user, entities)
+    return await to_pydantic(session, user, entities, visible_only=True)
 
 
 async def get_all(
@@ -257,7 +254,7 @@ async def get_all(
         page=params.page,
         per_page=params.per_page,
         total=total,
-        results=[await to_pydantic(session, user, params.entities) for user in users],
+        results=[await to_pydantic(session, user, params.entities, visible_only=True) for user in users],
     )
 
 
@@ -280,7 +277,7 @@ async def get_overview(
             ],
         )
 
-    users, total = await service.get_overview_users(session, params, grid)
+    users, total = await service.get_overview_users(session, params, grid, workspace_id=workspace_id)
     if not users:
         return pagination.Paginated(
             page=params.page,
@@ -290,12 +287,12 @@ async def get_overview(
         )
 
     user_ids = [user.id for user in users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
     tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     rows: list[schemas.UserOverviewRow] = []
     for user in users:
@@ -372,6 +369,7 @@ async def get_overview_stats(
     params: "schemas.UserOverviewStatsQueryParams",
     *,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> "schemas.UserOverviewStats":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -391,6 +389,7 @@ async def get_overview_stats(
         div_max=params.div_max,
         query=params.query,
         grid=grid,
+        workspace_id=workspace_id,
     )
     return schemas.UserOverviewStats(**payload)
 
@@ -401,6 +400,7 @@ async def get_catalog(
     *,
     grid: DivisionGrid,
     normalizer: DivisionGridNormalizer | None = None,
+    workspace_id: int | None = None,
 ) -> "schemas.UserCatalogResponse":
     if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
         raise errors.ApiHTTPException(
@@ -423,6 +423,7 @@ async def get_catalog(
         per_letter=params.per_letter,
         max_letters=params.max_letters,
         grid=grid,
+        workspace_id=workspace_id,
     )
 
     flat_users = [user for _letter, bucket in letters_with_users for user in bucket]
@@ -434,12 +435,12 @@ async def get_catalog(
         )
 
     user_ids = [user.id for user in flat_users]
-    raw_roles_map = await service.get_overview_role_divisions(session, user_ids)
-    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids)
-    achievements_count_map = await service.get_overview_achievements_count(session, user_ids)
-    averages_map = await service.get_overview_averages(session, user_ids)
-    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3)
-    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map)
+    raw_roles_map = await service.get_overview_role_divisions(session, user_ids, workspace_id=workspace_id)
+    tournaments_count_map = await service.get_overview_tournaments_count(session, user_ids, workspace_id=workspace_id)
+    achievements_count_map = await service.get_overview_achievements_count(session, user_ids, workspace_id=workspace_id)
+    averages_map = await service.get_overview_averages(session, user_ids, workspace_id=workspace_id)
+    top_heroes_map = await service.get_overview_top_heroes(session, user_ids, limit=3, workspace_id=workspace_id)
+    hero_metrics_map = await service.get_overview_top_hero_metrics(session, top_heroes_map, workspace_id=workspace_id)
 
     catalog_letters: list[schemas.UserCatalogLetter] = []
     for letter_label, users in letters_with_users:
@@ -815,7 +816,7 @@ async def search_by_name(session: AsyncSession, name: str, fields: list[str]) ->
         A `UserSearch` schema instance.
     """
     users = await service.search_by_name(session, name, fields)
-    return [schemas.UserSearch(id=user.user_id, name=user.battle_tag) for user in users]
+    return [schemas.UserSearch(id=user.user_id, name=user.username) for user in users]
 
 
 async def get_read(session: AsyncSession, user_id: int, entities: list[str]) -> schemas.UserRead:
@@ -1030,9 +1031,7 @@ async def get_tournaments(
 
         if match:
             matches_cache[team.id][encounter.id].append(
-                _mappers.to_match_with_user_stats(
-                    match, performance=performance, heroes=heroes
-                )
+                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
             )
 
     for team_id, encounter_dict in encounters_cache.items():
@@ -1061,7 +1060,7 @@ async def get_tournaments(
         )
 
         for player in team.players:
-            if player.user_id == user.id:
+            if player.workspace_member is not None and player.workspace_member.player_id == user.id:
                 user_role = player.role
                 user_division = resolve_tournament_division(
                     player.rank,
@@ -1081,10 +1080,7 @@ async def get_tournaments(
             else None
         )
 
-        players_read = [
-            _mappers.to_user_tournament_player(player, grid=tournament_grid)
-            for player in team.players
-        ]
+        players_read = [_mappers.to_user_tournament_player(player, grid=tournament_grid) for player in team.players]
 
         tournament = schemas.UserTournament(
             id=team.tournament.id,
@@ -1128,9 +1124,7 @@ async def get_tournament_with_stats(
         A `UserTournamentWithStats` schema instance if found, otherwise `None`.
     """
     user = await get(session, id, [])
-    player = await _repositories.get_player_by_user_and_tournament(
-        session, user.id, tournament_id
-    )
+    player = await _repositories.get_player_by_user_and_tournament(session, user.id, tournament_id)
     if player is None:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -1181,6 +1175,7 @@ async def get_tournament_with_stats(
             player.rank,
             tournament_grid=grid,
         ),
+        division_grid_version=_mappers._division_grid_version(team.tournament),
         closeness=round(statistics[2], 2) if statistics[2] else 0,
         role=player.role,
         maps=statistics[0] + statistics[1] if statistics[0] else 0,
@@ -1215,7 +1210,9 @@ async def get_heroes(
     requested_stats = set(stats or [])
     stats_filter = list(requested_stats) if requested_stats else None
 
-    user_stats = await service.get_statistics_by_heroes(session, user.id, stats_filter, tournament_id=tournament_id, workspace_id=workspace_id)
+    user_stats = await service.get_statistics_by_heroes(
+        session, user.id, stats_filter, tournament_id=tournament_id, workspace_id=workspace_id
+    )
     if stats_filter:
         all_stats = await service.get_statistics_by_heroes_all_values_filtered(session, stats_filter)
     else:
@@ -1291,7 +1288,10 @@ async def get_heroes(
 
 
 async def get_best_teammates(
-    session: AsyncSession, id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None,
+    session: AsyncSession,
+    id: int,
+    params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.UserBestTeammate]:
     """
     Retrieves a paginated list of a user's best teammates, including win rate, tournaments played together,
@@ -1368,9 +1368,7 @@ async def get_encounters_by_user(
 
         if match:
             matches_cache[encounter.id].append(
-                _mappers.to_match_with_user_stats(
-                    match, performance=performance, heroes=heroes
-                )
+                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
             )
 
     for encounter_id, encounter in encounters_cache.items():
@@ -1401,9 +1399,7 @@ async def get_matches_summary(
     sidebars, aggregated over ALL of the user's encounters (not the current
     page, which is what the old client-side computation was limited to)."""
     user = await get(session, user_id, [])
-    opponent_rows = await _repositories.get_user_opponents(
-        session, user.id, workspace_id, limit=opponents_limit
-    )
+    opponent_rows = await _repositories.get_user_opponents(session, user.id, workspace_id, limit=opponents_limit)
     stage_rows = await _repositories.get_user_stage_breakdown(session, user.id, workspace_id)
 
     stages = {kind: schemas.UserStageRecord(w=0, l=0) for kind in ("group", "playoffs", "finals")}

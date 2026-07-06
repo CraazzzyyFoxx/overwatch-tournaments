@@ -4,8 +4,8 @@ import typing
 
 from loguru import logger
 
-from src.services.balancer.algorithm.input_roles import resolve_input_role_name
 from src.services.balancer.algorithm.entities import Player
+from src.services.balancer.algorithm.input_roles import resolve_input_role_name
 
 
 def parse_player_node(

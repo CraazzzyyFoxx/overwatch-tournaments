@@ -22,7 +22,6 @@ from shared.core.enums import (
     DraftRole,
     DraftStatus,
 )
-
 from src.schemas.base import BaseRead
 
 __all__ = (
@@ -170,6 +169,7 @@ class DraftPickOverrideRequest(BaseModel):
     expected_version: int
     player_id: int | None = None
     draft_team_id: int | None = None
+    target_role: DraftRole | None = None
     note: str | None = None
 
 
@@ -202,7 +202,9 @@ class DraftPlayerRead(BaseRead):
     is_captain: bool
     drafted_by_team_id: int | None
     secondary_roles_json: list[str] | None = None
-    anomaly_flags: dict[str, Any] = Field(default_factory=dict)
+    role_ranks: dict[str, int] = Field(default_factory=dict)
+    role_top_heroes: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    additional_info: dict[str, Any] = Field(default_factory=dict)
 
 
 class DraftPickRead(BaseRead):
@@ -214,6 +216,7 @@ class DraftPickRead(BaseRead):
     pick_in_round: int
     draft_team_id: int
     target_role: str | None
+    target_rank_value: int | None
     status: DraftPickStatus
     picked_player_id: int | None
     picked_by_user_id: int | None

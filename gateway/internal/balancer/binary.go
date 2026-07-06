@@ -42,6 +42,7 @@ func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
@@ -73,6 +74,7 @@ func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	attachQuery(data, r) // forward workspace_id (and any other query param)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return
@@ -164,7 +166,8 @@ func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string,
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(success)
-	if len(env.Data) > 0 && string(env.Data) != "null" {
+	// Relay a literal JSON `null` rather than an empty body (see edge/dispatch.go).
+	if len(env.Data) > 0 {
 		_, _ = w.Write(env.Data)
 	}
 }

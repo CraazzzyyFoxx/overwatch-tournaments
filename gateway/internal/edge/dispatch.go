@@ -234,7 +234,12 @@ func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(success)
-	if success != http.StatusNoContent && len(env.Data) > 0 && string(env.Data) != "null" {
+	// Relay the envelope data as-is, including a literal JSON `null` for endpoints
+	// whose response_model is `X | None` and resolved to None. Suppressing the
+	// body here produced a 200 with content-length 0, which is not valid JSON and
+	// made callers' response.json() throw "Unexpected end of JSON input". 204
+	// genuinely carries no body and is still skipped.
+	if success != http.StatusNoContent && len(env.Data) > 0 {
 		_, _ = w.Write(env.Data)
 	}
 }

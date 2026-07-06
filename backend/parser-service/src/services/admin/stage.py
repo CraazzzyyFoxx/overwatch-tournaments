@@ -2,19 +2,17 @@
 
 from collections.abc import Sequence
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
-from shared.core import enums
-
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.schemas.admin import stage as admin_schemas
 from src.services.standings import recalculation as standings_recalculation
-from src.services.standings import swiss_auto_round
 
 GROUPED_GENERATION_STAGE_TYPES = {
     enums.StageType.ROUND_ROBIN,
@@ -30,9 +28,7 @@ async def get_stage(session: AsyncSession, stage_id: int) -> models.Stage:
     result = await session.execute(
         select(models.Stage)
         .where(models.Stage.id == stage_id)
-        .options(
-            selectinload(models.Stage.items).selectinload(models.StageItem.inputs)
-        )
+        .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
     )
     stage = result.scalar_one_or_none()
     if not stage:
@@ -55,29 +51,23 @@ async def get_stage_item(session: AsyncSession, stage_item_id: int) -> models.St
     return item
 
 
-async def get_stages_by_tournament(
-    session: AsyncSession, tournament_id: int
-) -> list[models.Stage]:
+async def get_stages_by_tournament(session: AsyncSession, tournament_id: int) -> list[models.Stage]:
     result = await session.execute(
         select(models.Stage)
         .where(models.Stage.tournament_id == tournament_id)
-        .options(
-            selectinload(models.Stage.items).selectinload(models.StageItem.inputs)
-        )
+        .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
         .order_by(models.Stage.order)
     )
     return list(result.scalars().all())
 
 
-async def get_stage_progress(
-    session: AsyncSession, tournament_id: int
-) -> list[dict]:
+async def get_stage_progress(session: AsyncSession, tournament_id: int) -> list[dict]:
     """Return per-stage and per-stage_item progress (completed / total
     encounters). Used by admin UI to render the "Group A — 8/10 done" badge
     and to warn before activating a playoff with pending group matches.
     """
     # Import locally to avoid cyclic module-load with standings service.
-    from src.services.standings import service as standings_service  # noqa: WPS433
+    from src.services.standings import service as standings_service
 
     stages_result = await session.execute(
         select(models.Stage)
@@ -147,12 +137,8 @@ async def get_stage_progress(
     return output
 
 
-async def create_stage(
-    session: AsyncSession, tournament_id: int, data: admin_schemas.StageCreate
-) -> models.Stage:
-    result = await session.execute(
-        select(models.Tournament).where(models.Tournament.id == tournament_id)
-    )
+async def create_stage(session: AsyncSession, tournament_id: int, data: admin_schemas.StageCreate) -> models.Stage:
+    result = await session.execute(select(models.Tournament).where(models.Tournament.id == tournament_id))
     tournament = result.scalar_one_or_none()
     if not tournament:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -164,9 +150,7 @@ async def create_stage(
     return await get_stage(session, stage.id)
 
 
-async def update_stage(
-    session: AsyncSession, stage_id: int, data: admin_schemas.StageUpdate
-) -> models.Stage:
+async def update_stage(session: AsyncSession, stage_id: int, data: admin_schemas.StageUpdate) -> models.Stage:
     stage = await get_stage(session, stage_id)
     tournament_id = stage.tournament_id
     update_data = data.model_dump(exclude_unset=True)
@@ -193,9 +177,12 @@ async def delete_stage(session: AsyncSession, stage_id: int) -> None:
 
 
 def _map_veto_signature(config: models.MapVetoConfig) -> tuple[tuple, tuple]:
+    # ``map_pool`` was normalized out of the old ``map_pool_ids`` JSON array
+    # (dbarch05) into the ``map_veto_config_map`` child table; the relationship
+    # is ordered by ``sort_order`` so the tuple mirrors the old array order.
     return (
         tuple(config.veto_sequence_json or []),
-        tuple(config.map_pool_ids or []),
+        tuple(entry.map_id for entry in config.map_pool),
     )
 
 
@@ -206,10 +193,12 @@ async def _merge_map_veto_configs(
     source_stage_ids: list[int],
 ) -> None:
     target_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id == target_stage.id,
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     target_configs = list(target_result.scalars().all())
     if len(target_configs) > 1:
@@ -219,10 +208,12 @@ async def _merge_map_veto_configs(
         )
 
     source_result = await session.execute(
-        select(models.MapVetoConfig).where(
+        select(models.MapVetoConfig)
+        .where(
             models.MapVetoConfig.tournament_id == target_stage.tournament_id,
             models.MapVetoConfig.stage_id.in_(source_stage_ids),
         )
+        .options(selectinload(models.MapVetoConfig.map_pool))
     )
     source_configs = list(source_result.scalars().all())
     if not source_configs:
@@ -237,10 +228,7 @@ async def _merge_map_veto_configs(
     if len(signatures) > 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Source stages have different map veto configs; keep one "
-                "target config before merging"
-            ),
+            detail=("Source stages have different map veto configs; keep one target config before merging"),
         )
 
     keeper = source_configs[0]
@@ -256,9 +244,7 @@ async def _retarget_stage_rows(
     source_stage_ids: list[int],
     target_stage_id: int,
 ) -> None:
-    result = await session.execute(
-        select(model).where(model.stage_id.in_(source_stage_ids))
-    )
+    result = await session.execute(select(model).where(model.stage_id.in_(source_stage_ids)))
     for row in result.scalars().all():
         row.stage_id = target_stage_id
 
@@ -313,9 +299,7 @@ async def merge_group_stages(
             detail="Target stage cannot be included in source_stage_ids",
         )
 
-    stages_result = await session.execute(
-        select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids))
-    )
+    stages_result = await session.execute(select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids)))
     source_by_id = {stage.id: stage for stage in stages_result.scalars().all()}
     missing = [stage_id for stage_id in unique_source_stage_ids if stage_id not in source_by_id]
     if missing:
@@ -411,9 +395,7 @@ async def merge_group_stages(
     if next_target_name:
         target_stage.name = next_target_name
     target_stage.is_active = target_stage.is_active or any(stage.is_active for stage in source_stages)
-    target_stage.is_completed = target_stage.is_completed and all(
-        stage.is_completed for stage in source_stages
-    )
+    target_stage.is_completed = target_stage.is_completed and all(stage.is_completed for stage in source_stages)
 
     await session.flush()
     for source_stage in source_stages:
@@ -511,9 +493,7 @@ async def create_stage_item_input(
     )
     stage_item = result.scalar_one_or_none()
     if not stage_item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found")
     tournament_id = stage_item.stage.tournament_id
     inp = models.StageItemInput(stage_item_id=stage_item_id, **data.model_dump())
     session.add(inp)
@@ -533,17 +513,11 @@ async def update_stage_item_input(
     result = await session.execute(
         select(models.StageItemInput)
         .where(models.StageItemInput.id == input_id)
-        .options(
-            selectinload(models.StageItemInput.stage_item).selectinload(
-                models.StageItem.stage
-            )
-        )
+        .options(selectinload(models.StageItemInput.stage_item).selectinload(models.StageItem.stage))
     )
     inp = result.scalar_one_or_none()
     if not inp:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Stage item input not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item input not found")
 
     tournament_id = inp.stage_item.stage.tournament_id
     stage_id = inp.stage_item.stage_id
@@ -553,15 +527,11 @@ async def update_stage_item_input(
 
     next_input_type = update_data.get("input_type", inp.input_type)
     next_team_id = update_data.get("team_id", inp.team_id)
-    next_source_stage_item_id = update_data.get(
-        "source_stage_item_id", inp.source_stage_item_id
-    )
+    next_source_stage_item_id = update_data.get("source_stage_item_id", inp.source_stage_item_id)
     next_source_position = update_data.get("source_position", inp.source_position)
 
     if "team_id" in update_data and next_team_id is not None:
-        team_result = await session.execute(
-            select(models.Team).where(models.Team.id == next_team_id)
-        )
+        team_result = await session.execute(select(models.Team).where(models.Team.id == next_team_id))
         team = team_result.scalar_one_or_none()
         if team is None:
             raise HTTPException(
@@ -588,10 +558,7 @@ async def update_stage_item_input(
             if inp.team_id is None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        "Selected team is already assigned in this stage; "
-                        "replace a populated slot to swap teams"
-                    ),
+                    detail=("Selected team is already assigned in this stage; replace a populated slot to swap teams"),
                 )
             existing_input.team_id = inp.team_id
 
@@ -611,10 +578,7 @@ async def update_stage_item_input(
         if next_source_stage_item_id is None or next_source_position is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "TENTATIVE inputs require source_stage_item_id and "
-                    "source_position"
-                ),
+                detail=("TENTATIVE inputs require source_stage_item_id and source_position"),
             )
         if next_team_id is not None:
             raise HTTPException(
@@ -638,9 +602,7 @@ async def update_stage_item_input(
     return inp
 
 
-async def activate_stage(
-    session: AsyncSession, stage_id: int, *, notify: bool = True
-) -> models.Stage:
+async def activate_stage(session: AsyncSession, stage_id: int, *, notify: bool = True) -> models.Stage:
     """Activate a stage, resolving tentative inputs from previous stages."""
     stage = await get_stage(session, stage_id)
 
@@ -682,11 +644,7 @@ async def activate_stage(
 
 
 def _collect_item_team_ids(item: models.StageItem) -> list[int]:
-    return [
-        inp.team_id
-        for inp in sorted(item.inputs, key=lambda value: value.slot)
-        if inp.team_id is not None
-    ]
+    return [inp.team_id for inp in sorted(item.inputs, key=lambda value: value.slot) if inp.team_id is not None]
 
 
 async def _load_team_names(
@@ -697,9 +655,7 @@ async def _load_team_names(
     if not unique_team_ids:
         return {}
 
-    result = await session.execute(
-        select(models.Team.id, models.Team.name).where(models.Team.id.in_(unique_team_ids))
-    )
+    result = await session.execute(select(models.Team.id, models.Team.name).where(models.Team.id.in_(unique_team_ids)))
     return dict(result.all())
 
 
@@ -740,17 +696,11 @@ async def seed_teams(
             detail="Stage has no stage_items to seed into",
         )
     if not team_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="team_ids must be non-empty"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="team_ids must be non-empty")
     if len(set(team_ids)) != len(team_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="team_ids contain duplicates"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="team_ids contain duplicates")
 
-    teams_result = await session.execute(
-        select(models.Team).where(models.Team.id.in_(team_ids))
-    )
+    teams_result = await session.execute(select(models.Team).where(models.Team.id.in_(team_ids)))
     teams = list(teams_result.scalars().all())
     if len(teams) != len(team_ids):
         found_ids = {team.id for team in teams}
@@ -768,13 +718,9 @@ async def seed_teams(
 
     # Sort teams according to the requested mode.
     if mode == "snake_sr":
-        teams_sorted = sorted(
-            teams, key=lambda t: (t.avg_sr or 0.0, t.id), reverse=True
-        )
+        teams_sorted = sorted(teams, key=lambda t: (t.avg_sr or 0.0, t.id), reverse=True)
     elif mode == "by_total_sr":
-        teams_sorted = sorted(
-            teams, key=lambda t: (t.total_sr or 0, t.id), reverse=True
-        )
+        teams_sorted = sorted(teams, key=lambda t: (t.total_sr or 0, t.id), reverse=True)
     elif mode == "random":
         # Deterministic shuffle based on team.id — two calls with the same
         # inputs produce identical seeding, useful for reproducibility and
@@ -813,6 +759,7 @@ async def seed_teams(
         def target_group_index(team_idx: int) -> int:
             return team_idx % num_groups
     else:
+
         def target_group_index(team_idx: int) -> int:
             row = team_idx // num_groups
             column = team_idx % num_groups
@@ -960,13 +907,9 @@ async def wire_from_groups(
             detail="Target stage must be a bracket (single_elimination or double_elimination)",
         )
     if top <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="`top` must be positive"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="`top` must be positive")
     if top_lb < 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="`top_lb` must be non-negative"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="`top_lb` must be non-negative")
     if not target_stage.items:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -987,10 +930,7 @@ async def wire_from_groups(
         if lb_item is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Target stage has no BRACKET_LOWER stage item; "
-                    "create one before using top_lb"
-                ),
+                detail=("Target stage has no BRACKET_LOWER stage item; create one before using top_lb"),
             )
 
     source_items = sorted(source_stage.items, key=lambda item: (item.order, item.id))
@@ -1016,8 +956,7 @@ async def wire_from_groups(
         await _publish_tournament_changed(target_stage.tournament_id, "structure_changed")
 
     logger.info(
-        "Wired TENTATIVE inputs from stage %s (%d groups × top %d, top_lb %d) "
-        "into stage %s (%s)",
+        "Wired TENTATIVE inputs from stage %s (%d groups × top %d, top_lb %d) into stage %s (%s)",
         source_stage.id,
         num_groups,
         top,
@@ -1028,9 +967,7 @@ async def wire_from_groups(
     return await get_stage(session, target_stage_id)
 
 
-async def _check_upstream_stages_completed(
-    session: AsyncSession, stage: models.Stage
-) -> list[int]:
+async def _check_upstream_stages_completed(session: AsyncSession, stage: models.Stage) -> list[int]:
     """Return ids of upstream stages that feed into ``stage`` via TENTATIVE
     inputs but are NOT yet marked ``is_completed``. Empty list means safe
     to activate. Used by /activate-and-generate to prevent admins from
@@ -1050,9 +987,7 @@ async def _check_upstream_stages_completed(
     if not source_stage_ids:
         return []
 
-    result = await session.execute(
-        select(models.Stage).where(models.Stage.id.in_(source_stage_ids))
-    )
+    result = await session.execute(select(models.Stage).where(models.Stage.id.in_(source_stage_ids)))
     return [s.id for s in result.scalars().all() if not s.is_completed]
 
 
@@ -1094,14 +1029,8 @@ async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> 
     # BRACKET_LOWER item. A "single bracket" double-elimination (one
     # SINGLE_BRACKET item) holds the whole UB+LB structure, so all advancing
     # teams seed that one item — the DE engine builds the rounds internally.
-    has_lower_bracket = any(
-        item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items
-    )
-    if (
-        stage.split_lower_bracket
-        and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-        and has_lower_bracket
-    ):
+    has_lower_bracket = any(item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items)
+    if stage.split_lower_bracket and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and has_lower_bracket:
         top_lb = advance // 2
         top = advance - top_lb  # odd count → extra team to the Upper bracket
     else:

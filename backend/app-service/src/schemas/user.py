@@ -84,6 +84,7 @@ class UserTournamentSummary(BaseModel):
     Narrow projection of `models.Tournament` — only fields the frontend
     actually consumes in user-scoped pages.
     """
+
     id: int
     number: int | None
     name: str
@@ -99,6 +100,7 @@ class UserTournamentPlayer(BaseModel):
     Also populated inside `UserEncounterTeamSummary.players` when the
     encounter view needs to identify the viewer's row (via `user_id`).
     """
+
     id: int
     name: str
     role: enums.HeroClass | None = None
@@ -115,6 +117,7 @@ class UserTournamentPlayer(BaseModel):
 
 class UserEncounterTournament(BaseModel):
     """Tournament link inside `EncounterReadWithUserStats.tournament`."""
+
     id: int
     name: str
     number: int | None = None
@@ -125,12 +128,14 @@ class UserEncounterTournament(BaseModel):
 
 class UserEncounterStageSummary(BaseModel):
     """Stage link inside `EncounterReadWithUserStats.stage`."""
+
     id: int
     name: str
 
 
 class UserEncounterStageItemSummary(BaseModel):
     """Stage-item link inside `EncounterReadWithUserStats.stage_item`."""
+
     id: int
     name: str
 
@@ -142,6 +147,7 @@ class UserEncounterTeamPlayerRef(BaseModel):
     (`players.find(p => p.user_id === selfUserId)`). Renders nothing on its
     own — for the full player card see `UserTournamentPlayer`.
     """
+
     id: int
     user_id: int
     role: enums.HeroClass | None = None
@@ -150,6 +156,7 @@ class UserEncounterTeamPlayerRef(BaseModel):
 
 class UserEncounterTeamSummary(BaseModel):
     """Team summary inside `EncounterReadWithUserStats.{home,away}_team`."""
+
     id: int
     name: str
     players: list[UserEncounterTeamPlayerRef] = Field(default_factory=list)
@@ -157,6 +164,7 @@ class UserEncounterTeamSummary(BaseModel):
 
 class MatchReadWithUserStats(BaseModel):
     """Match within a user-scoped encounter, with the viewer's performance."""
+
     id: int
     home_team_id: int | None = None
     away_team_id: int | None = None
@@ -173,6 +181,7 @@ class MatchReadWithUserStats(BaseModel):
 
 class EncounterReadWithUserStats(BaseModel):
     """Encounter rendered on the user encounters page."""
+
     id: int
     name: str
     home_team_id: int | None = None
@@ -229,6 +238,11 @@ class UserTournamentWithStats(BaseModel):
     number: int | None
     name: str
     division: int
+    # `division` is resolved against the tournament's own grid (see
+    # get_tournament_with_stats). Ship the grid version too so the frontend
+    # renders the division icon on that same grid instead of falling back to
+    # the workspace default.
+    division_grid_version: DivisionGridVersionRead | None = None
     closeness: float
     role: enums.HeroClass
     group_placement: float | None

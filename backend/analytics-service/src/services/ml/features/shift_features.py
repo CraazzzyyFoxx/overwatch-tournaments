@@ -23,11 +23,15 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.division_grid import DEFAULT_GRID, division_case_expr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.division_grid import DEFAULT_GRID
 from src import models
 from src.core.workspace import workspace_scope_filter
+from src.services.analytics.canonical_division import (
+    assign_canonical_division,
+    load_source_grids,
+)
 from src.services.analytics.flows import (
     compute_linear_metrics,
     compute_openskill_shift_map,
@@ -36,6 +40,7 @@ from src.services.analytics.flows import (
 
 from .aggregations import build_tournament_feature_frame
 from .cache import get_or_build_dataframe, scope_cache_params
+from .mvp_dominance import compute_mvp_dominance
 
 __all__ = ("build_shift_feature_frame",)
 
@@ -65,16 +70,19 @@ async def _player_rank_history(
         history_through_tournament_id or max(tournament_ids),
     )
 
-    div_expr = division_case_expr(models.Player.rank, DEFAULT_GRID)
     query = (
         sa.select(
             models.Player.id.label("player_id"),
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
-            div_expr.label("div"),
+            models.Tournament.division_grid_version_id.label("version_id"),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
@@ -82,7 +90,7 @@ async def _player_rank_history(
             models.Player.is_substitution.is_(False),
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .order_by(models.Player.user_id, models.Player.role, models.Tournament.id)
+        .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
     )
     result = await session.execute(query)
     df = pd.DataFrame(result.mappings().all())
@@ -91,6 +99,22 @@ async def _player_rank_history(
 
     df["tournament_id"] = df["tournament_id"].astype(int)
     df = df.sort_values(["user_id", "role", "tournament_id"]).reset_index(drop=True)
+
+    # Resolve every player's division on the canonical OW grid so
+    # div/prior_div/next_tournament_div are comparable across workspaces.
+    grids = await load_source_grids(session, df["version_id"].dropna().unique())
+    assign_canonical_division(df, grids, rank_col="rank")
+
+    # Workspace grid size (division count) per row — shift v2 scales the
+    # top-of-ladder output clamp by it so the same cap means the same real rank
+    # distance regardless of granularity. Missing grid → canonical 40-tier.
+    def _grid_div_count(version_id: object) -> int:
+        if pd.isna(version_id):
+            return DEFAULT_GRID.max_division
+        grid = grids.get(int(version_id))
+        return grid.max_division if grid is not None else DEFAULT_GRID.max_division
+
+    df["grid_n_div"] = [_grid_div_count(v) for v in df["version_id"]]
 
     grouped = df.groupby(["user_id", "role"], sort=False)
     df["prior_div"] = grouped["div"].shift(1)
@@ -168,10 +192,7 @@ async def _openskill_shift_frame(
             workspace_ids=workspace_ids,
         )
         return pd.DataFrame(
-            [
-                {"player_id": int(player_id), "os_shift": float(shift)}
-                for player_id, shift in shift_map.items()
-            ],
+            [{"player_id": int(player_id), "os_shift": float(shift)} for player_id, shift in shift_map.items()],
             columns=["player_id", "os_shift"],
         )
 
@@ -239,10 +260,7 @@ async def build_shift_feature_frame(
                 workspace_id=workspace_id,
                 workspace_ids=workspace_ids,
             )
-            shift_map = {
-                int(row.player_id): float(row.os_shift)
-                for row in shift_frame.itertuples(index=False)
-            }
+            shift_map = {int(row.player_id): float(row.os_shift) for row in shift_frame.itertuples(index=False)}
         except Exception:
             logger.exception(
                 "Failed to compute OpenSkill shift map for tournament_id=%d",
@@ -260,6 +278,7 @@ async def build_shift_feature_frame(
                     "tournaments_played",
                     "tournaments_at_current_div",
                     "div",
+                    "grid_n_div",
                 ]
             ],
             on="player_id",
@@ -274,6 +293,8 @@ async def build_shift_feature_frame(
                 "effective_evidence",
                 "sample_tournaments",
                 "sample_matches",
+                "overall_position",
+                "team_count",
             ]
         ].rename(
             columns={
@@ -285,17 +306,23 @@ async def build_shift_feature_frame(
         )
         merged = merged.merge(linear_t, on="player_id", how="left")
         merged["current_div"] = merged["div"]
-        merged["os_shift"] = (
-            merged["player_id"]
-            .map(lambda pid, lookup=shift_map: lookup.get(int(pid)))
-            .astype(float)
-        )
+        merged["os_shift"] = merged["player_id"].map(lambda pid, lookup=shift_map: lookup.get(int(pid))).astype(float)
         if not performance_features.empty:
             merged = merged.merge(
                 performance_features[performance_features["tournament_id"] == tid],
                 on=["player_id", "tournament_id"],
                 how="left",
             )
+        # Raw match-log MVP dominance — a secondary individual-skill signal that
+        # lifts a consistent scoreboard-topper the expectation-adjusted impact
+        # under-credits. Neutral (0.5) where there is no match log.
+        dominance_df = await compute_mvp_dominance(session, tid)
+        if not dominance_df.empty:
+            merged = merged.merge(dominance_df, on="player_id", how="left")
+        merged["mvp_dominance"] = pd.to_numeric(
+            merged.get("mvp_dominance", pd.Series(index=merged.index, dtype=float)),
+            errors="coerce",
+        ).fillna(0.5)
         # Flag rows that actually carry a Performance v2 row BEFORE the fillna
         # below masks missing perf as 0.0 — the merit target trains only on these
         # (treating "no perf data" as "average performance" would poison it).

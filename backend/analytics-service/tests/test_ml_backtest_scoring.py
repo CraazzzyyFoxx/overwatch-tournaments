@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -35,6 +35,12 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 backtest = importlib.import_module("src.services.ml.training.backtest")
+
+
+def _identity_assign(df, grids, *, rank_col, version_col="version_id", out_col="div"):
+    """Stub: canonical division == the supplied rank (1:1), for mechanics tests."""
+    df[out_col] = df[rank_col].astype(int)
+    return df
 
 
 class ShiftScoreTests(TestCase):
@@ -112,26 +118,31 @@ class RealisedShiftMapTests(IsolatedAsyncioTestCase):
         return SimpleNamespace(execute=AsyncMock(return_value=result))
 
     async def test_realised_shift_is_current_minus_next_div(self) -> None:
+        # rank doubles as the canonical division under the identity stub.
         rows = [
-            {"player_id": 1, "user_id": 10, "role": "tank", "tournament_id": 10, "div": 7},
-            {"player_id": 2, "user_id": 10, "role": "tank", "tournament_id": 20, "div": 6},
-            {"player_id": 3, "user_id": 10, "role": "tank", "tournament_id": 30, "div": 6},
+            {"player_id": 1, "user_id": 10, "role": "tank", "tournament_id": 10, "rank": 7, "version_id": 1},
+            {"player_id": 2, "user_id": 10, "role": "tank", "tournament_id": 20, "rank": 6, "version_id": 1},
+            {"player_id": 3, "user_id": 10, "role": "tank", "tournament_id": 30, "rank": 6, "version_id": 1},
         ]
         session = self._session(rows)
 
-        fold_10 = await backtest._realised_shift_map(
-            session, 10, history_through_tournament_id=30
-        )
+        with (
+            patch.object(backtest, "load_source_grids", AsyncMock(return_value={})),
+            patch.object(backtest, "assign_canonical_division", _identity_assign),
+        ):
+            fold_10 = await backtest._realised_shift_map(session, 10, history_through_tournament_id=30)
         self.assertEqual({1: 1.0}, fold_10)  # 7 - 6
 
     async def test_last_tournament_without_next_is_dropped(self) -> None:
         rows = [
-            {"player_id": 1, "user_id": 10, "role": "tank", "tournament_id": 10, "div": 7},
-            {"player_id": 3, "user_id": 10, "role": "tank", "tournament_id": 30, "div": 6},
+            {"player_id": 1, "user_id": 10, "role": "tank", "tournament_id": 10, "rank": 7, "version_id": 1},
+            {"player_id": 3, "user_id": 10, "role": "tank", "tournament_id": 30, "rank": 6, "version_id": 1},
         ]
         session = self._session(rows)
 
-        fold_30 = await backtest._realised_shift_map(
-            session, 30, history_through_tournament_id=30
-        )
+        with (
+            patch.object(backtest, "load_source_grids", AsyncMock(return_value={})),
+            patch.object(backtest, "assign_canonical_division", _identity_assign),
+        ):
+            fold_30 = await backtest._realised_shift_map(session, 30, history_through_tournament_id=30)
         self.assertEqual({}, fold_30)

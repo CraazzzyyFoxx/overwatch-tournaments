@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import models
 from src.services.encounter import captain as captain_service
 
-
 # ── Schemas ──────────────────────────────────────────────────────────────
 
 

@@ -48,7 +48,7 @@ export interface RankMappingConfig {
 // ─── Rank collection status / manual trigger (parser admin) ────────────────────
 
 export interface RankCollectionStatusRow {
-  battle_tag_id: number;
+  social_account_id: number;
   battle_tag: string;
   status: string | null;
   last_checked_at: string | null;
@@ -61,7 +61,7 @@ export interface RankCollectionStatusRow {
 
 export interface CollectTriggerInput {
   user_id?: number | null;
-  battle_tag_ids?: number[] | null;
+  social_account_ids?: number[] | null;
 }
 
 export interface CollectTriggerResult {
@@ -70,7 +70,7 @@ export interface CollectTriggerResult {
 
 export interface RankFetchLogRow {
   id: number;
-  battle_tag_id: number | null;
+  social_account_id: number | null;
   battle_tag: string;
   status: string;
   source: string;
@@ -400,9 +400,8 @@ export interface UserMergeFieldPolicy {
 }
 
 export interface UserMergeIdentitySelection {
-  discord_ids: number[];
-  battle_tag_ids: number[];
-  twitch_ids: number[];
+  /** social_account ids on the source profile to move to the target. */
+  social_account_ids: number[];
 }
 
 export interface UserMergeExecuteRequest extends UserMergePreviewRequest {
@@ -413,6 +412,7 @@ export interface UserMergeExecuteRequest extends UserMergePreviewRequest {
 
 export interface UserMergeIdentityOption {
   id: number;
+  provider: string;
   value: string;
   duplicate_on_target: boolean;
 }
@@ -421,9 +421,7 @@ export interface UserMergeUserSummary {
   id: number;
   name: string;
   avatar_url: string | null;
-  discord: UserMergeIdentityOption[];
-  battle_tag: UserMergeIdentityOption[];
-  twitch: UserMergeIdentityOption[];
+  social_accounts: UserMergeIdentityOption[];
   auth_links: number;
 }
 
@@ -447,8 +445,8 @@ export interface UserMergePreviewResponse {
 }
 
 export interface UserMergeIdentityResult {
-  moved: Record<string, number[]>;
-  deduped: Record<string, number[]>;
+  moved: number[];
+  deduped: number[];
 }
 
 export interface UserMergeExecuteResponse {
@@ -459,42 +457,21 @@ export interface UserMergeExecuteResponse {
   audit_id: number;
 }
 
-// Discord Identity
-export interface DiscordIdentityCreateInput {
-  name: string;
+// Unified social-account admin inputs
+export interface SocialAccountCreateInput {
+  provider: string;
+  username: string;
+  url?: string | null;
 }
 
-export interface DiscordIdentityUpdateInput {
-  name: string;
+export interface SocialAccountUpdateInput {
+  username?: string;
+  url?: string | null;
 }
 
-// BattleTag Identity
-export interface BattleTagIdentityCreateInput {
-  battle_tag: string;
-}
-
-export interface BattleTagIdentityUpdateInput {
-  battle_tag: string;
-}
-
-// Twitch Identity
-export interface TwitchIdentityCreateInput {
-  name: string;
-}
-
-export interface TwitchIdentityUpdateInput {
-  name: string;
-}
-
-// Generic (for backward compatibility)
-export interface IdentityCreateInput {
-  name?: string;
-  battle_tag?: string;
-}
-
-export interface IdentityUpdateInput {
-  name?: string;
-  battle_tag?: string;
+export interface SocialVisibilityInput {
+  workspace_id?: number | null;
+  visible: boolean;
 }
 
 // ─── Hero ────────────────────────────────────────────────────────────────────

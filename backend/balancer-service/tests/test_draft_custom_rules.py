@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
@@ -19,14 +18,14 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus, DraftFormat
-from shared.models.draft import DraftPick
+from shared.core.enums import DraftFormat, DraftPlayerStatus, DraftRole
+from shared.models.balancer.draft import DraftPick
+from shared.models.identity.user import User
+from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
-from shared.models.user import User
-from shared.models.workspace import Workspace
 from src import models
-from src.services.draft import board as draft_board
 from src.services.draft import lifecycle, selection
+
 
 def _async_url() -> str:
     u = os.environ.get("POSTGRES_USER", "postgres")
@@ -36,12 +35,15 @@ def _async_url() -> str:
     db = os.environ.get("POSTGRES_DB", "postgres")
     return f"postgresql+psycopg://{u}:{p}@{h}:{port}/{db}"
 
+
 _UNIQUE = 0
+
 
 def _uniq() -> int:
     global _UNIQUE
     _UNIQUE += 1
     return _UNIQUE
+
 
 class DraftCustomRulesTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
@@ -66,8 +68,8 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             await s.flush()
             users = []
             # We need 3 captains with different ranks
-            ranks = [2000, 3000, 2500] # Cap0 (2000), Cap1 (3000), Cap2 (2500)
-            for i, r in enumerate(ranks):
+            ranks = [2000, 3000, 2500]  # Cap0 (2000), Cap1 (3000), Cap2 (2500)
+            for i, _r in enumerate(ranks):
                 u = User(name=f"cap-{self._suffix}-{i}")
                 s.add(u)
                 users.append(u)
@@ -83,7 +85,8 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             await self.engine.dispose()
             return
         async with self.Session() as s:
-            from shared.models.draft import DraftSession
+            from shared.models.balancer.draft import DraftSession
+
             ids = (
                 await s.scalars(sa.select(DraftSession.id).where(DraftSession.tournament_id == self.tournament_id))
             ).all()
@@ -101,11 +104,11 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
         roles = [DraftRole.TANK, DraftRole.DPS, DraftRole.SUPPORT]
         return [
             lifecycle.CaptainSeed(
-                name=f"Cap{i}", 
-                draft_position=i + 1, 
+                name=f"Cap{i}",
+                draft_position=i + 1,
                 user_id=uid,
                 rank_value=self.captain_ranks[i],
-                primary_role=roles[i % 3]
+                primary_role=roles[i % 3],
             )
             for i, uid in enumerate(self.captain_user_ids)
         ]
@@ -127,16 +130,14 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                 rounds=4,
                 team_size=5,
                 fmt=DraftFormat.CUSTOM,
-                settings={"round_rules": rules}
+                settings={"round_rules": rules},
             )
             await lifecycle.seed(s, draft, captains=self._captains(), players=self._players())
             await s.commit()
 
             picks = (
                 await s.scalars(
-                    sa.select(DraftPick)
-                    .where(DraftPick.session_id == draft.id)
-                    .order_by(DraftPick.overall_no.asc())
+                    sa.select(DraftPick).where(DraftPick.session_id == draft.id).order_by(DraftPick.overall_no.asc())
                 )
             ).all()
 
@@ -180,7 +181,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                 rounds=2,
                 team_size=5,
                 fmt=DraftFormat.CUSTOM,
-                settings={"round_rules": rules}
+                settings={"round_rules": rules},
             )
             await lifecycle.seed(s, draft, captains=self._captains(), players=self._players())
             await lifecycle.start(s, draft)
@@ -188,10 +189,9 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
 
             available = (
                 await s.scalars(
-                    sa.select(lifecycle.DraftPlayer)
-                    .where(
+                    sa.select(lifecycle.DraftPlayer).where(
                         lifecycle.DraftPlayer.session_id == draft.id,
-                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value
+                        lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
                     )
                 )
             ).all()
@@ -218,27 +218,42 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             # Execute Pick 1 (Cap0)
             current = await s.get(DraftPick, draft.current_pick_id)
             await selection.select(
-                s, draft, current,
-                player_id=p1.id, expected_version=current.version,
-                target_role=None, actor_user_id=None, is_admin=True
+                s,
+                draft,
+                current,
+                player_id=p1.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                is_admin=True,
             )
             await s.commit()
 
             # Execute Pick 2 (Cap1)
             current = await s.get(DraftPick, draft.current_pick_id)
             await selection.select(
-                s, draft, current,
-                player_id=p2.id, expected_version=current.version,
-                target_role=None, actor_user_id=None, is_admin=True
+                s,
+                draft,
+                current,
+                player_id=p2.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                is_admin=True,
             )
             await s.commit()
 
             # Execute Pick 3 (Cap2) - triggers dynamic sort for Round 2
             current = await s.get(DraftPick, draft.current_pick_id)
             await selection.select(
-                s, draft, current,
-                player_id=p3.id, expected_version=current.version,
-                target_role=None, actor_user_id=None, is_admin=True
+                s,
+                draft,
+                current,
+                player_id=p3.id,
+                expected_version=current.version,
+                target_role=None,
+                actor_user_id=None,
+                is_admin=True,
             )
             await s.commit()
 
@@ -246,9 +261,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             await s.refresh(draft)
             picks = (
                 await s.scalars(
-                    sa.select(DraftPick)
-                    .where(DraftPick.session_id == draft.id)
-                    .order_by(DraftPick.overall_no.asc())
+                    sa.select(DraftPick).where(DraftPick.session_id == draft.id).order_by(DraftPick.overall_no.asc())
                 )
             ).all()
 

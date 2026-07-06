@@ -118,20 +118,18 @@ def attach_local_performance(
             local_mean = float(ref_values.mean()) if local_n else role_mean
             local_std_raw = _safe_std(ref_values, fallback=role_std)
 
-            alpha = (
-                float(local_n) / (float(local_n) + float(prior_strength))
-                if local_n > 0
-                else 0.0
-            )
+            alpha = float(local_n) / (float(local_n) + float(prior_strength)) if local_n > 0 else 0.0
             shrunk_mean = alpha * local_mean + (1.0 - alpha) * role_mean
             shrunk_std = alpha * local_std_raw + (1.0 - alpha) * role_std
             shrunk_std = max(float(shrunk_std), 1e-6)
 
             residual = raw_value - shrunk_mean
             zscore = residual / shrunk_std
-            percentile_pool = role_group[
-                role_group["division"].between(band_min, band_max)
-            ]["raw_value"] if band_min is not None and band_max is not None else role_values
+            percentile_pool = (
+                role_group[role_group["division"].between(band_min, band_max)]["raw_value"]
+                if band_min is not None and band_max is not None
+                else role_values
+            )
 
             rows.append(
                 {

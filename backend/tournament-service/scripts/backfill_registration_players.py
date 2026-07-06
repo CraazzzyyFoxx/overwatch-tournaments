@@ -1,12 +1,18 @@
 """One-time backfill of player identity for existing registrations.
 
 For every non-deleted registration in an active (not completed/archived)
-tournament, ensures a ``players.user`` + ``UserBattleTag`` exists for its battle
-tags and links ``registration.user_id`` — the same provisioning that now runs on
-new submissions. This lets already-registered players (who weren't yet in the
-analytics system) be picked up by rank collection / the open-profile gate.
+tournament, ensures a ``players.user`` + battlenet ``social_account`` exists for
+its battle tags and anchors ``registration.workspace_member_id`` on that
+player's member row (dbarch02 dropped the legacy ``user_id`` column) — the same
+provisioning that now runs on new submissions. This lets already-registered
+players (who weren't yet in the analytics system) be picked up by rank
+collection / the open-profile gate.
 
-Idempotent (dedups by ``UserBattleTag.battle_tag``), so safe to re-run.
+Idempotent (dedups by normalized battlenet handle; respects an existing member
+anchor), so safe to re-run. Note: the ``dbarch02`` migration already
+member-backfills all historical rows — this script remains useful only for
+re-provisioning rows whose identity was never resolvable (e.g. a battle tag
+fixed after import).
 
 Run once from the ``backend/`` directory so the service ``.env`` is picked up::
 
@@ -25,13 +31,13 @@ sys.path.insert(0, str(_BACKEND))
 sys.path.insert(0, str(_BACKEND / "tournament-service"))
 
 import sqlalchemy as sa  # noqa: E402
-from shared.core import enums  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
+from shared.core import enums  # noqa: E402
 from src import models  # noqa: E402
 from src.core import config  # noqa: E402
 from src.services.registration.service import ensure_player_identity  # noqa: E402

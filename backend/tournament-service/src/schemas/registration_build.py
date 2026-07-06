@@ -9,6 +9,9 @@ envelope. This module must NOT import fastapi.
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.balancer_registration_statuses import build_unknown_status_meta
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
@@ -16,9 +19,6 @@ from shared.services.division_grid_access import (
     get_effective_division_grid_version_id,
     load_division_grid_snapshot,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.division_grid import DivisionGridVersionRead
 from src.schemas.registration import (
@@ -49,6 +49,17 @@ def _http_exception(status_code: int, detail: str) -> Exception:
     from shared.core.errors import BaseAPIException as HTTPException
 
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def _registration_player_id(reg: models.BalancerRegistration) -> int | None:
+    """The registration's domain player id via its workspace_member anchor.
+
+    Callers MUST eager-load ``BalancerRegistration.workspace_member``
+    (``selectinload``) — accessing an unloaded relationship here would
+    lazy-load outside the request's greenlet and raise ``MissingGreenlet``.
+    """
+    member = reg.workspace_member
+    return member.player_id if member is not None else None
 
 
 async def _resolve_tournament_workspace(session: AsyncSession, tournament_id: int) -> int:
@@ -103,9 +114,18 @@ def _form_to_read(
 def _reg_to_read(
     reg: models.BalancerRegistration,
     *,
+    workspace_id: int,
     status_meta_map: dict[str, dict[str, dict[str, object]]] | None = None,
     show_ranks: bool = False,
+    include_private: bool = True,
 ) -> RegistrationRead:
+    """Serialize a registration for public API responses.
+
+    ``include_private=False`` is for anonymous/list contexts: it strips
+    self-declared smurf tags (anti-multi-accounting data), free-text notes and
+    organizer-defined custom fields — all of which may contain PII and are only
+    meant for the registrant themselves and tournament admins.
+    """
     roles = (
         [
             RegistrationRoleRead(
@@ -125,17 +145,18 @@ def _reg_to_read(
     return RegistrationRead(
         id=reg.id,
         tournament_id=reg.tournament_id,
-        workspace_id=reg.workspace_id,
-        auth_user_id=reg.auth_user_id,
-        user_id=reg.user_id,
+        workspace_id=workspace_id,
+        # API shape preserved: user_id stays in the payload, derived from the
+        # workspace_member anchor (callers eager-load it; see helper).
+        user_id=_registration_player_id(reg),
         battle_tag=reg.battle_tag,
-        smurf_tags_json=reg.smurf_tags_json,
+        smurf_tags_json=reg.smurf_tags_json if include_private else None,
         discord_nick=reg.discord_nick,
         twitch_nick=reg.twitch_nick,
         stream_pov=reg.stream_pov,
         roles=roles,
-        notes=reg.notes,
-        custom_fields_json=reg.custom_fields_json,
+        notes=reg.notes if include_private else None,
+        custom_fields_json=reg.custom_fields_json if include_private else None,
         status=reg.status,
         status_meta=(status_meta_map["registration"].get(reg.status) if status_meta_map is not None else None)
         or build_unknown_status_meta("registration", reg.status),
@@ -160,9 +181,13 @@ async def _build_tournament_history(
     Uses tournament.player (the analytics table) — if a player record exists,
     they definitely participated. No extra checks needed.
 
-    Resolution order to find player user_id (players.user.id):
-    1. user_id on the registration itself
-    2. auth_user_id → AuthUserPlayer → player_id
+    The player id (players.user.id) is resolved via workspace_member ->
+    player_id — the registration's only identity anchor since dbarch02
+    dropped user_id.
+
+    Callers must eager-load ``BalancerRegistration.workspace_member`` for the
+    resolution to see anything (a lazy load here would run outside the
+    request's greenlet).
 
     Returns a tuple of:
     - ``history_map``: registration_id -> most-recent-first history entries,
@@ -171,32 +196,10 @@ async def _build_tournament_history(
     - ``division_grids``: stringified version_id -> ``DivisionGridVersionRead``,
       containing only the versions actually referenced by the returned entries.
     """
-    # --- Step 1: resolve analytics user_id for every registration ---
-    auth_ids_to_resolve: list[int] = []
-    for r in registrations:
-        if r.user_id is None and r.auth_user_id is not None:
-            auth_ids_to_resolve.append(r.auth_user_id)
-
-    auth_to_player: dict[int, int] = {}
-    if auth_ids_to_resolve:
-        link_result = await session.execute(
-            sa.select(
-                models.AuthUserPlayer.auth_user_id,
-                models.AuthUserPlayer.player_id,
-            ).where(
-                models.AuthUserPlayer.auth_user_id.in_(auth_ids_to_resolve),
-                models.AuthUserPlayer.is_primary.is_(True),
-            )
-        )
-        for auth_id, player_id in link_result:
-            auth_to_player[auth_id] = player_id
-
     # Build reverse map: analytics_user_id -> list of registration ids
     player_to_reg_ids: dict[int, list[int]] = {}
     for r in registrations:
-        uid = r.user_id
-        if uid is None and r.auth_user_id is not None:
-            uid = auth_to_player.get(r.auth_user_id)
+        uid = _registration_player_id(r)
         if uid is not None:
             player_to_reg_ids.setdefault(uid, []).append(r.id)
 
@@ -211,7 +214,7 @@ async def _build_tournament_history(
     result = await session.execute(
         sa.select(
             models.Player.tournament_id,
-            models.Player.user_id,
+            models.WorkspaceMember.player_id,
             models.Player.role,
             models.Player.rank,
             models.Tournament.name.label("tournament_name"),
@@ -220,8 +223,12 @@ async def _build_tournament_history(
             models.Tournament,
             models.Player.tournament_id == models.Tournament.id,
         )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .where(
-            models.Player.user_id.in_(player_ids),
+            models.WorkspaceMember.player_id.in_(player_ids),
             models.Player.tournament_id != current_tournament_id,
             models.Tournament.workspace_id == workspace_id,
         )
@@ -235,9 +242,7 @@ async def _build_tournament_history(
     # --- Step 3: resolve division-grid versions (Redis-cached, batched) ---
     # ``get_effective_division_grid_version_id`` is Redis-backed, so the many past
     # tournaments collapse to a handful of distinct version ids cheaply.
-    tournament_ids_with_rank = {
-        tournament_id for tournament_id, _uid, _role, rank, _name in rows if rank is not None
-    }
+    tournament_ids_with_rank = {tournament_id for tournament_id, _uid, _role, rank, _name in rows if rank is not None}
     tournament_to_version: dict[int, int | None] = {}
     for tid in tournament_ids_with_rank:
         tournament_to_version[tid] = await get_effective_division_grid_version_id(
@@ -250,9 +255,7 @@ async def _build_tournament_history(
     runtime_grid_by_version: dict[int, DivisionGrid] = {}
     for vid in distinct_version_ids:
         snapshot = await load_division_grid_snapshot(session, vid)
-        runtime_grid_by_version[vid] = (
-            snapshot.to_runtime_grid() if snapshot is not None else load_runtime_grid(None)
-        )
+        runtime_grid_by_version[vid] = snapshot.to_runtime_grid() if snapshot is not None else load_runtime_grid(None)
 
     # Full version metadata for the response map — ONE batched query, validated once.
     version_read_by_id: dict[int, DivisionGridVersionRead] = {}
@@ -263,9 +266,7 @@ async def _build_tournament_history(
             .where(models.DivisionGridVersion.id.in_(distinct_version_ids))
         )
         for version in version_rows:
-            version_read_by_id[int(version.id)] = DivisionGridVersionRead.model_validate(
-                version, from_attributes=True
-            )
+            version_read_by_id[int(version.id)] = DivisionGridVersionRead.model_validate(version, from_attributes=True)
 
     # --- Step 4: build per-registration history (deduped by tournament, capped) ---
     history_map: dict[int, list[TournamentHistoryEntry]] = {}
@@ -316,10 +317,6 @@ async def _build_tournament_history(
         for entry in entries
         if entry.division_grid_version_id is not None
     }
-    division_grids = {
-        str(vid): version_read_by_id[vid]
-        for vid in referenced_version_ids
-        if vid in version_read_by_id
-    }
+    division_grids = {str(vid): version_read_by_id[vid] for vid in referenced_version_ids if vid in version_read_by_id}
 
     return history_map, count_map, division_grids

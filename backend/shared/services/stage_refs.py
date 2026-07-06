@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.models.stage import Stage, StageItem
 from shared.models.tournament import TournamentGroup
+from shared.models.tournament.stage import Stage, StageItem
 
 __all__ = (
     "StageRefs",
@@ -37,13 +37,9 @@ class StageRefs:
     tournament_group_id: int | None
 
 
-async def _load_group(
-    session: AsyncSession, group_id: int
-) -> TournamentGroup | None:
+async def _load_group(session: AsyncSession, group_id: int) -> TournamentGroup | None:
     result = await session.execute(
-        sa.select(TournamentGroup)
-        .where(TournamentGroup.id == group_id)
-        .options(selectinload(TournamentGroup.stage))
+        sa.select(TournamentGroup).where(TournamentGroup.id == group_id).options(selectinload(TournamentGroup.stage))
     )
     return result.scalar_one_or_none()
 

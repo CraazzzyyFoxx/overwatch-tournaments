@@ -28,8 +28,16 @@ def team_entities(in_entities: list[str], child: typing.Any | None = None) -> li
         players_entities = utils.prepare_entities(in_entities, "players")
         players_entity = utils.selectin_entity(child, models.Team.players)
         entities.append(players_entity)
+        # PlayerRead.user_id is a required field (resolved from
+        # workspace_member.player_id, contract step iwrefac07), so
+        # workspace_member itself must always be loaded here -- not just when
+        # "user" is requested. The nested workspace_member.player (+ further
+        # user sub-entities) stays gated behind "user" since that's the
+        # expensive/optional part (full user profile, not just its id).
+        workspace_member_entity = utils.join_entity(players_entity, models.Player.workspace_member)
+        entities.append(workspace_member_entity)
         if "user" in players_entities:
-            user_entity = utils.join_entity(players_entity, models.Player.user)
+            user_entity = utils.join_entity(workspace_member_entity, models.WorkspaceMember.player)
             entities.append(user_entity)
             entities.extend(user_service.user_entities(utils.prepare_entities(players_entities, "user"), user_entity))
     if "captain" in in_entities:
@@ -59,8 +67,14 @@ def player_entities(entities_in: list[str], child: typing.Any | None = None) -> 
     """
     entities = []
 
+    # PlayerRead.user_id is a required field resolved from
+    # workspace_member.player_id (contract step iwrefac07), so workspace_member
+    # is always loaded here -- the nested .player (full user profile) stays
+    # gated behind "user".
+    workspace_member_entity = utils.join_entity(child, models.Player.workspace_member)
+    entities.append(workspace_member_entity)
     if "user" in entities_in:
-        entities.append(utils.join_entity(child, models.Player.user))
+        entities.append(utils.join_entity(workspace_member_entity, models.WorkspaceMember.player))
     if "tournament" in entities_in:
         entities.append(utils.join_entity(child, models.Player.tournament))
     if "team" in entities_in:
@@ -154,11 +168,18 @@ async def get_by_tournament_challonge_id(
     query = (
         sa.select(models.Team)
         .options(*team_entities(entities))
-        .join(models.ChallongeTeam, models.Team.id == models.ChallongeTeam.team_id)
+        .join(
+            models.ChallongeParticipantMapping,
+            models.ChallongeParticipantMapping.team_id == models.Team.id,
+        )
+        .join(
+            models.ChallongeSource,
+            models.ChallongeSource.id == models.ChallongeParticipantMapping.source_id,
+        )
         .where(
             sa.and_(
-                models.ChallongeTeam.tournament_id == tournament_id,
-                models.ChallongeTeam.challonge_id == challonge_id,
+                models.ChallongeSource.tournament_id == tournament_id,
+                models.ChallongeParticipantMapping.challonge_participant_id == challonge_id,
             )
         )
     )
@@ -254,7 +275,7 @@ async def get_player_by_user_and_tournament(
         .options(*player_entities(entities))
         .where(
             sa.and_(
-                models.Player.user_id == user_id,
+                models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
             )
         )

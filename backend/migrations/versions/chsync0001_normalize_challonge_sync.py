@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["stage_id"], ["tournament.stage.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["stage_item_id"], ["tournament.stage_item.id"], ondelete="SET NULL"),
-        sa.UniqueConstraint("tournament_id", "challonge_tournament_id", name="uq_challonge_source_tournament_challonge"),
+        sa.UniqueConstraint(
+            "tournament_id", "challonge_tournament_id", name="uq_challonge_source_tournament_challonge"
+        ),
         schema="tournament",
     )
     op.create_index("ix_challonge_source_tournament", "challonge_source", ["tournament_id"], schema="tournament")
@@ -150,15 +152,18 @@ def upgrade() -> None:
     )
 
     conn = op.get_bind()
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_source
             (tournament_id, stage_id, stage_item_id, challonge_tournament_id, slug, source_type, created_at)
         SELECT t.id, NULL, NULL, t.challonge_id, t.challonge_slug, 'tournament', now()
         FROM tournament.tournament t
         WHERE t.challonge_id IS NOT NULL
         ON CONFLICT (tournament_id, challonge_tournament_id) DO NOTHING
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_source
             (tournament_id, stage_id, stage_item_id, challonge_tournament_id, slug, source_type, created_at)
         SELECT
@@ -181,8 +186,10 @@ def upgrade() -> None:
         SET stage_id = COALESCE(tournament.challonge_source.stage_id, EXCLUDED.stage_id),
             stage_item_id = COALESCE(tournament.challonge_source.stage_item_id, EXCLUDED.stage_item_id),
             slug = COALESCE(tournament.challonge_source.slug, EXCLUDED.slug)
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_source
             (tournament_id, stage_id, stage_item_id, challonge_tournament_id, slug, source_type, created_at)
         SELECT
@@ -205,8 +212,10 @@ def upgrade() -> None:
         SET stage_id = COALESCE(tournament.challonge_source.stage_id, EXCLUDED.stage_id),
             stage_item_id = COALESCE(tournament.challonge_source.stage_item_id, EXCLUDED.stage_item_id),
             slug = COALESCE(tournament.challonge_source.slug, EXCLUDED.slug)
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_participant_mapping
             (source_id, challonge_participant_id, team_id, created_at)
         SELECT DISTINCT ON (src.id, ct.challonge_id)
@@ -222,8 +231,10 @@ def upgrade() -> None:
          ))
         ORDER BY src.id, ct.challonge_id, ct.id
         ON CONFLICT (source_id, challonge_participant_id) DO NOTHING
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_match_mapping
             (source_id, challonge_match_id, encounter_id, created_at)
         SELECT DISTINCT ON (src.id, e.challonge_id)
@@ -241,7 +252,8 @@ def upgrade() -> None:
         WHERE e.challonge_id IS NOT NULL
         ORDER BY src.id, e.challonge_id, e.id
         ON CONFLICT (source_id, challonge_match_id) DO NOTHING
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:
@@ -257,8 +269,12 @@ def downgrade() -> None:
     op.drop_index("ix_challonge_match_mapping_source", table_name="challonge_match_mapping", schema="tournament")
     op.drop_table("challonge_match_mapping", schema="tournament")
 
-    op.drop_index("ix_challonge_participant_mapping_team", table_name="challonge_participant_mapping", schema="tournament")
-    op.drop_index("ix_challonge_participant_mapping_source", table_name="challonge_participant_mapping", schema="tournament")
+    op.drop_index(
+        "ix_challonge_participant_mapping_team", table_name="challonge_participant_mapping", schema="tournament"
+    )
+    op.drop_index(
+        "ix_challonge_participant_mapping_source", table_name="challonge_participant_mapping", schema="tournament"
+    )
     op.drop_table("challonge_participant_mapping", schema="tournament")
 
     op.drop_index("ix_challonge_source_stage_item", table_name="challonge_source", schema="tournament")

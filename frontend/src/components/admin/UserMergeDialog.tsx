@@ -28,6 +28,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { SocialIcon } from "@/components/social/SocialIcon";
+import { getSocialProviderConfig } from "@/lib/social-providers";
 
 interface UserMergeDialogProps {
   sourceUser: User;
@@ -37,16 +39,26 @@ interface UserMergeDialogProps {
 }
 
 type FieldKey = keyof UserMergeFieldPolicy;
-type IdentitySelectionKey = keyof UserMergeIdentitySelection;
+
+// The backend reports affected-record counts under raw FK-path keys
+// (e.g. "tournament.player.workspace_member_id"). Map them to human-readable
+// labels for the admin preview; unknown keys fall back to the raw key.
+const AFFECTED_RECORD_LABELS: Record<string, string> = {
+  "tournament.player.workspace_member_id": "Tournament roster entries",
+  "balancer.registration.workspace_member_id": "Balancer registrations",
+  "achievements.evaluation_result.workspace_member_id": "Achievement results",
+  "achievements.override.workspace_member_id": "Achievement overrides",
+  "players.user.auth_user_id": "Linked account"
+};
+
+function affectedRecordLabel(key: string): string {
+  return AFFECTED_RECORD_LABELS[key] ?? key;
+}
 
 function buildDefaultIdentitySelection(
   preview: UserMergePreviewResponse
 ): UserMergeIdentitySelection {
-  return {
-    discord_ids: preview.source.discord.map((item) => item.id),
-    battle_tag_ids: preview.source.battle_tag.map((item) => item.id),
-    twitch_ids: preview.source.twitch.map((item) => item.id)
-  };
+  return { social_account_ids: preview.source.social_accounts.map((item) => item.id) };
 }
 
 function mergePreviewToFieldPolicy(preview: UserMergePreviewResponse): UserMergeFieldPolicy {
@@ -143,7 +155,9 @@ function IdentitySelectionSection({
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
+                  <SocialIcon provider={item.provider} size={14} />
                   <span className="truncate text-sm font-medium">{item.value}</span>
+                  <span className="text-xs text-muted-foreground">{getSocialProviderConfig(item.provider).label}</span>
                   {item.duplicate_on_target ? (
                     <Badge variant="outline" className="text-xs">
                       Duplicate on target
@@ -172,9 +186,7 @@ export function UserMergeDialog({
     avatar_url: "target"
   });
   const [identitySelection, setIdentitySelection] = useState<UserMergeIdentitySelection>({
-    discord_ids: [],
-    battle_tag_ids: [],
-    twitch_ids: []
+    social_account_ids: []
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -213,23 +225,18 @@ export function UserMergeDialog({
   const handleTargetSelect = (user: MinimizedUser | undefined) => {
     setTargetUser(user);
     setFieldPolicy({ name: "target", avatar_url: "target" });
-    setIdentitySelection({ discord_ids: [], battle_tag_ids: [], twitch_ids: [] });
+    setIdentitySelection({ social_account_ids: [] });
     setConfirmDelete(false);
     previewMutation.reset();
     executeMutation.reset();
   };
 
-  const handleIdentityToggle = (
-    key: IdentitySelectionKey,
-    identityId: number,
-    checked: boolean
-  ) => {
-    setIdentitySelection((prev) => {
-      const nextValues = checked
-        ? [...prev[key], identityId]
-        : prev[key].filter((value) => value !== identityId);
-      return { ...prev, [key]: nextValues };
-    });
+  const handleIdentityToggle = (identityId: number, checked: boolean) => {
+    setIdentitySelection((prev) => ({
+      social_account_ids: checked
+        ? [...prev.social_account_ids, identityId]
+        : prev.social_account_ids.filter((value) => value !== identityId)
+    }));
   };
 
   const handleExecute = () => {
@@ -336,7 +343,7 @@ export function UserMergeDialog({
                             key={key}
                             className="flex items-center justify-between gap-3 text-sm"
                           >
-                            <span className="text-muted-foreground">{key}</span>
+                            <span className="text-muted-foreground">{affectedRecordLabel(key)}</span>
                             <Badge variant="secondary" className="tabular-nums">
                               {count}
                             </Badge>
@@ -352,32 +359,12 @@ export function UserMergeDialog({
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <IdentitySelectionSection
-                  label="Discord identities"
-                  items={preview.source.discord}
-                  selectedIds={identitySelection.discord_ids}
-                  onToggle={(identityId, checked) =>
-                    handleIdentityToggle("discord_ids", identityId, checked)
-                  }
-                />
-                <IdentitySelectionSection
-                  label="BattleTag identities"
-                  items={preview.source.battle_tag}
-                  selectedIds={identitySelection.battle_tag_ids}
-                  onToggle={(identityId, checked) =>
-                    handleIdentityToggle("battle_tag_ids", identityId, checked)
-                  }
-                />
-                <IdentitySelectionSection
-                  label="Twitch identities"
-                  items={preview.source.twitch}
-                  selectedIds={identitySelection.twitch_ids}
-                  onToggle={(identityId, checked) =>
-                    handleIdentityToggle("twitch_ids", identityId, checked)
-                  }
-                />
-              </div>
+              <IdentitySelectionSection
+                label="Social identities to move"
+                items={preview.source.social_accounts}
+                selectedIds={identitySelection.social_account_ids}
+                onToggle={handleIdentityToggle}
+              />
 
               <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                 <label className="flex items-start gap-3">

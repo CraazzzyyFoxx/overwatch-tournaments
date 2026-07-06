@@ -24,9 +24,10 @@ import { LogStatsName } from "@/types/stats.types";
 import { apiFetch } from "@/lib/api-fetch";
 
 // Public, workspace-scoped profile reads are cached in the Next Data Cache for
-// this long (seconds) when fetched server-side. Tagged for future on-demand
-// revalidation (`revalidateTag("user:<id>")`). Client (react-query) fetches
-// ignore the `next` option.
+// this long (seconds) when fetched server-side. Tagged for on-demand
+// revalidation: mutations call the `revalidateUser` server action
+// (src/app/actions/users.ts) to bust "users" / `user:<id>`. Client (react-query)
+// fetches ignore the `next` option.
 const USER_TTL_SECONDS = 300;
 
 export default class userService {
@@ -250,7 +251,8 @@ export default class userService {
     query,
     role,
     divMin,
-    divMax
+    divMax,
+    workspaceId
   }: {
     page?: number;
     perPage?: number;
@@ -260,6 +262,7 @@ export default class userService {
     role?: UserRoleType;
     divMin?: number;
     divMax?: number;
+    workspaceId?: number | null;
   } = {}): Promise<PaginatedResponse<UserOverviewRow>> {
     return apiFetch("/api/v1/users/overview", {
       query: {
@@ -271,7 +274,8 @@ export default class userService {
         fields: ["name"],
         role,
         div_min: divMin,
-        div_max: divMax
+        div_max: divMax,
+        workspace_id: workspaceId ?? undefined
       }
     }).then((res) => res.json());
   }
@@ -280,19 +284,22 @@ export default class userService {
     query,
     role,
     divMin,
-    divMax
+    divMax,
+    workspaceId
   }: {
     query?: string;
     role?: UserRoleType;
     divMin?: number;
     divMax?: number;
+    workspaceId?: number | null;
   } = {}): Promise<UserOverviewStats> {
     return apiFetch("/api/v1/users/overview/stats", {
       query: {
         query,
         role,
         div_min: divMin,
-        div_max: divMax
+        div_max: divMax,
+        workspace_id: workspaceId ?? undefined
       }
     }).then((res) => res.json());
   }
@@ -304,7 +311,8 @@ export default class userService {
     divMax,
     letter,
     perLetter = 12,
-    maxLetters = 27
+    maxLetters = 27,
+    workspaceId
   }: {
     query?: string;
     role?: UserRoleType;
@@ -313,6 +321,7 @@ export default class userService {
     letter?: string;
     perLetter?: number;
     maxLetters?: number;
+    workspaceId?: number | null;
   } = {}): Promise<UserCatalogResponse> {
     return apiFetch("/api/v1/users/overview/catalog", {
       query: {
@@ -322,7 +331,8 @@ export default class userService {
         div_max: divMax,
         letter,
         per_letter: perLetter,
-        max_letters: maxLetters
+        max_letters: maxLetters,
+        workspace_id: workspaceId ?? undefined
       }
     }).then((res) => res.json());
   }

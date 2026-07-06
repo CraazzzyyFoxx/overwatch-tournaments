@@ -1,6 +1,8 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.messaging.config import (
     TOURNAMENT_BRACKET_JOBS_DLQ,
     TOURNAMENT_BRACKET_JOBS_QUEUE,
@@ -19,11 +21,11 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import TournamentComputationJobEvent
-
 from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
-from src.rpc import admin_misc, integrations, public_rpc, reads as rpc_reads, registration_admin, stage_admin
+from src.rpc import admin_misc, integrations, public_rpc, registration_admin, stage_admin
+from src.rpc import reads as rpc_reads
 from src.services.admin import registry as admin_registry
 from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
@@ -42,7 +44,13 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(
+    config.settings.rabbitmq_url,
+    logger=logger,
+    # Channel QoS backpressure: bound how many messages are in flight on this
+    # worker at once; excess waits in RabbitMQ instead of piling up in-process.
+    default_channel=Channel(prefetch_count=config.settings.broker_prefetch_count),
+)
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
 
@@ -134,6 +142,11 @@ async def start_worker() -> None:
 
 @app.on_shutdown
 async def stop_scheduler() -> None:
+    # wait=False intentionally abandons in-flight scheduled jobs (outbox drain,
+    # sheet/Challonge sync) instead of blocking shutdown for up to minutes.
+    # This is safe: the outbox drain is transactional per-row, and the sync
+    # flows commit incrementally (per encounter / per batch) and are idempotent
+    # on re-run, so an interrupted job resumes cleanly on the next tick.
     scheduler.shutdown(wait=False)
 
 

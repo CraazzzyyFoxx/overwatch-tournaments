@@ -24,7 +24,7 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 
 from shared.core import enums  # noqa: E402
-from shared.models.encounter_link import EncounterLink  # noqa: E402
+from shared.models.tournament.encounter_link import EncounterLink  # noqa: E402
 from shared.services.bracket import advancement  # noqa: E402
 
 
@@ -67,15 +67,18 @@ class BracketAdvancementNameTests(IsolatedAsyncioTestCase):
             flush=AsyncMock(),
         )
 
-        with patch.object(
-            advancement,
-            "_maybe_create_grand_final_reset",
-            AsyncMock(return_value=None),
-        ), patch.object(
-            advancement,
-            "_build_encounter_name_for_ids",
-            AsyncMock(return_value="Team Alpha vs Team Gamma"),
-        ) as build_name:
+        with (
+            patch.object(
+                advancement,
+                "_maybe_create_grand_final_reset",
+                AsyncMock(return_value=None),
+            ),
+            patch.object(
+                advancement,
+                "_build_encounter_name_for_ids",
+                AsyncMock(return_value="Team Alpha vs Team Gamma"),
+            ) as build_name,
+        ):
             updated = await advancement.advance_winner(session, source)
 
         self.assertEqual(11, target.home_team_id)

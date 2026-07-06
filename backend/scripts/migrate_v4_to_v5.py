@@ -12,10 +12,7 @@ Usage:
     uv run python scripts/migrate_v4_to_v5.py
 """
 
-import sys
-
 import psycopg
-
 
 V4_DSN = "postgresql://system:0wJxwO4x3OQXw9unSolw@home.craazzzyyfoxx.me:6432/anak_v4"
 V5_DSN = "postgresql://system:0wJxwO4x3OQXw9unSolw@home.craazzzyyfoxx.me:6432/anak_v5"
@@ -120,8 +117,8 @@ def phase_a_bulk_copy(v4: psycopg.Connection, v5: psycopg.Connection) -> None:
         # Export from v4
         print(f"  Copying {qualified}...", end=" ", flush=True)
 
-        with v4.cursor().copy(f'COPY (SELECT {cols_str} FROM {qualified}) TO STDOUT') as v4_copy:
-            with v5.cursor().copy(f'COPY {qualified} ({cols_str}) FROM STDIN') as v5_copy:
+        with v4.cursor().copy(f"COPY (SELECT {cols_str} FROM {qualified}) TO STDOUT") as v4_copy:
+            with v5.cursor().copy(f"COPY {qualified} ({cols_str}) FROM STDIN") as v5_copy:
                 for data in v4_copy:
                     v5_copy.write(data)
 
@@ -203,13 +200,9 @@ def phase_c_reset_sequences(v5: psycopg.Connection) -> None:
     for schema, table in all_tables:
         qualified = qualify(schema, table)
         try:
-            seq = v5.execute(
-                f"SELECT pg_get_serial_sequence('{schema}.{table}', 'id')"
-            ).fetchone()[0]
+            seq = v5.execute(f"SELECT pg_get_serial_sequence('{schema}.{table}', 'id')").fetchone()[0]
             if seq:
-                v5.execute(
-                    f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {qualified}), 0) + 1, false)"
-                )
+                v5.execute(f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {qualified}), 0) + 1, false)")
         except Exception:
             pass  # Table might not have a serial/identity column
 

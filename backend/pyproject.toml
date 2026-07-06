@@ -10,7 +10,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["shared", "app-service", "identity-service", "discord-service", "parser-service", "balancer-service", "tournament-service", "analytics-service", "mixtura-balancer-tournament"]
+members = ["shared", "app-service", "identity-service", "discord-service", "parser-service", "balancer-service", "tournament-service", "analytics-service"]
 
 [tool.uv.sources]
 shared = { workspace = true }
@@ -51,7 +51,7 @@ extra-paths = [
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-exclude = ["alembic", "app/src/schemas/__init__.py", "app/src/models/__init__.py"]
+exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = [
@@ -70,7 +70,19 @@ ignore = [
     "W191",  # indentation contains tabs
     "B904",  # Allow raising exceptions without from e, for HTTPException
     "F403", # 'from module import *' used; unable to detect undefined names
+    "F405", # may be undefined, or defined from star imports (companion to F403; aggregators re-export via `*`)
+    "UP046", # non-pep695 generic class — hold off on PEP 695 syntax (pydantic generics)
+    "UP047", # non-pep695 generic function — hold off on PEP 695 syntax
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Test modules legitimately set env vars / sys.path before importing app code.
+"**/tests/**" = ["E402"]
+# Aggregator __init__.py files re-export via `*` in a hand-crafted dependency
+# order (e.g. `hero` before `achievement`, which consumes `HeroRead`). Import
+# sorting (I001) would reorder them alphabetically and break circular-import
+# avoidance, and re-exports look like unused imports (F401).
+"**/__init__.py" = ["I001", "F401"]
 
 [tool.ruff.lint.pyupgrade]
 # Preserve types, even if a file imports `from __future__ import annotations`.
@@ -79,4 +91,19 @@ keep-runtime-typing = true
 [tool.ruff.lint.isort]
 # Treat these as first-party so `shared.*` isn't grouped with stdlib/third-party.
 known-first-party = ["shared", "src"]
+
+[tool.coverage.run]
+# Per-service suites run with --parallel-mode + --source, then `coverage combine`
+# merges them. relative_files keeps paths portable across the matrix/checkout.
+relative_files = true
+omit = [
+    "*/tests/*",
+    "*/alembic/*",
+    "*/.venv/*",
+    "*/migrations/*",
+    "*/scripts/*",
+]
+
+[tool.coverage.report]
+show_missing = false
 

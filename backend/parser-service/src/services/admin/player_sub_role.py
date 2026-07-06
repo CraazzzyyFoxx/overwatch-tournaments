@@ -1,9 +1,9 @@
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
-from shared.domain.player_sub_roles import normalize_role, normalize_sub_role
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.player_sub_roles import normalize_role, normalize_sub_role
 from src import models
 from src.schemas.admin import player_sub_role as schemas
 
@@ -35,9 +35,7 @@ async def list_sub_roles(
     role: str | None = None,
     include_inactive: bool = False,
 ) -> list[models.PlayerSubRole]:
-    query = select(models.PlayerSubRole).where(
-        models.PlayerSubRole.workspace_id == workspace_id
-    )
+    query = select(models.PlayerSubRole).where(models.PlayerSubRole.workspace_id == workspace_id)
     if role is not None:
         query = query.where(models.PlayerSubRole.role == _normalize_role_or_raise(role))
     if not include_inactive:
@@ -53,9 +51,7 @@ async def list_sub_roles(
 
 
 async def get_sub_role(session: AsyncSession, sub_role_id: int) -> models.PlayerSubRole:
-    result = await session.execute(
-        select(models.PlayerSubRole).where(models.PlayerSubRole.id == sub_role_id)
-    )
+    result = await session.execute(select(models.PlayerSubRole).where(models.PlayerSubRole.id == sub_role_id))
     sub_role = result.scalar_one_or_none()
     if sub_role is None:
         raise HTTPException(

@@ -344,7 +344,7 @@ function BottomPanel({
               {playerName(selectedPlayer)}
             </span>
             <span className="text-xs font-semibold text-white/50 truncate">
-              {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedPlayer.rank_value)} SR · for {onClockTeam?.name}
+              {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedRole ? getRoleRank(selectedPlayer, selectedRole).rank_value : selectedPlayer.rank_value)} SR · for {onClockTeam?.name}
             </span>
           </div>
 
@@ -1509,7 +1509,7 @@ function SelectedPlayerPanel({
   const division = selectedPlayer.division_number ?? (selectedPlayer.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, selectedPlayer.rank_value) : null);
   const secondaryRoles = selectedPlayer.secondary_roles_json ?? [];
   const selectedPlayerRoles = [selectedPlayer.primary_role, ...secondaryRoles] as DraftRole[];
-  const playerNote = selectedPlayer.anomaly_flags?.notes as string | undefined;
+  const playerNote = selectedPlayer.additional_info?.notes as string | undefined;
 
   return (
     <section className={cn(styles.selectedCard, "relative")} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "16px", position: "relative" }}>
@@ -1996,7 +1996,9 @@ interface RosterPlayerProps {
 }
 
 function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerProps) {
-  const division = player.division_number ?? (player.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, player.rank_value) : null);
+  // Show the rank for the role the player was drafted on (off-role aware).
+  const rankValue = draftedRole ? getRoleRank(player, draftedRole).rank_value : player.rank_value;
+  const division = rankValue != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, rankValue) : null;
   const roleLabel = (r: DraftRole) => {
     if (r === "tank") return t("common.roles.tank");
     if (r === "dps") return t("common.roles.dps");
@@ -2042,7 +2044,7 @@ function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerPr
         </div>
       </div>
       {division != null ? (
-        <div className="flex items-center flex-shrink-0" title={`${getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)} (${formatRank(player.rank_value)})`}>
+        <div className="flex items-center flex-shrink-0" title={`${getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)} (${formatRank(rankValue)})`}>
           <PlayerDivisionIcon
             division={division}
             width={26}
@@ -2051,7 +2053,7 @@ function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerPr
           />
         </div>
       ) : (
-        <span className={styles.rosterRank} title={formatRank(player.rank_value)}>&mdash;</span>
+        <span className={styles.rosterRank} title={formatRank(rankValue)}>&mdash;</span>
       )}
     </div>
   );
@@ -2134,18 +2136,16 @@ function getRoleRank(player: DraftPlayer, role: DraftRole): {
   division_number: number | null;
   top_heroes?: Array<string | { slug: string; image_path: string | null }>;
 } {
-  const rolesRanks = player.anomaly_flags?.roles_ranks as Record<string, {
-    rank_value: number | null;
-    division_number: number | null;
-    top_heroes?: Array<string | { slug: string; image_path: string | null }>;
-  }> | undefined;
-  if (rolesRanks && rolesRanks[role]) {
-    return rolesRanks[role];
-  }
-  if (role === player.primary_role) {
-    return { rank_value: player.rank_value, division_number: player.division_number, top_heroes: [] };
-  }
-  return { rank_value: null, division_number: null, top_heroes: [] };
+  const roleRank = player.role_ranks?.[role];
+  const rank_value =
+    roleRank !== undefined && roleRank !== null
+      ? roleRank
+      : role === player.primary_role
+        ? player.rank_value
+        : null;
+  const top_heroes = player.role_top_heroes?.[role] ?? [];
+  // Per-role division is derived from the rank via the grid (resolveDivisionFromRank).
+  return { rank_value, division_number: null, top_heroes };
 }
 
 function playerName(player: DraftPlayer): string {

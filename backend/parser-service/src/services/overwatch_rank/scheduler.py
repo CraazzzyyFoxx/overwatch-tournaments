@@ -15,6 +15,7 @@ from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
+
 from shared.schemas.events import FetchRankEvent
 from shared.services import settings_provider
 from shared.services.distributed_lock import (
@@ -22,7 +23,6 @@ from shared.services.distributed_lock import (
     acquire_distributed_lock,
     release_distributed_lock,
 )
-
 from src.core import db
 
 from . import service, tasks
@@ -86,9 +86,7 @@ async def run_collection_tick(
                 logger.debug("OverFast rank collection disabled; skipping tick")
                 return 0
             if cfg.scope == "all":
-                seeded = await service.seed_states_for_all_battle_tags(
-                    session, interval_seconds=cfg.interval_seconds
-                )
+                seeded = await service.seed_states_for_all_battle_tags(session, interval_seconds=cfg.interval_seconds)
             else:
                 seeded = await service.seed_states_from_registrations(
                     session,
@@ -116,7 +114,7 @@ async def run_collection_tick(
                 interval_seconds=cfg.interval_seconds,
                 jitter_fraction=cfg.jitter_fraction,
             )
-            items = [(s.battle_tag_id, s.battle_tag) for s in due]
+            items = [(s.social_account_id, s.battle_tag) for s in due]
             await session.commit()
 
         # Coverage stretches past the configured interval when the population is
@@ -136,17 +134,16 @@ async def run_collection_tick(
                 )
 
         enqueued = 0
-        for battle_tag_id, battle_tag in items:
+        for social_account_id, battle_tag in items:
             event = FetchRankEvent(
-                battle_tag_id=battle_tag_id,
+                social_account_id=social_account_id,
                 battle_tag=battle_tag,
                 source="scheduled",
             )
             if await tasks.enqueue_fetch(event, priority=False, broker=broker, redis=redis_client):
                 enqueued += 1
         logger.info(
-            "OverFast rank tick: scope={} in_scope={} seeded={} per_tick={} due={} "
-            "enqueued={} effective_interval={}s",
+            "OverFast rank tick: scope={} in_scope={} seeded={} per_tick={} due={} enqueued={} effective_interval={}s",
             cfg.scope,
             total_in_scope,
             seeded,

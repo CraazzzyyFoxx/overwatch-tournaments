@@ -51,9 +51,7 @@ async def main() -> int:
 
     print(f"Connecting to {host}:{port}/{db} as {user} …")
     try:
-        conn = await asyncpg.connect(
-            host=host, port=port, database=db, user=user, password=password, timeout=15
-        )
+        conn = await asyncpg.connect(host=host, port=port, database=db, user=user, password=password, timeout=15)
     except Exception as exc:
         print(f"!! CONNECT FAILED: {type(exc).__name__}: {exc}")
         return 1
@@ -63,12 +61,9 @@ async def main() -> int:
 
         latest = await conn.fetchval("SELECT max(id) FROM tournament.tournament")
         total_t = await conn.fetchval("SELECT count(*) FROM tournament.tournament")
-        t_with_perf = await conn.fetchval(
-            "SELECT count(DISTINCT tournament_id) FROM analytics.performance"
-        )
+        t_with_perf = await conn.fetchval("SELECT count(DISTINCT tournament_id) FROM analytics.performance")
         perf_rows, perf_nonzero = await conn.fetchrow(
-            "SELECT count(*), count(*) FILTER (WHERE local_zscore <> 0) "
-            "FROM analytics.performance"
+            "SELECT count(*), count(*) FILTER (WHERE local_zscore <> 0) FROM analytics.performance"
         )
         print("=== Performance v2 overall coverage ===")
         print(f"  latest tournament id = {latest}   total tournaments = {total_t}")
@@ -104,8 +99,8 @@ async def main() -> int:
             roster = r["roster"] or 0
             perf = r["perf_rows"] or 0
             gap = roster - perf
-            on_fallback = "ALL on fallback" if perf == 0 else (
-                f"{gap} of {roster} on fallback" if gap > 0 else "covered"
+            on_fallback = (
+                "ALL on fallback" if perf == 0 else (f"{gap} of {roster} on fallback" if gap > 0 else "covered")
             )
             print(
                 f"  t#{r['id']:>4}  roster={roster:>3}  perf={perf:>3} "
@@ -129,8 +124,7 @@ async def main() -> int:
             """
         )
         if not dist:
-            print("  (no analytics.performance rows at all — shift signal is 100% on the "
-                  "division-blind fallback)")
+            print("  (no analytics.performance rows at all — shift signal is 100% on the division-blind fallback)")
         for r in dist:
             print(
                 f"  t#{r['tournament_id']:>4}  n={r['n']:>3}  "

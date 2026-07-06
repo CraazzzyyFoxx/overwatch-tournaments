@@ -32,8 +32,7 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-from shared.models.auth_user import AuthUser
-
+from shared.models.identity.auth_user import AuthUser
 from src.core import db
 from src.rpc import mutations
 

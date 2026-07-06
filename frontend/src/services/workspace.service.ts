@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-fetch";
+import type { PaginatedResponse } from "@/types/pagination.types";
 import {
   DivisionGridEntity,
   DivisionGridMarketplaceGrid,
@@ -48,8 +49,40 @@ export default class workspaceService {
     }).then((r) => r.json());
   }
 
-  static async getMembers(workspaceId: number): Promise<WorkspaceMember[]> {
-    return apiFetch(`/api/v1/workspaces/${workspaceId}/members`).then((r) => r.json());
+  static async getMembers(
+    workspaceId: number,
+    params?: {
+      page?: number;
+      per_page?: number;
+      search?: string;
+      role_id?: number | null;
+      sort?: "username" | "role";
+      order?: "asc" | "desc";
+    }
+  ): Promise<PaginatedResponse<WorkspaceMember>> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/members`, {
+      query: {
+        page: params?.page,
+        per_page: params?.per_page,
+        search: params?.search?.trim() || undefined,
+        role_id: params?.role_id ?? undefined,
+        sort: params?.sort,
+        order: params?.order
+      }
+    }).then((r) => r.json());
+  }
+
+  /** Fetch every member (for selectors, not the paginated table). */
+  static async getMembersAll(workspaceId: number): Promise<WorkspaceMember[]> {
+    const page = await this.getMembers(workspaceId, { per_page: -1 });
+    return page.results;
+  }
+
+  /** Grant the baseline "member" role to every member currently without a role. */
+  static async autofillMemberRoles(workspaceId: number): Promise<{ assigned: number }> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/members/autofill-roles`, {
+      method: "POST"
+    }).then((r) => r.json());
   }
 
   static async addMember(

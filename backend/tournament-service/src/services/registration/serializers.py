@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from shared.balancer_registration_statuses import StatusMeta, build_unknown_status_meta
 from sqlalchemy.orm.attributes import NO_VALUE
 
+from shared.balancer_registration_statuses import StatusMeta, build_unknown_status_meta
 from src import models
 from src.schemas.admin import balancer as admin_schemas
 from src.schemas.registration import RegistrationFormRead
@@ -47,6 +47,7 @@ def serialize_registration_role(
 def serialize_registration(
     registration: models.BalancerRegistration,
     *,
+    workspace_id: int,
     status_meta_map: dict[str, dict[str, StatusMeta]] | None = None,
     ow_ranks_for_user: dict[str, int] | None = None,
 ) -> admin_schemas.BalancerRegistrationRead:
@@ -54,6 +55,10 @@ def serialize_registration(
     roles = loaded_relationship_or_none(registration, "roles") or []
     reviewer = loaded_relationship_or_none(registration, "reviewer")
     checked_in_by_user = loaded_relationship_or_none(registration, "checked_in_by_user")
+    # API shape: user_id stays in the payload (frontend depends on it) but is
+    # now derived from the member anchor — callers must eager-load
+    # workspace_member (loaded_relationship_or_none never lazy-loads).
+    workspace_member = loaded_relationship_or_none(registration, "workspace_member")
     sorted_roles = sorted(roles, key=lambda item: (item.priority, item.role))
     resolved_status_meta = (
         status_meta_map["registration"].get(registration.status) if status_meta_map is not None else None
@@ -64,9 +69,8 @@ def serialize_registration(
     return admin_schemas.BalancerRegistrationRead(
         id=registration.id,
         tournament_id=registration.tournament_id,
-        workspace_id=registration.workspace_id,
-        auth_user_id=registration.auth_user_id,
-        user_id=registration.user_id,
+        workspace_id=workspace_id,
+        user_id=workspace_member.player_id if workspace_member is not None else None,
         display_name=registration.display_name,
         battle_tag=registration.battle_tag,
         battle_tag_normalized=registration.battle_tag_normalized,
@@ -94,10 +98,7 @@ def serialize_registration(
         reviewed_at=registration.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
-        roles=[
-            serialize_registration_role(role, (ow_ranks_for_user or {}).get(role.role))
-            for role in sorted_roles
-        ],
+        roles=[serialize_registration_role(role, (ow_ranks_for_user or {}).get(role.role)) for role in sorted_roles],
     )
 
 

@@ -5,16 +5,20 @@ from __future__ import annotations
 import re
 from typing import Any, NoReturn
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import enums
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider, normalize_social_handle
 from shared.domain.player_sub_roles import (
     REGISTRATION_ROLE_CODES,
     REGISTRATION_TO_CANONICAL,
     normalize_sub_role,
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
-
+from shared.models.identity.social import SocialAccount
 from src.schemas.registration import (
     BuiltInFieldConfig,
     CustomFieldDefinition,
@@ -24,6 +28,19 @@ from src.schemas.registration import (
 
 BATTLE_TAG_FIELDS = {"battle_tag", "smurf_tags"}
 TEXTUAL_CUSTOM_FIELD_TYPES = {"text", "number", "url"}
+
+# Identity registration fields that can require an OAuth-verified social account,
+# mapped to the canonical social provider their submitted handle must match.
+VERIFIED_FIELD_PROVIDERS: dict[str, str] = {
+    "battle_tag": SocialProvider.BATTLENET,
+    "discord_nick": SocialProvider.DISCORD,
+    "twitch_nick": SocialProvider.TWITCH,
+}
+_VERIFIED_FIELD_LABELS = {
+    "battle_tag": "BattleTag",
+    "discord_nick": "Discord",
+    "twitch_nick": "Twitch",
+}
 
 _ROLE_LABELS = {"tank": "Tank", "dps": "DPS", "support": "Support"}
 _HERO_CLASS_BY_CANONICAL = {
@@ -154,9 +171,7 @@ def _validate_role_heroes(
             if entry is None:
                 _validation_error(f"Unknown hero: {slug}.")
             if expected_class is not None and entry.hero_class != expected_class:
-                _validation_error(
-                    f"Hero '{slug}' is not a {_ROLE_LABELS.get(role_code, role_code)} hero."
-                )
+                _validation_error(f"Hero '{slug}' is not a {_ROLE_LABELS.get(role_code, role_code)} hero.")
 
     if config.required and not any_selected:
         _validation_error("Select at least one top hero.")
@@ -407,3 +422,67 @@ def validate_registration_input(
             provided=provided,
             partial=partial,
         )
+
+
+async def validate_verified_identity(
+    session: AsyncSession,
+    *,
+    form: Any,
+    payload: RegistrationCreate | RegistrationUpdate,
+    player_id: int | None,
+    partial: bool = False,
+) -> None:
+    """Enforce ``require_verified`` identity fields against the registrant's
+    OAuth-verified social accounts.
+
+    A field flagged ``require_verified`` must carry a handle matching one of the
+    registrant's verified ``social_account`` rows for the field's provider.
+    Ownership is proven only via OAuth (see identity-service), so a registrant
+    with no linked player — or no verified account for the provider — is rejected.
+    ``require_verified`` implies the field is required.
+    """
+    built_in_fields = {
+        key: _coerce_built_in_field_config(value)
+        for key, value in (getattr(form, "built_in_fields_json", None) or {}).items()
+    }
+    provided_fields = payload.model_fields_set if partial else None
+
+    # (field_key, provider, submitted_value) for every gated, in-scope field.
+    required: list[tuple[str, str, str]] = []
+    for field_key, provider in VERIFIED_FIELD_PROVIDERS.items():
+        config = built_in_fields.get(field_key)
+        if config is None or not config.enabled or not config.require_verified:
+            continue
+        if partial and provided_fields is not None and field_key not in provided_fields:
+            continue
+        label = _VERIFIED_FIELD_LABELS[field_key]
+        value = getattr(payload, field_key, None)
+        if not value or not str(value).strip():
+            _validation_error(f"{label} must be provided and verified via OAuth.")
+        required.append((field_key, provider, str(value)))
+
+    if not required:
+        return
+
+    if player_id is None:
+        _validation_error("A verified account is required. Link the requested account via OAuth in your profile first.")
+
+    providers = {provider for _, provider, _ in required}
+    rows = (
+        await session.execute(
+            select(SocialAccount.provider, SocialAccount.username_normalized).where(
+                SocialAccount.user_id == player_id,
+                SocialAccount.provider.in_(providers),
+                SocialAccount.is_verified.is_(True),
+            )
+        )
+    ).all()
+    verified_by_provider: dict[str, set[str]] = {provider: set() for provider in providers}
+    for provider, normalized in rows:
+        if normalized:
+            verified_by_provider.setdefault(provider, set()).add(normalized)
+
+    for field_key, provider, value in required:
+        label = _VERIFIED_FIELD_LABELS[field_key]
+        if normalize_social_handle(provider, value) not in verified_by_provider.get(provider, set()):
+            _validation_error(f"{label} must match an OAuth-verified account linked to your profile.")

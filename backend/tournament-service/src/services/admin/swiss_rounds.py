@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from loguru import logger
-from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from src import models
 from src.services.admin import stage as stage_service
 from src.services.standings import swiss_auto_round

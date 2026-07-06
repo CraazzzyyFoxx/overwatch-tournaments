@@ -29,69 +29,19 @@ Commit semantics:
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit.annotations import RabbitMessage
-from pydantic import ValidationError
 
-from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
-from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
-
-from src import models
-from src.core import auth, db
+from shared.rpc.identity import ensure_workspace_permission
+from src.core import auth
+from src.rpc._helpers import _dump, _identity, _path_int, _payload, _run
 from src.schemas.admin import stage as admin_schemas
 from src.schemas.admin.computation import TournamentComputationJobRead
 from src.services.admin import stage as stage_service
 from src.services.computation import jobs as computation_jobs
 
-
 # --- helpers -----------------------------------------------------------------
-
-
-def _identity(data: dict[str, Any]) -> models.AuthUser:
-    """Rehydrate the gateway-injected identity into a transient AuthUser."""
-    return rehydrate_user(data.get("identity"))
-
-
-def _payload(data: dict[str, Any]) -> dict[str, Any]:
-    return data.get("payload") or {}
-
-
-def _path_int(data: dict[str, Any], name: str) -> int:
-    raw = data.get(name)
-    try:
-        return int(raw)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{name} is required") from exc
-
-
-def _dump(obj: Any) -> Any:
-    """Plain serialization (admin routes keep nulls — no exclude_none)."""
-    if obj is None:
-        return None
-    if isinstance(obj, list):
-        return [_dump(x) for x in obj]
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    return obj
-
-
-async def _run(logger: Any, op: Callable[[Any], Awaitable[Any]]) -> dict[str, Any]:
-    """Envelope wrapper mirroring admin_misc._run, with identity-failure mapping."""
-    try:
-        async with db.async_session_maker() as session:
-            return rpc_ok(await op(session))
-    except MissingIdentityError as exc:
-        return rpc_error("unauthorized", str(exc) or "Not authenticated")
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("tournament stage-admin rpc failed")
-        return rpc_error("internal", "internal error")
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -103,7 +53,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             # Route: require_tournament_permission("stage", "read").
-            ws_id = await auth._get_tournament_workspace_id(session, tournament_id)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "stage", "read")
             # get_stage_progress is read-only; returns a custom list[dict].
             return await stage_service.get_stage_progress(session, tournament_id)
@@ -118,7 +68,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             body = admin_schemas.MergeGroupStagesRequest.model_validate(_payload(data))
             # merge_group_stages commits internally; returns a Stage.
@@ -142,7 +92,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             # activate_stage commits internally (commit=True default).
             stage = await stage_service.activate_stage(session, stage_id)
@@ -160,7 +110,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             # Route loads the stage to obtain tournament_id, then requests a
             # bracket job and commits explicitly (create_job does NOT commit).
@@ -185,7 +135,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             # Route reads ``force`` from the query string (bool, default False).
             force_vals = (data.get("query") or {}).get("force")
@@ -217,7 +167,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             body = admin_schemas.WireFromGroupsRequest.model_validate(_payload(data))
             # wire_from_groups commits internally; returns a Stage.
@@ -243,7 +193,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             stage_id = _path_int(data, "stage_id")
             # Route: require_stage_permission("stage", "update").
-            ws_id = await auth._get_stage_workspace_id(session, stage_id)
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
             body = admin_schemas.SeedTeamsRequest.model_validate(_payload(data))
             # seed_teams commits internally; returns a Stage.

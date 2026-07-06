@@ -5,10 +5,12 @@ collapses to one ``EntityConfig`` row per entity instead of a hand-written RPC
 handler. A service builds a ``CrudDispatcher`` from its registry + session factory
 and wires the five generic subscribers under its own queue prefix, e.g.::
 
+    from faststream.rabbit import RabbitMessage
+
     dispatcher = CrudDispatcher(REGISTRY, db.async_session_maker)
 
     @broker.subscriber("rpc.tournament.admin.update")
-    async def _(data: dict, msg) -> dict:
+    async def _(data: dict, msg: RabbitMessage) -> dict:
         return await dispatcher.do_update(data)
 
 Each request carries ``{entity, id?, payload?, identity, query?}``. The dispatcher
@@ -22,15 +24,16 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
 from shared.core.db import Base
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository.base import BaseRepository
 from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission, rehydrate_user
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
@@ -95,9 +98,9 @@ class EntityConfig:
     public_read: bool = False
     create_schema: type[BaseModel] | None = None
     update_schema: type[BaseModel] | None = None
-    resolve_ws_from_id: WsFromId | None = None       # get / update / delete (id from data["id"])
+    resolve_ws_from_id: WsFromId | None = None  # get / update / delete (id from data["id"])
     resolve_ws_for_create: WsFromData | None = None  # create (workspace from payload/path)
-    resolve_ws_for_list: WsFromData | None = None    # list (workspace from query/path)
+    resolve_ws_for_list: WsFromData | None = None  # list (workspace from query/path)
     # Hooks receive the full request ``data`` dict (3rd/4th arg) so adapters can
     # read path params (e.g. a create nested under /stages/tournament/{id}).
     service_create: Callable[[AsyncSession, BaseModel, dict], Awaitable[Any]] | None = None
@@ -108,7 +111,7 @@ class EntityConfig:
     not_found_detail: str = "Not found"
     actions: frozenset[str] = frozenset({"create", "get", "update", "delete"})
 
-    @property
+    @cached_property
     def repo(self) -> BaseRepository:
         return BaseRepository(self.model)
 
@@ -140,9 +143,13 @@ class CrudDispatcher:
     def _config(self, data: dict[str, Any], action: str) -> EntityConfig:
         cfg = self._registry.get(data.get("entity"))
         if cfg is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unknown entity: {data.get('entity')!r}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"unknown entity: {data.get('entity')!r}"
+            )
         if action not in cfg.actions:
-            raise HTTPException(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail=f"{action} not allowed for {cfg.entity}")
+            raise HTTPException(
+                status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail=f"{action} not allowed for {cfg.entity}"
+            )
         return cfg
 
     @staticmethod
@@ -177,7 +184,9 @@ class CrudDispatcher:
                 user = rehydrate_user(data.get("identity"))
                 ws_id = await self._ws_from_id(cfg, session, obj_id)
                 ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["get"])
-            obj = await cfg.service_get(session, obj_id, data) if cfg.service_get else await cfg.repo.get(session, obj_id)
+            obj = (
+                await cfg.service_get(session, obj_id, data) if cfg.service_get else await cfg.repo.get(session, obj_id)
+            )
             if obj is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=cfg.not_found_detail)
             return rpc_ok(await cfg.serializer(session, obj))
@@ -226,9 +235,13 @@ class CrudDispatcher:
         async with self._session_factory() as session:
             if not cfg.public_read:
                 user = rehydrate_user(data.get("identity"))
-                if cfg.resolve_ws_for_list is not None:
-                    ws_id = await cfg.resolve_ws_for_list(session, data)
-                    ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["list"])
+                if cfg.resolve_ws_for_list is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="entity has no list workspace resolver",
+                    )
+                ws_id = await cfg.resolve_ws_for_list(session, data)
+                ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["list"])
             return rpc_ok(await cfg.list_fn(session, data))
 
     @staticmethod
@@ -242,7 +255,7 @@ class CrudDispatcher:
         try:
             return await op()
         except MissingIdentityError:
-            return rpc_error("forbidden", "Not authenticated")
+            return rpc_error("unauthorized", "Not authenticated")
         except ValidationError as exc:
             return rpc_error("unprocessable", _validation_detail(exc))
         except HTTPException as exc:

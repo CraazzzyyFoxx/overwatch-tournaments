@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid
 from shared.domain.player_sub_roles import canonical_to_registration_role
-from shared.models.overwatch_rank import UserRankSnapshot
+from shared.models.ranks.overwatch_rank import UserRankSnapshot
 
 
 async def fetch_latest_ow_ranks_by_account(
@@ -44,7 +44,7 @@ async def fetch_latest_ow_ranks_by_account(
             .over(
                 partition_by=[
                     UserRankSnapshot.user_id,
-                    UserRankSnapshot.battle_tag_id,
+                    UserRankSnapshot.social_account_id,
                     UserRankSnapshot.role,
                 ],
                 order_by=UserRankSnapshot.captured_at.desc(),
@@ -58,9 +58,7 @@ async def fetch_latest_ow_ranks_by_account(
         )
         .subquery()
     )
-    query = sa.select(
-        subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value
-    ).where(subq.c.rn == 1)
+    query = sa.select(subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
     result = await session.execute(query)
 
     out: dict[int, dict[str, dict[str, int]]] = {}

@@ -4,6 +4,8 @@ import pandas as pd
 import sqlalchemy as sa
 from loguru import logger
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.clients.s3 import S3Client
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
@@ -15,10 +17,9 @@ from shared.schemas.events import (
     TournamentChangedEvent,
     TournamentStandingsInvalidatedEvent,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.core import enums, errors, pagination
+from src.core.config import settings
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import service as encounter_service
 from src.services.hero import service as hero_service
@@ -99,6 +100,20 @@ class MatchLogProcessor:
         self._s3 = s3
 
     def _load_and_format_data(self, data_in: list[str]) -> pd.DataFrame:
+        # Cap the number of lines before building the DataFrame — an oversized or
+        # adversarial log would otherwise be parsed in full (review MEDIUM).
+        max_lines = settings.max_match_log_lines
+        if len(data_in) > max_lines:
+            raise errors.ApiHTTPException(
+                status_code=413,
+                detail=[
+                    errors.ApiExc(
+                        code="match_log_too_large",
+                        msg=f"Match log {self.filename} exceeds the maximum of {max_lines} lines",
+                    )
+                ],
+            )
+
         valid_lines = [line for line in data_in if line.strip()]
         if not valid_lines:
             logger.warning(f"Match log {self.filename} has no valid lines.")
@@ -263,14 +278,15 @@ class MatchLogProcessor:
             team_name_1: [],
             team_name_2: [],
         }
+
+        # Resolve every log name across both teams in a single query rather than
+        # one (or two) SELECTs per player (review L14).
+        all_battle_names = [player for players in teams_raw.values() for player in players]
+        users_by_name = await service.get_users_by_battle_names(session, all_battle_names)
+
         for team_name, players in teams_raw.items():
             for player in players:
-                logger.info(f"Trying to get user by battle name {player} in team {team_name}")
-                for verbose in [True, False]:
-                    user_found = await service.get_user_by_battle_name(session, player, verbose)
-                    if user_found:
-                        break
-
+                user_found = users_by_name.get(player)
                 teams[team_name].append((player, user_found))
 
                 if user_found:
@@ -300,7 +316,7 @@ class MatchLogProcessor:
                     session,
                     current_player_ids_to_search,
                     self.tournament,
-                    ["players", "players.user"],
+                    ["players", "players.user", "players.workspace_member"],
                 )
                 if team_db:
                     return team_db
@@ -351,16 +367,14 @@ class MatchLogProcessor:
         team: models.Team,
         players_from_log: list[tuple[str, models.User | None]],
     ) -> list[tuple[str, models.Player | None]]:
+        # Resolve all roster players for the team in a single query instead of
+        # one (or two) SELECTs per log name (review L14).
+        battle_names = [battle_name_log for battle_name_log, _ in players_from_log]
+        players_by_name = await service.get_players_by_team_and_battle_names(session, team, battle_names)
+
         players_out: list[tuple[str, models.Player | None]] = []
         for battle_name_log, _ in players_from_log:
-            logger.info(f"Trying to get Player object for battle name '{battle_name_log}' in team '{team.name}'")
-            for verbose in [True, False]:
-                resolved_player_in_team = await service.get_user_by_team_and_battle_name(
-                    session, team, battle_name_log, verbose
-                )
-                if resolved_player_in_team:
-                    break
-
+            resolved_player_in_team = players_by_name.get(battle_name_log)
             players_out.append((battle_name_log, resolved_player_in_team))
 
             if resolved_player_in_team:
@@ -415,10 +429,10 @@ class MatchLogProcessor:
                     time=row.time,
                     round=row.round_number,
                     fight=0,
-                    killer_id=killer_player.user_id,
+                    killer_id=killer_player.workspace_member.player_id,
                     killer_hero_id=killer_hero.id,
                     killer_team_id=killer_player.team_id,
-                    victim_id=victim_player.user_id,
+                    victim_id=victim_player.workspace_member.player_id,
                     victim_hero_id=victim_hero.id,
                     victim_team_id=victim_player.team_id,
                     ability=kill.ability,
@@ -485,7 +499,7 @@ class MatchLogProcessor:
                 logger.warning(f"MercyRez target '{evt.related_player}' not in players_map.")
             else:
                 related_player_obj = players_map[evt.related_player]
-                related_player_id = related_player_obj.user_id
+                related_player_id = related_player_obj.workspace_member.player_id
                 related_team_id = related_player_obj.team_id
 
         return models.MatchEvent(
@@ -493,7 +507,7 @@ class MatchLogProcessor:
             time=row["time"],
             round=row["round_number"],
             team_id=player.team_id,
-            user_id=player.user_id,
+            user_id=player.workspace_member.player_id,
             hero_id=hero_id,
             related_hero_id=related_hero_id,
             related_team_id=related_team_id,
@@ -544,7 +558,7 @@ class MatchLogProcessor:
             match_id=match.id,
             round=match_round,
             team_id=player.team_id,
-            user_id=player.user_id,
+            user_id=player.workspace_member.player_id,
             hero_id=hero_id,
             name=name,
             value=value,
@@ -906,6 +920,11 @@ class MatchLogProcessor:
             else not bool(await team_service.get_player_by_user(session, sub_user.id, [])),
             is_newcomer_role=player_data_source.is_newcomer_role if player_data_source else True,
         )
+        # create_player() sets workspace_member_id (a plain FK column) but does not
+        # eagerly load the `workspace_member` relationship; readers downstream (this
+        # module) access `.workspace_member.player_id` in place of the retained
+        # `.user_id`, so it must be loaded before new_player leaves this method.
+        await session.refresh(new_player, attribute_names=["workspace_member"])
         logger.info(f"Created substitution player: {new_player.name} (ID: {new_player.id})")
         return new_player
 
@@ -932,10 +951,12 @@ class MatchLogProcessor:
                 f"Log has {len(users_who_played_map)} users, roster matched {len(players_found_in_roster_map)}."
             )
 
-            roster_player_user_ids_found_in_log = {p.user_id for p in players_found_in_roster_map.values()}
+            roster_player_user_ids_found_in_log = {
+                p.workspace_member.player_id for p in players_found_in_roster_map.values()
+            }
             missing_roster_player: models.Player | None = None
             for rp in roster_players_not_substituted:
-                if rp.user_id not in roster_player_user_ids_found_in_log:
+                if rp.workspace_member.player_id not in roster_player_user_ids_found_in_log:
                     missing_roster_player = rp
                     break
 
@@ -953,7 +974,7 @@ class MatchLogProcessor:
                     f"(log: {substitute_log_name}) for {missing_roster_player.name} in team {team_db.name}."
                 )
                 existing_sub_player = await team_service.get_player_by_team_and_user(
-                    session, team_db.id, substitute_user.id, []
+                    session, team_db.id, substitute_user.id, ["workspace_member"]
                 )
                 if (
                     existing_sub_player
@@ -984,9 +1005,11 @@ class MatchLogProcessor:
                 f"unmatched log names: {unmatched_log_names}."
             )
 
-            roster_players_in_log_user_ids = {p.user_id for p in final_players_map.values()}
+            roster_players_in_log_user_ids = {p.workspace_member.player_id for p in final_players_map.values()}
             missing_roster_players_from_log = [
-                rp for rp in roster_players_not_substituted if rp.user_id not in roster_players_in_log_user_ids
+                rp
+                for rp in roster_players_not_substituted
+                if rp.workspace_member.player_id not in roster_players_in_log_user_ids
             ]
 
             if len(missing_roster_players_from_log) == 1 and len(unmatched_log_names) == 1:
@@ -994,12 +1017,12 @@ class MatchLogProcessor:
                 new_battle_name_from_log = unmatched_log_names[0]
                 logger.info(
                     f"Player {player_who_changed_name.name} "
-                    f"(User ID: {player_who_changed_name.user_id}) "
+                    f"(User ID: {player_who_changed_name.workspace_member.player_id}) "
                     f"likely changed battle_name to '{new_battle_name_from_log}'."
                 )
 
-                user_to_update = player_who_changed_name.user or await user_service.get(
-                    session, player_who_changed_name.user_id, []
+                user_to_update = player_who_changed_name.workspace_member.player or await user_service.get(
+                    session, player_who_changed_name.workspace_member.player_id, []
                 )
 
                 if user_to_update:
@@ -1091,6 +1114,17 @@ async def process_match_log(
             raise errors.ApiHTTPException(
                 status_code=404,
                 detail=[errors.ApiExc(code="log_not_found", msg=msg)],
+            )
+        return
+
+    max_log_bytes = settings.max_match_log_bytes
+    if len(raw_bytes) > max_log_bytes:
+        msg = f"Log file {filename} exceeds the maximum size of {max_log_bytes} bytes"
+        logger.error(msg)
+        if is_raise:
+            raise errors.ApiHTTPException(
+                status_code=413,
+                detail=[errors.ApiExc(code="match_log_too_large", msg=msg)],
             )
         return
 

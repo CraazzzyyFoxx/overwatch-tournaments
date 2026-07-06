@@ -32,9 +32,7 @@ enums = importlib.import_module("shared.core.enums")
 stage_service._publish_tournament_changed = AsyncMock()
 
 
-def _group_stage(
-    *, stage_id: int, tournament_id: int, num_groups: int
-) -> SimpleNamespace:
+def _group_stage(*, stage_id: int, tournament_id: int, num_groups: int) -> SimpleNamespace:
     """Helper: build a round-robin source stage with ``num_groups`` items."""
     items = [
         SimpleNamespace(
@@ -53,9 +51,7 @@ def _group_stage(
     )
 
 
-def _playoff_stage(
-    *, stage_id: int, tournament_id: int, stage_item_id: int = 200
-) -> SimpleNamespace:
+def _playoff_stage(*, stage_id: int, tournament_id: int, stage_item_id: int = 200) -> SimpleNamespace:
     return SimpleNamespace(
         id=stage_id,
         tournament_id=tournament_id,
@@ -100,9 +96,7 @@ class WireFromGroupsTests(IsolatedAsyncioTestCase):
 
         # All TENTATIVE with valid source refs
         for inp in added_inputs:
-            self.assertEqual(
-                enums.StageItemInputType.TENTATIVE, inp.input_type
-            )
+            self.assertEqual(enums.StageItemInputType.TENTATIVE, inp.input_type)
             self.assertIsNone(inp.team_id)
             self.assertIsNotNone(inp.source_stage_item_id)
             self.assertIsNotNone(inp.source_position)
@@ -114,10 +108,7 @@ class WireFromGroupsTests(IsolatedAsyncioTestCase):
         # 3 → B, 2
         # 4 → A, 2
         expected = [(1, 100, 1), (2, 101, 1), (3, 101, 2), (4, 100, 2)]
-        actual = [
-            (inp.slot, inp.source_stage_item_id, inp.source_position)
-            for inp in added_inputs
-        ]
+        actual = [(inp.slot, inp.source_stage_item_id, inp.source_position) for inp in added_inputs]
         self.assertEqual(expected, actual)
 
     async def test_snake_seeding_two_groups_top_2(self) -> None:
@@ -146,10 +137,7 @@ class WireFromGroupsTests(IsolatedAsyncioTestCase):
 
         # Snake: A1, B1, A2, B2
         expected = [(1, 100, 1), (2, 101, 1), (3, 100, 2), (4, 101, 2)]
-        actual = [
-            (inp.slot, inp.source_stage_item_id, inp.source_position)
-            for inp in added_inputs
-        ]
+        actual = [(inp.slot, inp.source_stage_item_id, inp.source_position) for inp in added_inputs]
         self.assertEqual(expected, actual)
 
     async def test_preserves_final_inputs(self) -> None:
@@ -263,9 +251,7 @@ class WireFromGroupsTests(IsolatedAsyncioTestCase):
             id=2,
             tournament_id=99,
             stage_type=enums.StageType.ROUND_ROBIN,  # not a bracket
-            items=[
-                SimpleNamespace(id=200, name="Not a bracket", order=0, inputs=[])
-            ],
+            items=[SimpleNamespace(id=200, name="Not a bracket", order=0, inputs=[])],
         )
 
         session = SimpleNamespace(add=Mock(), commit=AsyncMock())

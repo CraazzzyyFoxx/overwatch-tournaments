@@ -1,11 +1,11 @@
 import typing
 
 import sqlalchemy as sa
-from shared.core import enums
-from shared.division_grid import DEFAULT_GRID, DivisionGrid, division_case_expr, load_runtime_grid
-from shared.models.division_grid import DivisionGridMapping, DivisionGridMappingRule, DivisionGridVersion
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import enums
+from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.models.division_grid import DivisionGridMapping, DivisionGridMappingRule, DivisionGridVersion
 from src import models
 from src.core.workspace import workspace_scope_filter
 
@@ -17,11 +17,16 @@ async def get_analytics(
 ) -> typing.Sequence[sa.RowMapping]:
     points_home = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.team_id.label("team_id"),
             sa.func.sum(models.Encounter.home_score).label("wins"),
             sa.func.sum(models.Encounter.away_score).label("losses"),
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Encounter, models.Player.team_id == models.Encounter.home_team_id)
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
@@ -29,16 +34,21 @@ async def get_analytics(
             models.Tournament.id >= 1,
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .group_by(models.Player.user_id, models.Player.role, models.Player.team_id)
+        .group_by(models.WorkspaceMember.player_id, models.Player.role, models.Player.team_id)
     ).cte("player_points_home")
 
     points_away = (
         sa.select(
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.team_id.label("team_id"),
             sa.func.sum(models.Encounter.away_score).label("wins"),
             sa.func.sum(models.Encounter.home_score).label("losses"),
+        )
+        .select_from(models.Player)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
         )
         .join(models.Encounter, models.Player.team_id == models.Encounter.away_team_id)
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
@@ -46,7 +56,7 @@ async def get_analytics(
             models.Tournament.id >= 1,
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .group_by(models.Player.user_id, models.Player.role, models.Player.team_id)
+        .group_by(models.WorkspaceMember.player_id, models.Player.role, models.Player.team_id)
     ).cte("player_points_away")
 
     matches_home = (
@@ -85,15 +95,25 @@ async def get_analytics(
         .group_by(models.Team.tournament_id)
     ).cte("team_counts")
 
+    # A team's FINAL tournament placement is the overall_position of its LATEST
+    # stage standing (the playoff bracket if it advanced, else the group stage),
+    # not ``min()`` across stages: an advancing team carries a placeholder
+    # overall_position=0 in the group stage, so ``min()`` mis-reads a 13th-place
+    # finisher as the champion (inflating placement_score and the placement gate).
     standings = (
         sa.select(
             models.Standing.team_id.label("team_id"),
             models.Standing.tournament_id.label("tournament_id"),
-            sa.func.min(models.Standing.overall_position).label("overall_position"),
+            models.Standing.overall_position.label("overall_position"),
         )
         .join(models.Tournament, models.Standing.tournament_id == models.Tournament.id)
         .where(*workspace_scope_filter(workspace_id, workspace_ids))
-        .group_by(models.Standing.team_id, models.Standing.tournament_id)
+        .distinct(models.Standing.team_id, models.Standing.tournament_id)
+        .order_by(
+            models.Standing.team_id,
+            models.Standing.tournament_id,
+            models.Standing.stage_id.desc(),
+        )
     ).cte("team_standings")
 
     performance_points = (
@@ -102,7 +122,14 @@ async def get_analytics(
             sa.func.avg(models.MatchStatistics.value).label("performance_points"),
         )
         .select_from(models.Player)
-        .join(models.MatchStatistics, models.MatchStatistics.user_id == models.Player.user_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
+        .join(
+            models.MatchStatistics,
+            models.MatchStatistics.user_id == models.WorkspaceMember.player_id,
+        )
         .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
@@ -122,49 +149,44 @@ async def get_analytics(
             models.Team.id.label("team_id"),
             models.Player.id.label("player_id"),
             models.Player.name.label("player_name"),
-            models.Player.user_id.label("user_id"),
+            models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
             models.Player.is_newcomer_role.label("is_newcomer_role"),
             models.Tournament.id.label("tournament_id"),
-            (
-                sa.func.coalesce(points_home.c.wins, 0) + sa.func.coalesce(points_away.c.wins, 0)
-            ).label("wins"),
-            (
-                sa.func.coalesce(points_home.c.losses, 0) + sa.func.coalesce(points_away.c.losses, 0)
-            ).label("losses"),
-            (
-                sa.func.coalesce(matches_home.c.match_count, 0)
-                + sa.func.coalesce(matches_away.c.match_count, 0)
-            ).label("match_count"),
+            (sa.func.coalesce(points_home.c.wins, 0) + sa.func.coalesce(points_away.c.wins, 0)).label("wins"),
+            (sa.func.coalesce(points_home.c.losses, 0) + sa.func.coalesce(points_away.c.losses, 0)).label("losses"),
+            (sa.func.coalesce(matches_home.c.match_count, 0) + sa.func.coalesce(matches_away.c.match_count, 0)).label(
+                "match_count"
+            ),
             standings.c.overall_position.label("overall_position"),
             team_counts.c.team_count.label("team_count"),
             performance_points.c.performance_points.label("performance_points"),
-            sa.func.lag(models.Player.rank, 1).over(
-                partition_by=(models.Player.user_id, models.Player.role),
+            sa.func.lag(models.Player.rank, 1)
+            .over(
+                partition_by=(models.WorkspaceMember.player_id, models.Player.role),
                 order_by=models.Tournament.id,
-            ).label("previous_cost"),
-            sa.func.lag(models.Player.rank, 2).over(
-                partition_by=(models.Player.user_id, models.Player.role),
+            )
+            .label("previous_cost"),
+            sa.func.lag(models.Player.rank, 2)
+            .over(
+                partition_by=(models.WorkspaceMember.player_id, models.Player.role),
                 order_by=models.Tournament.id,
-            ).label("pre_previous_cost"),
-            sa.func.lag(division_case_expr(models.Player.rank, DEFAULT_GRID), 1).over(
-                partition_by=(models.Player.user_id, models.Player.role),
-                order_by=models.Tournament.id,
-            ).label("previous_div"),
-            sa.func.lag(division_case_expr(models.Player.rank, DEFAULT_GRID), 2).over(
-                partition_by=(models.Player.user_id, models.Player.role),
-                order_by=models.Tournament.id,
-            ).label("pre_previous_div"),
+            )
+            .label("pre_previous_cost"),
         )
         .select_from(models.Team)
         .join(models.Player, models.Team.id == models.Player.team_id)
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
         .join(models.Tournament, models.Player.tournament_id == models.Tournament.id)
         .join(
             points_home,
             sa.and_(
-                models.Player.user_id == points_home.c.user_id,
+                models.WorkspaceMember.player_id == points_home.c.user_id,
                 models.Player.role == points_home.c.role,
                 models.Player.team_id == points_home.c.team_id,
             ),
@@ -173,7 +195,7 @@ async def get_analytics(
         .join(
             points_away,
             sa.and_(
-                models.Player.user_id == points_away.c.user_id,
+                models.WorkspaceMember.player_id == points_away.c.user_id,
                 models.Player.role == points_away.c.role,
                 models.Player.team_id == points_away.c.team_id,
             ),
@@ -196,7 +218,7 @@ async def get_analytics(
             models.Player.is_substitution.is_(False),
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .order_by(models.Player.user_id, models.Player.role, models.Tournament.id)
+        .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
     )
 
     result = await session.execute(query)
@@ -219,10 +241,10 @@ async def get_matches(
             sa.orm.joinedload(models.Encounter.away_team).joinedload(models.Team.players),
             sa.orm.joinedload(models.Encounter.home_team)
             .joinedload(models.Team.players)
-            .joinedload(models.Player.user),
+            .joinedload(models.Player.workspace_member),
             sa.orm.joinedload(models.Encounter.away_team)
             .joinedload(models.Team.players)
-            .joinedload(models.Player.user),
+            .joinedload(models.Player.workspace_member),
             sa.orm.joinedload(models.Encounter.tournament),
         )
         .join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id)
@@ -290,8 +312,7 @@ async def get_tournament_version_ids(
 ) -> dict[int, int | None]:
     """Maps tournament_id -> division_grid_version_id for all analytics-relevant tournaments."""
     result = await session.execute(
-        sa.select(models.Tournament.id, models.Tournament.division_grid_version_id)
-        .where(
+        sa.select(models.Tournament.id, models.Tournament.division_grid_version_id).where(
             models.Tournament.id >= 1,
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
@@ -369,9 +390,7 @@ async def get_players_by_tournament_id(
     return result.scalars().all()  # type: ignore
 
 
-async def get_teams_with_players(
-    session: AsyncSession, tournament_id: int
-) -> typing.Sequence[models.Team]:
+async def get_teams_with_players(session: AsyncSession, tournament_id: int) -> typing.Sequence[models.Team]:
     """Return teams of a tournament with players and player users eagerly loaded.
 
     Inlined replacement for parser-service ``team_service.get_by_tournament(
@@ -382,7 +401,7 @@ async def get_teams_with_players(
         sa.select(models.Team)
         .where(models.Team.tournament_id == tournament_id)
         .options(
-            sa.orm.selectinload(models.Team.players).selectinload(models.Player.user),
+            sa.orm.selectinload(models.Team.players).selectinload(models.Player.workspace_member),
         )
     )
     result = await session.execute(query)

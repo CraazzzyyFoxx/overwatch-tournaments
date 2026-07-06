@@ -46,7 +46,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint("fk_draft_team_captain_auth_user", "draft_team", schema="balancer", type_="foreignkey")
-    op.drop_index(
-        op.f("ix_balancer_draft_team_captain_auth_user_id"), table_name="draft_team", schema="balancer"
-    )
+    op.drop_index(op.f("ix_balancer_draft_team_captain_auth_user_id"), table_name="draft_team", schema="balancer")
     op.drop_column("draft_team", "captain_auth_user_id", schema="balancer")

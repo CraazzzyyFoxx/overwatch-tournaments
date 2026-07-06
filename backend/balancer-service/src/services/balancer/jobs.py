@@ -5,10 +5,10 @@ import time
 import uuid
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.observability import metrics
 from shared.services.balancer_realtime import (
     BALANCER_JOB_FAILED,
@@ -25,7 +25,8 @@ from src.core.metrics import (
 from src.core.security.api_key_limiter import (
     get_api_key_id,
     get_api_key_limiter,
-    get_api_key_limits,
+    get_effective_limits,
+    get_principal,
     is_api_key_principal,
 )
 from src.core.security.api_key_policy import validate_api_key_config_policy
@@ -48,6 +49,13 @@ from src.services.balancer.solver import run_balance
 _access_policy = WorkspaceAccessPolicy()
 _payload_parser = BalancerRequestParser()
 
+# Outer wall-clock safety net for a single solver run (review H5). The native
+# optimizer already honours ``time_limit_ms`` (max 600s); this watchdog is a
+# coarse backstop that fails the job instead of awaiting forever should the
+# solver hang or ignore its budget. Sized above the max native budget plus room
+# for polishing/serialization.
+_SOLVER_WATCHDOG_SECONDS = 660.0
+
 
 def _count_variant_players(variant: dict[str, Any]) -> int:
     team_players = sum(
@@ -69,13 +77,13 @@ def _count_input_players(player_data: dict[str, Any]) -> int:
     return 0
 
 
-def _enforce_api_key_upload_limit(user, uploaded_file) -> None:
-    if not is_api_key_principal(user):
-        return
+def _enforce_upload_limit(user, uploaded_file) -> None:
+    # Applies to every principal (review H5): API keys use their per-key cap,
+    # session users the generous ``SESSION_LIMITS`` ceiling.
     upload_size = getattr(uploaded_file, "size", None)
     if upload_size is None:
         return
-    max_upload_bytes = get_api_key_limits(user)["max_upload_bytes"]
+    max_upload_bytes = get_effective_limits(user)["max_upload_bytes"]
     try:
         upload_size_int = int(upload_size)
     except (TypeError, ValueError):
@@ -84,22 +92,20 @@ def _enforce_api_key_upload_limit(user, uploaded_file) -> None:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail={
-                "code": "api_key_upload_too_large",
+                "code": "balancer_upload_too_large",
                 "max_upload_bytes": max_upload_bytes,
             },
         )
 
 
-def _enforce_api_key_player_limit(user, player_data: dict[str, Any]) -> None:
-    if not is_api_key_principal(user):
-        return
+def _enforce_player_limit(user, player_data: dict[str, Any]) -> None:
     player_count = _count_input_players(player_data)
-    max_players = get_api_key_limits(user)["max_players"]
+    max_players = get_effective_limits(user)["max_players"]
     if player_count > max_players:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
-                "code": "api_key_player_limit_exceeded",
+                "code": "balancer_player_limit_exceeded",
                 "max_players": max_players,
             },
         )
@@ -131,15 +137,16 @@ async def create_job(
 
     await api_key_limiter.check_request(user)
     _access_policy.ensure_workspace_access(user, workspace_id)
-    _enforce_api_key_upload_limit(user, uploaded_file)
+    _enforce_upload_limit(user, uploaded_file)
 
     player_data = await _payload_parser.parse_player_data(uploaded_file)
     config_overrides = _payload_parser.parse_config_overrides(raw_config)
     validate_api_key_config_policy(user, config_overrides)
-    _enforce_api_key_player_limit(user, player_data)
+    _enforce_player_limit(user, player_data)
 
     job_id = uuid.uuid4().hex
     api_key_id = get_api_key_id(user) if is_api_key_principal(user) else None
+    principal = get_principal(user)
     await api_key_limiter.reserve_job(user, job_id)
 
     try:
@@ -154,8 +161,8 @@ async def create_job(
             api_key_id=api_key_id,
         )
     except Exception:
-        if api_key_id is not None:
-            await api_key_limiter.release_job(api_key_id, job_id)
+        if principal is not None:
+            await api_key_limiter.release_job(principal[0], principal[1], job_id)
         raise
 
     try:
@@ -354,7 +361,10 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
         )
 
         solver_started_at = time.perf_counter()
-        result = await run_balance(input_data, config_overrides, progress_callback)
+        result = await asyncio.wait_for(
+            run_balance(input_data, config_overrides, progress_callback),
+            timeout=_SOLVER_WATCHDOG_SECONDS,
+        )
         solver_seconds = time.perf_counter() - solver_started_at
         BALANCER_SOLVER_SECONDS.labels(algorithm=algorithm).observe(solver_seconds)
         result = normalize_balance_job_result_payload(result)

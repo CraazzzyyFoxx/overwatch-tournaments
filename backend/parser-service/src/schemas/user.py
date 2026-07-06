@@ -5,9 +5,7 @@ from src.schemas import BaseRead
 __all__ = (
     "UserCSV",
     "UserRead",
-    "UserDiscordRead",
-    "UserTwitchRead",
-    "UserBattleTagRead",
+    "SocialAccountRead",
     "UserUpdate",
     "UserDasha",
 )
@@ -32,29 +30,21 @@ class UserDasha(BaseModel):
     battle_tags: list[str]
 
 
-class UserDiscordRead(BaseRead):
+class SocialAccountRead(BaseRead):
+    """Unified player social identity (battlenet/discord/twitch/boosty/vk/youtube/…)."""
+
     user_id: int
-    name: str
-
-
-class UserBattleTagRead(BaseRead):
-    user_id: int
-    name: str
-    tag: int
-    battle_tag: str
-
-
-class UserTwitchRead(BaseRead):
-    user_id: int
-    name: str
+    provider: str
+    username: str
+    url: str | None = None
+    is_verified: bool = False
+    is_primary: bool = False
 
 
 class UserRead(BaseRead):
     name: str
     avatar_url: str | None = None
-    discord: list[UserDiscordRead]
-    battle_tag: list[UserBattleTagRead]
-    twitch: list[UserTwitchRead]
+    social_accounts: list[SocialAccountRead] = []
 
 
 class UserUpdate(BaseModel):

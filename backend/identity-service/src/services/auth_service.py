@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -8,15 +6,17 @@ from uuid import UUID, uuid4
 import bcrypt
 from jose import JWTError, jwt
 from loguru import logger
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.rbac import role_permissions, user_roles
 from sqlalchemy import func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.rbac import role_permissions, user_roles
 from src import models, schemas
-from src.core import config
+from src.core import config, key_derivation
+from src.services import session_cache
+from src.services.player_link_service import ensure_player_for_auth_user
 
 __all__ = [
     "AuthService",
@@ -24,6 +24,14 @@ __all__ = [
 ]
 
 settings = config.settings
+
+# Domain-separated subkey for refresh-token HMAC (never the raw JWT secret).
+_REFRESH_TOKEN_KEY = key_derivation.refresh_token_key(settings.JWT_SECRET_KEY)
+
+
+def _access_token_ttl_seconds() -> int:
+    """Seconds a freshly issued access token remains valid (blacklist TTL)."""
+    return max(int(settings.ACCESS_TOKEN_EXPIRE_MINUTES), 1) * 60
 
 
 class AuthService:
@@ -176,9 +184,7 @@ class AuthService:
             )
         )
 
-        result: dict[int, tuple[list[str], list[dict[str, str]]]] = {
-            ws_id: ([], []) for ws_id in workspace_ids
-        }
+        result: dict[int, tuple[list[str], list[dict[str, str]]]] = {ws_id: ([], []) for ws_id in workspace_ids}
         for ws_id, role_name in rows.all():
             result[ws_id][0].append(role_name)
 
@@ -222,12 +228,28 @@ class AuthService:
 
     @staticmethod
     def hash_refresh_token(token: str) -> str:
-        """Hash refresh token before persistence/lookup."""
-        return hmac.new(
-            settings.JWT_SECRET_KEY.encode("utf-8"),
-            token.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        """Hash a refresh token for persistence/lookup.
+
+        Uses an HKDF-derived subkey (domain-separated from the JWT signing
+        secret). Lookups accept the legacy raw-secret hash too — see
+        ``_refresh_token_hash_candidates`` — so tokens issued before domain
+        separation keep working without a migration or forced re-login.
+        """
+        return key_derivation.hmac_sha256_hex(_REFRESH_TOKEN_KEY, token)
+
+    @staticmethod
+    def _refresh_token_hash_candidates(token: str) -> list[str]:
+        """New (derived) plus legacy (raw-secret) hash of a refresh token.
+
+        New tokens are always written with the derived hash; this list lets a
+        lookup still match tokens persisted under the pre-domain-separation
+        HMAC. They migrate to the derived hash naturally on the next rotation.
+        """
+        new_hash = key_derivation.hmac_sha256_hex(_REFRESH_TOKEN_KEY, token)
+        legacy_hash = key_derivation.legacy_hmac_sha256_hex(settings.JWT_SECRET_KEY, token)
+        if new_hash == legacy_hash:
+            return [new_hash]
+        return [new_hash, legacy_hash]
 
     @staticmethod
     def decode_token(token: str) -> dict:
@@ -260,9 +282,7 @@ class AuthService:
             selectinload(models.AuthUser.roles).selectinload(models.Role.permissions)
         )
         if include_player_links:
-            query = query.options(
-                selectinload(models.AuthUser.player_links).selectinload(models.AuthUserPlayer.player)
-            )
+            query = query.options(selectinload(models.AuthUser.player))
         return query
 
     @staticmethod
@@ -274,7 +294,9 @@ class AuthService:
     ) -> models.AuthUser | None:
         """Load a user with roles + permissions eagerly loaded."""
         result = await session.execute(
-            AuthService._user_query_with_rbac(include_player_links=include_player_links).where(models.AuthUser.id == user_id)
+            AuthService._user_query_with_rbac(include_player_links=include_player_links).where(
+                models.AuthUser.id == user_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -341,18 +363,28 @@ class AuthService:
             return None
         return user
 
+    # Neutral, non-enumerating message for registration collisions: the same
+    # text is returned whether the email OR the username is taken, so an
+    # attacker cannot probe which accounts exist (mirrors the generic
+    # "Incorrect email or password" used on login).
+    _REGISTRATION_CONFLICT_DETAIL = "Registration failed: email or username is already in use"
+
     @staticmethod
     async def create_user(session: AsyncSession, user_data: schemas.UserRegister) -> models.AuthUser:
         """Create a new user"""
         # Check if email already exists
         result = await session.execute(select(models.AuthUser).where(models.AuthUser.email == user_data.email))
         if result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=AuthService._REGISTRATION_CONFLICT_DETAIL
+            )
 
         # Check if username already exists
         result = await session.execute(select(models.AuthUser).where(models.AuthUser.username == user_data.username))
         if result.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=AuthService._REGISTRATION_CONFLICT_DETAIL
+            )
 
         # Create user
         user = models.AuthUser(
@@ -371,6 +403,10 @@ class AuthService:
         if default_role is not None:
             # Avoid ORM relationship lazy-loads with AsyncSession.
             await session.execute(insert(user_roles).values(user_id=user.id, role_id=default_role.id))
+
+        # Provision the players.user identity backbone for the new auth user.
+        # No battletag yet — reconciled later at registration.
+        await ensure_player_for_auth_user(session, user)
 
         await session.commit()
         await session.refresh(user)
@@ -425,17 +461,17 @@ class AuthService:
     @staticmethod
     async def get_refresh_token_record(session: AsyncSession, token: str) -> models.RefreshToken | None:
         """Get a refresh-token record by raw token value."""
-        token_hash = AuthService.hash_refresh_token(token)
-        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token == token_hash))
+        candidates = AuthService._refresh_token_hash_candidates(token)
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         return result.scalar_one_or_none()
 
     @staticmethod
     async def get_active_refresh_token_record(session: AsyncSession, token: str) -> models.RefreshToken | None:
         """Get a non-revoked, non-expired refresh-token record by raw token value."""
-        token_hash = AuthService.hash_refresh_token(token)
+        candidates = AuthService._refresh_token_hash_candidates(token)
         result = await session.execute(
             select(models.RefreshToken)
-            .where(models.RefreshToken.token == token_hash)
+            .where(models.RefreshToken.token.in_(candidates))
             .where(models.RefreshToken.is_revoked.is_(False))
             .where(models.RefreshToken.expires_at > datetime.now(UTC))
         )
@@ -444,7 +480,7 @@ class AuthService:
     @staticmethod
     async def get_user_by_refresh_token(session: AsyncSession, token: str) -> models.AuthUser | None:
         """Get user by refresh token"""
-        token_hash = AuthService.hash_refresh_token(token)
+        candidates = AuthService._refresh_token_hash_candidates(token)
         refresh_token = await AuthService.get_active_refresh_token_record(session, token)
 
         if refresh_token:
@@ -454,7 +490,7 @@ class AuthService:
             return result.scalar_one_or_none()
 
         # Reuse detection: known token hash already revoked/expired.
-        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token == token_hash))
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         reused_token = result.scalar_one_or_none()
         if reused_token:
             logger.bind(user_id=str(reused_token.user_id)).error(
@@ -485,8 +521,8 @@ class AuthService:
         commit: bool = True,
     ) -> bool:
         """Revoke a refresh token"""
-        token_hash = AuthService.hash_refresh_token(token)
-        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token == token_hash))
+        candidates = AuthService._refresh_token_hash_candidates(token)
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         refresh_token = result.scalar_one_or_none()
 
         if not refresh_token:
@@ -528,6 +564,8 @@ class AuthService:
 
         if commit:
             await session.commit()
+        # Block any still-valid access token carrying this sid until it expires.
+        await session_cache.blacklist_session(str(session_id), _access_token_ttl_seconds())
         return count
 
     @staticmethod
@@ -555,6 +593,7 @@ class AuthService:
         tokens = result.scalars().all()
 
         count = 0
+        revoked_session_ids: set[str] = set()
         for token in tokens:
             if token.is_revoked:
                 continue
@@ -564,10 +603,16 @@ class AuthService:
                 continue
             token.is_revoked = True
             token.revoked_at = datetime.now(UTC)
+            token_session_id = getattr(token, "session_id", None)
+            if token_session_id is not None:
+                revoked_session_ids.add(str(token_session_id))
             count += 1
 
         if commit:
             await session.commit()
+        ttl = _access_token_ttl_seconds()
+        for sid in revoked_session_ids:
+            await session_cache.blacklist_session(sid, ttl)
         return count
 
     @staticmethod
@@ -586,13 +631,20 @@ class AuthService:
 
         count = 0
         now = datetime.now(UTC)
+        revoked_session_ids: set[str] = set()
         for token in tokens:
             token.is_revoked = True
             token.revoked_at = now
+            token_session_id = getattr(token, "session_id", None)
+            if token_session_id is not None:
+                revoked_session_ids.add(str(token_session_id))
             count += 1
 
         if commit:
             await session.commit()
+        ttl = _access_token_ttl_seconds()
+        for sid in revoked_session_ids:
+            await session_cache.blacklist_session(sid, ttl)
         return count
 
 

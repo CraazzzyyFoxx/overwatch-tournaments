@@ -152,9 +152,7 @@ def test_create_database_pgbouncer_mode_disables_prepared_statements(monkeypatch
 
 
 def test_create_database_pgbouncer_skips_timeout_registration_when_disabled(monkeypatch):
-    monkeypatch.setattr(
-        db_module, "create_async_engine", lambda *, url, **kwargs: object()
-    )
+    monkeypatch.setattr(db_module, "create_async_engine", lambda *, url, **kwargs: object())
     monkeypatch.setattr(db_module, "async_sessionmaker", lambda *args, **kwargs: object())
 
     registered: dict[str, object] = {}

@@ -26,6 +26,7 @@ async def execute_hero_stat(
     """Per-hero stat in a match. Grain: user_match."""
     hero_slug = params["hero_slug"]
     from . import resolve_stat_name
+
     stat = resolve_stat_name(params["stat"])
     op = params["op"]
     value = params["value"]
@@ -97,11 +98,13 @@ async def execute_hero_kd_best(
         .where(
             models.MatchStatistics.round == 0,
             models.MatchStatistics.hero_id.isnot(None),
-            models.MatchStatistics.name.in_([
-                "Eliminations",
-                "Deaths",
-                "HeroTimePlayed",
-            ]),
+            models.MatchStatistics.name.in_(
+                [
+                    "Eliminations",
+                    "Deaths",
+                    "HeroTimePlayed",
+                ]
+            ),
             models.Tournament.workspace_id == context.workspace_id,
             *hero_filter,
         )
@@ -126,20 +129,25 @@ async def execute_hero_kd_best(
             base_sq.c.tournament_id,
             base_sq.c.hero_id,
             base_sq.c.match_id,
-            sa.func.sum(sa.case(
-                (base_sq.c.name == "Eliminations", base_sq.c.val),
-                else_=0,
-            )).label("eliminations"),
-            sa.func.sum(sa.case(
-                (base_sq.c.name == "Deaths", base_sq.c.val),
-                else_=0,
-            )).label("deaths"),
-            sa.func.sum(sa.case(
-                (base_sq.c.name == "HeroTimePlayed", base_sq.c.val),
-                else_=0,
-            )).label("time_played"),
-        )
-        .group_by(
+            sa.func.sum(
+                sa.case(
+                    (base_sq.c.name == "Eliminations", base_sq.c.val),
+                    else_=0,
+                )
+            ).label("eliminations"),
+            sa.func.sum(
+                sa.case(
+                    (base_sq.c.name == "Deaths", base_sq.c.val),
+                    else_=0,
+                )
+            ).label("deaths"),
+            sa.func.sum(
+                sa.case(
+                    (base_sq.c.name == "HeroTimePlayed", base_sq.c.val),
+                    else_=0,
+                )
+            ).label("time_played"),
+        ).group_by(
             base_sq.c.user_id,
             base_sq.c.tournament_id,
             base_sq.c.hero_id,
@@ -148,10 +156,9 @@ async def execute_hero_kd_best(
     ).subquery("user_match")
 
     # Filter out matches where hero playtime is below per-match minimum
-    qualified_matches = (
-        sa.select(user_match)
-        .where(user_match.c.time_played >= min_match_time)
-    ).subquery("qualified_matches")
+    qualified_matches = (sa.select(user_match).where(user_match.c.time_played >= min_match_time)).subquery(
+        "qualified_matches"
+    )
 
     # Aggregate across matches: per-user-per-hero-per-tournament
     agg = (
@@ -183,10 +190,12 @@ async def execute_hero_kd_best(
             agg.c.user_id,
             agg.c.tournament_id,
             agg.c.hero_id,
-            sa.func.row_number().over(
+            sa.func.row_number()
+            .over(
                 partition_by=[agg.c.tournament_id, agg.c.hero_id],
                 order_by=agg.c.kd.desc(),
-            ).label("rn"),
+            )
+            .label("rn"),
         )
     ).subquery("best")
 

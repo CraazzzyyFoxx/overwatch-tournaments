@@ -2,18 +2,16 @@
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
 from shared.core.enums import MapPickSide, MapPoolEntryStatus
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 
 
-async def get_veto_config(
-    session: AsyncSession, encounter: models.Encounter
-) -> models.MapVetoConfig | None:
+async def get_veto_config(session: AsyncSession, encounter: models.Encounter) -> models.MapVetoConfig | None:
     """Find applicable veto config: stage-specific first, then tournament-level."""
     if encounter.stage_id:
         result = await session.execute(
@@ -35,9 +33,7 @@ async def get_veto_config(
     return result.scalar_one_or_none()
 
 
-async def get_map_pool(
-    session: AsyncSession, encounter_id: int
-) -> list[models.EncounterMapPool]:
+async def get_map_pool(session: AsyncSession, encounter_id: int) -> list[models.EncounterMapPool]:
     result = await session.execute(
         select(models.EncounterMapPool)
         .where(models.EncounterMapPool.encounter_id == encounter_id)
@@ -75,10 +71,7 @@ def get_current_step(
     Counts completed actions (picked/banned) and returns the next step.
     Returns None if sequence is complete.
     """
-    completed = sum(
-        1 for e in pool
-        if e.status in (MapPoolEntryStatus.PICKED, MapPoolEntryStatus.BANNED)
-    )
+    completed = sum(1 for e in pool if e.status in (MapPoolEntryStatus.PICKED, MapPoolEntryStatus.BANNED))
     if completed >= len(veto_sequence):
         return None
     return completed, veto_sequence[completed]
@@ -129,9 +122,7 @@ async def auto_complete_decider(
     pool: list[models.EncounterMapPool] | None = None,
 ) -> models.EncounterMapPool | None:
     if encounter is None:
-        enc_result = await session.execute(
-            select(models.Encounter).where(models.Encounter.id == encounter_id)
-        )
+        enc_result = await session.execute(select(models.Encounter).where(models.Encounter.id == encounter_id))
         encounter = enc_result.scalar_one_or_none()
         if encounter is None:
             raise HTTPException(
@@ -177,11 +168,7 @@ def build_map_pool_state(
             expected_action = parts[0]
             turn_side = parts[1] if len(parts) > 1 else None
 
-        if (
-            viewer_side is not None
-            and turn_side == viewer_side
-            and expected_action in {"pick", "ban"}
-        ):
+        if viewer_side is not None and turn_side == viewer_side and expected_action in {"pick", "ban"}:
             allowed_actions = [expected_action]
 
     return {
@@ -203,9 +190,7 @@ async def get_map_pool_state(
     *,
     viewer_side: str | None = None,
 ) -> dict[str, Any]:
-    enc_result = await session.execute(
-        select(models.Encounter).where(models.Encounter.id == encounter_id)
-    )
+    enc_result = await session.execute(select(models.Encounter).where(models.Encounter.id == encounter_id))
     encounter = enc_result.scalar_one_or_none()
     if encounter is None:
         raise HTTPException(
@@ -249,9 +234,7 @@ async def perform_veto_action(
     - The action matches the sequence step type
     """
     # Load encounter for veto config
-    enc_result = await session.execute(
-        select(models.Encounter).where(models.Encounter.id == encounter_id)
-    )
+    enc_result = await session.execute(select(models.Encounter).where(models.Encounter.id == encounter_id))
     encounter = enc_result.scalar_one_or_none()
     if not encounter:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")

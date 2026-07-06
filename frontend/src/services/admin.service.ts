@@ -39,12 +39,9 @@ import {
   StandingUpdateInput,
   UserCreateInput,
   UserUpdateInput,
-  DiscordIdentityCreateInput,
-  DiscordIdentityUpdateInput,
-  BattleTagIdentityCreateInput,
-  BattleTagIdentityUpdateInput,
-  TwitchIdentityCreateInput,
-  TwitchIdentityUpdateInput,
+  SocialAccountCreateInput,
+  SocialAccountUpdateInput,
+  SocialVisibilityInput,
   HeroCreateInput,
   HeroUpdateInput,
   GamemodeCreateInput,
@@ -504,83 +501,48 @@ class AdminService {
     return response.json();
   }
 
-  // User Identity Management
-  async addDiscordIdentity(userId: number, data: DiscordIdentityCreateInput): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/discord`, {
+  // Unified social-identity management (provider-agnostic). All return the
+  // refreshed User so the caller can update state in one round-trip.
+  async addSocialAccount(userId: number, data: SocialAccountCreateInput): Promise<User> {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/social`, {
       method: "POST",
       body: data
     });
     return response.json();
   }
 
-  async updateDiscordIdentity(
-    userId: number,
-    identityId: number,
-    data: DiscordIdentityUpdateInput
-  ): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/discord/${identityId}`, {
+  async updateSocialAccount(userId: number, accountId: number, data: SocialAccountUpdateInput): Promise<User> {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/social/${accountId}`, {
       method: "PATCH",
       body: data
     });
     return response.json();
   }
 
-  async deleteDiscordIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch(`/api/v1/admin/users/${userId}/discord/${identityId}`, {
+  async deleteSocialAccount(userId: number, accountId: number): Promise<User> {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/social/${accountId}`, {
       method: "DELETE"
     });
+    return response.json();
   }
 
-  async addBattleTagIdentity(userId: number, data: BattleTagIdentityCreateInput): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/battle-tag`, {
+  async setSocialAccountPrimary(userId: number, accountId: number): Promise<User> {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/social/${accountId}/primary`, {
+      method: "POST"
+    });
+    return response.json();
+  }
+
+  async setSocialAccountVisibility(
+    userId: number,
+    accountId: number,
+    data: SocialVisibilityInput
+  ): Promise<User> {
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/social/${accountId}/visibility`, {
       method: "POST",
       body: data
     });
     return response.json();
-  }
-
-  async updateBattleTagIdentity(
-    userId: number,
-    identityId: number,
-    data: BattleTagIdentityUpdateInput
-  ): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/battle-tag/${identityId}`, {
-      method: "PATCH",
-      body: data
-    });
-    return response.json();
-  }
-
-  async deleteBattleTagIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch(`/api/v1/admin/users/${userId}/battle-tag/${identityId}`, {
-      method: "DELETE"
-    });
-  }
-
-  async addTwitchIdentity(userId: number, data: TwitchIdentityCreateInput): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/twitch`, {
-      method: "POST",
-      body: data
-    });
-    return response.json();
-  }
-
-  async updateTwitchIdentity(
-    userId: number,
-    identityId: number,
-    data: TwitchIdentityUpdateInput
-  ): Promise<User> {
-    const response = await apiFetch(`/api/v1/admin/users/${userId}/twitch/${identityId}`, {
-      method: "PATCH",
-      body: data
-    });
-    return response.json();
-  }
-
-  async deleteTwitchIdentity(userId: number, identityId: number): Promise<void> {
-    await apiFetch(`/api/v1/admin/users/${userId}/twitch/${identityId}`, {
-      method: "DELETE"
-    });
   }
 
   // User Avatar Management
