@@ -40,9 +40,7 @@ class EncounterLink(db.TimeStampIntegerMixin):
 
     __tablename__ = "encounter_link"
     __table_args__ = (
-        UniqueConstraint(
-            "source_encounter_id", "role", name="uq_encounter_link_source_role"
-        ),
+        UniqueConstraint("source_encounter_id", "role", name="uq_encounter_link_source_role"),
         {"schema": "tournament"},
     )
 
@@ -57,13 +55,7 @@ class EncounterLink(db.TimeStampIntegerMixin):
         index=True,
     )
     role: Mapped[enums.EncounterLinkRole] = mapped_column(ENCOUNTER_LINK_ROLE_ENUM)
-    target_slot: Mapped[enums.EncounterLinkSlot] = mapped_column(
-        ENCOUNTER_LINK_SLOT_ENUM
-    )
+    target_slot: Mapped[enums.EncounterLinkSlot] = mapped_column(ENCOUNTER_LINK_SLOT_ENUM)
 
-    source_encounter: Mapped["Encounter"] = relationship(
-        foreign_keys=[source_encounter_id]
-    )
-    target_encounter: Mapped["Encounter"] = relationship(
-        foreign_keys=[target_encounter_id]
-    )
+    source_encounter: Mapped["Encounter"] = relationship(foreign_keys=[source_encounter_id])
+    target_encounter: Mapped["Encounter"] = relationship(foreign_keys=[target_encounter_id])

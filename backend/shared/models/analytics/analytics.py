@@ -35,12 +35,8 @@ class AnalyticsPlayer(db.TimeStampIntegerMixin):
     __tablename__ = "tournament"
     __table_args__ = ({"schema": "analytics"},)
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey(Player.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
     wins: Mapped[int] = mapped_column()
     losses: Mapped[int] = mapped_column()
     shift_one: Mapped[int | None] = mapped_column(nullable=True)
@@ -61,29 +57,19 @@ class AnalyticsAlgorithm(db.TimeStampIntegerMixin):
     # ``False`` for augmentation pipelines (Performance ML v2, Standings MC v2,
     # Match Quality v1) that materialise into dedicated tables instead.
     # The HTTP read API filters the dropdown by this flag.
-    produces_shifts: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="true", default=True
-    )
+    produces_shifts: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
 
 
 class AnalyticsShift(db.TimeStampIntegerMixin):
     __tablename__ = "shifts"
     __table_args__ = ({"schema": "analytics"},)
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey(Player.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
     shift: Mapped[float] = mapped_column()
     confidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
-    effective_evidence: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
+    effective_evidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
     sample_tournaments: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     sample_matches: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     log_coverage: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
@@ -106,18 +92,12 @@ class AnalyticsBalanceSnapshot(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    balance_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.balance.id", ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    balance_id: Mapped[int] = mapped_column(ForeignKey("balancer.balance.id", ondelete="CASCADE"), index=True)
     variant_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.balance_variant.id", ondelete="SET NULL"), nullable=True
     )
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspace.id", ondelete="SET NULL"), nullable=True
-    )
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspace.id", ondelete="SET NULL"), nullable=True)
     algorithm: Mapped[str] = mapped_column(String(32), nullable=False)
     division_scope: Mapped[str | None] = mapped_column(String(32), nullable=True)
     division_grid_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
@@ -148,15 +128,11 @@ class AnalyticsBalancePlayerSnapshot(db.TimeStampIntegerMixin):
     balance_snapshot_id: Mapped[int] = mapped_column(
         ForeignKey("analytics.balance_snapshot.id", ondelete="CASCADE"), index=True
     )
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    team_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Team.id, ondelete="SET NULL"), nullable=True
-    )
+    team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="SET NULL"), nullable=True)
     assigned_role: Mapped[str] = mapped_column(String(16), nullable=False)
     preferred_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
     assigned_rank: Mapped[int] = mapped_column(Integer(), nullable=False)
@@ -195,16 +171,12 @@ class MLFeatureStore(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     granularity: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     entity_id: Mapped[int] = mapped_column(Integer(), nullable=False, index=True)
     feature_version: Mapped[str] = mapped_column(String(32), nullable=False)
     features: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    log_coverage: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
+    log_coverage: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
 
 
 class MLModelArtifact(db.TimeStampIntegerMixin):
@@ -227,9 +199,7 @@ class MLModelArtifact(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     model_kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     role: Mapped[str | None] = mapped_column(String(16), nullable=True)
     version: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -264,41 +234,19 @@ class AnalyticsPerformance(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey(Player.id, ondelete="CASCADE"), index=True
-    )
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     impact_score: Mapped[float] = mapped_column(Float(), nullable=False)
     raw_value: Mapped[float] = mapped_column(Float(), nullable=False)
-    confidence: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
-    log_coverage: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
-    local_mean: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
-    local_std: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="1", default=1.0
-    )
-    local_residual: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
-    local_zscore: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
-    local_percentile: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="50", default=50.0
-    )
-    local_reference_n: Mapped[int] = mapped_column(
-        Integer(), nullable=False, server_default="0", default=0
-    )
+    confidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    log_coverage: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    local_mean: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    local_std: Mapped[float] = mapped_column(Float(), nullable=False, server_default="1", default=1.0)
+    local_residual: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    local_zscore: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
+    local_percentile: Mapped[float] = mapped_column(Float(), nullable=False, server_default="50", default=50.0)
+    local_reference_n: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     local_band_min_div: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     local_band_max_div: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     top_features: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
@@ -327,15 +275,9 @@ class AnalyticsStandingsDistribution(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    team_id: Mapped[int] = mapped_column(
-        ForeignKey(Team.id, ondelete="CASCADE"), index=True
-    )
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), index=True)
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     mean_position: Mapped[float] = mapped_column(Float(), nullable=False)
     median_position: Mapped[float] = mapped_column(Float(), nullable=False)
     p10_position: Mapped[float] = mapped_column(Float(), nullable=False)
@@ -359,12 +301,8 @@ class AnalyticsMatchQuality(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    encounter_id: Mapped[int] = mapped_column(
-        ForeignKey(Encounter.id, ondelete="CASCADE"), index=True
-    )
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
+    encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     competitiveness: Mapped[float] = mapped_column(Float(), nullable=False)
     predictability: Mapped[float] = mapped_column(Float(), nullable=False)
     skill_balance: Mapped[float] = mapped_column(Float(), nullable=False)
@@ -387,17 +325,11 @@ class AnalyticsPlayerAnomaly(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey(Player.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     score: Mapped[float] = mapped_column(Float(), nullable=False)
-    confidence: Mapped[float] = mapped_column(
-        Float(), nullable=False, server_default="0", default=0.0
-    )
+    confidence: Mapped[float] = mapped_column(Float(), nullable=False, server_default="0", default=0.0)
     reasons: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     source_encounter_id: Mapped[int | None] = mapped_column(
@@ -432,12 +364,8 @@ class AnalyticsAnomalyFeedback(db.TimeStampIntegerMixin):
         {"schema": "analytics"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey(Player.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey(Player.id, ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     # "confirmed" (true positive) | "dismissed" (false positive)
     verdict: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -461,14 +389,10 @@ class AnalyticsExplanation(db.TimeStampIntegerMixin):
     __tablename__ = "explanation"
     __table_args__ = ({"schema": "analytics"},)
 
-    algorithm_id: Mapped[int] = mapped_column(
-        ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True
-    )
+    algorithm_id: Mapped[int] = mapped_column(ForeignKey(AnalyticsAlgorithm.id, ondelete="CASCADE"), index=True)
     entity_id: Mapped[int] = mapped_column(Integer(), nullable=False, index=True)
     entity_kind: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     base_value: Mapped[float] = mapped_column(Float(), nullable=False)
     contributions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
@@ -514,16 +438,12 @@ class AnalyticsJob(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     requested_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, index=True
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # 'compute' | 'train_ml'
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default="pending", default="pending"
-    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending", default="pending")
     # NOTE (dbarch05 JSON-normalization pass): both of the JSON columns below
     # were evaluated for normalization into FK child tables and intentionally
     # LEFT AS JSON (gated), because they are polymorphic/ephemeral job-request
@@ -543,13 +463,7 @@ class AnalyticsJob(db.TimeStampIntegerMixin):
         JSON,
         nullable=True,
     )
-    progress: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, server_default="{}", default=dict
-    )
+    progress: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    started_at: Mapped[Any | None] = mapped_column(
-        db.DateTime(timezone=True), nullable=True
-    )
-    finished_at: Mapped[Any | None] = mapped_column(
-        db.DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[Any | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[Any | None] = mapped_column(db.DateTime(timezone=True), nullable=True)

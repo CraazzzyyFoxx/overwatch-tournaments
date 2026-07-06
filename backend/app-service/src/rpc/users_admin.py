@@ -22,13 +22,13 @@ from typing import Any
 
 import httpx
 import sqlalchemy as sa
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
+
 from shared.clients.s3 import upload_avatar
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SOCIAL_PROVIDERS, SocialProvider
 from shared.rpc.query import build_query_model
 from shared.services import social_identity as social_svc
-
 from src import models
 from src.core import db
 from src.schemas.admin import user as admin_schemas
@@ -68,9 +68,7 @@ def _account_gate(data: dict) -> Any:
 
 async def _resolve_my_player_id(session: Any, user: Any) -> int:
     """Current user's linked player id (404 if the user has no player)."""
-    player_id = await session.scalar(
-        sa.select(models.User.id).where(models.User.auth_user_id == user.id)
-    )
+    player_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
     if player_id is None:
         raise HTTPException(status_code=404, detail="No linked player profile")
     return player_id
@@ -87,9 +85,7 @@ async def _propagate_avatar_to_auth_user(session: Any, player_user: Any, avatar_
     linked account."""
     if player_user.auth_user_id is None:
         return
-    auth_user = await session.scalar(
-        sa.select(models.AuthUser).where(models.AuthUser.id == player_user.auth_user_id)
-    )
+    auth_user = await session.scalar(sa.select(models.AuthUser).where(models.AuthUser.id == player_user.auth_user_id))
     if auth_user is not None:
         auth_user.avatar_url = avatar_url
 
@@ -396,7 +392,9 @@ def register(broker: Any, logger: Any) -> None:
                 async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
                     resp = await client.get(csv_url)
                 if resp.status_code != 200:
-                    raise HTTPException(status_code=400, detail=f"Failed to fetch Google Sheet (HTTP {resp.status_code}).")
+                    raise HTTPException(
+                        status_code=400, detail=f"Failed to fetch Google Sheet (HTTP {resp.status_code})."
+                    )
                 lines = resp.text.split("\n")
                 filename = sheet_url
             else:

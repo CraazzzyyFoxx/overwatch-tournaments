@@ -1,5 +1,4 @@
 from shared.core.db import Base, create_database
-
 from src.core.config import settings
 
 __all__ = (

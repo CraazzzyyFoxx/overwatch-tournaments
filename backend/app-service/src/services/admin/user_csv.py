@@ -11,10 +11,10 @@ import re
 
 from loguru import logger
 from pydantic import ValidationError
-from shared.core.social import SocialProvider
-from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.social import SocialProvider
+from shared.services import social_identity
 from src import models, schemas
 from src.core import config
 

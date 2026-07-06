@@ -22,6 +22,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Re-adding requires at most one connection per (auth_user_id, provider).
-    op.create_unique_constraint(
-        "uq_user_provider", "oauth_connections", ["auth_user_id", "provider"], schema="auth"
-    )
+    op.create_unique_constraint("uq_user_provider", "oauth_connections", ["auth_user_id", "provider"], schema="auth")

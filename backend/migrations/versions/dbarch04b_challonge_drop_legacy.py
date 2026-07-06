@@ -68,13 +68,12 @@ Create Date: 2026-07-04
 from __future__ import annotations
 
 import os
-from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch04b"
-down_revision: Union[str, None] = "dbarch05"
+down_revision: str | None = "dbarch05"
 branch_labels = None
 depends_on = None
 
@@ -174,34 +173,41 @@ def downgrade() -> None:
     #    read path works again. FROM-clause-only UPDATE pattern (target only in SET/WHERE).
     conn = op.get_bind()
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE tournament.tournament t
         SET challonge_id = cs.challonge_tournament_id,
             challonge_slug = cs.slug
         FROM tournament.challonge_source cs
         WHERE cs.tournament_id = t.id
           AND cs.source_type = 'tournament'
-    """))
-    conn.execute(sa.text("""
+    """)
+    )
+    conn.execute(
+        sa.text("""
         UPDATE tournament.stage s
         SET challonge_id = cs.challonge_tournament_id,
             challonge_slug = cs.slug
         FROM tournament.challonge_source cs
         WHERE cs.stage_id = s.id
           AND cs.source_type = 'stage'
-    """))
+    """)
+    )
     # group.challonge_id/slug are NOT touched by upgrade() (they hold Challonge's
     # per-group match-routing id, not a source id) — so downgrade must NOT overwrite
     # them from challonge_source either.
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         UPDATE tournament.encounter e
         SET challonge_id = mm.challonge_match_id
         FROM tournament.challonge_match_mapping mm
         WHERE mm.encounter_id = e.id
-    """))
+    """)
+    )
     # challonge_team re-derivation is best-effort: group_id is recovered by matching the
     # source's stage to a group on that stage (may be NULL for tournament-scoped sources).
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         INSERT INTO tournament.challonge_team
             (challonge_id, team_id, group_id, tournament_id, created_at)
         SELECT DISTINCT ON (cs.tournament_id, pm.challonge_participant_id, pm.team_id)
@@ -219,4 +225,5 @@ def downgrade() -> None:
         FROM tournament.challonge_participant_mapping pm
         JOIN tournament.challonge_source cs ON cs.id = pm.source_id
         ORDER BY cs.tournament_id, pm.challonge_participant_id, pm.team_id, pm.id
-    """))
+    """)
+    )

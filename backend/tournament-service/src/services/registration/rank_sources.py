@@ -16,6 +16,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import enums
 from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
@@ -25,9 +28,6 @@ from shared.services.division_grid_normalization import (
     DivisionGridNormalizer,
     build_division_grid_normalizer,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.services.registration.utils import normalize_battle_tag_key
 
@@ -95,11 +95,7 @@ async def _load_tournament_for_autofill(
     result = await session.execute(
         sa.select(models.Tournament)
         .where(models.Tournament.id == tournament_id)
-        .options(
-            selectinload(models.Tournament.division_grid_version).selectinload(
-                models.DivisionGridVersion.tiers
-            )
-        )
+        .options(selectinload(models.Tournament.division_grid_version).selectinload(models.DivisionGridVersion.tiers))
     )
     return result.scalar_one_or_none()
 
@@ -219,9 +215,7 @@ async def _load_latest_ranks_from_balancer_history(
     for row in rows:
         user_map = latest.setdefault(row.user_id, {})
         if row.role not in user_map:
-            normalized = _normalize_history_rank(
-                normalizer, row.division_grid_version_id, row.rank_value, target_grid
-            )
+            normalized = _normalize_history_rank(normalizer, row.division_grid_version_id, row.rank_value, target_grid)
             if normalized is not None:
                 user_map[row.role] = normalized
     return latest
@@ -291,9 +285,7 @@ async def _load_latest_ranks_from_tournament_history(
             continue
         user_map = latest.setdefault(row.user_id, {})
         if role_code not in user_map:
-            normalized = _normalize_history_rank(
-                normalizer, row.division_grid_version_id, row.rank, target_grid
-            )
+            normalized = _normalize_history_rank(normalizer, row.division_grid_version_id, row.rank, target_grid)
             if normalized is not None:
                 user_map[role_code] = normalized
     return latest
@@ -369,7 +361,9 @@ async def _load_rank_autofill_registrations(
             models.BalancerRegistration.deleted_at.is_(None),
         )
         .options(selectinload(models.BalancerRegistration.roles))
-        .order_by(models.BalancerRegistration.battle_tag_normalized.asc().nullslast(), models.BalancerRegistration.id.asc())
+        .order_by(
+            models.BalancerRegistration.battle_tag_normalized.asc().nullslast(), models.BalancerRegistration.id.asc()
+        )
     )
     if registration_ids is not None:
         if not registration_ids:
@@ -403,11 +397,7 @@ async def _load_main_battle_tags_by_key(
             acc.username_normalized.in_(tag_keys),
         )
     )
-    return {
-        account.username_normalized: account
-        for account in result.scalars().all()
-        if account.username_normalized
-    }
+    return {account.username_normalized: account for account in result.scalars().all() if account.username_normalized}
 
 
 async def _load_ow_rank_signals_by_social_account_id(

@@ -130,9 +130,7 @@ class RealisedShiftMapTests(IsolatedAsyncioTestCase):
             patch.object(backtest, "load_source_grids", AsyncMock(return_value={})),
             patch.object(backtest, "assign_canonical_division", _identity_assign),
         ):
-            fold_10 = await backtest._realised_shift_map(
-                session, 10, history_through_tournament_id=30
-            )
+            fold_10 = await backtest._realised_shift_map(session, 10, history_through_tournament_id=30)
         self.assertEqual({1: 1.0}, fold_10)  # 7 - 6
 
     async def test_last_tournament_without_next_is_dropped(self) -> None:
@@ -146,7 +144,5 @@ class RealisedShiftMapTests(IsolatedAsyncioTestCase):
             patch.object(backtest, "load_source_grids", AsyncMock(return_value={})),
             patch.object(backtest, "assign_canonical_division", _identity_assign),
         ):
-            fold_30 = await backtest._realised_shift_map(
-                session, 30, history_through_tournament_id=30
-            )
+            fold_30 = await backtest._realised_shift_map(session, 30, history_through_tournament_id=30)
         self.assertEqual({}, fold_30)

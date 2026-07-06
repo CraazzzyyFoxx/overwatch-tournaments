@@ -21,16 +21,15 @@ Create Date: 2026-05-17 21:30:00.000000
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "ml1a2b3c4d5e"
-down_revision: Union[str, None] = "z6u0v4w5x6y7"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "z6u0v4w5x6y7"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _TIMESTAMP_COLUMNS = (
@@ -57,12 +56,8 @@ def upgrade() -> None:
         sa.Column("entity_id", sa.Integer(), nullable=False),
         sa.Column("feature_version", sa.String(length=32), nullable=False),
         sa.Column("features", sa.JSON(), nullable=False),
-        sa.Column(
-            "log_coverage", sa.Float(), nullable=False, server_default="0"
-        ),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
+        sa.Column("log_coverage", sa.Float(), nullable=False, server_default="0"),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "tournament_id",
@@ -117,9 +112,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.false(),
         ),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["training_cutoff_tournament_id"],
             ["tournament.tournament.id"],
@@ -169,22 +162,12 @@ def upgrade() -> None:
         sa.Column("algorithm_id", sa.Integer(), nullable=False),
         sa.Column("impact_score", sa.Float(), nullable=False),
         sa.Column("raw_value", sa.Float(), nullable=False),
-        sa.Column(
-            "confidence", sa.Float(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "log_coverage", sa.Float(), nullable=False, server_default="0"
-        ),
+        sa.Column("confidence", sa.Float(), nullable=False, server_default="0"),
+        sa.Column("log_coverage", sa.Float(), nullable=False, server_default="0"),
         sa.Column("top_features", sa.JSON(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["tournament.player.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["player_id"], ["tournament.player.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "tournament_id",
@@ -230,25 +213,13 @@ def upgrade() -> None:
         sa.Column("median_position", sa.Float(), nullable=False),
         sa.Column("p10_position", sa.Float(), nullable=False),
         sa.Column("p90_position", sa.Float(), nullable=False),
-        sa.Column(
-            "prob_top1", sa.Float(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "prob_top3", sa.Float(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "prob_top8", sa.Float(), nullable=False, server_default="0"
-        ),
+        sa.Column("prob_top1", sa.Float(), nullable=False, server_default="0"),
+        sa.Column("prob_top3", sa.Float(), nullable=False, server_default="0"),
+        sa.Column("prob_top8", sa.Float(), nullable=False, server_default="0"),
         sa.Column("position_histogram", sa.JSON(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["team_id"], ["tournament.team.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["team_id"], ["tournament.team.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "tournament_id",
@@ -294,12 +265,8 @@ def upgrade() -> None:
         sa.Column("skill_balance", sa.Float(), nullable=False),
         sa.Column("quality_score", sa.Float(), nullable=False),
         sa.Column("anomaly_flags", sa.JSON(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["encounter_id"], ["tournament.encounter.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["encounter_id"], ["tournament.encounter.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "encounter_id",
@@ -336,12 +303,8 @@ def upgrade() -> None:
         sa.Column("tournament_id", sa.Integer(), nullable=False),
         sa.Column("base_value", sa.Float(), nullable=False),
         sa.Column("contributions", sa.JSON(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         schema="analytics",
     )

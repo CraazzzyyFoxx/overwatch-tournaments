@@ -2,14 +2,14 @@ import typing
 
 import sqlalchemy as sa
 from cashews import cache
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.services.challonge_refs import (
     ChallongeRef,
     resolve_encounter_challonge,
     resolve_tournament_challonge,
 )
 from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import config, enums, errors, pagination, utils
 from src.services.map import flows as map_flows
@@ -216,9 +216,7 @@ async def to_pydantic(
     # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
     # read from the deprecated ``encounter.challonge_id`` column. Always set it so
     # the value survives the column being dropped; ``None`` when not prefetched.
-    encounter_dict["challonge_id"] = (
-        challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
-    )
+    encounter_dict["challonge_id"] = challonge_match_ids.get(encounter.id) if challonge_match_ids is not None else None
 
     return schemas.EncounterRead(
         **encounter_dict,
@@ -535,8 +533,7 @@ async def get_encounters_overview(
             ],
         ),
         hot_maps=[
-            schemas.EncounterMapMetricRead(name=str(name), count=int(count))
-            for name, count in data["hot_map_rows"]
+            schemas.EncounterMapMetricRead(name=str(name), count=int(count)) for name, count in data["hot_map_rows"]
         ],
         pulse=schemas.EncounterPulseRead(
             avg_series_seconds=data["avg_series_seconds"],

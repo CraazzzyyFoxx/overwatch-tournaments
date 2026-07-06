@@ -10,10 +10,11 @@ from __future__ import annotations
 import typing
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services.realtime_publisher import publish_event
 from shared.services.realtime_topics import analytics_jobs
-from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = ("publish_job_event",)
 

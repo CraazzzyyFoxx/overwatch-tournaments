@@ -12,9 +12,7 @@ async def get_existing_slugs(session: AsyncSession, slugs: list[str]) -> set[str
     of the per-item ``get_by_slug`` probes in ``initial_create``)."""
     if not slugs:
         return set()
-    result = await session.execute(
-        sa.select(models.Hero.slug).where(models.Hero.slug.in_(list(set(slugs))))
-    )
+    result = await session.execute(sa.select(models.Hero.slug).where(models.Hero.slug.in_(list(set(slugs)))))
     return set(result.scalars().all())
 
 

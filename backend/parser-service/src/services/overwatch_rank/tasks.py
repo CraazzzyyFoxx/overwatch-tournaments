@@ -14,12 +14,12 @@ from typing import Any
 
 from loguru import logger
 from redis import asyncio as redis_async
+
 from shared.core import enums
 from shared.messaging.config import RANK_FETCH_PRIORITY_QUEUE, RANK_FETCH_QUEUE
 from shared.observability import publish_message
 from shared.schemas.events import FetchRankEvent, RegistrationApprovedEvent
 from shared.services import settings_provider
-
 from src.core import config, db
 from src.core.broker import require_broker
 

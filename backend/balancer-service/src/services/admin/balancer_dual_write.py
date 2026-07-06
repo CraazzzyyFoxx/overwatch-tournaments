@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src import models
 from src.schemas.team import InternalBalancerTeamsPayload
 
-
 # ---------------------------------------------------------------------------
 # Balance variants + team slots  (replaces roster_json)
 # ---------------------------------------------------------------------------
@@ -42,9 +41,7 @@ async def sync_balance_variants_and_slots(
     """
     # Delete old variants (cascades to team_slots through variant→team FK)
     await session.execute(
-        sa.delete(models.BalancerBalanceVariant).where(
-            models.BalancerBalanceVariant.balance_id == balance.id
-        )
+        sa.delete(models.BalancerBalanceVariant).where(models.BalancerBalanceVariant.balance_id == balance.id)
     )
     await session.flush()
 
@@ -65,9 +62,7 @@ async def sync_balance_variants_and_slots(
 
     # Link teams to variant and create team_slots
     teams_result = await session.execute(
-        sa.select(models.BalancerTeam).where(
-            models.BalancerTeam.balance_id == balance.id
-        )
+        sa.select(models.BalancerTeam).where(models.BalancerTeam.balance_id == balance.id)
     )
     balancer_teams = {t.balancer_name: t for t in teams_result.scalars().all()}
 

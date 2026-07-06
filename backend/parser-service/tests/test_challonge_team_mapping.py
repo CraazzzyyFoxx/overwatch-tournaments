@@ -55,9 +55,11 @@ def _participant_row(
 
 class ChallongeTeamMappingTests(IsolatedAsyncioTestCase):
     def test_suggestion_normalizes_team_prefix_and_battle_tag(self) -> None:
-        index = flows._build_team_suggestion_index([
-            _team(42, "Alpha", "Alpha#1234"),
-        ])
+        index = flows._build_team_suggestion_index(
+            [
+                _team(42, "Alpha", "Alpha#1234"),
+            ]
+        )
 
         self.assertEqual(42, flows._suggest_team_id("Team Alpha#9876", index))
 

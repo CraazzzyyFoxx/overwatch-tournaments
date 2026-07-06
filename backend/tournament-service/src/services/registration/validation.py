@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 from typing import Any, NoReturn
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
@@ -16,9 +19,6 @@ from shared.domain.player_sub_roles import (
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
 from shared.models.identity.social import SocialAccount
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src.schemas.registration import (
     BuiltInFieldConfig,
     CustomFieldDefinition,
@@ -171,9 +171,7 @@ def _validate_role_heroes(
             if entry is None:
                 _validation_error(f"Unknown hero: {slug}.")
             if expected_class is not None and entry.hero_class != expected_class:
-                _validation_error(
-                    f"Hero '{slug}' is not a {_ROLE_LABELS.get(role_code, role_code)} hero."
-                )
+                _validation_error(f"Hero '{slug}' is not a {_ROLE_LABELS.get(role_code, role_code)} hero.")
 
     if config.required and not any_selected:
         _validation_error("Select at least one top hero.")
@@ -467,9 +465,7 @@ async def validate_verified_identity(
         return
 
     if player_id is None:
-        _validation_error(
-            "A verified account is required. Link the requested account via OAuth in your profile first."
-        )
+        _validation_error("A verified account is required. Link the requested account via OAuth in your profile first.")
 
     providers = {provider for _, provider, _ in required}
     rows = (
@@ -489,6 +485,4 @@ async def validate_verified_identity(
     for field_key, provider, value in required:
         label = _VERIFIED_FIELD_LABELS[field_key]
         if normalize_social_handle(provider, value) not in verified_by_provider.get(provider, set()):
-            _validation_error(
-                f"{label} must match an OAuth-verified account linked to your profile."
-            )
+            _validation_error(f"{label} must match an OAuth-verified account linked to your profile.")

@@ -2,6 +2,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
 from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.messaging.config import (
     TOURNAMENT_BRACKET_JOBS_DLQ,
     TOURNAMENT_BRACKET_JOBS_QUEUE,
@@ -20,7 +21,6 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import TournamentComputationJobEvent
-
 from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache

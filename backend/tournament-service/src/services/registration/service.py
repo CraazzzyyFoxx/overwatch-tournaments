@@ -8,6 +8,10 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import enums
@@ -19,10 +23,6 @@ from shared.rbac import assign_workspace_system_role
 from shared.repository import get_or_create_workspace_member
 from shared.services import social_identity
 from shared.services.profile_visibility import resolve_profiles_open
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.registration import (
     RegistrationCreate,
@@ -123,7 +123,6 @@ def _build_hero_entries(
     return build_hero_entries(slugs, hero_catalog=hero_catalog, max_heroes=max_heroes)
 
 
-
 def build_registration_roles(
     roles: list[Any] | None,
     *,
@@ -212,12 +211,16 @@ async def _move_battle_tag_identity(
     await session.flush()
     for provider in (SocialProvider.BATTLENET,):
         rows = (
-            await session.execute(
-                sa.select(models.SocialAccount)
-                .where(models.SocialAccount.user_id == target.id, models.SocialAccount.provider == provider)
-                .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+            (
+                await session.execute(
+                    sa.select(models.SocialAccount)
+                    .where(models.SocialAccount.user_id == target.id, models.SocialAccount.provider == provider)
+                    .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if rows and not any(row.is_primary for row in rows):
             rows[0].is_primary = True
     await session.flush()
@@ -266,9 +269,7 @@ async def _anchor_registration_member(
     """
     if workspace_id is None:
         workspace_id = await session.scalar(
-            sa.select(models.Tournament.workspace_id).where(
-                models.Tournament.id == registration.tournament_id
-            )
+            sa.select(models.Tournament.workspace_id).where(models.Tournament.id == registration.tournament_id)
         )
     if workspace_id is None:
         logger.warning(
@@ -537,9 +538,7 @@ async def create_registration(
         # internally, so we don't seed the catalog explicitly here — doing so
         # would re-upsert the whole permission catalog twice per registration
         # on this hot path for no behavioural gain.
-        await assign_workspace_system_role(
-            session, user_id=auth_user_id, workspace_id=workspace_id, role_name="player"
-        )
+        await assign_workspace_system_role(session, user_id=auth_user_id, workspace_id=workspace_id, role_name="player")
     elif auth_user_id is not None:
         # ensure_player_identity returns None when the registration has no
         # battle_tag (see its docstring) — there's no domain player to anchor

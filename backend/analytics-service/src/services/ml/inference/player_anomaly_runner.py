@@ -47,11 +47,7 @@ def _normalise_flag(
         "confidence": float(flag.get("confidence") or 0.0),
         "reasons": [str(reason) for reason in reasons] if isinstance(reasons, list) else [],
         "evidence": evidence if isinstance(evidence, dict) else None,
-        "source_encounter_id": (
-            int(flag["encounter_id"])
-            if flag.get("encounter_id") is not None
-            else None
-        ),
+        "source_encounter_id": (int(flag["encounter_id"]) if flag.get("encounter_id") is not None else None),
     }
 
 
@@ -109,9 +105,7 @@ async def run_player_anomalies_for_tournament(
         )
 
     await session.execute(
-        sa.delete(models.AnalyticsPlayerAnomaly).where(
-            models.AnalyticsPlayerAnomaly.tournament_id == tournament_id
-        )
+        sa.delete(models.AnalyticsPlayerAnomaly).where(models.AnalyticsPlayerAnomaly.tournament_id == tournament_id)
     )
     if rows:
         await session.execute(sa.insert(models.AnalyticsPlayerAnomaly), rows)

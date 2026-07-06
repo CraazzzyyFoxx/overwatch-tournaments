@@ -1,10 +1,9 @@
-import asyncio
 import json
+
 import pandas as pd
-
 from loguru import logger
-from shared.clients.s3 import S3Client
 
+from shared.clients.s3 import S3Client
 from src.core import config, db
 from src.services.s3 import service as s3_service
 from src.services.user.service import get_by_battle_tag
@@ -14,7 +13,7 @@ def update_player_data(player_data: dict, player_formated_data: dict) -> dict:
     is_flex = player_data.get("isFullFlex", False)
     if not player_formated_data.get("isFullFlex", None):
         player_formated_data["isFullFlex"] = "Flex" if is_flex else ""
-        logger.info(f"Updated player {player_formated_data["name"]} with isFullFlex: {is_flex}")
+        logger.info(f"Updated player {player_formated_data['name']} with isFullFlex: {is_flex}")
 
     return player_formated_data
 
@@ -29,11 +28,11 @@ async def filter_owal_players() -> None:
     await s3.start()
     tournaments = await s3_service.get_tournaments_teams(s3)
 
-    with open("players.json", "r", encoding="utf-8") as file:
+    with open("players.json", encoding="utf-8") as file:
         result_data = json.load(file)
         formated_data = {player["name"]: player for player in result_data}
 
-    for tournament_name, data_raw in tournaments.items():
+    for _tournament_name, data_raw in tournaments.items():
         data = json.loads(data_raw)
         players = data["data"].get("players", {})
         for player_uuid in players:
@@ -53,9 +52,10 @@ async def filter_owal_players() -> None:
     players_out = {}
 
     def check_player(player_info: dict, role: str, two_role: str, three_role: str) -> bool:
-        return (
-            player_info[role] >= 3 or
-            (player_info[role] == 2 and (player_info[two_role] >= 1 or player_info[three_role] >= 1) and player_info.get("isFullFlex", "") == "Flex")
+        return player_info[role] >= 3 or (
+            player_info[role] == 2
+            and (player_info[two_role] >= 1 or player_info[three_role] >= 1)
+            and player_info.get("isFullFlex", "") == "Flex"
         )
 
     for player_uuid in formated_data:
@@ -72,17 +72,16 @@ async def filter_owal_players() -> None:
     logger.info("Filtered OWAL players and saved to players_owal.xlsx")
 
 
-
 if __name__ == "__main__":
     # loop = asyncio.get_event_loop()
     # loop.run_until_complete(filter_owal_players())
     # loop.close()
 
-    with open("players.json", "r", encoding="utf-8") as file:
+    with open("players.json", encoding="utf-8") as file:
         result_data = json.load(file)
         formated_data = {player["name"]: player for player in result_data}
 
-    with open("players-25.07.2025, 00_45_37.json", "r", encoding="utf-8") as file:
+    with open("players-25.07.2025, 00_45_37.json", encoding="utf-8") as file:
         players = json.load(file)
         for player_uuid in players["players"]:
             player_data = players["players"][player_uuid]["identity"]

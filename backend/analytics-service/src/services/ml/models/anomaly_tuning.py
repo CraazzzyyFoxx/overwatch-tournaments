@@ -20,9 +20,7 @@ import numpy as np
 __all__ = ("precision_recall_curve", "tune_threshold")
 
 
-def precision_recall_curve(
-    scores: typing.Sequence[float], labels: typing.Sequence[bool]
-) -> list[dict[str, float]]:
+def precision_recall_curve(scores: typing.Sequence[float], labels: typing.Sequence[bool]) -> list[dict[str, float]]:
     """Return precision/recall at each candidate ``score >= threshold`` cut-off.
 
     ``labels[i]`` is ``True`` when the flagged player was confirmed a true

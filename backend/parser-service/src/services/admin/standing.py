@@ -1,11 +1,11 @@
 """Admin service layer for standing management"""
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.schemas.admin import standing as admin_schemas
 from src.services.standings import recalculation
@@ -18,12 +18,8 @@ async def get_standing(session: AsyncSession, standing_id: int) -> models.Standi
         .options(
             selectinload(models.Standing.team),
             selectinload(models.Standing.group),
-            selectinload(models.Standing.stage)
-            .selectinload(models.Stage.items)
-            .selectinload(models.StageItem.inputs),
-            selectinload(models.Standing.stage_item).selectinload(
-                models.StageItem.inputs
-            ),
+            selectinload(models.Standing.stage).selectinload(models.Stage.items).selectinload(models.StageItem.inputs),
+            selectinload(models.Standing.stage_item).selectinload(models.StageItem.inputs),
             selectinload(models.Standing.tournament),
         )
     )
@@ -55,9 +51,7 @@ async def update_standing(
 
 async def delete_standing(session: AsyncSession, standing_id: int) -> None:
     """Delete standing"""
-    result = await session.execute(
-        select(models.Standing).where(models.Standing.id == standing_id)
-    )
+    result = await session.execute(select(models.Standing).where(models.Standing.id == standing_id))
     standing = result.scalar_one_or_none()
 
     if not standing:
@@ -70,9 +64,7 @@ async def delete_standing(session: AsyncSession, standing_id: int) -> None:
 async def recalculate_standings(session: AsyncSession, tournament_id: int) -> dict:
     """Publish a standings invalidation for tournament-service."""
     # Verify tournament exists
-    result = await session.execute(
-        select(models.Tournament).where(models.Tournament.id == tournament_id)
-    )
+    result = await session.execute(select(models.Tournament).where(models.Tournament.id == tournament_id))
     tournament = result.scalar_one_or_none()
 
     if not tournament:

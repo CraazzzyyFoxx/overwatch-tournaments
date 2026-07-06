@@ -146,7 +146,7 @@ async def _wait_for_nudge(pubsub, timeout: float) -> bool:
             pubsub.get_message(ignore_subscribe_messages=True, timeout=timeout),
             timeout=timeout + 0.5,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         return False
     return msg is not None
 

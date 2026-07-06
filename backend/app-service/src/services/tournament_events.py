@@ -4,10 +4,10 @@ from typing import Any
 
 from cashews import cache
 from faststream.rabbit import RabbitMessage
+
 from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHANGED_EXCHANGE
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
-
 from src.core import db
 from src.core.caching import CACHE_PREFIXES
 from src.services import hero_stats_refresh

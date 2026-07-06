@@ -10,7 +10,7 @@ from src.core import enums, utils
 
 
 def tournament_entities(
-        in_entities: list[str], child: typing.Any | None = None
+    in_entities: list[str], child: typing.Any | None = None
 ) -> list[sa.orm.strategy_options._AbstractLoad]:
     entities = []
     if "groups" in in_entities:
@@ -40,9 +40,7 @@ async def get_all(
     workspace_id: int | None = None,
 ) -> typing.Sequence[models.Tournament]:
     query = (
-        sa.select(models.Tournament)
-        .options(*tournament_entities(entities or []))
-        .order_by(models.Tournament.id.asc())
+        sa.select(models.Tournament).options(*tournament_entities(entities or [])).order_by(models.Tournament.id.asc())
     )
 
     if is_league is not None:
@@ -163,9 +161,7 @@ async def create_groups(
 
     stages: list[models.Stage] = []
     for offset, spec in enumerate(specs):
-        stage_type = (
-            enums.StageType.ROUND_ROBIN if spec.is_groups else enums.StageType.DOUBLE_ELIMINATION
-        )
+        stage_type = enums.StageType.ROUND_ROBIN if spec.is_groups else enums.StageType.DOUBLE_ELIMINATION
         # The deprecated stage.challonge_id/slug columns are no longer written
         # (the stage↔Challonge link is derived from challonge_source). The group's
         # own challonge_id/slug below is KEPT: it stores Challonge's per-group
@@ -185,9 +181,7 @@ async def create_groups(
 
     groups: list[models.TournamentGroup] = []
     for spec, stage in zip(specs, stages, strict=True):
-        stage_item_type = (
-            enums.StageItemType.GROUP if spec.is_groups else enums.StageItemType.SINGLE_BRACKET
-        )
+        stage_item_type = enums.StageItemType.GROUP if spec.is_groups else enums.StageItemType.SINGLE_BRACKET
         session.add(
             models.StageItem(
                 stage_id=stage.id,

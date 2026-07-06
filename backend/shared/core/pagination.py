@@ -52,9 +52,7 @@ class SortOrder(Enum):
     DESC = "desc"
 
 
-def apply_search(
-    model: type[Base], query: sa.Select, query_str: str, fields: list[str]
-) -> sa.Select:
+def apply_search(model: type[Base], query: sa.Select, query_str: str, fields: list[str]) -> sa.Select:
     if not query_str or not fields:
         return query
     columns = [model.depth_get_column(field.split(".")) for field in fields]
@@ -118,9 +116,7 @@ class PaginationSortParams(PaginationParams):
     sort: str = "id"
     order: SortOrder | typing.Literal["asc", "desc"] = SortOrder.ASC
 
-    def apply_sort(
-        self, query: sa.Select, model: type[Base] | None = None
-    ) -> sa.Select:
+    def apply_sort(self, query: sa.Select, model: type[Base] | None = None) -> sa.Select:
         if model:
             if self.order == SortOrder.DESC or self.order == "desc":
                 order_by = model.depth_get_column(self.sort.split(".")).desc()
@@ -146,9 +142,7 @@ class PaginationSortParams(PaginationParams):
         else:
             return qmodel.asc()
 
-    def apply_pagination_sort(
-        self, query: sa.Select, model: type[Base] | None = None
-    ) -> sa.Select:
+    def apply_pagination_sort(self, query: sa.Select, model: type[Base] | None = None) -> sa.Select:
         query = self.apply_sort(query, model)
         query = self.apply_pagination(query)
         return query
@@ -177,9 +171,7 @@ class PaginationSortSearchParams(PaginationSortParams):
             return query
         return query.where(sa.or_(*[column.ilike(search_query) for column in columns]))
 
-    def apply_sort(
-        self, query: sa.Select, model: type[Base] | None = None
-    ) -> sa.Select:
+    def apply_sort(self, query: sa.Select, model: type[Base] | None = None) -> sa.Select:
         if self.sort.startswith("similarity"):
             if model is None:
                 raise ApiHTTPException(
@@ -198,9 +190,7 @@ class PaginationSortSearchParams(PaginationSortParams):
                         )
                     ],
                 )
-            column = sa.func.word_similarity(
-                model.depth_get_column(sort.split(".")), self.query
-            )
+            column = sa.func.word_similarity(model.depth_get_column(sort.split(".")), self.query)
             if self.order == SortOrder.ASC or self.order == "asc":
                 order_by = column.asc()
             else:

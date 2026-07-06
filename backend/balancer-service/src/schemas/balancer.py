@@ -49,16 +49,13 @@ class ConfigOverrides(BaseModel):
         None,
         ge=0,
         description=(
-            "Penalty weight per pair of players in the same team sharing the same "
-            "role subclass. Use 0 to disable."
+            "Penalty weight per pair of players in the same team sharing the same role subclass. Use 0 to disable."
         ),
     )
     team_max_pain_weight: float | None = Field(
         None,
         ge=0,
-        description=(
-            "Weight for the per-team maximum role discomfort averaged over teams."
-        ),
+        description=("Weight for the per-team maximum role discomfort averaged over teams."),
     )
     rank_comfort_tilt: float | None = Field(
         None, ge=0, le=1, description="Ranking tilt between balance and comfort (0.5 = balanced)"
@@ -164,6 +161,7 @@ class ConfigOverrides(BaseModel):
         le=200,
         description="Maximum number of result variants to return for the selected solver",
     )
+
 
 class BalanceRequest(BaseModel):
     """Request schema for direct team balancing."""

@@ -42,9 +42,7 @@ SOCIAL_PROVIDERS: frozenset[str] = frozenset(
 )
 
 # Providers that can be OAuth-verified (ownership proven → ``is_verified``).
-OAUTH_PROVIDERS: frozenset[str] = frozenset(
-    {SocialProvider.BATTLENET, SocialProvider.DISCORD, SocialProvider.TWITCH}
-)
+OAUTH_PROVIDERS: frozenset[str] = frozenset({SocialProvider.BATTLENET, SocialProvider.DISCORD, SocialProvider.TWITCH})
 
 # OAuth provider identifier -> canonical social provider (currently 1:1).
 OAUTH_TO_SOCIAL: dict[str, str] = {

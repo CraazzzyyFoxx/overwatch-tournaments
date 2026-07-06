@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from shared.core.enums import EncounterResultStatus, EncounterStatus
-from shared.services.bracket import advancement
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterResultStatus, EncounterStatus
+from shared.services.bracket import advancement
 from src import models
 
 FinalizeSource = Literal["captain", "admin", "challonge", "log"]
@@ -43,9 +43,7 @@ async def finalize_encounter_score(
 
     locked_encounter = encounter or await _load_encounter_for_update(session, encounter_id)
     if locked_encounter.id != encounter_id:
-        raise ValueError(
-            f"Encounter id mismatch: expected {encounter_id}, got {locked_encounter.id}"
-        )
+        raise ValueError(f"Encounter id mismatch: expected {encounter_id}, got {locked_encounter.id}")
 
     locked_encounter.home_score = home_score
     locked_encounter.away_score = away_score
@@ -70,9 +68,7 @@ async def _load_encounter_for_update(
     encounter_id: int,
 ) -> models.Encounter:
     result = await session.execute(
-        select(models.Encounter)
-        .where(models.Encounter.id == encounter_id)
-        .with_for_update(nowait=False)
+        select(models.Encounter).where(models.Encounter.id == encounter_id).with_for_update(nowait=False)
     )
     encounter = result.scalar_one_or_none()
     if encounter is None:

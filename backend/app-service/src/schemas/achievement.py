@@ -33,6 +33,7 @@ class AchievementRead(BaseRead):
 
 class AchievementTournamentLink(BaseModel):
     """Narrow tournament reference for achievement payloads."""
+
     id: int
     number: int | None = None
     name: str
@@ -41,12 +42,14 @@ class AchievementTournamentLink(BaseModel):
 
 class AchievementMatchTeamRef(BaseModel):
     """Bare team reference for `AchievementMatchLink.{home,away}_team`."""
+
     id: int
     name: str
 
 
 class AchievementMatchLink(BaseModel):
     """Narrow match reference for achievement payloads."""
+
     id: int
     encounter_id: int
     map_id: int

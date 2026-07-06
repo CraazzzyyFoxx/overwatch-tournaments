@@ -37,13 +37,9 @@ class StageRefs:
     tournament_group_id: int | None
 
 
-async def _load_group(
-    session: AsyncSession, group_id: int
-) -> TournamentGroup | None:
+async def _load_group(session: AsyncSession, group_id: int) -> TournamentGroup | None:
     result = await session.execute(
-        sa.select(TournamentGroup)
-        .where(TournamentGroup.id == group_id)
-        .options(selectinload(TournamentGroup.stage))
+        sa.select(TournamentGroup).where(TournamentGroup.id == group_id).options(selectinload(TournamentGroup.stage))
     )
     return result.scalar_one_or_none()
 

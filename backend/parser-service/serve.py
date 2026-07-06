@@ -3,6 +3,7 @@ import base64
 import sqlalchemy as sa
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
+
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.messaging.config import (
     ACHIEVEMENT_EVALUATE_QUEUE,
@@ -33,7 +34,6 @@ from shared.schemas.events import (
     ProcessTournamentLogsEvent,
     UploadMatchLogEvent,
 )
-
 from src import models
 from src.core import config, db
 from src.core.broker import set_worker_broker
@@ -214,9 +214,7 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
         except Exception:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "failed", logger=log)
             metrics.count("parser.match_log.processed", 1, attributes={"status": "failed"})
-            log.exception(
-                f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}"
-            )
+            log.exception(f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}")
             try:
                 async with db.async_session_maker() as session:
                     failed_workspace_id = await session.scalar(

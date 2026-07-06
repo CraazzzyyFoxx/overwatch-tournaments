@@ -4,6 +4,9 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.services.tournament_computation import (
     ACTIVE_STATUSES,
     create_job,
@@ -12,9 +15,6 @@ from shared.services.tournament_computation import (
 from shared.services.tournament_computation import (
     request_bracket_job as shared_request_bracket_job,
 )
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 JobKind = Literal["bracket", "standings"]

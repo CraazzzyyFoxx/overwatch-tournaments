@@ -1,9 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
 import re
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 __all__ = (
     "UserRegister",
-    "UserLogin", 
+    "UserLogin",
     "Token",
     "TokenPayload",
     "RefreshTokenRequest",
@@ -14,6 +15,7 @@ __all__ = (
 
 class UserRegister(BaseModel):
     """Schema for user registration"""
+
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8, max_length=100)
@@ -41,12 +43,14 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     """Schema for user login"""
+
     email: EmailStr
     password: str
 
 
 class Token(BaseModel):
     """Schema for token response"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -54,6 +58,7 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     """Schema for JWT token payload"""
+
     sub: int  # user_id
     email: str
     username: str
@@ -63,11 +68,13 @@ class TokenPayload(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Schema for refresh token request"""
+
     refresh_token: str
 
 
 class AuthUser(BaseModel):
     """Schema for authenticated user response"""
+
     id: int
     email: str
     username: str
@@ -85,6 +92,7 @@ class AuthUser(BaseModel):
 
 class UserUpdate(BaseModel):
     """Schema for user update"""
+
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
     email: EmailStr | None = None

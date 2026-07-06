@@ -32,7 +32,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 from shared.core.enums import StageType  # noqa: E402
 from shared.models.achievements.achievement import AchievementGrain, AchievementRule  # noqa: E402
 from shared.services.achievement_effective import override_applies_to_scope  # noqa: E402
-
 from src.services.achievement.engine import differ as differ_module  # noqa: E402
 from src.services.achievement.engine.conditions import (  # noqa: E402
     get_registered_types,
@@ -278,9 +277,7 @@ class ValidationTests(TestCase):
     def test_reached_playoffs_scope_drives_grain(self) -> None:
         self.assertEqual(
             AchievementGrain.user,
-            infer_grain(
-                {"type": "reached_playoffs", "params": {"scope": "global", "op": "==", "value": 0}}
-            ),
+            infer_grain({"type": "reached_playoffs", "params": {"scope": "global", "op": "==", "value": 0}}),
         )
         self.assertEqual(
             AchievementGrain.user_tournament,
@@ -289,17 +286,13 @@ class ValidationTests(TestCase):
 
     def test_log_stat_rank_requires_stat(self) -> None:
         self.assertTrue(validate_condition_tree({"type": "log_stat_rank", "params": {}}))
-        self.assertEqual(
-            [], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}})
-        )
+        self.assertEqual([], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}}))
 
     def test_standing_count_requires_op_and_value(self) -> None:
         self.assertTrue(validate_condition_tree({"type": "standing_count", "params": {}}))
         self.assertEqual(
             [],
-            validate_condition_tree(
-                {"type": "standing_count", "params": {"op": ">=", "value": 2}}
-            ),
+            validate_condition_tree({"type": "standing_count", "params": {"op": ">=", "value": 2}}),
         )
 
     def test_default_rule_catalog_matches_legacy_consts(self) -> None:
@@ -321,7 +314,8 @@ class ValidationTests(TestCase):
                 rules[slug].name,
                 rules[slug].description_ru,
                 rules[slug].description_en,
-            ) != EXPECTED_LEGACY_RULES[slug]
+            )
+            != EXPECTED_LEGACY_RULES[slug]
         ]
         self.assertEqual([], metadata_mismatches)
 

@@ -15,9 +15,11 @@ from __future__ import annotations
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import Paginated
-from redis.asyncio import Redis
 from shared.rbac import (
     WORKSPACE_SYSTEM_ROLE_NAMES,
     assign_workspace_system_role,
@@ -27,8 +29,6 @@ from shared.rbac import (
 )
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import config, db
 from src.rpc import _common as c

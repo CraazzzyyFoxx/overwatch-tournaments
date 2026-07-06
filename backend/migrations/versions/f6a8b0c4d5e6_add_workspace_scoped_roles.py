@@ -5,17 +5,17 @@ Revises: e5f7a9b3c4d5
 Create Date: 2026-04-09 12:00:00.000000
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f6a8b0c4d5e6"
-down_revision: Union[str, None] = "e5f7a9b3c4d5"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "e5f7a9b3c4d5"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -43,14 +43,10 @@ def upgrade() -> None:
 
     # Create partial unique indexes for name scoping
     # Global roles: name must be unique among roles with workspace_id IS NULL
-    op.execute(
-        "CREATE UNIQUE INDEX uq_roles_name_global "
-        "ON auth.roles (name) WHERE workspace_id IS NULL"
-    )
+    op.execute("CREATE UNIQUE INDEX uq_roles_name_global ON auth.roles (name) WHERE workspace_id IS NULL")
     # Workspace roles: (name, workspace_id) must be unique among non-NULL workspace_id
     op.execute(
-        "CREATE UNIQUE INDEX uq_roles_name_workspace "
-        "ON auth.roles (name, workspace_id) WHERE workspace_id IS NOT NULL"
+        "CREATE UNIQUE INDEX uq_roles_name_workspace ON auth.roles (name, workspace_id) WHERE workspace_id IS NOT NULL"
     )
 
     # Re-create a non-unique index on name for general lookups

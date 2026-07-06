@@ -17,15 +17,15 @@ Revises: wsbcfg0002
 Create Date: 2026-06-10 00:00:00.000000
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "purge0001"
-down_revision: Union[str, None] = "wsbcfg0002"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "wsbcfg0002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -117,7 +117,9 @@ def downgrade() -> None:
         sa.UniqueConstraint("tournament_id", name="uq_balancer_tournament_sheet_tournament"),
         schema="balancer",
     )
-    op.create_index("ix_balancer_tournament_sheet_tournament_id", "tournament_sheet", ["tournament_id"], schema="balancer")
+    op.create_index(
+        "ix_balancer_tournament_sheet_tournament_id", "tournament_sheet", ["tournament_id"], schema="balancer"
+    )
 
     op.create_table(
         "application",
@@ -149,9 +151,13 @@ def downgrade() -> None:
         schema="balancer",
     )
     op.create_index("ix_balancer_application_tournament_id", "application", ["tournament_id"], schema="balancer")
-    op.create_index("ix_balancer_application_tournament_sheet_id", "application", ["tournament_sheet_id"], schema="balancer")
+    op.create_index(
+        "ix_balancer_application_tournament_sheet_id", "application", ["tournament_sheet_id"], schema="balancer"
+    )
     op.create_index("ix_balancer_application_registration_id", "application", ["registration_id"], schema="balancer")
-    op.create_index("ix_balancer_application_battle_tag_normalized", "application", ["battle_tag_normalized"], schema="balancer")
+    op.create_index(
+        "ix_balancer_application_battle_tag_normalized", "application", ["battle_tag_normalized"], schema="balancer"
+    )
 
     op.create_table(
         "player",

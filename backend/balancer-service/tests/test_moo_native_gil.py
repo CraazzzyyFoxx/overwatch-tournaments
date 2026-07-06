@@ -15,9 +15,7 @@ import pytest
 
 moo_core = pytest.importorskip("moo_core", reason="native moo_core module is not installed")
 
-pytestmark = pytest.mark.skipif(
-    platform.system() != "Linux", reason="Rust MOO backend is Linux-only"
-)
+pytestmark = pytest.mark.skipif(platform.system() != "Linux", reason="Rust MOO backend is Linux-only")
 
 
 def _native_config(generation_count: int = 60, population_size: int = 40) -> dict[str, Any]:

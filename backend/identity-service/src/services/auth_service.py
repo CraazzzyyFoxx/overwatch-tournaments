@@ -6,13 +6,13 @@ from uuid import UUID, uuid4
 import bcrypt
 from jose import JWTError, jwt
 from loguru import logger
-from shared.core import http_status as status
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.identity.rbac import role_permissions, user_roles
 from sqlalchemy import func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.rbac import role_permissions, user_roles
 from src import models, schemas
 from src.core import config, key_derivation
 from src.services import session_cache
@@ -184,9 +184,7 @@ class AuthService:
             )
         )
 
-        result: dict[int, tuple[list[str], list[dict[str, str]]]] = {
-            ws_id: ([], []) for ws_id in workspace_ids
-        }
+        result: dict[int, tuple[list[str], list[dict[str, str]]]] = {ws_id: ([], []) for ws_id in workspace_ids}
         for ws_id, role_name in rows.all():
             result[ws_id][0].append(role_name)
 
@@ -296,7 +294,9 @@ class AuthService:
     ) -> models.AuthUser | None:
         """Load a user with roles + permissions eagerly loaded."""
         result = await session.execute(
-            AuthService._user_query_with_rbac(include_player_links=include_player_links).where(models.AuthUser.id == user_id)
+            AuthService._user_query_with_rbac(include_player_links=include_player_links).where(
+                models.AuthUser.id == user_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -462,9 +462,7 @@ class AuthService:
     async def get_refresh_token_record(session: AsyncSession, token: str) -> models.RefreshToken | None:
         """Get a refresh-token record by raw token value."""
         candidates = AuthService._refresh_token_hash_candidates(token)
-        result = await session.execute(
-            select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates))
-        )
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -492,9 +490,7 @@ class AuthService:
             return result.scalar_one_or_none()
 
         # Reuse detection: known token hash already revoked/expired.
-        result = await session.execute(
-            select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates))
-        )
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         reused_token = result.scalar_one_or_none()
         if reused_token:
             logger.bind(user_id=str(reused_token.user_id)).error(
@@ -526,9 +522,7 @@ class AuthService:
     ) -> bool:
         """Revoke a refresh token"""
         candidates = AuthService._refresh_token_hash_candidates(token)
-        result = await session.execute(
-            select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates))
-        )
+        result = await session.execute(select(models.RefreshToken).where(models.RefreshToken.token.in_(candidates)))
         refresh_token = result.scalar_one_or_none()
 
         if not refresh_token:

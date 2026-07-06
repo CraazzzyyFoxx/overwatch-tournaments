@@ -9,6 +9,9 @@ envelope. This module must NOT import fastapi.
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.balancer_registration_statuses import build_unknown_status_meta
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
@@ -16,9 +19,6 @@ from shared.services.division_grid_access import (
     get_effective_division_grid_version_id,
     load_division_grid_snapshot,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.division_grid import DivisionGridVersionRead
 from src.schemas.registration import (
@@ -242,9 +242,7 @@ async def _build_tournament_history(
     # --- Step 3: resolve division-grid versions (Redis-cached, batched) ---
     # ``get_effective_division_grid_version_id`` is Redis-backed, so the many past
     # tournaments collapse to a handful of distinct version ids cheaply.
-    tournament_ids_with_rank = {
-        tournament_id for tournament_id, _uid, _role, rank, _name in rows if rank is not None
-    }
+    tournament_ids_with_rank = {tournament_id for tournament_id, _uid, _role, rank, _name in rows if rank is not None}
     tournament_to_version: dict[int, int | None] = {}
     for tid in tournament_ids_with_rank:
         tournament_to_version[tid] = await get_effective_division_grid_version_id(
@@ -257,9 +255,7 @@ async def _build_tournament_history(
     runtime_grid_by_version: dict[int, DivisionGrid] = {}
     for vid in distinct_version_ids:
         snapshot = await load_division_grid_snapshot(session, vid)
-        runtime_grid_by_version[vid] = (
-            snapshot.to_runtime_grid() if snapshot is not None else load_runtime_grid(None)
-        )
+        runtime_grid_by_version[vid] = snapshot.to_runtime_grid() if snapshot is not None else load_runtime_grid(None)
 
     # Full version metadata for the response map — ONE batched query, validated once.
     version_read_by_id: dict[int, DivisionGridVersionRead] = {}
@@ -270,9 +266,7 @@ async def _build_tournament_history(
             .where(models.DivisionGridVersion.id.in_(distinct_version_ids))
         )
         for version in version_rows:
-            version_read_by_id[int(version.id)] = DivisionGridVersionRead.model_validate(
-                version, from_attributes=True
-            )
+            version_read_by_id[int(version.id)] = DivisionGridVersionRead.model_validate(version, from_attributes=True)
 
     # --- Step 4: build per-registration history (deduped by tournament, capped) ---
     history_map: dict[int, list[TournamentHistoryEntry]] = {}
@@ -323,10 +317,6 @@ async def _build_tournament_history(
         for entry in entries
         if entry.division_grid_version_id is not None
     }
-    division_grids = {
-        str(vid): version_read_by_id[vid]
-        for vid in referenced_version_ids
-        if vid in version_read_by_id
-    }
+    division_grids = {str(vid): version_read_by_id[vid] for vid in referenced_version_ids if vid in version_read_by_id}
 
     return history_map, count_map, division_grids

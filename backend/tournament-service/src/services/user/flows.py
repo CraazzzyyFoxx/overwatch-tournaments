@@ -26,9 +26,7 @@ async def to_pydantic(session: AsyncSession, user: models.User, entities: list[s
     if any(name in entities for name in _IDENTITY_ENTITIES):
         social_accounts = [
             schemas.SocialAccountRead.model_validate(account, from_attributes=True)
-            for account in sorted(
-                user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id)
-            )
+            for account in sorted(user.social_accounts, key=lambda a: (a.provider, not a.is_primary, a.id))
         ]
     return schemas.UserRead(id=user.id, name=user.name, social_accounts=social_accounts)
 

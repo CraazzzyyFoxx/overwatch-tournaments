@@ -442,9 +442,7 @@ def downgrade() -> None:
                 postgresql_concurrently=True,
                 if_exists=True,
             )
-        op.execute(
-            f"DROP INDEX CONCURRENTLY IF EXISTS players.{_SOCIAL_NULLNORM_INDEX}"
-        )
+        op.execute(f"DROP INDEX CONCURRENTLY IF EXISTS players.{_SOCIAL_NULLNORM_INDEX}")
 
     for name, table, _clause in _FOREIGN_KEYS:
         op.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {name}")

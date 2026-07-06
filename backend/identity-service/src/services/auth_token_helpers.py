@@ -9,11 +9,11 @@ fastapi-free ``BaseAPIException`` that the RPC envelope maps.
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rbac import WORKSPACE_SYSTEM_ROLE_NAMES
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.services import auth_service
 from src.services.session_cache import get_rbac, is_session_blacklisted, set_rbac
@@ -80,10 +80,7 @@ async def _build_access_token_payload(
 
     # Fetch workspace-scoped RBAC data
     if workspace_roles_cached is not None:
-        ws_rbac = {
-            int(k): (v["roles"], v["permissions"])
-            for k, v in workspace_roles_cached.items()
-        }
+        ws_rbac = {int(k): (v["roles"], v["permissions"]) for k, v in workspace_roles_cached.items()}
     else:
         ws_rbac = await auth_service.AuthService.get_workspace_roles_and_permissions_db(
             session, current_user.id, ws_ids

@@ -96,9 +96,7 @@ def validate_rule_definition(
     errors = validate_condition_tree(condition_tree)
     inferred_grain = infer_grain(condition_tree) if not errors else None
     if inferred_grain is not None and grain is not None and AchievementGrain(grain) != inferred_grain:
-        errors.append(
-            f"rule.grain must match inferred grain '{inferred_grain.value}'"
-        )
+        errors.append(f"rule.grain must match inferred grain '{inferred_grain.value}'")
     return errors, inferred_grain
 
 

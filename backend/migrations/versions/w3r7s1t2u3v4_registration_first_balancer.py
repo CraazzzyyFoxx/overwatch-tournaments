@@ -9,18 +9,17 @@ Create Date: 2026-04-12 15:00:00.000000
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from datetime import datetime, timezone
-from typing import Any, Union
+from datetime import UTC, datetime
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "w3r7s1t2u3v4"
-down_revision: Union[str, None] = "v2q6r0s1t2u3"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "v2q6r0s1t2u3"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 ROLE_ORDER = ("tank", "dps", "support")
@@ -84,17 +83,33 @@ def _build_legacy_mapping_config(
 
     battle_tag_column = _column_name(header_keys, column_mapping.get("battle_tag"))
     targets = {
-        "source_record_key": _build_target(parser="battle_tag", columns=[battle_tag_column] if battle_tag_column else None),
+        "source_record_key": _build_target(
+            parser="battle_tag", columns=[battle_tag_column] if battle_tag_column else None
+        ),
         "display_name": _build_target(parser="string", columns=[battle_tag_column] if battle_tag_column else None),
         "battle_tag": _build_target(parser="battle_tag", columns=[battle_tag_column] if battle_tag_column else None),
-        "submitted_at": _build_target(parser="datetime", columns=[_column_name(header_keys, column_mapping.get("timestamp"))]),
-        "smurf_tags": _build_target(parser="battle_tag_list", columns=[_column_name(header_keys, column_mapping.get("smurf_tags"))]),
-        "discord_nick": _build_target(parser="string", columns=[_column_name(header_keys, column_mapping.get("discord_nick"))]),
-        "twitch_nick": _build_target(parser="string", columns=[_column_name(header_keys, column_mapping.get("twitch_nick"))]),
-        "stream_pov": _build_target(parser="boolean", columns=[_column_name(header_keys, column_mapping.get("stream_pov"))]),
+        "submitted_at": _build_target(
+            parser="datetime", columns=[_column_name(header_keys, column_mapping.get("timestamp"))]
+        ),
+        "smurf_tags": _build_target(
+            parser="battle_tag_list", columns=[_column_name(header_keys, column_mapping.get("smurf_tags"))]
+        ),
+        "discord_nick": _build_target(
+            parser="string", columns=[_column_name(header_keys, column_mapping.get("discord_nick"))]
+        ),
+        "twitch_nick": _build_target(
+            parser="string", columns=[_column_name(header_keys, column_mapping.get("twitch_nick"))]
+        ),
+        "stream_pov": _build_target(
+            parser="boolean", columns=[_column_name(header_keys, column_mapping.get("stream_pov"))]
+        ),
         "notes": _build_target(parser="join_lines", columns=[_column_name(header_keys, column_mapping.get("notes"))]),
-        "source_roles.primary": _build_target(parser="role_token", columns=[_column_name(header_keys, column_mapping.get("primary_role"))]),
-        "source_roles.additional": _build_target(parser="role_token_list", columns=_column_names(header_keys, column_mapping.get("additional_roles"))),
+        "source_roles.primary": _build_target(
+            parser="role_token", columns=[_column_name(header_keys, column_mapping.get("primary_role"))]
+        ),
+        "source_roles.additional": _build_target(
+            parser="role_token_list", columns=_column_names(header_keys, column_mapping.get("additional_roles"))
+        ),
     }
 
     return {"targets": targets}
@@ -244,11 +259,7 @@ def _upsert_registration_role(
             )
         )
     else:
-        bind.execute(
-            registration_role.update()
-            .where(registration_role.c.id == existing)
-            .values(**values)
-        )
+        bind.execute(registration_role.update().where(registration_role.c.id == existing).values(**values))
 
 
 def upgrade() -> None:
@@ -377,7 +388,9 @@ def upgrade() -> None:
     registration = sa.Table("registration", metadata, autoload_with=bind, schema="balancer")
     registration_role = sa.Table("registration_role", metadata, autoload_with=bind, schema="balancer")
     google_sheet_feed = sa.Table("registration_google_sheet_feed", metadata, autoload_with=bind, schema="balancer")
-    google_sheet_binding = sa.Table("registration_google_sheet_binding", metadata, autoload_with=bind, schema="balancer")
+    google_sheet_binding = sa.Table(
+        "registration_google_sheet_binding", metadata, autoload_with=bind, schema="balancer"
+    )
     tournament_sheet = sa.Table("tournament_sheet", metadata, autoload_with=bind, schema="balancer")
     application = sa.Table("application", metadata, autoload_with=bind, schema="balancer")
     player = sa.Table("player", metadata, autoload_with=bind, schema="balancer")
@@ -391,9 +404,7 @@ def upgrade() -> None:
     )
 
     feed_id_by_legacy_sheet_id: dict[int, int] = {}
-    legacy_sheet_rows = bind.execute(
-        sa.select(tournament_sheet).order_by(tournament_sheet.c.id.asc())
-    ).mappings()
+    legacy_sheet_rows = bind.execute(sa.select(tournament_sheet).order_by(tournament_sheet.c.id.asc())).mappings()
     for sheet_row in legacy_sheet_rows:
         inserted_feed_id = bind.execute(
             google_sheet_feed.insert()
@@ -427,8 +438,7 @@ def upgrade() -> None:
     }
 
     existing_registration_by_id: dict[int, dict[str, Any]] = {
-        int(row["id"]): row
-        for row in bind.execute(sa.select(registration)).mappings().all()
+        int(row["id"]): row for row in bind.execute(sa.select(registration)).mappings().all()
     }
     existing_registration_by_tag: dict[tuple[int, str], int] = {
         (int(row["tournament_id"]), str(row["battle_tag_normalized"])): int(row["id"])
@@ -437,21 +447,12 @@ def upgrade() -> None:
     }
 
     player_by_application_id: dict[int, dict[str, Any]] = {
-        int(row["application_id"]): row
-        for row in bind.execute(sa.select(player)).mappings().all()
+        int(row["application_id"]): row for row in bind.execute(sa.select(player)).mappings().all()
     }
-    tournament_rows = {
-        int(row["id"]): row
-        for row in bind.execute(sa.select(tournament)).mappings().all()
-    }
-    workspace_rows = {
-        int(row["id"]): row
-        for row in bind.execute(sa.select(workspace)).mappings().all()
-    }
+    tournament_rows = {int(row["id"]): row for row in bind.execute(sa.select(tournament)).mappings().all()}
+    workspace_rows = {int(row["id"]): row for row in bind.execute(sa.select(workspace)).mappings().all()}
 
-    application_rows = bind.execute(
-        sa.select(application).order_by(application.c.id.asc())
-    ).mappings()
+    application_rows = bind.execute(sa.select(application).order_by(application.c.id.asc())).mappings()
 
     for application_row in application_rows:
         tournament_row = tournament_rows[int(application_row["tournament_id"])]
@@ -465,7 +466,9 @@ def upgrade() -> None:
         else:
             battle_tag_key = application_row["battle_tag_normalized"]
             if battle_tag_key:
-                registration_id = existing_registration_by_tag.get((int(application_row["tournament_id"]), str(battle_tag_key)))
+                registration_id = existing_registration_by_tag.get(
+                    (int(application_row["tournament_id"]), str(battle_tag_key))
+                )
 
         if registration_id is None:
             initial_status = "approved" if application_row["is_active"] else "withdrawn"
@@ -486,12 +489,16 @@ def upgrade() -> None:
                         stream_pov=application_row["stream_pov"],
                         notes=application_row["notes"],
                         exclude_from_balancer=False if (player_row is None or player_row["is_in_pool"]) else True,
-                        exclude_reason=None if (player_row is None or player_row["is_in_pool"]) else "legacy_pool_excluded",
+                        exclude_reason=None
+                        if (player_row is None or player_row["is_in_pool"])
+                        else "legacy_pool_excluded",
                         admin_notes=player_row["admin_notes"] if player_row else None,
                         is_flex=bool(player_row["is_flex"]) if player_row else False,
                         custom_fields_json=None,
                         status=initial_status,
-                        submitted_at=application_row["submitted_at"] or application_row["created_at"] or datetime.now(timezone.utc),
+                        submitted_at=application_row["submitted_at"]
+                        or application_row["created_at"]
+                        or datetime.now(UTC),
                         reviewed_at=None,
                         reviewed_by=None,
                         deleted_at=None,
@@ -501,9 +508,9 @@ def upgrade() -> None:
                     .returning(registration.c.id)
                 ).scalar_one()
             )
-            existing_registration_by_id[registration_id] = bind.execute(
-                sa.select(registration).where(registration.c.id == registration_id)
-            ).mappings().one()
+            existing_registration_by_id[registration_id] = (
+                bind.execute(sa.select(registration).where(registration.c.id == registration_id)).mappings().one()
+            )
             if application_row["battle_tag_normalized"]:
                 existing_registration_by_tag[
                     (int(application_row["tournament_id"]), str(application_row["battle_tag_normalized"]))
@@ -530,14 +537,10 @@ def upgrade() -> None:
                 update_values["exclude_from_balancer"] = True
                 update_values["exclude_reason"] = "legacy_pool_excluded"
             if update_values:
-                bind.execute(
-                    registration.update()
-                    .where(registration.c.id == registration_id)
-                    .values(**update_values)
+                bind.execute(registration.update().where(registration.c.id == registration_id).values(**update_values))
+                existing_registration_by_id[registration_id] = (
+                    bind.execute(sa.select(registration).where(registration.c.id == registration_id)).mappings().one()
                 )
-                existing_registration_by_id[registration_id] = bind.execute(
-                    sa.select(registration).where(registration.c.id == registration_id)
-                ).mappings().one()
 
         if application_row["registration_id"] != registration_id:
             bind.execute(
@@ -563,7 +566,9 @@ def upgrade() -> None:
                     {
                         "role": role_code,
                         "subrole": entry.get("subtype"),
-                        "is_primary": bool(index == 0 or role_code == _normalize_role_code(player_row.get("primary_role"))),
+                        "is_primary": bool(
+                            index == 0 or role_code == _normalize_role_code(player_row.get("primary_role"))
+                        ),
                         "priority": int(entry.get("priority", index)),
                         "rank_value": rank_value,
                         "is_active": bool(entry.get("is_active", True)),
@@ -611,11 +616,13 @@ def upgrade() -> None:
         if feed_id is None:
             continue
 
-        source_record_key = application_row["battle_tag_normalized"] or application_row["battle_tag"] or f"legacy-{application_row['id']}"
+        source_record_key = (
+            application_row["battle_tag_normalized"]
+            or application_row["battle_tag"]
+            or f"legacy-{application_row['id']}"
+        )
         existing_binding_id = bind.execute(
-            sa.select(google_sheet_binding.c.id).where(
-                google_sheet_binding.c.registration_id == registration_id
-            )
+            sa.select(google_sheet_binding.c.id).where(google_sheet_binding.c.registration_id == registration_id)
         ).scalar_one_or_none()
         binding_values = {
             "feed_id": feed_id,
@@ -624,7 +631,9 @@ def upgrade() -> None:
             "raw_row_json": application_row["raw_row_json"],
             "parsed_fields_json": _parsed_fields_from_application(application_row),
             "row_hash": None,
-            "last_seen_at": application_row["synced_at"] or application_row["updated_at"] or application_row["created_at"],
+            "last_seen_at": application_row["synced_at"]
+            or application_row["updated_at"]
+            or application_row["created_at"],
         }
         if existing_binding_id is None:
             bind.execute(google_sheet_binding.insert().values(**binding_values))
@@ -667,7 +676,9 @@ def downgrade() -> None:
         postgresql_where=sa.text("battle_tag_normalized IS NOT NULL"),
     )
 
-    op.drop_constraint("fk_balancer_registration_deleted_by_auth_user", "registration", schema="balancer", type_="foreignkey")
+    op.drop_constraint(
+        "fk_balancer_registration_deleted_by_auth_user", "registration", schema="balancer", type_="foreignkey"
+    )
     op.drop_column("registration_role", "is_active", schema="balancer")
     op.drop_column("registration_role", "rank_value", schema="balancer")
 

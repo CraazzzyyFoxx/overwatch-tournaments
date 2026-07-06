@@ -9,6 +9,7 @@ NULL`` means a global deny; a concrete ``workspace_id`` scopes the deny to
 that workspace only. The CHECK logic that consumes this column is Task 8 —
 not part of this migration.
 """
+
 import sqlalchemy as sa
 from alembic import op
 

@@ -113,16 +113,10 @@ def detect_smurfs(
             rank = float(row["rank"] or 0.0)
             rank_suspicious = rank > 0 and rank <= rank_cutoff
             impact_suspicious = impact >= impact_cutoff
-            local_suspicious = (
-                local_z >= local_z_threshold
-                or local_pct >= local_percentile_threshold
-            )
+            local_suspicious = local_z >= local_z_threshold or local_pct >= local_percentile_threshold
             strong_local = local_z >= strong_local_z_threshold
             mvp_dominance = pd.to_numeric(row.get("mvp_dominance"), errors="coerce")
-            raw_dominator = (
-                pd.notna(mvp_dominance)
-                and float(mvp_dominance) >= mvp_dominance_threshold
-            )
+            raw_dominator = pd.notna(mvp_dominance) and float(mvp_dominance) >= mvp_dominance_threshold
             classic_smurf = impact_suspicious and rank_suspicious and local_suspicious
             deterministic_review = classic_smurf or strong_local or raw_dominator
             if deterministic_review:
@@ -163,9 +157,7 @@ def detect_smurfs(
                             "rank": rank,
                             "local_zscore": local_z,
                             "local_percentile": local_pct,
-                            "mvp_dominance": (
-                                float(mvp_dominance) if pd.notna(mvp_dominance) else None
-                            ),
+                            "mvp_dominance": (float(mvp_dominance) if pd.notna(mvp_dominance) else None),
                             "impact_cutoff": impact_cutoff,
                             "rank_cutoff": rank_cutoff,
                             "role": str(role),
@@ -206,10 +198,7 @@ def detect_trolls(
                 else:
                     current = 0.0
                 impact = float(row.get("impact_score") or 100.0)
-                if (
-                    current <= single_tournament_z_threshold
-                    and impact <= single_tournament_impact_threshold
-                ):
+                if current <= single_tournament_z_threshold and impact <= single_tournament_impact_threshold:
                     out.append(
                         {
                             "player_id": int(row["player_id"]),
@@ -329,11 +318,7 @@ def detect_sandbags(
         current = float(history[-1])
         prior_mean = float(np.nanmean(prior))
         drop = prior_mean - current
-        if (
-            current <= min_current_z
-            and drop >= min_drop_z
-            and prior_mean >= prior_mean_floor
-        ):
+        if current <= min_current_z and drop >= min_drop_z and prior_mean >= prior_mean_floor:
             confidence_base = max(float(row.get("confidence") or 0.5), 0.25)
             out.append(
                 {
@@ -371,9 +356,7 @@ def detect_throws(
         return []
 
     out: list[dict[str, typing.Any]] = []
-    grouped = round_residuals.sort_values(["player_id", "encounter_id", "round"]).groupby(
-        ["player_id", "encounter_id"]
-    )
+    grouped = round_residuals.sort_values(["player_id", "encounter_id", "round"]).groupby(["player_id", "encounter_id"])
     for (player_id, encounter_id), group in grouped:
         series = group["y_perf"].astype(float).to_numpy()
         if len(series) < 4 or np.isnan(series).all():
@@ -394,10 +377,7 @@ def detect_throws(
             # simple best split fallback so obvious mid-match collapses still
             # become low/medium-confidence review signals.
             candidates = range(2, max(2, len(series) - 1))
-            drops = [
-                (split, float(series[:split].mean() - series[split:].mean()))
-                for split in candidates
-            ]
+            drops = [(split, float(series[:split].mean() - series[split:].mean())) for split in candidates]
             if not drops:
                 continue
             cp, best_drop = max(drops, key=lambda item: item[1])

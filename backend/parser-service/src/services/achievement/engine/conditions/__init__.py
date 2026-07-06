@@ -51,6 +51,7 @@ def validate_stat_name(raw: str) -> str | None:
         return None
     return f"unknown stat '{raw}'"
 
+
 from ..context import EvalContext  # noqa: E402
 
 ResultSet = set[tuple[int, ...]]

@@ -117,9 +117,7 @@ def test_role_is_legal_reads_off_role_from_child_rows() -> None:
 
 
 def test_team_and_pick_compat_properties() -> None:
-    team = DraftTeam(
-        session_id=1, name="T", draft_position=1, captain_member=WorkspaceMember(player_id=9)
-    )
+    team = DraftTeam(session_id=1, name="T", draft_position=1, captain_member=WorkspaceMember(player_id=9))
     assert team.captain_user_id == 9
     assert DraftTeam(session_id=1, name="T2", draft_position=2).captain_user_id is None
 
@@ -132,7 +130,5 @@ def test_team_and_pick_compat_properties() -> None:
         picked_by_member=WorkspaceMember(player_id=5),
     )
     assert pick.picked_by_user_id == 5
-    pick_none = DraftPick(
-        session_id=1, overall_no=2, round_no=1, pick_in_round=2, draft_team_id=1
-    )
+    pick_none = DraftPick(session_id=1, overall_no=2, round_no=1, pick_in_round=2, draft_team_id=1)
     assert pick_none.picked_by_user_id is None

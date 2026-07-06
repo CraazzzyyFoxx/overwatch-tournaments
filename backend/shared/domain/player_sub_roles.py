@@ -10,12 +10,8 @@ LEGACY_PROJECTILE_SUB_ROLE = "projectile"
 LEGACY_MAIN_HEAL_SUB_ROLE = "main_heal"
 LEGACY_LIGHT_HEAL_SUB_ROLE = "light_heal"
 
-LEGACY_PRIMARY_SUB_ROLES = frozenset(
-    {LEGACY_HITSCAN_SUB_ROLE, LEGACY_MAIN_HEAL_SUB_ROLE}
-)
-LEGACY_SECONDARY_SUB_ROLES = frozenset(
-    {LEGACY_PROJECTILE_SUB_ROLE, LEGACY_LIGHT_HEAL_SUB_ROLE}
-)
+LEGACY_PRIMARY_SUB_ROLES = frozenset({LEGACY_HITSCAN_SUB_ROLE, LEGACY_MAIN_HEAL_SUB_ROLE})
+LEGACY_SECONDARY_SUB_ROLES = frozenset({LEGACY_PROJECTILE_SUB_ROLE, LEGACY_LIGHT_HEAL_SUB_ROLE})
 
 _DAMAGE_ROLE_ALIASES = frozenset({"damage", "dps"})
 _SUPPORT_ROLE_ALIASES = frozenset({"support", "heal", "healer"})
@@ -146,9 +142,7 @@ def build_subrole_catalog(
     role code, so the frontend always receives a stable shape. Callers should
     pass rows already sorted (role, sort_order, label).
     """
-    catalog: dict[str, list[dict[str, str]]] = {
-        code: [] for code in REGISTRATION_ROLE_CODES
-    }
+    catalog: dict[str, list[dict[str, str]]] = {code: [] for code in REGISTRATION_ROLE_CODES}
     for row in rows:
         reg_code = canonical_to_registration_role(getattr(row, "role", None))
         if reg_code is None or reg_code not in catalog:

@@ -95,8 +95,7 @@ async def publish_pending_outbox_events(
             row.last_error = str(exc)
             row.next_attempt_at = now + _retry_delay(row.attempts)
             logger.warning(
-                f"Outbox publish failed for event {row.event_id} "
-                f"(type={row.event_type}, attempt={row.attempts}): {exc}"
+                f"Outbox publish failed for event {row.event_id} (type={row.event_type}, attempt={row.attempts}): {exc}"
             )
         else:
             row.status = "published"
@@ -112,4 +111,4 @@ async def publish_pending_outbox_events(
 
 
 def _retry_delay(attempts: int) -> timedelta:
-    return timedelta(seconds=min(2**max(attempts - 1, 0), 300))
+    return timedelta(seconds=min(2 ** max(attempts - 1, 0), 300))

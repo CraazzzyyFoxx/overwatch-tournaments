@@ -41,9 +41,7 @@ def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
     return ApiHTTPException(status_code=status_code, detail=[ApiExc(code=code, msg=msg)])
 
 
-async def _actor_member_id(
-    session: AsyncSession, draft_session: DraftSession, actor_user_id: int | None
-) -> int | None:
+async def _actor_member_id(session: AsyncSession, draft_session: DraftSession, actor_user_id: int | None) -> int | None:
     """Resolve an acting captain's domain player id to a workspace_member id.
 
     dbarch03 anchors ``draft_pick.picked_by`` on ``workspace_member``; the actor
@@ -134,17 +132,12 @@ async def _advance(session: AsyncSession, draft_session: DraftSession) -> DraftP
 
                 # Load all teams in this draft session
                 teams = (
-                    await session.scalars(
-                        sa.select(DraftTeam)
-                        .where(DraftTeam.session_id == draft_session.id)
-                    )
+                    await session.scalars(sa.select(DraftTeam).where(DraftTeam.session_id == draft_session.id))
                 ).all()
 
                 reverse_sort = rule == "team_avg_desc"
                 sorted_teams = sorted(
-                    teams,
-                    key=lambda t: (avg_by_team.get(t.id, 0.0), t.draft_position),
-                    reverse=reverse_sort
+                    teams, key=lambda t: (avg_by_team.get(t.id, 0.0), t.draft_position), reverse=reverse_sort
                 )
                 sorted_team_ids = [t.id for t in sorted_teams]
 
@@ -152,10 +145,7 @@ async def _advance(session: AsyncSession, draft_session: DraftSession) -> DraftP
                 round_picks = (
                     await session.scalars(
                         sa.select(DraftPick)
-                        .where(
-                            DraftPick.session_id == draft_session.id,
-                            DraftPick.round_no == next_pick.round_no
-                        )
+                        .where(DraftPick.session_id == draft_session.id, DraftPick.round_no == next_pick.round_no)
                         .order_by(DraftPick.overall_no.asc())
                     )
                 ).all()
@@ -222,15 +212,13 @@ async def _team_role_counts(session: AsyncSession, team_id: int) -> dict[DraftRo
         await session.scalars(
             sa.select(DraftPick).where(
                 DraftPick.draft_team_id == team_id,
-                DraftPick.status.in_(
-                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
-                ),
+                DraftPick.status.in_([DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]),
             )
         )
     ).all()
 
     pick_by_player_id = {pk.picked_player_id: pk for pk in picks if pk.picked_player_id is not None}
-    counts = {r: 0 for r in DraftRole}
+    counts = dict.fromkeys(DraftRole, 0)
     for p in players:
         pk = pick_by_player_id.get(p.id)
         role_str = pk.target_role if (pk and pk.target_role) else p.primary_role
@@ -264,9 +252,7 @@ async def _team_avg_drafted_rank(session: AsyncSession, draft_session_id: int) -
         await session.scalars(
             sa.select(DraftPick).where(
                 DraftPick.session_id == draft_session_id,
-                DraftPick.status.in_(
-                    [DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]
-                ),
+                DraftPick.status.in_([DraftPickStatus.COMPLETED.value, DraftPickStatus.AUTOPICKED.value]),
             )
         )
     ).all()
@@ -289,11 +275,7 @@ async def _team_avg_drafted_rank(session: AsyncSession, draft_session_id: int) -
 
 def _role_capacity(team_size: int, counts: dict[DraftRole, int]) -> dict[DraftRole, int]:
     targets = role_targets(team_size)
-    return {
-        role: max(0, targets.get(role, 0) - counts.get(role, 0))
-        for role in DraftRole
-    }
-
+    return {role: max(0, targets.get(role, 0) - counts.get(role, 0)) for role in DraftRole}
 
 
 async def _validate_current_pick(draft_session: DraftSession, pick: DraftPick) -> None:
@@ -308,9 +290,7 @@ async def _load_available_player(session: AsyncSession, draft_session_id: int, p
     # (secondary_roles_json/role_ranks via _role_is_legal + ranks.role_rank).
     # populate_existing forces the loader options to apply even when the row is
     # already in the identity map (e.g. pre-loaded by a caller's own query).
-    player = await session.get(
-        DraftPlayer, player_id, options=loaders.player_options(), populate_existing=True
-    )
+    player = await session.get(DraftPlayer, player_id, options=loaders.player_options(), populate_existing=True)
     if player is None or player.session_id != draft_session_id:
         raise _err("player_not_found", "Player not in this draft", status_code=404)
     if player.status != DraftPlayerStatus.AVAILABLE.value:
@@ -356,9 +336,7 @@ async def select(
     await _validate_current_pick(draft_session, pick)
     # captain_user_id (read in _is_on_clock_captain) resolves via captain_member;
     # eager-load it so the property read never triggers an async lazy load.
-    team = await session.get(
-        DraftTeam, pick.draft_team_id, options=loaders.team_options(), populate_existing=True
-    )
+    team = await session.get(DraftTeam, pick.draft_team_id, options=loaders.team_options(), populate_existing=True)
     player_ids = set(actor_player_ids)
     if actor_user_id is not None:
         player_ids.add(actor_user_id)
@@ -462,9 +440,7 @@ async def autopick(
     # ranks.role_rank(player, ...) reads role_ranks -> roles; the row is already in
     # the identity map from the eager-loaded `available` query, so get() returns it
     # with roles loaded. populate_existing guards the case it was cached unloaded.
-    player = await session.get(
-        DraftPlayer, chosen_id, options=loaders.player_options(), populate_existing=True
-    )
+    player = await session.get(DraftPlayer, chosen_id, options=loaders.player_options(), populate_existing=True)
     resolved_role = chosen_role or DraftRole(player.primary_role)
     pick.target_role = resolved_role.value
     pick.target_rank_value = ranks.role_rank(player, resolved_role)

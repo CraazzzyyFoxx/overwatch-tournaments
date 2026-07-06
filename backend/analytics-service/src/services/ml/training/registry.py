@@ -30,9 +30,7 @@ __all__ = (
 
 async def ensure_algorithm(session: AsyncSession, name: str) -> models.AnalyticsAlgorithm:
     """Upsert an ``AnalyticsAlgorithm`` row by ``name``."""
-    existing = await session.scalar(
-        sa.select(models.AnalyticsAlgorithm).where(models.AnalyticsAlgorithm.name == name)
-    )
+    existing = await session.scalar(sa.select(models.AnalyticsAlgorithm).where(models.AnalyticsAlgorithm.name == name))
     if existing is not None:
         return existing
     row = models.AnalyticsAlgorithm(name=name)

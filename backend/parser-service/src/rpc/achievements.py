@@ -24,9 +24,9 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.achievements.achievement import (
-    AchievementEvaluationResult,
     AchievementOverride,
     AchievementOverrideAction,
     AchievementRule,
@@ -36,7 +36,6 @@ from shared.models.achievements.achievement import (
 from shared.repository.workspace import get_or_create_workspace_member
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
-
 from src import models, schemas
 from src.core import db
 from src.schemas.admin.achievement_rule import (
@@ -45,7 +44,6 @@ from src.schemas.admin.achievement_rule import (
     AchievementLibraryWorkspaceRead,
     AchievementRuleCreate,
     AchievementRuleExportEnvelope,
-    AchievementRuleImportResult,
     AchievementRulePortable,
     AchievementRuleRead,
     AchievementRuleUpdate,
@@ -134,8 +132,12 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
                 raise HTTPException(status_code=403, detail="Role required: admin")
             payload = schemas.AchievementCalculateRequest.model_validate(c.payload(data) or {})
             if payload.workspace_id is None:
-                raise HTTPException(status_code=400, detail="workspace_id is required for global achievement calculation")
-            executed = await _run_calculate(session, workspace_id=payload.workspace_id, tournament_id=None, payload=payload)
+                raise HTTPException(
+                    status_code=400, detail="workspace_id is required for global achievement calculation"
+                )
+            executed = await _run_calculate(
+                session, workspace_id=payload.workspace_id, tournament_id=None, payload=payload
+            )
             return schemas.AchievementCalculateResponse(
                 tournament_id=None, executed=executed, message="Achievement calculation finished"
             )
@@ -157,7 +159,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             workspace_id = payload.workspace_id or tournament.workspace_id
             if payload.workspace_id is not None and payload.workspace_id != tournament.workspace_id:
                 raise HTTPException(status_code=400, detail="workspace_id does not match tournament workspace")
-            executed = await _run_calculate(session, workspace_id=workspace_id, tournament_id=tournament_id, payload=payload)
+            executed = await _run_calculate(
+                session, workspace_id=workspace_id, tournament_id=tournament_id, payload=payload
+            )
             return schemas.AchievementCalculateResponse(
                 tournament_id=tournament_id, executed=executed, message="Achievement calculation finished"
             )
@@ -420,9 +424,12 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             where_clauses = [effective_rows.c.achievement_rule_id == rule_id]
             if tournament_id is not None:
                 where_clauses.append(effective_rows.c.tournament_id == tournament_id)
-            total = await session.scalar(
-                sa.select(sa.func.count(sa.distinct(effective_rows.c.user_id))).where(*where_clauses)
-            ) or 0
+            total = (
+                await session.scalar(
+                    sa.select(sa.func.count(sa.distinct(effective_rows.c.user_id))).where(*where_clauses)
+                )
+                or 0
+            )
 
             count_col = sa.func.count().label("count")
             first_qualified_col = sa.func.min(effective_rows.c.qualified_at).label("first_qualified")
@@ -567,7 +574,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             source_rules = await load_rules_for_workspace(session, source_workspace.id, slugs=body.slugs)
             found_slugs = {rule.slug for rule in source_rules}
             missing_slugs = sorted(set(body.slugs) - found_slugs)
-            portable_rules = [AchievementRulePortable.model_validate(rule, from_attributes=True) for rule in source_rules]
+            portable_rules = [
+                AchievementRulePortable.model_validate(rule, from_attributes=True) for rule in source_rules
+            ]
             try:
                 result = await import_portable_rules(
                     session,
@@ -633,9 +642,7 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             rule = await session.get(AchievementRule, body.achievement_rule_id)
             if not rule or rule.workspace_id != workspace_id:
                 raise HTTPException(status_code=404, detail="Rule not found in workspace")
-            member = await get_or_create_workspace_member(
-                session, workspace_id=workspace_id, player_id=body.user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=body.user_id)
             override = AchievementOverride(
                 achievement_rule_id=body.achievement_rule_id,
                 workspace_member_id=member.id,

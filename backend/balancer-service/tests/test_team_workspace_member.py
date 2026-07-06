@@ -36,8 +36,8 @@ os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost")
 os.environ.setdefault("S3_BUCKET_NAME", "test")
 os.environ["DEBUG"] = "false"
 
-from src.services import team as team_service  # noqa: E402
 from src.schemas.team import BalancerTeam, BalancerTeamMember  # noqa: E402
+from src.services import team as team_service  # noqa: E402
 
 
 def _scalar_result(value):
@@ -126,9 +126,7 @@ class BulkCreateFromBalancerWorkspaceMemberTests(IsolatedAsyncioTestCase):
 
         get_or_create.assert_awaited_once_with(session, workspace_id=55, player_id=42)
         player_calls = [
-            call.args[0]
-            for call in session.add.call_args_list
-            if isinstance(call.args[0], team_service.models.Player)
+            call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], team_service.models.Player)
         ]
         self.assertEqual(1, len(player_calls))
         created_player = player_calls[0]

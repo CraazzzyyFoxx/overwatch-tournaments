@@ -67,9 +67,7 @@ def upgrade() -> None:
             ["tournament_id", "status"],
             schema="tournament",
             unique=False,
-            postgresql_where=sa.text(
-                "status IN ('PENDING'::public.encounterstatus, 'OPEN'::public.encounterstatus)"
-            ),
+            postgresql_where=sa.text("status IN ('PENDING'::public.encounterstatus, 'OPEN'::public.encounterstatus)"),
             postgresql_concurrently=True,
             if_not_exists=True,
         )

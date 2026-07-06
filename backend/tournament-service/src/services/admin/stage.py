@@ -3,6 +3,10 @@
 from collections.abc import Sequence
 
 from loguru import logger
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
@@ -19,10 +23,6 @@ from shared.services.bracket.swiss_settings import (
 )
 from shared.services.bracket.types import BracketSkeleton
 from shared.services.encounter_naming import build_encounter_name_from_ids
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.admin import stage as admin_schemas
 from src.services.standings import swiss_auto_round
@@ -261,10 +261,7 @@ async def _merge_map_veto_configs(
     if len(signatures) > 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Source stages have different map veto configs; keep one "
-                "target config before merging"
-            ),
+            detail=("Source stages have different map veto configs; keep one target config before merging"),
         )
 
     keeper = source_configs[0]
@@ -280,9 +277,7 @@ async def _retarget_stage_rows(
     source_stage_ids: list[int],
     target_stage_id: int,
 ) -> None:
-    result = await session.execute(
-        select(model).where(model.stage_id.in_(source_stage_ids))
-    )
+    result = await session.execute(select(model).where(model.stage_id.in_(source_stage_ids)))
     for row in result.scalars().all():
         row.stage_id = target_stage_id
 
@@ -337,9 +332,7 @@ async def merge_group_stages(
             detail="Target stage cannot be included in source_stage_ids",
         )
 
-    stages_result = await session.execute(
-        select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids))
-    )
+    stages_result = await session.execute(select(models.Stage).where(models.Stage.id.in_(unique_source_stage_ids)))
     source_by_id = {stage.id: stage for stage in stages_result.scalars().all()}
     missing = [stage_id for stage_id in unique_source_stage_ids if stage_id not in source_by_id]
     if missing:
@@ -435,9 +428,7 @@ async def merge_group_stages(
     if next_target_name:
         target_stage.name = next_target_name
     target_stage.is_active = target_stage.is_active or any(stage.is_active for stage in source_stages)
-    target_stage.is_completed = target_stage.is_completed and all(
-        stage.is_completed for stage in source_stages
-    )
+    target_stage.is_completed = target_stage.is_completed and all(stage.is_completed for stage in source_stages)
 
     await session.flush()
     for source_stage in source_stages:
@@ -731,10 +722,12 @@ async def _get_swiss_generation_context(
             swiss_played_pairs.add(frozenset({encounter.home_team_id, encounter.away_team_id}))
 
     standing_result = await session.execute(
-        select(models.Standing).where(
+        select(models.Standing)
+        .where(
             models.Standing.stage_id == stage_id,
             models.Standing.stage_item_id == stage_item_id,
-        ).order_by(models.Standing.position, models.Standing.team_id)
+        )
+        .order_by(models.Standing.position, models.Standing.team_id)
     )
     raw_standings = list(standing_result.scalars().all())
     swiss_standings = [
@@ -1227,14 +1220,8 @@ async def _auto_wire_from_groups(session: AsyncSession, stage: models.Stage) -> 
     # BRACKET_LOWER item. A "single bracket" double-elimination (one
     # SINGLE_BRACKET item) holds the whole UB+LB structure, so all advancing
     # teams seed that one item — the DE engine builds the rounds internally.
-    has_lower_bracket = any(
-        item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items
-    )
-    if (
-        stage.split_lower_bracket
-        and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-        and has_lower_bracket
-    ):
+    has_lower_bracket = any(item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items)
+    if stage.split_lower_bracket and stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and has_lower_bracket:
         top_lb = advance // 2
         top = advance - top_lb  # odd count → extra team to the Upper bracket
     else:
@@ -1371,19 +1358,12 @@ async def generate_encounters(
 
     # Decide which advancing teams start in the upper vs the lower bracket.
     lower_bracket_team_ids: list[int] = []
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(
-        stage, "split_lower_bracket", False
-    ):
+    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(stage, "split_lower_bracket", False):
         if lb_item is not None:
             # Separate Upper + Lower bracket items: the lower item's teams
             # start in the lower bracket.
             lower_bracket_team_ids = _collect_item_team_ids(lb_item)
-            team_ids = [
-                tid
-                for item in sorted_items
-                if item is not lb_item
-                for tid in _collect_item_team_ids(item)
-            ]
+            team_ids = [tid for item in sorted_items if item is not lb_item for tid in _collect_item_team_ids(item)]
         else:
             # Single bracket item: seeds are ordered winners-first, so the first
             # half start in the upper bracket and the second half in the lower.

@@ -68,9 +68,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_social_account_username_normalized", "social_account", ["username_normalized"], schema="players"
     )
-    op.create_index(
-        "ix_social_account_provider_user_id", "social_account", ["provider_user_id"], schema="players"
-    )
+    op.create_index("ix_social_account_provider_user_id", "social_account", ["provider_user_id"], schema="players")
     op.create_index(
         "uq_social_account_provider_subject",
         "social_account",

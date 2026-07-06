@@ -18,15 +18,15 @@ Create Date: 2026-04-18 04:00:00.000000
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "phasea0001"
-down_revision: Union[str, Sequence[str], None] = "merge0003"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "merge0003"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -60,9 +60,7 @@ def upgrade() -> None:
 
         if tournament_id not in per_tournament_order:
             max_order_row = conn.execute(
-                sa.text(
-                    'SELECT COALESCE(MAX("order"), -1) FROM tournament.stage WHERE tournament_id = :tid'
-                ),
+                sa.text('SELECT COALESCE(MAX("order"), -1) FROM tournament.stage WHERE tournament_id = :tid'),
                 {"tid": tournament_id},
             ).scalar()
             per_tournament_order[tournament_id] = int(max_order_row or -1)
@@ -127,9 +125,7 @@ def upgrade() -> None:
         stage_item_id = item_row.scalar_one()
 
         conn.execute(
-            sa.text(
-                'UPDATE tournament."group" SET stage_id = :sid WHERE id = :gid'
-            ),
+            sa.text('UPDATE tournament."group" SET stage_id = :sid WHERE id = :gid'),
             {"sid": stage_id, "gid": group_id},
         )
 
@@ -212,14 +208,8 @@ def upgrade() -> None:
 
     # 5. Меняем UNIQUE constraint: (tournament_id, group_id, team_id) →
     #    stage-aware unique.
-    op.execute(
-        'ALTER TABLE tournament.standing '
-        'DROP CONSTRAINT IF EXISTS standing_tournament_id_group_id_team_id_key'
-    )
-    op.execute(
-        'ALTER TABLE tournament.standing '
-        'DROP CONSTRAINT IF EXISTS uq_standing_tournament_group_team'
-    )
+    op.execute("ALTER TABLE tournament.standing DROP CONSTRAINT IF EXISTS standing_tournament_id_group_id_team_id_key")
+    op.execute("ALTER TABLE tournament.standing DROP CONSTRAINT IF EXISTS uq_standing_tournament_group_team")
     # COALESCE чтобы NULL stage_item_id не давал дубликаты среди разных групп
     op.execute(
         """
@@ -243,12 +233,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        'DROP INDEX IF EXISTS tournament.ix_encounter_stage_item_round'
-    )
-    op.execute(
-        'DROP INDEX IF EXISTS tournament.uq_standing_tournament_stage_item_team'
-    )
+    op.execute("DROP INDEX IF EXISTS tournament.ix_encounter_stage_item_round")
+    op.execute("DROP INDEX IF EXISTS tournament.uq_standing_tournament_stage_item_team")
 
     # Восстанавливаем старый UNIQUE. Если в данных есть конфликты с nullable
     # group_id, миграция вниз упадёт — это ожидаемо.

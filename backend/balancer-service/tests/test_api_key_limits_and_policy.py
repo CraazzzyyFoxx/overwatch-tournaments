@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]

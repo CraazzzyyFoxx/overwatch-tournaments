@@ -23,17 +23,14 @@ def test_user_permission_deny_workspace_id_is_indexed():
 
 def test_old_plain_unique_constraint_is_gone():
     constraint_names = {
-        c.name
-        for c in UserPermissionDeny.__table__.constraints
-        if c.__class__.__name__ == "UniqueConstraint"
+        c.name for c in UserPermissionDeny.__table__.constraints if c.__class__.__name__ == "UniqueConstraint"
     }
     assert "uq_user_permission_deny" not in constraint_names
 
 
 def test_workspace_aware_unique_index_exists():
     index = next(
-        (ix for ix in UserPermissionDeny.__table__.indexes
-         if ix.name == "uq_user_permission_deny_user_perm_workspace"),
+        (ix for ix in UserPermissionDeny.__table__.indexes if ix.name == "uq_user_permission_deny_user_perm_workspace"),
         None,
     )
     assert index is not None

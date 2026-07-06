@@ -86,9 +86,7 @@ class PublishOp(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict, max_length=32)
 
 
-ClientOp = Annotated[
-    SubscribeOp | UnsubscribeOp | PingOp | PublishOp, Field(discriminator="op")
-]
+ClientOp = Annotated[SubscribeOp | UnsubscribeOp | PingOp | PublishOp, Field(discriminator="op")]
 
 
 class SubscribedFrame(BaseModel):

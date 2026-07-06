@@ -6,7 +6,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
 
-
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PARSER_SERVICE_ROOT = REPO_BACKEND_ROOT / "parser-service"
 

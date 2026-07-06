@@ -13,11 +13,11 @@ from typing import Any
 from uuid import uuid4
 
 import sqlalchemy as sa
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.social import SocialProvider, normalize_social_handle
+from shared.services import social_identity
 from src import models
 from src.services.registration._common import BATTLE_TAG_RE
 from src.services.registration.lifecycle import list_registrations
@@ -164,9 +164,7 @@ async def _upsert_user_from_registration(
             if key in known_handles:
                 continue
             known_handles.add(key)
-        await social_identity.upsert_social_account(
-            session, user_id=user.id, provider=provider, username=handle
-        )
+        await social_identity.upsert_social_account(session, user_id=user.id, provider=provider, username=handle)
 
 
 async def export_registrations_to_users(

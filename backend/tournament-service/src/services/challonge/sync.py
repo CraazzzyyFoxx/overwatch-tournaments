@@ -14,16 +14,16 @@ from dataclasses import dataclass
 
 from loguru import logger
 from redis import asyncio as redis_async
-from shared.core import enums
-from shared.services.challonge_refs import resolve_encounter_challonge
-from shared.services.distributed_lock import distributed_lock
-from shared.services.encounter_naming import build_encounter_name
-from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from shared.core import enums
+from shared.services.challonge_refs import resolve_encounter_challonge
+from shared.services.distributed_lock import distributed_lock
+from shared.services.encounter_naming import build_encounter_name
+from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src import models, schemas
 from src.core import config
 from src.services.challonge import service as challonge_service
@@ -275,9 +275,7 @@ async def discover_sources(
     # Resolve the TournamentGroup for group/playoff sources through stage_id
     # (challonge_source is scoped by stage_id, never group_id).
     group_stage_ids = [
-        row.stage_id
-        for row in source_rows
-        if row.stage_id is not None and row.source_type in ("group", "playoff")
+        row.stage_id for row in source_rows if row.stage_id is not None and row.source_type in ("group", "playoff")
     ]
     groups_by_stage_id: dict[int, models.TournamentGroup] = {}
     if group_stage_ids:
@@ -1710,11 +1708,7 @@ async def _resolve_winner_challonge_id(
     # ``participant_mappings`` is an optional bulk prefetch (export path) keyed by
     # (source_id, team_id); a missing key falls back to the query so stale mappings
     # referencing undiscovered sources still resolve.
-    cached = (
-        participant_mappings.get((source.source_id, winner_team_id))
-        if participant_mappings is not None
-        else None
-    )
+    cached = participant_mappings.get((source.source_id, winner_team_id)) if participant_mappings is not None else None
     if cached is not None:
         source_mappings = cached
     else:
@@ -1803,9 +1797,9 @@ async def export_tournament(session: AsyncSession, tournament_id: int) -> dict:
                 .order_by(models.ChallongeParticipantMapping.id.asc())
             )
             for participant_row in participant_rows.scalars():
-                participant_mappings.setdefault(
-                    (participant_row.source_id, participant_row.team_id), []
-                ).append(participant_row)
+                participant_mappings.setdefault((participant_row.source_id, participant_row.team_id), []).append(
+                    participant_row
+                )
 
         for encounter in encounters:
             try:

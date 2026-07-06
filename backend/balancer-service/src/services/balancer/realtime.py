@@ -22,11 +22,11 @@ from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
+
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.balancer_realtime import BALANCER_JOB_PROGRESS, publish_balancer_event
 from shared.services.realtime_publisher import publish_envelope_to_redis
-
 from src.core import db
 from src.core.config import config
 

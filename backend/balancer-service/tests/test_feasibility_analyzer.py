@@ -4,8 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
 
@@ -30,7 +28,6 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 from src.services.balancer.algorithm.entities import Player  # noqa: E402
 from src.services.balancer.algorithm.feasibility_analyzer import analyze_feasibility  # noqa: E402
 
-
 MASK = {"Tank": 1, "Damage": 2, "Support": 2}
 
 
@@ -45,7 +42,7 @@ def make_player(
     ``extra_roles`` extends ``ratings`` so the player CAN play those roles
     (used for flex coverage) without listing them as preferences.
     """
-    ratings: dict[str, int] = {role: 2000 for role in preferences}
+    ratings: dict[str, int] = dict.fromkeys(preferences, 2000)
     for role in extra_roles or []:
         ratings.setdefault(role, 1500)
     return Player(
@@ -78,10 +75,9 @@ class TestFeasibilityIdealCases:
     def test_oversupply_one_role_undersupply_another(self) -> None:
         # 2 teams, 10 slots. 6 want Tank (only 2 slots), nobody wants Support.
         # Excess Tanks must go off-role; Support slots filled by whoever fits.
-        players = (
-            [make_player(f"t{i}", ["Tank"]) for i in range(6)]
-            + [make_player(f"d{i}", ["Damage"]) for i in range(4)]
-        )
+        players = [make_player(f"t{i}", ["Tank"]) for i in range(6)] + [
+            make_player(f"d{i}", ["Damage"]) for i in range(4)
+        ]
         report = analyze_feasibility(players, MASK, num_teams=2)
         assert report.total_slots == 10
         # Max placeable in 1st-pref: 2 Tank + 4 DPS = 6. Remaining 4 slots
@@ -89,10 +85,9 @@ class TestFeasibilityIdealCases:
         assert report.structural_min_off_role == 4
 
     def test_no_supply_for_one_role(self) -> None:
-        players = (
-            [make_player(f"t{i}", ["Tank"]) for i in range(2)]
-            + [make_player(f"d{i}", ["Damage"]) for i in range(8)]
-        )
+        players = [make_player(f"t{i}", ["Tank"]) for i in range(2)] + [
+            make_player(f"d{i}", ["Damage"]) for i in range(8)
+        ]
         report = analyze_feasibility(players, MASK, num_teams=2)
         # 2 Tank + 4 DPS placeable in 1st pref; 4 Support slots forced off-role.
         assert report.structural_min_off_role == 4
@@ -107,12 +102,7 @@ class TestFeasibilityWithFlexPlayers:
             [make_player(f"t{i}", ["Tank"]) for i in range(2)]
             + [make_player(f"d{i}", ["Damage"]) for i in range(2)]
             + [make_player(f"s{i}", ["Support"]) for i in range(2)]
-            + [
-                make_player(
-                    f"f{i}", ["Damage"], extra_roles=["Tank", "Support"], is_flex=True
-                )
-                for i in range(4)
-            ]
+            + [make_player(f"f{i}", ["Damage"], extra_roles=["Tank", "Support"], is_flex=True) for i in range(4)]
         )
         report = analyze_feasibility(players, MASK, num_teams=2)
         assert report.flex_player_count == 4
@@ -158,8 +148,11 @@ class TestFeasibilityEdgeCases:
 
     def test_player_without_preferences_does_not_supply(self) -> None:
         no_pref = Player(
-            name="Px", ratings={"Damage": 2000}, preferences=[],
-            uuid="x", mask=MASK,
+            name="Px",
+            ratings={"Damage": 2000},
+            preferences=[],
+            uuid="x",
+            mask=MASK,
         )
         with_pref = make_player("y", ["Damage"])
         report = analyze_feasibility([no_pref, with_pref], MASK, num_teams=1)

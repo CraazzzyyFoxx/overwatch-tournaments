@@ -1,8 +1,8 @@
 import sqlalchemy as sa
-from shared.core.social import SocialProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.social import SocialProvider
 from src import models
 
 
@@ -79,9 +79,7 @@ def _index_by_requested_name(
             out.setdefault(original, value)
 
 
-async def get_users_by_battle_names(
-    session: AsyncSession, battle_names: list[str]
-) -> dict[str, models.User]:
+async def get_users_by_battle_names(session: AsyncSession, battle_names: list[str]) -> dict[str, models.User]:
     """Batch equivalent of :func:`get_user_by_battle_name` for a set of names.
 
     Resolves every requested log name to a user in a single ``IN`` query instead

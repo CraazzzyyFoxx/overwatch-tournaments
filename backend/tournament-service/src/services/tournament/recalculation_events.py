@@ -5,6 +5,7 @@ from typing import Any
 from faststream.rabbit import RabbitRouter
 from faststream.rabbit.annotations import RabbitMessage
 from loguru import logger
+
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_CHANGED_TOURNAMENT_QUEUE,
@@ -13,7 +14,6 @@ from shared.messaging.config import (
 )
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent, TournamentStandingsInvalidatedEvent
-
 from src.core import db
 from src.services.computation.jobs import request_standings_recalculation
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache

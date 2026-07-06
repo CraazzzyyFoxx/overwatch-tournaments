@@ -1,12 +1,12 @@
 """Admin service layer for encounter CRUD operations"""
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.core import enums
 from src.schemas.admin import encounter as admin_schemas
@@ -117,26 +117,18 @@ async def create_encounter(session: AsyncSession, data: admin_schemas.EncounterC
 
     # Verify selected teams exist when provided
     if data.home_team_id is not None:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == data.home_team_id)
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == data.home_team_id))
         home_team = result.scalar_one_or_none()
 
         if not home_team:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
 
     if data.away_team_id is not None:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == data.away_team_id)
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == data.away_team_id))
         away_team = result.scalar_one_or_none()
 
         if not away_team:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
 
     stage_id, stage_item_id, tournament_group_id = await _resolve_stage_refs(
         session,
@@ -201,22 +193,14 @@ async def update_encounter(
     update_data = data.model_dump(exclude_unset=True)
 
     if "home_team_id" in update_data and update_data["home_team_id"] is not None:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == update_data["home_team_id"])
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == update_data["home_team_id"]))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
 
     if "away_team_id" in update_data and update_data["away_team_id"] is not None:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == update_data["away_team_id"])
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == update_data["away_team_id"]))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
 
     resolved_stage_id, resolved_stage_item_id, resolved_group_id = await _resolve_stage_refs(
         session,
@@ -271,42 +255,26 @@ async def update_match(
 ) -> models.Match:
     """Update a single Match (map) belonging to an encounter."""
     result = await session.execute(
-        select(models.Match)
-        .where(models.Match.id == match_id)
-        .options(selectinload(models.Match.encounter))
+        select(models.Match).where(models.Match.id == match_id).options(selectinload(models.Match.encounter))
     )
     match = result.scalar_one_or_none()
     if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Match not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
 
     update_data = data.model_dump(exclude_unset=True)
 
     if "home_team_id" in update_data:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == update_data["home_team_id"])
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == update_data["home_team_id"]))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Home team not found")
     if "away_team_id" in update_data:
-        result = await session.execute(
-            select(models.Team).where(models.Team.id == update_data["away_team_id"])
-        )
+        result = await session.execute(select(models.Team).where(models.Team.id == update_data["away_team_id"]))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Away team not found")
     if "map_id" in update_data and update_data["map_id"] is not None:
-        result = await session.execute(
-            select(models.Map).where(models.Map.id == update_data["map_id"])
-        )
+        result = await session.execute(select(models.Map).where(models.Map.id == update_data["map_id"]))
         if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
     for field, value in update_data.items():
         setattr(match, field, value)
@@ -367,9 +335,7 @@ async def bulk_update_encounters(
             ) from exc
 
     result = await session.execute(
-        select(models.Encounter)
-        .where(models.Encounter.id.in_(data.encounter_ids))
-        .with_for_update()
+        select(models.Encounter).where(models.Encounter.id.in_(data.encounter_ids)).with_for_update()
     )
     encounters = list(result.scalars().all())
     if not encounters:

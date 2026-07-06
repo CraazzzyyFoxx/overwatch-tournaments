@@ -2,6 +2,10 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import http_status as status
 from shared.core.enums import EncounterResultStatus
 from shared.core.errors import BaseAPIException as HTTPException
@@ -11,10 +15,6 @@ from shared.messaging.config import (
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import EncounterCompletedEvent
 from shared.services.challonge_refs import resolve_encounter_challonge
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.services.challonge import sync as challonge_sync
 from src.services.encounter.finalize import finalize_encounter_score

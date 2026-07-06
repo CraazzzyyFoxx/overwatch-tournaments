@@ -58,9 +58,7 @@ async def fetch_latest_ow_ranks_by_account(
         )
         .subquery()
     )
-    query = sa.select(
-        subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value
-    ).where(subq.c.rn == 1)
+    query = sa.select(subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
     result = await session.execute(query)
 
     out: dict[int, dict[str, dict[str, int]]] = {}

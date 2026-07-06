@@ -1,5 +1,7 @@
 #!/bin/sh -e
+
 set -x
 
-ruff check app scripts --fix
-ruff format app scripts
+# Auto-fix + format the entire uv workspace. Run from the backend/ directory.
+ruff check . --fix
+ruff format .

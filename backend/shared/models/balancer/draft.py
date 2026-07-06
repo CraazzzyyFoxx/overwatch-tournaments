@@ -83,17 +83,17 @@ class DraftSession(db.TimeStampIntegerMixin):
     export_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
 
-    tournament: Mapped["Tournament"] = relationship()
-    workspace: Mapped["Workspace"] = relationship()
-    source_balance: Mapped["BalancerBalance | None"] = relationship()
-    teams: Mapped[list["DraftTeam"]] = relationship(back_populates="session", cascade="all, delete-orphan")
-    players: Mapped[list["DraftPlayer"]] = relationship(back_populates="session", cascade="all, delete-orphan")
-    picks: Mapped[list["DraftPick"]] = relationship(
+    tournament: Mapped[Tournament] = relationship()
+    workspace: Mapped[Workspace] = relationship()
+    source_balance: Mapped[BalancerBalance | None] = relationship()
+    teams: Mapped[list[DraftTeam]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    players: Mapped[list[DraftPlayer]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    picks: Mapped[list[DraftPick]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
         foreign_keys="DraftPick.session_id",
     )
-    current_pick: Mapped["DraftPick | None"] = relationship(foreign_keys=[current_pick_id], post_update=True)
+    current_pick: Mapped[DraftPick | None] = relationship(foreign_keys=[current_pick_id], post_update=True)
 
 
 class DraftTeam(db.TimeStampIntegerMixin):
@@ -122,10 +122,10 @@ class DraftTeam(db.TimeStampIntegerMixin):
         ForeignKey("tournament.team.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    session: Mapped["DraftSession"] = relationship(back_populates="teams")
-    captain_member: Mapped["WorkspaceMember | None"] = relationship()
-    picks: Mapped[list["DraftPick"]] = relationship(back_populates="draft_team", foreign_keys="DraftPick.draft_team_id")
-    roster: Mapped[list["DraftPlayer"]] = relationship(
+    session: Mapped[DraftSession] = relationship(back_populates="teams")
+    captain_member: Mapped[WorkspaceMember | None] = relationship()
+    picks: Mapped[list[DraftPick]] = relationship(back_populates="draft_team", foreign_keys="DraftPick.draft_team_id")
+    roster: Mapped[list[DraftPlayer]] = relationship(
         primaryjoin="DraftPlayer.drafted_by_team_id == DraftTeam.id",
         viewonly=True,
     )
@@ -174,10 +174,10 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     # ``secondary_roles_json`` JSON bags); this catch-all is intentionally kept.
     additional_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
 
-    session: Mapped["DraftSession"] = relationship(back_populates="players")
-    member: Mapped["WorkspaceMember | None"] = relationship()
-    drafted_by_team: Mapped["DraftTeam | None"] = relationship(foreign_keys=[drafted_by_team_id], overlaps="roster")
-    roles: Mapped[list["DraftPlayerRole"]] = relationship(
+    session: Mapped[DraftSession] = relationship(back_populates="players")
+    member: Mapped[WorkspaceMember | None] = relationship()
+    drafted_by_team: Mapped[DraftTeam | None] = relationship(foreign_keys=[drafted_by_team_id], overlaps="roster")
+    roles: Mapped[list[DraftPlayerRole]] = relationship(
         back_populates="player",
         cascade="all, delete-orphan",
         order_by="DraftPlayerRole.priority",
@@ -246,16 +246,14 @@ class DraftPlayerRole(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    draft_player_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.draft_player.id", ondelete="CASCADE"), index=True
-    )
+    draft_player_id: Mapped[int] = mapped_column(ForeignKey("balancer.draft_player.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     is_secondary: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     priority: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
-    player: Mapped["DraftPlayer"] = relationship(back_populates="roles")
-    hero_entries: Mapped[list["DraftPlayerRoleHero"]] = relationship(
+    player: Mapped[DraftPlayer] = relationship(back_populates="roles")
+    hero_entries: Mapped[list[DraftPlayerRoleHero]] = relationship(
         back_populates="role_entry",
         cascade="all, delete-orphan",
         order_by="DraftPlayerRoleHero.priority",
@@ -282,8 +280,8 @@ class DraftPlayerRoleHero(db.TimeStampIntegerMixin):
     hero_id: Mapped[int] = mapped_column(ForeignKey("overwatch.hero.id", ondelete="CASCADE"))
     priority: Mapped[int] = mapped_column(Integer(), nullable=False)
 
-    role_entry: Mapped["DraftPlayerRole"] = relationship(back_populates="hero_entries")
-    hero: Mapped["Hero"] = relationship()
+    role_entry: Mapped[DraftPlayerRole] = relationship(back_populates="hero_entries")
+    hero: Mapped[Hero] = relationship()
 
 
 class DraftPick(db.TimeStampIntegerMixin):
@@ -324,10 +322,10 @@ class DraftPick(db.TimeStampIntegerMixin):
     # bumps this under a WHERE version = :expected guard.
     version: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
-    session: Mapped["DraftSession"] = relationship(back_populates="picks", foreign_keys=[session_id])
-    draft_team: Mapped["DraftTeam"] = relationship(back_populates="picks", foreign_keys=[draft_team_id])
-    picked_player: Mapped["DraftPlayer | None"] = relationship(foreign_keys=[picked_player_id])
-    picked_by_member: Mapped["WorkspaceMember | None"] = relationship(foreign_keys=[picked_by_workspace_member_id])
+    session: Mapped[DraftSession] = relationship(back_populates="picks", foreign_keys=[session_id])
+    draft_team: Mapped[DraftTeam] = relationship(back_populates="picks", foreign_keys=[draft_team_id])
+    picked_player: Mapped[DraftPlayer | None] = relationship(foreign_keys=[picked_player_id])
+    picked_by_member: Mapped[WorkspaceMember | None] = relationship(foreign_keys=[picked_by_workspace_member_id])
 
     @property
     def picked_by_user_id(self) -> int | None:

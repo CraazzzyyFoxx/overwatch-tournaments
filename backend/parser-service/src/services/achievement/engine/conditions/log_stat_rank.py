@@ -42,9 +42,7 @@ async def execute_log_stat_rank(
     limit = params.get("limit", 1)
     normalize_by_time = params.get("normalize_by_time", True)
 
-    log_value = sa.func.sum(
-        sa.case((models.MatchStatistics.name == stat, models.MatchStatistics.value), else_=0)
-    )
+    log_value = sa.func.sum(sa.case((models.MatchStatistics.name == stat, models.MatchStatistics.value), else_=0))
     time_value = sa.func.sum(
         sa.case(
             (models.MatchStatistics.name == "HeroTimePlayed", models.MatchStatistics.value),
@@ -82,16 +80,12 @@ async def execute_log_stat_rank(
 
     per_user_sq = per_user.subquery("per_user")
 
-    order_expr = (
-        sa.desc(per_user_sq.c.metric) if order == "desc" else sa.asc(per_user_sq.c.metric)
-    )
+    order_expr = sa.desc(per_user_sq.c.metric) if order == "desc" else sa.asc(per_user_sq.c.metric)
     ranked = (
         sa.select(
             per_user_sq.c.user_id,
             per_user_sq.c.tournament_id,
-            sa.func.row_number()
-            .over(partition_by=per_user_sq.c.tournament_id, order_by=order_expr)
-            .label("rn"),
+            sa.func.row_number().over(partition_by=per_user_sq.c.tournament_id, order_by=order_expr).label("rn"),
         ).where(per_user_sq.c.metric.isnot(None))
     ).subquery("ranked")
 

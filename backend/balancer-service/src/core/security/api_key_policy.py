@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
-
+from shared.core.errors import BaseAPIException as HTTPException
 from src.core.security.api_key_limiter import is_api_key_principal
 
 DEFAULT_CONFIG_POLICY: dict[str, Any] = {

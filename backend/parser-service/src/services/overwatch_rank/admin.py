@@ -6,10 +6,10 @@ from collections.abc import Sequence
 from typing import Any
 
 import sqlalchemy as sa
-from shared.core.social import SocialProvider
-from shared.schemas.events import FetchRankEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.social import SocialProvider
+from shared.schemas.events import FetchRankEvent
 from src import models
 
 from . import service, tasks
@@ -18,9 +18,7 @@ from . import service, tasks
 _MANUAL_PRIORITY_TIER = 2
 
 
-async def get_user_collection_status(
-    session: AsyncSession, user_id: int
-) -> list[dict[str, Any]]:
+async def get_user_collection_status(session: AsyncSession, user_id: int) -> list[dict[str, Any]]:
     """Per-battle-tag collection state for a user (incl. tags never fetched)."""
     acc = models.SocialAccount
     state = models.BattleTagRankState
@@ -110,9 +108,7 @@ async def trigger_collection(
         return 0
 
     for tag in tags:
-        await service.ensure_state(
-            session, tag.id, tag.username, priority_tier=_MANUAL_PRIORITY_TIER
-        )
+        await service.ensure_state(session, tag.id, tag.username, priority_tier=_MANUAL_PRIORITY_TIER)
     await session.commit()
 
     enqueued = 0
@@ -122,8 +118,6 @@ async def trigger_collection(
             battle_tag=tag.username,
             source="manual",
         )
-        if await tasks.enqueue_fetch(
-            event, priority=True, force=True, broker=broker, redis=redis
-        ):
+        if await tasks.enqueue_fetch(event, priority=True, force=True, broker=broker, redis=redis):
             enqueued += 1
     return enqueued

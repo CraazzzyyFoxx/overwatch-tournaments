@@ -38,15 +38,9 @@ def upgrade() -> None:
         sa.Column("verdict", sa.String(length=16), nullable=False),
         sa.Column("reviewer_user_id", sa.Integer(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["tournament.player.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["reviewer_user_id"], ["auth.user.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["player_id"], ["tournament.player.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["reviewer_user_id"], ["auth.user.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "tournament_id",

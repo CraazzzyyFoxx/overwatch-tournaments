@@ -22,7 +22,6 @@ from shared.core.enums import (
     DraftRole,
     DraftStatus,
 )
-
 from src.schemas.base import BaseRead
 
 __all__ = (

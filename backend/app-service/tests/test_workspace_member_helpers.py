@@ -15,13 +15,13 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
+
 from shared.models.identity.auth_user import AuthUser
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.rbac import user_has_any_workspace_role
 from shared.repository import get_or_create_workspace_member
 from shared.services.division_grid_access import get_default_division_grid_version_id
-
 from src.services.workspace import service as workspace_service
 
 
@@ -101,12 +101,8 @@ def test_get_or_create_workspace_member_is_idempotent(db_session) -> None:
         workspace = await _make_workspace(db_session)
         player = await _make_player(db_session)
 
-        first = await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=player.id
-        )
-        second = await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=player.id
-        )
+        first = await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player.id)
+        second = await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player.id)
         return first, second
 
     first, second = asyncio.run(_run())
@@ -122,12 +118,8 @@ def test_get_or_create_workspace_member_distinct_players_distinct_rows(db_sessio
         player_a = await _make_player(db_session)
         player_b = await _make_player(db_session)
 
-        member_a = await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=player_a.id
-        )
-        member_b = await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=player_b.id
-        )
+        member_a = await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player_a.id)
+        member_b = await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player_b.id)
         return member_a, member_b
 
     member_a, member_b = asyncio.run(_run())
@@ -155,12 +147,8 @@ def test_get_members_excludes_players_without_auth_link(db_session) -> None:
         linked = await _make_player(db_session, auth_user_id=auth_user.id)
         player_only = await _make_player(db_session, auth_user_id=None)
 
-        await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=linked.id
-        )
-        await get_or_create_workspace_member(
-            db_session, workspace_id=workspace.id, player_id=player_only.id
-        )
+        await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=linked.id)
+        await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player_only.id)
 
         members = await workspace_service.get_members(db_session, workspace.id)
         return {m.player_id for m in members}, linked.id, player_only.id
@@ -179,14 +167,10 @@ def test_add_member_creates_row_anchored_on_player_id(db_session) -> None:
         await _make_player(db_session, auth_user_id=auth_user.id)
 
         member = await workspace_service.add_member(db_session, workspace.id, auth_user.id)
-        row = await db_session.execute(
-            sa.select(WorkspaceMember).where(WorkspaceMember.id == member.id)
-        )
+        row = await db_session.execute(sa.select(WorkspaceMember).where(WorkspaceMember.id == member.id))
         # The anchor autofill trigger grants the baseline member role to the
         # new auth-linked member.
-        has_role = await user_has_any_workspace_role(
-            db_session, user_id=auth_user.id, workspace_id=workspace.id
-        )
+        has_role = await user_has_any_workspace_role(db_session, user_id=auth_user.id, workspace_id=workspace.id)
         return member, row.scalar_one(), has_role
 
     member, row, has_role = asyncio.run(_run())
@@ -228,9 +212,7 @@ def test_assign_default_member_role_if_roleless_is_idempotent(db_session) -> Non
         again = await assign_default_member_role_if_roleless(
             db_session, user_id=auth_user.id, workspace_id=workspace.id
         )
-        has = await user_has_any_workspace_role(
-            db_session, user_id=auth_user.id, workspace_id=workspace.id
-        )
+        has = await user_has_any_workspace_role(db_session, user_id=auth_user.id, workspace_id=workspace.id)
         return first, again, has
 
     first, again, has = asyncio.run(_run())
@@ -252,9 +234,7 @@ def test_list_members_page_paginates_and_excludes_auth_less(db_session) -> None:
         p2 = await _make_player(db_session, auth_user_id=au2.id)
         orphan = await _make_player(db_session, auth_user_id=None)
         for player in (p1, p2, orphan):
-            await get_or_create_workspace_member(
-                db_session, workspace_id=workspace.id, player_id=player.id
-            )
+            await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player.id)
 
         first_total, first_rows = await workspace_service.list_members_page(
             db_session, workspace.id, page=1, per_page=1, search=None
@@ -284,9 +264,7 @@ def test_list_members_page_role_filter_and_sort(db_session) -> None:
         p_admin = await _make_player(db_session, auth_user_id=au_admin.id)
         p_member = await _make_player(db_session, auth_user_id=au_member.id)
         for player in (p_admin, p_member):
-            await get_or_create_workspace_member(
-                db_session, workspace_id=workspace.id, player_id=player.id
-            )
+            await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player.id)
         # Both got 'member' via the anchor trigger; promote one to admin.
         await assign_workspace_system_role(
             db_session, user_id=au_admin.id, workspace_id=workspace.id, role_name="admin"
@@ -327,9 +305,7 @@ def test_autofill_member_roles_grants_member_to_roleless(db_session) -> None:
 
         assigned = await workspace_service.autofill_member_roles(db_session, workspace.id)
         assigned_again = await workspace_service.autofill_member_roles(db_session, workspace.id)
-        has = await user_has_any_workspace_role(
-            db_session, user_id=auth_user.id, workspace_id=workspace.id
-        )
+        has = await user_has_any_workspace_role(db_session, user_id=auth_user.id, workspace_id=workspace.id)
         return assigned, assigned_again, has
 
     assigned, assigned_again, has = asyncio.run(_run())

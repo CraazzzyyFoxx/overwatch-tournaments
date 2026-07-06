@@ -114,8 +114,7 @@ def _prepare_shift_training_frames(
         return train_df, val_df
 
     logger.info(
-        "Shift v2 validation holdout contains the only labelled rows; "
-        "reusing it for training without validation"
+        "Shift v2 validation holdout contains the only labelled rows; reusing it for training without validation"
     )
     return val_df, pd.DataFrame()
 
@@ -219,9 +218,7 @@ async def train_performance_v2_for_cutoff(
             logger.warning("Skipping role=%s: %s", role, exc)
             continue
 
-        path = artifact_path(
-            algorithm.id, PERFORMANCE_MODEL_VERSION, f"performance_{role}.joblib"
-        )
+        path = artifact_path(algorithm.id, PERFORMANCE_MODEL_VERSION, f"performance_{role}.joblib")
         storage_uri = save_artifact(result.model, path)
 
         artifact = await register_artifact(
@@ -339,9 +336,7 @@ async def train_standings_v2_for_cutoff(
         return None
 
     try:
-        result: StandingsTrainingResult = train_standings_v2(
-            train_df, val_df=val_df if not val_df.empty else None
-        )
+        result: StandingsTrainingResult = train_standings_v2(train_df, val_df=val_df if not val_df.empty else None)
     except ValueError as exc:
         logger.warning("Standings v2 training skipped: %s", exc)
         return None
@@ -361,9 +356,7 @@ async def train_standings_v2_for_cutoff(
         feature_importance=result.feature_importance,
         activate=True,
     )
-    return StandingsTrainingOutcome(
-        algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics
-    )
+    return StandingsTrainingOutcome(algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics)
 
 
 async def train_shift_v2_for_cutoff(
@@ -451,6 +444,4 @@ async def train_shift_v2_for_cutoff(
         feature_importance=result.feature_importance,
         activate=True,
     )
-    return ShiftTrainingOutcome(
-        algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics
-    )
+    return ShiftTrainingOutcome(algorithm_id=algorithm.id, artifact_id=artifact.id, metrics=result.metrics)

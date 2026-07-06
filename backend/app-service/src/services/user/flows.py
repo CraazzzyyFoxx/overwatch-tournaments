@@ -3,6 +3,8 @@ from statistics import mean
 
 import sqlalchemy as sa
 from cashews import cache
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.services.division_grid_access import build_workspace_division_grid_normalizer
 from shared.services.division_grid_normalization import (
@@ -13,8 +15,6 @@ from shared.services.division_grid_resolution import (
     resolve_tournament_division,
     resolve_workspace_division,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models, schemas
 from src.core import config, enums, errors, pagination
 from src.core.workspace import get_division_grid_version
@@ -22,9 +22,7 @@ from src.services.hero import flows as hero_flows
 from src.services.map import flows as map_flows
 from src.services.statistics import service as statistics_service
 
-from . import _mappers, _repositories
-
-from . import service
+from . import _mappers, _repositories, service
 
 tournament_stats = [
     enums.LogStatsName.HeroDamageDealt,
@@ -50,9 +48,7 @@ overview_hero_metrics_order = [
 _METRIC_DIRECTION_MAP: dict[str, bool] = {
     key: higher_is_better for key, _label, higher_is_better in service.COMPARE_METRIC_DEFINITIONS
 }
-_METRIC_LABEL_MAP: dict[str, str] = {
-    key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS
-}
+_METRIC_LABEL_MAP: dict[str, str] = {key: label for key, label, _higher_is_better in service.COMPARE_METRIC_DEFINITIONS}
 
 
 def _build_baseline_average_row(rows: list[dict[str, typing.Any]]) -> dict[str, float | None]:
@@ -137,9 +133,7 @@ async def to_pydantic(
         if visible_only:
             accounts = [account for account in accounts if _is_globally_visible(account)]
         social_accounts = [_social_account_read(account) for account in accounts]
-    return schemas.UserRead(
-        id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts
-    )
+    return schemas.UserRead(id=user.id, name=user.name, avatar_url=user.avatar_url, social_accounts=social_accounts)
 
 
 def _is_globally_visible(account: models.SocialAccount) -> bool:
@@ -1037,9 +1031,7 @@ async def get_tournaments(
 
         if match:
             matches_cache[team.id][encounter.id].append(
-                _mappers.to_match_with_user_stats(
-                    match, performance=performance, heroes=heroes
-                )
+                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
             )
 
     for team_id, encounter_dict in encounters_cache.items():
@@ -1088,10 +1080,7 @@ async def get_tournaments(
             else None
         )
 
-        players_read = [
-            _mappers.to_user_tournament_player(player, grid=tournament_grid)
-            for player in team.players
-        ]
+        players_read = [_mappers.to_user_tournament_player(player, grid=tournament_grid) for player in team.players]
 
         tournament = schemas.UserTournament(
             id=team.tournament.id,
@@ -1135,9 +1124,7 @@ async def get_tournament_with_stats(
         A `UserTournamentWithStats` schema instance if found, otherwise `None`.
     """
     user = await get(session, id, [])
-    player = await _repositories.get_player_by_user_and_tournament(
-        session, user.id, tournament_id
-    )
+    player = await _repositories.get_player_by_user_and_tournament(session, user.id, tournament_id)
     if player is None:
         raise errors.ApiHTTPException(
             status_code=404,
@@ -1223,7 +1210,9 @@ async def get_heroes(
     requested_stats = set(stats or [])
     stats_filter = list(requested_stats) if requested_stats else None
 
-    user_stats = await service.get_statistics_by_heroes(session, user.id, stats_filter, tournament_id=tournament_id, workspace_id=workspace_id)
+    user_stats = await service.get_statistics_by_heroes(
+        session, user.id, stats_filter, tournament_id=tournament_id, workspace_id=workspace_id
+    )
     if stats_filter:
         all_stats = await service.get_statistics_by_heroes_all_values_filtered(session, stats_filter)
     else:
@@ -1299,7 +1288,10 @@ async def get_heroes(
 
 
 async def get_best_teammates(
-    session: AsyncSession, id: int, params: pagination.PaginationSortParams, workspace_id: int | None = None,
+    session: AsyncSession,
+    id: int,
+    params: pagination.PaginationSortParams,
+    workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.UserBestTeammate]:
     """
     Retrieves a paginated list of a user's best teammates, including win rate, tournaments played together,
@@ -1376,9 +1368,7 @@ async def get_encounters_by_user(
 
         if match:
             matches_cache[encounter.id].append(
-                _mappers.to_match_with_user_stats(
-                    match, performance=performance, heroes=heroes
-                )
+                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
             )
 
     for encounter_id, encounter in encounters_cache.items():
@@ -1409,9 +1399,7 @@ async def get_matches_summary(
     sidebars, aggregated over ALL of the user's encounters (not the current
     page, which is what the old client-side computation was limited to)."""
     user = await get(session, user_id, [])
-    opponent_rows = await _repositories.get_user_opponents(
-        session, user.id, workspace_id, limit=opponents_limit
-    )
+    opponent_rows = await _repositories.get_user_opponents(session, user.id, workspace_id, limit=opponents_limit)
     stage_rows = await _repositories.get_user_stage_breakdown(session, user.id, workspace_id)
 
     stages = {kind: schemas.UserStageRecord(w=0, l=0) for kind in ("group", "playoffs", "finals")}

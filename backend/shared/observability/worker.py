@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import time
+import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from threading import Lock
-import time
 from typing import Any
-import uuid
 
 from loguru import logger as default_logger
 from opentelemetry import propagate, trace

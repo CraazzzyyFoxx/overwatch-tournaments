@@ -4,13 +4,13 @@ from itertools import groupby
 
 import sqlalchemy as sa
 from cashews import cache
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.division_grid import DivisionGrid
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models, schemas
 from src.core import config, enums, errors, pagination
 from src.services.registration import service as registration_service
@@ -93,7 +93,9 @@ async def to_pydantic(
         if registrations_counts is not None:
             registrations_count = registrations_counts.get(tournament.id, 0)
         else:
-            registrations_count = await registration_service.get_registration_count_by_tournament(session, tournament.id)
+            registrations_count = await registration_service.get_registration_count_by_tournament(
+                session, tournament.id
+            )
     division_grid_version = None
     if _entity_requested(entities, "division_grid_version"):
         division_grid_version_model = _loaded_relationship(tournament, "division_grid_version")
@@ -102,9 +104,7 @@ async def to_pydantic(
                 division_grid_version_model,
                 from_attributes=True,
             )
-    tournament_challonge_id, tournament_challonge_slug = (
-        challonge_ref if challonge_ref is not None else (None, None)
-    )
+    tournament_challonge_id, tournament_challonge_slug = challonge_ref if challonge_ref is not None else (None, None)
     return schemas.TournamentRead(
         id=tournament.id,
         workspace_id=tournament.workspace_id,
@@ -326,9 +326,7 @@ async def get_all(
     challonge_refs = await resolve_tournament_challonge(session, tournament_ids)
     stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None
     if "stages" in params.entities:
-        stage_ids = [
-            stage.id for result in results for stage in (_loaded_relationship(result, "stages") or [])
-        ]
+        stage_ids = [stage.id for result in results for stage in (_loaded_relationship(result, "stages") or [])]
         stage_challonge_refs = await resolve_stage_challonge(session, stage_ids)
     return pagination.Paginated(
         results=[

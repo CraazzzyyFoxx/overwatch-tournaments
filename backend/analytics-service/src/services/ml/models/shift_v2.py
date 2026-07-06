@@ -49,6 +49,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
 from shared.division_grid import DEFAULT_GRID
 
 from .base import MLModel
@@ -115,9 +116,7 @@ SHIFT_BLEND_COLUMNS: tuple[str, ...] = (
 
 def _team_result(df: pd.DataFrame) -> pd.Series:
     """Team-result backbone component: v1 Linear ``stable_shift`` (fallback os_shift)."""
-    fallback = pd.to_numeric(
-        df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce"
-    ).fillna(0.0)
+    fallback = pd.to_numeric(df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce").fillna(0.0)
     if "linear_stable_shift" not in df.columns:
         return fallback
     stable = pd.to_numeric(df["linear_stable_shift"], errors="coerce")
@@ -125,9 +124,7 @@ def _team_result(df: pd.DataFrame) -> pd.Series:
 
 
 def _os_shift(df: pd.DataFrame) -> pd.Series:
-    return pd.to_numeric(
-        df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce"
-    ).fillna(0.0)
+    return pd.to_numeric(df.get("os_shift", pd.Series(0.0, index=df.index)), errors="coerce").fillna(0.0)
 
 
 def _rank_ramp(div: pd.Series, *, top: float, bottom: float) -> pd.Series:
@@ -156,12 +153,10 @@ def _output_clamp(
     cap ramps up to ``shift_range`` at the bottom (division 40). Missing grid size
     falls back to the canonical 40-tier grid; missing division → mid-ladder.
     """
-    div = pd.to_numeric(
-        df.get("current_div", pd.Series(np.nan, index=df.index)), errors="coerce"
-    ).fillna(_GRID_MID_DIV)
-    n_div = pd.to_numeric(
-        df.get("grid_n_div", pd.Series(_GRID_MAX_DIV, index=df.index)), errors="coerce"
-    ).fillna(_GRID_MAX_DIV)
+    div = pd.to_numeric(df.get("current_div", pd.Series(np.nan, index=df.index)), errors="coerce").fillna(_GRID_MID_DIV)
+    n_div = pd.to_numeric(df.get("grid_n_div", pd.Series(_GRID_MAX_DIV, index=df.index)), errors="coerce").fillna(
+        _GRID_MAX_DIV
+    )
     ref = top_grid_ref or 1.0
     top_cap = (n_div / ref).clip(lower=0.0, upper=shift_range)
     span = (_GRID_MAX_DIV - _GRID_MIN_DIV) or 1.0
@@ -191,12 +186,8 @@ def _placement_factor(df: pd.DataFrame, *, floor: float) -> pd.Series:
     strong individual on a last-placed team is not promoted. Missing standings
     (no ``overall_position``/``team_count``) → 1.0 (no gate).
     """
-    pos = pd.to_numeric(
-        df.get("overall_position", pd.Series(np.nan, index=df.index)), errors="coerce"
-    )
-    n = pd.to_numeric(
-        df.get("team_count", pd.Series(np.nan, index=df.index)), errors="coerce"
-    )
+    pos = pd.to_numeric(df.get("overall_position", pd.Series(np.nan, index=df.index)), errors="coerce")
+    n = pd.to_numeric(df.get("team_count", pd.Series(np.nan, index=df.index)), errors="coerce")
     raw = ((n - pos) / (n - 1.0).clip(lower=1.0)).clip(0.0, 1.0)
     factor = floor + (1.0 - floor) * raw
     return factor.where(pos.notna() & n.notna() & (n > 1), 1.0)
@@ -237,9 +228,7 @@ def _linear_confidence(df: pd.DataFrame) -> pd.Series:
 
 def _newcomer_mask(df: pd.DataFrame) -> np.ndarray:
     is_newcomer = df.get("is_newcomer", pd.Series(False, index=df.index))
-    played = pd.to_numeric(
-        df.get("tournaments_played", pd.Series(0, index=df.index)), errors="coerce"
-    ).fillna(0)
+    played = pd.to_numeric(df.get("tournaments_played", pd.Series(0, index=df.index)), errors="coerce").fillna(0)
     return (is_newcomer.fillna(False).astype(bool) | (played <= 1)).to_numpy()
 
 
@@ -261,10 +250,7 @@ class ShiftModelV2(MLModel):
     feature_order: list[str] = field(default_factory=lambda: list(SHIFT_BLEND_COLUMNS))
 
     def _shift_array(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        backbone = (
-            self.w_team * _team_result(df).to_numpy()
-            + self.w_os * _os_shift(df).to_numpy()
-        )
+        backbone = self.w_team * _team_result(df).to_numpy() + self.w_os * _os_shift(df).to_numpy()
         # Rank- and grid-dependent output clamp: squeezed at the top of the
         # ladder so no source (backbone or individual) can yank a high-rank player
         # the full range from one tournament; top cap scales with grid size.
@@ -310,9 +296,7 @@ class ShiftModelV2(MLModel):
         # a poorly-placed team, however strong the individual play OR the rating
         # swing (a losing team's spurious os_shift cannot promote either). Applies
         # to the full shift, not just the individual lift; demotions pass through.
-        placement = _placement_factor(
-            df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)
-        ).to_numpy()
+        placement = _placement_factor(df, floor=getattr(self, "placement_floor", PLACEMENT_FLOOR)).to_numpy()
         shift = np.where(shift > 0.0, shift * placement, shift)
         return shift, newcomer
 
@@ -398,10 +382,7 @@ def train_shift_v2(
         labelled = frame.dropna(subset=["current_div", "next_tournament_div"])
         if labelled.empty:
             return None
-        realised = (
-            labelled["current_div"].astype(float)
-            - labelled["next_tournament_div"].astype(float)
-        ).to_numpy()
+        realised = (labelled["current_div"].astype(float) - labelled["next_tournament_div"].astype(float)).to_numpy()
         pred = model.predict(labelled).to_numpy()
         return float(np.mean(np.abs(pred - realised))), int(len(labelled))
 

@@ -14,9 +14,9 @@ from uuid import UUID
 
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
 from pydantic import ValidationError
 
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -25,7 +25,6 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.rpc.query import build_query_model
-
 from src import schemas
 from src.core import db
 from src.core.config import settings
@@ -76,6 +75,7 @@ async def _with_active_user(
     except Exception:  # pragma: no cover - defensive worker guard
         logger.exception("authenticated RPC failed")
         return rpc_error("internal", "internal error")
+
 
 logger = setup_logging(
     service_name="identity-svc",
@@ -188,9 +188,7 @@ async def rpc_refresh(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}
     try:
         async with db.async_session_maker() as session:
-            token = await auth_flows.refresh(
-                session, req.refresh_token, data.get("user_agent"), data.get("ip_address")
-            )
+            token = await auth_flows.refresh(session, req.refresh_token, data.get("user_agent"), data.get("ip_address"))
         return rpc_ok(token.model_dump(mode="json"))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
@@ -454,9 +452,7 @@ async def rpc_update_api_key(data: dict, msg: RabbitMessage) -> dict:
         except (TypeError, ValueError):
             raise HTTPException(status_code=422, detail="api_key_id is required")
         payload = schemas.ApiKeyUpdate.model_validate(data)
-        result = await api_key_service.update_api_key(
-            session, user=user, api_key_id=api_key_id, payload=payload
-        )
+        result = await api_key_service.update_api_key(session, user=user, api_key_id=api_key_id, payload=payload)
         return result.model_dump(mode="json")
 
     return await _with_active_user(data.get("access_token"), op)

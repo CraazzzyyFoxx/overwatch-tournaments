@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import sqlalchemy as sa
 
@@ -120,9 +120,7 @@ def build_effective_achievement_rows_subquery(
         evaluation_rows = evaluation_rows.where(
             AchievementEvaluationResult.achievement_rule_id.in_(achievement_rule_ids)
         )
-        grant_rows = grant_rows.where(
-            AchievementOverride.achievement_rule_id.in_(achievement_rule_ids)
-        )
+        grant_rows = grant_rows.where(AchievementOverride.achievement_rule_id.in_(achievement_rule_ids))
 
     if user_ids:
         evaluation_rows = evaluation_rows.where(eval_member.player_id.in_(user_ids))

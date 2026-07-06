@@ -29,9 +29,9 @@ import typing
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import LogStatsName
 from src import models
 from src.core.workspace import workspace_scope_filter
 
@@ -131,9 +131,7 @@ def _stat_col(stat: LogStatsName, column_name: str) -> sa.Label[typing.Any]:
     hero_id NULL, stat_name)`` row is unique in the source table; ``MAX`` is
     equivalent to picking the single row and avoids accidental duplication.
     """
-    return sa.func.max(
-        sa.case((models.MatchStatistics.name == stat, models.MatchStatistics.value))
-    ).label(column_name)
+    return sa.func.max(sa.case((models.MatchStatistics.name == stat, models.MatchStatistics.value))).label(column_name)
 
 
 # ---------------------------------------------------------------------------
@@ -499,16 +497,10 @@ def _normalise_round_residuals(df: pd.DataFrame) -> pd.DataFrame:
         df["performance_points"],
         errors="coerce",
     ).astype(float)
-    df = df.sort_values(
-        ["player_id", "encounter_id", "match_id", "source_round"]
-    ).reset_index(drop=True)
-    df["round"] = (
-        df.groupby(["player_id", "encounter_id"], sort=False).cumcount() + 1
-    )
+    df = df.sort_values(["player_id", "encounter_id", "match_id", "source_round"]).reset_index(drop=True)
+    df["round"] = df.groupby(["player_id", "encounter_id"], sort=False).cumcount() + 1
 
-    player_group = df.groupby(["player_id", "encounter_id"], sort=False)[
-        "performance_points"
-    ]
+    player_group = df.groupby(["player_id", "encounter_id"], sort=False)["performance_points"]
     player_mean = player_group.transform("mean")
     player_std = player_group.transform(lambda values: values.std(ddof=0))
     df["_player_z"] = np.where(

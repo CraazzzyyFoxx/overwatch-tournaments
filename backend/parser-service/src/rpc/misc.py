@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
-from shared.rpc.identity import ensure_workspace_permission
 from sqlalchemy import delete, select
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 from src import models
 from src.core import auth, db
 from src.schemas.admin import settings as settings_schemas
@@ -47,7 +47,9 @@ def register(broker: Any, logger: Any) -> None:
 
     _sync_handler("rpc.parser.metadata.sync_heroes", "hero", hero_flows.initial_create, "metadata.sync_heroes")
     _sync_handler("rpc.parser.metadata.sync_maps", "map", map_flows.initial_create, "metadata.sync_maps")
-    _sync_handler("rpc.parser.metadata.sync_gamemodes", "gamemode", gamemode_flows.initial_create, "metadata.sync_gamemodes")
+    _sync_handler(
+        "rpc.parser.metadata.sync_gamemodes", "gamemode", gamemode_flows.initial_create, "metadata.sync_gamemodes"
+    )
 
     # ── Global settings (superuser) ─────────────────────────────────────────────
     @broker.subscriber("rpc.parser.settings.list")

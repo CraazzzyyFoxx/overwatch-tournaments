@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.strategy_options import _AbstractLoad
+
 from shared.core import enums
 from shared.core.enums import StageType
 from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
@@ -15,10 +19,6 @@ from shared.services.tournament_utils import (
     completed_encounters_in_finished_rounds as _shared_completed_encounters_in_finished_rounds,
 )
 from shared.services.tournament_utils import sort_bracket_matches
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.orm.strategy_options import _AbstractLoad
-
 from src import models, schemas
 from src.core import utils
 from src.services.encounter import service as encounter_service
@@ -912,8 +912,7 @@ async def _update_stage_completion_flags(session: AsyncSession, tournament: mode
                 for stage_item_id, total, completed, max_round in stage_rows
             }
             item_scopes = [
-                (item.id, *rows_by_item.get(item.id, (0, 0, 0)))
-                for item in (getattr(stage, "items", []) or [])
+                (item.id, *rows_by_item.get(item.id, (0, 0, 0))) for item in (getattr(stage, "items", []) or [])
             ]
             extra_scopes = [
                 (None, total, completed, max_round)
@@ -923,9 +922,7 @@ async def _update_stage_completion_flags(session: AsyncSession, tournament: mode
             scopes = item_scopes or extra_scopes
             should_be_completed = bool(scopes) and all(
                 swiss_scope_stopped(stage, stage_item_id)
-                or _swiss_scope_completed(
-                    total, completed, max_round, _stage_max_rounds(stage)
-                )
+                or _swiss_scope_completed(total, completed, max_round, _stage_max_rounds(stage))
                 for stage_item_id, total, completed, max_round in scopes
             )
             if stage.is_completed != should_be_completed:

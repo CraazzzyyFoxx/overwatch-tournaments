@@ -53,9 +53,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     for name in _AUGMENT_ONLY_NAMES:
         bind.execute(
-            sa.text(
-                "UPDATE analytics.algorithms SET produces_shifts = false WHERE name = :name"
-            ),
+            sa.text("UPDATE analytics.algorithms SET produces_shifts = false WHERE name = :name"),
             {"name": name},
         )
 
@@ -91,12 +89,8 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspace.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["requested_by_user_id"], ["auth.user.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["requested_by_user_id"], ["auth.user.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         schema="analytics",
     )
@@ -142,14 +136,8 @@ def downgrade() -> None:
         schema="analytics",
     )
     op.drop_index("ix_analytics_job_status", table_name="job", schema="analytics")
-    op.drop_index(
-        "ix_analytics_job_requested_by_user_id", table_name="job", schema="analytics"
-    )
-    op.drop_index(
-        "ix_analytics_job_tournament_id", table_name="job", schema="analytics"
-    )
-    op.drop_index(
-        "ix_analytics_job_workspace_id", table_name="job", schema="analytics"
-    )
+    op.drop_index("ix_analytics_job_requested_by_user_id", table_name="job", schema="analytics")
+    op.drop_index("ix_analytics_job_tournament_id", table_name="job", schema="analytics")
+    op.drop_index("ix_analytics_job_workspace_id", table_name="job", schema="analytics")
     op.drop_table("job", schema="analytics")
     op.drop_column("algorithms", "produces_shifts", schema="analytics")

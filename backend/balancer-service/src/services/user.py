@@ -9,11 +9,11 @@ from __future__ import annotations
 import logging
 
 import sqlalchemy as sa
-from shared.core.social import SocialProvider, normalize_social_handle
-from shared.services import social_identity
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core.social import SocialProvider, normalize_social_handle
+from shared.services import social_identity
 from src import models
 from src.schemas.user import UserCSV
 
@@ -61,11 +61,7 @@ async def find_by_csv(session: AsyncSession, data_in: UserCSV) -> models.User | 
         )
 
     if clauses:
-        query = (
-            sa.select(models.User)
-            .outerjoin(acc, models.User.id == acc.user_id)
-            .where(sa.or_(*clauses))
-        )
+        query = sa.select(models.User).outerjoin(acc, models.User.id == acc.user_id).where(sa.or_(*clauses))
         player = (await session.scalars(query)).unique().first()
         if player:
             return player
@@ -98,9 +94,7 @@ async def find_by_csv(session: AsyncSession, data_in: UserCSV) -> models.User | 
 async def _get_with_relations(session: AsyncSession, user_id: int) -> models.User | None:
     """Load a user with its unified social accounts."""
     result = await session.execute(
-        sa.select(models.User)
-        .where(models.User.id == user_id)
-        .options(selectinload(models.User.social_accounts))
+        sa.select(models.User).where(models.User.id == user_id).options(selectinload(models.User.social_accounts))
     )
     return result.unique().scalar_one_or_none()
 
@@ -142,9 +136,7 @@ async def find_by_battle_tag(
     return None
 
 
-async def find_users_by_battle_tags(
-    session: AsyncSession, battle_tags: list[str]
-) -> dict[str, models.User]:
+async def find_users_by_battle_tags(session: AsyncSession, battle_tags: list[str]) -> dict[str, models.User]:
     """Batch equivalent of :func:`find_by_battle_tag` for a set of tags.
 
     Resolves every tag in at most two queries (name pass, then battlenet social
@@ -213,9 +205,7 @@ async def find_users_by_battle_tags(
 
 
 async def _get_battle_tag(session: AsyncSession, battle_tag: str) -> models.SocialAccount | None:
-    return await social_identity.find_by_handle(
-        session, provider=SocialProvider.BATTLENET, username=battle_tag
-    )
+    return await social_identity.find_by_handle(session, provider=SocialProvider.BATTLENET, username=battle_tag)
 
 
 async def _get_discord(session: AsyncSession, discord: str) -> models.SocialAccount | None:

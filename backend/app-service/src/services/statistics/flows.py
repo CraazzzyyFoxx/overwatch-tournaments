@@ -7,7 +7,8 @@ from . import service
 
 
 async def get_most_champions(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.PlayerStatistics]:
     """
@@ -37,7 +38,8 @@ async def get_most_champions(
 
 
 async def get_to_winrate_players(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.PlayerStatistics]:
     """
@@ -67,7 +69,8 @@ async def get_to_winrate_players(
 
 
 async def get_to_won_players(
-    session: AsyncSession, params: pagination.PaginationSortParams,
+    session: AsyncSession,
+    params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.PlayerStatistics]:
     """

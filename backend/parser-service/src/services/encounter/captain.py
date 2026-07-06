@@ -2,14 +2,14 @@
 
 from datetime import UTC, datetime
 
-from shared.core import http_status as status
-from shared.core.enums import EncounterResultStatus
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.services.challonge_refs import resolve_encounter_challonge
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import http_status as status
+from shared.core.enums import EncounterResultStatus
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.services.challonge_refs import resolve_encounter_challonge
 from src import models
 from src.services.challonge import sync as challonge_sync
 from src.services.encounter.finalize import finalize_encounter_score
@@ -51,15 +51,11 @@ async def resolve_captain_side(
     auth_user: models.AuthUser,
     encounter: models.Encounter,
 ) -> str:
-    side, _captain_player_id = await _resolve_captain_identity(
-        session, auth_user, encounter
-    )
+    side, _captain_player_id = await _resolve_captain_identity(session, auth_user, encounter)
     return side
 
 
-async def _load_encounter(
-    session: AsyncSession, encounter_id: int
-) -> models.Encounter:
+async def _load_encounter(session: AsyncSession, encounter_id: int) -> models.Encounter:
     result = await session.execute(
         select(models.Encounter)
         .where(models.Encounter.id == encounter_id)
@@ -98,9 +94,7 @@ async def submit_result(
             detail=f"Cannot submit: result status is '{encounter.result_status}'",
         )
 
-    _side, captain_player_id = await _resolve_captain_identity(
-        session, auth_user, encounter
-    )
+    _side, captain_player_id = await _resolve_captain_identity(session, auth_user, encounter)
 
     encounter.home_score = home_score
     encounter.away_score = away_score
@@ -131,9 +125,7 @@ async def confirm_result(
             detail="No pending result to confirm",
         )
 
-    _side, captain_player_id = await _resolve_captain_identity(
-        session, auth_user, encounter
-    )
+    _side, captain_player_id = await _resolve_captain_identity(session, auth_user, encounter)
 
     # Must be the OTHER captain (not the one who submitted)
     if encounter.submitted_by_id == captain_player_id:
@@ -194,14 +186,10 @@ async def submit_match_report(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Cannot submit: result status is '{encounter.result_status}'"
-            ),
+            detail=(f"Cannot submit: result status is '{encounter.result_status}'"),
         )
 
-    _side, captain_player_id = await _resolve_captain_identity(
-        session, auth_user, encounter
-    )
+    _side, captain_player_id = await _resolve_captain_identity(session, auth_user, encounter)
 
     now = datetime.now(UTC)
     encounter.home_score = home_score

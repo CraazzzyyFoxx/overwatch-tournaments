@@ -14,7 +14,6 @@ that per-item code and surfaces only the status-derived ``error.code``:
 import pytest
 
 from shared.core import enums
-
 from tests.conftest import RpcHarness, build_query
 
 pytestmark = pytest.mark.validation

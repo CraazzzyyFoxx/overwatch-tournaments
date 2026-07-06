@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pandas as pd
 import sqlalchemy as sa
-from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import LogStatsName
 from src import models
 from src.core.workspace import workspace_filter
 
@@ -59,11 +59,7 @@ async def load_player_signal_profile(
         sa.select(
             models.MatchStatistics.user_id.label("user_id"),
             sa.func.coalesce(
-                sa.func.avg(
-                    sa.case(
-                        (models.MatchStatistics.name == LogStatsName.KD, models.MatchStatistics.value)
-                    )
-                ),
+                sa.func.avg(sa.case((models.MatchStatistics.name == LogStatsName.KD, models.MatchStatistics.value))),
                 0.0,
             ).label("kd"),
             sa.func.coalesce(
@@ -151,15 +147,9 @@ async def load_player_signal_profile(
     if not history_df.empty:
         for (uid, role), grp in history_df.groupby(["user_id", "role"]):
             histories[(int(uid), str(role))] = {
-                "raw_value_history": [
-                    float(v) for v in grp["raw_value"].tolist() if v is not None
-                ],
-                "local_residual_history": [
-                    float(v) for v in grp["local_residual"].tolist() if v is not None
-                ],
-                "local_zscore_history": [
-                    float(v) for v in grp["local_zscore"].tolist() if v is not None
-                ],
+                "raw_value_history": [float(v) for v in grp["raw_value"].tolist() if v is not None],
+                "local_residual_history": [float(v) for v in grp["local_residual"].tolist() if v is not None],
+                "local_zscore_history": [float(v) for v in grp["local_zscore"].tolist() if v is not None],
             }
 
     def _history(row: pd.Series, key: str) -> list[float]:

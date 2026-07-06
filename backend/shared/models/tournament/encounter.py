@@ -61,12 +61,8 @@ class Encounter(db.TimeStampIntegerMixin):
     )
 
     name: Mapped[str] = mapped_column(String())
-    home_team_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True
-    )
-    away_team_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True
-    )
+    home_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True)
+    away_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True)
     home_score: Mapped[int] = mapped_column(Integer())
     away_score: Mapped[int] = mapped_column(Integer())
 
@@ -78,15 +74,11 @@ class Encounter(db.TimeStampIntegerMixin):
     ended_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
     current_map_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     tournament_group_id: Mapped[int | None] = mapped_column(
         ForeignKey(TournamentGroup.id, ondelete="CASCADE"), nullable=True, index=True
     )
-    stage_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Stage.id, ondelete="SET NULL"), nullable=True, index=True
-    )
+    stage_id: Mapped[int | None] = mapped_column(ForeignKey(Stage.id, ondelete="SET NULL"), nullable=True, index=True)
     stage_item_id: Mapped[int | None] = mapped_column(
         ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True, index=True
     )
@@ -98,9 +90,7 @@ class Encounter(db.TimeStampIntegerMixin):
     # stranded there when b8e2f4a1c903 moved `encounter` to `tournament` (ALTER
     # TABLE ... SET SCHEMA does not move dependent types); dbarch01 finally moved
     # it into the tournament schema.
-    status: Mapped[enums.EncounterStatus] = mapped_column(
-        ENCOUNTER_STATUS_ENUM, default=enums.EncounterStatus.OPEN
-    )
+    status: Mapped[enums.EncounterStatus] = mapped_column(ENCOUNTER_STATUS_ENUM, default=enums.EncounterStatus.OPEN)
     has_logs: Mapped[bool] = mapped_column(Boolean(), default=False)
 
     # Captain result submission
@@ -109,18 +99,10 @@ class Encounter(db.TimeStampIntegerMixin):
         default=enums.EncounterResultStatus.NONE,
         server_default=enums.EncounterResultStatus.NONE.value,
     )
-    submitted_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey(User.id, ondelete="SET NULL"), nullable=True
-    )
-    submitted_at: Mapped[datetime | None] = mapped_column(
-        db.DateTime(timezone=True), nullable=True
-    )
-    confirmed_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey(User.id, ondelete="SET NULL"), nullable=True
-    )
-    confirmed_at: Mapped[datetime | None] = mapped_column(
-        db.DateTime(timezone=True), nullable=True
-    )
+    submitted_by_id: Mapped[int | None] = mapped_column(ForeignKey(User.id, ondelete="SET NULL"), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    confirmed_by_id: Mapped[int | None] = mapped_column(ForeignKey(User.id, ondelete="SET NULL"), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
     tournament_group: Mapped[TournamentGroup] = relationship()
     tournament: Mapped[Tournament] = relationship()

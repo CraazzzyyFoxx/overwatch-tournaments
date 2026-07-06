@@ -245,7 +245,9 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(sync, "discover_sources", AsyncMock(return_value=[source])),
             patch.object(sync.challonge_service, "fetch_matches", AsyncMock(return_value=[_challonge_match()])),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup(mappings, [home_team, away_team]))),
+            patch.object(
+                sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup(mappings, [home_team, away_team]))
+            ),
             patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {}, set()))),
             patch.object(
                 sync,
@@ -267,9 +269,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             result = await sync.import_tournament(session, tournament.id)
 
         created = next(
-            obj for call in session.add.call_args_list
-            for obj in call.args
-            if isinstance(obj, sync.models.Encounter)
+            obj for call in session.add.call_args_list for obj in call.args if isinstance(obj, sync.models.Encounter)
         )
         self.assertEqual(1, result["matches_synced"])
         self.assertEqual(1, result["matches_created"])
@@ -280,7 +280,8 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual(enums.EncounterStatus.COMPLETED, created.status)
         self.assertEqual((20, 30, 10), (created.stage_id, created.stage_item_id, created.tournament_group_id))
         created_inputs = [
-            obj for call in session.add.call_args_list
+            obj
+            for call in session.add.call_args_list
             for obj in call.args
             if isinstance(obj, sync.models.StageItemInput)
         ]
@@ -405,18 +406,10 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             result = await sync.import_tournament(session, tournament.id)
 
         added_objects = [obj for call in session.add.call_args_list for obj in call.args]
-        created_encounters = [
-            obj for obj in added_objects if isinstance(obj, sync.models.Encounter)
-        ]
-        created_links = [
-            obj for obj in added_objects if isinstance(obj, sync.models.EncounterLink)
-        ]
-        created_group = next(
-            obj for obj in added_objects if isinstance(obj, sync.models.TournamentGroup)
-        )
-        created_stage = next(
-            obj for obj in added_objects if isinstance(obj, sync.models.Stage)
-        )
+        created_encounters = [obj for obj in added_objects if isinstance(obj, sync.models.Encounter)]
+        created_links = [obj for obj in added_objects if isinstance(obj, sync.models.EncounterLink)]
+        created_group = next(obj for obj in added_objects if isinstance(obj, sync.models.TournamentGroup))
+        created_stage = next(obj for obj in added_objects if isinstance(obj, sync.models.Stage))
         # The pending advancement match has no resolved teams yet.
         pending = next(obj for obj in created_encounters if obj.home_team_id is None)
 
@@ -473,7 +466,11 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(sync, "discover_sources", AsyncMock(return_value=[source])),
             patch.object(sync.challonge_service, "fetch_matches", AsyncMock(return_value=[_challonge_match()])),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
             patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {}, set()))),
             patch.object(
@@ -487,11 +484,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, result["matches_synced"])
         self.assertEqual(1, result["errors"])
         self.assertFalse(
-            any(
-                isinstance(obj, sync.models.Encounter)
-                for call in session.add.call_args_list
-                for obj in call.args
-            )
+            any(isinstance(obj, sync.models.Encounter) for call in session.add.call_args_list for obj in call.args)
         )
         session.commit.assert_awaited_once_with()
         enqueue_recalculation.assert_not_awaited()
@@ -536,16 +529,18 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
             patch.object(
                 sync.challonge_service,
                 "fetch_matches",
-                AsyncMock(
-                    return_value=[
-                        _challonge_match(state="open", scores_csv="1-0")
-                    ]
-                ),
+                AsyncMock(return_value=[_challonge_match(state="open", scores_csv="1-0")]),
             ),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
-            patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))),
+            patch.object(
+                sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))
+            ),
             patch.object(
                 sync,
                 "resolve_stage_refs_from_group",
@@ -573,11 +568,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual((20, 30), (existing.stage_id, existing.stage_item_id))
         self.assertEqual(enums.EncounterStatus.OPEN, existing.status)
         self.assertFalse(
-            any(
-                isinstance(obj, sync.models.Encounter)
-                for call in session.add.call_args_list
-                for obj in call.args
-            )
+            any(isinstance(obj, sync.models.Encounter) for call in session.add.call_args_list for obj in call.args)
         )
         enqueue_recalculation.assert_awaited_once_with(tournament.id)
 
@@ -620,9 +611,15 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=[_challonge_match(state="complete", scores_csv="0-2")]),
             ),
             patch.object(sync.challonge_service, "fetch_participants", AsyncMock(return_value=[])),
-            patch.object(sync, "_ensure_stage_structure_for_matches", AsyncMock(return_value={"groups_created": 0, "stages_created": 0})),
+            patch.object(
+                sync,
+                "_ensure_stage_structure_for_matches",
+                AsyncMock(return_value={"groups_created": 0, "stages_created": 0}),
+            ),
             patch.object(sync, "_build_team_lookup", AsyncMock(return_value=_team_lookup([], []))),
-            patch.object(sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))),
+            patch.object(
+                sync, "_build_match_lookup", AsyncMock(return_value=sync._MatchLookup({}, {900: existing}, set()))
+            ),
             patch.object(
                 sync,
                 "resolve_stage_refs_from_group",
@@ -856,9 +853,7 @@ class ChallongeSyncImportTests(IsolatedAsyncioTestCase):
         self.assertEqual(1, result["matches_created"])
         self.assertEqual(0, result["errors"])
         created = next(
-            obj for call in session.add.call_args_list
-            for obj in call.args
-            if isinstance(obj, sync.models.Encounter)
+            obj for call in session.add.call_args_list for obj in call.args if isinstance(obj, sync.models.Encounter)
         )
         self.assertEqual((home_team.id, away_team.id), (created.home_team_id, created.away_team_id))
 

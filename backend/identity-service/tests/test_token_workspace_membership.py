@@ -100,9 +100,7 @@ def test_token_payload_includes_workspace_membership_with_rbac_derived_role(db_s
         auth_user = await auth_flows.register(db_session, payload)
 
         player = (
-            await db_session.execute(
-                sa.select(models.User).where(models.User.auth_user_id == auth_user.id)
-            )
+            await db_session.execute(sa.select(models.User).where(models.User.auth_user_id == auth_user.id))
         ).scalar_one()
 
         # 2. Create a workspace and anchor a workspace_member row on player_id.

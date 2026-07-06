@@ -13,8 +13,8 @@ import logging
 import typing
 
 from faststream.rabbit import RabbitBroker
-from shared.observability import make_rabbit_broker
 
+from shared.observability import make_rabbit_broker
 from src.core import config
 
 logger = logging.getLogger(__name__)
@@ -32,9 +32,7 @@ async def start_publisher_broker() -> RabbitBroker | None:
     if _broker is not None:
         return _broker
     if not config.settings.rabbitmq_url:
-        logger.warning(
-            "RABBITMQ_URL is not set — analytics HTTP publish endpoints will return 503."
-        )
+        logger.warning("RABBITMQ_URL is not set — analytics HTTP publish endpoints will return 503.")
         return None
     _broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
     await _broker.connect()

@@ -6,9 +6,7 @@ def test_member_anchored_on_player():
     assert "player_id" in cols
     assert "auth_user_id" not in cols
     assert "role" not in cols
-    uniques = [
-        c for c in WorkspaceMember.__table__.constraints if c.__class__.__name__ == "UniqueConstraint"
-    ]
+    uniques = [c for c in WorkspaceMember.__table__.constraints if c.__class__.__name__ == "UniqueConstraint"]
     sets = [{col.name for col in u.columns} for u in uniques]
     assert {"workspace_id", "player_id"} in sets
     assert {"id", "workspace_id"} in sets

@@ -37,9 +37,7 @@ def test_registration_no_auth_user_relationship():
 
 
 def test_registration_unique_index_on_tournament_and_workspace_member():
-    indexes = [
-        idx for idx in BalancerRegistration.__table__.indexes if idx.name == "uq_balancer_registration_user"
-    ]
+    indexes = [idx for idx in BalancerRegistration.__table__.indexes if idx.name == "uq_balancer_registration_user"]
     assert len(indexes) == 1
     index = indexes[0]
     assert index.unique is True

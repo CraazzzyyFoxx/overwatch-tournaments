@@ -6,13 +6,14 @@ Produces inserts and deletes to reconcile the stored state with the new evaluati
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.models.achievements.achievement import AchievementEvaluationResult, AchievementRule
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.repository.workspace import get_or_create_workspace_member
-from sqlalchemy.ext.asyncio import AsyncSession
 
 ResultSet = set[tuple[int, ...]]
 
@@ -110,21 +111,17 @@ async def diff_and_apply(
     ids_to_delete = [existing_map[key] for key in to_remove]
     if ids_to_delete:
         await session.execute(
-            sa.delete(AchievementEvaluationResult).where(
-                AchievementEvaluationResult.id.in_(ids_to_delete)
-            )
+            sa.delete(AchievementEvaluationResult).where(AchievementEvaluationResult.id.in_(ids_to_delete))
         )
 
     # Apply insertions
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     inserts = []
     member_id_by_player: dict[int, int] = {}
     for key in to_add:
         user_id, tournament_id, match_id = _unpack_key(key)
         if user_id not in member_id_by_player:
-            member = await get_or_create_workspace_member(
-                session, workspace_id=rule.workspace_id, player_id=user_id
-            )
+            member = await get_or_create_workspace_member(session, workspace_id=rule.workspace_id, player_id=user_id)
             member_id_by_player[user_id] = member.id
         row = AchievementEvaluationResult(
             achievement_rule_id=rule.id,

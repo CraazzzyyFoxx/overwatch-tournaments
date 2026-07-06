@@ -5,10 +5,10 @@ import time
 import uuid
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.core import http_status as status
 from loguru import logger
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.observability import metrics
 from shared.services.balancer_realtime import (
     BALANCER_JOB_FAILED,

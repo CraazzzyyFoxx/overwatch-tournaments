@@ -13,15 +13,15 @@ import re
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.balancer_registration_statuses import get_builtin_status_values
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.player_sub_roles import normalize_sub_role
 from shared.hero_catalog import HeroCatalog
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.schemas.registration import CustomFieldDefinition
 from src.services.registration.utils import DEFAULT_SORT_PRIORITY_SENTINEL
@@ -36,6 +36,7 @@ def _register_registration_changed(
     registration: models.BalancerRegistration,
 ) -> None:
     register_tournament_realtime_update(session, registration.tournament_id, "structure_changed")
+
 
 BATTLE_TAG_RE = re.compile(r"[\w][\w ]{0,30}#[0-9]{3,}", re.UNICODE)
 
@@ -149,6 +150,7 @@ def replace_registration_roles(
             top_heroes = role.get("top_heroes")
             if top_heroes is not None:
                 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, build_hero_entries
+
                 registration_role.hero_entries = build_hero_entries(
                     top_heroes,
                     hero_catalog=hero_catalog,
@@ -158,7 +160,6 @@ def replace_registration_roles(
         next_roles.append(registration_role)
 
     registration.roles[:] = next_roles
-
 
 
 def _active_roles(registration: models.BalancerRegistration | Any) -> list[Any]:

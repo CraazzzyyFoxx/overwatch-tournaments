@@ -31,9 +31,33 @@ class UserFlowsTests(IsolatedAsyncioTestCase):
             name="Captain",
             avatar_url="https://cdn.example/avatar.png",
             social_accounts=[
-                SimpleNamespace(id=10, user_id=7, provider="battlenet", username="Captain#1234", url=None, is_verified=True, is_primary=True),
-                SimpleNamespace(id=12, user_id=7, provider="discord", username="captain", url=None, is_verified=False, is_primary=True),
-                SimpleNamespace(id=14, user_id=7, provider="twitch", username="captaintv", url=None, is_verified=False, is_primary=True),
+                SimpleNamespace(
+                    id=10,
+                    user_id=7,
+                    provider="battlenet",
+                    username="Captain#1234",
+                    url=None,
+                    is_verified=True,
+                    is_primary=True,
+                ),
+                SimpleNamespace(
+                    id=12,
+                    user_id=7,
+                    provider="discord",
+                    username="captain",
+                    url=None,
+                    is_verified=False,
+                    is_primary=True,
+                ),
+                SimpleNamespace(
+                    id=14,
+                    user_id=7,
+                    provider="twitch",
+                    username="captaintv",
+                    url=None,
+                    is_verified=False,
+                    is_primary=True,
+                ),
             ],
         )
 
@@ -58,7 +82,15 @@ class UserFlowsTests(IsolatedAsyncioTestCase):
             name="Captain",
             avatar_url=None,
             social_accounts=[
-                SimpleNamespace(id=10, user_id=7, provider="battlenet", username="Captain#1234", url=None, is_verified=False, is_primary=True),
+                SimpleNamespace(
+                    id=10,
+                    user_id=7,
+                    provider="battlenet",
+                    username="Captain#1234",
+                    url=None,
+                    is_verified=False,
+                    is_primary=True,
+                ),
             ],
         )
         team = SimpleNamespace(

@@ -132,10 +132,7 @@ async def get_data_frame(
     df["placement_score"] = df.apply(
         lambda row: 0.0
         if row["overall_position"] is None or row["team_count"] is None
-        else (
-            1.0
-            - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1)
-        ),
+        else (1.0 - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1)),
         axis=1,
     )
 
@@ -157,16 +154,8 @@ async def create_players_shifts_is_not_exists(
     final_df = final_df.replace({np.nan: None})
 
     for _, row in final_df.iterrows():
-        shift_one = (
-            int(row["normalized_shift_one"])
-            if row["normalized_shift_one"] is not None
-            else None
-        )
-        shift_two = (
-            int(row["normalized_shift_two"])
-            if row["normalized_shift_two"] is not None
-            else None
-        )
+        shift_one = int(row["normalized_shift_one"]) if row["normalized_shift_one"] is not None else None
+        shift_two = int(row["normalized_shift_two"]) if row["normalized_shift_two"] is not None else None
 
         analytics_player = players_by_id.get(row["player_id"])
         if analytics_player is not None:
@@ -218,9 +207,7 @@ def compute_points_shifts(df: pd.DataFrame) -> pd.Series:
     return output
 
 
-def compute_linear_metrics(
-    df: pd.DataFrame, *, shift_scale: float | None = None
-) -> pd.DataFrame:
+def compute_linear_metrics(df: pd.DataFrame, *, shift_scale: float | None = None) -> pd.DataFrame:
     if df.empty:
         return df
 
@@ -240,9 +227,7 @@ def compute_linear_metrics(
                         placement_score=float(history["placement_score"]),
                         recency_decay=float(0.85 ** (position - history_position)),
                         coverage_weight=float(0.7 + 0.3 * history["log_available"]),
-                        newcomer_weight=0.75
-                        if history["is_newcomer"] or history["is_newcomer_role"]
-                        else 1.0,
+                        newcomer_weight=0.75 if history["is_newcomer"] or history["is_newcomer_role"] else 1.0,
                         match_count=int(history["match_count"] or 0),
                         log_available=float(history["log_available"]),
                     )
@@ -335,6 +320,7 @@ def prepare_openskill_data(
             players_rating[encounter.away_players[player_index]] = rated_away_team[player_index]
 
     return agents, players_rating, analytics_matches
+
 
 async def compute_openskill_shift_map(
     session: AsyncSession,

@@ -85,9 +85,7 @@ class RankMappingConfig(BaseModel):
         for entry in self.entries:
             key = (entry.division.lower(), entry.tier)
             if key in seen:
-                raise ValueError(
-                    f"duplicate mapping entry for division={entry.division!r} tier={entry.tier}"
-                )
+                raise ValueError(f"duplicate mapping entry for division={entry.division!r} tier={entry.tier}")
             seen.add(key)
         return self
 

@@ -7,14 +7,14 @@ Usage (in services — returns list of conditions to unpack into .where()):
     query = query.where(*workspace_filter(workspace_id))
 """
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
     get_effective_division_grid,
     get_effective_division_grid_version,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 

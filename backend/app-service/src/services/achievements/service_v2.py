@@ -8,11 +8,11 @@ from datetime import datetime
 
 import sqlalchemy as sa
 from cashews import cache
-from shared.models.achievements.achievement import AchievementRule
-from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.models.achievements.achievement import AchievementRule
+from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from src import models
 from src.core import config, pagination, utils
 
@@ -80,10 +80,7 @@ def get_rarity_subq(
     return (
         sa.select(
             effective_rows.c.achievement_rule_id,
-            (
-                sa.func.count(sa.distinct(effective_rows.c.user_id))
-                / sa.func.nullif(denominator, 0)
-            ).label("rarity"),
+            (sa.func.count(sa.distinct(effective_rows.c.user_id)) / sa.func.nullif(denominator, 0)).label("rarity"),
         )
         .group_by(effective_rows.c.achievement_rule_id)
         .subquery()
@@ -174,9 +171,7 @@ async def _get_rarity_map(
     ``TournamentChangedEvent`` (services.tournament_events).
     """
     rarity_subq = get_rarity_subq(workspace_id=workspace_id)
-    result = await session.execute(
-        sa.select(rarity_subq.c.achievement_rule_id, rarity_subq.c.rarity)
-    )
+    result = await session.execute(sa.select(rarity_subq.c.achievement_rule_id, rarity_subq.c.rarity))
     return {rule_id: float(rarity) for rule_id, rarity in result.all() if rarity is not None}
 
 
@@ -211,13 +206,10 @@ async def get_count_users(
         rule_ids=rule_ids,
         name="count_effective_rows",
     )
-    query = (
-        sa.select(
-            effective_rows.c.achievement_rule_id,
-            sa.func.count(sa.distinct(effective_rows.c.user_id)).label("count"),
-        )
-        .group_by(effective_rows.c.achievement_rule_id)
-    )
+    query = sa.select(
+        effective_rows.c.achievement_rule_id,
+        sa.func.count(sa.distinct(effective_rows.c.user_id)).label("count"),
+    ).group_by(effective_rows.c.achievement_rule_id)
     results = await session.execute(query)
     return {row[0]: row[1] for row in results.all()}
 
@@ -233,9 +225,7 @@ async def get_users_for_rule(
         name="rule_users_effective_rows",
     )
 
-    total_query = sa.select(
-        sa.func.count(sa.distinct(effective_rows.c.user_id))
-    )
+    total_query = sa.select(sa.func.count(sa.distinct(effective_rows.c.user_id)))
 
     query = (
         sa.select(

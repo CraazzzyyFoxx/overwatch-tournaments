@@ -54,9 +54,7 @@ class TournamentRecalculationEventsTests(IsolatedAsyncioTestCase):
         invalidate = AsyncMock()
 
         with patch.object(events, "invalidate_tournament_standings_cache", invalidate):
-            await events.handle_tournament_changed_event(
-                {"tournament_id": 42, "reason": "results_changed"}
-            )
+            await events.handle_tournament_changed_event({"tournament_id": 42, "reason": "results_changed"})
 
         invalidate.assert_awaited_once_with(42)
 
@@ -64,8 +62,6 @@ class TournamentRecalculationEventsTests(IsolatedAsyncioTestCase):
         invalidate = AsyncMock()
 
         with patch.object(events, "invalidate_tournament_standings_cache", invalidate):
-            await events.handle_tournament_changed_event(
-                {"tournament_id": 42, "reason": "bracket_changed"}
-            )
+            await events.handle_tournament_changed_event({"tournament_id": 42, "reason": "bracket_changed"})
 
         invalidate.assert_not_awaited()

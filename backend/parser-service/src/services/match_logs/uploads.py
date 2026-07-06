@@ -1,12 +1,12 @@
 """Shared helpers for storing uploaded match log files."""
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.clients.s3 import S3Client
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.ingestion.log_processing import LogProcessingRecord, LogProcessingSource
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 from src.services.match_logs import log_records as record_service
 from src.services.s3 import service as s3_service

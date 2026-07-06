@@ -61,20 +61,14 @@ def drop_legacy_public_config_keys(config_payload: Mapping[str, typing.Any] | No
     if not config_payload:
         return {}
 
-    return {
-        key: value
-        for key, value in dict(config_payload).items()
-        if key not in LEGACY_PUBLIC_CONFIG_KEYS
-    }
+    return {key: value for key, value in dict(config_payload).items() if key not in LEGACY_PUBLIC_CONFIG_KEYS}
 
 
 def normalize_persisted_config_payload(config_payload: Mapping[str, typing.Any] | None) -> dict[str, typing.Any]:
     from src.schemas.balancer import ConfigOverrides
 
     sanitized_payload = {
-        key: value
-        for key, value in drop_legacy_public_config_keys(config_payload).items()
-        if key in PUBLIC_CONFIG_KEYS
+        key: value for key, value in drop_legacy_public_config_keys(config_payload).items() if key in PUBLIC_CONFIG_KEYS
     }
     if not sanitized_payload:
         return {}
@@ -95,11 +89,7 @@ def normalize_config_overrides(config_overrides: Mapping[str, typing.Any]) -> di
 
 def serialize_algorithm_config(config: AlgorithmConfig | Mapping[str, typing.Any]) -> dict[str, typing.Any]:
     payload = config.model_dump() if hasattr(config, "model_dump") else dict(config)
-    return {
-        key: value
-        for key, value in payload.items()
-        if key in PUBLIC_CONFIG_KEYS and value is not None
-    }
+    return {key: value for key, value in payload.items() if key in PUBLIC_CONFIG_KEYS and value is not None}
 
 
 def normalize_balance_response_payload(balance_payload: Mapping[str, typing.Any]) -> dict[str, typing.Any]:

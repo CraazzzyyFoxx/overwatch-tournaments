@@ -14,13 +14,11 @@ Create Date: 2026-04-12
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "x4s8t2u3v4w5"
-down_revision: Union[str, None] = "w3r7s1t2u3v4"
+down_revision: str | None = "w3r7s1t2u3v4"
 branch_labels = None
 depends_on = None
 

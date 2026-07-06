@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
 from shared.core import pagination
 
 __all__ = (

@@ -14,6 +14,9 @@ is later work.
 from collections.abc import Iterable
 
 from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
@@ -23,9 +26,6 @@ from shared.models.identity.social import SocialAccount
 from shared.models.identity.user import User
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.rbac import assign_default_member_role_if_roleless, workspace_names_blocking_player_unlink
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 
@@ -214,14 +214,10 @@ class PlayerLinkService:
         """Grant the baseline ``member`` role in each workspace where ``player_id``
         has a membership row but the (now-linked) auth user holds no role yet."""
         workspace_ids = (
-            await session.scalars(
-                select(WorkspaceMember.workspace_id).where(WorkspaceMember.player_id == player_id)
-            )
+            await session.scalars(select(WorkspaceMember.workspace_id).where(WorkspaceMember.player_id == player_id))
         ).all()
         for workspace_id in workspace_ids:
-            await assign_default_member_role_if_roleless(
-                session, user_id=auth_user_id, workspace_id=workspace_id
-            )
+            await assign_default_member_role_if_roleless(session, user_id=auth_user_id, workspace_id=workspace_id)
 
     @staticmethod
     async def admin_link_player(
@@ -271,9 +267,7 @@ class PlayerLinkService:
         auth_user_id = player.auth_user_id
         if auth_user_id is None:
             return  # already unlinked — idempotent no-op
-        blocking_workspaces = await workspace_names_blocking_player_unlink(
-            session, user_id=auth_user_id
-        )
+        blocking_workspaces = await workspace_names_blocking_player_unlink(session, user_id=auth_user_id)
         if blocking_workspaces:
             listed = ", ".join(blocking_workspaces)
             raise HTTPException(

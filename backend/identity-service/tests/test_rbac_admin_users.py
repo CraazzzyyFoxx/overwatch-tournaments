@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from shared.core.errors import BaseAPIException as HTTPException
 
 
@@ -785,6 +786,8 @@ def test_delete_oauth_connection_route_blocks_last_passwordless_login() -> None:
         )
 
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "Cannot unlink last OAuth provider for a passwordless account. Set a password first."
+    assert (
+        exc_info.value.detail == "Cannot unlink last OAuth provider for a passwordless account. Set a password first."
+    )
     assert session.delete_called is False
     assert session.commit_called is False

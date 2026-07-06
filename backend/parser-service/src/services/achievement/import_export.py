@@ -7,10 +7,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 import sqlalchemy as sa
+
 from shared.clients import S3Client
 from shared.clients.s3.upload import upload_asset
 from shared.models.achievements.achievement import AchievementRule
-
 from src import models
 from src.services.achievement.engine.validation import validate_rule_definition
 

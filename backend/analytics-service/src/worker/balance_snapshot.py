@@ -17,20 +17,18 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.messaging.config import (
     ANALYTICS_BALANCE_SNAPSHOT_QUEUE,
     BALANCER_EVENTS_EXCHANGE,
 )
 from shared.observability import observe_message_processing
 from shared.schemas.events import BalanceExportedEvent
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 
-async def write_balance_snapshot(
-    session: AsyncSession, event: BalanceExportedEvent
-) -> models.AnalyticsBalanceSnapshot:
+async def write_balance_snapshot(session: AsyncSession, event: BalanceExportedEvent) -> models.AnalyticsBalanceSnapshot:
     """Write (upsert) the balance snapshot + per-player rows for one event.
 
     Deletes any existing snapshot for ``(tournament_id, balance_id)`` first; the

@@ -33,9 +33,7 @@ async def get_algorithms(
     return result.scalars().all()
 
 
-async def get_algorithm_ids_with_shift_data(
-    session: AsyncSession, tournament_id: int
-) -> set[int]:
+async def get_algorithm_ids_with_shift_data(session: AsyncSession, tournament_id: int) -> set[int]:
     """Return the algorithm IDs that have computed shift rows for a tournament.
 
     Used to mark which algorithms are actually populated (e.g. ``OpenSkill + ML``
@@ -65,17 +63,11 @@ async def get_analytics(
     tournament_id: int,
     algorithm: models.AnalyticsAlgorithm,
     workspace_id: int | None = None,
-) -> typing.Sequence[
-    tuple[models.Team, models.Player, models.AnalyticsShift, models.AnalyticsPlayer]
-]:
+) -> typing.Sequence[tuple[models.Team, models.Player, models.AnalyticsShift, models.AnalyticsPlayer]]:
     query = (
-        sa.select(
-            models.Team, models.Player, models.AnalyticsShift, models.AnalyticsPlayer
-        )
+        sa.select(models.Team, models.Player, models.AnalyticsShift, models.AnalyticsPlayer)
         .options(
-            sa.orm.joinedload(models.Team.tournament).joinedload(
-                models.Tournament.division_grid_version
-            ),
+            sa.orm.joinedload(models.Team.tournament).joinedload(models.Tournament.division_grid_version),
             sa.orm.joinedload(models.Team.standings),
             sa.orm.joinedload(models.Team.standings).joinedload(models.Standing.group),
             # PlayerRead.user_id (built by _player_to_pydantic) is resolved from
@@ -85,9 +77,7 @@ async def get_analytics(
         )
         .join(models.Tournament, models.Team.tournament_id == models.Tournament.id)
         .join(models.Player, models.Player.team_id == models.Team.id)
-        .join(
-            models.AnalyticsPlayer, models.AnalyticsPlayer.player_id == models.Player.id
-        )
+        .join(models.AnalyticsPlayer, models.AnalyticsPlayer.player_id == models.Player.id)
         .join(
             models.AnalyticsShift,
             sa.and_(
@@ -113,11 +103,7 @@ _STANDINGS_V2_NAME = "Standings MC v2"
 
 
 async def _algorithm_id_by_name(session: AsyncSession, name: str) -> int | None:
-    return await session.scalar(
-        sa.select(models.AnalyticsAlgorithm.id).where(
-            models.AnalyticsAlgorithm.name == name
-        )
-    )
+    return await session.scalar(sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == name))
 
 
 async def get_predicted_places(
@@ -180,11 +166,7 @@ async def get_match_quality_anomalies(
         return []
 
     unresolved_player_ids = sorted(
-        {
-            int(anomaly.player_id)
-            for anomaly in anomalies
-            if anomaly.source_encounter_id is None
-        }
+        {int(anomaly.player_id) for anomaly in anomalies if anomaly.source_encounter_id is None}
     )
     encounter_for_player: dict[int, int] = {}
     if unresolved_player_ids:
@@ -214,17 +196,11 @@ async def get_match_quality_anomalies(
             )
             .group_by(models.Player.id)
         )
-        for pid, encounter_id in (await session.execute(home_query)).all() + (
-            await session.execute(away_query)
-        ).all():
+        for pid, encounter_id in (await session.execute(home_query)).all() + (await session.execute(away_query)).all():
             if pid is None or encounter_id is None:
                 continue
             previous = encounter_for_player.get(int(pid))
-            encounter_for_player[int(pid)] = (
-                int(encounter_id)
-                if previous is None
-                else min(previous, int(encounter_id))
-            )
+            encounter_for_player[int(pid)] = int(encounter_id) if previous is None else min(previous, int(encounter_id))
 
     grouped: dict[int, list[dict[str, typing.Any]]] = {}
     for anomaly in anomalies:
@@ -274,9 +250,7 @@ async def change_shift(
     return analytics, calculated_shift
 
 
-async def get_streaks(
-    session: AsyncSession, tournament_id: int
-) -> typing.Sequence[tuple[models.User, int, str, int]]:
+async def get_streaks(session: AsyncSession, tournament_id: int) -> typing.Sequence[tuple[models.User, int, str, int]]:
     subquery = (
         sa.select(
             models.WorkspaceMember.player_id.label("user_id"),

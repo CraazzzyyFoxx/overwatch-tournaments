@@ -17,17 +17,16 @@ Create Date: 2026-05-18 02:00:00.000000
 
 from __future__ import annotations
 
-from typing import Sequence, Union
-
+from collections.abc import Sequence
 
 revision: str = "mergeheads001"
-down_revision: Union[str, Sequence[str], None] = (
+down_revision: str | Sequence[str] | None = (
     "ml1a2b3c4d5e",
     "rbacws0001",
     "realtime0001",
 )
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

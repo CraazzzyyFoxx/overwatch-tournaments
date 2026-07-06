@@ -8,13 +8,13 @@ remains the error vehicle the RPC envelope maps; a later phase removes it.
 
 from __future__ import annotations
 
-from shared.core.errors import BaseAPIException as HTTPException
 from loguru import logger
-from shared.clients.s3 import S3Client
-from shared.clients.s3.upload import upload_avatar
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.clients.s3 import S3Client
+from shared.clients.s3.upload import upload_avatar
+from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 
 

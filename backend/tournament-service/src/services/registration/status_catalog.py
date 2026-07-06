@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.balancer_registration_statuses import (
     StatusScope,
     get_builtin_status_values,
@@ -8,8 +10,6 @@ from shared.balancer_registration_statuses import (
 )
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 

@@ -12,15 +12,15 @@ from collections import defaultdict
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from shared.core import enums
 from shared.services.bracket.swiss_settings import swiss_scope_stopped
 from shared.services.tournament_utils import (
     completed_encounters_in_finished_rounds,
     has_incomplete_playable_rounds,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from src import models
 from src.services.computation import jobs as computation_jobs
 

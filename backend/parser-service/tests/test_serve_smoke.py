@@ -55,8 +55,7 @@ def test_serve_registers_parser_unique_rpc_subjects() -> None:
     serve = _import_serve()
 
     subjects = {
-        getattr(subscriber, "subject", None)
-        or getattr(getattr(subscriber, "queue", None), "name", None)
+        getattr(subscriber, "subject", None) or getattr(getattr(subscriber, "queue", None), "name", None)
         for subscriber in serve.broker.subscribers
     }
 

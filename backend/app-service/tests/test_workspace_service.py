@@ -99,15 +99,11 @@ class WorkspaceServiceTests(IsolatedAsyncioTestCase):
                 AsyncMock(),
             ) as replace_roles,
         ):
-            result = await workspace_service.update_member_roles(
-                session, member, role_ids=[5]
-            )
+            result = await workspace_service.update_member_roles(session, member, role_ids=[5])
 
         self.assertIs(result, member)
         get_auth_user_id.assert_awaited_once_with(session, member)
-        replace_roles.assert_awaited_once_with(
-            session, user_id=22, workspace_id=2, role_ids=[5]
-        )
+        replace_roles.assert_awaited_once_with(session, user_id=22, workspace_id=2, role_ids=[5])
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(member)
 
@@ -137,9 +133,7 @@ class WorkspaceServiceTests(IsolatedAsyncioTestCase):
 
         self.assertIs(result, member)
         add_member.assert_awaited_once_with(session, 2, 22)
-        replace_roles.assert_awaited_once_with(
-            session, user_id=22, workspace_id=2, role_ids=[5]
-        )
+        replace_roles.assert_awaited_once_with(session, user_id=22, workspace_id=2, role_ids=[5])
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(member)
 

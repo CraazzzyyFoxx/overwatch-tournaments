@@ -34,7 +34,6 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.services import challonge_refs  # noqa: E402
-
 from src import models  # noqa: E402
 from src.core import enums  # noqa: E402
 from src.services.encounter import flows as encounter_flows  # noqa: E402

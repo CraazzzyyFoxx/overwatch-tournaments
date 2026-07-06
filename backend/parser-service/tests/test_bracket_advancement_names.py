@@ -67,15 +67,18 @@ class BracketAdvancementNameTests(IsolatedAsyncioTestCase):
             flush=AsyncMock(),
         )
 
-        with patch.object(
-            advancement,
-            "_maybe_create_grand_final_reset",
-            AsyncMock(return_value=None),
-        ), patch.object(
-            advancement,
-            "_build_encounter_name_for_ids",
-            AsyncMock(return_value="Team Alpha vs Team Gamma"),
-        ) as build_name:
+        with (
+            patch.object(
+                advancement,
+                "_maybe_create_grand_final_reset",
+                AsyncMock(return_value=None),
+            ),
+            patch.object(
+                advancement,
+                "_build_encounter_name_for_ids",
+                AsyncMock(return_value="Team Alpha vs Team Gamma"),
+            ) as build_name,
+        ):
             updated = await advancement.advance_winner(session, source)
 
         self.assertEqual(11, target.home_team_id)

@@ -54,13 +54,12 @@ Create Date: 2026-07-04
 from __future__ import annotations
 
 import os
-from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch06"
-down_revision: Union[str, None] = "dbarch04b"
+down_revision: str | None = "dbarch04b"
 branch_labels = None
 depends_on = None
 
@@ -97,15 +96,9 @@ def downgrade() -> None:
         sa.Column("team_id", sa.BigInteger(), nullable=False),
         sa.Column("predicted_place", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["team_id"], ["tournament.team.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tournament_id"], ["tournament.tournament.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["algorithm_id"], ["analytics.algorithms.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["team_id"], ["tournament.team.id"], ondelete="CASCADE"),
         schema="analytics",
     )
     op.create_index(

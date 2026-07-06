@@ -108,9 +108,7 @@ def _predictability(home_won: float | None, p_home: float | None) -> float:
     return float(np.clip(1 - abs(home_won - p_home), 0.0, 1.0)) * 100.0
 
 
-def _skill_balance(
-    home_mu: float | None, away_mu: float | None, sigma_pool: float = DEFAULT_SIGMA_POOL
-) -> float:
+def _skill_balance(home_mu: float | None, away_mu: float | None, sigma_pool: float = DEFAULT_SIGMA_POOL) -> float:
     if _is_missing(home_mu) or _is_missing(away_mu) or sigma_pool <= 0:
         return 50.0
     diff = abs(home_mu - away_mu)
@@ -181,10 +179,7 @@ def compute_match_quality(
                 encounters.get("away_avg_mu", pd.Series(dtype=float)),
                 strict=False,
             )
-            if home is not None
-            and away is not None
-            and not pd.isna(home)
-            and not pd.isna(away)
+            if home is not None and away is not None and not pd.isna(home) and not pd.isna(away)
         ]
         sigma_pool = _derive_sigma_pool(gaps)
 
@@ -208,11 +203,7 @@ def compute_match_quality(
             getattr(row, "away_avg_mu", None),
             sigma_pool=sigma_pool,
         )
-        weighted = (
-            competitiveness_weight * comp
-            + predictability_weight * pred
-            + skill_balance_weight * skill
-        )
+        weighted = competitiveness_weight * comp + predictability_weight * pred + skill_balance_weight * skill
         out.append(
             {
                 "encounter_id": enc_id,
@@ -233,7 +224,5 @@ def compute_match_quality(
         "skill_balance": 50.0,
         "quality_score": 30.0,
     }
-    result[list(neutral)] = (
-        result[list(neutral)].replace([np.inf, -np.inf], np.nan).fillna(neutral)
-    )
+    result[list(neutral)] = result[list(neutral)].replace([np.inf, -np.inf], np.nan).fillna(neutral)
     return result

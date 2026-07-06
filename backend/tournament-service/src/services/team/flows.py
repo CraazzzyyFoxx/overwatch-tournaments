@@ -1,8 +1,8 @@
 from cashews import cache
-from shared.division_grid import DivisionGrid
-from shared.services.division_grid_resolution import resolve_tournament_division
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.division_grid import DivisionGrid
+from shared.services.division_grid_resolution import resolve_tournament_division
 from src import models, schemas
 from src.core import config, errors, pagination, utils
 from src.core.workspace import get_division_grid
@@ -304,7 +304,11 @@ async def get_player(session: AsyncSession, player_id: int, entities: list[str])
     return await service.get_player(session, player_id, entities)
 
 
-@cache(ttl=config.settings.teams_cache_ttl, key="teams:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}", prefix="fastapi:")
+@cache(
+    ttl=config.settings.teams_cache_ttl,
+    key="teams:{workspace_id}:{params.tournament_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}:{params.entities}",
+    prefix="fastapi:",
+)
 async def get_all(
     session: AsyncSession,
     params: schemas.TeamFilterParams,

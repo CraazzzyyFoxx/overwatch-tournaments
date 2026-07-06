@@ -9,14 +9,14 @@ after the move.
 import typing
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
 from shared.services.division_grid_access import (
     get_effective_division_grid,
     get_effective_division_grid_version,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 
@@ -70,11 +70,7 @@ async def get_tournament_workspace_id(
     every entry point — CLI, backfill, RPC — agree. Returns ``None`` if the
     tournament does not exist (callers fall back to the prior global behaviour).
     """
-    return await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(
-            models.Tournament.id == tournament_id
-        )
-    )
+    return await session.scalar(sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id))
 
 
 async def get_division_grid(

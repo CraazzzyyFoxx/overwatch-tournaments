@@ -1,13 +1,13 @@
 import typing
 
 import sqlalchemy as sa
-from shared.domain.player_sub_roles import normalize_sub_role
-from shared.repository import get_or_create_workspace_member
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.domain.player_sub_roles import normalize_sub_role
+from shared.repository import get_or_create_workspace_member
 from src import models
 from src.core import enums, utils
 from src.services.user import service as user_service
@@ -70,7 +70,7 @@ async def resolve_workspace_member_ids(
             models.WorkspaceMember.player_id.in_(list(player_ids)),
         )
     )
-    return {player_id: member_id for player_id, member_id in result.all()}
+    return dict(result.all())
 
 
 def team_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:

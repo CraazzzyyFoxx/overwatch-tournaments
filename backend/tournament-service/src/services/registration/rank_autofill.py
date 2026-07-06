@@ -14,9 +14,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from shared.division_grid import DivisionGrid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.division_grid import DivisionGrid
 from src import models
 from src.services.registration._common import (
     _active_roles,
@@ -208,7 +208,9 @@ def build_registration_rank_autofill_plan(
     return row, []
 
 
-def _active_roles_ranked_after_updates(registration: models.BalancerRegistration | Any, updates: list[tuple[Any, Any]]) -> bool:
+def _active_roles_ranked_after_updates(
+    registration: models.BalancerRegistration | Any, updates: list[tuple[Any, Any]]
+) -> bool:
     roles = _active_roles(registration)
     if not roles:
         return False
@@ -310,12 +312,8 @@ async def autofill_registration_ranks_from_parsed(
     order = tuple(stage.source for stage in resolved_stages)
     enabled_sources = set(order)
     ow_lookback_days = next((s.lookback_days for s in resolved_stages if s.source == "ow"), None)
-    division_lookback = next(
-        (s.lookback_tournaments for s in resolved_stages if s.source == "division_history"), None
-    )
-    analytics_lookback = next(
-        (s.lookback_tournaments for s in resolved_stages if s.source == "analytics"), None
-    )
+    division_lookback = next((s.lookback_tournaments for s in resolved_stages if s.source == "division_history"), None)
+    analytics_lookback = next((s.lookback_tournaments for s in resolved_stages if s.source == "analytics"), None)
 
     now = datetime.now(UTC)
     tournament = await _load_tournament_for_autofill(session, tournament_id)
@@ -342,11 +340,7 @@ async def autofill_registration_ranks_from_parsed(
     balancer_history_by_user_id: dict[int, dict[str, int]] = {}
     analytics_history_by_user_id: dict[int, dict[str, int]] = {}
     if tournament is not None and ({"division_history", "analytics"} & enabled_sources):
-        user_ids = [
-            battle_tag.user_id
-            for battle_tag in battle_tags_by_key.values()
-            if battle_tag.user_id is not None
-        ]
+        user_ids = [battle_tag.user_id for battle_tag in battle_tags_by_key.values() if battle_tag.user_id is not None]
         # Normalize historical ranks from each source tournament's grid version into this
         # tournament's grid. Best-effort: skip when the target version is unknown or the
         # normalizer cannot be built (loaders then fall back to raw ranks).

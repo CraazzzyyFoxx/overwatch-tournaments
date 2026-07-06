@@ -146,29 +146,29 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
             status=enums.TournamentStatus.DRAFT,
             is_finished=False,
             stages=[
-            SimpleNamespace(
-                id=11,
-                order=0,
-                stage_type=enums.StageType.ROUND_ROBIN,
-                is_active=False,
-                is_completed=False,
-                items=[
-                    SimpleNamespace(
-                        id=21,
-                        inputs=[
-                            SimpleNamespace(slot=1, team_id=1),
-                            SimpleNamespace(slot=2, team_id=2),
-                        ],
-                    ),
-                    SimpleNamespace(
-                        id=22,
-                        inputs=[
-                            SimpleNamespace(slot=1, team_id=3),
-                            SimpleNamespace(slot=2, team_id=4),
-                        ],
-                    ),
-                ],
-            )
+                SimpleNamespace(
+                    id=11,
+                    order=0,
+                    stage_type=enums.StageType.ROUND_ROBIN,
+                    is_active=False,
+                    is_completed=False,
+                    items=[
+                        SimpleNamespace(
+                            id=21,
+                            inputs=[
+                                SimpleNamespace(slot=1, team_id=1),
+                                SimpleNamespace(slot=2, team_id=2),
+                            ],
+                        ),
+                        SimpleNamespace(
+                            id=22,
+                            inputs=[
+                                SimpleNamespace(slot=1, team_id=3),
+                                SimpleNamespace(slot=2, team_id=4),
+                            ],
+                        ),
+                    ],
+                )
             ],
         )
 
@@ -216,24 +216,24 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
             status=enums.TournamentStatus.CHECK_IN,
             is_finished=False,
             stages=[
-            SimpleNamespace(
-                id=11,
-                order=0,
-                stage_type=enums.StageType.SWISS,
-                is_active=True,
-                is_completed=False,
-                items=[
-                    SimpleNamespace(
-                        id=21,
-                        inputs=[
-                            SimpleNamespace(slot=1, team_id=1),
-                            SimpleNamespace(slot=2, team_id=2),
-                            SimpleNamespace(slot=3, team_id=3),
-                            SimpleNamespace(slot=4, team_id=4),
-                        ],
-                    )
-                ],
-            )
+                SimpleNamespace(
+                    id=11,
+                    order=0,
+                    stage_type=enums.StageType.SWISS,
+                    is_active=True,
+                    is_completed=False,
+                    items=[
+                        SimpleNamespace(
+                            id=21,
+                            inputs=[
+                                SimpleNamespace(slot=1, team_id=1),
+                                SimpleNamespace(slot=2, team_id=2),
+                                SimpleNamespace(slot=3, team_id=3),
+                                SimpleNamespace(slot=4, team_id=4),
+                            ],
+                        )
+                    ],
+                )
             ],
         )
 

@@ -57,10 +57,7 @@ async def migrate(frontend_dir: Path, dry_run: bool = False) -> None:
     engine = create_async_engine(settings.db_url_asyncpg)
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    image_files = sorted(
-        p for p in frontend_dir.iterdir()
-        if p.suffix in (".webp", ".png", ".jpg", ".jpeg", ".gif")
-    )
+    image_files = sorted(p for p in frontend_dir.iterdir() if p.suffix in (".webp", ".png", ".jpg", ".jpeg", ".gif"))
     logger.info(f"Found {len(image_files)} image files in {frontend_dir}")
 
     async with session_maker() as session:
@@ -88,7 +85,7 @@ async def migrate(frontend_dir: Path, dry_run: bool = False) -> None:
         total_uploaded = 0
         total_db_updated = 0
 
-        for ws_id, ws_slug, ws_name in workspaces:
+        for ws_id, ws_slug, _ws_name in workspaces:
             ws_uploaded = 0
             ws_db_updated = 0
 
@@ -135,7 +132,9 @@ async def migrate(frontend_dir: Path, dry_run: bool = False) -> None:
             # Report after
             for ws_id, ws_slug, _ in workspaces:
                 has_image = await session.scalar(
-                    sa.text("SELECT COUNT(*) FROM achievements.rule WHERE workspace_id = :ws_id AND image_url IS NOT NULL"),
+                    sa.text(
+                        "SELECT COUNT(*) FROM achievements.rule WHERE workspace_id = :ws_id AND image_url IS NOT NULL"
+                    ),
                     {"ws_id": ws_id},
                 )
                 still_null = await session.scalar(
@@ -147,10 +146,7 @@ async def migrate(frontend_dir: Path, dry_run: bool = False) -> None:
     await s3.close()
     await engine.dispose()
 
-    logger.info(
-        f"Done: {total_uploaded} uploaded to S3, "
-        f"{total_db_updated} rule rows updated"
-    )
+    logger.info(f"Done: {total_uploaded} uploaded to S3, {total_db_updated} rule rows updated")
 
 
 @click.command()

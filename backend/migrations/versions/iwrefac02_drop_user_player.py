@@ -1,4 +1,5 @@
 """identity refactor: drop auth.user_player (superseded by players.user.auth_user_id)"""
+
 import sqlalchemy as sa
 from alembic import op
 

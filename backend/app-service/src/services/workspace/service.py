@@ -1,6 +1,8 @@
 import typing
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.rbac import user_roles
 from shared.rbac import (
@@ -19,8 +21,6 @@ from shared.repository import (
 )
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_default_division_grid_version_id
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 _role_repo = RoleRepository()
@@ -64,9 +64,7 @@ async def get_user_workspaces(
     return [
         (
             workspace,
-            await legacy_workspace_role_name_for_user(
-                session, user_id=auth_user_id, workspace_id=workspace.id
-            ),
+            await legacy_workspace_role_name_for_user(session, user_id=auth_user_id, workspace_id=workspace.id),
         )
         for workspace in workspaces
     ]
@@ -96,9 +94,7 @@ async def create(session: AsyncSession, **kwargs) -> models.Workspace:
     return await _workspace_repo.create(session, workspace)
 
 
-async def update(
-    session: AsyncSession, workspace: models.Workspace, data: dict
-) -> models.Workspace:
+async def update(session: AsyncSession, workspace: models.Workspace, data: dict) -> models.Workspace:
     resolved_data = dict(data)
     if "default_division_grid_version_id" in resolved_data:
         resolved_data["default_division_grid_version_id"] = await _resolve_default_division_grid_version_id(
@@ -120,9 +116,7 @@ async def delete(session: AsyncSession, workspace: models.Workspace) -> None:
     await _workspace_repo.delete(session, workspace)
 
 
-async def get_members(
-    session: AsyncSession, workspace_id: int
-) -> typing.Sequence[models.WorkspaceMember]:
+async def get_members(session: AsyncSession, workspace_id: int) -> typing.Sequence[models.WorkspaceMember]:
     return await _workspace_member_repo.list_by_workspace(session, workspace_id)
 
 
@@ -149,9 +143,7 @@ def _members_filtered_query(
     )
     if search and search.strip():
         like = f"%{search.strip()}%"
-        base = base.where(
-            sa.or_(models.AuthUser.username.ilike(like), models.AuthUser.email.ilike(like))
-        )
+        base = base.where(sa.or_(models.AuthUser.username.ilike(like), models.AuthUser.email.ilike(like)))
     if role_id is not None:
         base = base.where(
             sa.exists().where(
@@ -201,14 +193,17 @@ async def list_members_page(
     ``desc``.
     """
     descending = order == "desc"
-    total = await session.scalar(
-        _members_filtered_query(
-            sa.select(sa.func.count()).select_from(models.WorkspaceMember),
-            workspace_id,
-            search,
-            role_id,
+    total = (
+        await session.scalar(
+            _members_filtered_query(
+                sa.select(sa.func.count()).select_from(models.WorkspaceMember),
+                workspace_id,
+                search,
+                role_id,
+            )
         )
-    ) or 0
+        or 0
+    )
 
     if sort == "role":
         rank = _primary_role_rank(workspace_id)
@@ -282,9 +277,7 @@ async def autofill_member_roles(session: AsyncSession, workspace_id: int) -> int
     return result.rowcount or 0
 
 
-async def get_member(
-    session: AsyncSession, workspace_id: int, auth_user_id: int
-) -> models.WorkspaceMember | None:
+async def get_member(session: AsyncSession, workspace_id: int, auth_user_id: int) -> models.WorkspaceMember | None:
     return await _workspace_member_repo.get_member(
         session,
         workspace_id=workspace_id,
@@ -306,15 +299,11 @@ async def _resolve_player_id_for_auth_user(session: AsyncSession, auth_user_id: 
     """
     auth_user = await session.get(models.AuthUser, auth_user_id)
     name_hint = (auth_user.username or auth_user.email) if auth_user is not None else None
-    player = await _user_repo.ensure_for_auth_user(
-        session, auth_user_id=auth_user_id, name_hint=name_hint
-    )
+    player = await _user_repo.ensure_for_auth_user(session, auth_user_id=auth_user_id, name_hint=name_hint)
     return player.id
 
 
-async def add_member(
-    session: AsyncSession, workspace_id: int, auth_user_id: int
-) -> models.WorkspaceMember:
+async def add_member(session: AsyncSession, workspace_id: int, auth_user_id: int) -> models.WorkspaceMember:
     """Create (or fetch) the membership row for the player linked to ``auth_user_id``.
 
     Callers keep passing ``auth_user_id`` (unchanged signature); internally we
@@ -439,9 +428,7 @@ async def remove_member(session: AsyncSession, member: models.WorkspaceMember) -
     await session.execute(
         sa.delete(user_roles).where(
             user_roles.c.user_id == auth_user_id,
-            user_roles.c.role_id.in_(
-                sa.select(models.Role.id).where(models.Role.workspace_id == member.workspace_id)
-            ),
+            user_roles.c.role_id.in_(sa.select(models.Role.id).where(models.Role.workspace_id == member.workspace_id)),
         )
     )
     await session.delete(member)

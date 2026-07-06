@@ -54,13 +54,11 @@ Create Date: 2026-07-04
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "dbarch05"
-down_revision: Union[str, None] = "dbarch04"
+down_revision: str | None = "dbarch04"
 branch_labels = None
 depends_on = None
 
@@ -86,12 +84,8 @@ def upgrade() -> None:
             ["tournament.map_veto_config.id"],
             ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["map_id"], ["overwatch.map.id"], ondelete="CASCADE"
-        ),
-        sa.UniqueConstraint(
-            "map_veto_config_id", "map_id", name="uq_map_veto_config_map_config_map"
-        ),
+        sa.ForeignKeyConstraint(["map_id"], ["overwatch.map.id"], ondelete="CASCADE"),
+        sa.UniqueConstraint("map_veto_config_id", "map_id", name="uq_map_veto_config_map_config_map"),
         schema="tournament",
     )
     op.create_index(
@@ -172,9 +166,7 @@ def downgrade() -> None:
 
     # 3. Drop the transient server_default (the model declares none) and the
     #    child table.
-    op.alter_column(
-        "map_veto_config", "map_pool_ids", server_default=None, schema="tournament"
-    )
+    op.alter_column("map_veto_config", "map_pool_ids", server_default=None, schema="tournament")
     op.drop_index(
         "ix_map_veto_config_map_map_id",
         table_name="map_veto_config_map",

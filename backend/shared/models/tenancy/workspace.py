@@ -28,9 +28,7 @@ class Workspace(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-    members: Mapped[list["WorkspaceMember"]] = relationship(
-        back_populates="workspace", passive_deletes=True
-    )
+    members: Mapped[list["WorkspaceMember"]] = relationship(back_populates="workspace", passive_deletes=True)
     default_division_grid_version: Mapped["DivisionGridVersion | None"] = relationship(
         foreign_keys=[default_division_grid_version_id],
         lazy="selectin",
@@ -45,12 +43,8 @@ class WorkspaceMember(db.TimeStampIntegerMixin):
         UniqueConstraint("id", "workspace_id", name="uq_workspace_member_id_workspace"),
     )
 
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
-    )
-    player_id: Mapped[int] = mapped_column(
-        ForeignKey("players.user.id", ondelete="CASCADE"), index=True
-    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.user.id", ondelete="CASCADE"), index=True)
 
     workspace: Mapped["Workspace"] = relationship(back_populates="members")
     player: Mapped["User"] = relationship()

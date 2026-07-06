@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.rpc.crud import CrudDispatcher, EntityConfig
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.crud import CrudDispatcher, EntityConfig
 from src import models, schemas
 from src.core import db
 from src.services.workspace import service as workspace_service
@@ -29,7 +29,9 @@ async def _ws_self(session: AsyncSession, obj_id: int) -> int:
     return obj_id
 
 
-async def _svc_update(session: AsyncSession, obj_id: int, payload: schemas.WorkspaceUpdate, data: dict[str, Any]) -> Any:
+async def _svc_update(
+    session: AsyncSession, obj_id: int, payload: schemas.WorkspaceUpdate, data: dict[str, Any]
+) -> Any:
     workspace = await workspace_service.get_by_id(session, obj_id)
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")

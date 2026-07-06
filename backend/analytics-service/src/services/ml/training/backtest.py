@@ -42,30 +42,22 @@ logger = logging.getLogger(__name__)
 __all__ = ("run_rolling_backtest", "persist_backtest_summary")
 
 
-async def _v1_shift_map(
-    session: AsyncSession, tournament_id: int
-) -> dict[int, float]:
+async def _v1_shift_map(session: AsyncSession, tournament_id: int) -> dict[int, float]:
     """Return ``{player_id: shift}`` from the v1 ``AnalyticsPlayer`` table."""
-    query = sa.select(
-        models.AnalyticsPlayer.player_id, models.AnalyticsPlayer.shift
-    ).where(models.AnalyticsPlayer.tournament_id == tournament_id)
+    query = sa.select(models.AnalyticsPlayer.player_id, models.AnalyticsPlayer.shift).where(
+        models.AnalyticsPlayer.tournament_id == tournament_id
+    )
     result = await session.execute(query)
     return {int(pid): float(shift or 0) for pid, shift in result.all()}
 
 
-async def _v2_shift_map(
-    session: AsyncSession, tournament_id: int
-) -> dict[int, float]:
+async def _v2_shift_map(session: AsyncSession, tournament_id: int) -> dict[int, float]:
     algorithm_id = await session.scalar(
-        sa.select(models.AnalyticsAlgorithm.id).where(
-            models.AnalyticsAlgorithm.name == SHIFT_ALGORITHM_NAME
-        )
+        sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == SHIFT_ALGORITHM_NAME)
     )
     if algorithm_id is None:
         return {}
-    query = sa.select(
-        models.AnalyticsShift.player_id, models.AnalyticsShift.shift
-    ).where(
+    query = sa.select(models.AnalyticsShift.player_id, models.AnalyticsShift.shift).where(
         models.AnalyticsShift.tournament_id == tournament_id,
         models.AnalyticsShift.algorithm_id == algorithm_id,
     )
@@ -73,20 +65,14 @@ async def _v2_shift_map(
     return {int(pid): float(shift) for pid, shift in result.all()}
 
 
-async def _v2_shift_confidence_map(
-    session: AsyncSession, tournament_id: int
-) -> dict[int, float]:
+async def _v2_shift_confidence_map(session: AsyncSession, tournament_id: int) -> dict[int, float]:
     """Return ``{player_id: confidence}`` for v2 shift rows of one tournament."""
     algorithm_id = await session.scalar(
-        sa.select(models.AnalyticsAlgorithm.id).where(
-            models.AnalyticsAlgorithm.name == SHIFT_ALGORITHM_NAME
-        )
+        sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == SHIFT_ALGORITHM_NAME)
     )
     if algorithm_id is None:
         return {}
-    query = sa.select(
-        models.AnalyticsShift.player_id, models.AnalyticsShift.confidence
-    ).where(
+    query = sa.select(models.AnalyticsShift.player_id, models.AnalyticsShift.confidence).where(
         models.AnalyticsShift.tournament_id == tournament_id,
         models.AnalyticsShift.algorithm_id == algorithm_id,
     )
@@ -172,16 +158,12 @@ def _shift_scores(
     nobody moved.
     """
     common = [
-        key
-        for key in (realised.keys() & predicted.keys())
-        if realised[key] is not None and predicted[key] is not None
+        key for key in (realised.keys() & predicted.keys()) if realised[key] is not None and predicted[key] is not None
     ]
     if not common:
         return {"shift_mae": None, "shift_rmse": None, "shift_sign_accuracy": None, "n": 0}
 
-    errors = np.array(
-        [float(predicted[key]) - float(realised[key]) for key in common], dtype=float
-    )
+    errors = np.array([float(predicted[key]) - float(realised[key]) for key in common], dtype=float)
     mae = float(np.mean(np.abs(errors)))
     rmse = float(np.sqrt(np.mean(errors**2)))
 
@@ -217,23 +199,17 @@ def _position_mae(actual: dict[int, int], predicted: dict[int, float]) -> float 
     return float(np.mean([abs(float(actual[k]) - float(predicted[k])) for k in keys]))
 
 
-async def _actual_standings(
-    session: AsyncSession, tournament_id: int
-) -> dict[int, int]:
-    query = sa.select(
-        models.Standing.team_id, models.Standing.overall_position
-    ).where(models.Standing.tournament_id == tournament_id)
+async def _actual_standings(session: AsyncSession, tournament_id: int) -> dict[int, int]:
+    query = sa.select(models.Standing.team_id, models.Standing.overall_position).where(
+        models.Standing.tournament_id == tournament_id
+    )
     result = await session.execute(query)
     return {int(tid): int(pos) for tid, pos in result.all() if pos is not None}
 
 
-async def _predicted_standings(
-    session: AsyncSession, tournament_id: int
-) -> dict[int, float]:
+async def _predicted_standings(session: AsyncSession, tournament_id: int) -> dict[int, float]:
     algorithm_id = await session.scalar(
-        sa.select(models.AnalyticsAlgorithm.id).where(
-            models.AnalyticsAlgorithm.name == STANDINGS_ALGORITHM_NAME
-        )
+        sa.select(models.AnalyticsAlgorithm.id).where(models.AnalyticsAlgorithm.name == STANDINGS_ALGORITHM_NAME)
     )
     if algorithm_id is None:
         return {}
@@ -248,9 +224,7 @@ async def _predicted_standings(
     return {int(tid): float(pos) for tid, pos in result.all()}
 
 
-def _spearman_correlation(
-    actual: dict[int, int], predicted: dict[int, float]
-) -> float | None:
+def _spearman_correlation(actual: dict[int, int], predicted: dict[int, float]) -> float | None:
     """Spearman rank correlation over common teams.
 
     Returns ``None`` (not ``0.0``) when there is too little overlap or zero
@@ -284,9 +258,7 @@ async def run_rolling_backtest(
     """
     all_ids = await tournament_ids_up_to(
         session,
-        cutoff_tournament_id
-        if cutoff_tournament_id is not None
-        else (await _latest_tournament_id(session)),
+        cutoff_tournament_id if cutoff_tournament_id is not None else (await _latest_tournament_id(session)),
         workspace_id=workspace_id,
     )
     if len(all_ids) < window + 1:
@@ -301,9 +273,7 @@ async def run_rolling_backtest(
     for fold_tid in last_tids:
         logger.info("Backtest fold cutoff=%d", fold_tid)
         # Train on everything strictly before the fold.
-        await train_all_models(
-            session, fold_tid - 1, workspace_id=workspace_id
-        )
+        await train_all_models(session, fold_tid - 1, workspace_id=workspace_id)
         await session.commit()
         await run_for_tournament(session, fold_tid, workspace_id=workspace_id)
 
@@ -329,9 +299,7 @@ async def run_rolling_backtest(
 
         # Agreement with the v1 heuristic (kept as a reference, not accuracy).
         common = v1.keys() & v2.keys()
-        shift_mae_v1_vs_v2 = (
-            float(np.mean([abs(v1[k] - v2[k]) for k in common])) if common else None
-        )
+        shift_mae_v1_vs_v2 = float(np.mean([abs(v1[k] - v2[k]) for k in common])) if common else None
 
         actual = await _actual_standings(session, fold_tid)
         predicted = await _predicted_standings(session, fold_tid)
@@ -359,9 +327,7 @@ async def run_rolling_backtest(
         }
 
     def _mean(metric: str) -> float | None:
-        values = [
-            m[metric] for m in folds_meta.values() if m.get(metric) is not None
-        ]
+        values = [m[metric] for m in folds_meta.values() if m.get(metric) is not None]
         return float(np.mean(values)) if values else None
 
     aggregate = {
@@ -374,9 +340,7 @@ async def run_rolling_backtest(
         "mean_standings_position_mae": _mean("standings_position_mae"),
     }
     # A prediction within half a division of the realised move counts as a hit.
-    calibration = compute_calibration_report(
-        calibration_confidences, calibration_errors, accuracy_tolerance=0.5
-    )
+    calibration = compute_calibration_report(calibration_confidences, calibration_errors, accuracy_tolerance=0.5)
     return {
         "folds": folds_meta,
         "summary": aggregate,

@@ -14,10 +14,10 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
-from shared.core.errors import BaseAPIException as HTTPException
-from shared.clients.s3.upload import upload_asset, upload_avatar
-from shared.rpc.identity import ensure_workspace_permission
 
+from shared.clients.s3.upload import upload_asset, upload_avatar
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 from src import models, schemas
 from src.core import db
 from src.rpc import _common as c

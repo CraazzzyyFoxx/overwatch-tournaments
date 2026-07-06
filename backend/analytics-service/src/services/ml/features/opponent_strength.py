@@ -30,9 +30,7 @@ from src.services.analytics.flows import (
 
 from .cache import get_or_build_dataframe, scope_cache_params
 
-__all__ = (
-    "snapshot_pre_encounter_team_mu",
-)
+__all__ = ("snapshot_pre_encounter_team_mu",)
 
 
 async def snapshot_pre_encounter_team_mu(
@@ -94,9 +92,7 @@ async def _snapshot_pre_encounter_team_mu_uncached(
         workspace_ids=workspace_ids,
     )
     if df.empty:
-        return pd.DataFrame(
-            columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"]
-        )
+        return pd.DataFrame(columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"])
 
     start_tid = await v1_service.lookback_start_tournament_id(
         session,
@@ -180,16 +176,8 @@ async def _snapshot_pre_encounter_team_mu_uncached(
 
         home_score = getattr(encounter, "home_score", 0) or 0
         away_score = getattr(encounter, "away_score", 0) or 0
-        ranks = (
-            [0, 1]
-            if home_score > away_score
-            else [1, 0]
-            if home_score < away_score
-            else [0, 0]
-        )
-        new_home, new_away = pl.rate(
-            [home_team_players, away_team_players], ranks=ranks
-        )
+        ranks = [0, 1] if home_score > away_score else [1, 0] if home_score < away_score else [0, 0]
+        new_home, new_away = pl.rate([home_team_players, away_team_players], ranks=ranks)
         for player, new_rating in zip(
             (p for p in encounter.home_team.players),
             new_home,
@@ -204,13 +192,9 @@ async def _snapshot_pre_encounter_team_mu_uncached(
             rating_map[get_id_role(player)] = new_rating
 
     if not snapshots:
-        return pd.DataFrame(
-            columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"]
-        )
+        return pd.DataFrame(columns=["encounter_id", "team_id", "avg_mu", "max_mu", "min_mu", "std_mu"])
     # Enforce the documented one-row-per-(encounter_id, team_id) contract as a
     # defensive backstop against any future fan-out source.
     return (
-        pd.DataFrame(snapshots)
-        .drop_duplicates(subset=["encounter_id", "team_id"], keep="first")
-        .reset_index(drop=True)
+        pd.DataFrame(snapshots).drop_duplicates(subset=["encounter_id", "team_id"], keep="first").reset_index(drop=True)
     )

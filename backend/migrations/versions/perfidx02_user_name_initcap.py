@@ -32,10 +32,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     with op.get_context().autocommit_block():
-        op.execute(
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_user_name_initcap '
-            'ON players."user" (initcap(name))'
-        )
+        op.execute('CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_user_name_initcap ON players."user" (initcap(name))')
 
 
 def downgrade() -> None:

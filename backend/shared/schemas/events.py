@@ -328,6 +328,4 @@ class BalanceExportedEvent(BaseEvent):
     total_discomfort: int = Field(default=0, description="Sum of per-player role discomfort")
     off_role_count: int = Field(default=0, description="Count of players assigned off their first preference")
     objective_score: float | None = Field(default=None, description="Solver objective score when available")
-    players: list[BalancePlayerSnapshotData] = Field(
-        default_factory=list, description="Per-player assignment rows"
-    )
+    players: list[BalancePlayerSnapshotData] = Field(default_factory=list, description="Per-player assignment rows")

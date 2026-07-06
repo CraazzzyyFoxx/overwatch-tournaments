@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.core.errors import BaseAPIException as HTTPException
 from faststream.rabbit import RabbitMessage
-from shared.rpc.query import build_query_model
 
+from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.query import build_query_model
 from src.core import db
 from src.schemas import GamemodeRead, HeroRead, MapRead
 from src.schemas.admin import gamemode as gamemode_schemas

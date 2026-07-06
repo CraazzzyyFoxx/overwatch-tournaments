@@ -29,15 +29,9 @@ class ChallongeSource(db.TimeStampIntegerMixin):
         {"schema": "tournament"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE")
-    )
-    stage_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Stage.id, ondelete="SET NULL"), nullable=True
-    )
-    stage_item_id: Mapped[int | None] = mapped_column(
-        ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"))
+    stage_id: Mapped[int | None] = mapped_column(ForeignKey(Stage.id, ondelete="SET NULL"), nullable=True)
+    stage_item_id: Mapped[int | None] = mapped_column(ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True)
     challonge_tournament_id: Mapped[int] = mapped_column(Integer())
     slug: Mapped[str | None] = mapped_column(String(), nullable=True)
     source_type: Mapped[str] = mapped_column(String(32), default="tournament")
@@ -60,9 +54,7 @@ class ChallongeParticipantMapping(db.TimeStampIntegerMixin):
         {"schema": "tournament"},
     )
 
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.challonge_source.id", ondelete="CASCADE")
-    )
+    source_id: Mapped[int] = mapped_column(ForeignKey("tournament.challonge_source.id", ondelete="CASCADE"))
     challonge_participant_id: Mapped[int] = mapped_column(Integer())
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"))
 
@@ -88,13 +80,9 @@ class ChallongeMatchMapping(db.TimeStampIntegerMixin):
         {"schema": "tournament"},
     )
 
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.challonge_source.id", ondelete="CASCADE")
-    )
+    source_id: Mapped[int] = mapped_column(ForeignKey("tournament.challonge_source.id", ondelete="CASCADE"))
     challonge_match_id: Mapped[int] = mapped_column(Integer())
-    encounter_id: Mapped[int] = mapped_column(
-        ForeignKey(Encounter.id, ondelete="CASCADE")
-    )
+    encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"))
 
     source: Mapped[ChallongeSource] = relationship()
     encounter: Mapped[Encounter] = relationship()
@@ -113,9 +101,7 @@ class ChallongeSyncLog(db.TimeStampIntegerMixin):
         {"schema": "tournament"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey(Tournament.id, ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     source_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournament.challonge_source.id", ondelete="SET NULL"),
         nullable=True,
@@ -135,5 +121,3 @@ class ChallongeSyncLog(db.TimeStampIntegerMixin):
 
     tournament: Mapped[Tournament] = relationship()
     source: Mapped[ChallongeSource | None] = relationship()
-
-

@@ -14,16 +14,16 @@ from dataclasses import dataclass
 
 from loguru import logger
 from redis import asyncio as redis_async
-from shared.core import enums
-from shared.services.challonge_refs import resolve_encounter_challonge
-from shared.services.distributed_lock import distributed_lock
-from shared.services.encounter_naming import build_encounter_name
-from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from shared.core import enums
+from shared.services.challonge_refs import resolve_encounter_challonge
+from shared.services.distributed_lock import distributed_lock
+from shared.services.encounter_naming import build_encounter_name
+from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src import models, schemas
 from src.core import config
 from src.services.challonge import service as challonge_service
@@ -280,9 +280,7 @@ async def discover_sources(
 
     # Resolve the TournamentGroup for group/playoff sources through stage_id.
     group_stage_ids = [
-        row.stage_id
-        for row in source_rows
-        if row.stage_id is not None and row.source_type in ("group", "playoff")
+        row.stage_id for row in source_rows if row.stage_id is not None and row.source_type in ("group", "playoff")
     ]
     groups_by_stage_id: dict[int, models.TournamentGroup] = {}
     if group_stage_ids:
@@ -316,10 +314,7 @@ async def discover_sources(
 
 
 def _next_stage_order(tournament: models.Tournament) -> int:
-    orders = [
-        int(getattr(stage, "order", 0) or 0)
-        for stage in (tournament.stages or [])
-    ]
+    orders = [int(getattr(stage, "order", 0) or 0) for stage in (tournament.stages or [])]
     return max(orders, default=-1) + 1
 
 
@@ -384,6 +379,7 @@ async def _ensure_stage_item(
 
     if items_unloaded:
         from sqlalchemy import select as sa_select  # noqa: PLC0415
+
         result = await session.execute(
             sa_select(models.StageItem)
             .where(models.StageItem.stage_id == stage.id)
@@ -556,16 +552,8 @@ async def _ensure_stage_structure_for_matches(
             session,
             tournament,
             source.group,
-            stage_type=(
-                enums.StageType.ROUND_ROBIN
-                if source.group.is_groups
-                else _playoff_stage_type(matches)
-            ),
-            item_type=(
-                enums.StageItemType.GROUP
-                if source.group.is_groups
-                else enums.StageItemType.SINGLE_BRACKET
-            ),
+            stage_type=(enums.StageType.ROUND_ROBIN if source.group.is_groups else _playoff_stage_type(matches)),
+            item_type=(enums.StageItemType.GROUP if source.group.is_groups else enums.StageItemType.SINGLE_BRACKET),
         )
         stats["stages_created"] += max(0, len(tournament.stages or []) - before_stage_count)
         return stats
@@ -582,11 +570,7 @@ async def _ensure_stage_structure_for_matches(
     names_by_group_id = _group_names_for_challonge_ids(group_ids)
     for group_id in sorted(group_ids):
         group = next(
-            (
-                candidate
-                for candidate in tournament.groups or []
-                if candidate.challonge_id == group_id
-            ),
+            (candidate for candidate in tournament.groups or [] if candidate.challonge_id == group_id),
             None,
         )
         if group is None:
@@ -703,9 +687,7 @@ async def _build_team_name_index(
     Collisions (two teams with the same normalized name) are marked _AMBIGUOUS.
     balancer_name is used as a fallback only when name produces no entry.
     """
-    result = await session.execute(
-        select(models.Team).where(models.Team.tournament_id == tournament_id)
-    )
+    result = await session.execute(select(models.Team).where(models.Team.tournament_id == tournament_id))
     teams = list(result.scalars().all())
     index: dict[str, int] = {}
 
@@ -1030,16 +1012,8 @@ async def _ensure_stage_item_team_inputs(
     if not inputs_loaded:
         stage_inputs = await _load_stage_inputs(session, stage.id)
 
-    existing_team_ids = {
-        stage_input.team_id
-        for stage_input in stage_inputs
-        if stage_input.team_id is not None
-    }
-    used_slots = {
-        stage_input.slot
-        for stage_input in stage_inputs
-        if stage_input.stage_item_id == stage_item_id
-    }
+    existing_team_ids = {stage_input.team_id for stage_input in stage_inputs if stage_input.team_id is not None}
+    used_slots = {stage_input.slot for stage_input in stage_inputs if stage_input.stage_item_id == stage_item_id}
     next_slot = 1
     created = 0
 
@@ -1111,10 +1085,7 @@ async def _upsert_encounter_from_challonge(
     if encounter is None and missing_team_mapping:
         return _UpsertResult(
             action="error",
-            error=(
-                "Missing Challonge team mapping for participant(s): "
-                + ", ".join(missing_team_mapping)
-            ),
+            error=("Missing Challonge team mapping for participant(s): " + ", ".join(missing_team_mapping)),
         )
 
     home_team = team_lookup.teams_by_id.get(home_team_id) if home_team_id is not None else None
@@ -1182,10 +1153,7 @@ async def _upsert_encounter_from_challonge(
         if (
             status != enums.EncounterStatus.COMPLETED
             or local_score != remote_score
-            or (
-                None not in remote_teams
-                and local_teams != remote_teams
-            )
+            or (None not in remote_teams and local_teams != remote_teams)
         ):
             await _ensure_match_mapping(session, source, match.id, encounter, match_lookup)
             return _UpsertResult(
@@ -1255,11 +1223,7 @@ def _iter_challonge_link_specs(
                 source_key=source_key,
                 source_challonge_id=prereq_id,
                 target_challonge_id=match.id,
-                role=(
-                    enums.EncounterLinkRole.LOSER
-                    if is_loser
-                    else enums.EncounterLinkRole.WINNER
-                ),
+                role=(enums.EncounterLinkRole.LOSER if is_loser else enums.EncounterLinkRole.WINNER),
                 target_slot=slot,
             )
         )
@@ -1287,25 +1251,16 @@ async def _sync_challonge_advancement_links(
     source_encounter_ids = [
         encounter.id
         for spec in specs_by_source_role.values()
-        if (
-            source := sources_by_key.get(spec.source_key)
-        ) is not None
-        and (
-            encounter := match_lookup.get(source, spec.source_challonge_id)
-        ) is not None
+        if (source := sources_by_key.get(spec.source_key)) is not None
+        and (encounter := match_lookup.get(source, spec.source_challonge_id)) is not None
     ]
     if not source_encounter_ids:
         return {"bracket_links_created": 0, "bracket_links_updated": 0}
 
     existing_result = await session.execute(
-        select(models.EncounterLink).where(
-            models.EncounterLink.source_encounter_id.in_(source_encounter_ids)
-        )
+        select(models.EncounterLink).where(models.EncounterLink.source_encounter_id.in_(source_encounter_ids))
     )
-    existing_by_source_role = {
-        (link.source_encounter_id, link.role): link
-        for link in existing_result.scalars().all()
-    }
+    existing_by_source_role = {(link.source_encounter_id, link.role): link for link in existing_result.scalars().all()}
 
     created = 0
     updated = 0
@@ -1332,10 +1287,7 @@ async def _sync_challonge_advancement_links(
             created += 1
             continue
 
-        if (
-            existing.target_encounter_id != target.id
-            or existing.target_slot != spec.target_slot
-        ):
+        if existing.target_encounter_id != target.id or existing.target_slot != spec.target_slot:
             existing.target_encounter_id = target.id
             existing.target_slot = spec.target_slot
             updated += 1
@@ -1386,9 +1338,7 @@ async def _build_match_lookup(
     )
     mappings = list(mapping_result.scalars().all())
     source_keys_by_source_id = {
-        source.source_id: _source_lookup_key(source)
-        for source in sources
-        if source.source_id is not None
+        source.source_id: _source_lookup_key(source) for source in sources if source.source_id is not None
     }
     by_source_key: dict[tuple[int, int], models.Encounter] = {}
     mapped_keys: set[tuple[int, int]] = set()
@@ -1410,9 +1360,7 @@ async def _build_match_lookup(
     )
 
 
-async def import_tournament(
-    session: AsyncSession, tournament_id: int, *, dry_run: bool = False
-) -> dict:
+async def import_tournament(session: AsyncSession, tournament_id: int, *, dry_run: bool = False) -> dict:
     """Full import from Challonge: upsert encounters with scores and status."""
     async with _sync_job_lock(tournament_id, "import") as job_id:
         result = await session.execute(
@@ -1477,7 +1425,10 @@ async def import_tournament(
             try:
                 if not dry_run:
                     structure_stats = await _ensure_stage_structure_for_matches(
-                        session, tournament, source, fetch_result.matches,
+                        session,
+                        tournament,
+                        source,
+                        fetch_result.matches,
                     )
                     stats["groups_created"] += structure_stats["groups_created"]
                     stats["stages_created"] += structure_stats["stages_created"]
@@ -1487,7 +1438,8 @@ async def import_tournament(
                 tb = traceback.format_exc()
                 logger.exception(
                     "Stage structure failed for challonge_id=%s tournament=%s",
-                    source.challonge_id, tournament_id,
+                    source.challonge_id,
+                    tournament_id,
                 )
                 if not dry_run:
                     await _log_sync(
@@ -1503,9 +1455,7 @@ async def import_tournament(
                         error_message=tb,
                     )
 
-        team_lookup = await _build_team_lookup(
-            session, tournament, fetches, dry_run=dry_run
-        )
+        team_lookup = await _build_team_lookup(session, tournament, fetches, dry_run=dry_run)
         match_lookup = await _build_match_lookup(session, tournament_id, sources)
 
         processed_match_keys: set[tuple[int, int]] = set()
@@ -1621,7 +1571,8 @@ async def import_tournament(
                     tb = traceback.format_exc()
                     logger.exception(
                         "Match upsert failed challonge_match_id=%s tournament=%s",
-                        cm.id, tournament_id,
+                        cm.id,
+                        tournament_id,
                     )
                     await _log_sync(
                         session,
@@ -1728,11 +1679,7 @@ async def _resolve_winner_challonge_id(
     # ``participant_mappings`` is an optional bulk prefetch (export path) keyed by
     # (source_id, team_id); a missing key falls back to the query so stale mappings
     # referencing undiscovered sources still resolve.
-    cached = (
-        participant_mappings.get((source.source_id, winner_team_id))
-        if participant_mappings is not None
-        else None
-    )
+    cached = participant_mappings.get((source.source_id, winner_team_id)) if participant_mappings is not None else None
     if cached is not None:
         source_mappings = cached
     else:
@@ -1750,9 +1697,7 @@ async def _resolve_winner_challonge_id(
     return None
 
 
-async def export_tournament(
-    session: AsyncSession, tournament_id: int
-) -> dict:
+async def export_tournament(session: AsyncSession, tournament_id: int) -> dict:
     """Full export: push all completed encounter results to Challonge."""
     async with _sync_job_lock(tournament_id, "export") as job_id:
         result = await session.execute(
@@ -1823,9 +1768,9 @@ async def export_tournament(
                 .order_by(models.ChallongeParticipantMapping.id.asc())
             )
             for participant_row in participant_rows.scalars():
-                participant_mappings.setdefault(
-                    (participant_row.source_id, participant_row.team_id), []
-                ).append(participant_row)
+                participant_mappings.setdefault((participant_row.source_id, participant_row.team_id), []).append(
+                    participant_row
+                )
 
         for encounter in encounters:
             try:
@@ -1897,11 +1842,7 @@ async def _push_single_result_impl(
     if source is None or challonge_match_id is None:
         return False
 
-    winner_team = (
-        encounter.home_team
-        if encounter.home_score > encounter.away_score
-        else encounter.away_team
-    )
+    winner_team = encounter.home_team if encounter.home_score > encounter.away_score else encounter.away_team
     if not winner_team:
         raise ValueError(f"Encounter {encounter.id} has no winner team")
 
@@ -1914,8 +1855,7 @@ async def _push_single_result_impl(
     )
     if winner_challonge_id is None:
         raise ValueError(
-            f"Winner team {winner_team.id} has no Challonge participant mapping "
-            f"for source {source.challonge_id}"
+            f"Winner team {winner_team.id} has no Challonge participant mapping for source {source.challonge_id}"
         )
 
     scores_csv = f"{encounter.home_score}-{encounter.away_score}"
@@ -1942,9 +1882,7 @@ async def _push_single_result_impl(
     return True
 
 
-async def auto_push_on_confirm(
-    session: AsyncSession, encounter_id: int
-) -> None:
+async def auto_push_on_confirm(session: AsyncSession, encounter_id: int) -> None:
     """Auto-push to Challonge when an encounter result is confirmed.
 
     Called from captain.confirm_result after status -> confirmed.
@@ -1984,16 +1922,19 @@ async def auto_push_on_confirm(
     except Exception as e:
         logger.error(f"Auto-push failed for encounter {encounter_id}: {e}")
         await _log_sync(
-            session, tournament.id, "export", "match",
-            encounter.id, challonge_match_id,
-            "failed", error_message=str(e),
+            session,
+            tournament.id,
+            "export",
+            "match",
+            encounter.id,
+            challonge_match_id,
+            "failed",
+            error_message=str(e),
         )
         await session.commit()
 
 
-async def get_sync_log(
-    session: AsyncSession, tournament_id: int, limit: int = 50
-) -> list[models.ChallongeSyncLog]:
+async def get_sync_log(session: AsyncSession, tournament_id: int, limit: int = 50) -> list[models.ChallongeSyncLog]:
     result = await session.execute(
         select(models.ChallongeSyncLog)
         .where(models.ChallongeSyncLog.tournament_id == tournament_id)

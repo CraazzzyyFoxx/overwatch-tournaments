@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from loguru import logger
+
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_CHANGED_QUEUE,
@@ -15,7 +16,6 @@ from shared.schemas.events import (
     TournamentChangedReason,
     TournamentStandingsInvalidatedEvent,
 )
-
 from src.core.broker import require_broker
 
 

@@ -115,9 +115,7 @@ def generate(team_ids: list[int]) -> BracketSkeleton:
             b_present = b_local is not None or b_team is not None
 
             if a_present and b_present:
-                match_counter_per_round[round_num] = (
-                    match_counter_per_round.get(round_num, 0) + 1
-                )
+                match_counter_per_round[round_num] = match_counter_per_round.get(round_num, 0) + 1
                 local_id = next_local_id
                 next_local_id += 1
                 pairings.append(
@@ -125,9 +123,7 @@ def generate(team_ids: list[int]) -> BracketSkeleton:
                         home_team_id=a_team,
                         away_team_id=b_team,
                         round_number=round_num,
-                        name=_round_match_label(
-                            round_num, match_counter_per_round[round_num]
-                        ),
+                        name=_round_match_label(round_num, match_counter_per_round[round_num]),
                         local_id=local_id,
                     )
                 )

@@ -186,7 +186,9 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
                 payload_json={"next_round": 2},
             )
             with (
-                patch.object(bracket_worker.stage_service, "generate_encounters", AsyncMock(return_value=[])) as generate,
+                patch.object(
+                    bracket_worker.stage_service, "generate_encounters", AsyncMock(return_value=[])
+                ) as generate,
                 patch.object(
                     bracket_worker.stage_service,
                     "activate_and_generate",

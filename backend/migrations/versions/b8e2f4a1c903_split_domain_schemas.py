@@ -5,16 +5,16 @@ Revises: a7634c02717d
 Create Date: 2026-04-05 20:00:00.000000
 
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "b8e2f4a1c903"
-down_revision: Union[str, None] = "a7634c02717d"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "a7634c02717d"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -102,9 +102,7 @@ def upgrade() -> None:
         op.execute(f"ALTER TABLE public.{t} SET SCHEMA log_processing")
     # Rename: drop prefixes
     op.execute("ALTER TABLE log_processing.log_processing_record RENAME TO record")
-    op.execute(
-        "ALTER TABLE log_processing.tournament_discord_channel RENAME TO discord_channel"
-    )
+    op.execute("ALTER TABLE log_processing.tournament_discord_channel RENAME TO discord_channel")
 
     # workspace, workspace_member stay in public
 
@@ -112,9 +110,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # --- Log processing -> public ---
     op.execute("ALTER TABLE log_processing.record RENAME TO log_processing_record")
-    op.execute(
-        "ALTER TABLE log_processing.discord_channel RENAME TO tournament_discord_channel"
-    )
+    op.execute("ALTER TABLE log_processing.discord_channel RENAME TO tournament_discord_channel")
     for t in ["log_processing_record", "tournament_discord_channel"]:
         op.execute(f"ALTER TABLE log_processing.{t} SET SCHEMA public")
 

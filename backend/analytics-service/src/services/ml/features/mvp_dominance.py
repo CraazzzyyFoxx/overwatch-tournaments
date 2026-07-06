@@ -23,9 +23,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import sqlalchemy as sa
-from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import LogStatsName
 from src import models
 
 __all__ = ("compute_mvp_dominance", "dominance_from_perf_ranks")

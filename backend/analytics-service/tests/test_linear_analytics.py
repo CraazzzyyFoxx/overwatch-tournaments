@@ -135,9 +135,7 @@ class LinearAnalyticsTests(TestCase):
 
         default = linear.score_history(signals)
         # Zero weight on every team component ⇒ the raw signal collapses to 0.
-        zeroed = linear.score_history(
-            signals, weights={"map_diff": 0.0, "placement_score": 0.0}
-        )
+        zeroed = linear.score_history(signals, weights={"map_diff": 0.0, "placement_score": 0.0})
 
         self.assertGreater(abs(default.stable_shift), 0.0)
         self.assertAlmostEqual(0.0, zeroed.stable_shift, places=6)
@@ -164,9 +162,7 @@ class FitRawSignalWeightsTests(TestCase):
         # realised = 0.7*a + 0.3*b (sums to 1) over an arbitrary component set.
         realised = components @ np.array([0.7, 0.3])
 
-        weights = linear.fit_raw_signal_weights(
-            components, realised, component_names=("a", "b")
-        )
+        weights = linear.fit_raw_signal_weights(components, realised, component_names=("a", "b"))
 
         self.assertAlmostEqual(0.7, weights["a"], places=2)
         self.assertAlmostEqual(0.3, weights["b"], places=2)

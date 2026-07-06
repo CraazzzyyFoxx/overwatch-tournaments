@@ -34,12 +34,8 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True
-    )
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     is_open: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     auto_approve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     opens_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -50,18 +46,12 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     custom_fields_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, server_default="[]", default=list
     )
-    require_open_profile: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="false", default=False
-    )
-    open_profile_scope: Mapped[str] = mapped_column(
-        String(8), nullable=False, server_default="main", default="main"
-    )
-    show_ranks: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="false", default=False
-    )
+    require_open_profile: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    open_profile_scope: Mapped[str] = mapped_column(String(8), nullable=False, server_default="main", default="main")
+    show_ranks: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
 
-    tournament: Mapped["Tournament"] = relationship()
-    workspace: Mapped["Workspace"] = relationship()
+    tournament: Mapped[Tournament] = relationship()
+    workspace: Mapped[Workspace] = relationship()
 
 
 class BalancerRegistrationStatus(db.TimeStampIntegerMixin):
@@ -95,7 +85,7 @@ class BalancerRegistrationStatus(db.TimeStampIntegerMixin):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
-    workspace: Mapped["Workspace"] = relationship()
+    workspace: Mapped[Workspace] = relationship()
 
 
 class BalancerRegistration(db.TimeStampIntegerMixin):
@@ -134,9 +124,7 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
     # Sole identity anchor (dbarch02 dropped the legacy user_id column): the
     # domain player is reached via workspace_member.player_id. Nullable — a
     # registration with no member has no player identity at all (e.g. an
@@ -165,35 +153,27 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     )
     checked_in: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     checked_in_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    checked_in_by: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
-    )
+    checked_in_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     submitted_at: Mapped[db.DateTime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     reviewed_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    reviewed_by: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
-    )
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
     deleted_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_by: Mapped[int | None] = mapped_column(
-        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
-    )
-    balancer_profile_overridden_at: Mapped[db.DateTime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    deleted_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    balancer_profile_overridden_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tournament: Mapped["Tournament"] = relationship()
+    tournament: Mapped[Tournament] = relationship()
     # Readers needing the domain player must eager-load this relationship
     # (selectinload / explicit join) — never rely on a lazy load in async code.
-    workspace_member: Mapped["WorkspaceMember | None"] = relationship()
-    reviewer: Mapped["AuthUser | None"] = relationship(foreign_keys=[reviewed_by])
-    deleted_by_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[deleted_by])
-    checked_in_by_user: Mapped["AuthUser | None"] = relationship(foreign_keys=[checked_in_by])
-    roles: Mapped[list["BalancerRegistrationRole"]] = relationship(
+    workspace_member: Mapped[WorkspaceMember | None] = relationship()
+    reviewer: Mapped[AuthUser | None] = relationship(foreign_keys=[reviewed_by])
+    deleted_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[deleted_by])
+    checked_in_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[checked_in_by])
+    roles: Mapped[list[BalancerRegistrationRole]] = relationship(
         back_populates="registration", cascade="all, delete-orphan"
     )
-    google_sheet_binding: Mapped["BalancerRegistrationGoogleSheetBinding | None"] = relationship(
+    google_sheet_binding: Mapped[BalancerRegistrationGoogleSheetBinding | None] = relationship(
         back_populates="registration",
         cascade="all, delete-orphan",
         uselist=False,
@@ -214,9 +194,7 @@ class BalancerRegistrationRole(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    registration_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.registration.id", ondelete="CASCADE"), index=True
-    )
+    registration_id: Mapped[int] = mapped_column(ForeignKey("balancer.registration.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     subrole: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
@@ -224,8 +202,8 @@ class BalancerRegistrationRole(db.TimeStampIntegerMixin):
     rank_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="true", default=True)
 
-    registration: Mapped["BalancerRegistration"] = relationship(back_populates="roles")
-    hero_entries: Mapped[list["BalancerRegistrationRoleHero"]] = relationship(
+    registration: Mapped[BalancerRegistration] = relationship(back_populates="roles")
+    hero_entries: Mapped[list[BalancerRegistrationRoleHero]] = relationship(
         back_populates="role",
         cascade="all, delete-orphan",
         order_by="BalancerRegistrationRoleHero.priority",
@@ -242,14 +220,12 @@ class BalancerRegistrationRoleHero(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    role_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.registration_role.id", ondelete="CASCADE"), index=True
-    )
+    role_id: Mapped[int] = mapped_column(ForeignKey("balancer.registration_role.id", ondelete="CASCADE"), index=True)
     hero_id: Mapped[int] = mapped_column(ForeignKey("overwatch.hero.id", ondelete="CASCADE"))
     priority: Mapped[int] = mapped_column(Integer(), nullable=False)
 
-    role: Mapped["BalancerRegistrationRole"] = relationship(back_populates="hero_entries")
-    hero: Mapped["Hero"] = relationship()
+    role: Mapped[BalancerRegistrationRole] = relationship(back_populates="hero_entries")
+    hero: Mapped[Hero] = relationship()
 
 
 class BalancerRegistrationGoogleSheetFeed(db.TimeStampIntegerMixin):
@@ -259,9 +235,7 @@ class BalancerRegistrationGoogleSheetFeed(db.TimeStampIntegerMixin):
         {"schema": "balancer"},
     )
 
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True
-    )
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
     source_url: Mapped[str] = mapped_column(Text())
     sheet_id: Mapped[str] = mapped_column(String(255))
     gid: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -280,8 +254,8 @@ class BalancerRegistrationGoogleSheetFeed(db.TimeStampIntegerMixin):
     last_sync_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
-    tournament: Mapped["Tournament"] = relationship()
-    bindings: Mapped[list["BalancerRegistrationGoogleSheetBinding"]] = relationship(
+    tournament: Mapped[Tournament] = relationship()
+    bindings: Mapped[list[BalancerRegistrationGoogleSheetBinding]] = relationship(
         back_populates="feed",
         cascade="all, delete-orphan",
     )
@@ -309,5 +283,5 @@ class BalancerRegistrationGoogleSheetBinding(db.TimeStampIntegerMixin):
     row_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_seen_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    feed: Mapped["BalancerRegistrationGoogleSheetFeed"] = relationship(back_populates="bindings")
-    registration: Mapped["BalancerRegistration"] = relationship(back_populates="google_sheet_binding")
+    feed: Mapped[BalancerRegistrationGoogleSheetFeed] = relationship(back_populates="bindings")
+    registration: Mapped[BalancerRegistration] = relationship(back_populates="google_sheet_binding")

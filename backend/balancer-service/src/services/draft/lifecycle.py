@@ -321,7 +321,9 @@ async def seed(
             elif rule == "weakest_first":
                 round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), t.draft_position))
             elif rule == "strongest_first":
-                round_seats = sorted(seats, key=lambda t: (team_captain_ranks.get(t.id, -1), -t.draft_position), reverse=True)
+                round_seats = sorted(
+                    seats, key=lambda t: (team_captain_ranks.get(t.id, -1), -t.draft_position), reverse=True
+                )
             else:
                 # Dynamic rules (team_avg_asc, team_avg_desc) default to linear order at seeding time
                 round_seats = seats
@@ -419,19 +421,22 @@ def _map_registration(reg: BalancerRegistration) -> dict:
         if r.rank_value is not None:
             role_ranks[role.value] = r.rank_value
         hero_entries = getattr(r, "hero_entries", None)
-        heroes = [
-            {
-                # hero_id is what the normalized draft_player_role_hero row needs
-                # (real FK); slug/image_path are kept for the read-side snapshot.
-                "hero_id": getattr(he.hero, "id", None),
-                "slug": getattr(he.hero, "slug", ""),
-                "image_path": getattr(he.hero, "image_path", None),
-            }
-            for he in (hero_entries or [])
-            if he and getattr(he, "hero", None) is not None
-        ] if isinstance(hero_entries, (list, set)) or (
-            hero_entries is not None and not hasattr(hero_entries, "_mock_return_value")
-        ) else []
+        heroes = (
+            [
+                {
+                    # hero_id is what the normalized draft_player_role_hero row needs
+                    # (real FK); slug/image_path are kept for the read-side snapshot.
+                    "hero_id": getattr(he.hero, "id", None),
+                    "slug": getattr(he.hero, "slug", ""),
+                    "image_path": getattr(he.hero, "image_path", None),
+                }
+                for he in (hero_entries or [])
+                if he and getattr(he, "hero", None) is not None
+            ]
+            if isinstance(hero_entries, (list, set))
+            or (hero_entries is not None and not hasattr(hero_entries, "_mock_return_value"))
+            else []
+        )
         if heroes:
             role_top_heroes[role.value] = heroes
 
@@ -675,11 +680,13 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
         sa.select(DraftPick)
         .where(
             DraftPick.session_id == draft_session.id,
-            DraftPick.status.in_([
-                DraftPickStatus.COMPLETED.value,
-                DraftPickStatus.AUTOPICKED.value,
-                DraftPickStatus.SKIPPED.value,
-            ]),
+            DraftPick.status.in_(
+                [
+                    DraftPickStatus.COMPLETED.value,
+                    DraftPickStatus.AUTOPICKED.value,
+                    DraftPickStatus.SKIPPED.value,
+                ]
+            ),
         )
         .order_by(DraftPick.overall_no.desc())
         .limit(1)
@@ -741,4 +748,3 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
     await session.flush()
     await session.refresh(draft_session)
     return draft_session
-

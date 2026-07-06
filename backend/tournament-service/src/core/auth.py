@@ -9,11 +9,11 @@ check the caller's permission in that workspace.
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from src import models
 
 

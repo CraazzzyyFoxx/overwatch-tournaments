@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import hmac
 
-from shared.core.errors import BaseAPIException as HTTPException
 from shared.core import http_status as status
-
+from shared.core.errors import BaseAPIException as HTTPException
 from src import schemas
 from src.core.config import settings
 from src.services.auth_service import AuthService

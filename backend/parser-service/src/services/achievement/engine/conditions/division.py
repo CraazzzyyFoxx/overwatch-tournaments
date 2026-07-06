@@ -84,14 +84,18 @@ async def execute_div_change(
             models.Player.rank,
             models.Player.role,
             models.Tournament.division_grid_version_id.label("source_version_id"),
-            sa.func.lag(models.Player.rank).over(
+            sa.func.lag(models.Player.rank)
+            .over(
                 partition_by=[models.WorkspaceMember.player_id, models.Player.role],
                 order_by=models.Tournament.number,
-            ).label("prev_rank"),
-            sa.func.lag(models.Tournament.division_grid_version_id).over(
+            )
+            .label("prev_rank"),
+            sa.func.lag(models.Tournament.division_grid_version_id)
+            .over(
                 partition_by=[models.WorkspaceMember.player_id, models.Player.role],
                 order_by=models.Tournament.number,
-            ).label("prev_source_version_id"),
+            )
+            .label("prev_source_version_id"),
         )
         .select_from(models.Player)
         .join(

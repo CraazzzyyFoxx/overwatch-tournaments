@@ -30,13 +30,11 @@ Create Date: 2026-07-02
 
 from __future__ import annotations
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "iwrefac07"
-down_revision: Union[str, None] = "iwrefac06"
+down_revision: str | None = "iwrefac06"
 branch_labels = None
 depends_on = None
 
@@ -52,9 +50,7 @@ def upgrade() -> None:
     op.drop_index("ix_player_user_tournament", table_name="player", schema="tournament")
     op.drop_index("ix_player_team_user", table_name="player", schema="tournament")
     op.drop_index("ix_player_user_not_sub", table_name="player", schema="tournament")
-    op.drop_index(
-        "ix_tournament_player_workspace_member_id", table_name="player", schema="tournament"
-    )
+    op.drop_index("ix_tournament_player_workspace_member_id", table_name="player", schema="tournament")
 
     op.create_index(
         "ix_player_workspace_member_tournament",
@@ -112,9 +108,7 @@ def downgrade() -> None:
         ondelete="CASCADE",
     )
 
-    op.drop_index(
-        "ix_player_workspace_member_tournament", table_name="player", schema="tournament"
-    )
+    op.drop_index("ix_player_workspace_member_tournament", table_name="player", schema="tournament")
     op.drop_index("ix_player_team_workspace_member", table_name="player", schema="tournament")
     op.drop_index("ix_player_member_not_sub", table_name="player", schema="tournament")
 
