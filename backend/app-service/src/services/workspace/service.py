@@ -1,5 +1,8 @@
+import secrets
 import typing
+from datetime import UTC, datetime
 
+import dns.asyncresolver
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,12 +24,18 @@ from shared.repository import (
 )
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_default_division_grid_version_id
+from shared.tenancy.hostnames import normalize_custom_domain
 from src import models
 
 _role_repo = RoleRepository()
 _workspace_member_repo = WorkspaceMemberRepository()
 _workspace_repo = WorkspaceRepository()
 _user_repo = UserRepository()
+
+# Prefix for the generated per-workspace DNS verification token (the required
+# TXT value at ``_owt-verify.<custom_domain>``). Namespaced so the string is
+# unambiguous if it ever leaks into logs or support tickets.
+_CUSTOM_DOMAIN_TOKEN_PREFIX = "owt-verify-"
 
 
 async def get_by_id(session: AsyncSession, workspace_id: int) -> models.Workspace | None:
@@ -48,6 +57,82 @@ async def get_by_custom_domain(session: AsyncSession, domain: str) -> models.Wor
     never resolves here.
     """
     return await _workspace_repo.get_by_verified_custom_domain(session, domain)
+
+
+async def _dns_txt_contains(name: str, expected: str) -> bool:
+    """True iff a TXT record at ``name`` has a string that exactly equals ``expected``.
+
+    Any DNS failure (NXDOMAIN, timeout, no-answer, malformed name, resolver
+    misconfiguration, ...) resolves to ``False`` rather than raising —
+    verification is meant to fail closed (``verify_custom_domain`` reports
+    "not found yet"), never 500.
+    """
+    try:
+        answers = await dns.asyncresolver.resolve(name, "TXT")
+    except Exception:  # noqa: BLE001 -- any DNS failure means "not verified yet"
+        return False
+    for rdata in answers:
+        txt = b"".join(rdata.strings).decode("utf-8", "ignore")
+        if txt.strip() == expected:
+            return True
+    return False
+
+
+async def set_custom_domain(session: AsyncSession, workspace: models.Workspace, domain: str) -> models.Workspace:
+    """Store a normalized custom domain plus a fresh verification token, unverified.
+
+    Re-pointing an already-verified domain (or setting a new one) always resets
+    ``custom_domain_verified_at`` — the resolver (``get_by_custom_domain``) must
+    never serve a domain whose ownership hasn't been (re-)proven via DNS TXT.
+
+    Raises ``ValueError`` (mapped to 400 by the RPC caller) if ``domain`` fails
+    ``normalize_custom_domain`` (empty, not a valid FQDN, or under the platform
+    zone).
+    """
+    normalized = normalize_custom_domain(domain)
+    token = _CUSTOM_DOMAIN_TOKEN_PREFIX + secrets.token_urlsafe(24)
+    await _workspace_repo.update_fields(
+        session,
+        workspace,
+        {
+            "custom_domain": normalized,
+            "custom_domain_verification_token": token,
+            "custom_domain_verified_at": None,
+        },
+    )
+    return workspace
+
+
+async def clear_custom_domain(session: AsyncSession, workspace: models.Workspace) -> models.Workspace:
+    """Remove the custom domain (and its token/verification state) entirely."""
+    await _workspace_repo.update_fields(
+        session,
+        workspace,
+        {
+            "custom_domain": None,
+            "custom_domain_verification_token": None,
+            "custom_domain_verified_at": None,
+        },
+    )
+    return workspace
+
+
+async def verify_custom_domain(session: AsyncSession, workspace: models.Workspace) -> models.Workspace:
+    """DNS-verify ``workspace.custom_domain`` and stamp ``custom_domain_verified_at``.
+
+    Ownership proof is a TXT record at ``_owt-verify.<custom_domain>`` whose value
+    equals the stored ``custom_domain_verification_token``. Raises 400 if no
+    domain/token is set, or if the record doesn't (yet) match.
+    """
+    if not workspace.custom_domain or not workspace.custom_domain_verification_token:
+        raise HTTPException(status_code=400, detail="No custom domain to verify")
+    ok = await _dns_txt_contains(
+        f"_owt-verify.{workspace.custom_domain}", workspace.custom_domain_verification_token
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="Verification TXT record not found yet")
+    await _workspace_repo.update_fields(session, workspace, {"custom_domain_verified_at": datetime.now(UTC)})
+    return workspace
 
 
 async def get_all(session: AsyncSession) -> typing.Sequence[models.Workspace]:

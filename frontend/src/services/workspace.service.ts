@@ -121,6 +121,28 @@ export default class workspaceService {
     });
   }
 
+  /** Store a normalized custom domain + a fresh DNS TXT verification token (unverified). */
+  static async setCustomDomain(workspaceId: number, customDomain: string): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain`, {
+      method: "POST",
+      body: { custom_domain: customDomain }
+    }).then((r) => r.json());
+  }
+
+  /** Check the `_owt-verify.<domain>` DNS TXT record against the stored token. */
+  static async verifyCustomDomain(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain/verify`, {
+      method: "POST"
+    }).then((r) => r.json());
+  }
+
+  /** Remove the custom domain, its token, and its verification state. */
+  static async clearCustomDomain(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain`, {
+      method: "DELETE"
+    }).then((r) => r.json());
+  }
+
   static async uploadIcon(workspaceId: number, file: File): Promise<Workspace> {
     const formData = new FormData();
     formData.append("file", file);

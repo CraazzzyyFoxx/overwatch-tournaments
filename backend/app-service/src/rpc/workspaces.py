@@ -3,7 +3,10 @@
 Reads (list/get) are public. create is superuser-global. Member ops are
 workspace-scoped (workspace_member.{read,create,update,delete}). workspace
 update/delete go through the shared CRUD engine (see services/workspace/registry.py
-+ rpc/admin_crud.py).
++ rpc/admin_crud.py). The custom-domain set/verify/clear trio (white-label Phase
+2) is bespoke too — like member ops, gated on the workspace-scoped
+``workspace.update`` permission — since verification has a side effect (a DNS
+lookup) the generic CRUD engine has no hook for.
 
 The role-resolution / member-payload / RBAC-cache-bust helpers are replicated
 here (not imported from the route module) so the headless worker never depends on
@@ -333,3 +336,56 @@ def register(broker: Any, logger: Any) -> None:
             return None
 
         return await c.envelope(logger, "workspaces.member_remove", op, session_factory=_SF)
+
+    # --- custom domain (white-label Phase 2) --------------------------------
+    @broker.subscriber("rpc.app.workspaces.set_custom_domain")
+    async def _set_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            body = schemas.WorkspaceCustomDomainSet.model_validate(c.payload(data))
+            try:
+                workspace = await workspace_service.set_custom_domain(session, workspace, body.custom_domain)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.set_custom_domain", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.verify_custom_domain")
+    async def _verify_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            workspace = await workspace_service.verify_custom_domain(session, workspace)
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.verify_custom_domain", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.clear_custom_domain")
+    async def _clear_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            workspace = await workspace_service.clear_custom_domain(session, workspace)
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.clear_custom_domain", op, session_factory=_SF)

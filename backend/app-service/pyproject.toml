@@ -11,6 +11,7 @@ dependencies = [
     "bcrypt>=4.2.1",
     "cachetools>=6.1.0",
     "cashews>=7.4.0",
+    "dnspython>=2.8.0",
     "faststream[rabbit,cli]>=0.6.7",
     "httpx>=0.28.1",
     "loguru>=0.7.3",

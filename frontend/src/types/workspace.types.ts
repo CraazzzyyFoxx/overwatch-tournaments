@@ -127,6 +127,11 @@ export interface Workspace {
   subdomain: string | null;
   seo_title: string | null;
   seo_description: string | null;
+  /** White-label custom domain (Phase 2). Resolver serves it only once verified. */
+  custom_domain: string | null;
+  custom_domain_verified_at: string | null;
+  /** Required value of the `_owt-verify.<custom_domain>` TXT record; not secret. */
+  custom_domain_verification_token: string | null;
   default_division_grid_version_id: number | null;
   default_division_grid_version: DivisionGridVersion | null;
 }
