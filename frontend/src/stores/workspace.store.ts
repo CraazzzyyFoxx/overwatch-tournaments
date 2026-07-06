@@ -120,6 +120,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         // Forcing currentWorkspaceId corrects it even if fetchWorkspaces ran
         // first, so client apiFetch/theme-sync align with the SSR host lock.
         if (id != null) {
+          // Also drop any workspace cookie a race-ahead fetchWorkspaces may have
+          // written, so the "no cookie on a locked host" invariant holds
+          // regardless of effect order (SSR scopes by the host header anyway).
+          Cookies.remove(WORKSPACE_COOKIE);
           set({ hostLockedWorkspaceId: id, currentWorkspaceId: id });
         } else {
           set({ hostLockedWorkspaceId: null });
