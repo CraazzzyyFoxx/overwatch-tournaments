@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authService } from "@/services/auth.service";
+import { authService, OAuthLinkAuthRequiredError } from "@/services/auth.service";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
@@ -114,6 +114,23 @@ export async function isVerifiedTenantOrigin(origin: string): Promise<boolean> {
   }
 }
 
+// Builds the `/auth/link/complete` redirect for a custom-domain account link
+// (Task 10R), gated by the SAME authoritative by_host check as the login
+// ticket handoff above. Returns null when the origin fails verification --
+// callers must fail closed (error-redirect), never fall back to delivering
+// the ticket anywhere else. Exported separately from handleOAuthCallback so
+// this gate is unit-testable without mocking cookies()/authService, mirroring
+// why isVerifiedTenantOrigin itself is exported.
+export async function buildLinkTicketRedirect(origin: string, ticket: string, redirect: string): Promise<URL | null> {
+  const verified = await isVerifiedTenantOrigin(origin);
+  if (!verified) return null;
+
+  const url = new URL("/auth/link/complete", origin);
+  url.searchParams.set("ticket", ticket);
+  url.searchParams.set("next", redirect || "/account");
+  return url;
+}
+
 function base64UrlDecodeToString(value: string): string {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
@@ -208,23 +225,59 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     const forwardedHeaders = getForwardedClientHeaders(request);
 
     if (action === "link") {
+      // May be absent -- and that's fine now (Task 10R): a custom-domain
+      // link has no apex session to present, and identity-svc itself decides
+      // (branching on the signed state's origin, never on anything supplied
+      // here) whether one was actually required. SECURITY INVARIANT: this
+      // value is NEVER used to pick who gets linked -- it's just the bearer
+      // forwarded on this one RPC call, same as any other authenticated
+      // request.
       const accessToken = getAccessToken(cookieStore);
 
-      if (!accessToken) {
-        const loginUrl = new URL("/", SITE_URL);
-        loginUrl.searchParams.set("login", "1");
-        loginUrl.searchParams.set("next", "/account");
-        const response = NextResponse.redirect(loginUrl);
+      try {
+        const linkResult = await authService.linkOAuth(provider, { code, state, csrf, accessToken, headers: forwardedHeaders });
+
+        if (linkResult.mode === "link_ticket") {
+          if (!linkResult.ticket) {
+            // Defensive: ticket mode always carries a ticket per the backend
+            // contract (OAuthLinkResult); an absent one is a hard failure.
+            return errorRedirect("exchange_failed");
+          }
+
+          // AUTHORITATIVE check (see buildLinkTicketRedirect/
+          // isVerifiedTenantOrigin) -- the cheap syntactic isAllowedOrigin
+          // used for the "linked" branch below is NOT sufficient here: the
+          // ticket is single-use, so delivering it anywhere other than the
+          // verified origin either wastes it or hands it to whoever
+          // controls that unverified host. Fail closed.
+          const target = await buildLinkTicketRedirect(linkResult.origin, linkResult.ticket, linkResult.redirect);
+          if (!target) {
+            return errorRedirect("invalid_origin");
+          }
+
+          const response = NextResponse.redirect(target);
+          clearCsrfCookie(response);
+          return response;
+        }
+
+        // mode === "linked" (platform apex / a `.owt` subdomain) -- unchanged.
+        const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
+        const response = NextResponse.redirect(new URL("/account", origin));
         clearCsrfCookie(response);
         return response;
+      } catch (err) {
+        if (err instanceof OAuthLinkAuthRequiredError) {
+          // Same UX as the old client-side pre-check: send the user to log
+          // in, then retry linking from account settings.
+          const loginUrl = new URL("/", SITE_URL);
+          loginUrl.searchParams.set("login", "1");
+          loginUrl.searchParams.set("next", "/account");
+          const response = NextResponse.redirect(loginUrl);
+          clearCsrfCookie(response);
+          return response;
+        }
+        throw err;
       }
-
-      const linkResult = await authService.linkOAuth(provider, code, state, accessToken, csrf, forwardedHeaders);
-      const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
-
-      const response = NextResponse.redirect(new URL("/account", origin));
-      clearCsrfCookie(response);
-      return response;
     }
 
     const result = await authService.exchangeOAuthCode(provider, code, state, csrf, forwardedHeaders);

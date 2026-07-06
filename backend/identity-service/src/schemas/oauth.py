@@ -19,6 +19,7 @@ __all__ = (
     "OAuthURL",
     "OAuthCallbackRequest",
     "OAuthCallbackResult",
+    "OAuthLinkResult",
     "OAuthUserInfo",
     "OAuthConnectionRead",
     "OAuthConnectionAdminRead",
@@ -82,6 +83,34 @@ class OAuthCallbackResult(Token):
     mode: Literal["cookie", "ticket"] = "cookie"
     access_token: str | None = None
     refresh_token: str | None = None
+    ticket: str | None = None
+    origin: str
+    redirect: str
+    action: str | None = None
+
+
+class OAuthLinkResult(BaseModel):
+    """Result of an account-linking attempt (``oauth_flows.link``, Task 10R).
+
+    ``mode="linked"`` (default; platform apex / a ``.owt`` subdomain): the
+    provider identity was attached directly to the LIVE bearer-authenticated
+    user -- ``message``/``provider``/``username`` describe what was linked.
+
+    ``mode="link_ticket"`` (a workspace custom domain): nothing was linked.
+    This response is produced by the ONE fixed apex callback, which shares
+    no cookie with a custom domain (see ``oauth_flows`` module docstring), so
+    there is no live session here to attach the provider identity to.
+    ``ticket`` carries a single-use handle to that PROVIDER identity only
+    (never a site user id -- SECURITY INVARIANT #2); the custom domain's own
+    frontend route redeems it (``rpc.identity.link_complete``, itself
+    bearer-authenticated there) against ITS OWN live session. ``message``/
+    ``provider``/``username`` are omitted in this mode.
+    """
+
+    mode: Literal["linked", "link_ticket"] = "linked"
+    message: str | None = None
+    provider: str | None = None
+    username: str | None = None
     ticket: str | None = None
     origin: str
     redirect: str

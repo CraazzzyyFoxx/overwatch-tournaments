@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-import { isVerifiedTenantOrigin, safeRedirectTarget } from "@/lib/oauth-callback";
+import { buildLinkTicketRedirect, isVerifiedTenantOrigin, safeRedirectTarget } from "@/lib/oauth-callback";
 import { PLATFORM_ZONE } from "@/lib/host";
 
 // isVerifiedTenantOrigin is the authoritative gate for the custom-domain SSO
@@ -91,6 +91,39 @@ describe("isVerifiedTenantOrigin", () => {
   it("rejects the platform apex itself (not a tenant host, and by-host would not resolve it)", async () => {
     byHostWorkspaceId = null;
     expect(await isVerifiedTenantOrigin(`https://${PLATFORM_ZONE}`)).toBe(false);
+  });
+});
+
+// buildLinkTicketRedirect is the Task 10R analogue of the ticket-mode branch
+// tested above for login: it must gate delivery of the account-linking
+// end-ticket through the SAME by_host verification, fail-closed. A ticket
+// delivered to an unverified/attacker origin would let its operator link the
+// victim's provider identity to their own account (see the module's security
+// invariants), so this is exactly as load-bearing as the login ticket gate.
+describe("buildLinkTicketRedirect", () => {
+  it("returns null when the origin fails by-host verification (fail closed)", async () => {
+    byHostWorkspaceId = null;
+    expect(await buildLinkTicketRedirect("https://evil.com", "tic-1", "/account")).toBeNull();
+    // The gate itself ran (and rejected) -- it did not skip straight to
+    // building the URL without checking.
+    expect(lastRequestedUrl).toBe("http://gateway:8080/api/v1/workspaces/by-host?host=evil.com");
+  });
+
+  it("returns null when the by-host fetch throws (network error)", async () => {
+    byHostThrows = true;
+    expect(await buildLinkTicketRedirect("https://anakq.gg", "tic-1", "/account")).toBeNull();
+  });
+
+  it("builds the /auth/link/complete URL only after by-host verification succeeds", async () => {
+    byHostWorkspaceId = 42;
+    const url = await buildLinkTicketRedirect("https://anakq.gg", "tic-1", "/account");
+    expect(url?.toString()).toBe("https://anakq.gg/auth/link/complete?ticket=tic-1&next=%2Faccount");
+  });
+
+  it("defaults the redirect to /account when redirect is empty", async () => {
+    byHostWorkspaceId = 42;
+    const url = await buildLinkTicketRedirect("https://anakq.gg", "tic-1", "");
+    expect(url?.searchParams.get("next")).toBe("/account");
   });
 });
 

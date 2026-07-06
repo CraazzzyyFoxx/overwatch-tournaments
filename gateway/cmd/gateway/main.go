@@ -181,6 +181,11 @@ func run() error {
 	// minted by the apex OAuth callback for the session tokens. Same
 	// anti-brute-force posture as the other auth token-exchange endpoints.
 	mux.HandleFunc("POST /api/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
+	// Custom-domain account-linking end-ticket (Task 10R): redeems a
+	// pending-link ticket minted by a custom-domain OAuth link callback and
+	// attaches its provider identity to the bearer-authenticated caller.
+	// Unlike sso/exchange above, this route IS authenticated.
+	mux.HandleFunc("POST /api/auth/link/complete", identityHandler.LinkComplete)
 	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)

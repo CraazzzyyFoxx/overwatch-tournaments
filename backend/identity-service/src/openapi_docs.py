@@ -86,7 +86,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.identity.oauth_link": {
         "summary": "Link OAuth provider",
-        "description": "Links an OAuth provider connection to the active user via the provider code+state exchange.",
+        "description": "Exchanges the provider code+state and links the connection to the active user (platform apex/subdomain), or -- for a workspace custom domain, which has no live session here -- mints a single-use provider-identity ticket (mode='link_ticket') for rpc.identity.link_complete to redeem instead.",
+    },
+    "rpc.identity.link_complete": {
+        "summary": "Complete custom-domain OAuth link",
+        "description": "Redeems a pending-link ticket minted by rpc.identity.oauth_link and attaches the provider identity it carries to the bearer-authenticated caller; 400 if the ticket is invalid, expired, or already used.",
     },
     "rpc.identity.oauth_connections": {
         "summary": "List OAuth connections",

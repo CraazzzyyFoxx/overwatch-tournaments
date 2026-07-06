@@ -38,7 +38,7 @@ from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import models, schemas
 from src.core.config import settings
 from src.core.redis import get_redis
-from src.services import sso_tickets
+from src.services import pending_link_tickets, sso_tickets
 from src.services.auth_service import AuthService
 from src.services.oauth_service import OAuthService, StatePayload
 
@@ -247,8 +247,40 @@ async def callback(
 
 
 async def link(
-    session: AsyncSession, user: models.AuthUser, provider: str, code: str, state: str, csrf: str | None
-) -> dict:
+    session: AsyncSession,
+    user: models.AuthUser | None,
+    provider: str,
+    code: str,
+    state: str,
+    csrf: str | None,
+) -> schemas.OAuthLinkResult:
+    """Attach a provider identity to a site account (Task 10R re-architecture).
+
+    State HMAC + csrf-binding + state-nonce single-use are verified FIRST and
+    are completely unaffected by ``user``/the branch below (SECURITY
+    INVARIANT #5) -- exactly as before this task.
+
+    ``user`` is the LIVE apex/``.owt``-subdomain session the RPC layer
+    resolved from a bearer access token, if one was presented (it may be
+    ``None`` -- unlike every other authenticated RPC method, a missing bearer
+    is not rejected before reaching here; see ``serve.py``'s
+    ``rpc_oauth_link``). What happens next depends ONLY on the signed
+    state's ``origin`` -- never on anything the caller supplied about who
+    they are:
+
+    - platform apex / a ``.owt`` subdomain: unchanged existing behavior --
+      link the provider identity straight onto ``user``. If ``user`` is
+      ``None`` (no bearer, or an invalid one), this is exactly the same
+      "Not authenticated" signal callers got before this task.
+    - a workspace custom domain: this response IS the fixed apex callback,
+      which never shares a cookie with that domain (see module docstring),
+      so ``user`` -- even if present -- is NOT the custom domain's live
+      session and must never be used to link anything here (SECURITY
+      INVARIANT #1). Instead, mint a single-use ticket carrying ONLY the
+      just-exchanged PROVIDER identity (SECURITY INVARIANT #2); the custom
+      domain's own frontend route resolves the actual linked-to user later,
+      from ITS OWN live session (``link_complete``).
+    """
     payload = _verify_state_for(provider, state, expected_action="link")
     _verify_csrf_binding(payload, csrf)
     await _consume_state_nonce(payload)
@@ -256,14 +288,60 @@ async def link(
     provider_impl = OAuthService.get_provider(provider)
     token_data = await provider_impl.exchange_code(code)
     oauth_user_info = await provider_impl.get_user_info(token_data["access_token"])
+
+    origin_host = urlparse(payload.origin).hostname
+    if origin_host and not is_platform_host(origin_host):
+        ticket = await pending_link_tickets.issue(oauth_user_info, token_data)
+        return schemas.OAuthLinkResult(
+            mode="link_ticket",
+            ticket=ticket,
+            origin=payload.origin,
+            redirect=payload.redirect,
+            action=payload.action,
+        )
+
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
+
+    await OAuthService.link_oauth_to_existing_user(session, user, oauth_user_info, token_data)
+    return schemas.OAuthLinkResult(
+        mode="linked",
+        message=f"{provider.title()} account linked successfully",
+        provider=provider,
+        username=oauth_user_info.username,
+        origin=payload.origin,
+        redirect=payload.redirect,
+        action=payload.action,
+    )
+
+
+async def link_complete(session: AsyncSession, user: models.AuthUser, ticket: str) -> dict:
+    """Redeem a pending-link ticket and attach its PROVIDER identity to the
+    BEARER-authenticated caller (step 6 of the Task 10R end-ticket flow).
+
+    ``user`` is resolved by the RPC layer (``serve.py``'s ``_with_active_user``,
+    same as ``unlink``/``connections``) from the access token presented on
+    THIS call -- i.e. the live session on whichever host this RPC method was
+    invoked for (the custom domain's own frontend route, never the apex).
+    That bearer user IS the linked-to site account; nothing here reads a
+    user/account identifier out of ``ticket`` or anywhere else, because the
+    ticket never carries one (SECURITY INVARIANTS #1, #2, #4).
+    """
+    payload = await pending_link_tickets.redeem(ticket)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired link ticket")
+
+    try:
+        oauth_user_info = schemas.OAuthUserInfo.model_validate(payload["oauth_info"])
+        token_data = payload["token_data"]
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired link ticket") from exc
+
     await OAuthService.link_oauth_to_existing_user(session, user, oauth_user_info, token_data)
     return {
-        "message": f"{provider.title()} account linked successfully",
-        "provider": provider,
+        "message": f"{oauth_user_info.provider.value.title()} account linked successfully",
+        "provider": oauth_user_info.provider.value,
         "username": oauth_user_info.username,
-        "origin": payload.origin,
-        "redirect": payload.redirect,
-        "action": payload.action,
     }
 
 

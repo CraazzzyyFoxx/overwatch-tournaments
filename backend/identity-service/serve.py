@@ -419,13 +419,66 @@ async def rpc_sso_exchange(data: dict, msg: RabbitMessage) -> dict:
 
 @broker.subscriber("rpc.identity.oauth_link")
 async def rpc_oauth_link(data: dict, msg: RabbitMessage) -> dict:
+    """Custom-domain-aware account-link callback (Task 10R re-architecture).
+
+    Unlike every OTHER authenticated RPC method here, a missing bearer is
+    NOT rejected up front (no ``_with_active_user``) -- ``oauth_flows.link``
+    decides whether one is required, branching on the signed OAuth state's
+    origin: a platform-host link still requires a resolvable user (unchanged
+    -- same "Not authenticated" signal as before this task), but a
+    custom-domain link never does; it can only ever mint a single-use
+    provider-identity ticket (``mode="link_ticket"``) for a LIVE session on
+    the custom domain itself to redeem later (``rpc.identity.link_complete``).
+
+    A *present but invalid* access_token is treated the same as a missing
+    one (best-effort resolution, mirroring the gateway's own
+    fail-safe-to-anonymous posture for this route) so a stale platform
+    cookie can never block an otherwise-valid custom-domain ticket issuance;
+    on the platform-host branch this still surfaces as the same generic
+    "Not authenticated" the caller would have seen from a missing bearer.
+    """
     data = data or {}
     provider, code, state = data.get("provider"), data.get("code"), data.get("state")
+    if not (provider and code and state):
+        return rpc_error("unprocessable", "provider, code and state are required")
+
+    access_token = data.get("access_token")
+    try:
+        async with db.async_session_maker() as session:
+            user = None
+            if access_token:
+                try:
+                    user = await auth_flows.resolve_active_user(session, access_token)
+                except HTTPException:
+                    user = None
+            result = await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
+        return rpc_ok(result.model_dump(mode="json"))
+    except HTTPException as exc:
+        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
+    except Exception:  # pragma: no cover - defensive worker guard
+        logger.exception("oauth_link RPC failed")
+        return rpc_error("internal", "internal error")
+
+
+@broker.subscriber("rpc.identity.link_complete")
+async def rpc_link_complete(data: dict, msg: RabbitMessage) -> dict:
+    """Redeem a pending-link ticket (custom-domain account linking, Task
+    10R) and attach the PROVIDER identity it carries to the bearer-
+    authenticated caller.
+
+    Uses ``_with_active_user`` like every other authenticated RPC method --
+    UNLIKE ``rpc_oauth_link`` above, a bearer is mandatory here (SECURITY
+    INVARIANT #4): this is the step that actually resolves the linked-to
+    site account, and that resolution must come from nothing but the live
+    session presented on THIS call.
+    """
+    data = data or {}
+    ticket = data.get("ticket")
 
     async def op(session: Any, user: Any) -> dict:
-        if not (provider and code and state):
-            raise HTTPException(status_code=422, detail="provider, code and state are required")
-        return await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
+        if not ticket or not isinstance(ticket, str):
+            raise HTTPException(status_code=422, detail="ticket is required")
+        return await oauth_flows.link_complete(session, user, ticket)
 
     return await _with_active_user(data.get("access_token"), op)
 

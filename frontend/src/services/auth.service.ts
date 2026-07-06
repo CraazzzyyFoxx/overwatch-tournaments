@@ -20,6 +20,24 @@ type OAuthUrlParams = {
   csrf: string;
 };
 
+export type OAuthLinkMode = "linked" | "link_ticket";
+
+// Named-options object (Task 10R) rather than positional (…, csrf,
+// accessToken?) — a positional signature with two adjacent, easily
+// transposed string params (csrf/accessToken) is exactly the kind of call
+// site a future edit silently swaps by accident. `accessToken` is OPTIONAL:
+// a custom-domain link has no apex session to present one (see
+// oauth-callback.ts's "link" branch) — identity-svc decides server-side
+// whether one was required (SECURITY INVARIANT: never derive the linked-to
+// user from anything but a live session).
+type OAuthLinkParams = {
+  code: string;
+  state: string;
+  csrf: string;
+  accessToken?: string;
+  headers?: ForwardedAuthHeaders;
+};
+
 // Returned by POST /api/auth/oauth/{provider}/callback. `origin`/`redirect`/
 // `action` are decoded server-side from the signed OAuth state (Task 9) so the
 // callback can redirect back to whichever subdomain started the flow.
@@ -41,16 +59,43 @@ export interface OAuthCallbackResult {
   action?: OAuthAction;
 }
 
-// Returned by POST /api/auth/oauth/{provider}/link — same origin/redirect/action
-// echo as OAuthCallbackResult, "for symmetry" (Task 9), so the link redirect can
-// also honor the origin the flow started on.
+// Returned by POST /api/auth/oauth/{provider}/link. `origin`/`redirect`/
+// `action` echo OAuthCallbackResult "for symmetry" (Task 9), so the caller
+// can honor the origin the flow started on either way.
+//
+// `mode` (Task 10R) discriminates two shapes: "linked" (default; platform
+// apex / a `.owt` subdomain) means the provider identity was attached
+// directly — `message`/`provider`/`username` describe what was linked.
+// "link_ticket" (a workspace custom domain) means NOTHING was linked yet:
+// there is no live session on the ONE fixed apex callback that produced this
+// response (see oauth_flows.link's module docstring) to attach the provider
+// identity to. `ticket` then carries a single-use handle to that provider
+// identity ONLY (never a site user id) for the custom domain's own frontend
+// route (`/auth/link/complete`) to redeem against ITS OWN live session
+// (`completeLink` below). `message`/`provider`/`username` are omitted in
+// that mode.
 export interface OAuthLinkResult {
-  message: string;
-  provider: string;
-  username: string;
+  mode?: OAuthLinkMode;
+  message?: string;
+  provider?: string;
+  username?: string;
+  ticket?: string;
   origin: string;
   redirect: string;
-  action: OAuthAction;
+  action?: OAuthAction;
+}
+
+// Thrown by linkOAuth when identity-svc reports the platform-host branch has
+// no resolvable user (missing or invalid apex bearer) — the SAME signal the
+// caller would have gotten before Task 10R moved this decision server-side.
+// Callers should treat this identically to the old client-side pre-check:
+// send the user to log in, then let them retry linking from account
+// settings. Never treated as a generic failure (see oauth-callback.ts).
+export class OAuthLinkAuthRequiredError extends Error {
+  constructor() {
+    super("OAuth account linking requires an authenticated session");
+    this.name = "OAuthLinkAuthRequiredError";
+  }
 }
 
 export const authService = {
@@ -107,25 +152,42 @@ export const authService = {
     return res.json();
   },
 
-  async linkOAuth(
-    provider: OAuthProviderName,
-    code: string,
-    state: string,
-    accessToken: string,
-    csrf: string,
-    headers?: ForwardedAuthHeaders,
-  ): Promise<OAuthLinkResult> {
+  async linkOAuth(provider: OAuthProviderName, params: OAuthLinkParams): Promise<OAuthLinkResult> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/link`, {
       method: "POST",
-      token: accessToken,
-      headers,
-      body: { code, state, csrf },
+      token: params.accessToken,
+      headers: params.headers,
+      body: { code: params.code, state: params.state, csrf: params.csrf },
       throwOnError: false
     });
 
     if (!res.ok) {
+      // 403 here is identity-svc's "Not authenticated" for the platform-host
+      // branch (missing/invalid apex bearer) -- the same signal a missing
+      // accessToken produced client-side before Task 10R. Any other failure
+      // (bad state, provider error, ...) is generic.
+      if (res.status === 403) {
+        throw new OAuthLinkAuthRequiredError();
+      }
       throw new Error(`Failed to link ${provider} OAuth account`);
     }
+    return res.json();
+  },
+
+  // Redeems a one-time pending-link ticket (Task 10R) minted by the apex
+  // `link` callback for a workspace custom domain — the reverse of
+  // ssoExchange: this carries only a PROVIDER identity, and requires the
+  // caller's OWN bearer (the live session on whichever host this runs on).
+  // Called by /auth/link/complete/route.ts, which runs ON the custom domain
+  // itself. The bearer resolves the linked-to user; the ticket never does.
+  async completeLink(ticket: string, accessToken: string): Promise<{ message: string; provider?: string; username?: string }> {
+    const res = await apiFetch("/api/auth/link/complete", {
+      method: "POST",
+      token: accessToken,
+      body: { ticket },
+      throwOnError: false
+    });
+    if (!res.ok) throw new Error("Failed to complete OAuth account link");
     return res.json();
   },
 

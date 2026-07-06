@@ -167,6 +167,113 @@ func TestLogout_ForwardsAccessToken(t *testing.T) {
 	}
 }
 
+// TestOAuthLink_NoBearer_StillCallsIdentity documents the Task 10R behavior
+// change: unlike every other authenticated identity route, OAuthLink no
+// longer rejects a missing bearer at the gateway -- identity-svc decides
+// (branching on the signed OAuth state's origin) whether one is required.
+func TestOAuthLink_NoBearer_StillCallsIdentity(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://anakq.gg","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link", strings.NewReader(`{"code":"c","state":"s","csrf":"x"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !caller.called {
+		t.Fatal("RPC must run even without a bearer token -- identity-svc decides (Task 10R)")
+	}
+}
+
+// TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity is the
+// "hardening" test from the Task 10R brief: a client-supplied access_token
+// in the body must never survive mergeBody's overwrite, whether or not a
+// real bearer is present. With no bearer, the forwarded access_token must be
+// the empty string, never the attacker-supplied value.
+func TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://anakq.gg","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "" {
+		t.Fatalf("access_token = %v, want \"\" (body-supplied value must never survive)", req["access_token"])
+	}
+}
+
+// TestOAuthLink_WithBearer_OverridesBodyAccessToken proves the same
+// overwrite holds when a real bearer IS present: the server-computed
+// access_token (from the Authorization header) always wins over whatever a
+// client put in the JSON body.
+func TestOAuthLink_WithBearer_OverridesBodyAccessToken(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"linked","message":"ok","provider":"discord","username":"u","origin":"https://owt.craazzzyyfoxx.me","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
+	r.Header.Set("Authorization", "Bearer real-token")
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "real-token" {
+		t.Fatalf("access_token = %v, want \"real-token\"", req["access_token"])
+	}
+}
+
+func TestLinkComplete_NoBearer(t *testing.T) {
+	caller := &fakeCaller{}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if caller.called {
+		t.Fatal("RPC must not run without a bearer token -- this route is NOT public (unlike SsoExchange)")
+	}
+}
+
+func TestLinkComplete_ForwardsAccessTokenAndTicket(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"message":"Discord account linked successfully","provider":"discord","username":"u"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	r.Header.Set("Authorization", "Bearer acc")
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if caller.gotQueue != queueLinkComplete {
+		t.Fatalf("queue = %q", caller.gotQueue)
+	}
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "acc" || req["ticket"] != "tic-1" {
+		t.Fatalf("link_complete body = %v", req)
+	}
+}
+
+// TestLinkComplete_BodyAccessTokenNeverOverridesBearer guards the same
+// footgun as OAuthLink above, for the new route.
+func TestLinkComplete_BodyAccessTokenNeverOverridesBearer(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete",
+		strings.NewReader(`{"ticket":"tic-1","access_token":"attacker-supplied"}`))
+	r.Header.Set("Authorization", "Bearer real-token")
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "real-token" {
+		t.Fatalf("access_token = %v, want \"real-token\"", req["access_token"])
+	}
+}
+
 func TestRbacListSessions_ForwardsAllQuery(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":2,"per_page":25}}`)}
 	r := httptest.NewRequest(http.MethodGet,
