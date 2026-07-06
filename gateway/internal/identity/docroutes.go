@@ -33,7 +33,6 @@ var PublicDocRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/auth/oauth/providers", Queue: "rpc.identity.oauth_providers", Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/auth/oauth/connections", Queue: "rpc.identity.oauth_connections", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/url", Queue: "rpc.identity.oauth_url", Auth: edge.AuthOptional},
-	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Auth: edge.AuthNone},
 	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Body: true, Auth: edge.AuthNone},
 	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/auth/oauth/{provider}/unlink", Queue: "rpc.identity.oauth_unlink", Auth: edge.AuthRequired, Success: 204},

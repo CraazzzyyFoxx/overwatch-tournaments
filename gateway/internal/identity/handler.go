@@ -260,19 +260,6 @@ func (h *Handler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
 }
 
-// OAuthCallbackGet mirrors GET /oauth/{provider}/callback?code=&state= -> Token.
-func (h *Handler) OAuthCallbackGet(w http.ResponseWriter, r *http.Request) {
-	ua, ip := clientMeta(r)
-	body, _ := json.Marshal(map[string]any{
-		"provider":   r.PathValue("provider"),
-		"code":       r.URL.Query().Get("code"),
-		"state":      r.URL.Query().Get("state"),
-		"user_agent": ua,
-		"ip_address": ip,
-	})
-	h.callIdentity(w, r, queueOAuthCallback, body, http.StatusOK)
-}
-
 // OAuthCallbackPost mirrors POST /oauth/{provider}/callback (body code+state) -> Token.
 func (h *Handler) OAuthCallbackPost(w http.ResponseWriter, r *http.Request) {
 	body, ok := bodyWithMeta(w, r, map[string]any{"provider": r.PathValue("provider")})
