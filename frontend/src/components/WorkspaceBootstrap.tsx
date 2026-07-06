@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { resolveHost } from "@/lib/host";
 import { LEGACY_WORKSPACE_COOKIE, useWorkspaceStore, WORKSPACE_COOKIE } from "@/stores/workspace.store";
 
 export default function WorkspaceBootstrap() {
@@ -27,6 +28,13 @@ export default function WorkspaceBootstrap() {
   }, [fetchWorkspaces]);
 
   useEffect(() => {
+    // On a tenant (white-label) host the SSR is already scoped by the
+    // `x-owt-workspace-id` header (host beats cookie), the workspace is fixed,
+    // and no workspace cookie is written — so the cookie-absence "correction"
+    // below would fire a needless router.refresh()+invalidateQueries() on every
+    // load. Skip it entirely there.
+    const isTenantHost = resolveHost(window.location.hostname).mode === "tenant";
+
     const workspaceChanged =
       prevWorkspaceId.current !== null &&
       currentWorkspaceId !== null &&
@@ -40,7 +48,7 @@ export default function WorkspaceBootstrap() {
       !correctedInitialSsr.current &&
       currentWorkspaceId !== null;
 
-    if (workspaceChanged || needsInitialCorrection) {
+    if (!isTenantHost && (workspaceChanged || needsInitialCorrection)) {
       correctedInitialSsr.current = true;
       // Invalidate client-side React Query cache
       queryClient.invalidateQueries();
