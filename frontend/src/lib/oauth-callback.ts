@@ -4,14 +4,18 @@ import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
 import { getAccessToken } from "@/lib/auth-cookies";
+import { internalApiOrigin } from "@/lib/api-routes";
 import type { OAuthProviderName } from "@/types/auth.types";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const IS_PROD = process.env.NODE_ENV === "production";
 
 // Cookie lifetime used when the access token's `exp` can't be decoded.
-const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
-const REFRESH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+// Exported so /auth/sso/route.ts (the custom-domain far side of the ticket
+// handoff below) applies the exact same cookie lifetimes instead of
+// duplicating the literals.
+export const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
+export const REFRESH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 // Session cookies are readable across every subdomain (SSO) in production;
 // omitted in dev since `localhost` has no registrable platform-zone domain.
@@ -52,7 +56,9 @@ function isAllowedOrigin(origin: string): boolean {
 // http(s)) silently escape `origin` entirely — a classic OAuth-state open
 // redirect. Let the URL parser do the normalization, then verify the
 // *resulting* origin still matches before trusting it.
-function safeRedirectTarget(redirect: string, origin: string): URL {
+// Exported so /auth/sso/route.ts can clamp its own post-login redirect the
+// same way, so a `next` param can never escape the custom domain's origin.
+export function safeRedirectTarget(redirect: string, origin: string): URL {
   try {
     const target = new URL(redirect || "/", origin);
     if (target.origin === new URL(origin).origin) return target;
@@ -60,6 +66,52 @@ function safeRedirectTarget(redirect: string, origin: string): URL {
     // fall through to the safe default below
   }
   return new URL("/", origin);
+}
+
+// AUTHORITATIVE gate for the ticket-handoff branch (see `handleOAuthCallback`
+// below). `isAllowedOrigin` is a cheap, purely syntactic pre-filter — it
+// accepts ANY well-formed http(s) FQDN that merely *looks* like a tenant
+// host (`resolveHost(...).mode === "tenant"`), including one nobody ever
+// registered. That's fine for the existing cookie-mode path, because those
+// cookies are set with `Domain=.owt` — a host outside the platform zone
+// could never read them regardless of what `origin` claims. It is NOT fine
+// for the ticket branch: the ticket is delivered by redirecting the user's
+// browser straight to `<origin>/auth/sso?ticket=...`, so an unverified
+// `origin` IS an account takeover (attacker crafts
+// `.../auth/discord/login?origin=https://evil.com`, victim logs in as
+// themselves, their ticket lands on evil.com, attacker redeems it via the
+// public `sso_exchange`).
+//
+// The only source of truth for "is this a real, resolvable workspace host"
+// is the backend's `by_host` lookup (already used by `middleware.ts`'s
+// `resolveWorkspace`, whose fetch shape/error handling this mirrors) — a
+// numeric `workspace_id` means a registered subdomain or a *verified*
+// custom domain; `null`, a non-OK response, or a thrown/network error must
+// all fail CLOSED (never deliver a ticket to an unverified host). Unlike
+// `middleware.ts`'s lookup, there is no TTL cache here: this runs once per
+// login, not on every page request, so there's no hot-path cost to trade
+// staleness for.
+export async function isVerifiedTenantOrigin(origin: string): Promise<boolean> {
+  if (!isAllowedOrigin(origin)) return false;
+
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+
+  try {
+    const base = internalApiOrigin() ?? SITE_URL;
+    const res = await fetch(`${base}/api/v1/workspaces/by-host?host=${encodeURIComponent(hostname)}`, {
+      headers: { accept: "application/json" }
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return typeof data?.workspace_id === "number";
+  } catch {
+    return false;
+  }
 }
 
 function base64UrlDecodeToString(value: string): string {
@@ -176,6 +228,43 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     }
 
     const result = await authService.exchangeOAuthCode(provider, code, state, csrf, forwardedHeaders);
+
+    if (result.mode === "ticket") {
+      if (!result.ticket) {
+        // Defensive: ticket mode always carries a ticket per the backend
+        // contract (OAuthCallbackResult); an absent one is a hard failure,
+        // not a fall-through to the cookie-mode field access below.
+        return errorRedirect("exchange_failed");
+      }
+
+      // AUTHORITATIVE check (see isVerifiedTenantOrigin) — the cheap
+      // syntactic `isAllowedOrigin` used for the cookie-mode `origin` below
+      // is NOT sufficient here. There is no safe fallback (e.g. "redirect
+      // to the apex instead") for an unverified origin: the ticket is
+      // single-use, so delivering it anywhere other than the verified
+      // origin either wastes it or, worse, hands it to whoever controls
+      // that unverified host. Fail closed.
+      const verified = await isVerifiedTenantOrigin(result.origin);
+      if (!verified) {
+        return errorRedirect("invalid_origin");
+      }
+
+      const ssoUrl = new URL("/auth/sso", result.origin);
+      ssoUrl.searchParams.set("ticket", result.ticket);
+      ssoUrl.searchParams.set("next", result.redirect);
+
+      const response = NextResponse.redirect(ssoUrl);
+      clearCsrfCookie(response);
+      return response;
+    }
+
+    if (!result.access_token || !result.refresh_token) {
+      // Defensive: cookie mode (the default) always carries both tokens per
+      // the backend contract; treat a missing one as a hard failure rather
+      // than setting a cookie to "undefined".
+      return errorRedirect("exchange_failed");
+    }
+
     const origin = isAllowedOrigin(result.origin) ? result.origin : `https://${PLATFORM_ZONE}`;
     const target = safeRedirectTarget(result.redirect, origin);
 

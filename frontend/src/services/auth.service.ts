@@ -1,6 +1,8 @@
 import type { AuthUser, LinkedPlayer, OAuthProviderAvailability, OAuthProviderName, TokenPair } from "@/types/auth.types";
 import { apiFetch } from "@/lib/api-fetch";
 
+export type OAuthCallbackMode = "cookie" | "ticket";
+
 type OAuthUrlResponse = {
   provider: string;
   url: string;
@@ -21,12 +23,22 @@ type OAuthUrlParams = {
 // Returned by POST /api/auth/oauth/{provider}/callback. `origin`/`redirect`/
 // `action` are decoded server-side from the signed OAuth state (Task 9) so the
 // callback can redirect back to whichever subdomain started the flow.
+//
+// `mode` (Task 9, custom domains) discriminates two shapes the backend can
+// return: "cookie" (platform apex / a `.owt` subdomain) carries the raw
+// tokens as before; "ticket" (a workspace custom domain, which can't read a
+// cookie set on the apex) carries a one-time `ticket` instead and omits the
+// tokens entirely. All four fields are optional so this stays backward-safe
+// against older/cached responses that predate `mode` — callers must narrow
+// on `mode`/presence before using either shape.
 export interface OAuthCallbackResult {
-  access_token: string;
-  refresh_token: string;
+  access_token?: string;
+  refresh_token?: string;
+  mode?: OAuthCallbackMode;
+  ticket?: string;
   origin: string;
   redirect: string;
-  action: OAuthAction;
+  action?: OAuthAction;
 }
 
 // Returned by POST /api/auth/oauth/{provider}/link — same origin/redirect/action
@@ -77,6 +89,21 @@ export const authService = {
       throwOnError: false
     });
     if (!res.ok) throw new Error(`Failed to complete ${provider} OAuth`);
+    return res.json();
+  },
+
+  // Redeems a one-time SSO ticket (Task 9) minted by the apex OAuth callback
+  // for a workspace custom domain that can't read a cookie set on the apex.
+  // Called by /auth/sso/route.ts, which runs ON the custom domain itself —
+  // never by the apex. No bearer token: the ticket alone (single-use, 60s
+  // TTL, opaque) is the credential here.
+  async ssoExchange(ticket: string): Promise<TokenPair> {
+    const res = await apiFetch("/api/auth/sso/exchange", {
+      method: "POST",
+      body: { ticket },
+      throwOnError: false
+    });
+    if (!res.ok) throw new Error("Failed to exchange SSO ticket");
     return res.json();
   },
 
