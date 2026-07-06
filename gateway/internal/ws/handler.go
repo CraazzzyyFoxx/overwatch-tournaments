@@ -44,6 +44,14 @@ type Handler struct {
 // toward the active-user metrics. allowedOrigins, when non-empty, enforces the
 // browser Origin against that allowlist (CSWSH protection); when empty the
 // previous permissive behaviour is kept (see accept setup below).
+//
+// config.Load defaults GATEWAY_WS_ALLOWED_ORIGINS to the platform apex plus
+// the "*.owt.craazzzyyfoxx.me" wildcard (coder/websocket's OriginPatterns
+// supports "*" globs, so this also covers every tenant subdomain), so a
+// default deployment always takes the allowlist branch below. The
+// InsecureSkipVerify fallback only fires if an operator explicitly overrides
+// GATEWAY_WS_ALLOWED_ORIGINS to an empty value — it must never be relied on
+// in production.
 func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, recordActive func(userID int64)) *Handler {
 	accept := &websocket.AcceptOptions{}
 	if len(allowedOrigins) > 0 {

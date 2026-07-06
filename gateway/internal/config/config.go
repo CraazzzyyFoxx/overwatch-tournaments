@@ -14,6 +14,15 @@ import (
 	"time"
 )
 
+// defaultWSAllowedOrigins is the fallback for GATEWAY_WS_ALLOWED_ORIGINS. It
+// covers the platform apex plus every tenant subdomain (workspace white-label
+// hosts, see docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md)
+// so that ws.NewHandler never receives an empty allow-list in a default
+// deployment and falls back to AcceptOptions.InsecureSkipVerify. Operators can
+// still override this with an explicit (possibly empty) CSV, but the default
+// itself must never leave production open.
+const defaultWSAllowedOrigins = "https://owt.craazzzyyfoxx.me,https://*.owt.craazzzyyfoxx.me"
+
 // Config holds all runtime settings for the gateway.
 type Config struct {
 	Port             string
@@ -127,7 +136,7 @@ func Load() (*Config, error) {
 		DBPgBouncer:      getenvBool("DB_PGBOUNCER", false),
 		WSIdleTimeout:    time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
 		WSReplayLimit:    getenvInt("WS_REPLAY_LIMIT", 500),
-		WSAllowedOrigins: splitCSV(os.Getenv("GATEWAY_WS_ALLOWED_ORIGINS")),
+		WSAllowedOrigins: splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),
 		AuthRateLimit:    getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
 		AuthRateWindow:   time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
 		Upstreams: Upstreams{
