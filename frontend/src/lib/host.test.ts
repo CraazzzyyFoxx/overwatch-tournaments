@@ -17,4 +17,11 @@ describe("resolveHost", () => {
     expect(resolveHost(`api.${PLATFORM_ZONE}`)).toEqual({ mode: "platform" });
     expect(resolveHost(`a.b.${PLATFORM_ZONE}`)).toEqual({ mode: "platform" });
   });
+
+  it("treats suffix-collision, foreign, and empty hosts as platform", () => {
+    // Leading-dot suffix check must NOT match a host that merely ends with the zone string.
+    expect(resolveHost(`evil${PLATFORM_ZONE}`)).toEqual({ mode: "platform" });
+    expect(resolveHost("example.com")).toEqual({ mode: "platform" });
+    expect(resolveHost("")).toEqual({ mode: "platform" });
+  });
 });
