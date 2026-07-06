@@ -45,6 +45,7 @@ def subdomain_from_host(host: str) -> str | None:
     label = hostname[: -len(suffix)]
     if not label or "." in label:  # apex has empty label; multi-segment rejected
         return None
-    if label == "www" or label in RESERVED_SUBDOMAINS:
+    try:
+        return validate_subdomain_label(label)
+    except ValueError:
         return None
-    return label

@@ -39,3 +39,17 @@ def test_subdomain_from_host_ignores_apex_www_and_foreign():
     assert subdomain_from_host("a.b.owt.craazzzyyfoxx.me") is None  # multi-segment
     assert subdomain_from_host("evil.com") is None
     assert subdomain_from_host("team-a.owt.craazzzyyfoxx.me:443") == "team-a"  # port stripped
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "te$t.owt.craazzzyyfoxx.me",
+        "-team.owt.craazzzyyfoxx.me",
+        ("a" * 64) + ".owt.craazzzyyfoxx.me",
+        "api.owt.craazzzyyfoxx.me",
+        "admin.owt.craazzzyyfoxx.me",
+    ],
+)
+def test_subdomain_from_host_rejects_invalid_or_reserved(host):
+    assert subdomain_from_host(host) is None
