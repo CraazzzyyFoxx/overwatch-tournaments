@@ -47,7 +47,7 @@ The TLS termination is handled by Traefik (external to the docker-compose stack,
 
 ### Wildcard Certificate via DNS-01 ACME
 
-**Rationale:** A wildcard certificate for `*.owt.craazzzyyfoxx.me` covers both the apex and all subdomains, avoiding Let's Encrypt's per-domain rate limits and simplifying multi-tenant DNS validation.
+**Rationale:** A wildcard certificate for `*.owt.craazzzyyfoxx.me` covers all subdomains. To also cover the bare apex domain `owt.craazzzyyfoxx.me`, both the apex and the wildcard must be included as SANs (Subject Alternative Names) on the same certificate. This avoids Let's Encrypt's per-domain rate limits and simplifies multi-tenant DNS validation.
 
 #### Prerequisites
 
@@ -91,13 +91,22 @@ certificatesResolvers:
 
 #### Certificate Issuance
 
-Traefik will automatically request and renew the certificate when a matching route (host rule) is first accessed:
+Traefik will automatically request and renew the certificate when a matching route (host rule) is first accessed. The `tls.domains` configuration explicitly specifies that both the apex and wildcard must be on the same certificate:
 
 ```yaml
 # In Traefik router/service config
 - Host(`owt.craazzzyyfoxx.me`) || HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.owt.craazzzyyfoxx.me`)
-- CertResolver: dns-acme
+  tls:
+    certResolver: dns-acme
+    domains:
+      - main: "owt.craazzzyyfoxx.me"
+        sans:
+          - "*.owt.craazzzyyfoxx.me"
 ```
+
+**Important:** The `tls.domains` entry ensures that both the apex (`main`) and the wildcard (`sans`) are included on the certificate. Without explicit SAN configuration, Let's Encrypt may issue separate certificates.
+
+**Note on HostRegexp (Traefik version):** Traefik v2 supports named captures in `HostRegexp` (e.g., `{subdomain:[a-zA-Z0-9-]+}`). Traefik v3 removed named-capture support from `HostRegexp` — use a plain regex pattern instead if upgrading to v3.
 
 **Traefik will:**
 1. Create a DNS TXT record in your domain via API (DNS-01 challenge)
@@ -119,11 +128,38 @@ Traefik automatically renews certificates 30 days before expiry. Monitor Traefik
 
 #### Manual Renewal (if needed)
 
-```bash
-# On the host running Traefik
-traefik --acme.onHostRule=true --entryPoints.web.address=:80 \
-  --certificatesResolvers.dns-acme.acme.dnsChallenge.provider=cloudflare
-```
+In Traefik v2/v3, certificates are managed automatically by the `certificatesResolvers.<name>.acme` configuration and renew 30 days before expiry. If you need to force an immediate renewal:
+
+1. **Locate the ACME storage file** (typically `/root/overwatch-tournaments/acme.json`):
+   ```bash
+   # On the host running Traefik
+   ls -lh /root/overwatch-tournaments/acme.json
+   ```
+
+2. **Remove the stored certificate entry** (this forces re-issuance on next route access):
+   ```bash
+   # Backup first
+   cp /root/overwatch-tournaments/acme.json /root/overwatch-tournaments/acme.json.backup
+   
+   # Remove the certificate entry (or delete the entire file to force re-issuance)
+   rm /root/overwatch-tournaments/acme.json
+   ```
+
+3. **Restart Traefik** to trigger certificate re-issuance:
+   ```bash
+   # If Traefik runs as systemd service
+   sudo systemctl restart traefik
+   
+   # Or if running in Docker
+   docker restart traefik
+   ```
+
+4. **Monitor logs** to confirm the new certificate is issued:
+   ```bash
+   docker logs traefik | grep -i acme
+   # or
+   journalctl -u traefik -f
+   ```
 
 ---
 
