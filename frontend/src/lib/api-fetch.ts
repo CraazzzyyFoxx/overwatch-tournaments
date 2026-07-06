@@ -76,9 +76,11 @@ function domainBehavior(path: string): DomainBehavior {
 
 const getServerWorkspaceId = cache(async (): Promise<string | undefined> => {
   try {
-    const { cookies } = await import("next/headers");
+    const { headers, cookies } = await import("next/headers");
+    const headerId = (await headers()).get("x-owt-workspace-id");
+    if (headerId) return headerId;
     const cookieStore = await cookies();
-    return cookieStore.get("aqt-workspace-id")?.value;
+    return cookieStore.get("owt-workspace-id")?.value ?? cookieStore.get("aqt-workspace-id")?.value;
   } catch {
     return undefined;
   }
