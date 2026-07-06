@@ -31,11 +31,23 @@ import { apiFetch } from "@/lib/api-fetch";
 const USER_TTL_SECONDS = 300;
 
 export default class userService {
-  static async getAll(params: SearchPaginationParams): Promise<PaginatedResponse<User>> {
+  /**
+   * `options.workspaceId`, when provided (even as `null`), pins the request to
+   * that workspace explicitly instead of resolving it from ambient request
+   * headers/cookies. Required for callers running inside `unstable_cache`
+   * (e.g. the sitemap), where Next.js forbids calling `headers()`/`cookies()`.
+   */
+  static async getAll(
+    params: SearchPaginationParams,
+    options?: { workspaceId?: string | number | null }
+  ): Promise<PaginatedResponse<User>> {
+    const hasWorkspaceOverride = options !== undefined;
     return apiFetch("/api/v1/users", {
       query: {
-        ...params
-      }
+        ...params,
+        workspace_id: hasWorkspaceOverride ? options?.workspaceId ?? undefined : undefined
+      },
+      skipWorkspace: hasWorkspaceOverride
     }).then((res) => res.json());
   }
   static async getUserByName(name: string): Promise<User> {
