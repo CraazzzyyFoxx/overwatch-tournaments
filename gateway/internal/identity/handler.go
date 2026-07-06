@@ -244,9 +244,19 @@ func (h *Handler) OAuthProviders(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthProviders, []byte("{}"), http.StatusOK)
 }
 
-// OAuthURL mirrors GET /oauth/{provider}/url.
+// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=.
+// origin/redirect/action/csrf get signed into the OAuth state server-side
+// (identity-service oauth_flows.get_url) so the callback can later redirect
+// back to the originating host and bind the browser via the csrf cookie.
 func (h *Handler) OAuthURL(w http.ResponseWriter, r *http.Request) {
-	body, _ := json.Marshal(map[string]any{"provider": r.PathValue("provider")})
+	q := r.URL.Query()
+	body, _ := json.Marshal(map[string]any{
+		"provider": r.PathValue("provider"),
+		"origin":   q.Get("origin"),
+		"redirect": q.Get("redirect"),
+		"action":   q.Get("action"),
+		"csrf":     q.Get("csrf"),
+	})
 	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
 }
 
