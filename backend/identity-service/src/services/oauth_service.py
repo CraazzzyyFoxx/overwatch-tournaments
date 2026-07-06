@@ -3,6 +3,7 @@ Generic OAuth service for multiple providers
 """
 
 import base64
+import hashlib
 import hmac
 import json
 import secrets
@@ -391,7 +392,12 @@ class StatePayload:
     registered with each provider -- can send the user back to the tenant
     subdomain that started the flow. ``nonce`` is exposed so the caller can
     enforce single-use / replay protection (see ``oauth_flows.callback``);
-    ``verify_state`` itself does not consume it.
+    ``verify_state`` itself does not consume it. ``csrf`` is the SHA-256 hex
+    digest of the raw CSRF cookie value that was live in the browser when the
+    flow started (browser-binding, closes OAuth login/link CSRF) -- this
+    dataclass never carries the raw token, only its hash, and does not
+    compare it against anything; the caller (``oauth_flows``) does that with
+    the raw cookie value it receives separately.
     """
 
     origin: str
@@ -400,6 +406,7 @@ class StatePayload:
     provider: str
     nonce: str
     exp: int
+    csrf: str
 
 
 class OAuthService:
@@ -488,10 +495,20 @@ class OAuthService:
         return cls._encode_state_part(digest)
 
     @classmethod
-    def encode_state(cls, *, origin: str, redirect: str, action: str, provider: str) -> str:
+    def encode_state(cls, *, origin: str, redirect: str, action: str, provider: str, csrf: str) -> str:
         """Build a signed, short-lived OAuth ``state`` carrying the originating
         host, post-auth redirect path, and action (``login``/``link``)
         alongside the provider.
+
+        ``csrf`` is the RAW CSRF cookie token (never the hash) that was live
+        in the browser that is about to start this flow; only its SHA-256 hex
+        digest is stored in the payload (short key ``"c"``) -- the raw value
+        itself is never persisted, signed into anything retrievable, or
+        logged. This is what lets ``oauth_flows`` bind the eventual callback
+        to the SAME browser: an attacker can trigger ``get_url`` for
+        themselves and obtain a validly-signed ``state``, but cannot read the
+        victim's HttpOnly cookie, so they cannot produce a ``csrf`` value
+        whose hash matches this one.
 
         Pure and Redis/DB-free: the returned string is fully self-contained
         (``base64url(json) + "." + base64url(hmac)``), so it round-trips
@@ -503,6 +520,7 @@ class OAuthService:
         """
         now_ts = int(datetime.now(UTC).timestamp())
         ttl_seconds = max(settings.OAUTH_STATE_EXPIRE_MINUTES, 1) * 60
+        csrf_hash = hashlib.sha256(csrf.encode("utf-8")).hexdigest()
         payload = {
             "o": origin,
             "r": redirect,
@@ -510,6 +528,7 @@ class OAuthService:
             "p": provider,
             "n": cls._encode_state_part(secrets.token_bytes(24)),
             "e": now_ts + ttl_seconds,
+            "c": csrf_hash,
         }
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         signature = cls._build_payload_signature(payload_json)
@@ -525,7 +544,10 @@ class OAuthService:
         ``HTTPException``, so this stays usable from a plain unit test.
         Nonce single-use / replay protection is intentionally NOT enforced
         here; the caller must consume ``StatePayload.nonce`` itself (see
-        ``oauth_flows.callback``).
+        ``oauth_flows.callback``). Likewise, this function only returns the
+        stored ``csrf`` hash (``StatePayload.csrf``) -- it does NOT compare it
+        against a cookie, since that requires the raw cookie value which only
+        the RPC-layer caller (``oauth_flows``) has access to.
         """
         if not state or not isinstance(state, str):
             raise ValueError("state is required")
@@ -551,6 +573,7 @@ class OAuthService:
                 provider=str(payload["p"]),
                 nonce=str(payload["n"]),
                 exp=exp,
+                csrf=str(payload["c"]),
             )
         except ValueError:
             raise
@@ -569,7 +592,9 @@ class OAuthService:
         return provider
 
     @classmethod
-    def generate_oauth_url(cls, provider_name: str, *, origin: str, redirect: str, action: str) -> tuple[str, str]:
+    def generate_oauth_url(
+        cls, provider_name: str, *, origin: str, redirect: str, action: str, csrf: str
+    ) -> tuple[str, str]:
         """
         Generate an OAuth authorization URL for the given provider.
 
@@ -578,9 +603,12 @@ class OAuthService:
         ``origin``. ``origin``/``redirect``/``action`` travel inside the
         signed ``state`` instead, so the callback (which always lands on that
         one fixed URL) can send the user back to the tenant subdomain that
-        started the flow. Returns (url, state).
+        started the flow. ``csrf`` is the RAW CSRF cookie token (never
+        stored, never logged) -- only its SHA-256 hash is embedded in the
+        signed state (see ``encode_state``), binding the eventual callback to
+        the same browser. Returns (url, state).
         """
-        state = cls.encode_state(origin=origin, redirect=redirect, action=action, provider=provider_name)
+        state = cls.encode_state(origin=origin, redirect=redirect, action=action, provider=provider_name, csrf=csrf)
 
         provider = cls.get_provider(provider_name)
         url = provider.get_authorization_url(state)

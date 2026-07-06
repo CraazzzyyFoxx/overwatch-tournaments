@@ -1,11 +1,21 @@
-"""Signed OAuth ``state`` payload: encode/verify round-trip (Task 9).
+"""Signed OAuth ``state`` payload: encode/verify round-trip (Task 9) plus the
+browser-binding CSRF hash (Task 9b).
 
 Pure and Redis/DB-free by design — ``encode_state``/``verify_state`` only do
 HMAC signing + an embedded expiry check. Nonce single-use (replay) protection
 is enforced separately in ``oauth_flows.callback`` where a Redis client is
 available; that half is intentionally NOT exercised here (see brief).
+
+Task 9b adds a ``csrf`` field: the state carries only ``sha256(raw_token)``,
+never the raw token itself. The flow-level compare against the raw cookie
+value (``oauth_flows._verify_csrf_binding``, exercised via ``callback``/
+``link``) IS unit-testable without infra, because a missing/mismatched
+cookie is rejected before either function ever touches Redis or the DB --
+see ``test_callback_rejects_missing_csrf`` / ``test_link_rejects_mismatched_csrf``.
 """
 
+import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -51,6 +61,7 @@ def test_state_roundtrip_carries_origin_and_action() -> None:
         redirect="/account",
         action="login",
         provider="discord",
+        csrf="raw-csrf-token",
     )
 
     payload = OAuthService.verify_state(state)
@@ -69,6 +80,7 @@ def test_state_roundtrip_carries_link_action() -> None:
         redirect="/account",
         action="link",
         provider="battlenet",
+        csrf="raw-csrf-token",
     )
 
     payload = OAuthService.verify_state(state)
@@ -77,8 +89,30 @@ def test_state_roundtrip_carries_link_action() -> None:
     assert payload.provider == "battlenet"
 
 
+def test_state_roundtrip_carries_csrf_hash() -> None:
+    """The state stores sha256(raw token), never the raw token itself."""
+    state = OAuthService.encode_state(
+        origin="https://team-a.owt.craazzzyyfoxx.me",
+        redirect="/account",
+        action="login",
+        provider="discord",
+        csrf="super-secret-cookie-value",
+    )
+
+    payload = OAuthService.verify_state(state)
+
+    assert payload.csrf == hashlib.sha256(b"super-secret-cookie-value").hexdigest()
+    assert "super-secret-cookie-value" not in state
+
+
 def test_state_nonces_are_unique() -> None:
-    kwargs = {"origin": "https://team-a.owt.craazzzyyfoxx.me", "redirect": "/", "action": "login", "provider": "discord"}
+    kwargs = {
+        "origin": "https://team-a.owt.craazzzyyfoxx.me",
+        "redirect": "/",
+        "action": "login",
+        "provider": "discord",
+        "csrf": "raw-csrf-token",
+    }
 
     first = OAuthService.verify_state(OAuthService.encode_state(**kwargs))
     second = OAuthService.verify_state(OAuthService.encode_state(**kwargs))
@@ -92,6 +126,7 @@ def test_state_rejects_tamper() -> None:
         redirect="/",
         action="login",
         provider="discord",
+        csrf="raw-csrf-token",
     )
     tampered = state[:-2] + ("aa" if not state.endswith("aa") else "bb")
 
@@ -113,6 +148,7 @@ def test_state_rejects_expired() -> None:
         redirect="/",
         action="login",
         provider="discord",
+        csrf="raw-csrf-token",
     )
     encoded_payload, _signature = state.split(".", maxsplit=1)
     payload = json.loads(OAuthService._decode_state_part(encoded_payload))
@@ -135,6 +171,7 @@ def test_get_url_embeds_origin_redirect_action(monkeypatch: pytest.MonkeyPatch) 
         origin="https://team-a.owt.craazzzyyfoxx.me",
         redirect="/account",
         action="login",
+        csrf="raw-csrf-token",
     )
 
     payload = OAuthService.verify_state(result.state)
@@ -144,6 +181,9 @@ def test_get_url_embeds_origin_redirect_action(monkeypatch: pytest.MonkeyPatch) 
     assert payload.provider == "discord"
     # redirect_uri must stay the fixed apex callback -- never derived from origin.
     assert "team-a" not in result.url
+    # the raw cookie token never appears in the state or the URL -- only its hash.
+    assert "raw-csrf-token" not in result.state
+    assert "raw-csrf-token" not in result.url
 
 
 def test_get_url_rejects_invalid_action(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -156,6 +196,94 @@ def test_get_url_rejects_invalid_action(monkeypatch: pytest.MonkeyPatch) -> None
             origin="https://team-a.owt.craazzzyyfoxx.me",
             redirect="/",
             action="delete-everything",
+            csrf="raw-csrf-token",
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def test_callback_rejects_missing_csrf() -> None:
+    """Fail closed: no cookie forwarded at all -- the whole point of the binding.
+
+    Both ``_verify_state_for`` and ``_verify_csrf_binding`` run before
+    ``callback`` ever touches Redis (``_consume_state_nonce``) or the DB
+    (``OAuthService.handle_callback``), so this is testable with ``session``
+    left as ``None`` and no infra running.
+    """
+    state = OAuthService.encode_state(
+        origin="https://team-a.owt.craazzzyyfoxx.me",
+        redirect="/",
+        action="login",
+        provider="discord",
+        csrf="the-real-browser-cookie-value",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            oauth_flows.callback(
+                session=None,
+                provider="discord",
+                code="unused-code",
+                state=state,
+                user_agent=None,
+                ip_address=None,
+                csrf=None,
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def test_callback_rejects_mismatched_csrf() -> None:
+    """A state minted while the victim's browser held one cookie value must
+    reject a callback presenting any other value -- e.g. an attacker's own
+    cookie, forwarded while replaying a state they tricked the victim into
+    using (login CSRF)."""
+    state = OAuthService.encode_state(
+        origin="https://team-a.owt.craazzzyyfoxx.me",
+        redirect="/",
+        action="login",
+        provider="discord",
+        csrf="the-real-browser-cookie-value",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            oauth_flows.callback(
+                session=None,
+                provider="discord",
+                code="unused-code",
+                state=state,
+                user_agent=None,
+                ip_address=None,
+                csrf="an-attackers-forged-cookie-value",
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def test_link_rejects_mismatched_csrf() -> None:
+    """Account-linking CSRF: the same browser-binding must be enforced on
+    the ``link`` flow, not just ``callback``."""
+    state = OAuthService.encode_state(
+        origin="https://owt.craazzzyyfoxx.me",
+        redirect="/account",
+        action="link",
+        provider="battlenet",
+        csrf="the-real-browser-cookie-value",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            oauth_flows.link(
+                session=None,
+                user=None,
+                provider="battlenet",
+                code="unused-code",
+                state=state,
+                csrf="an-attackers-forged-cookie-value",
+            )
         )
 
     assert exc_info.value.status_code == 400

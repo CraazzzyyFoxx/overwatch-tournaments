@@ -8,9 +8,20 @@ replay protection -- is enforced here via Redis (see ``_consume_state_nonce``).
 Callbacks return an ``OAuthCallbackResult`` (token + the decoded state
 fields); the frontend handles its own redirect back to ``origin``. Provider
 code-exchange does outbound HTTP from identity-svc.
+
+The state alone is NOT proof the callback came from the same browser that
+started the flow -- anyone can obtain a validly-signed state by calling
+``get_url`` themselves (login/account-linking CSRF). ``callback``/``link``
+close that gap by comparing ``sha256(csrf)`` (``csrf`` being the RAW value of
+an HttpOnly cookie set when the flow started) against the hash embedded in
+the state (see ``_verify_csrf_binding``); a missing or mismatched cookie is
+rejected exactly like an invalid state (fail closed).
 """
 
 from __future__ import annotations
+
+import hashlib
+import hmac
 
 from loguru import logger
 from redis.exceptions import RedisError
@@ -40,11 +51,13 @@ def list_providers() -> list[schemas.OAuthProviderAvailability]:
     return [schemas.OAuthProviderAvailability(provider=p) for p in OAuthService.get_available_providers()]
 
 
-def get_url(provider: str, *, origin: str, redirect: str, action: str) -> schemas.OAuthURL:
+def get_url(provider: str, *, origin: str, redirect: str, action: str, csrf: str) -> schemas.OAuthURL:
     if action not in _VALID_OAUTH_ACTIONS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid OAuth action: {action}")
     try:
-        url, state = OAuthService.generate_oauth_url(provider, origin=origin, redirect=redirect, action=action)
+        url, state = OAuthService.generate_oauth_url(
+            provider, origin=origin, redirect=redirect, action=action, csrf=csrf
+        )
         return schemas.OAuthURL(provider=schemas.OAuthProvider(provider), url=url, state=state)
     except HTTPException:
         raise
@@ -72,6 +85,31 @@ def _verify_state_for(provider: str, state: str, *, expected_action: str) -> Sta
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
 
     return payload
+
+
+def _verify_csrf_binding(payload: StatePayload, csrf: str | None) -> None:
+    """Bind the verified ``state`` to the browser that started the flow.
+
+    ``payload.csrf`` is ``sha256(raw_cookie_token)``, computed at ``get_url``
+    time (see ``OAuthService.encode_state``). ``csrf`` here is the RAW value
+    of that same HttpOnly cookie, forwarded by the frontend on the
+    callback/link RPC call. A state alone can be minted by anyone (they can
+    call ``get_url`` for themselves) -- what an attacker running a login/
+    account-linking CSRF attack CANNOT do is read the victim's HttpOnly
+    cookie, so they cannot supply a ``csrf`` whose hash matches
+    ``payload.csrf``.
+
+    Fails CLOSED: a missing cookie (``csrf`` falsy) or a hash mismatch is
+    always rejected with the same "invalid state" error the rest of this
+    module uses -- never distinguished in the response, and the raw token is
+    never logged (only compared, in constant time).
+    """
+    if not csrf:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
+
+    csrf_hash = hashlib.sha256(csrf.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(csrf_hash, payload.csrf):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
 
 
 async def _consume_state_nonce(payload: StatePayload) -> None:
@@ -107,8 +145,10 @@ async def callback(
     state: str,
     user_agent: str | None,
     ip_address: str | None,
+    csrf: str | None,
 ) -> schemas.OAuthCallbackResult:
     payload = _verify_state_for(provider, state, expected_action="login")
+    _verify_csrf_binding(payload, csrf)
     await _consume_state_nonce(payload)
 
     auth_user, _ = await OAuthService.handle_callback(session, provider, code)
@@ -146,8 +186,11 @@ async def callback(
     )
 
 
-async def link(session: AsyncSession, user: models.AuthUser, provider: str, code: str, state: str) -> dict:
+async def link(
+    session: AsyncSession, user: models.AuthUser, provider: str, code: str, state: str, csrf: str | None
+) -> dict:
     payload = _verify_state_for(provider, state, expected_action="link")
+    _verify_csrf_binding(payload, csrf)
     await _consume_state_nonce(payload)
 
     provider_impl = OAuthService.get_provider(provider)
