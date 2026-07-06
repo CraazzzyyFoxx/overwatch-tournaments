@@ -4,8 +4,10 @@ Generic OAuth service for multiple providers
 
 import base64
 import hmac
+import json
 import secrets
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
@@ -379,6 +381,27 @@ class BattleNetOAuthProvider(OAuthProviderBase):
             ) from e
 
 
+@dataclass(frozen=True)
+class StatePayload:
+    """Decoded, verified contents of a signed OAuth ``state`` parameter.
+
+    Carries the originating host (``origin``), the post-auth redirect path
+    (``redirect``), and the intent (``action``: ``"login"`` or ``"link"``) so
+    the callback -- which always lands on the ONE fixed apex callback URL
+    registered with each provider -- can send the user back to the tenant
+    subdomain that started the flow. ``nonce`` is exposed so the caller can
+    enforce single-use / replay protection (see ``oauth_flows.callback``);
+    ``verify_state`` itself does not consume it.
+    """
+
+    origin: str
+    redirect: str
+    action: str
+    provider: str
+    nonce: str
+    exp: int
+
+
 class OAuthService:
     """Generic OAuth service handling multiple providers"""
 
@@ -409,8 +432,6 @@ class OAuthService:
             "redirect_uri": "OAUTH_REDIRECT",
         },
     }
-
-    _state_prefix = "v1"
 
     @classmethod
     def _provider_config(cls, provider_name: str) -> dict[str, str]:
@@ -462,42 +483,79 @@ class OAuthService:
         return base64.urlsafe_b64decode(padded.encode("utf-8"))
 
     @classmethod
-    def _build_state_signature(cls, provider_name: str, issued_at: int, nonce: str) -> str:
-        payload = f"oauth-state:{provider_name}:{issued_at}:{nonce}"
-        digest = bytes.fromhex(key_derivation.hmac_sha256_hex(_OAUTH_STATE_KEY, payload))
+    def _build_payload_signature(cls, payload_json: bytes) -> str:
+        digest = bytes.fromhex(key_derivation.hmac_sha256_hex(_OAUTH_STATE_KEY, payload_json.decode("utf-8")))
         return cls._encode_state_part(digest)
 
     @classmethod
-    def generate_oauth_state(cls, provider_name: str) -> str:
-        nonce = cls._encode_state_part(secrets.token_bytes(24))
-        issued_at = int(datetime.now(UTC).timestamp())
-        signature = cls._build_state_signature(provider_name, issued_at, nonce)
-        return f"{cls._state_prefix}.{issued_at}.{nonce}.{signature}"
+    def encode_state(cls, *, origin: str, redirect: str, action: str, provider: str) -> str:
+        """Build a signed, short-lived OAuth ``state`` carrying the originating
+        host, post-auth redirect path, and action (``login``/``link``)
+        alongside the provider.
+
+        Pure and Redis/DB-free: the returned string is fully self-contained
+        (``base64url(json) + "." + base64url(hmac)``), so it round-trips
+        through any provider's redirect with no shared storage, and
+        ``verify_state`` can check it with nothing but the signing key. Nonce
+        single-use / replay protection is enforced separately by the caller
+        that has access to Redis (see ``oauth_flows.callback``) -- keeping
+        this function unit-testable without any infra.
+        """
+        now_ts = int(datetime.now(UTC).timestamp())
+        ttl_seconds = max(settings.OAUTH_STATE_EXPIRE_MINUTES, 1) * 60
+        payload = {
+            "o": origin,
+            "r": redirect,
+            "a": action,
+            "p": provider,
+            "n": cls._encode_state_part(secrets.token_bytes(24)),
+            "e": now_ts + ttl_seconds,
+        }
+        payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        signature = cls._build_payload_signature(payload_json)
+        return f"{cls._encode_state_part(payload_json)}.{signature}"
 
     @classmethod
-    def validate_oauth_state(cls, provider_name: str, state: str) -> None:
-        try:
-            version, issued_at_raw, nonce, signature = state.split(".", maxsplit=3)
-            if version != cls._state_prefix:
-                raise ValueError("invalid state version")
+    def verify_state(cls, state: str) -> StatePayload:
+        """Verify a signed OAuth ``state`` and decode its payload.
 
-            issued_at = int(issued_at_raw)
+        Pure and Redis/DB-free: checks the HMAC signature (constant-time
+        comparison) and the embedded expiry only. Raises ``ValueError`` if
+        the state is missing, malformed, tampered with, or expired -- never
+        ``HTTPException``, so this stays usable from a plain unit test.
+        Nonce single-use / replay protection is intentionally NOT enforced
+        here; the caller must consume ``StatePayload.nonce`` itself (see
+        ``oauth_flows.callback``).
+        """
+        if not state or not isinstance(state, str):
+            raise ValueError("state is required")
+
+        try:
+            encoded_payload, signature = state.split(".", maxsplit=1)
+            payload_json = cls._decode_state_part(encoded_payload)
+
+            expected_signature = cls._build_payload_signature(payload_json)
+            if not hmac.compare_digest(signature, expected_signature):
+                raise ValueError("invalid state signature")
+
+            payload = json.loads(payload_json)
+            exp = int(payload["e"])
             now_ts = int(datetime.now(UTC).timestamp())
-            state_ttl_seconds = max(settings.OAUTH_STATE_EXPIRE_MINUTES, 1) * 60
-            if issued_at > now_ts + 60 or now_ts - issued_at > state_ttl_seconds:
+            if now_ts > exp:
                 raise ValueError("state expired")
 
-            expected_sig = cls._build_state_signature(provider_name, issued_at, nonce)
-            if not hmac.compare_digest(signature, expected_sig):
-                raise ValueError("invalid signature")
-
-            # Validate nonce is valid base64url
-            cls._decode_state_part(nonce)
+            return StatePayload(
+                origin=str(payload["o"]),
+                redirect=str(payload["r"]),
+                action=str(payload["a"]),
+                provider=str(payload["p"]),
+                nonce=str(payload["n"]),
+                exp=exp,
+            )
+        except ValueError:
+            raise
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired OAuth state",
-            ) from exc
+            raise ValueError("malformed OAuth state") from exc
 
     @classmethod
     def get_provider(cls, provider_name: str) -> OAuthProviderBase:
@@ -511,13 +569,18 @@ class OAuthService:
         return provider
 
     @classmethod
-    def generate_oauth_url(cls, provider_name: str, state: str | None = None) -> tuple[str, str]:
+    def generate_oauth_url(cls, provider_name: str, *, origin: str, redirect: str, action: str) -> tuple[str, str]:
         """
-        Generate OAuth URL for specified provider
-        Returns (url, state)
+        Generate an OAuth authorization URL for the given provider.
+
+        ``redirect_uri`` stays ``settings.OAUTH_REDIRECT`` -- the ONE fixed
+        apex callback registered with every provider -- regardless of
+        ``origin``. ``origin``/``redirect``/``action`` travel inside the
+        signed ``state`` instead, so the callback (which always lands on that
+        one fixed URL) can send the user back to the tenant subdomain that
+        started the flow. Returns (url, state).
         """
-        if not state:
-            state = cls.generate_oauth_state(provider_name)
+        state = cls.encode_state(origin=origin, redirect=redirect, action=action, provider=provider_name)
 
         provider = cls.get_provider(provider_name)
         url = provider.get_authorization_url(state)

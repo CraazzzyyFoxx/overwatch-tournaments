@@ -32,6 +32,7 @@ from .auth import (
 from .oauth import (
     LinkedPlayer,
     OAuthCallbackRequest,
+    OAuthCallbackResult,
     OAuthConnectionAdminRead,
     OAuthConnectionListParams,
     OAuthConnectionListQueryParams,
@@ -99,6 +100,7 @@ __all__ = [
     "OAuthProviderAvailability",
     "OAuthURL",
     "OAuthCallbackRequest",
+    "OAuthCallbackResult",
     "OAuthUserInfo",
     "OAuthConnectionRead",
     "OAuthConnectionAdminRead",

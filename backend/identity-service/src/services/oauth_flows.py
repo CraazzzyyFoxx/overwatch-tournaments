@@ -1,12 +1,19 @@
 """RPC-callable OAuth flows (port of routes/oauth.py).
 
-OAuth state is stateless (HMAC-signed with TTL) so it works across RPC calls
-with no shared storage. Callbacks return a Token (the frontend handles its own
-redirect). Provider code-exchange does outbound HTTP from identity-svc.
+OAuth ``state`` is a signed, self-contained payload (HMAC + short TTL) that
+carries the originating host/redirect/action, so it works across RPC calls
+and across the ONE fixed apex callback with no shared storage for the CSRF
+check itself. The one part that DOES need shared storage -- single-use nonce
+replay protection -- is enforced here via Redis (see ``_consume_state_nonce``).
+Callbacks return an ``OAuthCallbackResult`` (token + the decoded state
+fields); the frontend handles its own redirect back to ``origin``. Provider
+code-exchange does outbound HTTP from identity-svc.
 """
 
 from __future__ import annotations
 
+from loguru import logger
+from redis.exceptions import RedisError
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,22 +23,81 @@ from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.social import SocialAccount
 from src import models, schemas
+from src.core.config import settings
+from src.core.redis import get_redis
 from src.services.auth_service import AuthService
-from src.services.oauth_service import OAuthService
+from src.services.oauth_service import OAuthService, StatePayload
+
+# Actions a signed OAuth ``state`` may carry. "login" starts/continues a
+# session; "link" attaches a provider to the CURRENT authenticated user.
+_VALID_OAUTH_ACTIONS = frozenset({"login", "link"})
+
+# Redis key prefix for single-use OAuth state nonces (replay protection).
+_STATE_NONCE_PREFIX = "oauth:state-nonce:"
 
 
 def list_providers() -> list[schemas.OAuthProviderAvailability]:
     return [schemas.OAuthProviderAvailability(provider=p) for p in OAuthService.get_available_providers()]
 
 
-def get_url(provider: str) -> schemas.OAuthURL:
+def get_url(provider: str, *, origin: str, redirect: str, action: str) -> schemas.OAuthURL:
+    if action not in _VALID_OAUTH_ACTIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid OAuth action: {action}")
     try:
-        url, state = OAuthService.generate_oauth_url(provider)
+        url, state = OAuthService.generate_oauth_url(provider, origin=origin, redirect=redirect, action=action)
         return schemas.OAuthURL(provider=schemas.OAuthProvider(provider), url=url, state=state)
     except HTTPException:
         raise
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid provider: {provider}") from exc
+
+
+def _verify_state_for(provider: str, state: str, *, expected_action: str) -> StatePayload:
+    """Verify a signed ``state``, and that it was minted for THIS provider and action.
+
+    ``OAuthService.verify_state`` only checks the HMAC + expiry (it has no
+    notion of "the provider/action the caller expects"); the provider/action
+    match here is what stops a state signed for e.g. a Discord *login* being
+    replayed against a Twitch *link* callback.
+    """
+    try:
+        payload = OAuthService.verify_state(state)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state",
+        ) from exc
+
+    if payload.provider != provider or payload.action != expected_action:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
+
+    return payload
+
+
+async def _consume_state_nonce(payload: StatePayload) -> None:
+    """Enforce single-use of a verified state's nonce (replay protection).
+
+    ``OAuthService.verify_state`` is pure/Redis-free on purpose (HMAC + exp
+    only, so it stays unit-testable with no infra); this is the Redis-backed
+    half that rejects a state being redeemed a second time. The nonce key's
+    TTL mirrors the state's own expiry window, so it never outlives the state
+    that carried it. If Redis is unreachable this fails OPEN (logs and lets
+    the flow continue) rather than locking out every OAuth login -- the same
+    posture ``init_redis()`` already takes for this service -- and the
+    exp-bounded state format still caps the replay window at
+    ``OAUTH_STATE_EXPIRE_MINUTES``.
+    """
+    ttl_seconds = max(settings.OAUTH_STATE_EXPIRE_MINUTES, 1) * 60
+    key = f"{_STATE_NONCE_PREFIX}{payload.provider}:{payload.nonce}"
+    try:
+        redis = get_redis()
+        consumed = await redis.set(key, "1", nx=True, ex=ttl_seconds)
+    except (RuntimeError, RedisError) as exc:
+        logger.warning(f"OAuth state nonce replay-check unavailable, continuing without it: {exc}")
+        return
+
+    if not consumed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state has already been used")
 
 
 async def callback(
@@ -41,8 +107,10 @@ async def callback(
     state: str,
     user_agent: str | None,
     ip_address: str | None,
-) -> schemas.Token:
-    OAuthService.validate_oauth_state(provider, state)
+) -> schemas.OAuthCallbackResult:
+    payload = _verify_state_for(provider, state, expected_action="login")
+    await _consume_state_nonce(payload)
+
     auth_user, _ = await OAuthService.handle_callback(session, provider, code)
 
     if not auth_user.is_active:
@@ -69,11 +137,19 @@ async def callback(
         user_agent=user_agent,
         ip_address=ip_address,
     )
-    return schemas.Token(access_token=access_token, refresh_token=refresh_token)
+    return schemas.OAuthCallbackResult(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        origin=payload.origin,
+        redirect=payload.redirect,
+        action=payload.action,
+    )
 
 
 async def link(session: AsyncSession, user: models.AuthUser, provider: str, code: str, state: str) -> dict:
-    OAuthService.validate_oauth_state(provider, state)
+    payload = _verify_state_for(provider, state, expected_action="link")
+    await _consume_state_nonce(payload)
+
     provider_impl = OAuthService.get_provider(provider)
     token_data = await provider_impl.exchange_code(code)
     oauth_user_info = await provider_impl.get_user_info(token_data["access_token"])
@@ -82,6 +158,9 @@ async def link(session: AsyncSession, user: models.AuthUser, provider: str, code
         "message": f"{provider.title()} account linked successfully",
         "provider": provider,
         "username": oauth_user_info.username,
+        "origin": payload.origin,
+        "redirect": payload.redirect,
+        "action": payload.action,
     }
 
 
