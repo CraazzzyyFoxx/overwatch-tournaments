@@ -47,7 +47,11 @@ export default class userService {
         ...params,
         workspace_id: hasWorkspaceOverride ? options?.workspaceId ?? undefined : undefined
       },
-      skipWorkspace: hasWorkspaceOverride
+      // Explicit workspace override == "no ambient request state" (unstable_cache
+      // caller, e.g. sitemap): skip both the workspace-header and access-cookie
+      // reads so no dynamic API is called inside the cache boundary.
+      skipWorkspace: hasWorkspaceOverride,
+      skipAuth: hasWorkspaceOverride
     }).then((res) => res.json());
   }
   static async getUserByName(name: string): Promise<User> {

@@ -29,6 +29,12 @@ interface ApiFetchOptions {
   next?: { revalidate?: number | false; tags?: string[] };
   timeout?: number;
   skipWorkspace?: boolean;
+  /**
+   * Skip reading the access-token cookie (and thus `cookies()`). Required for
+   * callers running inside `unstable_cache`, where Next.js forbids dynamic APIs
+   * — e.g. the sitemap's public user fetch. Combine with `skipWorkspace`.
+   */
+  skipAuth?: boolean;
   throwOnError?: boolean;
 }
 
@@ -201,8 +207,9 @@ export async function apiFetch(
   const qs = params.toString();
   const url = qs ? `${baseUrl}${cleanPath}?${qs}` : `${baseUrl}${cleanPath}`;
 
-  // Auth token
-  const initialToken = options.token ?? (await getAccessTokenCookie());
+  // Auth token. `skipAuth` avoids reading the cookie (a dynamic API) — required
+  // for callers inside `unstable_cache` (e.g. the sitemap's public fetch).
+  const initialToken = options.skipAuth ? undefined : (options.token ?? (await getAccessTokenCookie()));
 
   // Headers
   const isFormData =
