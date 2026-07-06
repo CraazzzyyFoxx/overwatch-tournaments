@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import workspaceService from "@/services/workspace.service";
-import { SITE_NAME, SITE_URL } from "@/config/site";
+import { SITE_NAME, SITE_URL, SITE_URL_OBJ, SITE_FAVICON } from "@/config/site";
 
 export interface SiteMetadata {
   name: string;
@@ -14,7 +14,7 @@ function platformDefaults(origin: string): SiteMetadata {
     name: SITE_NAME,
     description: `${SITE_NAME} — Overwatch tournament results & stats.`,
     origin,
-    icon: "/favicon.ico"
+    icon: SITE_FAVICON
   };
 }
 
@@ -34,9 +34,16 @@ function platformDefaults(origin: string): SiteMetadata {
 export async function resolveSiteMetadata(): Promise<SiteMetadata> {
   try {
     const h = await headers();
-    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "owt.craazzzyyfoxx.me";
-    const proto = h.get("x-forwarded-proto") ?? "https";
-    const origin = `${proto}://${host.split(",")[0].trim()}`;
+    const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim();
+    const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+    let origin = SITE_URL_OBJ.origin;
+    if (host) {
+      try {
+        origin = new URL(`${proto}://${host}`).origin;
+      } catch {
+        origin = SITE_URL_OBJ.origin;
+      }
+    }
 
     const wsId = h.get("x-owt-workspace-id");
     if (!wsId) {
@@ -49,12 +56,12 @@ export async function resolveSiteMetadata(): Promise<SiteMetadata> {
         name: ws.seo_title ?? ws.name,
         description: ws.seo_description ?? ws.description ?? `${ws.name} — tournaments`,
         origin,
-        icon: ws.icon_url ?? "/favicon.ico"
+        icon: ws.icon_url ?? SITE_FAVICON
       };
     } catch {
       return platformDefaults(origin);
     }
   } catch {
-    return platformDefaults(SITE_URL);
+    return platformDefaults(SITE_URL_OBJ.origin);
   }
 }
