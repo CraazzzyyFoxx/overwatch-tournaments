@@ -24,30 +24,33 @@ const barlowCondensed = Barlow_Condensed({
 });
 import { Providers } from "@/app/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { cn } from "@/lib/utils";
 import AuthModal from "@/components/AuthModal";
 import AccountSettingsModal from "@/components/AccountSettingsModal";
 import LoginModalTrigger from "@/components/LoginModalTrigger";
 import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: SITE_NAME,
-  description: `${SITE_NAME} is a tool for analyzing Anak's tournaments.`,
-  metadataBase: new URL("https://aqt.craazzzyyfoxx.me"),
-  icons: {
-    icon: SITE_FAVICON
-  },
-  openGraph: {
-    title: SITE_NAME,
-    description: `${SITE_NAME} is a tool for analyzing Anak's tournaments.`,
-    url: "https://aqt.craazzzyyfoxx.me",
-    type: "website",
-    siteName: SITE_NAME,
-    locale: "en_US"
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { name, description, origin, icon } = await resolveSiteMetadata();
+  return {
+    title: name,
+    description,
+    metadataBase: new URL(origin),
+    icons: {
+      icon
+    },
+    openGraph: {
+      title: name,
+      description,
+      url: origin,
+      type: "website",
+      siteName: name,
+      locale: "en_US"
+    }
+  };
+}
 
 export default function RootLayout({
   children

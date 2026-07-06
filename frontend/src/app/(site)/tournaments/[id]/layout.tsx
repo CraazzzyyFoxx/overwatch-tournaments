@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { getTournament } from "./_data";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -11,27 +12,32 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   const params = await props.params;
   const tournamentId = Number(params.id);
+  const { name, origin } = await resolveSiteMetadata();
+  const metadataBase = new URL(origin);
 
   try {
     const tournament = await getTournament(tournamentId);
     const title = `${tournament.name} | AQT`;
+    const description = `Overview for ${tournament.name} on AQT.`;
 
     return {
       title,
-      description: `Overview for ${tournament.name} on AQT.`,
+      description,
+      metadataBase,
       openGraph: {
         title,
-        description: `Overview for ${tournament.name} on AQT.`,
-        url: `https://aqt.craazzzyyfoxx.me/tournaments/${tournamentId}`,
+        description,
+        url: `${origin}/tournaments/${tournamentId}`,
         type: "website",
-        siteName: "AQT",
+        siteName: name,
         locale: "en_US"
       }
     };
   } catch {
     return {
       title: "Tournament | AQT",
-      description: "Tournament overview on AQT."
+      description: "Tournament overview on AQT.",
+      metadataBase
     };
   }
 }

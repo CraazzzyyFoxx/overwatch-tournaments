@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { authService } from "@/services/auth.service";
+import { clearAuthCookies, getAccessToken, getRefreshToken } from "@/lib/auth-cookies";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -10,8 +11,8 @@ export async function GET(request: Request) {
   const nextParam = url.searchParams.get("next");
 
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
-  const refreshToken = cookieStore.get("aqt_refresh_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
+  const refreshToken = getRefreshToken(cookieStore);
 
   // Best-effort server-side logout (revoke refresh token)
   try {
@@ -41,7 +42,6 @@ export async function GET(request: Request) {
   // Build redirect URL using SITE_URL to avoid 0.0.0.0 issues
   const redirectUrl = new URL(safeNext, SITE_URL);
   const response = NextResponse.redirect(redirectUrl);
-  response.cookies.delete("aqt_access_token");
-  response.cookies.delete("aqt_refresh_token");
+  clearAuthCookies(response);
   return response;
 }

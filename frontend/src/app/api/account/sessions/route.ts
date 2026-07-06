@@ -1,12 +1,13 @@
 import { authServiceBase } from "@/lib/api-routes";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getAccessToken } from "@/lib/auth-cookies";
 
 const AUTH_SERVICE_URL = authServiceBase();
 
 export async function GET() {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });

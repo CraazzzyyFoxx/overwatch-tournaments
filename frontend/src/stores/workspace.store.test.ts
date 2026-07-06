@@ -4,6 +4,7 @@ import type { AuthProfile } from "@/stores/auth-profile.store";
 import {
   filterAccessibleWorkspaces,
   resolveCurrentWorkspaceId,
+  useWorkspaceStore,
 } from "@/stores/workspace.store";
 import type { Workspace } from "@/types/workspace.types";
 
@@ -56,5 +57,26 @@ describe("workspace store helpers", () => {
     const accessible = [createWorkspace(5), createWorkspace(8)];
 
     expect(resolveCurrentWorkspaceId(accessible, 99)).toBe(5);
+  });
+});
+
+describe("workspace store host lock (tenant white-label)", () => {
+  it("setHostLock forces the current workspace and blocks switching", () => {
+    // Start clean.
+    useWorkspaceStore.getState().setHostLock(null);
+    useWorkspaceStore.setState({ currentWorkspaceId: 2 });
+
+    // Locking a tenant host overrides the current (cookie-derived) workspace.
+    useWorkspaceStore.getState().setHostLock(7);
+    expect(useWorkspaceStore.getState().hostLockedWorkspaceId).toBe(7);
+    expect(useWorkspaceStore.getState().currentWorkspaceId).toBe(7);
+
+    // While locked, switching is ignored (guard returns before any cookie write).
+    useWorkspaceStore.getState().setCurrentWorkspace(9);
+    expect(useWorkspaceStore.getState().currentWorkspaceId).toBe(7);
+
+    // Clearing the lock (apex) drops the lock flag.
+    useWorkspaceStore.getState().setHostLock(null);
+    expect(useWorkspaceStore.getState().hostLockedWorkspaceId).toBeNull();
   });
 });

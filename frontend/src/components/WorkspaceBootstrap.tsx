@@ -3,9 +3,8 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWorkspaceStore } from "@/stores/workspace.store";
-
-const WORKSPACE_COOKIE = "aqt-workspace-id";
+import { resolveHost } from "@/lib/host";
+import { LEGACY_WORKSPACE_COOKIE, useWorkspaceStore, WORKSPACE_COOKIE } from "@/stores/workspace.store";
 
 export default function WorkspaceBootstrap() {
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
@@ -18,7 +17,9 @@ export default function WorkspaceBootstrap() {
   // components rendered unscoped (cross-workspace) data, so once we resolve the
   // active workspace on the client we must refresh them exactly once.
   const ssrHadWorkspaceCookie = useRef(
-    typeof document !== "undefined" && document.cookie.includes(`${WORKSPACE_COOKIE}=`)
+    typeof document !== "undefined" &&
+      (document.cookie.includes(`${WORKSPACE_COOKIE}=`) ||
+        document.cookie.includes(`${LEGACY_WORKSPACE_COOKIE}=`))
   );
   const correctedInitialSsr = useRef(false);
 
@@ -27,6 +28,13 @@ export default function WorkspaceBootstrap() {
   }, [fetchWorkspaces]);
 
   useEffect(() => {
+    // On a tenant (white-label) host the SSR is already scoped by the
+    // `x-owt-workspace-id` header (host beats cookie), the workspace is fixed,
+    // and no workspace cookie is written — so the cookie-absence "correction"
+    // below would fire a needless router.refresh()+invalidateQueries() on every
+    // load. Skip it entirely there.
+    const isTenantHost = resolveHost(window.location.hostname).mode === "tenant";
+
     const workspaceChanged =
       prevWorkspaceId.current !== null &&
       currentWorkspaceId !== null &&
@@ -40,7 +48,7 @@ export default function WorkspaceBootstrap() {
       !correctedInitialSsr.current &&
       currentWorkspaceId !== null;
 
-    if (workspaceChanged || needsInitialCorrection) {
+    if (!isTenantHost && (workspaceChanged || needsInitialCorrection)) {
       correctedInitialSsr.current = true;
       // Invalidate client-side React Query cache
       queryClient.invalidateQueries();

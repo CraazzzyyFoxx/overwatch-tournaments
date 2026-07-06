@@ -17,8 +17,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// CookieName is where the frontend stores the access token.
-const CookieName = "aqt_access_token"
+// CookieName is the canonical access-token cookie; LegacyCookieName is read as a
+// fallback during the aqt->owt rename so existing sessions are not logged out.
+const CookieName = "owt_access_token"
+const LegacyCookieName = "aqt_access_token"
 
 // User is an authenticated WebSocket/HTTP principal. A nil *User means anonymous.
 type User struct {
@@ -100,8 +102,10 @@ func extractToken(r *http.Request) string {
 		}
 	}
 
-	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
-		return strings.TrimSpace(strings.TrimPrefix(c.Value, "Bearer "))
+	for _, name := range []string{CookieName, LegacyCookieName} {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			return strings.TrimSpace(strings.TrimPrefix(c.Value, "Bearer "))
+		}
 	}
 	return ""
 }

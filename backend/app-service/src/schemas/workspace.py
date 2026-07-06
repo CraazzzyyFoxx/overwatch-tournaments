@@ -1,7 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from shared.tenancy.hostnames import validate_subdomain_label
 from src.schemas.base import BaseRead
 from src.schemas.division_grid import DivisionGridVersionRead
+
+# 6-digit hex colour (#RRGGBB) — the format the frontend colour pickers emit and
+# the branding derive util consumes.
+_HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 
 __all__ = (
     "WorkspaceRead",
@@ -21,6 +26,14 @@ class WorkspaceRead(BaseRead):
     description: str | None
     icon_url: str | None
     is_active: bool
+    branding_enabled: bool = False
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
+    brand_background: str | None = None
+    brand_surface: str | None = None
+    subdomain: str | None = None
+    seo_title: str | None = None
+    seo_description: str | None = None
     default_division_grid_version_id: int | None
     default_division_grid_version: DivisionGridVersionRead | None = None
 
@@ -38,7 +51,22 @@ class WorkspaceUpdate(BaseModel):
     description: str | None = None
     icon_url: str | None = None
     is_active: bool | None = None
+    branding_enabled: bool | None = None
+    brand_primary: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_secondary: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_background: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_surface: str | None = Field(default=None, pattern=_HEX_COLOR)
+    subdomain: str | None = None
+    seo_title: str | None = None
+    seo_description: str | None = None
     default_division_grid_version_id: int | None = None
+
+    @field_validator("subdomain")
+    @classmethod
+    def _validate_subdomain(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        return validate_subdomain_label(value)
 
 
 class WorkspaceMemberRoleRead(BaseModel):

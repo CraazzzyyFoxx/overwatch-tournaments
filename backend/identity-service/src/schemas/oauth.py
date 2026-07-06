@@ -11,11 +11,14 @@ from pydantic import BaseModel, Field
 
 from shared.core import pagination
 
+from .auth import Token
+
 __all__ = (
     "OAuthProvider",
     "OAuthProviderAvailability",
     "OAuthURL",
     "OAuthCallbackRequest",
+    "OAuthCallbackResult",
     "OAuthUserInfo",
     "OAuthConnectionRead",
     "OAuthConnectionAdminRead",
@@ -57,6 +60,17 @@ class OAuthCallbackRequest(BaseModel):
 
     code: str
     state: str
+
+
+class OAuthCallbackResult(Token):
+    """OAuth callback response: the session token plus the decoded, verified
+    state fields the frontend needs to redirect the user back to the tenant
+    subdomain that started the flow (the callback itself always lands on the
+    one fixed apex callback URL, never on ``origin``)."""
+
+    origin: str
+    redirect: str
+    action: str
 
 
 class OAuthUserInfo(BaseModel):

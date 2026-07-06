@@ -346,11 +346,23 @@ async def rpc_oauth_providers(data: dict, msg: RabbitMessage) -> dict:
 
 @broker.subscriber("rpc.identity.oauth_url")
 async def rpc_oauth_url(data: dict, msg: RabbitMessage) -> dict:
-    provider = (data or {}).get("provider")
+    data = data or {}
+    provider = data.get("provider")
     if not provider or not isinstance(provider, str):
         return rpc_error("bad_request", "provider is required")
+    origin, redirect, action = data.get("origin"), data.get("redirect"), data.get("action")
+    if not origin or not isinstance(origin, str):
+        return rpc_error("bad_request", "origin is required")
+    if not isinstance(redirect, str) or not redirect:
+        redirect = "/"
+    if not action or not isinstance(action, str):
+        return rpc_error("bad_request", "action is required")
+    csrf = data.get("csrf")
+    if not csrf or not isinstance(csrf, str):
+        return rpc_error("bad_request", "csrf is required")
     try:
-        return rpc_ok(oauth_flows.get_url(provider).model_dump(mode="json"))
+        result = oauth_flows.get_url(provider, origin=origin, redirect=redirect, action=action, csrf=csrf)
+        return rpc_ok(result.model_dump(mode="json"))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
     except Exception:  # pragma: no cover - defensive worker guard
@@ -367,7 +379,13 @@ async def rpc_oauth_callback(data: dict, msg: RabbitMessage) -> dict:
     try:
         async with db.async_session_maker() as session:
             token = await oauth_flows.callback(
-                session, provider, code, state, data.get("user_agent"), data.get("ip_address")
+                session,
+                provider,
+                code,
+                state,
+                data.get("user_agent"),
+                data.get("ip_address"),
+                data.get("csrf"),
             )
         return rpc_ok(token.model_dump(mode="json"))
     except HTTPException as exc:
@@ -385,7 +403,7 @@ async def rpc_oauth_link(data: dict, msg: RabbitMessage) -> dict:
     async def op(session: Any, user: Any) -> dict:
         if not (provider and code and state):
             raise HTTPException(status_code=422, detail="provider, code and state are required")
-        return await oauth_flows.link(session, user, provider, code, state)
+        return await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
 
     return await _with_active_user(data.get("access_token"), op)
 

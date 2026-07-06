@@ -174,7 +174,6 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/oauth/providers", identityHandler.OAuthProviders)
 	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
-	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackGet))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)

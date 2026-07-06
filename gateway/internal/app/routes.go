@@ -40,6 +40,7 @@ var ReadRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/statistics/won-maps", Queue: "rpc.app.statistics.won_maps", AllQuery: true, Auth: edge.AuthNone},
 	// --- workspaces (public reads; writes + members in Phase 2) -------------
 	{Method: "GET", Pattern: "/api/v1/workspaces", Queue: "rpc.app.workspaces.list", Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/workspaces/by-host", Queue: "rpc.app.workspaces.by_host", Query: []string{"host"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/workspaces/{id}", Queue: "rpc.app.workspaces.get", IDParam: "id", Auth: edge.AuthNone},
 	// --- users (literals + /{id}/... + bare /{name} last) -------------------
 	{Method: "GET", Pattern: "/api/v1/users", Queue: "rpc.app.users.list", AllQuery: true, Auth: edge.AuthNone},

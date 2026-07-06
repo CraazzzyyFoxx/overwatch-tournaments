@@ -244,23 +244,20 @@ func (h *Handler) OAuthProviders(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthProviders, []byte("{}"), http.StatusOK)
 }
 
-// OAuthURL mirrors GET /oauth/{provider}/url.
+// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=.
+// origin/redirect/action/csrf get signed into the OAuth state server-side
+// (identity-service oauth_flows.get_url) so the callback can later redirect
+// back to the originating host and bind the browser via the csrf cookie.
 func (h *Handler) OAuthURL(w http.ResponseWriter, r *http.Request) {
-	body, _ := json.Marshal(map[string]any{"provider": r.PathValue("provider")})
-	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
-}
-
-// OAuthCallbackGet mirrors GET /oauth/{provider}/callback?code=&state= -> Token.
-func (h *Handler) OAuthCallbackGet(w http.ResponseWriter, r *http.Request) {
-	ua, ip := clientMeta(r)
+	q := r.URL.Query()
 	body, _ := json.Marshal(map[string]any{
-		"provider":   r.PathValue("provider"),
-		"code":       r.URL.Query().Get("code"),
-		"state":      r.URL.Query().Get("state"),
-		"user_agent": ua,
-		"ip_address": ip,
+		"provider": r.PathValue("provider"),
+		"origin":   q.Get("origin"),
+		"redirect": q.Get("redirect"),
+		"action":   q.Get("action"),
+		"csrf":     q.Get("csrf"),
 	})
-	h.callIdentity(w, r, queueOAuthCallback, body, http.StatusOK)
+	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
 }
 
 // OAuthCallbackPost mirrors POST /oauth/{provider}/callback (body code+state) -> Token.

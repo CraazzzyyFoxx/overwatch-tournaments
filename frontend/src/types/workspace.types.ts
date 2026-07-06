@@ -118,8 +118,26 @@ export interface Workspace {
   description: string | null;
   icon_url: string | null;
   is_active: boolean;
+  /** Per-workspace main-site branding (see lib/workspace-theme). */
+  branding_enabled: boolean;
+  brand_primary: string | null;
+  brand_secondary: string | null;
+  brand_background: string | null;
+  brand_surface: string | null;
+  subdomain: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
   default_division_grid_version_id: number | null;
   default_division_grid_version: DivisionGridVersion | null;
+}
+
+/** The 4 organiser-controlled brand colours + master toggle. */
+export interface WorkspaceBranding {
+  branding_enabled: boolean;
+  brand_primary: string | null;
+  brand_secondary: string | null;
+  brand_background: string | null;
+  brand_surface: string | null;
 }
 
 export type WorkspaceSystemRole = "owner" | "admin" | "member" | "player";
