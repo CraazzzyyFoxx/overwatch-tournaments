@@ -37,6 +37,10 @@ async def get_by_slug(session: AsyncSession, slug: str) -> models.Workspace | No
     return await _workspace_repo.get_by_slug(session, slug)
 
 
+async def get_by_subdomain(session: AsyncSession, subdomain: str) -> models.Workspace | None:
+    return await _workspace_repo.get_by_subdomain(session, subdomain)
+
+
 async def get_all(session: AsyncSession) -> typing.Sequence[models.Workspace]:
     return await _workspace_repo.list_ordered(session)
 

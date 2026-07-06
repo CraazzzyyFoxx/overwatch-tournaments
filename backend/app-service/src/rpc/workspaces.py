@@ -29,6 +29,7 @@ from shared.rbac import (
 )
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission
+from shared.tenancy.hostnames import subdomain_from_host
 from src import models, schemas
 from src.core import config, db
 from src.rpc import _common as c
@@ -154,6 +155,30 @@ def register(broker: Any, logger: Any) -> None:
             return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
 
         return await c.envelope(logger, "workspaces.get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.by_host")
+    async def by_host(data: dict, msg: RabbitMessage) -> dict:
+        """Resolve a request host to its workspace: ``{workspace_id, slug}``.
+
+        Public (no auth). Phase 1 matches only the platform-zone subdomain
+        (``subdomain_from_host``) against ``Workspace.subdomain``; custom
+        domains are Phase 2. Returns ``data: None`` when the host is missing,
+        not a platform-zone subdomain, or matches no workspace.
+        """
+
+        async def op(session: Any) -> Any:
+            host = c.q1(data, "host", str, None)
+            if not host:
+                return None
+            label = subdomain_from_host(host)
+            if label is None:
+                return None
+            workspace = await workspace_service.get_by_subdomain(session, label)
+            if workspace is None:
+                return None
+            return {"workspace_id": workspace.id, "slug": workspace.slug}
+
+        return await c.envelope(logger, "workspaces.by_host", op, session_factory=_SF)
 
     # --- create (superuser) -------------------------------------------------
     @broker.subscriber("rpc.app.workspaces.create")

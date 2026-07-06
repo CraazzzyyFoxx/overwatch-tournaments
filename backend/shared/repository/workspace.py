@@ -19,6 +19,16 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
     async def get_by_slug(self, session: AsyncSession, slug: str) -> models.Workspace | None:
         return await self.get_by(session, options=self.default_grid_options(), slug=slug)
 
+    async def get_by_subdomain(self, session: AsyncSession, subdomain: str) -> models.Workspace | None:
+        """Resolve a platform-zone subdomain label to its workspace (Phase 1).
+
+        Deliberately a bare lookup (no eager-loaded grid options): the
+        ``by_host`` RPC only needs ``id``/``slug`` for tenant resolution, and
+        this runs on the request-resolution hot path.
+        """
+        result = await session.execute(sa.select(models.Workspace).where(models.Workspace.subdomain == subdomain))
+        return result.scalar_one_or_none()
+
     async def get_with_default_grid(self, session: AsyncSession, workspace_id: int) -> models.Workspace | None:
         return await self.get(session, workspace_id, options=self.default_grid_options())
 
