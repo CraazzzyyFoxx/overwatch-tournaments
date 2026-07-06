@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from urllib.parse import urlparse
 
 from loguru import logger
 from redis.exceptions import RedisError
@@ -33,6 +34,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import OAUTH_TO_SOCIAL
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.social import SocialAccount
+from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import models, schemas
 from src.core.config import settings
 from src.core.redis import get_redis
@@ -51,7 +53,49 @@ def list_providers() -> list[schemas.OAuthProviderAvailability]:
     return [schemas.OAuthProviderAvailability(provider=p) for p in OAuthService.get_available_providers()]
 
 
+def _validate_origin(origin: str) -> None:
+    """Reject an ``origin`` this service has no business signing into a state.
+
+    ``origin`` is attacker-influenceable (it starts as whatever ``Host`` the
+    browser hit), and it gets echoed straight back out of ``callback``/``link``
+    for the frontend to redirect to -- so this is the open-redirect guard for
+    the OAuth flow.
+
+    identity-svc does not own the workspace database, so it cannot check
+    ``origin`` against the actual set of verified custom domains. What it CAN
+    do without a DB round-trip is reject anything that isn't even a
+    well-formed host:
+
+    - the platform apex or a ``.owt`` subdomain (``is_platform_host``) --
+      trusted outright, same as Phase 1.
+    - any other syntactically-valid FQDN (``normalize_custom_domain`` succeeds)
+      -- accepted as a CANDIDATE custom domain. This is required: custom-domain
+      login bounces its start to the apex and passes the real custom-domain
+      origin as this parameter (see the frontend apex-bounce), so rejecting
+      well-formed non-platform hosts here would break that flow entirely.
+      Whether the host is an actual, VERIFIED custom domain is enforced
+      elsewhere: the frontend's ``isAllowedOrigin`` allow-list, and --
+      decisively -- the callback never hands a custom-domain origin raw
+      tokens, only a workspace-bound one-time ticket (see ``sso_tickets``).
+    - anything else (malformed URL, no host, ``javascript:``, empty string,
+      etc.) is rejected with a 400 here.
+    """
+    try:
+        hostname = urlparse(origin).hostname
+    except ValueError:
+        hostname = None
+    if not hostname:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin")
+    if is_platform_host(hostname):
+        return
+    try:
+        normalize_custom_domain(hostname)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin") from None
+
+
 def get_url(provider: str, *, origin: str, redirect: str, action: str, csrf: str) -> schemas.OAuthURL:
+    _validate_origin(origin)
     if action not in _VALID_OAUTH_ACTIONS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid OAuth action: {action}")
     try:

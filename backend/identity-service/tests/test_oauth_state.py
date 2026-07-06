@@ -186,6 +186,56 @@ def test_get_url_embeds_origin_redirect_action(monkeypatch: pytest.MonkeyPatch) 
     assert "raw-csrf-token" not in result.url
 
 
+def test_get_url_accepts_well_formed_custom_domain_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Custom-domain login bounces its start to the apex and passes the real
+    custom-domain origin through to ``get_url`` (Phase 2 apex-bounce) --
+    identity-svc has no workspace-DB lookup to confirm it is a VERIFIED
+    custom domain, so a well-formed non-platform FQDN must be accepted here;
+    the frontend allow-list + the workspace-bound ticket handoff are what
+    actually gate it."""
+    monkeypatch.setattr("src.services.oauth_service.settings.DISCORD_OAUTH_ENABLED", True)
+    monkeypatch.setattr("src.services.oauth_service.settings.OAUTH_REDIRECT", "http://localhost:3000/auth/callback")
+
+    result = oauth_flows.get_url(
+        "discord",
+        origin="https://tourney.customer.com",
+        redirect="/account",
+        action="login",
+        csrf="raw-csrf-token",
+    )
+
+    payload = OAuthService.verify_state(result.state)
+    assert payload.origin == "https://tourney.customer.com"
+
+
+@pytest.mark.parametrize(
+    "bad_origin",
+    [
+        "",
+        "not-a-url",
+        "javascript:alert(1)",
+        "https://",
+        "https:///no-host",
+        "https://nodot",  # has a hostname, but not an FQDN -- rejected by normalize_custom_domain
+        "https://has space.com",
+    ],
+)
+def test_get_url_rejects_malformed_origin(monkeypatch: pytest.MonkeyPatch, bad_origin: str) -> None:
+    monkeypatch.setattr("src.services.oauth_service.settings.DISCORD_OAUTH_ENABLED", True)
+    monkeypatch.setattr("src.services.oauth_service.settings.OAUTH_REDIRECT", "http://localhost:3000/auth/callback")
+
+    with pytest.raises(HTTPException) as exc_info:
+        oauth_flows.get_url(
+            "discord",
+            origin=bad_origin,
+            redirect="/",
+            action="login",
+            csrf="raw-csrf-token",
+        )
+
+    assert exc_info.value.status_code == 400
+
+
 def test_get_url_rejects_invalid_action(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.services.oauth_service.settings.DISCORD_OAUTH_ENABLED", True)
     monkeypatch.setattr("src.services.oauth_service.settings.OAUTH_REDIRECT", "http://localhost:3000/auth/callback")
