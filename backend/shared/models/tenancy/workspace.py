@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -37,6 +38,11 @@ class Workspace(db.TimeStampIntegerMixin):
     subdomain: Mapped[str | None] = mapped_column(String(63), unique=True, index=True, nullable=True)
     seo_title: Mapped[str | None] = mapped_column(String(), nullable=True)
     seo_description: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # White-label custom domains (Phase 2). Resolver serves the domain only
+    # once verified (DNS TXT owner-proof); token is the required TXT value.
+    custom_domain: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    custom_domain_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    custom_domain_verification_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     default_division_grid_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("division_grid_version.id", ondelete="SET NULL"),
         nullable=True,
