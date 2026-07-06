@@ -41,28 +41,30 @@ type Handler struct {
 
 // NewHandler wires the WebSocket handler. recordActive may be nil; when set it
 // is called with the user ID of each authenticated connection so WS users count
-// toward the active-user metrics. allowedOrigins, when non-empty, enforces the
-// browser Origin against that allowlist (CSWSH protection); when empty the
-// previous permissive behaviour is kept (see accept setup below).
+// toward the active-user metrics. allowedOrigins enforces the browser Origin
+// against that allowlist (CSWSH protection); InsecureSkipVerify is never set.
 //
 // config.Load defaults GATEWAY_WS_ALLOWED_ORIGINS to the platform apex plus
 // the "*.owt.craazzzyyfoxx.me" wildcard (coder/websocket's OriginPatterns
 // supports "*" globs, so this also covers every tenant subdomain), so a
-// default deployment always takes the allowlist branch below. The
-// InsecureSkipVerify fallback only fires if an operator explicitly overrides
-// GATEWAY_WS_ALLOWED_ORIGINS to an empty value — it must never be relied on
-// in production.
+// default deployment always has a non-empty allowlist. If an operator
+// explicitly overrides GATEWAY_WS_ALLOWED_ORIGINS to an empty value, we do
+// NOT fall back to InsecureSkipVerify: coder/websocket's Accept always
+// authorizes the request's own Host regardless of OriginPatterns (see
+// authenticateOrigin in its accept.go), so an empty allowlist degrades to
+// same-origin-only enforcement rather than "accept any origin". That keeps a
+// same-host WS connection (e.g. a tenant subdomain talking to itself)
+// working while still rejecting foreign cross-site handshakes.
 func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, recordActive func(userID int64)) *Handler {
-	accept := &websocket.AcceptOptions{}
-	if len(allowedOrigins) > 0 {
+	if len(allowedOrigins) == 0 {
+		log.Warn("GATEWAY_WS_ALLOWED_ORIGINS is empty; WebSocket origin checking is degraded to same-origin-only")
+	}
+	accept := &websocket.AcceptOptions{
 		// Enforce the Origin header against the configured allowlist so a hostile
-		// page cannot open an authenticated cross-site WebSocket (CSWSH).
-		accept.OriginPatterns = allowedOrigins
-	} else {
-		// No allowlist configured: preserve the previous behaviour (the gateway
-		// runs behind nginx and is not exposed directly to untrusted browsers).
-		// Set GATEWAY_WS_ALLOWED_ORIGINS to the frontend domain(s) to tighten this.
-		accept.InsecureSkipVerify = true
+		// page cannot open an authenticated cross-site WebSocket (CSWSH). Never
+		// set InsecureSkipVerify: an empty allowedOrigins still fails closed to
+		// same-origin (see the doc comment above), never open.
+		OriginPatterns: allowedOrigins,
 	}
 	return &Handler{
 		hub:          hub,

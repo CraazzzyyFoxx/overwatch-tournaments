@@ -23,6 +23,12 @@ import (
 // itself must never leave production open.
 const defaultWSAllowedOrigins = "https://owt.craazzzyyfoxx.me,https://*.owt.craazzzyyfoxx.me"
 
+// DefaultWSAllowedOrigins is the parsed form of defaultWSAllowedOrigins,
+// exported so callers outside this package (e.g. ws package tests) can
+// assert against the exact production default without duplicating the
+// literal and risking drift.
+var DefaultWSAllowedOrigins = splitCSV(defaultWSAllowedOrigins)
+
 // Config holds all runtime settings for the gateway.
 type Config struct {
 	Port             string

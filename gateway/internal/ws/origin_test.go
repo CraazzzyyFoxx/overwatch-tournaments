@@ -12,16 +12,14 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 )
 
-// productionWSAllowedOrigins mirrors config.defaultWSAllowedOrigins (gateway/
-// internal/config/config.go). It is duplicated here, rather than imported,
-// to keep this package free of a config dependency; TestLoad_WSAllowedOriginsDefault
-// in internal/config guards the source of truth.
-var productionWSAllowedOrigins = []string{
-	"https://owt.craazzzyyfoxx.me",
-	"https://*.owt.craazzzyyfoxx.me",
-}
+// productionWSAllowedOrigins is config.DefaultWSAllowedOrigins, the exact
+// slice config.Load falls back to. Referencing the exported value (rather
+// than duplicating the literal) means this test and
+// config.TestLoad_WSAllowedOriginsDefault can't drift apart.
+var productionWSAllowedOrigins = config.DefaultWSAllowedOrigins
 
 // dialWithOrigin attempts the WS handshake against srvURL with the given
 // Origin header and reports whether the server accepted the connection.
@@ -78,12 +76,14 @@ func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 	}
 }
 
-// TestWS_OriginAllowlist_EmptyFallsBackToInsecure documents the one path that
-// still reaches AcceptOptions.InsecureSkipVerify: an operator explicitly
-// clearing the allowlist. It must never be the default (see
-// TestWS_OriginAllowlist_ProductionDefault and
-// config.TestLoad_WSAllowedOriginsDefault).
-func TestWS_OriginAllowlist_EmptyFallsBackToInsecure(t *testing.T) {
+// TestWS_OriginAllowlist_EmptyRejectsForeignOrigin proves the fail-closed
+// behaviour when an operator explicitly clears GATEWAY_WS_ALLOWED_ORIGINS:
+// NewHandler must never set AcceptOptions.InsecureSkipVerify. coder/websocket
+// always authorizes the request's own Host regardless of OriginPatterns (see
+// authenticateOrigin in its accept.go), so an empty allowlist degrades to
+// same-origin-only enforcement — a foreign cross-site handshake is rejected,
+// while a same-origin handshake (Origin host == request Host) still works.
+func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
 		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
 	mux := http.NewServeMux()
@@ -91,7 +91,16 @@ func TestWS_OriginAllowlist_EmptyFallsBackToInsecure(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	if err := dialWithOrigin(t, srv.URL, "https://evil.example.com"); err != nil {
-		t.Fatalf("expected InsecureSkipVerify fallback to accept any origin, got: %v", err)
+	if err := dialWithOrigin(t, srv.URL, "https://evil.example.com"); err == nil {
+		t.Fatal("expected empty allow-list to reject a foreign cross-origin handshake, but it was accepted")
+	}
+
+	// Same-origin (Origin host == request Host) must still work even with an
+	// empty allowlist: coder/websocket authorizes the request's own Host
+	// unconditionally. Only the host matters for that check, so reusing
+	// srv.URL (http scheme) as the Origin against the ws:// dial target is
+	// sufficient.
+	if err := dialWithOrigin(t, srv.URL, srv.URL); err != nil {
+		t.Fatalf("expected same-origin handshake to be accepted with empty allow-list, got: %v", err)
 	}
 }
