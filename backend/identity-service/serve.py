@@ -39,6 +39,7 @@ from src.services import (
     player_flows,
     rbac_flows,
     service_flows,
+    sso_tickets,
 )
 from src.services.token_validation import validate_token
 
@@ -393,6 +394,27 @@ async def rpc_oauth_callback(data: dict, msg: RabbitMessage) -> dict:
     except Exception:  # pragma: no cover - defensive worker guard
         logger.exception("oauth_callback RPC failed")
         return rpc_error("internal", f"OAuth authentication failed for {provider}")
+
+
+@broker.subscriber("rpc.identity.sso_exchange")
+async def rpc_sso_exchange(data: dict, msg: RabbitMessage) -> dict:
+    """Redeem a one-time SSO ticket (custom-domain OAuth callback handoff).
+
+    Called by the custom domain's own frontend route -- never by the apex --
+    after `oauth_flows.callback` returned `mode="ticket"` (see `sso_tickets`).
+    The ticket is single-use (Redis GETDEL); a missing, expired, already-
+    redeemed, or unknown ticket all look identical from here.
+    """
+    data = data or {}
+    ticket = data.get("ticket")
+    if not ticket or not isinstance(ticket, str):
+        return rpc_error("bad_request", "ticket is required")
+
+    payload = await sso_tickets.redeem(ticket)
+    if payload is None:
+        return rpc_error("bad_request", "invalid or expired ticket")
+
+    return rpc_ok({"access_token": payload.get("access_token"), "refresh_token": payload.get("refresh_token")})
 
 
 @broker.subscriber("rpc.identity.oauth_link")

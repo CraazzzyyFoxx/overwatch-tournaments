@@ -63,14 +63,29 @@ class OAuthCallbackRequest(BaseModel):
 
 
 class OAuthCallbackResult(Token):
-    """OAuth callback response: the session token plus the decoded, verified
-    state fields the frontend needs to redirect the user back to the tenant
-    subdomain that started the flow (the callback itself always lands on the
-    one fixed apex callback URL, never on ``origin``)."""
+    """OAuth callback response: the session (or a handoff to it) plus the
+    decoded, verified state fields the frontend needs to redirect the user
+    back to the tenant subdomain/custom domain that started the flow (the
+    callback itself always lands on the one fixed apex callback URL, never
+    on ``origin``).
 
+    ``mode="cookie"`` (platform apex / ``.owt`` subdomain) carries the raw
+    tokens, same as before -- the frontend sets cookies directly.
+    ``mode="ticket"`` (custom domain) carries a one-time Redis ``ticket``
+    instead: cookies set on the apex are not readable on a custom domain, so
+    the tokens themselves never leave identity-svc's Redis until the custom
+    domain redeems the ticket via ``rpc.identity.sso_exchange`` (see
+    ``sso_tickets``). Token fields are optional because ticket mode omits
+    them entirely -- never populate both a ticket AND raw tokens.
+    """
+
+    mode: Literal["cookie", "ticket"] = "cookie"
+    access_token: str | None = None
+    refresh_token: str | None = None
+    ticket: str | None = None
     origin: str
     redirect: str
-    action: str
+    action: str | None = None
 
 
 class OAuthUserInfo(BaseModel):

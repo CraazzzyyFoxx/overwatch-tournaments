@@ -41,6 +41,7 @@ const (
 	queueOAuthLink        = "rpc.identity.oauth_link"
 	queueOAuthConnections = "rpc.identity.oauth_connections"
 	queueOAuthUnlink      = "rpc.identity.oauth_unlink"
+	queueSsoExchange      = "rpc.identity.sso_exchange"
 
 	queueListApiKeys  = "rpc.identity.list_api_keys"
 	queueCreateApiKey = "rpc.identity.create_api_key"
@@ -281,6 +282,19 @@ func (h *Handler) OAuthLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.callIdentity(w, r, queueOAuthLink, body, http.StatusOK)
+}
+
+// SsoExchange mirrors POST /auth/sso/exchange (public; body {ticket}).
+// Redeems a one-time Redis SSO ticket minted by a custom-domain OAuth
+// callback (identity-svc oauth_flows.callback, mode="ticket") for the
+// session tokens -- called by the custom domain's own frontend route, never
+// by the apex. No client metadata is needed, so this skips bodyWithMeta.
+func (h *Handler) SsoExchange(w http.ResponseWriter, r *http.Request) {
+	body, ok := decodeRawBody(w, r)
+	if !ok {
+		return
+	}
+	h.callIdentity(w, r, queueSsoExchange, body, http.StatusOK)
 }
 
 // OAuthConnections mirrors GET /oauth/connections (authenticated).

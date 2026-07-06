@@ -177,6 +177,10 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
+	// Custom-domain SSO ticket handoff (Task 8): redeems a one-time ticket
+	// minted by the apex OAuth callback for the session tokens. Same
+	// anti-brute-force posture as the other auth token-exchange endpoints.
+	mux.HandleFunc("POST /api/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
 	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)

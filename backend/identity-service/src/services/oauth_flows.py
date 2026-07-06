@@ -38,6 +38,7 @@ from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import models, schemas
 from src.core.config import settings
 from src.core.redis import get_redis
+from src.services import sso_tickets
 from src.services.auth_service import AuthService
 from src.services.oauth_service import OAuthService, StatePayload
 
@@ -219,7 +220,24 @@ async def callback(
         user_agent=user_agent,
         ip_address=ip_address,
     )
+
+    # The platform apex / a `.owt` subdomain can read a cookie set by this
+    # same callback (Domain=.owt in production); a custom domain cannot --
+    # it's a different registrable domain. Hand it a one-time ticket instead
+    # of the raw tokens; the custom domain's own frontend route redeems it
+    # via rpc.identity.sso_exchange and sets host-only cookies itself.
+    origin_host = urlparse(payload.origin).hostname
+    if origin_host and not is_platform_host(origin_host):
+        ticket = await sso_tickets.issue(access_token, refresh_token, payload.redirect)
+        return schemas.OAuthCallbackResult(
+            mode="ticket",
+            ticket=ticket,
+            origin=payload.origin,
+            redirect=payload.redirect,
+        )
+
     return schemas.OAuthCallbackResult(
+        mode="cookie",
         access_token=access_token,
         refresh_token=refresh_token,
         origin=payload.origin,
