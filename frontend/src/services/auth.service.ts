@@ -9,9 +9,20 @@ type OAuthUrlResponse = {
 
 type ForwardedAuthHeaders = Record<string, string>;
 
+type OAuthUrlParams = {
+  origin: string;
+  redirect: string;
+  action: "login" | "link";
+  csrf: string;
+};
+
 export const authService = {
-  async getOAuthUrl(provider: OAuthProviderName): Promise<OAuthUrlResponse> {
-    const res = await apiFetch(`/api/auth/oauth/${provider}/url`, { throwOnError: false });
+  async getOAuthUrl(provider: OAuthProviderName, params: OAuthUrlParams): Promise<OAuthUrlResponse> {
+    const res = await apiFetch(`/api/auth/oauth/${provider}/url`, {
+      query: { origin: params.origin, redirect: params.redirect, action: params.action, csrf: params.csrf },
+      skipWorkspace: true,
+      throwOnError: false
+    });
     if (!res.ok) throw new Error(`Failed to get ${provider} OAuth URL`);
     return res.json();
   },
