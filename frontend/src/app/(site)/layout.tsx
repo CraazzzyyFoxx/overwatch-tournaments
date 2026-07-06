@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import workspaceService from "@/services/workspace.service";
 import { deriveWorkspacePalette } from "@/lib/workspace-theme";
 import { WorkspaceThemeSync } from "@/components/WorkspaceThemeSync";
+import { WorkspaceHostLock } from "@/components/WorkspaceHostLock";
 import type { Workspace } from "@/types/workspace.types";
 
 // Resolve the current workspace server-side. On a tenant (white-label) host
@@ -53,6 +54,7 @@ export default async function SiteLayout({
 
   return (
     <div className="site-theme min-h-screen w-full" style={style}>
+      <WorkspaceHostLock workspaceId={tenantMode && workspace ? workspace.id : null} />
       <WorkspaceThemeSync />
       <div className="w-full max-w-screen-3xl mt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
         <Header tenantMode={tenantMode} tenantWorkspace={tenantWorkspace} />
