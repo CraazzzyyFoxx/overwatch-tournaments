@@ -5,7 +5,11 @@ import type { AuthProfile } from "@/stores/auth-profile.store";
 import { Workspace } from "@/types/workspace.types";
 import workspaceService from "@/services/workspace.service";
 
-const WORKSPACE_COOKIE = "aqt-workspace-id";
+// Canonical workspace cookie name. LEGACY_WORKSPACE_COOKIE is read as a
+// fallback during the aqt->owt rename so an active workspace selection is
+// not lost; it is never written.
+export const WORKSPACE_COOKIE = "owt-workspace-id";
+export const LEGACY_WORKSPACE_COOKIE = "aqt-workspace-id";
 // Persist for a year so the active workspace survives browser restarts and is
 // present on the very first server render of each new session — otherwise SSR
 // reads no workspace and server components render unscoped (cross-workspace) data.

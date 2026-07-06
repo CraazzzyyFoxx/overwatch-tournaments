@@ -28,7 +28,7 @@ const AUTH_SERVICE_URL = authServiceBase();
 
 export async function GET() {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });

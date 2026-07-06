@@ -17,7 +17,7 @@ function authHeaders(accessToken: string): HeadersInit {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
   const { apiKeyId } = await context.params;
 
   if (!accessToken) {
@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
   const { apiKeyId } = await context.params;
 
   if (!accessToken) {

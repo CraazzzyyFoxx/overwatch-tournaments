@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getTokenFromCookies, refreshAccessToken } from "@/lib/auth-tokens";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
 
 export type WorkspaceRbac = {
   workspace_id: number;
@@ -79,7 +79,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
     }
 
     try {
-      const token = await getTokenFromCookies("aqt_access_token");
+      const token = await getAccessTokenCookie();
       let res = await fetch("/api/auth/me", {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},

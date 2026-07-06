@@ -13,7 +13,7 @@ function authHeaders(accessToken: string): HeadersInit {
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
   const workspaceId = request.nextUrl.searchParams.get("workspace_id");
 
   if (!accessToken) {
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });

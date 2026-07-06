@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 import { isAuthRequiredPath } from "@/config/auth";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-events";
-import { getTokenFromCookies, refreshAccessToken } from "@/lib/auth-tokens";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
 import { isExpiredOrNearExpiry } from "@/lib/jwt";
 import { useProactiveTokenRefresh } from "@/lib/use-proactive-token-refresh";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
@@ -59,7 +59,7 @@ export default function AuthBootstrap() {
         // /auth/refresh on every focus while logged out.
         const currentStatus = useAuthProfileStore.getState().status;
         if (currentStatus !== "anonymous") {
-          const token = await getTokenFromCookies("aqt_access_token");
+          const token = await getAccessTokenCookie();
           if (isExpiredOrNearExpiry(token)) {
             await refreshAccessToken();
           }

@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getTokenFromCookies } from "./auth-tokens";
+import { getAccessTokenCookie } from "./auth-tokens";
 import { retryWithRefreshOnUnauthorized } from "./auth-request";
 import { parseApiError } from "./api-error";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -202,7 +202,7 @@ export async function apiFetch(
   const url = qs ? `${baseUrl}${cleanPath}?${qs}` : `${baseUrl}${cleanPath}`;
 
   // Auth token
-  const initialToken = options.token ?? (await getTokenFromCookies("aqt_access_token"));
+  const initialToken = options.token ?? (await getAccessTokenCookie());
 
   // Headers
   const isFormData =

@@ -1,5 +1,11 @@
 import { getTokenExpMs } from "./jwt";
 
+// Canonical access-token cookie name. LEGACY_ACCESS_TOKEN_COOKIE is read as a
+// fallback during the aqt->owt rename so existing sessions are not logged out;
+// it is never written.
+const ACCESS_TOKEN_COOKIE = "owt_access_token";
+const LEGACY_ACCESS_TOKEN_COOKIE = "aqt_access_token";
+
 // Outcome of an access-token refresh attempt. The distinction matters: only a
 // genuinely dead session ("unauthenticated" — the refresh endpoint returned 401)
 // should log the user out. A transient failure ("error" — network/5xx) must NOT
@@ -31,6 +37,17 @@ export async function getTokenFromCookies(cookieName: string): Promise<string | 
   }
 }
 
+// Reads the access-token cookie, preferring the canonical `owt_access_token`
+// name and falling back to the legacy `aqt_access_token` name so existing
+// sessions survive the aqt->owt rename.
+export async function getAccessTokenCookie(): Promise<string | undefined> {
+  const token = await getTokenFromCookies(ACCESS_TOKEN_COOKIE);
+  if (token !== undefined) {
+    return token;
+  }
+  return getTokenFromCookies(LEGACY_ACCESS_TOKEN_COOKIE);
+}
+
 // Persist the access token in a JS-readable cookie whose lifetime matches the
 // token's own `exp`, so the client keeps the token exactly as long as it is
 // valid (and decides when to refresh by `exp`, instead of losing it early).
@@ -43,7 +60,7 @@ export async function setAccessTokenCookie(token: string): Promise<void> {
   try {
     const Cookies = (await import("js-cookie")).default;
     const expMs = getTokenExpMs(token);
-    Cookies.set("aqt_access_token", token, {
+    Cookies.set(ACCESS_TOKEN_COOKIE, token, {
       path: "/",
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",

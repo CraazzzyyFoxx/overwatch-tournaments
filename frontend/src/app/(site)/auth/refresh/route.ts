@@ -9,10 +9,13 @@ const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
-  const refreshToken = cookieStore.get("aqt_refresh_token")?.value;
+  const refreshToken =
+    cookieStore.get("owt_refresh_token")?.value ?? cookieStore.get("aqt_refresh_token")?.value;
 
   if (!refreshToken) {
     const response = NextResponse.json({ message: "Missing refresh token" }, { status: 401 });
+    response.cookies.delete("owt_access_token");
+    response.cookies.delete("owt_refresh_token");
     response.cookies.delete("aqt_access_token");
     response.cookies.delete("aqt_refresh_token");
     return response;
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json(tokens, { status: 200 });
 
-    response.cookies.set("aqt_access_token", tokens.access_token, {
+    response.cookies.set("owt_access_token", tokens.access_token, {
       httpOnly: false,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -31,7 +34,7 @@ export async function POST(request: Request) {
       maxAge: getTokenMaxAgeSeconds(tokens.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS)
     });
 
-    response.cookies.set("aqt_refresh_token", tokens.refresh_token, {
+    response.cookies.set("owt_refresh_token", tokens.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -42,6 +45,8 @@ export async function POST(request: Request) {
     return response;
   } catch {
     const response = NextResponse.json({ message: "Failed to refresh" }, { status: 401 });
+    response.cookies.delete("owt_access_token");
+    response.cookies.delete("owt_refresh_token");
     response.cookies.delete("aqt_access_token");
     response.cookies.delete("aqt_refresh_token");
     return response;

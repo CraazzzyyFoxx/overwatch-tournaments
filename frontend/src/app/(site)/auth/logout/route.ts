@@ -10,8 +10,9 @@ export async function GET(request: Request) {
   const nextParam = url.searchParams.get("next");
 
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
-  const refreshToken = cookieStore.get("aqt_refresh_token")?.value;
+  const accessToken = cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
+  const refreshToken =
+    cookieStore.get("owt_refresh_token")?.value ?? cookieStore.get("aqt_refresh_token")?.value;
 
   // Best-effort server-side logout (revoke refresh token)
   try {
@@ -41,6 +42,8 @@ export async function GET(request: Request) {
   // Build redirect URL using SITE_URL to avoid 0.0.0.0 issues
   const redirectUrl = new URL(safeNext, SITE_URL);
   const response = NextResponse.redirect(redirectUrl);
+  response.cookies.delete("owt_access_token");
+  response.cookies.delete("owt_refresh_token");
   response.cookies.delete("aqt_access_token");
   response.cookies.delete("aqt_refresh_token");
   return response;

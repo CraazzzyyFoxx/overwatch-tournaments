@@ -68,7 +68,8 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
     const forwardedHeaders = getForwardedClientHeaders(request);
 
     if (oauthAction === "link") {
-      const accessToken = cookieStore.get("aqt_access_token")?.value;
+      const accessToken =
+        cookieStore.get("owt_access_token")?.value ?? cookieStore.get("aqt_access_token")?.value;
 
       if (!accessToken) {
         const loginUrl = new URL("/", SITE_URL);
@@ -84,7 +85,7 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
     const tokens = await authService.exchangeOAuthCode(provider, code, state, forwardedHeaders);
     const response = createRedirectResponse(resolveSafeRedirect(postLoginRedirect));
 
-    response.cookies.set("aqt_access_token", tokens.access_token, {
+    response.cookies.set("owt_access_token", tokens.access_token, {
       httpOnly: false,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -92,7 +93,7 @@ export async function handleOAuthCallback(request: Request, provider: OAuthProvi
       maxAge: getTokenMaxAgeSeconds(tokens.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS)
     });
 
-    response.cookies.set("aqt_refresh_token", tokens.refresh_token, {
+    response.cookies.set("owt_refresh_token", tokens.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",

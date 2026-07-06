@@ -3,9 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useWorkspaceStore } from "@/stores/workspace.store";
-
-const WORKSPACE_COOKIE = "aqt-workspace-id";
+import { LEGACY_WORKSPACE_COOKIE, useWorkspaceStore, WORKSPACE_COOKIE } from "@/stores/workspace.store";
 
 export default function WorkspaceBootstrap() {
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
@@ -18,7 +16,9 @@ export default function WorkspaceBootstrap() {
   // components rendered unscoped (cross-workspace) data, so once we resolve the
   // active workspace on the client we must refresh them exactly once.
   const ssrHadWorkspaceCookie = useRef(
-    typeof document !== "undefined" && document.cookie.includes(`${WORKSPACE_COOKIE}=`)
+    typeof document !== "undefined" &&
+      (document.cookie.includes(`${WORKSPACE_COOKIE}=`) ||
+        document.cookie.includes(`${LEGACY_WORKSPACE_COOKIE}=`))
   );
   const correctedInitialSsr = useRef(false);
 
