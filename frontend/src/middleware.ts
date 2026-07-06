@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PLATFORM_ZONE, resolveHost } from "@/lib/host";
+import { internalApiOrigin } from "@/lib/api-routes";
 
 // Small bounded TTL cache: the host->workspace map is tiny and rarely changes.
 const CACHE_TTL_MS = 60_000;
@@ -29,7 +30,8 @@ async function resolveWorkspace(origin: string, subdomain: string): Promise<Look
     return fromEntry(cached);
   }
   try {
-    const res = await fetch(`${origin}/api/v1/workspaces/by-host?host=${encodeURIComponent(host)}`, {
+    const base = internalApiOrigin() ?? origin;
+    const res = await fetch(`${base}/api/v1/workspaces/by-host?host=${encodeURIComponent(host)}`, {
       headers: { accept: "application/json" },
     });
     if (!res.ok) {
@@ -51,13 +53,23 @@ export async function middleware(request: NextRequest) {
   const resolution = resolveHost(host);
 
   if (resolution.mode === "platform") {
-    return NextResponse.next();
+    // Defense-in-depth: strip any client-supplied workspace-scoping headers
+    // before letting the request through, so a caller can never spoof SSR
+    // workspace scope or white-label chrome on the platform (apex/www) host.
+    const headers = new Headers(request.headers);
+    headers.delete("x-owt-workspace-id");
+    headers.delete("x-owt-host-mode");
+    return NextResponse.next({ request: { headers } });
   }
 
   const lookup = await resolveWorkspace(request.nextUrl.origin, resolution.subdomain);
 
   if (lookup.status === "found") {
     const headers = new Headers(request.headers);
+    // Delete before set so a client-supplied value can never survive even
+    // if the set logic below changes.
+    headers.delete("x-owt-workspace-id");
+    headers.delete("x-owt-host-mode");
     headers.set("x-owt-workspace-id", String(lookup.id));
     headers.set("x-owt-host-mode", "tenant");
     return NextResponse.next({ request: { headers } });
