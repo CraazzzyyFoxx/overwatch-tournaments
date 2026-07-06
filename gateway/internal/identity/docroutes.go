@@ -34,7 +34,11 @@ var PublicDocRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/auth/oauth/connections", Queue: "rpc.identity.oauth_connections", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/url", Queue: "rpc.identity.oauth_url", Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Body: true, Auth: edge.AuthNone},
-	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthRequired},
+	// AuthOptional (Task 10): a missing token is forwarded rather than
+	// rejected -- identity-svc falls back to a link-intent nonce carried in
+	// the signed state for custom-domain linking. See OAuthLink in handler.go.
+	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthOptional},
+	{Method: "POST", Pattern: "/api/auth/oauth/link-intent", Queue: "rpc.identity.mint_link_intent", Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/auth/oauth/{provider}/unlink", Queue: "rpc.identity.oauth_unlink", Auth: edge.AuthRequired, Success: 204},
 	{Method: "POST", Pattern: "/api/auth/sso/exchange", Queue: "rpc.identity.sso_exchange", Body: true, Auth: edge.AuthNone},
 	// API keys

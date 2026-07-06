@@ -175,7 +175,15 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
-	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
+	// Rate-limited (Task 10): a missing bearer token is now forwarded rather
+	// than rejected at the edge (see OAuthLink), so an anonymous caller can
+	// reach identity-svc's provider token-exchange call with a self-signed
+	// state/csrf pair -- same anti-brute-force posture as OAuthCallbackPost.
+	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", authLimiter.Wrap(identityHandler.OAuthLink))
+	// Custom-domain linking (Task 10): mints the single-use link-intent nonce
+	// carried across the apex bounce so OAuthLink above can resolve who is
+	// linking when it has no readable apex access token.
+	mux.HandleFunc("POST /api/auth/oauth/link-intent", identityHandler.MintLinkIntent)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
 	// Custom-domain SSO ticket handoff (Task 8): redeems a one-time ticket
 	// minted by the apex OAuth callback for the session tokens. Same

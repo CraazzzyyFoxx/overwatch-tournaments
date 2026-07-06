@@ -42,6 +42,7 @@ const (
 	queueOAuthConnections = "rpc.identity.oauth_connections"
 	queueOAuthUnlink      = "rpc.identity.oauth_unlink"
 	queueSsoExchange      = "rpc.identity.sso_exchange"
+	queueMintLinkIntent   = "rpc.identity.mint_link_intent"
 
 	queueListApiKeys  = "rpc.identity.list_api_keys"
 	queueCreateApiKey = "rpc.identity.create_api_key"
@@ -245,18 +246,21 @@ func (h *Handler) OAuthProviders(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthProviders, []byte("{}"), http.StatusOK)
 }
 
-// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=.
+// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=&link_intent=.
 // origin/redirect/action/csrf get signed into the OAuth state server-side
 // (identity-service oauth_flows.get_url) so the callback can later redirect
 // back to the originating host and bind the browser via the csrf cookie.
+// link_intent (Task 10, optional) carries a custom-domain linking nonce
+// through the same signing step -- see oauth_flows.get_url/link.
 func (h *Handler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	body, _ := json.Marshal(map[string]any{
-		"provider": r.PathValue("provider"),
-		"origin":   q.Get("origin"),
-		"redirect": q.Get("redirect"),
-		"action":   q.Get("action"),
-		"csrf":     q.Get("csrf"),
+		"provider":    r.PathValue("provider"),
+		"origin":      q.Get("origin"),
+		"redirect":    q.Get("redirect"),
+		"action":      q.Get("action"),
+		"csrf":        q.Get("csrf"),
+		"link_intent": q.Get("link_intent"),
 	})
 	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
 }
@@ -270,18 +274,37 @@ func (h *Handler) OAuthCallbackPost(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthCallback, body, http.StatusOK)
 }
 
-// OAuthLink mirrors POST /oauth/{provider}/link (authenticated).
+// OAuthLink mirrors POST /oauth/{provider}/link. Authenticated when the
+// caller has a readable apex access token (the common case: linking from the
+// apex or a .owt subdomain) -- but, unlike every other authenticated
+// endpoint in this file, a MISSING token does not 403 here. It is forwarded
+// on regardless: identity-svc's oauth_flows.link falls back to resolving the
+// linking user from a verified, single-use link-intent nonce carried inside
+// the signed OAuth state (custom-domain linking, Task 10), and 401s itself
+// if that fallback also comes up empty. Either way there is exactly one
+// authenticated resolution path server-side -- this handler never decides
+// who the linking user is, it only decides which credential (if any) to
+// forward.
 func (h *Handler) OAuthLink(w http.ResponseWriter, r *http.Request) {
-	token := bearerToken(r)
-	if token == "" {
-		writeDetail(w, http.StatusForbidden, "Not authenticated")
-		return
+	extra := map[string]any{"provider": r.PathValue("provider")}
+	if token := bearerToken(r); token != "" {
+		extra["access_token"] = token
 	}
-	body, ok := mergeBody(w, r, map[string]any{"access_token": token, "provider": r.PathValue("provider")})
+	body, ok := mergeBody(w, r, extra)
 	if !ok {
 		return
 	}
 	h.callIdentity(w, r, queueOAuthLink, body, http.StatusOK)
+}
+
+// MintLinkIntent mirrors POST /oauth/link-intent (authenticated). Mints a
+// short-lived, single-use link-intent nonce from a readable access token --
+// called by a workspace custom domain's OWN frontend route (it can read that
+// domain's host-only session cookie, unlike the apex) so the linking user
+// can be carried across the apex OAuth bounce (Task 10; see OAuthLink above
+// and identity-svc's oauth_flows.mint_link_intent).
+func (h *Handler) MintLinkIntent(w http.ResponseWriter, r *http.Request) {
+	h.authedNoBody(w, r, queueMintLinkIntent, http.StatusOK)
 }
 
 // SsoExchange mirrors POST /auth/sso/exchange (public; body {ticket}).

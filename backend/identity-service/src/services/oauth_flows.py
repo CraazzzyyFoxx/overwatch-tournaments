@@ -38,7 +38,7 @@ from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import models, schemas
 from src.core.config import settings
 from src.core.redis import get_redis
-from src.services import sso_tickets
+from src.services import link_intents, sso_tickets
 from src.services.auth_service import AuthService
 from src.services.oauth_service import OAuthService, StatePayload
 
@@ -93,13 +93,20 @@ def _validate_origin(origin: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin") from None
 
 
-def get_url(provider: str, *, origin: str, redirect: str, action: str, csrf: str) -> schemas.OAuthURL:
+def get_url(
+    provider: str, *, origin: str, redirect: str, action: str, csrf: str, link_intent: str | None = None
+) -> schemas.OAuthURL:
     _validate_origin(origin)
     if action not in _VALID_OAUTH_ACTIONS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid OAuth action: {action}")
+    # A link-intent nonce (Task 10) only ever makes sense for a "link" state --
+    # reject rather than silently drop it for "login", instead of letting a
+    # caller's mistake sign a meaningless value into a login state.
+    if link_intent and action != "link":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="link_intent requires action=link")
     try:
         url, state = OAuthService.generate_oauth_url(
-            provider, origin=origin, redirect=redirect, action=action, csrf=csrf
+            provider, origin=origin, redirect=redirect, action=action, csrf=csrf, link_intent=link_intent
         )
         return schemas.OAuthURL(provider=schemas.OAuthProvider(provider), url=url, state=state)
     except HTTPException:
@@ -246,17 +253,67 @@ async def callback(
     )
 
 
+async def _resolve_link_user_from_intent(session: AsyncSession, payload: StatePayload) -> models.AuthUser | None:
+    """Resolve the linking user from a verified, single-use link-intent nonce.
+
+    Only reached from ``link`` when the caller had no readable apex access
+    token (custom-domain linking, Task 10) -- see ``link`` below.
+    ``link_intents.redeem`` is an atomic Redis ``GETDEL``: the nonce is
+    consumed here even if the resulting user id turns out stale (e.g. the
+    account was deleted after the nonce was minted), so a captured/observed
+    nonce can never be redeemed a second time regardless of outcome.
+    """
+    if not payload.link_intent:
+        return None
+    user_id = await link_intents.redeem(payload.link_intent)
+    if user_id is None:
+        return None
+    return await session.get(models.AuthUser, user_id)
+
+
 async def link(
-    session: AsyncSession, user: models.AuthUser, provider: str, code: str, state: str, csrf: str | None
+    session: AsyncSession,
+    user: models.AuthUser | None,
+    provider: str,
+    code: str,
+    state: str,
+    csrf: str | None,
 ) -> dict:
+    """Link an OAuth provider connection to the linking user.
+
+    ``user`` resolves the linking identity from EXACTLY ONE authenticated
+    source, checked in this order:
+
+      (a) an already-resolved apex access token, passed in by the caller
+          (``serve.py``'s ``rpc_oauth_link``) -- the existing behavior, used
+          when linking from the platform apex or a ``.owt`` subdomain, both
+          of which can read the session cookie that same callback set.
+      (b) failing that (``user is None`` -- no readable apex token, the
+          custom-domain case), a link-intent nonce redeemed from THIS
+          request's own verified ``state`` (Task 10) --
+          ``_resolve_link_user_from_intent``.
+
+    If NEITHER source yields a user, this raises 401 -- there is no third
+    path and never a client-supplied user id; a state that merely CLAIMS a
+    link-intent without a valid, unredeemed nonce behind it resolves to
+    ``None`` from (b) exactly like having none at all.
+    """
     payload = _verify_state_for(provider, state, expected_action="link")
     _verify_csrf_binding(payload, csrf)
     await _consume_state_nonce(payload)
 
+    linking_user = user
+    if linking_user is None:
+        linking_user = await _resolve_link_user_from_intent(session, payload)
+    if linking_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required to link an account"
+        )
+
     provider_impl = OAuthService.get_provider(provider)
     token_data = await provider_impl.exchange_code(code)
     oauth_user_info = await provider_impl.get_user_info(token_data["access_token"])
-    await OAuthService.link_oauth_to_existing_user(session, user, oauth_user_info, token_data)
+    await OAuthService.link_oauth_to_existing_user(session, linking_user, oauth_user_info, token_data)
     return {
         "message": f"{provider.title()} account linked successfully",
         "provider": provider,
@@ -265,6 +322,21 @@ async def link(
         "redirect": payload.redirect,
         "action": payload.action,
     }
+
+
+async def mint_link_intent(user: models.AuthUser) -> dict:
+    """Mint a short-lived, single-use link-intent nonce for ``user`` (Task 10).
+
+    ``user`` is ALREADY resolved server-side from a verified access token by
+    the caller (``serve.py``'s ``_with_active_user``, the same identity
+    ``rpc_oauth_link``/every other authenticated RPC method uses) -- this
+    function never trusts a client-supplied user id. The nonce carries no
+    information of its own (opaque, Redis-backed -- see ``link_intents``); a
+    subsequent ``get_url`` call signs it into the OAuth ``state``, and
+    ``link`` redeems it at most once.
+    """
+    nonce = await link_intents.issue(user.id)
+    return {"link_intent": nonce}
 
 
 async def connections(session: AsyncSession, user: models.AuthUser) -> list[schemas.OAuthUserInfo]:

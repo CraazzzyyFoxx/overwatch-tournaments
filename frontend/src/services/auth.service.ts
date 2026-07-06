@@ -18,6 +18,11 @@ type OAuthUrlParams = {
   redirect: string;
   action: OAuthAction;
   csrf: string;
+  // Custom-domain linking (Task 10): an opaque, single-use nonce (minted by
+  // mintLinkIntent below) identifying the linking user. Only meaningful for
+  // action === "link"; the backend signs it into the OAuth state so the apex
+  // callback can redeem it when it has no readable apex access token.
+  linkIntent?: string;
 };
 
 // Returned by POST /api/auth/oauth/{provider}/callback. `origin`/`redirect`/
@@ -56,11 +61,33 @@ export interface OAuthLinkResult {
 export const authService = {
   async getOAuthUrl(provider: OAuthProviderName, params: OAuthUrlParams): Promise<OAuthUrlResponse> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/url`, {
-      query: { origin: params.origin, redirect: params.redirect, action: params.action, csrf: params.csrf },
+      query: {
+        origin: params.origin,
+        redirect: params.redirect,
+        action: params.action,
+        csrf: params.csrf,
+        ...(params.linkIntent ? { link_intent: params.linkIntent } : {})
+      },
       skipWorkspace: true,
       throwOnError: false
     });
     if (!res.ok) throw new Error(`Failed to get ${provider} OAuth URL`);
+    return res.json();
+  },
+
+  // Mints a short-lived, single-use link-intent nonce from `accessToken`
+  // (Task 10: custom-domain account linking). Called by a workspace custom
+  // domain's OWN frontend route -- it can read that domain's host-only
+  // session cookie, unlike the apex OAuth callback -- so the linking user
+  // can be carried across the apex bounce via the signed OAuth state
+  // (getOAuthUrl's `linkIntent`) instead of a cookie the apex can't read.
+  async mintLinkIntent(accessToken: string): Promise<{ link_intent: string }> {
+    const res = await apiFetch("/api/auth/oauth/link-intent", {
+      method: "POST",
+      token: accessToken,
+      throwOnError: false
+    });
+    if (!res.ok) throw new Error("Failed to mint link intent");
     return res.json();
   },
 
@@ -107,17 +134,24 @@ export const authService = {
     return res.json();
   },
 
+  // `accessToken` is optional (Task 10): a custom-domain linking bounce has
+  // no readable apex access token by construction (that's the whole reason
+  // the link-intent nonce exists -- see mintLinkIntent above), so this must
+  // still be callable without one. `skipAuth` is set in that case so apiFetch
+  // never falls back to reading an access-token cookie itself -- the caller
+  // (oauth-callback.ts) has already made the "no token" determination and
+  // that must not be silently overridden here.
   async linkOAuth(
     provider: OAuthProviderName,
     code: string,
     state: string,
-    accessToken: string,
     csrf: string,
+    accessToken?: string,
     headers?: ForwardedAuthHeaders,
   ): Promise<OAuthLinkResult> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/link`, {
       method: "POST",
-      token: accessToken,
+      ...(accessToken ? { token: accessToken } : { skipAuth: true }),
       headers,
       body: { code, state, csrf },
       throwOnError: false

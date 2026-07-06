@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
 import type { OAuthProviderName } from "@/types/auth.types";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
+import { getAccessToken } from "@/lib/auth-cookies";
 
 // Browser-binding CSRF cookie for the OAuth start->callback round trip. The
 // signed state (produced by the backend) carries origin/redirect/action and
@@ -38,6 +39,33 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
     apexLogin.searchParams.set("action", action);
     apexLogin.searchParams.set("origin", `https://${currentHost}`);
     if (nextParam) apexLogin.searchParams.set("next", nextParam);
+
+    // Account linking (Task 10): the apex can't read this domain's
+    // host-only session cookie, so it has no way to attribute the eventual
+    // OAuth callback to a user on its own. If THIS domain can read an
+    // access token, mint a single-use link-intent nonce and carry it along
+    // -- the apex signs it into the OAuth state (see the apex branch below)
+    // and its callback redeems it to resolve the linking user. No readable
+    // token here means no safe way to mint one; fall through without a
+    // link-intent so the apex treats this as an unauthenticated link
+    // attempt (redirect to login) rather than linking anything.
+    if (action === "link") {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const accessToken = getAccessToken(cookieStore);
+      if (accessToken) {
+        try {
+          const { link_intent } = await authService.mintLinkIntent(accessToken);
+          apexLogin.searchParams.set("link_intent", link_intent);
+        } catch (err) {
+          console.error("Failed to mint custom-domain link intent:", err);
+          // No link-intent carried through -- the apex callback will have
+          // neither a readable token nor a redeemable nonce and falls back
+          // to redirecting to login (never an unauthenticated link).
+        }
+      }
+    }
+
     return NextResponse.redirect(apexLogin);
   }
 
@@ -45,6 +73,7 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
   // start, Task 7). Never honor it on a subdomain — a crafted ?origin= there
   // would otherwise be signed into the state.
   let flowOrigin = origin;
+  let linkIntent: string | undefined;
   if (currentHost === PLATFORM_ZONE) {
     const originParam = searchParams.get("origin");
     if (originParam) {
@@ -54,6 +83,14 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
       } catch {
         // malformed origin param — fail safe to the apex origin
       }
+    }
+    // Only honor a bounced link-intent nonce (Task 10) on the apex, mirroring
+    // the origin gate above — a subdomain crafting its own ?link_intent=
+    // would otherwise get an arbitrary value signed straight into a state it
+    // has no business minting.
+    if (action === "link") {
+      const linkIntentParam = searchParams.get("link_intent");
+      if (linkIntentParam) linkIntent = linkIntentParam;
     }
   }
 
@@ -68,7 +105,7 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
   }
 
   const csrf = generateCsrfToken();
-  const { url } = await authService.getOAuthUrl(provider, { origin: flowOrigin, redirect, action, csrf });
+  const { url } = await authService.getOAuthUrl(provider, { origin: flowOrigin, redirect, action, csrf, linkIntent });
 
   const response = NextResponse.redirect(url);
   response.cookies.set(CSRF_COOKIE, csrf, {

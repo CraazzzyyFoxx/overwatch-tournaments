@@ -123,6 +123,12 @@ function base64UrlDecodeToString(value: string): string {
 interface StateRouting {
   action: "login" | "link";
   provider: OAuthProviderName | null;
+  // Best-effort read of whether the state carries a link-intent nonce (Task
+  // 10, short key "li") — used below to decide whether a no-apex-token link
+  // attempt should still be tried (custom-domain linking) or redirected to
+  // login. NOT trusted for anything beyond that routing choice: the backend
+  // independently redeems (or fails to redeem) the real nonce.
+  hasLinkIntent: boolean;
 }
 
 // Best-effort, UNTRUSTED decode of the signed OAuth state — used only to pick
@@ -134,12 +140,12 @@ interface StateRouting {
 // misroute the request to the wrong endpoint (which then fails verification),
 // never bypass verification itself. State shape is
 // `base64url(payloadJson).base64url(signature)` with short JSON keys:
-// {"o": origin, "r": redirect, "a": action, "p": provider, "n": nonce, "e": exp}
-// (confirmed against backend/identity-service's StatePayload, Task 9 report).
-// A decode failure defaults to the login action per the brief; provider has
-// no safe default (we'd have no endpoint to call), so it's null and the
-// caller must fail closed on that.
-function decodeStateForRouting(state: string): StateRouting {
+// {"o": origin, "r": redirect, "a": action, "p": provider, "n": nonce, "e": exp, "li": link_intent}
+// (confirmed against backend/identity-service's StatePayload, Task 9 report;
+// "li" added Task 10). A decode failure defaults to the login action per the
+// brief; provider has no safe default (we'd have no endpoint to call), so
+// it's null and the caller must fail closed on that.
+export function decodeStateForRouting(state: string): StateRouting {
   try {
     const payloadPart = state.split(".")[0];
     const json = JSON.parse(base64UrlDecodeToString(payloadPart)) as Record<string, unknown>;
@@ -148,9 +154,10 @@ function decodeStateForRouting(state: string): StateRouting {
       typeof json.p === "string" && KNOWN_PROVIDERS.has(json.p as OAuthProviderName)
         ? (json.p as OAuthProviderName)
         : null;
-    return { action, provider };
+    const hasLinkIntent = typeof json.li === "string" && json.li.length > 0;
+    return { action, provider, hasLinkIntent };
   } catch {
-    return { action: "login", provider: null };
+    return { action: "login", provider: null, hasLinkIntent: false };
   }
 }
 
@@ -199,7 +206,7 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     return errorRedirect("invalid_state");
   }
 
-  const { action, provider } = decodeStateForRouting(state);
+  const { action, provider, hasLinkIntent } = decodeStateForRouting(state);
   if (!provider) {
     return errorRedirect("invalid_provider");
   }
@@ -210,7 +217,13 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     if (action === "link") {
       const accessToken = getAccessToken(cookieStore);
 
-      if (!accessToken) {
+      // No readable apex access token AND no link-intent nonce in the state
+      // (best-effort read, see decodeStateForRouting) means there is no
+      // authenticated source at all to attribute this link to -- same
+      // "redirect to login" fallback as before Task 10. A `hasLinkIntent`
+      // false positive is harmless: the backend redeems the REAL nonce and
+      // 401s if it doesn't have one, same as if this branch weren't reached.
+      if (!accessToken && !hasLinkIntent) {
         const loginUrl = new URL("/", SITE_URL);
         loginUrl.searchParams.set("login", "1");
         loginUrl.searchParams.set("next", "/account");
@@ -219,7 +232,11 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
         return response;
       }
 
-      const linkResult = await authService.linkOAuth(provider, code, state, accessToken, csrf, forwardedHeaders);
+      // `accessToken` may be undefined here (custom-domain linking, Task
+      // 10) -- linkOAuth forwards no token in that case and the backend
+      // resolves the linking user from the link-intent nonce redeemed out
+      // of the (independently HMAC-verified) state instead.
+      const linkResult = await authService.linkOAuth(provider, code, state, csrf, accessToken, forwardedHeaders);
       const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
 
       const response = NextResponse.redirect(new URL("/account", origin));

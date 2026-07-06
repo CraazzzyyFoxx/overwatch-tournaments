@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-import { isVerifiedTenantOrigin, safeRedirectTarget } from "@/lib/oauth-callback";
+import { decodeStateForRouting, isVerifiedTenantOrigin, safeRedirectTarget } from "@/lib/oauth-callback";
 import { PLATFORM_ZONE } from "@/lib/host";
+
+// Builds a state string in the exact shape decodeStateForRouting reads --
+// `base64url(payloadJson).base64url(signature)` -- without needing a real
+// HMAC: this decode never touches the signature part, only splits it off.
+function fakeState(payload: Record<string, unknown>, signaturePart = "sig"): string {
+  const json = JSON.stringify(payload);
+  const payloadPart = Buffer.from(json, "utf-8").toString("base64url");
+  return `${payloadPart}.${signaturePart}`;
+}
 
 // isVerifiedTenantOrigin is the authoritative gate for the custom-domain SSO
 // ticket handoff: unlike the cookie-mode path (safe because those cookies
@@ -91,6 +100,44 @@ describe("isVerifiedTenantOrigin", () => {
   it("rejects the platform apex itself (not a tenant host, and by-host would not resolve it)", async () => {
     byHostWorkspaceId = null;
     expect(await isVerifiedTenantOrigin(`https://${PLATFORM_ZONE}`)).toBe(false);
+  });
+});
+
+describe("decodeStateForRouting", () => {
+  it("reports hasLinkIntent true when the state carries a non-empty link_intent (\"li\")", () => {
+    const state = fakeState({ a: "link", p: "discord", li: "nonce-abc123" });
+    expect(decodeStateForRouting(state)).toEqual({ action: "link", provider: "discord", hasLinkIntent: true });
+  });
+
+  it("reports hasLinkIntent false when \"li\" is absent (the ordinary apex/subdomain linking case)", () => {
+    const state = fakeState({ a: "link", p: "discord" });
+    expect(decodeStateForRouting(state)).toEqual({ action: "link", provider: "discord", hasLinkIntent: false });
+  });
+
+  it("reports hasLinkIntent false when \"li\" is an empty string", () => {
+    const state = fakeState({ a: "link", p: "discord", li: "" });
+    expect(decodeStateForRouting(state)).toEqual({ action: "link", provider: "discord", hasLinkIntent: false });
+  });
+
+  it("reports hasLinkIntent false for a login state even if \"li\" were somehow present", () => {
+    // Defense in depth for the routing read only -- the backend independently
+    // rejects link_intent signed into anything but a "link" state
+    // (oauth_flows.get_url), so this key should never appear here in practice.
+    const state = fakeState({ a: "login", p: "twitch", li: "nonce-abc123" });
+    expect(decodeStateForRouting(state).action).toBe("login");
+  });
+
+  it("defaults to action=login, provider=null, hasLinkIntent=false on a malformed state", () => {
+    expect(decodeStateForRouting("not-a-valid-state")).toEqual({
+      action: "login",
+      provider: null,
+      hasLinkIntent: false
+    });
+  });
+
+  it("treats an unknown provider as null regardless of hasLinkIntent", () => {
+    const state = fakeState({ a: "link", p: "unknown-provider", li: "nonce-abc123" });
+    expect(decodeStateForRouting(state)).toEqual({ action: "link", provider: null, hasLinkIntent: true });
   });
 });
 
