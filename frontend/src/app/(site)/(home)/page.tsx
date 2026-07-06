@@ -1,5 +1,6 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
 
 import StatisticsCard from "@/components/StatisticsCard";
@@ -35,7 +36,12 @@ const HEX_GRID_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/200
 // Root page
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Home() {
+export default async function Home() {
+  // On a tenant (white-label) host the whole site is locked to one
+  // workspace, so the cross-workspace "communities on this platform" list
+  // is hidden. See middleware.ts (Task 6) for the header injection.
+  const tenantMode = (await headers()).get("x-owt-host-mode") === "tenant";
+
   return (
     <div className="space-y-8">
       {/* Cinematic page intro */}
@@ -59,17 +65,19 @@ export default function Home() {
       </section>
 
       {/* Workspace / community cards */}
-      <section>
-        <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-          Workspaces
-        </p>
-        <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground mb-5">
-          Communities on this platform
-        </h2>
-        <Suspense fallback={<CommunitiesSkeleton />}>
-          <CommunitiesSection />
-        </Suspense>
-      </section>
+      {!tenantMode && (
+        <section>
+          <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
+            Workspaces
+          </p>
+          <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground mb-5">
+            Communities on this platform
+          </h2>
+          <Suspense fallback={<CommunitiesSkeleton />}>
+            <CommunitiesSection />
+          </Suspense>
+        </section>
+      )}
 
       {/* Season dashboard */}
       <section className="pb-8 space-y-4">

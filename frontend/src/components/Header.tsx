@@ -148,7 +148,17 @@ function isNavGroupActive(
   });
 }
 
-const Header = () => {
+interface HeaderProps {
+  /**
+   * True on a tenant (white-label) host — injected server-side from the
+   * `x-owt-host-mode` header (Task 6). The whole site is locked to one
+   * workspace there, so cross-workspace UI (the workspace switcher) is
+   * hidden. Absent/false on the apex/platform host.
+   */
+  tenantMode?: boolean;
+}
+
+const Header = ({ tenantMode }: HeaderProps) => {
   const { user } = useAuthProfile();
   const pathname = usePathname() ?? "";
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -192,7 +202,7 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
-      <WorkspaceSwitcher />
+      {!tenantMode && <WorkspaceSwitcher />}
       <NavigationMenu className="hidden md:flex">
         {Object.keys(components)
           .filter((title) => title !== "Organization" || canAccessOrganization)

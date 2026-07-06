@@ -1,5 +1,5 @@
 import React from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Header from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Separator } from "@/components/ui/separator";
@@ -34,11 +34,17 @@ export default async function SiteLayout({
     ? ({ ...seed, backgroundColor: "var(--aqt-bg)" } as React.CSSProperties)
     : undefined;
 
+  // On a tenant (white-label) host, `middleware.ts` (Task 6) injects
+  // `x-owt-host-mode: tenant` — the whole site is locked to one workspace,
+  // so cross-workspace UI (the workspace switcher, the communities list)
+  // must be hidden. Absent on the apex/platform host.
+  const tenantMode = (await headers()).get("x-owt-host-mode") === "tenant";
+
   return (
     <div className="site-theme min-h-screen w-full" style={style}>
       <WorkspaceThemeSync />
       <div className="w-full max-w-screen-3xl mt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
-        <Header />
+        <Header tenantMode={tenantMode} />
         <div className="flex w-full flex-col min-h-[95%]">
           <main className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8">
             {children}
