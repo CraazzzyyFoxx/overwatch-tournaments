@@ -9,12 +9,37 @@ type OAuthUrlResponse = {
 
 type ForwardedAuthHeaders = Record<string, string>;
 
+type OAuthAction = "login" | "link";
+
 type OAuthUrlParams = {
   origin: string;
   redirect: string;
-  action: "login" | "link";
+  action: OAuthAction;
   csrf: string;
 };
+
+// Returned by POST /api/auth/oauth/{provider}/callback. `origin`/`redirect`/
+// `action` are decoded server-side from the signed OAuth state (Task 9) so the
+// callback can redirect back to whichever subdomain started the flow.
+export interface OAuthCallbackResult {
+  access_token: string;
+  refresh_token: string;
+  origin: string;
+  redirect: string;
+  action: OAuthAction;
+}
+
+// Returned by POST /api/auth/oauth/{provider}/link — same origin/redirect/action
+// echo as OAuthCallbackResult, "for symmetry" (Task 9), so the link redirect can
+// also honor the origin the flow started on.
+export interface OAuthLinkResult {
+  message: string;
+  provider: string;
+  username: string;
+  origin: string;
+  redirect: string;
+  action: OAuthAction;
+}
 
 export const authService = {
   async getOAuthUrl(provider: OAuthProviderName, params: OAuthUrlParams): Promise<OAuthUrlResponse> {
@@ -33,15 +58,22 @@ export const authService = {
     return res.json();
   },
 
+  // `csrf` is the RAW value of the `owt_oauth_csrf` cookie (never the hash) —
+  // the backend re-hashes it and fail-closed-compares against the value bound
+  // into the signed state at `getOAuthUrl` time. Sent in the body (alongside
+  // code/state) rather than as a query param so the gateway's generic
+  // body-merge forwarding (`bodyWithMeta`) carries it through unmodified.
   async exchangeOAuthCode(
     provider: OAuthProviderName,
     code: string,
     state: string,
+    csrf: string,
     headers?: ForwardedAuthHeaders,
-  ): Promise<TokenPair> {
+  ): Promise<OAuthCallbackResult> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/callback`, {
-      query: { code, state },
+      method: "POST",
       headers,
+      body: { code, state, csrf },
       throwOnError: false
     });
     if (!res.ok) throw new Error(`Failed to complete ${provider} OAuth`);
@@ -53,19 +85,21 @@ export const authService = {
     code: string,
     state: string,
     accessToken: string,
+    csrf: string,
     headers?: ForwardedAuthHeaders,
-  ): Promise<void> {
+  ): Promise<OAuthLinkResult> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/link`, {
       method: "POST",
       token: accessToken,
       headers,
-      body: { code, state },
+      body: { code, state, csrf },
       throwOnError: false
     });
 
     if (!res.ok) {
       throw new Error(`Failed to link ${provider} OAuth account`);
     }
+    return res.json();
   },
 
   async me(accessToken?: string): Promise<AuthUser> {

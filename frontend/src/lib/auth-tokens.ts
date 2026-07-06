@@ -1,10 +1,20 @@
 import { getTokenExpMs } from "./jwt";
+import { PLATFORM_ZONE } from "./host";
 
 // Canonical access-token cookie name. LEGACY_ACCESS_TOKEN_COOKIE is read as a
 // fallback during the aqt->owt rename so existing sessions are not logged out;
 // it is never written.
 const ACCESS_TOKEN_COOKIE = "owt_access_token";
 const LEGACY_ACCESS_TOKEN_COOKIE = "aqt_access_token";
+
+// Must match the Domain the server sets on login (oauth-callback.ts) /
+// refresh (auth/refresh/route.ts) in production. A client-side `Cookies.set`
+// without a matching Domain wouldn't overwrite that cookie — RFC 6265 keys a
+// cookie by (name, domain, path) — it would instead create a second,
+// host-only cookie with the same name, and which one a later request sends
+// first (stale domain-wide vs. fresh host-only) is undefined.
+const IS_PROD = process.env.NODE_ENV === "production";
+const COOKIE_DOMAIN = `.${PLATFORM_ZONE}`;
 
 // Outcome of an access-token refresh attempt. The distinction matters: only a
 // genuinely dead session ("unauthenticated" — the refresh endpoint returned 401)
@@ -63,7 +73,8 @@ export async function setAccessTokenCookie(token: string): Promise<void> {
     Cookies.set(ACCESS_TOKEN_COOKIE, token, {
       path: "/",
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: IS_PROD,
+      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {}),
       ...(expMs !== undefined ? { expires: new Date(expMs) } : {}),
     });
   } catch {
