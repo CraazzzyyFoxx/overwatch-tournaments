@@ -287,3 +287,34 @@ def test_link_rejects_mismatched_csrf() -> None:
         )
 
     assert exc_info.value.status_code == 400
+
+
+def test_link_rejects_missing_csrf() -> None:
+    """Fail closed: no cookie forwarded on the ``link`` flow -- the same
+    browser-binding requirement as ``callback``.
+
+    Both ``_verify_state_for`` and ``_verify_csrf_binding`` run before
+    ``link`` ever touches the DB, so this is testable with ``session``
+    left as ``None`` and no infra running.
+    """
+    state = OAuthService.encode_state(
+        origin="https://owt.craazzzyyfoxx.me",
+        redirect="/account",
+        action="link",
+        provider="battlenet",
+        csrf="the-real-browser-cookie-value",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            oauth_flows.link(
+                session=None,
+                user=None,
+                provider="battlenet",
+                code="unused-code",
+                state=state,
+                csrf=None,
+            )
+        )
+
+    assert exc_info.value.status_code == 400

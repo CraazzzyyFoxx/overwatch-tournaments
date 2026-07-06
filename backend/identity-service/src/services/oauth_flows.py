@@ -104,7 +104,7 @@ def _verify_csrf_binding(payload: StatePayload, csrf: str | None) -> None:
     module uses -- never distinguished in the response, and the raw token is
     never logged (only compared, in constant time).
     """
-    if not csrf:
+    if not isinstance(csrf, str) or not csrf:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
 
     csrf_hash = hashlib.sha256(csrf.encode("utf-8")).hexdigest()
