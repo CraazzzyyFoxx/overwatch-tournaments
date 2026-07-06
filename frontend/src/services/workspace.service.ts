@@ -17,6 +17,15 @@ export default class workspaceService {
     return apiFetch("/api/v1/workspaces").then((r) => r.json());
   }
 
+  /** Resolve a platform-zone host to its workspace (used by middleware/host resolution). */
+  static async getByHost(host: string): Promise<{ workspace_id: number; slug: string } | null> {
+    const res = await apiFetch(`/api/v1/workspaces/by-host`, {
+      query: { host },
+      skipWorkspace: true,
+    });
+    return res.json();
+  }
+
   static async getById(id: number): Promise<Workspace> {
     return apiFetch(`/api/v1/workspaces/${id}`).then((r) => r.json());
   }
