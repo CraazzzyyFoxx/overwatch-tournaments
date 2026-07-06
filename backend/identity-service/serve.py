@@ -361,16 +361,8 @@ async def rpc_oauth_url(data: dict, msg: RabbitMessage) -> dict:
     csrf = data.get("csrf")
     if not csrf or not isinstance(csrf, str):
         return rpc_error("bad_request", "csrf is required")
-    # Optional (Task 10): a custom-domain linking bounce carries a link-intent
-    # nonce minted by `rpc.identity.mint_link_intent`. The gateway always sends
-    # this key, empty string when absent -- treat blank the same as omitted.
-    link_intent = data.get("link_intent") or None
-    if link_intent is not None and not isinstance(link_intent, str):
-        return rpc_error("bad_request", "link_intent must be a string")
     try:
-        result = oauth_flows.get_url(
-            provider, origin=origin, redirect=redirect, action=action, csrf=csrf, link_intent=link_intent
-        )
+        result = oauth_flows.get_url(provider, origin=origin, redirect=redirect, action=action, csrf=csrf)
         return rpc_ok(result.model_dump(mode="json"))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
@@ -427,57 +419,13 @@ async def rpc_sso_exchange(data: dict, msg: RabbitMessage) -> dict:
 
 @broker.subscriber("rpc.identity.oauth_link")
 async def rpc_oauth_link(data: dict, msg: RabbitMessage) -> dict:
-    """Link an OAuth provider connection to the linking user.
-
-    Deliberately does NOT go through ``_with_active_user`` (unlike every
-    other authenticated RPC method in this file): that helper 403s outright
-    when ``access_token`` is absent, which is exactly the custom-domain
-    linking case (Task 10) this must NOT reject upfront -- the apex has no
-    readable cookie for that domain's session, so a request with no
-    ``access_token`` is expected, not necessarily unauthenticated. When an
-    ``access_token`` IS present it is resolved exactly as ``_with_active_user``
-    would (same ``auth_flows.resolve_active_user``, same 401 on an invalid
-    token); when it is absent, ``user`` stays ``None`` and ``oauth_flows.link``
-    itself falls back to resolving a link-intent nonce from the verified
-    ``state`` -- or raises 401 if that fallback also comes up empty. There is
-    no path here that links without a resolved, authenticated user.
-    """
     data = data or {}
     provider, code, state = data.get("provider"), data.get("code"), data.get("state")
-    if not (provider and code and state):
-        return rpc_error("unprocessable", "provider, code and state are required")
-
-    access_token = data.get("access_token")
-    try:
-        async with db.async_session_maker() as session:
-            user = None
-            if access_token and isinstance(access_token, str):
-                user = await auth_flows.resolve_active_user(session, access_token)
-            result = await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
-        return rpc_ok(result)
-    except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
-    except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("oauth_link RPC failed")
-        return rpc_error("internal", "internal error")
-
-
-@broker.subscriber("rpc.identity.mint_link_intent")
-async def rpc_mint_link_intent(data: dict, msg: RabbitMessage) -> dict:
-    """Mint a link-intent nonce from a readable access token (Task 10).
-
-    Called by a workspace custom domain's OWN frontend route -- it can read
-    that domain's host-only session cookie, unlike the apex OAuth callback --
-    so the linking user can be carried across the apex bounce via the signed
-    OAuth ``state`` instead (see ``oauth_flows.mint_link_intent``/``link``).
-    Uses ``_with_active_user`` like every other authenticated RPC method
-    here: a missing/invalid access token 403s/401s, full stop -- there is no
-    unauthenticated way to mint one.
-    """
-    data = data or {}
 
     async def op(session: Any, user: Any) -> dict:
-        return await oauth_flows.mint_link_intent(user)
+        if not (provider and code and state):
+            raise HTTPException(status_code=422, detail="provider, code and state are required")
+        return await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
 
     return await _with_active_user(data.get("access_token"), op)
 

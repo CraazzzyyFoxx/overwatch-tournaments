@@ -398,13 +398,6 @@ class StatePayload:
     dataclass never carries the raw token, only its hash, and does not
     compare it against anything; the caller (``oauth_flows``) does that with
     the raw cookie value it receives separately.
-
-    ``link_intent`` (Task 10) is an opaque, single-use Redis nonce (see
-    ``link_intents``) that only ever accompanies ``action == "link"`` states
-    minted for a custom-domain linking bounce -- ``None`` for every other
-    state. It is NOT itself proof of anything; ``oauth_flows.link`` must
-    still redeem it (``link_intents.redeem``) to resolve a user, exactly as
-    ``nonce`` above must still be consumed via ``_consume_state_nonce``.
     """
 
     origin: str
@@ -414,7 +407,6 @@ class StatePayload:
     nonce: str
     exp: int
     csrf: str
-    link_intent: str | None = None
 
 
 class OAuthService:
@@ -503,9 +495,7 @@ class OAuthService:
         return cls._encode_state_part(digest)
 
     @classmethod
-    def encode_state(
-        cls, *, origin: str, redirect: str, action: str, provider: str, csrf: str, link_intent: str | None = None
-    ) -> str:
+    def encode_state(cls, *, origin: str, redirect: str, action: str, provider: str, csrf: str) -> str:
         """Build a signed, short-lived OAuth ``state`` carrying the originating
         host, post-auth redirect path, and action (``login``/``link``)
         alongside the provider.
@@ -520,16 +510,6 @@ class OAuthService:
         victim's HttpOnly cookie, so they cannot produce a ``csrf`` value
         whose hash matches this one.
 
-        ``link_intent`` (Task 10, optional, short key ``"li"``) carries an
-        opaque, single-use Redis nonce identifying the linking user for a
-        custom-domain linking bounce -- see ``StatePayload``/``link_intents``.
-        Omitted from the payload entirely when ``None`` so ordinary states
-        stay byte-identical to before this parameter existed. Signing it in
-        here does not make it any more trustworthy on its own -- the HMAC
-        only proves THIS SERVICE minted the state, not that the nonce inside
-        it is still valid; ``oauth_flows.link`` still redeems it through
-        ``link_intents.redeem`` (single-use, TTL-bounded) before trusting it.
-
         Pure and Redis/DB-free: the returned string is fully self-contained
         (``base64url(json) + "." + base64url(hmac)``), so it round-trips
         through any provider's redirect with no shared storage, and
@@ -541,7 +521,7 @@ class OAuthService:
         now_ts = int(datetime.now(UTC).timestamp())
         ttl_seconds = max(settings.OAUTH_STATE_EXPIRE_MINUTES, 1) * 60
         csrf_hash = hashlib.sha256(csrf.encode("utf-8")).hexdigest()
-        payload: dict[str, Any] = {
+        payload = {
             "o": origin,
             "r": redirect,
             "a": action,
@@ -550,8 +530,6 @@ class OAuthService:
             "e": now_ts + ttl_seconds,
             "c": csrf_hash,
         }
-        if link_intent:
-            payload["li"] = link_intent
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         signature = cls._build_payload_signature(payload_json)
         return f"{cls._encode_state_part(payload_json)}.{signature}"
@@ -588,10 +566,6 @@ class OAuthService:
             if now_ts > exp:
                 raise ValueError("state expired")
 
-            # "li" is absent from every state minted before Task 10 and from
-            # every login/non-linking state minted since -- default to None
-            # rather than a KeyError so both keep verifying unchanged.
-            raw_link_intent = payload.get("li")
             return StatePayload(
                 origin=str(payload["o"]),
                 redirect=str(payload["r"]),
@@ -600,7 +574,6 @@ class OAuthService:
                 nonce=str(payload["n"]),
                 exp=exp,
                 csrf=str(payload["c"]),
-                link_intent=str(raw_link_intent) if raw_link_intent else None,
             )
         except ValueError:
             raise
@@ -620,14 +593,7 @@ class OAuthService:
 
     @classmethod
     def generate_oauth_url(
-        cls,
-        provider_name: str,
-        *,
-        origin: str,
-        redirect: str,
-        action: str,
-        csrf: str,
-        link_intent: str | None = None,
+        cls, provider_name: str, *, origin: str, redirect: str, action: str, csrf: str
     ) -> tuple[str, str]:
         """
         Generate an OAuth authorization URL for the given provider.
@@ -640,12 +606,9 @@ class OAuthService:
         started the flow. ``csrf`` is the RAW CSRF cookie token (never
         stored, never logged) -- only its SHA-256 hash is embedded in the
         signed state (see ``encode_state``), binding the eventual callback to
-        the same browser. ``link_intent`` (Task 10, optional) is signed into
-        the state alongside them -- see ``encode_state``. Returns (url, state).
+        the same browser. Returns (url, state).
         """
-        state = cls.encode_state(
-            origin=origin, redirect=redirect, action=action, provider=provider_name, csrf=csrf, link_intent=link_intent
-        )
+        state = cls.encode_state(origin=origin, redirect=redirect, action=action, provider=provider_name, csrf=csrf)
 
         provider = cls.get_provider(provider_name)
         url = provider.get_authorization_url(state)
