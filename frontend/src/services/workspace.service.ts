@@ -40,6 +40,11 @@ export default class workspaceService {
       description?: string;
       icon_url?: string | null;
       is_active?: boolean;
+      branding_enabled?: boolean;
+      brand_primary?: string | null;
+      brand_secondary?: string | null;
+      brand_background?: string | null;
+      brand_surface?: string | null;
       default_division_grid_version_id?: number | null;
     }
   ): Promise<Workspace> {

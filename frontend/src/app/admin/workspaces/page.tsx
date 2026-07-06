@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
@@ -12,11 +12,13 @@ import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
+import { deriveWorkspacePalette } from "@/lib/workspace-theme";
 import workspaceService from "@/services/workspace.service";
 import { Workspace } from "@/types/workspace.types";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -31,6 +33,47 @@ interface WorkspaceUpdateFormData {
   name?: string;
   description?: string;
   is_active?: boolean;
+  branding_enabled?: boolean;
+  brand_primary?: string | null;
+  brand_secondary?: string | null;
+  brand_background?: string | null;
+  brand_surface?: string | null;
+}
+
+function BrandColorField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+}) {
+  const hex = value ?? "";
+  const valid = /^#[0-9a-fA-F]{6}$/.test(hex);
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`${label} color`}
+          value={valid ? hex : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-10 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
+        />
+        <Input
+          id={id}
+          value={hex}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#000000"
+          className="font-mono"
+        />
+      </div>
+    </div>
+  );
 }
 
 const emptyForm: WorkspaceFormData = {
@@ -138,7 +181,15 @@ export default function WorkspacesPage() {
 
   const handleEdit = (ws: Workspace) => {
     setSelected(ws);
-    setFormData({ name: ws.name, description: ws.description || "" });
+    setFormData({
+      name: ws.name,
+      description: ws.description || "",
+      branding_enabled: ws.branding_enabled,
+      brand_primary: ws.brand_primary,
+      brand_secondary: ws.brand_secondary,
+      brand_background: ws.brand_background,
+      brand_surface: ws.brand_surface,
+    });
     setIconFile(null);
     setIconPreview(ws.icon_url || null);
     setEditOpen(true);
@@ -224,6 +275,15 @@ export default function WorkspacesPage() {
       }
     }
   ];
+
+  const editForm = formData as WorkspaceUpdateFormData;
+  const brandingPreview = deriveWorkspacePalette({
+    branding_enabled: true,
+    brand_primary: editForm.brand_primary ?? null,
+    brand_secondary: editForm.brand_secondary ?? null,
+    brand_background: editForm.brand_background ?? null,
+    brand_surface: editForm.brand_surface ?? null,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -407,6 +467,98 @@ export default function WorkspacesPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground mt-1">PNG, JPEG, WebP or GIF, max 2 MB</p>
+          </div>
+
+          {/* Branding — applies to the main public site only */}
+          <div className="space-y-3 rounded-md border p-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="branding-enabled">Site branding</Label>
+                <p className="text-xs text-muted-foreground">
+                  Custom palette for this workspace on the main site
+                </p>
+              </div>
+              <Switch
+                id="branding-enabled"
+                checked={editForm.branding_enabled ?? false}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, branding_enabled: checked })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <BrandColorField
+                id="brand-primary"
+                label="Primary accent"
+                value={editForm.brand_primary}
+                onChange={(v) => setFormData({ ...formData, brand_primary: v })}
+              />
+              <BrandColorField
+                id="brand-secondary"
+                label="Secondary accent"
+                value={editForm.brand_secondary}
+                onChange={(v) => setFormData({ ...formData, brand_secondary: v })}
+              />
+              <BrandColorField
+                id="brand-background"
+                label="Background"
+                value={editForm.brand_background}
+                onChange={(v) => setFormData({ ...formData, brand_background: v })}
+              />
+              <BrandColorField
+                id="brand-surface"
+                label="Surface"
+                value={editForm.brand_surface}
+                onChange={(v) => setFormData({ ...formData, brand_surface: v })}
+              />
+            </div>
+
+            {brandingPreview ? (
+              <div
+                className="rounded-md border p-3"
+                style={{ ...brandingPreview, background: "var(--aqt-bg)" } as CSSProperties}
+              >
+                <div className="text-xs font-medium" style={{ color: "var(--aqt-fg)" }}>
+                  Preview
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span
+                    className="rounded px-2 py-1 text-xs font-medium"
+                    style={{
+                      background: "var(--aqt-teal)",
+                      color: "hsl(var(--primary-foreground))",
+                    }}
+                  >
+                    Primary
+                  </span>
+                  <span
+                    className="rounded px-2 py-1 text-xs font-medium"
+                    style={{
+                      background: "var(--aqt-violet)",
+                      color: "hsl(var(--secondary-foreground))",
+                    }}
+                  >
+                    Secondary
+                  </span>
+                  <span
+                    className="rounded px-2 py-1 text-xs"
+                    style={{
+                      background: "var(--aqt-card)",
+                      color: "var(--aqt-fg-muted)",
+                      border: "1px solid var(--aqt-border)",
+                    }}
+                  >
+                    Surface
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Set at least a primary accent and a background to preview. Backgrounds are
+                clamped to a dark shade to keep text readable.
+              </p>
+            )}
           </div>
         </div>
       </EntityFormDialog>

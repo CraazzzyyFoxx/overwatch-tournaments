@@ -23,6 +23,15 @@ class Workspace(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), server_default="true")
+    # Per-workspace site branding (main public site only). Typed hex colours
+    # (#RRGGBB); the rest of the palette (text/borders/hover) is derived on the
+    # frontend with contrast guards. ``branding_enabled`` is the master toggle so
+    # a workspace can turn branding off without losing its saved colours.
+    branding_enabled: Mapped[bool] = mapped_column(Boolean(), server_default="false")
+    brand_primary: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_secondary: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_background: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_surface: Mapped[str | None] = mapped_column(String(), nullable=True)
     default_division_grid_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("division_grid_version.id", ondelete="SET NULL"),
         nullable=True,

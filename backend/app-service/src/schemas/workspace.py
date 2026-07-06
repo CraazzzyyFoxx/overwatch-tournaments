@@ -3,6 +3,10 @@ from pydantic import BaseModel, Field
 from src.schemas.base import BaseRead
 from src.schemas.division_grid import DivisionGridVersionRead
 
+# 6-digit hex colour (#RRGGBB) — the format the frontend colour pickers emit and
+# the branding derive util consumes.
+_HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
+
 __all__ = (
     "WorkspaceRead",
     "WorkspaceCreate",
@@ -21,6 +25,11 @@ class WorkspaceRead(BaseRead):
     description: str | None
     icon_url: str | None
     is_active: bool
+    branding_enabled: bool = False
+    brand_primary: str | None = None
+    brand_secondary: str | None = None
+    brand_background: str | None = None
+    brand_surface: str | None = None
     default_division_grid_version_id: int | None
     default_division_grid_version: DivisionGridVersionRead | None = None
 
@@ -38,6 +47,11 @@ class WorkspaceUpdate(BaseModel):
     description: str | None = None
     icon_url: str | None = None
     is_active: bool | None = None
+    branding_enabled: bool | None = None
+    brand_primary: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_secondary: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_background: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_surface: str | None = Field(default=None, pattern=_HEX_COLOR)
     default_division_grid_version_id: int | None = None
 
 
