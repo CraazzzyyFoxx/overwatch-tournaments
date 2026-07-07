@@ -45,6 +45,12 @@ export default class workspaceService {
       brand_secondary?: string | null;
       brand_background?: string | null;
       brand_surface?: string | null;
+      brand_accent?: string | null;
+      brand_foreground?: string | null;
+      brand_muted?: string | null;
+      brand_border?: string | null;
+      brand_ring?: string | null;
+      brand_destructive?: string | null;
       subdomain?: string | null;
       seo_title?: string | null;
       seo_description?: string | null;

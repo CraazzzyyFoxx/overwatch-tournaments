@@ -124,6 +124,12 @@ export interface Workspace {
   brand_secondary: string | null;
   brand_background: string | null;
   brand_surface: string | null;
+  brand_accent: string | null;
+  brand_foreground: string | null;
+  brand_muted: string | null;
+  brand_border: string | null;
+  brand_ring: string | null;
+  brand_destructive: string | null;
   subdomain: string | null;
   seo_title: string | null;
   seo_description: string | null;
@@ -136,13 +142,23 @@ export interface Workspace {
   default_division_grid_version: DivisionGridVersion | null;
 }
 
-/** The 4 organiser-controlled brand colours + master toggle. */
+/**
+ * Organiser-controlled branding: 4 seed colours (primary/secondary/background/
+ * surface) that derive the full palette, plus 6 optional core-palette overrides
+ * (accent/foreground/muted/border/ring/destructive) that win when set.
+ */
 export interface WorkspaceBranding {
   branding_enabled: boolean;
   brand_primary: string | null;
   brand_secondary: string | null;
   brand_background: string | null;
   brand_surface: string | null;
+  brand_accent?: string | null;
+  brand_foreground?: string | null;
+  brand_muted?: string | null;
+  brand_border?: string | null;
+  brand_ring?: string | null;
+  brand_destructive?: string | null;
 }
 
 export type WorkspaceSystemRole = "owner" | "admin" | "member" | "player";
