@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -76,12 +77,32 @@ const (
 	queuePlayerLinked     = "rpc.identity.player.linked"
 	queuePlayerSetPrimary = "rpc.identity.player.set_primary"
 
-	rpcTimeout = 5 * time.Second
 	// maxJSONBody caps the request body before it is buffered into an RPC
 	// message, matching edge.maxBody. Without it a slowloris/oversized body could
 	// exhaust the container's memory (nginx's own cap is the only other guard).
 	maxJSONBody = 12 << 20 // 12 MiB
 )
+
+// rpcTimeout bounds how long the gateway waits for an identity-svc RPC reply
+// before returning 504. Most identity RPCs are sub-second, but oauth_callback
+// performs external provider token+userinfo calls (Discord/Twitch/Battle.net)
+// that can take several seconds from the ingress host — with the old 5s cap the
+// gateway gave up while identity-svc was still completing a *successful* login,
+// so the user landed back logged-out. Override with GATEWAY_IDENTITY_RPC_TIMEOUT
+// (a Go duration, e.g. "20s"); keep it BELOW the frontend SSR fetch timeout
+// (DEFAULT_SERVER_TIMEOUT_MS = 15s) or the Next server aborts before this reply
+// lands.
+var rpcTimeout = resolveRPCTimeout()
+
+func resolveRPCTimeout() time.Duration {
+	const def = 12 * time.Second
+	if v := os.Getenv("GATEWAY_IDENTITY_RPC_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return def
+}
 
 // RPCCaller is the subset of rpc.Client the handlers need (eases testing).
 type RPCCaller interface {
