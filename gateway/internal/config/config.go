@@ -53,11 +53,19 @@ type Config struct {
 	// realistic WS reconnect storm from a single IP.
 	WSCustomDomainRateLimit  int
 	WSCustomDomainRateWindow time.Duration
-	Upstreams                Upstreams
-	Sentry                   Sentry
-	Tracing                  Tracing
-	Log                      Log
-	Docs                     Docs
+	// AnonRateLimit/Window bound anonymous (no-bearer) API traffic per client
+	// IP across all /api paths — a global anonymous budget layered under the
+	// coarse nginx limit_req. Authenticated requests (Authorization: Bearer …)
+	// bypass it. Disabled by default (limit 0): set GATEWAY_ANON_RATE_LIMIT to
+	// enable. Keep it generous — a single anonymous page view fans out into many
+	// public API calls, so a tight limit would throttle legitimate visitors.
+	AnonRateLimit  int
+	AnonRateWindow time.Duration
+	Upstreams      Upstreams
+	Sentry         Sentry
+	Tracing        Tracing
+	Log            Log
+	Docs           Docs
 }
 
 // Tracing holds the OpenTelemetry settings. The variable names mirror the
@@ -156,6 +164,8 @@ func Load() (*Config, error) {
 		AuthRateWindow:           time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
 		WSCustomDomainRateLimit:  getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT", 30),
 		WSCustomDomainRateWindow: time.Duration(getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_WINDOW", 10)) * time.Second,
+		AnonRateLimit:            getenvInt("GATEWAY_ANON_RATE_LIMIT", 0), // 0 = disabled (pass-through)
+		AnonRateWindow:           time.Duration(getenvInt("GATEWAY_ANON_RATE_WINDOW", 10)) * time.Second,
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),

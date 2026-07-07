@@ -8,6 +8,7 @@ package ratelimit
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,12 +116,45 @@ func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := clientip.From(r) + "|" + r.URL.Path
 		if !l.allow(key) {
-			w.Header().Set("Retry-After", strconv.Itoa(int(l.window.Seconds())))
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"detail":"Too many requests"}`))
+			tooManyRequests(w, l.window)
 			return
 		}
 		next(w, r)
 	}
+}
+
+// WrapAnon returns next guarded by the limiter for anonymous requests only —
+// those that carry no bearer token — keyed on client IP alone (a global
+// per-IP anonymous budget across all paths). Authenticated requests
+// (Authorization: Bearer …) pass through untouched, as do all requests when
+// the limiter is disabled. Unlike Wrap it takes/returns http.Handler so it can
+// wrap the whole API mux as outer middleware.
+func (l *Limiter) WrapAnon(next http.Handler) http.Handler {
+	if !l.Enabled() {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isAnonymous(r) && !l.allow(clientip.From(r)) {
+			tooManyRequests(w, l.window)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// tooManyRequests writes the shared 429 response (FastAPI-style detail body).
+func tooManyRequests(w http.ResponseWriter, window time.Duration) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, _ = w.Write([]byte(`{"detail":"Too many requests"}`))
+}
+
+// isAnonymous reports whether r carries no usable bearer token. It mirrors
+// principal.bearer's parsing (scheme-insensitive, non-empty credential) so the
+// "anonymous" verdict here matches what the identity resolver would treat as
+// unauthenticated — without the RPC token validation.
+func isAnonymous(r *http.Request) bool {
+	scheme, creds, found := strings.Cut(r.Header.Get("Authorization"), " ")
+	return !(found && strings.EqualFold(scheme, "bearer") && strings.TrimSpace(creds) != "")
 }

@@ -399,7 +399,12 @@ func run() error {
 	// request logger picks up the OTel trace_id and rpc.Call/proxy see the span
 	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
-	instrumented := httplog.Middleware(mtr.Middleware(mux, authn, activeUsers), logger, authn)
+	// Anonymous (no-bearer) per-IP throttle across the whole API mux, layered
+	// under the coarse nginx limit_req. Innermost (wrapping mux) so a throttled
+	// 429 is still metered + access-logged. Disabled (pass-through) when
+	// GATEWAY_ANON_RATE_LIMIT <= 0.
+	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow)
+	instrumented := httplog.Middleware(mtr.Middleware(anonLimiter.WrapAnon(mux), authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
 
