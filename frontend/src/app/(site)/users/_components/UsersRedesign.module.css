@@ -18,7 +18,7 @@
   --u-damage: hsl(340 78% 60%);
   --u-support: hsl(142 60% 52%);
 
-  --u-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --u-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --u-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
 
   color: var(--u-fg);

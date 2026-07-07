@@ -14,7 +14,7 @@
   --enc-rose: hsl(340 75% 58%);
   --enc-violet: hsl(270 70% 62%);
   --enc-blue: hsl(210 80% 60%);
-  --enc-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --enc-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --enc-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
   color: var(--enc-fg);
   display: flex;

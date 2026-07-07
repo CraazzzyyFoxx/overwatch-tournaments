@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Barlow_Condensed, Onest } from "next/font/google";
+import { Inter, JetBrains_Mono, Onest } from "next/font/google";
 import "./globals.css";
 import React from "react";
 
@@ -25,12 +25,6 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap"
 });
 
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-  variable: "--font-barlow-condensed",
-  display: "swap"
-});
 import { Providers } from "@/app/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { cn } from "@/lib/utils";
@@ -73,7 +67,6 @@ export default function RootLayout({
           inter.className,
           inter.variable,
           jetbrainsMono.variable,
-          barlowCondensed.variable,
           onest.variable,
           "dark"
         )}

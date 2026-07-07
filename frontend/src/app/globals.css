@@ -1275,7 +1275,7 @@
   --aqt-support: hsl(142 60% 52%);
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
-  --aqt-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --aqt-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --aqt-onest: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --aqt-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
   /* Editorial Tactical hero (design-book): role-spectrum accent + ONE
