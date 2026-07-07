@@ -80,11 +80,11 @@ const STAGE_PILL_CLASS: Record<string, string> = {
 };
 
 const VIEW_SWATCH_HSL: Record<TeamColor, string> = {
-  teal: "hsl(174 72% 46%)",
-  amber: "hsl(38 95% 55%)",
-  rose: "hsl(340 75% 58%)",
-  violet: "hsl(270 70% 62%)",
-  blue: "hsl(210 80% 60%)"
+  teal: "var(--aqt-teal)",
+  amber: "var(--aqt-amber)",
+  rose: "var(--aqt-rose)",
+  violet: "var(--aqt-violet)",
+  blue: "var(--aqt-blue)"
 };
 
 const STAGE_DONUT_COLORS = [

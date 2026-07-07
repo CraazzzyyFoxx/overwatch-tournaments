@@ -26,7 +26,7 @@ const EncounterTeamCard = ({
   isHome: boolean;
   tournamentGrid?: DivisionGridVersion | null;
 }) => {
-  const titleColor = isHome ? "text-[#16e5b4]" : "text-[#ff4655]";
+  const titleColor = isHome ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-rose)]";
   const sortedPlayers = sortTeamPlayers(team.players);
   const backgroundColor = isHome
     ? "bg-[#104e48] hover:bg-[#104e48]"

@@ -56,7 +56,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
   return (
     <tr
       onClick={() => router.push(`/encounters/${enc.id}`)}
-      className="cursor-pointer border-b border-[hsl(215_20%_10%)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]"
+      className="cursor-pointer border-b border-[color:var(--aqt-border)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]"
     >
       <td className="px-3.5 py-3">
         <Link
@@ -64,8 +64,8 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           onClick={(e) => e.stopPropagation()}
           className="aqt-mono inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-[11.5px] font-bold"
           style={{
-            background: "hsl(174 72% 46% / 0.08)",
-            borderColor: "hsl(174 72% 46% / 0.25)",
+            background: "color-mix(in srgb, var(--aqt-teal) 8%, transparent)",
+            borderColor: "color-mix(in srgb, var(--aqt-teal) 25%, transparent)",
             color: "var(--aqt-teal)"
           }}
         >

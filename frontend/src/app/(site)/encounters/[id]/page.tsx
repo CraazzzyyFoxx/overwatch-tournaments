@@ -91,10 +91,10 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
           <CardHeader>
             <div className="flex gap-4">
               <div className="flex-1 text-right">
-                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[#16e5b4]">
+                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                   {homeTeamState}
                 </p>
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#16e5b4]">
+                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                   {encounter.score.home}
                 </h4>
               </div>
@@ -102,10 +102,10 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
                 <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">:</h4>
               </div>
               <div className="flex-1 text-left">
-                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[#ff4655]">
+                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                   {awayTeamState}
                 </p>
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#ff4655]">
+                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                   {encounter.score.away}
                 </h4>
               </div>

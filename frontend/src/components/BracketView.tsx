@@ -481,7 +481,7 @@ function MatchCard({
 
   const getRowClasses = (side: "home" | "away") => {
     if (data.winner === side) {
-      return "bg-[hsl(174_72%_46%/0.10)] text-[var(--aqt-fg)] font-semibold";
+      return "bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[var(--aqt-fg)] font-semibold";
     }
     if (data.winner && data.winner !== side) {
       return "text-[var(--aqt-fg-dim)]";
@@ -523,7 +523,8 @@ function MatchCard({
           "flex items-center justify-between gap-2 px-2.5 transition-colors",
           side === "home" && "border-b border-[var(--aqt-border)]",
           getRowClasses(side),
-          isHighlighted(side) && "bg-[hsl(174_72%_46%/0.16)] text-[var(--aqt-fg)]"
+          isHighlighted(side) &&
+            "bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] text-[var(--aqt-fg)]"
         )}
         data-team-id={getTeamId(side) ?? undefined}
         data-team-highlighted={isHighlighted(side) || undefined}
@@ -556,7 +557,7 @@ function MatchCard({
       className={cn(
         "relative flex h-full flex-col overflow-hidden rounded-[10px] border bg-[var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
         meta.isLive
-          ? "border-[hsl(340_75%_58%/0.45)]"
+          ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)]"
           : data.winner
             ? "border-[var(--aqt-border-2)]"
             : "border-[var(--aqt-border)]"
@@ -846,7 +847,7 @@ export function BracketView({
                     {reportable && (
                       <button
                         type="button"
-                        className="rounded-md border border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.16)] p-1 text-[var(--aqt-teal)] hover:bg-[hsl(174_72%_46%/0.24)]"
+                        className="rounded-md border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] p-1 text-[var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)]"
                         aria-label="Репорт матча"
                         onClick={(e) => {
                           e.stopPropagation();

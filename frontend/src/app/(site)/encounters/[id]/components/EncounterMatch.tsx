@@ -91,8 +91,8 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
               </div>
               <div className="flex flex-row gap-4">
                 <div className="flex flex-col text-right">
-                  <p className="leading-7 text-[#16e5b4]">{data.home_team.name}</p>
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#16e5b4]">
+                  <p className="leading-7 text-[color:var(--aqt-teal)]">{data.home_team.name}</p>
+                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                     {data.score.home}
                   </h4>
                 </div>
@@ -100,8 +100,8 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
                   <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">:</h4>
                 </div>
                 <div className="flex flex-col text-left">
-                  <p className="leading-7  text-[#ff4655]">{data.away_team.name}</p>
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#ff4655]">
+                  <p className="leading-7  text-[color:var(--aqt-rose)]">{data.away_team.name}</p>
+                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                     {data.score.away}
                   </h4>
                 </div>

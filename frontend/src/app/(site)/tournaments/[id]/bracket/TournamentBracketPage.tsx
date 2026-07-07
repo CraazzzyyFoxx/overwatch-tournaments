@@ -102,14 +102,14 @@ function GroupStagePanel({
           {hasStandings && (
             <TabsTrigger
               value="standings"
-              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
             >
               {t("common.standings")}
             </TabsTrigger>
           )}
           <TabsTrigger
             value="matches"
-            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
           >
             {t("common.bracket")}
           </TabsTrigger>
@@ -422,14 +422,14 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                         {hasPlayoffStandings && (
                           <TabsTrigger
                             value="standings"
-                            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                           >
                             {t("common.standings")}
                           </TabsTrigger>
                         )}
                         <TabsTrigger
                           value="bracket"
-                          className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                          className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                         >
                           {t("common.bracket")}
                         </TabsTrigger>
