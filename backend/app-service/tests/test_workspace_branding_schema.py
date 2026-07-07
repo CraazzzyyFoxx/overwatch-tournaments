@@ -59,6 +59,47 @@ def test_update_strips_whitespace_around_hex():
     assert model.brand_primary == "#14b8a6"
 
 
+_CORE_PALETTE = (
+    "brand_accent",
+    "brand_foreground",
+    "brand_muted",
+    "brand_border",
+    "brand_ring",
+    "brand_destructive",
+)
+
+
+def test_update_accepts_core_palette_overrides():
+    model = schemas.WorkspaceUpdate(
+        brand_accent="#22d3ee",
+        brand_foreground="#f1f5f9",
+        brand_muted="#1e293b",
+        brand_border="#334155",
+        brand_ring="#22d3ee",
+        brand_destructive="#ef4444",
+    )
+    assert model.brand_accent == "#22d3ee"
+    assert model.brand_destructive == "#ef4444"
+
+
+@pytest.mark.parametrize("field", _CORE_PALETTE)
+def test_update_blank_core_palette_becomes_none(field):
+    model = schemas.WorkspaceUpdate(**{field: "   "})
+    assert getattr(model, field) is None
+
+
+@pytest.mark.parametrize("field", _CORE_PALETTE)
+def test_update_rejects_malformed_core_palette(field):
+    with pytest.raises(ValidationError):
+        schemas.WorkspaceUpdate(**{field: "not-a-hex"})
+
+
+def test_read_exposes_core_palette_fields():
+    fields = schemas.WorkspaceRead.model_fields
+    for name in _CORE_PALETTE:
+        assert name in fields
+
+
 def test_read_exposes_branding_fields():
     fields = schemas.WorkspaceRead.model_fields
     for name in (
