@@ -94,7 +94,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             className="absolute -inset-1 rounded-[22px] opacity-40 blur-2xl"
             style={{ background: "var(--aqt-teal)" }}
           />
-          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:hsl(30_40%_22%)]">
+          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:var(--aqt-border-2)]">
             <Image src={avatarSrc} alt={`${name} avatar`} fill sizes="110px" className="object-cover" priority />
           </div>
           {primaryRole ? (
