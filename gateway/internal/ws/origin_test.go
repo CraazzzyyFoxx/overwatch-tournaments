@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -46,7 +47,7 @@ func dialWithOrigin(t *testing.T, srvURL, origin string) error {
 // value or how it's wired into ws.NewHandler's AcceptOptions fails this test.
 func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -85,7 +86,7 @@ func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 // while a same-origin handshake (Origin host == request Host) still works.
 func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -102,5 +103,109 @@ func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 	// sufficient.
 	if err := dialWithOrigin(t, srv.URL, srv.URL); err != nil {
 		t.Fatalf("expected same-origin handshake to be accepted with empty allow-list, got: %v", err)
+	}
+}
+
+// stubCustomDomainResolver is a fake CustomDomainResolver: it answers a fixed
+// (verified, err) pair for every host and counts how many times it was
+// called, so tests can both drive the accepted/rejected/fail-closed paths and
+// assert that the static-origin fast path never touches the resolver at all.
+type stubCustomDomainResolver struct {
+	verified bool
+	err      error
+	calls    int
+}
+
+func (s *stubCustomDomainResolver) IsVerifiedCustomDomain(context.Context, string) (bool, error) {
+	s.calls++
+	return s.verified, s.err
+}
+
+// TestWS_OriginAllowlist_VerifiedCustomDomain exercises the dynamic
+// custom-domain path (Phase 2 white-label): a host that is not covered by the
+// static apex/*.owt allowlist is only accepted when the resolver reports it
+// as a VERIFIED custom domain. An unverified domain, a resolver error, and a
+// plain foreign origin must all be rejected — the same "reject" outcome,
+// proving the handler never distinguishes "unverified" from "lookup failed"
+// in the client's favor (fail-closed).
+func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
+	tests := []struct {
+		name      string
+		resolver  *stubCustomDomainResolver
+		origin    string
+		wantAllow bool
+	}{
+		{
+			name:      "verified custom domain is accepted",
+			resolver:  &stubCustomDomainResolver{verified: true},
+			origin:    "https://anakq.gg",
+			wantAllow: true,
+		},
+		{
+			name:      "unverified custom domain is rejected",
+			resolver:  &stubCustomDomainResolver{verified: false},
+			origin:    "https://anakq.gg",
+			wantAllow: false,
+		},
+		{
+			name:      "lookup error fails closed, not open",
+			resolver:  &stubCustomDomainResolver{verified: true, err: errors.New("db unavailable")},
+			origin:    "https://anakq.gg",
+			wantAllow: false,
+		},
+		{
+			name:      "foreign origin unrelated to any custom domain is rejected",
+			resolver:  &stubCustomDomainResolver{verified: false},
+			origin:    "https://evil.example.com",
+			wantAllow: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
+				30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, tt.resolver, nil)
+			mux := http.NewServeMux()
+			mux.Handle("/ws", h)
+			srv := httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+
+			err := dialWithOrigin(t, srv.URL, tt.origin)
+			allowed := err == nil
+			if allowed != tt.wantAllow {
+				t.Fatalf("origin %q: allowed=%v (err=%v), want allowed=%v", tt.origin, allowed, err, tt.wantAllow)
+			}
+			if tt.resolver.calls != 1 {
+				t.Fatalf("expected exactly 1 resolver call for a non-static origin, got %d", tt.resolver.calls)
+			}
+		})
+	}
+}
+
+// TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup proves the fast
+// path (no DB lookup for an origin already covered by the static apex/*.owt
+// allowlist): the resolver here is rigged to reject and blow up if called at
+// all, so the connections would fail if acceptOptionsFor ever queried it for
+// these origins.
+func TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: false, err: errors.New("must not be called for a static origin")}
+	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil)
+	mux := http.NewServeMux()
+	mux.Handle("/ws", h)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	origins := []string{
+		"https://owt.craazzzyyfoxx.me",
+		"https://team-a.owt.craazzzyyfoxx.me",
+	}
+	for _, origin := range origins {
+		if err := dialWithOrigin(t, srv.URL, origin); err != nil {
+			t.Fatalf("origin %q: expected static allowlist to accept it, got: %v", origin, err)
+		}
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("expected the custom-domain resolver to never be called for a static origin, got %d calls", resolver.calls)
 	}
 }

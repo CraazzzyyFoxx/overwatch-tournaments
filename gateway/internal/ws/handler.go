@@ -5,6 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -26,17 +29,28 @@ type Replayer interface {
 	EventsSince(ctx context.Context, topic string, after *int64, upTo int64) ([]protocol.Envelope, error)
 }
 
+// CustomDomainResolver answers whether host is a verified white-label
+// workspace custom domain (Phase 2). Implemented by *workspace.Store's
+// IsVerifiedCustomDomain. A nil CustomDomainResolver simply disables
+// dynamic custom-domain origin matching (ServeHTTP falls back to the static
+// allowlist for every request), which keeps Handler's zero-ish value safe
+// and lets tests that don't care about custom domains pass nil.
+type CustomDomainResolver interface {
+	IsVerifiedCustomDomain(ctx context.Context, host string) (bool, error)
+}
+
 // Handler serves the WebSocket endpoint: it authenticates the connection,
 // registers it with the hub, and runs the per-connection read loop.
 type Handler struct {
-	hub          *Hub
-	auth         *auth.Authenticator
-	authz        Authorizer
-	replay       Replayer
-	idleTimeout  time.Duration
-	log          *slog.Logger
-	accept       *websocket.AcceptOptions
-	recordActive func(userID int64)
+	hub           *Hub
+	auth          *auth.Authenticator
+	authz         Authorizer
+	replay        Replayer
+	idleTimeout   time.Duration
+	log           *slog.Logger
+	accept        *websocket.AcceptOptions
+	customDomains CustomDomainResolver
+	recordActive  func(userID int64)
 }
 
 // NewHandler wires the WebSocket handler. recordActive may be nil; when set it
@@ -55,7 +69,16 @@ type Handler struct {
 // same-origin-only enforcement rather than "accept any origin". That keeps a
 // same-host WS connection (e.g. a tenant subdomain talking to itself)
 // working while still rejecting foreign cross-site handshakes.
-func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, recordActive func(userID int64)) *Handler {
+//
+// customDomains resolves white-label workspace custom domains (Phase 2, see
+// docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md): an
+// Origin whose host is not covered by allowedOrigins is looked up dynamically
+// per-request in ServeHTTP (see acceptOptionsFor), and only a VERIFIED custom
+// domain is ever added to the accepted patterns — and only for that one
+// request, never mutating the shared static allowlist. customDomains may be
+// nil, which simply disables that dynamic path (every request then uses the
+// static allowlist only); it never causes InsecureSkipVerify to be set.
+func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, customDomains CustomDomainResolver, recordActive func(userID int64)) *Handler {
 	if len(allowedOrigins) == 0 {
 		log.Warn("GATEWAY_WS_ALLOWED_ORIGINS is empty; WebSocket origin checking is degraded to same-origin-only")
 	}
@@ -67,14 +90,15 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 		OriginPatterns: allowedOrigins,
 	}
 	return &Handler{
-		hub:          hub,
-		auth:         a,
-		authz:        authz,
-		replay:       rep,
-		idleTimeout:  idleTimeout,
-		log:          log,
-		recordActive: recordActive,
-		accept:       accept,
+		hub:           hub,
+		auth:          a,
+		authz:         authz,
+		replay:        rep,
+		idleTimeout:   idleTimeout,
+		log:           log,
+		recordActive:  recordActive,
+		accept:        accept,
+		customDomains: customDomains,
 	}
 }
 
@@ -88,7 +112,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// REST httplog middleware, so resolve the id here).
 	connLog := h.log.With("correlation_id", httplog.CorrelationID(r))
 
-	c, err := websocket.Accept(w, r, h.accept)
+	c, err := websocket.Accept(w, r, h.acceptOptionsFor(r))
 	if err != nil {
 		return // Accept already wrote the error response.
 	}
@@ -102,6 +126,89 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer h.cleanup(conn)
 
 	h.readLoop(ctx, conn)
+}
+
+// acceptOptionsFor resolves the *websocket.AcceptOptions to hand to
+// websocket.Accept for this one handshake. It returns the shared static
+// options (h.accept) unmodified — never mutated — in every case except one:
+//
+//   - no Origin header: same-origin / non-browser client. websocket.Accept
+//     authorizes the request's own Host regardless of OriginPatterns, so the
+//     static options are enough.
+//   - a malformed Origin (fails to parse, or has no host): websocket.Accept
+//     parses the same header itself and will reject it identically.
+//   - an Origin whose host already matches one of the static patterns
+//     (apex/*.owt): no need to touch the database for a host we already
+//     allow unconditionally.
+//   - customDomains is nil: the dynamic path is disabled.
+//   - the custom-domain lookup errors: fail-closed. A transient DB failure
+//     must never be treated as "allowed" — it falls through to the static
+//     options, which will then reject this non-static Origin.
+//   - the host is not a verified custom domain: same fall-through/reject.
+//
+// Only when the lookup succeeds and reports a VERIFIED custom domain do we
+// return a fresh *websocket.AcceptOptions carrying the static patterns plus
+// that exact origin host, scoped to this single request. InsecureSkipVerify
+// is never set on either path.
+func (h *Handler) acceptOptionsFor(r *http.Request) *websocket.AcceptOptions {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return h.accept
+	}
+	if h.customDomains == nil {
+		return h.accept
+	}
+
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		// Malformed/hostless Origin: websocket.Accept re-parses the header
+		// itself and rejects it the same way, so just defer to the static path.
+		return h.accept
+	}
+
+	if matchesAnyOriginPattern(u, h.accept.OriginPatterns) {
+		return h.accept // already covered by the static allowlist.
+	}
+
+	host := strings.ToLower(u.Hostname())
+	verified, err := h.customDomains.IsVerifiedCustomDomain(r.Context(), host)
+	if err != nil {
+		h.log.Error("verified custom-domain lookup failed; rejecting WS origin", "origin", origin, "err", err)
+		return h.accept // fail-closed: never allow on a lookup error.
+	}
+	if !verified {
+		return h.accept // not a verified custom domain: let the static Accept reject it.
+	}
+
+	// Augment a *copy* of the static patterns with this exact, now-verified
+	// origin host. h.accept itself is never mutated, and no wildcard/skip is
+	// introduced — only the literal host that was just verified.
+	patterns := make([]string, 0, len(h.accept.OriginPatterns)+1)
+	patterns = append(patterns, h.accept.OriginPatterns...)
+	patterns = append(patterns, u.Host)
+	return &websocket.AcceptOptions{OriginPatterns: patterns}
+}
+
+// matchesAnyOriginPattern reports whether the parsed origin already satisfies
+// one of patterns, mirroring coder/websocket's own matching (see match and
+// authenticateOrigin in its accept.go): each pattern is matched case
+// insensitively with path.Match against either the origin host, or
+// "scheme://host" when the pattern itself carries a scheme. This is used only
+// to decide whether the custom-domain DB lookup can be skipped; the actual
+// authorization decision is still made by websocket.Accept itself, so a
+// false negative here only costs an extra (cached) lookup, never a security
+// regression.
+func matchesAnyOriginPattern(u *url.URL, patterns []string) bool {
+	for _, p := range patterns {
+		target := u.Host
+		if strings.Contains(p, "://") {
+			target = u.Scheme + "://" + u.Host
+		}
+		if matched, err := path.Match(strings.ToLower(p), strings.ToLower(target)); err == nil && matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) readLoop(ctx context.Context, conn *Conn) {

@@ -17,18 +17,30 @@ import (
 const (
 	tournamentWorkspaceSQL = `SELECT workspace_id FROM tournament.tournament WHERE id = $1`
 	isMemberSQL            = `SELECT EXISTS(SELECT 1 FROM workspace_member WHERE auth_user_id = $1 AND workspace_id = $2)`
+	// Only a workspace whose custom domain has completed DNS TXT verification
+	// matches; a domain that is merely set (custom_domain_verified_at IS NULL,
+	// still pending/unverified) never does. See
+	// docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md and the
+	// mirrored predicate in backend/shared/repository/workspace.py
+	// (get_by_verified_custom_domain).
+	customDomainVerifiedSQL = `SELECT EXISTS(SELECT 1 FROM workspace WHERE custom_domain = $1 AND custom_domain_verified_at IS NOT NULL)`
 
 	tournamentCacheTTL = 5 * time.Minute
 	// Matches the auth-service RBAC cache TTL, so membership changes propagate
 	// within roughly the same window.
 	membershipCacheTTL = 60 * time.Second
+	// Short TTL so a domain that is unclaimed, re-pointed, or has its
+	// verification revoked stops being accepted for new WebSocket handshakes
+	// within roughly this window, mirroring membershipCacheTTL above.
+	customDomainCacheTTL = 60 * time.Second
 )
 
 // Store answers ACL lookups against the database, with small TTL caches.
 type Store struct {
-	pool       *pgxpool.Pool
-	tournament *ttlCache[int64, int64]
-	members    *ttlCache[memberKey, bool]
+	pool          *pgxpool.Pool
+	tournament    *ttlCache[int64, int64]
+	members       *ttlCache[memberKey, bool]
+	customDomains *ttlCache[string, bool]
 }
 
 type memberKey struct {
@@ -38,9 +50,10 @@ type memberKey struct {
 // New returns a workspace Store backed by the given pool.
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
-		pool:       pool,
-		tournament: newTTLCache[int64, int64](tournamentCacheTTL),
-		members:    newTTLCache[memberKey, bool](membershipCacheTTL),
+		pool:          pool,
+		tournament:    newTTLCache[int64, int64](tournamentCacheTTL),
+		members:       newTTLCache[memberKey, bool](membershipCacheTTL),
+		customDomains: newTTLCache[string, bool](customDomainCacheTTL),
 	}
 }
 
@@ -78,4 +91,27 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 
 	s.members.set(key, member)
 	return member, nil
+}
+
+// IsVerifiedCustomDomain reports whether host is a workspace's verified
+// white-label custom domain (Phase 2). host must already be normalized
+// (lowercase, no port) by the caller — this method does no normalization of
+// its own, matching how the other lookups here take pre-resolved keys.
+//
+// Fail-closed: on a query error, the error is returned and verified is
+// always false; callers (ws.Handler) must treat that as "not allowed", never
+// as "allowed", so a transient DB failure can't open the WS origin
+// allowlist.
+func (s *Store) IsVerifiedCustomDomain(ctx context.Context, host string) (bool, error) {
+	if v, ok := s.customDomains.get(host); ok {
+		return v, nil
+	}
+
+	var verified bool
+	if err := s.pool.QueryRow(ctx, customDomainVerifiedSQL, host).Scan(&verified); err != nil {
+		return false, fmt.Errorf("custom domain lookup: %w", err)
+	}
+
+	s.customDomains.set(host, verified)
+	return verified, nil
 }

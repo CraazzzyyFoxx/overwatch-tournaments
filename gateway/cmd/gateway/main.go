@@ -126,7 +126,10 @@ func run() error {
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
 	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
 
-	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
+	// Wiring: workspace store satisfies both ACL interfaces (resolver + members)
+	// plus ws.CustomDomainResolver, so verified white-label custom-domain
+	// origins (Phase 2) are allowed dynamically without widening the static
+	// WS origin allowlist.
 	hub := ws.NewHub()
 	wsStore := workspace.New(pool)
 	authz := acl.New(wsStore, wsStore)
@@ -138,6 +141,7 @@ func run() error {
 		cfg.WSIdleTimeout,
 		logger,
 		cfg.WSAllowedOrigins,
+		wsStore,
 		activeUsers.Record,
 	)
 
