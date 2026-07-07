@@ -3,7 +3,10 @@
 Reads (list/get) are public. create is superuser-global. Member ops are
 workspace-scoped (workspace_member.{read,create,update,delete}). workspace
 update/delete go through the shared CRUD engine (see services/workspace/registry.py
-+ rpc/admin_crud.py).
++ rpc/admin_crud.py). The custom-domain set/verify/clear trio (white-label Phase
+2) is bespoke too — like member ops, gated on the workspace-scoped
+``workspace.update`` permission — since verification has a side effect (a DNS
+lookup) the generic CRUD engine has no hook for.
 
 The role-resolution / member-payload / RBAC-cache-bust helpers are replicated
 here (not imported from the route module) so the headless worker never depends on
@@ -29,7 +32,7 @@ from shared.rbac import (
 )
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission
-from shared.tenancy.hostnames import subdomain_from_host
+from shared.tenancy.hostnames import normalize_custom_domain, subdomain_from_host
 from src import models, schemas
 from src.core import config, db
 from src.rpc import _common as c
@@ -160,10 +163,12 @@ def register(broker: Any, logger: Any) -> None:
     async def by_host(data: dict, msg: RabbitMessage) -> dict:
         """Resolve a request host to its workspace: ``{workspace_id, slug}``.
 
-        Public (no auth). Phase 1 matches only the platform-zone subdomain
-        (``subdomain_from_host``) against ``Workspace.subdomain``; custom
-        domains are Phase 2. Returns ``data: None`` when the host is missing,
-        not a platform-zone subdomain, or matches no workspace.
+        Public (no auth). Matches either a platform-zone subdomain
+        (``subdomain_from_host`` against ``Workspace.subdomain``) or, for any
+        other host, a VERIFIED custom domain (``normalize_custom_domain``
+        against ``Workspace.custom_domain`` + ``custom_domain_verified_at``).
+        Returns ``data: None`` when the host is missing, invalid, or matches
+        no workspace — an unverified custom domain never resolves (fail-closed).
         """
 
         async def op(session: Any) -> Any:
@@ -171,9 +176,14 @@ def register(broker: Any, logger: Any) -> None:
             if not host:
                 return None
             label = subdomain_from_host(host)
-            if label is None:
-                return None
-            workspace = await workspace_service.get_by_subdomain(session, label)
+            if label is not None:
+                workspace = await workspace_service.get_by_subdomain(session, label)
+            else:
+                try:
+                    domain = normalize_custom_domain(host)
+                except ValueError:
+                    return None
+                workspace = await workspace_service.get_by_custom_domain(session, domain)
             if workspace is None:
                 return None
             return {"workspace_id": workspace.id, "slug": workspace.slug}
@@ -326,3 +336,56 @@ def register(broker: Any, logger: Any) -> None:
             return None
 
         return await c.envelope(logger, "workspaces.member_remove", op, session_factory=_SF)
+
+    # --- custom domain (white-label Phase 2) --------------------------------
+    @broker.subscriber("rpc.app.workspaces.set_custom_domain")
+    async def _set_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            body = schemas.WorkspaceCustomDomainSet.model_validate(c.payload(data))
+            try:
+                workspace = await workspace_service.set_custom_domain(session, workspace, body.custom_domain)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.set_custom_domain", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.verify_custom_domain")
+    async def _verify_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            workspace = await workspace_service.verify_custom_domain(session, workspace)
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.verify_custom_domain", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.clear_custom_domain")
+    async def _clear_custom_domain(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            workspace = await workspace_service.clear_custom_domain(session, workspace)
+            await session.commit()
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.clear_custom_domain", op, session_factory=_SF)

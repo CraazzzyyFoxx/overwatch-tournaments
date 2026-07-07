@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 from shared.tenancy.hostnames import validate_subdomain_label
@@ -12,6 +14,7 @@ __all__ = (
     "WorkspaceRead",
     "WorkspaceCreate",
     "WorkspaceUpdate",
+    "WorkspaceCustomDomainSet",
     "WorkspaceMemberRoleRead",
     "WorkspaceMemberRead",
     "WorkspaceMemberCreate",
@@ -34,6 +37,12 @@ class WorkspaceRead(BaseRead):
     subdomain: str | None = None
     seo_title: str | None = None
     seo_description: str | None = None
+    # White-label custom domains (Phase 2). ``custom_domain_verification_token``
+    # is exposed so the admin UI can render the required DNS TXT record without
+    # a second round-trip; it is not a secret (the TXT record IS public DNS).
+    custom_domain: str | None = None
+    custom_domain_verified_at: datetime | None = None
+    custom_domain_verification_token: str | None = None
     default_division_grid_version_id: int | None
     default_division_grid_version: DivisionGridVersionRead | None = None
 
@@ -61,12 +70,36 @@ class WorkspaceUpdate(BaseModel):
     seo_description: str | None = None
     default_division_grid_version_id: int | None = None
 
+    @field_validator(
+        "brand_primary",
+        "brand_secondary",
+        "brand_background",
+        "brand_surface",
+        mode="before",
+    )
+    @classmethod
+    def _blank_hex_to_none(cls, value: object) -> object:
+        # An empty/whitespace colour means "keep the default" — normalize it to
+        # None (which clears the token) instead of failing the #RRGGBB pattern.
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
     @field_validator("subdomain")
     @classmethod
     def _validate_subdomain(cls, value: str | None) -> str | None:
         if value is None or value == "":
             return None
         return validate_subdomain_label(value)
+
+
+class WorkspaceCustomDomainSet(BaseModel):
+    """Body for ``set_custom_domain``. Normalization/validation of the domain
+    itself (FQDN shape, platform-zone rejection) happens in the service layer
+    via ``normalize_custom_domain`` so both this RPC and any future caller share
+    one source of truth for what counts as a valid custom domain."""
+
+    custom_domain: str = Field(..., min_length=1, max_length=255)
 
 
 class WorkspaceMemberRoleRead(BaseModel):

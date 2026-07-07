@@ -52,6 +52,23 @@ func New(limit int, window time.Duration) *Limiter {
 // Enabled reports whether the limiter is active.
 func (l *Limiter) Enabled() bool { return l.rate > 0 }
 
+// Allow reports whether the next request for key may proceed, consuming a
+// token if so. It is exported (in addition to Wrap) for callers that need to
+// gate a single unit of work inside a larger handler rather than reject an
+// entire request — e.g. ws.Handler bounds only its pre-handshake
+// custom-domain lookup this way, falling through to the static origin
+// allowlist (which then rejects the connection) instead of refusing the
+// whole request outright.
+//
+// A nil *Limiter behaves like a disabled one (always allows), so callers can
+// safely hold an optional *Limiter field without a separate nil check.
+func (l *Limiter) Allow(key string) bool {
+	if l == nil || !l.Enabled() {
+		return true
+	}
+	return l.allow(key)
+}
+
 // allow consumes one token for key, returning false when the bucket is empty.
 func (l *Limiter) allow(key string) bool {
 	l.mu.Lock()

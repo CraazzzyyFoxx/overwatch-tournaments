@@ -44,11 +44,20 @@ type Config struct {
 	WSAllowedOrigins []string
 	AuthRateLimit    int
 	AuthRateWindow   time.Duration
-	Upstreams        Upstreams
-	Sentry           Sentry
-	Tracing          Tracing
-	Log              Log
-	Docs             Docs
+	// WSCustomDomainRateLimit/Window bound how often ws.Handler's dynamic
+	// custom-domain Origin lookup (see acceptOptionsFor) may run per client
+	// IP. /ws carries neither auth nor the outer nginx-level limiter that
+	// guards /api/auth/*, so this is the only per-IP throttle on a lookup
+	// path that is otherwise reachable by anyone with distinct fake Origin
+	// headers. The default (30 requests / 10s) is generous relative to any
+	// realistic WS reconnect storm from a single IP.
+	WSCustomDomainRateLimit  int
+	WSCustomDomainRateWindow time.Duration
+	Upstreams                Upstreams
+	Sentry                   Sentry
+	Tracing                  Tracing
+	Log                      Log
+	Docs                     Docs
 }
 
 // Tracing holds the OpenTelemetry settings. The variable names mirror the
@@ -132,19 +141,21 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:             getenv("GATEWAY_PORT", "8080"),
-		MetricsPort:      getenv("GATEWAY_METRICS_PORT", "9110"),
-		Environment:      env,
-		JWTSecret:        secret,
-		RedisURL:         getenv("REDIS_URL", "redis://redis:6379"),
-		RabbitMQURL:      rabbitURL,
-		DatabaseURL:      dbURL,
-		DBPgBouncer:      getenvBool("DB_PGBOUNCER", false),
-		WSIdleTimeout:    time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
-		WSReplayLimit:    getenvInt("WS_REPLAY_LIMIT", 500),
-		WSAllowedOrigins: splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),
-		AuthRateLimit:    getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
-		AuthRateWindow:   time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
+		Port:                     getenv("GATEWAY_PORT", "8080"),
+		MetricsPort:              getenv("GATEWAY_METRICS_PORT", "9110"),
+		Environment:              env,
+		JWTSecret:                secret,
+		RedisURL:                 getenv("REDIS_URL", "redis://redis:6379"),
+		RabbitMQURL:              rabbitURL,
+		DatabaseURL:              dbURL,
+		DBPgBouncer:              getenvBool("DB_PGBOUNCER", false),
+		WSIdleTimeout:            time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
+		WSReplayLimit:            getenvInt("WS_REPLAY_LIMIT", 500),
+		WSAllowedOrigins:         splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),
+		AuthRateLimit:            getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
+		AuthRateWindow:           time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
+		WSCustomDomainRateLimit:  getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT", 30),
+		WSCustomDomainRateWindow: time.Duration(getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_WINDOW", 10)) * time.Second,
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),

@@ -125,8 +125,17 @@ func run() error {
 	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
 	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	// Separate limiter bounding ws.Handler's pre-handshake custom-domain
+	// lookup per client IP: /ws itself carries no auth and no rate limit, so
+	// without this an unauthenticated flood of distinct fake Origin headers
+	// could drive unbounded DB/cache-write load (see acceptOptionsFor).
+	// Disabled (pass-through) when GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT <= 0.
+	wsCustomDomainLimiter := ratelimit.New(cfg.WSCustomDomainRateLimit, cfg.WSCustomDomainRateWindow)
 
-	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
+	// Wiring: workspace store satisfies both ACL interfaces (resolver + members)
+	// plus ws.CustomDomainResolver, so verified white-label custom-domain
+	// origins (Phase 2) are allowed dynamically without widening the static
+	// WS origin allowlist.
 	hub := ws.NewHub()
 	wsStore := workspace.New(pool)
 	authz := acl.New(wsStore, wsStore)
@@ -138,6 +147,8 @@ func run() error {
 		cfg.WSIdleTimeout,
 		logger,
 		cfg.WSAllowedOrigins,
+		wsStore,
+		wsCustomDomainLimiter,
 		activeUsers.Record,
 	)
 
@@ -177,6 +188,15 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
+	// Custom-domain SSO ticket handoff (Task 8): redeems a one-time ticket
+	// minted by the apex OAuth callback for the session tokens. Same
+	// anti-brute-force posture as the other auth token-exchange endpoints.
+	mux.HandleFunc("POST /api/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
+	// Custom-domain account-linking end-ticket (Task 10R): redeems a
+	// pending-link ticket minted by a custom-domain OAuth link callback and
+	// attaches its provider identity to the bearer-authenticated caller.
+	// Unlike sso/exchange above, this route IS authenticated.
+	mux.HandleFunc("POST /api/auth/link/complete", identityHandler.LinkComplete)
 	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)

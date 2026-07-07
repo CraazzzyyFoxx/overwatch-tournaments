@@ -13,6 +13,8 @@ __all__ = (
     "RESERVED_SUBDOMAINS",
     "validate_subdomain_label",
     "subdomain_from_host",
+    "is_platform_host",
+    "normalize_custom_domain",
 )
 
 PLATFORM_ZONE = "owt.craazzzyyfoxx.me"
@@ -20,6 +22,10 @@ PLATFORM_ZONE = "owt.craazzzyyfoxx.me"
 RESERVED_SUBDOMAINS = frozenset({"www", "api", "auth", "admin", "app", "assets", "static", "cdn", "mail", "ws"})
 
 _LABEL_RE = re.compile(r"^[a-z0-9-]+$")
+
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
 
 
 def validate_subdomain_label(label: str) -> str:
@@ -49,3 +55,27 @@ def subdomain_from_host(host: str) -> str | None:
         return validate_subdomain_label(label)
     except ValueError:
         return None
+
+
+def is_platform_host(host: str) -> bool:
+    """Check if host is the platform zone apex or a subdomain under it."""
+    h = host.strip().lower().split(":", 1)[0]
+    return h == PLATFORM_ZONE or h.endswith("." + PLATFORM_ZONE)
+
+
+def normalize_custom_domain(domain: str) -> str:
+    """Normalize and validate a custom domain.
+
+    - Lowercase, strip whitespace, strip trailing dot and port.
+    - Must be a valid multi-label FQDN (at least one dot).
+    - Rejects empty, non-FQDN, and any host under the platform zone.
+
+    Raises ValueError if invalid.
+    """
+    host = domain.strip().lower().split(":", 1)[0]
+    d = host.rstrip(".")
+    if not d or "." not in d or not _DOMAIN_RE.fullmatch(d):
+        raise ValueError("Invalid custom domain")
+    if is_platform_host(d):
+        raise ValueError("Custom domain must not be under the platform zone")
+    return d

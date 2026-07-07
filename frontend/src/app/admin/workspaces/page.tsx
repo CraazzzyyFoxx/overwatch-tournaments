@@ -3,12 +3,13 @@
 import { useState, type CSSProperties } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle, XCircle, Copy } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,6 +105,16 @@ export default function WorkspacesPage() {
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
 
+  // Custom domain (white-label Phase 2) is its own set/verify/clear RPC flow,
+  // not part of the main WorkspaceUpdate PATCH — tracked separately from
+  // `formData` so its buttons act immediately instead of waiting for Save.
+  const [customDomainInput, setCustomDomainInput] = useState("");
+  const [customDomain, setCustomDomain] = useState<{
+    domain: string | null;
+    verifiedAt: string | null;
+    token: string | null;
+  }>({ domain: null, verifiedAt: null, token: null });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-workspaces"] });
     fetchWorkspaces();
@@ -176,6 +187,58 @@ export default function WorkspacesPage() {
     }
   });
 
+  const applyCustomDomainResult = (ws: Workspace) => {
+    setCustomDomain({
+      domain: ws.custom_domain,
+      verifiedAt: ws.custom_domain_verified_at,
+      token: ws.custom_domain_verification_token
+    });
+    setCustomDomainInput(ws.custom_domain ?? "");
+  };
+
+  const errorMessage = (error: unknown, fallback: string): string =>
+    error instanceof Error ? error.message : fallback;
+
+  const setCustomDomainMutation = useMutation({
+    mutationFn: ({ id, domain }: { id: number; domain: string }) => workspaceService.setCustomDomain(id, domain),
+    onSuccess: (ws) => {
+      applyCustomDomainResult(ws);
+      invalidate();
+      notify.success("Custom domain saved — add the DNS records below, then verify");
+    },
+    onError: (error) => notify.error(errorMessage(error, "Failed to save custom domain"))
+  });
+
+  const verifyCustomDomainMutation = useMutation({
+    mutationFn: (id: number) => workspaceService.verifyCustomDomain(id),
+    onSuccess: (ws) => {
+      applyCustomDomainResult(ws);
+      invalidate();
+      notify.success("Custom domain verified");
+    },
+    onError: (error) =>
+      notify.error(errorMessage(error, "Verification record not found yet — DNS changes can take time to propagate"))
+  });
+
+  const clearCustomDomainMutation = useMutation({
+    mutationFn: (id: number) => workspaceService.clearCustomDomain(id),
+    onSuccess: (ws) => {
+      applyCustomDomainResult(ws);
+      invalidate();
+      notify.success("Custom domain removed");
+    },
+    onError: (error) => notify.error(errorMessage(error, "Failed to remove custom domain"))
+  });
+
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      notify.success("Copied to clipboard");
+    } catch {
+      notify.error("Could not copy to clipboard");
+    }
+  };
+
   const handleCreate = () => {
     setFormData({ ...emptyForm });
     setIconFile(null);
@@ -199,6 +262,12 @@ export default function WorkspacesPage() {
     });
     setIconFile(null);
     setIconPreview(ws.icon_url || null);
+    setCustomDomainInput(ws.custom_domain ?? "");
+    setCustomDomain({
+      domain: ws.custom_domain,
+      verifiedAt: ws.custom_domain_verified_at,
+      token: ws.custom_domain_verification_token
+    });
     setEditOpen(true);
   };
 
@@ -421,9 +490,22 @@ export default function WorkspacesPage() {
         description={`Editing "${selected?.name}"`}
         onSubmit={(e) => {
           e.preventDefault();
-          if (selected) {
-            updateMutation.mutate({ id: selected.id, data: formData as WorkspaceUpdateFormData });
-          }
+          if (!selected) return;
+          const form = formData as WorkspaceUpdateFormData;
+          // A blank colour field means "keep the default" → send null (the
+          // backend rejects "" via the #RRGGBB pattern, and the derive util
+          // treats a missing token as the default palette value).
+          const hexOrNull = (v: string | null | undefined) => v?.trim() || null;
+          updateMutation.mutate({
+            id: selected.id,
+            data: {
+              ...form,
+              brand_primary: hexOrNull(form.brand_primary),
+              brand_secondary: hexOrNull(form.brand_secondary),
+              brand_background: hexOrNull(form.brand_background),
+              brand_surface: hexOrNull(form.brand_surface),
+            },
+          });
         }}
         isSubmitting={updateMutation.isPending}
         submittingLabel="Saving..."
@@ -589,6 +671,98 @@ export default function WorkspacesPage() {
                   : "Leave blank to use the platform URL only"}
               </p>
             </div>
+
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="edit-custom-domain">Custom domain</Label>
+                {customDomain.verifiedAt ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <CheckCircle className="h-3 w-3 text-emerald-500" />
+                    Verified
+                  </Badge>
+                ) : customDomain.domain ? (
+                  <Badge variant="outline" className="gap-1">
+                    <XCircle className="h-3 w-3 text-amber-500" />
+                    Pending verification
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="edit-custom-domain"
+                  value={customDomainInput}
+                  onChange={(e) => setCustomDomainInput(e.target.value.toLowerCase().trim())}
+                  placeholder="tourney.example.com"
+                  disabled={!!customDomain.verifiedAt}
+                />
+                {customDomain.verifiedAt ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-destructive"
+                    disabled={!selected || clearCustomDomainMutation.isPending}
+                    onClick={() => selected && clearCustomDomainMutation.mutate(selected.id)}
+                  >
+                    Remove
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!selected || !customDomainInput || setCustomDomainMutation.isPending}
+                    onClick={() =>
+                      selected &&
+                      setCustomDomainMutation.mutate({ id: selected.id, domain: customDomainInput })
+                    }
+                  >
+                    {setCustomDomainMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Serves this workspace on your own domain once verified. Leave blank to use the
+                platform URL / subdomain only.
+              </p>
+
+              {customDomain.domain && !customDomain.verifiedAt ? (
+                <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs font-medium">Add these DNS records, then verify:</p>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex flex-wrap items-center gap-2 font-mono">
+                      <span className="shrink-0 text-muted-foreground">TXT</span>
+                      <span className="break-all">{`_owt-verify.${customDomain.domain}`}</span>
+                      <span className="break-all">{customDomain.token}</span>
+                      {customDomain.token ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          aria-label="Copy TXT value"
+                          onClick={() => customDomain.token && handleCopy(customDomain.token)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 font-mono">
+                      <span className="shrink-0 text-muted-foreground">CNAME</span>
+                      <span className="break-all">{customDomain.domain}</span>
+                      <span className="break-all">{PLATFORM_ZONE}</span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!selected || verifyCustomDomainMutation.isPending}
+                    onClick={() => selected && verifyCustomDomainMutation.mutate(selected.id)}
+                  >
+                    {verifyCustomDomainMutation.isPending ? "Checking..." : "Verify"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
             <div>
               <Label htmlFor="edit-seo-title">SEO title</Label>
               <Input

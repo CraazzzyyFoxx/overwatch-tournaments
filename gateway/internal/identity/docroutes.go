@@ -34,8 +34,14 @@ var PublicDocRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/auth/oauth/connections", Queue: "rpc.identity.oauth_connections", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/url", Queue: "rpc.identity.oauth_url", Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Body: true, Auth: edge.AuthNone},
-	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthRequired},
+	// Auth: AuthOptional -- identity-svc decides whether a bearer is
+	// required, branching on the signed OAuth state's origin (Task 10R).
+	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthOptional},
 	{Method: "DELETE", Pattern: "/api/auth/oauth/{provider}/unlink", Queue: "rpc.identity.oauth_unlink", Auth: edge.AuthRequired, Success: 204},
+	{Method: "POST", Pattern: "/api/auth/sso/exchange", Queue: "rpc.identity.sso_exchange", Body: true, Auth: edge.AuthNone},
+	// Custom-domain account-linking end-ticket (Task 10R) -- unlike
+	// sso/exchange above, this one IS authenticated (bearer required).
+	{Method: "POST", Pattern: "/api/auth/link/complete", Queue: "rpc.identity.link_complete", Body: true, Auth: edge.AuthRequired},
 	// API keys
 	{Method: "GET", Pattern: "/api/auth/api-keys", Queue: "rpc.identity.list_api_keys", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/api-keys", Queue: "rpc.identity.create_api_key", Body: true, Auth: edge.AuthRequired, Success: 201},

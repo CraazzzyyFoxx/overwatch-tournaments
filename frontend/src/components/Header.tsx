@@ -215,7 +215,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
     });
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
+    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 px-4 backdrop-blur-xl md:px-6">
       {tenantMode ? (
         tenantWorkspace ? (
           <Link
@@ -233,11 +233,11 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                 className="size-7 shrink-0 rounded-md object-cover"
               />
             ) : (
-              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[var(--aqt-teal)] text-xs font-semibold text-black">
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-(--aqt-teal) text-xs font-semibold text-black">
                 {workspaceInitials(tenantWorkspace.name)}
               </span>
             )}
-            <span className="hidden max-w-[12rem] truncate text-sm font-semibold sm:inline">
+            <span className="hidden max-w-48 truncate text-sm font-semibold sm:inline">
               {tenantWorkspace.name}
             </span>
           </Link>

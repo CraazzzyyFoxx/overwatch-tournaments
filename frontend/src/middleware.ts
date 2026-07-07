@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PLATFORM_ZONE, resolveHost } from "@/lib/host";
+import { resolveHost } from "@/lib/host";
 import { internalApiOrigin } from "@/lib/api-routes";
 
 // Small bounded TTL cache: the host->workspace map is tiny and rarely changes.
@@ -22,8 +22,7 @@ function fromEntry(entry: { id: number | null }): Lookup {
   return entry.id === null ? { status: "not_found" } : { status: "found", id: entry.id };
 }
 
-async function resolveWorkspace(origin: string, subdomain: string): Promise<Lookup> {
-  const host = `${subdomain}.${PLATFORM_ZONE}`;
+async function resolveWorkspace(origin: string, host: string): Promise<Lookup> {
   const now = Date.now();
   const cached = cache.get(host);
   if (cached && now - cached.at < CACHE_TTL_MS) {
@@ -62,7 +61,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request: { headers } });
   }
 
-  const lookup = await resolveWorkspace(request.nextUrl.origin, resolution.subdomain);
+  const lookup = await resolveWorkspace(request.nextUrl.origin, resolution.host);
 
   if (lookup.status === "found") {
     const headers = new Headers(request.headers);
