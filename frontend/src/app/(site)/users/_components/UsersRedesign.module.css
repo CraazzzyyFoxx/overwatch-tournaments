@@ -18,7 +18,7 @@
   --u-damage: hsl(340 78% 60%);
   --u-support: hsl(142 60% 52%);
 
-  --u-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --u-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --u-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
 
   color: var(--u-fg);
@@ -28,92 +28,8 @@
 }
 
 /* ===== Hero ===== */
-.hero {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--u-border);
-  border-radius: 14px;
-  padding: 36px 40px;
-  background: var(--u-bg);
-}
-
-.hex {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E");
-  background-size: 80px 92.4px;
-}
-
-.glow1 {
-  position: absolute;
-  top: -15%;
-  left: -5%;
-  width: 65%;
-  height: 130%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18), transparent 62%);
-  pointer-events: none;
-}
-
-.glow2 {
-  position: absolute;
-  top: -25%;
-  right: 0;
-  width: 55%;
-  height: 100%;
-  background: radial-gradient(ellipse at 70% 30%, hsl(270 70% 62% / 0.1), transparent 58%);
-  pointer-events: none;
-}
-
-.heroGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 48px;
-  align-items: end;
-}
-
-.crumb {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--u-faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  margin: 0;
-}
-
-.crumb a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.crumb a:hover {
-  color: var(--u-muted);
-}
-
-.title {
-  font-family: var(--u-display);
-  font-weight: 700;
-  font-size: 52px;
-  line-height: 1.05;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  margin: 8px 0 12px;
-}
-
-.titleAccent {
-  font-style: normal;
-  color: var(--u-teal);
-}
-
-.subtitle {
-  color: var(--u-muted);
-  max-width: 42rem;
-  font-size: 14px;
-  margin: 0;
-}
-
+/* Hero shell + title moved to the shared <PageHero> (Editorial Tactical).
+   Only the stat blocks below are still rendered here, as the hero aside. */
 .heroStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

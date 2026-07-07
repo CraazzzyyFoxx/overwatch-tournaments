@@ -10,6 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak, type FormResult } from "@/app/(site)/users/components/shared/atoms";
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
+import { HeroFrame } from "@/components/site/PageHero";
 
 export interface UserHeaderProps {
   profile: UserProfile;
@@ -77,25 +78,8 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
         : "var(--aqt-damage)";
 
   return (
-    <section className="aqt-player relative overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E\")",
-          backgroundSize: "80px 92.4px"
-        }}
-      />
-      <div
-        className="pointer-events-none absolute -left-[5%] -top-[20%] h-[140%] w-[60%]"
-        style={{ background: "radial-gradient(ellipse at 30% 50%, hsl(340 78% 60% / 0.15), transparent 62%)" }}
-      />
-      <div
-        className="pointer-events-none absolute -right-[5%] -top-[25%] h-[120%] w-[55%]"
-        style={{ background: "radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.12), transparent 58%)" }}
-      />
-
-      <div className="relative z-[1] flex items-center justify-between gap-3 px-9 pt-5">
+    <HeroFrame className="aqt-player">
+      <div className="flex items-center justify-between gap-3 px-9 pt-5">
         <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
           <span className="mx-1">·</span>
@@ -104,16 +88,13 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
         <ProfileToolbar />
       </div>
 
-      <div className="relative z-[1] grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">
+      <div className="grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">
         <div className="relative h-[110px] w-[110px] flex-shrink-0">
           <div
-            className="absolute -inset-1 rounded-[22px] opacity-60 blur-2xl"
-            style={{
-              background:
-                "linear-gradient(135deg,var(--aqt-damage),var(--aqt-amber),var(--aqt-teal))"
-            }}
+            className="absolute -inset-1 rounded-[22px] opacity-40 blur-2xl"
+            style={{ background: "var(--aqt-teal)" }}
           />
-          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:hsl(30_40%_22%)]">
+          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:var(--aqt-border-2)]">
             <Image src={avatarSrc} alt={`${name} avatar`} fill sizes="110px" className="object-cover" priority />
           </div>
           {primaryRole ? (
@@ -132,7 +113,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
         </div>
 
         <div className="flex min-w-0 flex-col gap-2">
-          <h1 className="m-0 flex flex-wrap items-baseline gap-2.5 text-[clamp(28px,4vw,48px)] aqt-display font-bold uppercase tracking-[0.02em] leading-none">
+          <h1 className="aqt-hero-title m-0 flex flex-wrap items-baseline gap-2.5 text-[clamp(28px,4vw,48px)] font-onest font-semibold tracking-[-0.01em] leading-none">
             <span>{name}</span>
             {tag ? <span className="text-[22px] font-medium tracking-[0.04em] text-[color:var(--aqt-fg-faint)]">#{tag}</span> : null}
             {hasVerifiedSocial(user.social_accounts) ? (
@@ -189,7 +170,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
           </div>
         </div>
       </div>
-    </section>
+    </HeroFrame>
   );
 };
 
@@ -206,7 +187,7 @@ interface PfStatProps {
 const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => (
   <div className="flex flex-col gap-1">
     <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
-    <span className="aqt-display aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
+    <span className="font-onest aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
       {value}
       {unit ? <em className="ml-0.5 not-italic text-[color:var(--aqt-teal)]">{unit}</em> : null}
       {valueSuffix ? (

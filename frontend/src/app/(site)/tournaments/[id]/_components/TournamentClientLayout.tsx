@@ -16,6 +16,7 @@ import type { Stage } from "@/types/tournament.types";
 
 import { useTranslation } from "@/i18n/LanguageContext";
 import TournamentSectionNav from "./TournamentSectionNav";
+import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 
 type TournamentClientLayoutProps = {
   tournamentId: number;
@@ -97,97 +98,67 @@ export default function TournamentClientLayout({
 
   return (
     <div className="aqt-tn space-y-4">
-      <p className="crumb">
-        <Link href="/tournaments">{t("common.tournaments")}</Link>
-        <span className="sep">/</span>
-        <span>{tournament.name}</span>
-      </p>
-
-      <section className={cn("tn-hero", designClass !== "live" && `status-${designClass}`)}>
-        <div className="hex" />
-        <div className="glow-rose" />
-        <div className="glow-teal" />
-
-        {!isEnded && (
-          <div className="tn-actions">
+      <PageHero
+        eyebrow={
+          <HeroCoord className="inline-flex flex-wrap items-center gap-2">
+            <Link
+              href="/tournaments"
+              className="transition-colors hover:text-[color:var(--aqt-teal)]"
+            >
+              {t("common.tournaments")}
+            </Link>
+            <span className="opacity-50">/</span>
+            <span>{tournament.is_league ? t("common.league") : `#${tournament.number}`}</span>
+            <span className="opacity-50">·</span>
+            <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
+          </HeroCoord>
+        }
+        title={tournament.name}
+        meta={
+          <>
+            <span className={cn("status-pill", designClass)}>
+              {(tournament.status === "live" || tournament.status === "playoffs") && (
+                <span className="dot" />
+              )}
+              {t(`common.statusBadge.${tournament.status}`)}
+            </span>
+            <span className="meta-pill">
+              <span className="k">{t("common.format")}</span>
+              <span className="v">{formatLabel(stages, t)}</span>
+            </span>
+            <span className="meta-pill">
+              <span className="k">{t("common.teamFormation")}</span>
+              <span className="v">{t(`common.${tournament.team_formation ?? "balancer"}`)}</span>
+            </span>
+          </>
+        }
+        lede={tournament.description || undefined}
+        actions={
+          !isEnded ? (
             <TournamentRegisterButton
               workspaceId={tournament.workspace_id}
               tournamentId={tournament.id}
               tournamentName={tournament.name}
             />
+          ) : undefined
+        }
+        aside={
+          <div className="grid grid-cols-2 gap-x-7 gap-y-5 xl:grid-cols-4">
+            <HeroStat label={t("common.teams")} value={teamsCount} sub={t("common.registered")} />
+            <HeroStat
+              label={t("common.participants")}
+              value={tournament.registrations_count ?? 0}
+              sub={t("common.players")}
+            />
+            <HeroStat label={t("common.rostered")} value={players} sub={t("common.inTeams")} />
+            <HeroStat
+              label={t("common.stages")}
+              value={stages.length}
+              sub={`${completedStages} ${t("common.done")}`}
+            />
           </div>
-        )}
-
-        <div className="tn-hero-inner">
-          <div className="tn-h-left">
-            <div className="tn-id-line">
-              <span className="id">
-                {tournament.is_league ? t("common.league") : `#${tournament.number}`}
-              </span>
-              <span>·</span>
-              <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
-            </div>
-
-            <h1 className="tn-title">{tournament.name}</h1>
-
-            <div className="tn-meta-row">
-              <span className={cn("status-pill", designClass)}>
-                {(tournament.status === "live" || tournament.status === "playoffs") && (
-                  <span className="dot" />
-                )}
-                {t(`common.statusBadge.${tournament.status}`)}
-              </span>
-              <span className="meta-pill">
-                <span className="k">{t("common.format")}</span>
-                <span className="v">{formatLabel(stages, t)}</span>
-              </span>
-              <span className="meta-pill">
-                <span className="k">{t("common.teamFormation")}</span>
-                <span className="v">{t(`common.${tournament.team_formation ?? "balancer"}`)}</span>
-              </span>
-            </div>
-
-            {tournament.description && (
-              <p
-                style={{
-                  marginTop: 6,
-                  maxWidth: "44rem",
-                  fontSize: 12.5,
-                  lineHeight: 1.6,
-                  color: "var(--fg-dim)"
-                }}
-              >
-                {tournament.description}
-              </p>
-            )}
-          </div>
-
-          <div className="tn-h-stats">
-            <div className="tn-h-stat">
-              <span className="l">{t("common.teams")}</span>
-              <span className="v">{teamsCount}</span>
-              <span className="s">{t("common.registered")}</span>
-            </div>
-            <div className="tn-h-stat">
-              <span className="l">{t("common.participants")}</span>
-              <span className="v">{tournament.registrations_count ?? 0}</span>
-              <span className="s">{t("common.players")}</span>
-            </div>
-            <div className="tn-h-stat">
-              <span className="l">{t("common.rostered")}</span>
-              <span className="v">{players}</span>
-              <span className="s">{t("common.inTeams")}</span>
-            </div>
-            <div className="tn-h-stat">
-              <span className="l">{t("common.stages")}</span>
-              <span className="v">{stages.length}</span>
-              <span className="s">
-                {completedStages} {t("common.done")}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+        }
+      />
 
       <TournamentSectionNav
         tournamentId={String(tournamentId)}

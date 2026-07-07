@@ -88,7 +88,7 @@ function DashCard({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ background: "hsl(215 22% 7%)", border: "1px solid hsl(215 20% 11%)" }}
+      style={{ background: "var(--aqt-bg-2)", border: "1px solid var(--aqt-border)" }}
     >
       {children}
     </div>
@@ -99,7 +99,7 @@ function DashCardHeader({ icon, children }: { icon?: React.ReactNode; children: 
   return (
     <div
       className="flex items-center gap-2 px-5 py-4 border-b font-display font-bold text-[15px] uppercase tracking-[0.04em]"
-      style={{ borderColor: "hsl(215 20% 10%)", color: "hsl(210 20% 88%)" }}
+      style={{ borderColor: "var(--aqt-border)", color: "var(--aqt-fg)" }}
     >
       {icon}
       {children}
@@ -113,7 +113,7 @@ function PlaceBadge({ n }: { n: number }) {
     2: { bg: "#99b0cc", color: "#121009" },
     3: { bg: "#a86243", color: "#fff" },
   };
-  const s = map[n] ?? { bg: "hsl(215 20% 14%)", color: "hsl(210 20% 65%)" };
+  const s = map[n] ?? { bg: "var(--aqt-border-2)", color: "var(--aqt-fg-muted)" };
   return (
     <span
       className="w-[22px] h-[22px] rounded-full shrink-0 inline-flex items-center justify-center text-[11px] font-bold tabular-nums"
@@ -247,7 +247,7 @@ function LeaderboardCard({
           <div
             key={player.id}
             className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
-            style={{ borderColor: "hsl(215 20% 9%)", color: "hsl(210 20% 80%)" }}
+            style={{ borderColor: "var(--aqt-border)", color: "var(--aqt-fg)" }}
           >
             <div className="flex items-center gap-2.5 min-w-0">
               {index < 3 ? (
@@ -255,7 +255,7 @@ function LeaderboardCard({
               ) : (
                 <span
                   className="font-mono text-[12px] min-w-[22px] text-center"
-                  style={{ color: "hsl(215 12% 38%)" }}
+                  style={{ color: "var(--aqt-fg-dim)" }}
                 >
                   #{index + 1}
                 </span>
@@ -294,7 +294,7 @@ async function ChampionsLeaderboard() {
       icon={<Trophy className="h-4 w-4 text-amber-400" />}
       rows={rows}
       format={(v) => `${v}×`}
-      accent="hsl(174 72% 55%)"
+      accent="var(--aqt-teal)"
     />
   );
 }
@@ -315,7 +315,7 @@ async function WinRateLeaderboard() {
       icon={<Percent className="h-4 w-4 text-emerald-400" />}
       rows={rows}
       format={(v) => `${(v * 100).toFixed(1)}%`}
-      accent="hsl(142 70% 55%)"
+      accent="var(--aqt-emerald)"
     />
   );
 }
@@ -336,7 +336,7 @@ async function WonMapsLeaderboard() {
       icon={<MapIcon className="h-4 w-4 text-blue-400" />}
       rows={rows}
       format={(v) => `${v}`}
-      accent="hsl(210 80% 62%)"
+      accent="var(--aqt-blue)"
     />
   );
 }

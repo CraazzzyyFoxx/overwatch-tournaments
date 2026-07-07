@@ -107,8 +107,8 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
           </div>
           <div className="flex flex-row gap-4">
             <div className="flex flex-col text-right">
-              <p className="leading-7 text-[#16e5b4]">{match.home_team.name}</p>
-              <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#16e5b4]">
+              <p className="leading-7 text-[color:var(--aqt-teal)]">{match.home_team.name}</p>
+              <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                 {match.score.home}
               </h4>
             </div>
@@ -116,8 +116,8 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
               <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">:</h4>
             </div>
             <div className="flex flex-col text-left">
-              <p className="leading-7  text-[#ff4655]">{match.away_team.name}</p>
-              <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#ff4655]">
+              <p className="leading-7  text-[color:var(--aqt-rose)]">{match.away_team.name}</p>
+              <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                 {match.score.away}
               </h4>
             </div>

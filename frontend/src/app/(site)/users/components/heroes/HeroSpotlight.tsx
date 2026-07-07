@@ -62,8 +62,8 @@ const HeroSpotlight = ({
   <div
     className="relative grid grid-cols-[auto_1fr_auto] items-center gap-6 overflow-hidden rounded-xl border p-5"
     style={{
-      background: `linear-gradient(135deg, hsl(${heroVariant === "tank" ? "210" : heroVariant === "support" ? "142" : "340"} 65% 50% / 0.18), hsl(${heroVariant === "tank" ? "210" : heroVariant === "support" ? "142" : "340"} 65% 50% / 0.04))`,
-      borderColor: `hsl(${heroVariant === "tank" ? "210" : heroVariant === "support" ? "142" : "340"} 78% 60% / 0.25)`
+      background: `linear-gradient(135deg, color-mix(in srgb, var(--aqt-${heroVariant}) 18%, transparent), color-mix(in srgb, var(--aqt-${heroVariant}) 4%, transparent))`,
+      borderColor: `color-mix(in srgb, var(--aqt-${heroVariant}) 25%, transparent)`
     }}
   >
     <div className="absolute inset-0 pointer-events-none" style={{
@@ -85,7 +85,7 @@ const HeroSpotlight = ({
       <div className="flex flex-wrap items-center gap-2">
         <span
           className="aqt-mono inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[12px] uppercase tracking-[0.06em]"
-          style={{ background: `var(--aqt-${heroVariant})`, color: "hsl(220 30% 8%)" }}
+          style={{ background: `var(--aqt-${heroVariant})`, color: "var(--aqt-bg)" }}
         >
           {selected.hero.hero.type ?? selected.hero.hero.role}
         </span>

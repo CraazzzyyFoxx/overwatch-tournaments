@@ -190,7 +190,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
           <span className="flex-1 truncate text-sm font-medium">{account.username}</span>
           {account.is_verified && (
             <Check
-              className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-teal,#2dd4bf)]"
+              className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-teal)]"
               aria-label="Verified via OAuth"
             />
           )}

@@ -6,6 +6,7 @@ import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
 import StatisticsCard from "@/components/StatisticsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import statisticsService from "@/services/statistics.service";
 import workspaceService from "@/services/workspace.service";
 import tournamentService from "@/services/tournament.service";
@@ -28,9 +29,6 @@ const WORKSPACE_HUES = [174, 210, 38, 270, 142, 320, 0, 60];
 function getWorkspaceHue(id: number): number {
   return WORKSPACE_HUES[id % WORKSPACE_HUES.length];
 }
-
-// SVG hex-grid data URL used as a subtle background pattern
-const HEX_GRID_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40%2C1 79%2C23.2 79%2C69.2 40%2C91.4 1%2C69.2 1%2C23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E")`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root page
@@ -128,87 +126,21 @@ export default async function Home() {
 
 function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
   return (
-    <div
-      className="relative overflow-hidden rounded-xl border border-white/[0.07] p-8 md:p-10"
-      style={{ background: "hsl(222 30% 6%)" }}
-    >
-      {/* Hex grid */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: HEX_GRID_BG, backgroundSize: "80px 92.4px" }}
-      />
-      {/* Teal left spotlight */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-15%",
-          left: "-5%",
-          width: "65%",
-          height: "130%",
-          background:
-            "radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18) 0%, transparent 62%)",
-        }}
-      />
-      {/* Blue top-right accent */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-25%",
-          right: "0%",
-          width: "55%",
-          height: "100%",
-          background:
-            "radial-gradient(ellipse at 70% 30%, hsl(210 80% 55% / 0.1) 0%, transparent 58%)",
-        }}
-      />
-      {/* Subtle center glow */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "20%",
-          left: "25%",
-          width: "50%",
-          height: "60%",
-          background:
-            "radial-gradient(ellipse at 50% 50%, hsl(174 72% 46% / 0.05) 0%, transparent 70%)",
-        }}
-      />
-      {/* Bottom fade to page */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-        style={{
-          background: "linear-gradient(to bottom, transparent, hsl(222 30% 6% / 0.6))",
-        }}
-      />
-
-      <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p
-            className="text-[11px] font-semibold tracking-[0.14em] uppercase mb-3"
-            style={{ color: "hsl(215 12% 40%)" }}
-          >
-            Overwatch Tournament Platform
-          </p>
-          <h1
-            className="font-display font-bold uppercase mb-4"
-            style={{
-              fontSize: "clamp(2.4rem, 5vw, 3.5rem)",
-              lineHeight: 1.1,
-              letterSpacing: "0.03em",
-              color: "hsl(210 20% 95%)",
-            }}
-          >
-            What&apos;s happening{" "}
-            <span style={{ color: "hsl(162 72% 50%)" }}>now</span>
-          </h1>
-          <p className="text-sm leading-relaxed" style={{ color: "hsl(215 12% 52%)", maxWidth: "26rem" }}>
-            {tenantMode
-              ? "Tournaments, player stats and rankings for this community."
-              : "Tournaments, player stats and rankings across all communities on the platform."}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+    <PageHero
+      align="center"
+      eyebrow={<HeroCoord>OWT // Overwatch Tournament Platform</HeroCoord>}
+      title={
+        <>
+          What&apos;s happening <em>now</em>
+        </>
+      }
+      lede={
+        tenantMode
+          ? "Tournaments, player stats and rankings for this community."
+          : "Tournaments, player stats and rankings across all communities on the platform."
+      }
+      actions={
+        <>
           <Button asChild size="lg" className="shadow-lg shadow-primary/20">
             <Link href="/tournaments">
               <Trophy className="mr-2 h-5 w-5" />
@@ -221,9 +153,9 @@ function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
               Analytics
             </Link>
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 
@@ -566,13 +498,7 @@ async function StatsGrid() {
 
 function DashCard({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{
-        background: "hsl(215 22% 7%)",
-        border: "1px solid hsl(215 20% 11%)",
-      }}
-    >
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       {children}
     </div>
   );
@@ -580,10 +506,7 @@ function DashCard({ children }: { children: React.ReactNode }) {
 
 function DashCardHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="px-5 py-4 border-b font-display font-bold text-[15px] uppercase tracking-[0.04em]"
-      style={{ borderColor: "hsl(215 20% 10%)", color: "hsl(210 20% 88%)" }}
-    >
+    <div className="px-5 py-4 border-b border-border font-display font-bold text-[15px] uppercase tracking-[0.04em] text-foreground">
       {children}
     </div>
   );
@@ -595,7 +518,7 @@ function PlaceBadge({ n }: { n: number }) {
     2: { bg: "#99b0cc", color: "#121009" },
     3: { bg: "#a86243", color: "#fff" },
   };
-  const s = map[n] ?? { bg: "hsl(215 20% 14%)", color: "hsl(210 20% 65%)" };
+  const s = map[n] ?? { bg: "var(--aqt-border-2)", color: "var(--aqt-fg-muted)" };
   return (
     <span
       className="w-[22px] h-[22px] rounded-full shrink-0 inline-flex items-center justify-center text-[11px] font-bold"
@@ -650,8 +573,8 @@ async function TournamentActivityCard() {
                   height: `${(t.players_count / max) * 100}%`,
                   background:
                     i === visible.length - 1
-                      ? "hsl(174 72% 46%)"
-                      : "hsl(174 72% 46% / 0.22)",
+                      ? "var(--aqt-teal)"
+                      : "color-mix(in srgb, var(--aqt-teal) 22%, transparent)",
                   borderRadius: "3px 3px 0 0",
                   minHeight: 3,
                 }}
@@ -664,7 +587,7 @@ async function TournamentActivityCard() {
             <span
               key={t.id}
               className="flex-1 text-center"
-              style={{ fontSize: 9, color: "hsl(215 12% 36%)" }}
+              style={{ fontSize: 9, color: "var(--aqt-fg-faint)" }}
             >
               {i % Math.ceil(visible.length / 8) === 0 ? `#${t.number}` : ""}
             </span>
@@ -695,9 +618,9 @@ async function DivisionRingsCard() {
       const globalMax = Math.max(meanTank, meanDamage, meanSupport, 0.001);
 
       roles = [
-        { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: 210 },
-        { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: 38 },
-        { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: 174 },
+        { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: "var(--aqt-tank)" },
+        { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: "var(--aqt-damage)" },
+        { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: "var(--aqt-support)" },
       ];
     }
   } catch {
@@ -732,13 +655,13 @@ async function DivisionRingsCard() {
               <circle
                 cx="36" cy="36" r={r}
                 fill="none"
-                stroke="hsl(215 20% 11%)"
+                stroke="var(--aqt-border)"
                 strokeWidth="7"
               />
               <circle
                 cx="36" cy="36" r={r}
                 fill="none"
-                stroke={`hsl(${role.color} 72% 46%)`}
+                stroke={role.color}
                 strokeWidth="7"
                 strokeDasharray={`${(circum * role.pct) / 100} ${circum}`}
                 strokeLinecap="round"
@@ -749,15 +672,15 @@ async function DivisionRingsCard() {
                 textAnchor="middle"
                 fontSize="12"
                 fontWeight="700"
-                fontFamily="Barlow Condensed, sans-serif"
-                fill={`hsl(${role.color} 72% 55%)`}
+                fill={role.color}
+                style={{ fontFamily: "var(--font-onest)" }}
               >
                 {role.val.toFixed(1)}
               </text>
             </svg>
             <span
               className="text-[12px] font-medium"
-              style={{ color: "hsl(215 12% 50%)" }}
+              style={{ color: "var(--aqt-fg-muted)" }}
             >
               {role.label}
             </span>
@@ -765,7 +688,7 @@ async function DivisionRingsCard() {
         ))}
         <p
           className="flex-[2] text-[12px] leading-relaxed self-center"
-          style={{ color: "hsl(215 12% 42%)", minWidth: 90 }}
+          style={{ color: "var(--aqt-fg-dim)", minWidth: 90 }}
         >
           Average division rank per role across all tournaments.
         </p>
@@ -802,8 +725,8 @@ async function ChampionsCard() {
           key={p.id}
           className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
           style={{
-            borderColor: "hsl(215 20% 9%)",
-            color: "hsl(210 20% 80%)",
+            borderColor: "var(--aqt-border)",
+            color: "var(--aqt-fg-muted)",
           }}
         >
           <div className="flex items-center gap-2.5">
@@ -817,7 +740,7 @@ async function ChampionsCard() {
           </div>
           <span
             className="font-bold font-mono min-w-[28px] text-right"
-            style={{ color: "hsl(174 72% 55%)" }}
+            style={{ color: "var(--aqt-teal)" }}
           >
             {p.value}×
           </span>
@@ -857,14 +780,14 @@ async function TopWinRateCard() {
           key={p.id}
           className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
           style={{
-            borderColor: "hsl(215 20% 9%)",
-            color: "hsl(210 20% 80%)",
+            borderColor: "var(--aqt-border)",
+            color: "var(--aqt-fg-muted)",
           }}
         >
           <div className="flex items-center gap-2.5">
             <span
               className="font-mono text-[12px] min-w-[22px]"
-              style={{ color: "hsl(215 12% 38%)" }}
+              style={{ color: "var(--aqt-fg-dim)" }}
             >
               #{i + 1}
             </span>
@@ -877,7 +800,7 @@ async function TopWinRateCard() {
           </div>
           <span
             className="font-bold font-mono min-w-[44px] text-right"
-            style={{ color: "hsl(142 70% 55%)" }}
+            style={{ color: "var(--aqt-emerald)" }}
           >
             {(p.value * 100).toFixed(1)}%
           </span>

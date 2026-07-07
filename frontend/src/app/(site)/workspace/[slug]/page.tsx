@@ -310,9 +310,9 @@ function EventCard({ tournament }: { tournament: TournamentWithCount }) {
             <span
               className="text-[9px] font-bold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full"
               style={{
-                background: "hsl(270 70% 55% / 0.14)",
-                border: "1px solid hsl(270 70% 55% / 0.28)",
-                color: "hsl(270 60% 72%)",
+                background: "color-mix(in srgb, var(--aqt-violet) 14%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--aqt-violet) 28%, transparent)",
+                color: "var(--aqt-violet)",
               }}
             >
               League
