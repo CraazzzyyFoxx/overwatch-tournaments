@@ -33,6 +33,15 @@ class Workspace(db.TimeStampIntegerMixin):
     brand_secondary: Mapped[str | None] = mapped_column(String(), nullable=True)
     brand_background: Mapped[str | None] = mapped_column(String(), nullable=True)
     brand_surface: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # Curated core-palette overrides (optional). When null, the frontend derives
+    # these from the four seed colours above; when set, they win. Same typed hex
+    # (#RRGGBB) columns as the seeds — no JSON bag.
+    brand_accent: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_foreground: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_muted: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_border: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_ring: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_destructive: Mapped[str | None] = mapped_column(String(), nullable=True)
     # White-label multi-domain (Phase 1: subdomains). See
     # docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md.
     subdomain: Mapped[str | None] = mapped_column(String(63), unique=True, index=True, nullable=True)

@@ -86,11 +86,36 @@ describe("deriveWorkspacePalette", () => {
       "--aqt-gold",
       "--aqt-rose",
       "--aqt-blue",
-      "--destructive",
       "--chart-1",
     ]) {
       expect(palette[forbidden]).toBeUndefined();
     }
+  });
+
+  it("defaults --destructive to the standard red when not overridden", () => {
+    const palette = deriveWorkspacePalette(FULL)!;
+    expect(palette["--destructive"]).toBe("0 72% 51%");
+  });
+
+  it("applies curated core-palette overrides when set", () => {
+    const base = deriveWorkspacePalette(FULL)!;
+    const palette = deriveWorkspacePalette({
+      ...FULL,
+      brand_ring: "#22d3ee",
+      brand_destructive: "#ef4444",
+    })!;
+    // set of keys is unchanged (overrides reuse existing slots)
+    expect(new Set(Object.keys(palette))).toEqual(new Set(WORKSPACE_THEME_VAR_NAMES));
+    // overrides win over the derived defaults
+    expect(palette["--ring"]).not.toBe(base["--ring"]);
+    expect(palette["--destructive"]).not.toBe("0 72% 51%");
+  });
+
+  it("ignores malformed override hex (falls back to derived)", () => {
+    const base = deriveWorkspacePalette(FULL)!;
+    const palette = deriveWorkspacePalette({ ...FULL, brand_ring: "nope", brand_border: "" })!;
+    expect(palette["--ring"]).toBe(base["--ring"]);
+    expect(palette["--border"]).toBe(base["--border"]);
   });
 
   it("falls back to primary/background when secondary + surface are absent", () => {

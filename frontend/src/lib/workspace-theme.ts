@@ -16,9 +16,11 @@
  * band to keep the (light) foreground readable; accents are clamped into a
  * usable band and their on-accent foreground is contrast-picked (WCAG).
  *
- * Semantic tokens are deliberately NOT overridden — OW role colours
- * (`--aqt-tank/-damage/-support`), status hues (`--aqt-emerald/-amber/-gold`),
- * chart colours and `--destructive` carry meaning and must stay stable.
+ * OW role colours (`--aqt-tank/-damage/-support`), status hues
+ * (`--aqt-emerald/-amber/-gold`) and chart colours carry meaning and are never
+ * overridden. Beyond the 4 seed colours, organisers may override a curated core
+ * set (accent/foreground/muted/border/ring/destructive); an unset override
+ * simply falls back to the derived value.
  */
 import type { Workspace, WorkspaceBranding } from "@/types/workspace.types";
 
@@ -79,6 +81,8 @@ export const WORKSPACE_THEME_VAR_NAMES: readonly string[] = [
   "--border",
   "--input",
   "--ring",
+  "--destructive",
+  "--destructive-foreground",
 ];
 
 function clamp(n: number, min: number, max: number): number {
@@ -244,16 +248,36 @@ export function deriveWorkspacePalette(
   const onAccent = pickOnColorForeground(hslToRgb(accent));
   const onSecondary = pickOnColorForeground(hslToRgb(secondary));
 
+  // Curated core-palette overrides: a valid hex wins over the derived value.
+  // Surface-like tokens (accent/muted/border) are clamped into the dark band so
+  // they stay legible on the dark canvas; ring uses the accent band; foreground
+  // is used near as-given; destructive defaults to the standard red when unset.
+  const accentSurface = parseHex(branding.brand_accent);
+  const foregroundRgb = parseHex(branding.brand_foreground);
+  const mutedRgb = parseHex(branding.brand_muted);
+  const borderRgb = parseHex(branding.brand_border);
+  const ringRgb = parseHex(branding.brand_ring);
+  const destructiveRgb = parseHex(branding.brand_destructive);
+
+  const accentHsl = accentSurface ? clampBackground(rgbToHsl(accentSurface), { min: 6, max: 26 }) : mutedSurface;
+  const fgFinal = foregroundRgb ? rgbToHsl(foregroundRgb) : fg;
+  const mutedFinal = mutedRgb ? clampBackground(rgbToHsl(mutedRgb), { min: 6, max: 26 }) : mutedSurface;
+  const borderFinal = borderRgb ? clampBackground(rgbToHsl(borderRgb), { min: 6, max: 34 }) : border;
+  const ringFinal = ringRgb ? clampAccent(rgbToHsl(ringRgb)) : accent;
+  const destructive: Hsl = destructiveRgb ? clampAccent(rgbToHsl(destructiveRgb)) : { h: 0, s: 72, l: 51 };
+  const onAccentSurface = pickOnColorForeground(hslToRgb(accentHsl));
+  const onDestructive = pickOnColorForeground(hslToRgb(destructive));
+
   return {
     // ── --aqt-* (full hsl) ──
     "--aqt-bg": fullHsl(bg),
     "--aqt-bg-2": fullHsl(bg2),
     "--aqt-card": fullHsl(surface),
     "--aqt-card-2": fullHsl(card2),
-    "--aqt-border": fullHsl(border),
+    "--aqt-border": fullHsl(borderFinal),
     "--aqt-border-2": fullHsl(border2),
     "--aqt-border-3": fullHsl(border3),
-    "--aqt-fg": fullHsl(fg),
+    "--aqt-fg": fullHsl(fgFinal),
     "--aqt-fg-muted": fullHsl(fgMuted),
     "--aqt-fg-dim": fullHsl(fgDim),
     "--aqt-fg-faint": fullHsl(fgFaint),
@@ -261,22 +285,24 @@ export function deriveWorkspacePalette(
     "--aqt-violet": fullHsl(secondary),
     // ── shadcn (bare triplet) ──
     "--background": triplet(bg),
-    "--foreground": triplet(fg),
+    "--foreground": triplet(fgFinal),
     "--card": triplet(surface),
-    "--card-foreground": triplet(fg),
+    "--card-foreground": triplet(fgFinal),
     "--popover": triplet(surface),
-    "--popover-foreground": triplet(fg),
+    "--popover-foreground": triplet(fgFinal),
     "--primary": triplet(accent),
     "--primary-foreground": onAccent,
     "--secondary": triplet(secondary),
     "--secondary-foreground": onSecondary,
-    "--muted": triplet(mutedSurface),
+    "--muted": triplet(mutedFinal),
     "--muted-foreground": triplet(fgMuted),
-    "--accent": triplet(mutedSurface),
-    "--accent-foreground": triplet(fg),
-    "--border": triplet(border),
-    "--input": triplet(border),
-    "--ring": triplet(accent),
+    "--accent": triplet(accentHsl),
+    "--accent-foreground": onAccentSurface,
+    "--border": triplet(borderFinal),
+    "--input": triplet(borderFinal),
+    "--ring": triplet(ringFinal),
+    "--destructive": triplet(destructive),
+    "--destructive-foreground": onDestructive,
   };
 }
 

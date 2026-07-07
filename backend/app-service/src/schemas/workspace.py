@@ -34,6 +34,12 @@ class WorkspaceRead(BaseRead):
     brand_secondary: str | None = None
     brand_background: str | None = None
     brand_surface: str | None = None
+    brand_accent: str | None = None
+    brand_foreground: str | None = None
+    brand_muted: str | None = None
+    brand_border: str | None = None
+    brand_ring: str | None = None
+    brand_destructive: str | None = None
     subdomain: str | None = None
     seo_title: str | None = None
     seo_description: str | None = None
@@ -65,6 +71,12 @@ class WorkspaceUpdate(BaseModel):
     brand_secondary: str | None = Field(default=None, pattern=_HEX_COLOR)
     brand_background: str | None = Field(default=None, pattern=_HEX_COLOR)
     brand_surface: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_accent: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_foreground: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_muted: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_border: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_ring: str | None = Field(default=None, pattern=_HEX_COLOR)
+    brand_destructive: str | None = Field(default=None, pattern=_HEX_COLOR)
     subdomain: str | None = None
     seo_title: str | None = None
     seo_description: str | None = None
@@ -75,6 +87,12 @@ class WorkspaceUpdate(BaseModel):
         "brand_secondary",
         "brand_background",
         "brand_surface",
+        "brand_accent",
+        "brand_foreground",
+        "brand_muted",
+        "brand_border",
+        "brand_ring",
+        "brand_destructive",
         mode="before",
     )
     @classmethod
