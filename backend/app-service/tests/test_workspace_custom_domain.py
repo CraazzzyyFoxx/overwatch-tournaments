@@ -22,6 +22,7 @@ import dns.rdataclass
 import dns.rdatatype
 import dns.resolver
 from dns.rdtypes.ANY.TXT import TXT
+from sqlalchemy.exc import IntegrityError
 
 os.environ.setdefault("PROJECT_URL", "http://localhost")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -120,6 +121,19 @@ def _make_workspace(**overrides) -> SimpleNamespace:
 
 
 class SetCustomDomainTests(IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        # Every test below exercises the normalize/token/reset behavior, not
+        # the duplicate-claim check (see DuplicateCustomDomainTests for that) —
+        # patch the best-effort pre-check to report "no conflict" so these
+        # tests don't need a session with a working ``execute``, matching how
+        # the DNS tests patch ``_dns_txt_contains`` at the exact seam instead
+        # of stubbing the network.
+        patcher = patch.object(
+            workspace_service._workspace_repo, "get_by_custom_domain_any", AsyncMock(return_value=None)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def test_normalizes_domain_generates_token_and_resets_verification(self) -> None:
         session = SimpleNamespace(flush=AsyncMock())
         workspace = _make_workspace(
@@ -168,6 +182,67 @@ class SetCustomDomainTests(IsolatedAsyncioTestCase):
         session.flush.assert_not_awaited()
 
 
+class DuplicateCustomDomainTests(IsolatedAsyncioTestCase):
+    """A domain already claimed by another workspace is a 409, not a 500
+    (final-review fix): checked twice — a best-effort pre-check
+    (``get_by_custom_domain_any``) AND the authoritative ``IntegrityError``
+    catch around the write, since the pre-check alone has a TOCTOU gap.
+    """
+
+    async def test_pre_check_rejects_domain_claimed_by_another_workspace(self) -> None:
+        session = SimpleNamespace(flush=AsyncMock())
+        workspace = _make_workspace(id=7)
+        other_workspace = _make_workspace(id=99, custom_domain="tourney.customer.com")
+
+        with patch.object(
+            workspace_service._workspace_repo,
+            "get_by_custom_domain_any",
+            AsyncMock(return_value=other_workspace),
+        ):
+            with self.assertRaises(workspace_service.HTTPException) as ctx:
+                await workspace_service.set_custom_domain(session, workspace, "tourney.customer.com")
+
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIsNone(workspace.custom_domain)  # never written
+        session.flush.assert_not_awaited()
+
+    async def test_pre_check_allows_repointing_the_same_workspaces_own_domain(self) -> None:
+        session = SimpleNamespace(flush=AsyncMock())
+        workspace = _make_workspace(id=7, custom_domain="tourney.customer.com")
+
+        with patch.object(
+            workspace_service._workspace_repo,
+            "get_by_custom_domain_any",
+            AsyncMock(return_value=workspace),  # the pre-check finds itself
+        ):
+            result = await workspace_service.set_custom_domain(session, workspace, "tourney.customer.com")
+
+        self.assertIs(result, workspace)
+        session.flush.assert_awaited_once()
+
+    async def test_integrity_error_on_write_maps_to_409_and_rolls_back(self) -> None:
+        # The pre-check passes (no conflict seen), but the unique index still
+        # raises at flush time — the race the pre-check alone cannot close.
+        session = SimpleNamespace(
+            flush=AsyncMock(
+                side_effect=IntegrityError(
+                    "UPDATE workspace ...",
+                    {},
+                    Exception('duplicate key value violates unique constraint "ix_workspace_custom_domain"'),
+                )
+            ),
+            rollback=AsyncMock(),
+        )
+        workspace = _make_workspace(id=7)
+
+        with patch.object(workspace_service._workspace_repo, "get_by_custom_domain_any", AsyncMock(return_value=None)):
+            with self.assertRaises(workspace_service.HTTPException) as ctx:
+                await workspace_service.set_custom_domain(session, workspace, "tourney.customer.com")
+
+        self.assertEqual(409, ctx.exception.status_code)
+        session.rollback.assert_awaited_once()
+
+
 class ClearCustomDomainTests(IsolatedAsyncioTestCase):
     async def test_clears_all_three_fields(self) -> None:
         session = SimpleNamespace(flush=AsyncMock())
@@ -207,24 +282,46 @@ class VerifyCustomDomainTests(IsolatedAsyncioTestCase):
         self.assertEqual(400, ctx.exception.status_code)
 
     async def test_dns_match_stamps_verified_at(self) -> None:
-        session = SimpleNamespace(flush=AsyncMock())
+        session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
         workspace = _make_workspace(
             custom_domain="tourney.customer.com",
             custom_domain_verification_token="owt-verify-abc123",
         )
 
-        with patch.object(
-            workspace_service, "_dns_txt_contains", AsyncMock(return_value=True)
-        ) as dns_check:
+        with patch.object(workspace_service, "_dns_txt_contains", AsyncMock(return_value=True)) as dns_check:
             result = await workspace_service.verify_custom_domain(session, workspace)
 
         self.assertIs(result, workspace)
         dns_check.assert_awaited_once_with("_owt-verify.tourney.customer.com", "owt-verify-abc123")
         self.assertIsInstance(workspace.custom_domain_verified_at, datetime)
         session.flush.assert_awaited_once()
+        # The read-only transaction is committed (releasing the pooled
+        # connection) BEFORE the DNS round-trip, not after.
+        session.commit.assert_awaited_once()
+
+    async def test_dns_lookup_runs_after_releasing_the_connection(self) -> None:
+        """Regression test for the DNS-outside-transaction fix: ``session.commit()``
+        must happen before ``_dns_txt_contains`` runs, not interleaved with or
+        after it, so the network round-trip never pins a pooled connection."""
+        session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
+        workspace = _make_workspace(
+            custom_domain="tourney.customer.com",
+            custom_domain_verification_token="owt-verify-abc123",
+        )
+        call_order: list[str] = []
+        session.commit.side_effect = lambda: call_order.append("commit")
+
+        async def _fake_dns_check(*_args: object) -> bool:
+            call_order.append("dns")
+            return True
+
+        with patch.object(workspace_service, "_dns_txt_contains", _fake_dns_check):
+            await workspace_service.verify_custom_domain(session, workspace)
+
+        self.assertEqual(["commit", "dns"], call_order)
 
     async def test_dns_no_match_raises_400_and_does_not_stamp(self) -> None:
-        session = SimpleNamespace(flush=AsyncMock())
+        session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
         workspace = _make_workspace(
             custom_domain="tourney.customer.com",
             custom_domain_verification_token="owt-verify-abc123",
@@ -237,6 +334,7 @@ class VerifyCustomDomainTests(IsolatedAsyncioTestCase):
         self.assertEqual(400, ctx.exception.status_code)
         self.assertIsNone(workspace.custom_domain_verified_at)
         session.flush.assert_not_awaited()
+        session.commit.assert_awaited_once()  # still committed the read before the (failed) lookup
 
 
 class WorkspaceCustomDomainSchemaTests(IsolatedAsyncioTestCase):

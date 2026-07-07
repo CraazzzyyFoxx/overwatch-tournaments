@@ -79,7 +79,7 @@ The redirect_uri problem is solved by funnelling **every** provider round-trip t
 ### F. Custom-domain verification (Phase 2)
 
 1. Organiser enters `custom_domain` in settings → stored unverified + `custom_domain_verification_token` generated.
-2. UI shows: TXT `_anak-verify.<domain> = <token>` and CNAME/A `<domain> → owt.craazzzyyfoxx.me`.
+2. UI shows: TXT `_owt-verify.<domain> = <token>` and CNAME/A `<domain> → owt.craazzzyyfoxx.me`.
 3. "Verify" → backend DNS TXT lookup → set `custom_domain_verified_at`. Resolver only serves verified domains.
 4. TLS issued on-demand by external Traefik once DNS points at the ingress.
 

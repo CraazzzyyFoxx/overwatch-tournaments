@@ -460,17 +460,20 @@ Extend `OAuthCallbackResult` with `mode: Literal["cookie","ticket"]`, optional `
 
 ---
 
-### Task 10: Custom-domain account-linking via signed link-intent
+### Task 10: Custom-domain account-linking via a single-use provider-identity ticket
 
-**Files:**
-- Modify: `frontend/src/lib/oauth-login.ts` (link on custom domain), `oauth-callback.ts` (link path), `auth.service.ts`
-- Modify: `backend/identity-service/src/services/oauth_flows.py` (`link` accepts a link-intent) + `oauth_service.py` (sign/verify link-intent)
+**Shipped design (supersedes the "signed link-intent" sketch this task started from):** the original plan below minted a signed `link_intent` from the custom-domain-readable access token and carried it in the OAuth state. That was reverted for a security flaw — an attacker could mint their own `link_intent`, capture it, and lure a victim's live bearer session into completing the link, attaching the ATTACKER's provider identity to the VICTIM's account. The shipped design instead crosses the apex↔custom-domain boundary with a single-use Redis ticket that carries ONLY the just-exchanged OAuth PROVIDER identity — never a site user id. The linked-to site account is resolved from the LIVE session on the custom domain, at `/auth/link/complete`, never from the ticket. Cross-domain tickets are additionally bound by a host-only `owt_xdomain_guard` cookie (constant-time hash-compared at redemption), closing the same hijack shape at the transport level too.
 
-**Interfaces:**
-- Produces: a short-lived signed `link_intent` (`{user_id, exp}`, HMAC) minted from the custom-domain access token; the apex `link` callback uses it instead of the unreadable custom-domain auth cookie.
+**Files (shipped):**
+- `backend/identity-service/src/services/pending_link_tickets.py` (one-time Redis ticket, `GETDEL`-redeemed at most once, TTL 120s, provider identity only — mirrors `sso_tickets` with the roles reversed)
+- `backend/identity-service/src/services/oauth_flows.py` (`link` mints the ticket at the apex callback; `link_complete` redeems it against the caller's live session + guard cookie), `oauth_service.py`
+- `frontend/src/lib/oauth-login.ts` (`onCustomDomain` branch sets the host-only `owt_xdomain_guard` cookie before bouncing to the apex), `oauth-callback.ts`
+- `frontend/src/app/(site)/auth/link/complete/route.ts` (redeems the ticket on the custom domain against ITS OWN live local session; never establishes a session from the ticket itself)
 
-- [ ] **Step 1** — Decision/scope: linking from a custom domain is rare. Mint the link-intent on the custom domain (frontend route handler CAN read the custom-domain access token) via a new `rpc.identity.mint_link_intent {access_token}` → signed `{user_id, exp}`; carry it in the OAuth state (extend state payload with optional `link_intent`). The apex `link` callback, when `action==="link"` and no readable auth cookie, verifies `link_intent` → resolves the user. If this proves too large for one task, ship Phases 2 without custom-domain *linking* (login works; linking only from the apex/subdomains) and track it — **do not** silently allow an unauthenticated link.
-- [ ] **Step 2: Tests + commit** — `git commit -m "feat(oauth): custom-domain account linking via signed link-intent"`
+**Interfaces (shipped):**
+- Produces/consumes: a single-use Redis ticket (`link:ticket:<code>`) carrying `{oauth_info, token_data}` — the exchanged provider identity, never a site user id. Site identity is resolved from the live session on the custom domain at `/auth/link/complete`. A host-only `owt_xdomain_guard` cookie binds the cross-domain ticket to the browser that started the flow.
+
+- [x] Shipped as described above; see `pending_link_tickets.py`'s module docstring ("Task 10R") for the full security rationale, and `docs/superpowers/plans/2026-07-06-subdomains-ops-runbook.md` step 6 for the operational verification (`/auth/link/complete` requires an existing session on that exact host and never establishes a new one from the ticket).
 
 ---
 
@@ -513,9 +516,9 @@ Extend `OAuthCallbackResult` with `mode: Literal["cookie","ticket"]`, optional `
 
 ## Self-Review
 
-**Spec coverage (Phase 2):** custom_domain columns → T1; verification (TXT/CNAME + DNS check) + settings UI → T5; on-demand TLS → T12; SSO ticket handoff (`sso_exchange` + `/auth/sso` + Redis) → T8/T9; dynamic WS origin → T11; resolver matches verified custom_domain → T2/T3/T4; custom-domain account-linking via signed link-intent → T10; origin validation → T6; apex-bounce for CSRF → T7.
+**Spec coverage (Phase 2):** custom_domain columns → T1; verification (TXT/CNAME + DNS check) + settings UI → T5; on-demand TLS → T12; SSO ticket handoff (`sso_exchange` + `/auth/sso` + Redis) → T8/T9; dynamic WS origin → T11; resolver matches verified custom_domain → T2/T3/T4; custom-domain account-linking via a single-use provider-identity ticket (`owt_xdomain_guard`-bound) → T10; origin validation → T6; apex-bounce for CSRF → T7.
 
-**Placeholder scan:** T6 and T10 carry explicit *decisions/fallbacks* (validate platform hosts now / ship without custom-domain linking if oversized) — these are scoping calls with a defined safe default (fail closed, never allow an unauthenticated link), not TODOs.
+**Placeholder scan:** T6 carries an explicit *decision/fallback* (validate platform hosts now) — a scoping call with a defined safe default, not a TODO. T10 shipped in full (see above) rather than falling back to its original scoping decision.
 
 **Type consistency:** `resolveHost` returns `{mode:"tenant", host}` (T4) consumed by middleware (T4) + callers; `OAuthCallbackResult{mode, ticket?}` produced T8, consumed T9; `by_host` shape unchanged (`{workspace_id, slug}`) T3; `normalize_custom_domain`/`is_platform_host` (T2) used in T3/T5/T6/T8.
 

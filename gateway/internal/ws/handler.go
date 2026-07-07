@@ -29,6 +29,21 @@ import (
 // an arbitrarily long string.
 const maxOriginHostLen = 253
 
+// customDomainLookupTimeout bounds the pre-handshake IsVerifiedCustomDomain
+// call, mirroring the house convention of wrapping every cross-process
+// lookup in its own context.WithTimeout (see
+// gateway/internal/identity/handler.go's rpcTimeout and
+// gateway/internal/principal/resolver.go's validateTimeout). /ws has no auth
+// and no rate limiter of its own in front of it — only customDomainLimiter,
+// which bounds request RATE, not how long any single request can hold a
+// connection — and the shared DB pool is capped at MaxConns=8 with no
+// statement_timeout backstop (gateway/internal/db/db.go). Without a deadline
+// here, a slow/hanging Postgres turns this unauthenticated surface into a
+// lever to starve the pool against authenticated ACL/replay queries. Shorter
+// than the REST rpcTimeout siblings (5s) since this is a single cached
+// point-lookup, not an RPC round-trip to another service.
+const customDomainLookupTimeout = 2 * time.Second
+
 // Authorizer decides whether a principal may subscribe to a topic.
 type Authorizer interface {
 	Allow(ctx context.Context, user *auth.User, topic string) (bool, error)
@@ -215,6 +230,24 @@ func (h *Handler) acceptOptionsFor(r *http.Request) *websocket.AcceptOptions {
 		return h.accept
 	}
 
+	// A trailing dot denotes an absolute FQDN (RFC 1035 §3.1) and is otherwise
+	// the same host as the dot-less form; Python's normalize_custom_domain
+	// (backend/shared/tenancy/hostnames.py) strips it before comparing against
+	// or storing a custom_domain. Normalize it here, once, immediately after
+	// parsing and BEFORE every check below (static-pattern match, same-host
+	// short-circuit, length bound, DB lookup, and the appended OriginPatterns
+	// entry) — otherwise a trailing-dot origin could pass one check under the
+	// dotted form and fail another under the dot-less one. u.Host is updated
+	// in place (preserving any port) so every subsequent read of it agrees.
+	if host := u.Hostname(); strings.HasSuffix(host, ".") {
+		trimmed := strings.TrimSuffix(host, ".")
+		if port := u.Port(); port != "" {
+			u.Host = trimmed + ":" + port
+		} else {
+			u.Host = trimmed
+		}
+	}
+
 	if matchesAnyOriginPattern(u, h.accept.OriginPatterns) {
 		return h.accept // already covered by the static allowlist.
 	}
@@ -250,10 +283,17 @@ func (h *Handler) acceptOptionsFor(r *http.Request) *websocket.AcceptOptions {
 		return h.accept
 	}
 
-	verified, err := h.customDomains.IsVerifiedCustomDomain(r.Context(), hostname)
+	// Bound the lookup itself: this is an unauthenticated pre-handshake DB
+	// call against a pool with no statement_timeout backstop (see
+	// customDomainLookupTimeout's doc comment). A timeout surfaces as ctx's
+	// DeadlineExceeded error from IsVerifiedCustomDomain, which the fail-closed
+	// handling right below treats exactly like any other lookup error.
+	lookupCtx, cancel := context.WithTimeout(r.Context(), customDomainLookupTimeout)
+	verified, err := h.customDomains.IsVerifiedCustomDomain(lookupCtx, hostname)
+	cancel()
 	if err != nil {
 		h.log.Error("verified custom-domain lookup failed; rejecting WS origin", "origin", origin, "err", err)
-		return h.accept // fail-closed: never allow on a lookup error.
+		return h.accept // fail-closed: never allow on a lookup error (including a timeout).
 	}
 	if !verified {
 		return h.accept // not a verified custom domain: let the static Accept reject it.
@@ -263,18 +303,23 @@ func (h *Handler) acceptOptionsFor(r *http.Request) *websocket.AcceptOptions {
 	// origin host. h.accept itself is never mutated, and no wildcard/skip is
 	// introduced — only the literal host that was just verified.
 	//
+	// The scheme is pinned to https://, matching how the static defaults are
+	// written (config.defaultWSAllowedOrigins: "https://owt.craazzzyyfoxx.me,
+	// https://*.owt.craazzzyyfoxx.me") — an http:// Origin for this same host
+	// must NOT be accepted just because the https:// form was verified.
+	//
 	// Port handling, deliberately: coder/websocket's own authenticateOrigin
-	// matches OriginPatterns against u.Host (i.e. WITH any port), so the
-	// appended pattern must carry the same port the actual Origin did for
-	// Accept's own matching to succeed — using hostname (no port) here would
-	// silently reject a verified domain whose Origin happened to include an
-	// explicit port. Only the letter case is normalized (lowercase), to stay
-	// consistent with hostname and with matchesAnyOriginPattern above; case
-	// doesn't otherwise matter since coder/websocket's own match() lowercases
-	// both sides before comparing.
+	// matches a scheme-carrying pattern against "u.Scheme://u.Host" (i.e. WITH
+	// any port), so the appended pattern must carry the same port the actual
+	// Origin did for Accept's own matching to succeed — using hostname (no
+	// port) here would silently reject a verified domain whose Origin happened
+	// to include an explicit port. Only the letter case is normalized
+	// (lowercase), to stay consistent with hostname and with
+	// matchesAnyOriginPattern above; case doesn't otherwise matter since
+	// coder/websocket's own match() lowercases both sides before comparing.
 	patterns := make([]string, 0, len(h.accept.OriginPatterns)+1)
 	patterns = append(patterns, h.accept.OriginPatterns...)
-	patterns = append(patterns, strings.ToLower(u.Host))
+	patterns = append(patterns, "https://"+strings.ToLower(u.Host))
 	return &websocket.AcceptOptions{OriginPatterns: patterns}
 }
 

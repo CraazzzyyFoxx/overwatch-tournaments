@@ -113,14 +113,19 @@ func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 // (verified, err) pair for every host and counts how many times it was
 // called, so tests can both drive the accepted/rejected/fail-closed paths and
 // assert that the static-origin fast path never touches the resolver at all.
+// lastHost records the exact host string the resolver was queried with, so
+// tests can assert a normalization (e.g. trailing-dot stripping) happened
+// BEFORE the lookup, not just that a lookup happened.
 type stubCustomDomainResolver struct {
 	verified bool
 	err      error
 	calls    int
+	lastHost string
 }
 
-func (s *stubCustomDomainResolver) IsVerifiedCustomDomain(context.Context, string) (bool, error) {
+func (s *stubCustomDomainResolver) IsVerifiedCustomDomain(_ context.Context, host string) (bool, error) {
 	s.calls++
+	s.lastHost = host
 	return s.verified, s.err
 }
 
@@ -182,6 +187,32 @@ func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
 				t.Fatalf("expected exactly 1 resolver call for a non-static origin, got %d", tt.resolver.calls)
 			}
 		})
+	}
+}
+
+// TestWS_OriginAllowlist_VerifiedCustomDomainPinsHTTPS is the direct
+// regression test for the https-pin fix: the dynamically-appended
+// OriginPatterns entry for a verified custom domain must carry "https://",
+// matching how the static defaults are written
+// (config.defaultWSAllowedOrigins). Before the fix the appended pattern was
+// scheme-less and therefore matched an http:// Origin too — this drives the
+// real coder/websocket Accept path (not just acceptOptionsFor) to prove an
+// http:// Origin for the exact same verified host is rejected while the
+// https:// form is accepted.
+func TestWS_OriginAllowlist_VerifiedCustomDomainPinsHTTPS(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil)
+	mux := http.NewServeMux()
+	mux.Handle("/ws", h)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	if err := dialWithOrigin(t, srv.URL, "http://anakq.gg"); err == nil {
+		t.Fatal("expected an http:// origin for a verified custom domain to be rejected (https-pinned), but it was accepted")
+	}
+	if err := dialWithOrigin(t, srv.URL, "https://anakq.gg"); err != nil {
+		t.Fatalf("expected an https:// origin for a verified custom domain to be accepted, got: %v", err)
 	}
 }
 
@@ -320,6 +351,39 @@ func TestAcceptOptionsFor_SameHostSkipsLookup(t *testing.T) {
 	}
 	if resolver.calls != 0 {
 		t.Fatalf("expected 0 resolver calls for a same-host origin, got %d", resolver.calls)
+	}
+}
+
+// TestAcceptOptionsFor_TrailingDotOriginNormalized is the direct regression
+// test for the trailing-dot normalization fix: an Origin host written as an
+// absolute FQDN (a trailing "." per RFC 1035 §3.1) must be stripped BEFORE
+// the DB lookup and the appended OriginPatterns entry, matching Python's
+// normalize_custom_domain (backend/shared/tenancy/hostnames.py). Without the
+// fix this failed closed (a dotted host just never matched the dot-less
+// custom_domain row) — this proves the dotted origin is now treated
+// identically to its dot-less form: the resolver sees the stripped host, and
+// the connection is accepted.
+func TestAcceptOptionsFor_TrailingDotOriginNormalized(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	h := newAcceptTestHandler(resolver, nil)
+
+	r := newUpgradeRequest("https://anakq.gg.") // trailing dot
+	opts := h.acceptOptionsFor(r)
+
+	if resolver.lastHost != "anakq.gg" {
+		t.Fatalf("resolver queried with %q, want the trailing dot stripped (\"anakq.gg\")", resolver.lastHost)
+	}
+	if opts == h.accept {
+		t.Fatal("expected the trailing-dot origin to be dynamically accepted, got the static (rejecting) options")
+	}
+	found := false
+	for _, p := range opts.OriginPatterns {
+		if p == "https://anakq.gg" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an appended pattern of exactly %q (dot-stripped, https-pinned), got %v", "https://anakq.gg", opts.OriginPatterns)
 	}
 }
 

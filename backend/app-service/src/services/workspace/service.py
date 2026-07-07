@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import dns.asyncresolver
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
@@ -78,6 +79,9 @@ async def _dns_txt_contains(name: str, expected: str) -> bool:
     return False
 
 
+_DOMAIN_CONFLICT_MESSAGE = "This custom domain is already claimed by another workspace"
+
+
 async def set_custom_domain(session: AsyncSession, workspace: models.Workspace, domain: str) -> models.Workspace:
     """Store a normalized custom domain plus a fresh verification token, unverified.
 
@@ -88,18 +92,33 @@ async def set_custom_domain(session: AsyncSession, workspace: models.Workspace, 
     Raises ``ValueError`` (mapped to 400 by the RPC caller) if ``domain`` fails
     ``normalize_custom_domain`` (empty, not a valid FQDN, or under the platform
     zone).
+
+    Raises ``HTTPException(409)`` if another workspace already claims this
+    domain (verified or not — the unique index ``ix_workspace_custom_domain``
+    doesn't care either way). This is checked twice: a best-effort read
+    up front (cheap, gives a clean error in the common case) AND the
+    authoritative catch of the index's ``IntegrityError`` on write, since the
+    read has a TOCTOU gap under a concurrent claim of the same domain.
     """
     normalized = normalize_custom_domain(domain)
+    existing = await _workspace_repo.get_by_custom_domain_any(session, normalized)
+    if existing is not None and existing.id != workspace.id:
+        raise HTTPException(status_code=409, detail=_DOMAIN_CONFLICT_MESSAGE)
+
     token = _CUSTOM_DOMAIN_TOKEN_PREFIX + secrets.token_urlsafe(24)
-    await _workspace_repo.update_fields(
-        session,
-        workspace,
-        {
-            "custom_domain": normalized,
-            "custom_domain_verification_token": token,
-            "custom_domain_verified_at": None,
-        },
-    )
+    try:
+        await _workspace_repo.update_fields(
+            session,
+            workspace,
+            {
+                "custom_domain": normalized,
+                "custom_domain_verification_token": token,
+                "custom_domain_verified_at": None,
+            },
+        )
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=_DOMAIN_CONFLICT_MESSAGE) from exc
     return workspace
 
 
@@ -123,12 +142,27 @@ async def verify_custom_domain(session: AsyncSession, workspace: models.Workspac
     Ownership proof is a TXT record at ``_owt-verify.<custom_domain>`` whose value
     equals the stored ``custom_domain_verification_token``. Raises 400 if no
     domain/token is set, or if the record doesn't (yet) match.
+
+    The DNS TXT lookup is network I/O and must not run while pinning a pooled
+    DB connection. By the time this is called, the caller's earlier read
+    (``get_by_id``) has already opened an ambient transaction on ``session``
+    — with nothing written yet, so committing it here is a plain read-only
+    commit that only releases the connection. The lookup then runs with no
+    session held, and the DB is only touched again (a fresh, short
+    transaction) for the final ``custom_domain_verified_at`` write. This is
+    safe against SQLAlchemy's attribute-expiry-on-commit: ``async_session_maker``
+    is built with ``expire_on_commit=False`` (``backend/shared/core/db.py``),
+    so this early commit never invalidates ``workspace``'s already-loaded
+    attributes.
     """
     if not workspace.custom_domain or not workspace.custom_domain_verification_token:
         raise HTTPException(status_code=400, detail="No custom domain to verify")
-    ok = await _dns_txt_contains(
-        f"_owt-verify.{workspace.custom_domain}", workspace.custom_domain_verification_token
-    )
+
+    domain = workspace.custom_domain
+    token = workspace.custom_domain_verification_token
+    await session.commit()
+
+    ok = await _dns_txt_contains(f"_owt-verify.{domain}", token)
     if not ok:
         raise HTTPException(status_code=400, detail="Verification TXT record not found yet")
     await _workspace_repo.update_fields(session, workspace, {"custom_domain_verified_at": datetime.now(UTC)})
