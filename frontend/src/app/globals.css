@@ -41,30 +41,35 @@
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 0 0% 98%;
-    --chart-2: 0 0% 14.9%;
-    --chart-3: 0 0% 14.9%;
-    --chart-4: 0 0% 17.9%;
-    --chart-5: 0 3% 98%;
+    /* Dark-only app: shadcn semantic tokens mapped onto the OWT "Editorial
+       Tactical" palette (mirrors the global --aqt-* set), so every shadcn
+       component (bg-background, bg-card, border-border, bg-primary, ring, …)
+       renders in-brand instead of the default neutral greyscale. */
+    --background: 222 30% 6%;
+    --foreground: 210 20% 95%;
+    --muted: 215 16% 13%;
+    --muted-foreground: 215 12% 60%;
+    --popover: 215 20% 8%;
+    --popover-foreground: 210 20% 95%;
+    --card: 215 20% 8%;
+    --card-foreground: 210 20% 95%;
+    --border: 215 20% 12%;
+    --input: 215 20% 12%;
+    --primary: 174 72% 46%;
+    --primary-foreground: 180 20% 8%;
+    --secondary: 215 20% 16%;
+    --secondary-foreground: 210 20% 95%;
+    --accent: 215 20% 16%;
+    --accent-foreground: 210 20% 95%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 174 72% 46%;
+    /* Chart palette — OW2-inspired categorical hues (was greyscale). */
+    --chart-1: 174 72% 46%;
+    --chart-2: 30 100% 50%;
+    --chart-3: 262 83% 58%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 340 75% 55%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -73,15 +78,6 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }
 
@@ -104,14 +100,6 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
-
-/* *, *::before, *::after {
-  outline: 1px solid red;
-}
-
-body, html {
-  overflow-x: hidden;
-} */
 
 .user-map {
   position: relative;
@@ -219,30 +207,10 @@ body, html {
   --sidebar-ring: hsl(174 72% 46%);
 }
 
-/* ───── Player redesign (AQT) — scoped tokens ───── */
+/* Player-profile scope. The --aqt-* palette now lives globally on :root (see
+   "Redesign token layer" below), so this scope only sets the text colour — the
+   duplicated token block (and the unused --aqt-teal-soft) was removed. */
 .aqt-player {
-  --aqt-bg: hsl(222 30% 6%);
-  --aqt-bg-2: hsl(215 22% 7%);
-  --aqt-card: hsl(215 20% 8%);
-  --aqt-card-2: hsl(215 22% 9%);
-  --aqt-border: hsl(215 20% 12%);
-  --aqt-border-2: hsl(215 20% 16%);
-  --aqt-fg: hsl(210 20% 95%);
-  --aqt-fg-muted: hsl(215 12% 60%);
-  --aqt-fg-dim: hsl(215 12% 40%);
-  --aqt-fg-faint: hsl(215 12% 30%);
-  --aqt-teal: hsl(174 72% 46%);
-  --aqt-teal-soft: hsl(174 72% 46% / 0.18);
-  --aqt-emerald: hsl(142 70% 50%);
-  --aqt-amber: hsl(38 95% 55%);
-  --aqt-rose: hsl(340 75% 58%);
-  --aqt-violet: hsl(270 70% 62%);
-  --aqt-blue: hsl(210 80% 60%);
-  --aqt-tank: hsl(210 78% 60%);
-  --aqt-damage: hsl(340 78% 60%);
-  --aqt-support: hsl(142 60% 52%);
-  --aqt-display: "Barlow Condensed", Inter, system-ui, sans-serif;
-  --aqt-mono: "JetBrains Mono", ui-monospace, monospace;
   color: var(--aqt-fg);
 }
 
