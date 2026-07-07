@@ -40,6 +40,12 @@ interface WorkspaceUpdateFormData {
   brand_secondary?: string | null;
   brand_background?: string | null;
   brand_surface?: string | null;
+  brand_accent?: string | null;
+  brand_foreground?: string | null;
+  brand_muted?: string | null;
+  brand_border?: string | null;
+  brand_ring?: string | null;
+  brand_destructive?: string | null;
   subdomain?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
@@ -256,6 +262,12 @@ export default function WorkspacesPage() {
       brand_secondary: ws.brand_secondary,
       brand_background: ws.brand_background,
       brand_surface: ws.brand_surface,
+      brand_accent: ws.brand_accent,
+      brand_foreground: ws.brand_foreground,
+      brand_muted: ws.brand_muted,
+      brand_border: ws.brand_border,
+      brand_ring: ws.brand_ring,
+      brand_destructive: ws.brand_destructive,
       subdomain: ws.subdomain,
       seo_title: ws.seo_title,
       seo_description: ws.seo_description,
@@ -359,6 +371,12 @@ export default function WorkspacesPage() {
     brand_secondary: editForm.brand_secondary ?? null,
     brand_background: editForm.brand_background ?? null,
     brand_surface: editForm.brand_surface ?? null,
+    brand_accent: editForm.brand_accent ?? null,
+    brand_foreground: editForm.brand_foreground ?? null,
+    brand_muted: editForm.brand_muted ?? null,
+    brand_border: editForm.brand_border ?? null,
+    brand_ring: editForm.brand_ring ?? null,
+    brand_destructive: editForm.brand_destructive ?? null,
   });
 
   return (
@@ -504,6 +522,12 @@ export default function WorkspacesPage() {
               brand_secondary: hexOrNull(form.brand_secondary),
               brand_background: hexOrNull(form.brand_background),
               brand_surface: hexOrNull(form.brand_surface),
+              brand_accent: hexOrNull(form.brand_accent),
+              brand_foreground: hexOrNull(form.brand_foreground),
+              brand_muted: hexOrNull(form.brand_muted),
+              brand_border: hexOrNull(form.brand_border),
+              brand_ring: hexOrNull(form.brand_ring),
+              brand_destructive: hexOrNull(form.brand_destructive),
             },
           });
         }}
@@ -600,6 +624,51 @@ export default function WorkspacesPage() {
                 label="Surface"
                 value={editForm.brand_surface}
                 onChange={(v) => setFormData({ ...formData, brand_surface: v })}
+              />
+            </div>
+
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Core palette · optional overrides
+            </p>
+            <p className="-mt-2 text-[11px] text-muted-foreground">
+              Leave blank to derive from the seed colours above.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <BrandColorField
+                id="brand-accent"
+                label="Accent"
+                value={editForm.brand_accent}
+                onChange={(v) => setFormData({ ...formData, brand_accent: v })}
+              />
+              <BrandColorField
+                id="brand-foreground"
+                label="Foreground (text)"
+                value={editForm.brand_foreground}
+                onChange={(v) => setFormData({ ...formData, brand_foreground: v })}
+              />
+              <BrandColorField
+                id="brand-muted"
+                label="Muted surface"
+                value={editForm.brand_muted}
+                onChange={(v) => setFormData({ ...formData, brand_muted: v })}
+              />
+              <BrandColorField
+                id="brand-border"
+                label="Border"
+                value={editForm.brand_border}
+                onChange={(v) => setFormData({ ...formData, brand_border: v })}
+              />
+              <BrandColorField
+                id="brand-ring"
+                label="Focus ring"
+                value={editForm.brand_ring}
+                onChange={(v) => setFormData({ ...formData, brand_ring: v })}
+              />
+              <BrandColorField
+                id="brand-destructive"
+                label="Destructive"
+                value={editForm.brand_destructive}
+                onChange={(v) => setFormData({ ...formData, brand_destructive: v })}
               />
             </div>
 
