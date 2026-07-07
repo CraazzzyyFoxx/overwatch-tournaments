@@ -3,10 +3,12 @@ package ws
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 )
 
 // productionWSAllowedOrigins is config.DefaultWSAllowedOrigins, the exact
@@ -47,7 +50,7 @@ func dialWithOrigin(t *testing.T, srvURL, origin string) error {
 // value or how it's wired into ws.NewHandler's AcceptOptions fails this test.
 func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil, nil, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -86,7 +89,7 @@ func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 // while a same-origin handshake (Origin host == request Host) still works.
 func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -164,7 +167,7 @@ func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-				30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, tt.resolver, nil)
+				30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, tt.resolver, nil, nil)
 			mux := http.NewServeMux()
 			mux.Handle("/ws", h)
 			srv := httptest.NewServer(mux)
@@ -190,7 +193,7 @@ func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
 func TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup(t *testing.T) {
 	resolver := &stubCustomDomainResolver{verified: false, err: errors.New("must not be called for a static origin")}
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -207,5 +210,188 @@ func TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup(t *testing.T) {
 	}
 	if resolver.calls != 0 {
 		t.Fatalf("expected the custom-domain resolver to never be called for a static origin, got %d calls", resolver.calls)
+	}
+}
+
+// newAcceptTestHandler builds a Handler wired exactly like production
+// (static allowlist + a custom-domain resolver + an optional rate limiter),
+// for tests that call acceptOptionsFor directly rather than dialing a real
+// server — this lets tests assert resolver.calls precisely without the
+// overhead/timing sensitivity of a full WS handshake.
+func newAcceptTestHandler(resolver CustomDomainResolver, limiter *ratelimit.Limiter) *Handler {
+	return NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, limiter, nil)
+}
+
+// newUpgradeRequest builds a GET /ws request carrying the Connection/Upgrade
+// header pair a genuine WebSocket handshake requires (see
+// isWebSocketUpgrade), plus the given Origin header (skipped if empty).
+func newUpgradeRequest(origin string) *http.Request {
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Upgrade", "websocket")
+	if origin != "" {
+		r.Header.Set("Origin", origin)
+	}
+	return r
+}
+
+// TestAcceptOptionsFor_NonUpgradeRequestSkipsLookup is the direct regression
+// test for the trivial bare-GET probe this review closed: previously,
+// acceptOptionsFor ran the custom-domain DB lookup for ANY request carrying
+// an Origin header, with no check at all that the request was an actual
+// WebSocket handshake. /ws has neither auth nor a rate limiter in front of
+// it, so that made a single unauthenticated `GET /ws` (no Upgrade headers,
+// just a hostile Origin) enough to trigger one Postgres query + one cache
+// write. A bare GET must now cost 0 resolver calls.
+func TestAcceptOptionsFor_NonUpgradeRequestSkipsLookup(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	h := newAcceptTestHandler(resolver, nil)
+
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil) // no Connection/Upgrade headers at all
+	r.Header.Set("Origin", "https://attacker.example.com")
+
+	if opts := h.acceptOptionsFor(r); opts != h.accept {
+		t.Fatal("a non-upgrade request must fall through to the static accept options unchanged")
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("expected 0 resolver calls for a non-upgrade request, got %d", resolver.calls)
+	}
+}
+
+// TestAcceptOptionsFor_MalformedOriginSkipsLookup proves a malformed or
+// hostless Origin never reaches the resolver, even on a genuine WS-upgrade
+// request — websocket.Accept re-parses the same header and rejects it
+// identically, so there is nothing to gain from querying first.
+func TestAcceptOptionsFor_MalformedOriginSkipsLookup(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	h := newAcceptTestHandler(resolver, nil)
+
+	origins := []string{
+		"not-a-url",  // no scheme/authority -> u.Host == ""
+		"http://%zz", // invalid percent-encoding -> url.Parse returns an error
+	}
+	for _, origin := range origins {
+		if opts := h.acceptOptionsFor(newUpgradeRequest(origin)); opts != h.accept {
+			t.Errorf("origin %q: expected fallthrough to the static accept options", origin)
+		}
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("expected 0 resolver calls for malformed origins, got %d", resolver.calls)
+	}
+}
+
+// TestAcceptOptionsFor_OversizedOriginSkipsLookup proves an Origin host
+// longer than a DNS name can ever be (maxOriginHostLen) is rejected before
+// it is ever used as a query parameter or cache key — no verified
+// custom_domain row could match it regardless.
+func TestAcceptOptionsFor_OversizedOriginSkipsLookup(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	h := newAcceptTestHandler(resolver, nil)
+
+	oversizedHost := strings.Repeat("a", maxOriginHostLen+1) + ".example.com"
+	r := newUpgradeRequest("https://" + oversizedHost)
+
+	if opts := h.acceptOptionsFor(r); opts != h.accept {
+		t.Fatal("an oversized Origin host must fall through to the static accept options")
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("expected 0 resolver calls for an oversized origin host, got %d", resolver.calls)
+	}
+}
+
+// TestAcceptOptionsFor_SameHostSkipsLookup proves the common real case — a
+// white-label custom domain's page talking back to that same host — never
+// touches the DB: coder/websocket's own authenticateOrigin authorizes the
+// request's own Host unconditionally (strings.EqualFold(r.Host, u.Host),
+// before it even looks at OriginPatterns), so acceptOptionsFor short-circuits
+// identically before querying. The resolver here is rigged to blow up if
+// called at all, proving the short-circuit — not a lucky "unverified"
+// answer — is what causes the fallthrough.
+func TestAcceptOptionsFor_SameHostSkipsLookup(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: false, err: errors.New("must not be called for a same-host origin")}
+	h := newAcceptTestHandler(resolver, nil)
+
+	r := newUpgradeRequest("https://anakq.gg")
+	r.Host = "anakq.gg" // Origin host == request Host
+
+	if opts := h.acceptOptionsFor(r); opts != h.accept {
+		t.Fatal("a same-host origin must fall through to the static accept options")
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("expected 0 resolver calls for a same-host origin, got %d", resolver.calls)
+	}
+}
+
+// TestAcceptOptionsFor_RateLimitBoundsDistinctHostFlood is the direct
+// regression test for the availability finding this review closed: a flood
+// of distinct, non-static, non-same-host Origins from one client IP must not
+// drive an unbounded number of DB lookups. With the limiter capped at 2
+// requests, 5 distinct hosts must yield at most 2 resolver calls — the rest
+// fall through to the static (rejecting) accept options instead of querying.
+func TestAcceptOptionsFor_RateLimitBoundsDistinctHostFlood(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	limiter := ratelimit.New(2, time.Minute)
+	h := newAcceptTestHandler(resolver, limiter)
+
+	const distinctHosts = 5
+	var accepted int
+	for i := 0; i < distinctHosts; i++ {
+		origin := fmt.Sprintf("https://tenant-%d.example.com", i)
+		// httptest.NewRequest always sets the same RemoteAddr, so every one
+		// of these is seen as the same client IP by the limiter.
+		if opts := h.acceptOptionsFor(newUpgradeRequest(origin)); opts != h.accept {
+			accepted++
+		}
+	}
+
+	if resolver.calls != 2 {
+		t.Fatalf("expected the rate limiter to cap resolver calls at 2 despite %d distinct hosts, got %d", distinctHosts, resolver.calls)
+	}
+	if accepted != 2 {
+		t.Fatalf("expected exactly 2 of %d distinct hosts to be dynamically accepted (the rest rate-limited), got %d", distinctHosts, accepted)
+	}
+}
+
+// TestAcceptOptionsFor_RateLimitDoesNotAffectStaticOrSameHost proves the
+// limiter only gates the dynamic custom-domain DB lookup, never a
+// same-host or already-statically-allowed connection: with the limiter
+// exhausted (limit 0, i.e. disabled-by-config would actually pass-through,
+// so use limit 1 and burn it first), a same-host request must still be
+// accepted without even consulting the limiter.
+func TestAcceptOptionsFor_RateLimitDoesNotAffectStaticOrSameHost(t *testing.T) {
+	resolver := &stubCustomDomainResolver{verified: true}
+	limiter := ratelimit.New(1, time.Minute)
+	h := newAcceptTestHandler(resolver, limiter)
+
+	// Burn the limiter's single token on a distinct dynamic lookup.
+	burn := newUpgradeRequest("https://tenant-0.example.com")
+	if opts := h.acceptOptionsFor(burn); opts == h.accept {
+		t.Fatal("the first dynamic lookup should have been allowed and accepted")
+	}
+	if resolver.calls != 1 {
+		t.Fatalf("expected exactly 1 resolver call after burning the limiter, got %d", resolver.calls)
+	}
+
+	// A static-allowlist origin must still be accepted even though the
+	// limiter is now exhausted: it never reaches the limiter check at all.
+	static := newUpgradeRequest("https://owt.craazzzyyfoxx.me")
+	if opts := h.acceptOptionsFor(static); opts != h.accept {
+		t.Fatal("a static-allowlist origin must be handled by h.accept directly")
+	}
+
+	// A same-host origin must also still be accepted (via h.accept, which
+	// coder/websocket authorizes unconditionally for the request's own
+	// Host) even with the limiter exhausted: it too never reaches the
+	// limiter check.
+	sameHost := newUpgradeRequest("https://white-label.example.com")
+	sameHost.Host = "white-label.example.com"
+	if opts := h.acceptOptionsFor(sameHost); opts != h.accept {
+		t.Fatal("a same-host origin must fall through to h.accept without consulting the limiter")
+	}
+
+	// The resolver must not have been called again by either of the above.
+	if resolver.calls != 1 {
+		t.Fatalf("expected resolver calls to stay at 1 (static/same-host never touch the resolver), got %d", resolver.calls)
 	}
 }

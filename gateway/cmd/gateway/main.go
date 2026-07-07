@@ -125,6 +125,12 @@ func run() error {
 	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
 	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	// Separate limiter bounding ws.Handler's pre-handshake custom-domain
+	// lookup per client IP: /ws itself carries no auth and no rate limit, so
+	// without this an unauthenticated flood of distinct fake Origin headers
+	// could drive unbounded DB/cache-write load (see acceptOptionsFor).
+	// Disabled (pass-through) when GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT <= 0.
+	wsCustomDomainLimiter := ratelimit.New(cfg.WSCustomDomainRateLimit, cfg.WSCustomDomainRateWindow)
 
 	// Wiring: workspace store satisfies both ACL interfaces (resolver + members)
 	// plus ws.CustomDomainResolver, so verified white-label custom-domain
@@ -142,6 +148,7 @@ func run() error {
 		logger,
 		cfg.WSAllowedOrigins,
 		wsStore,
+		wsCustomDomainLimiter,
 		activeUsers.Record,
 	)
 

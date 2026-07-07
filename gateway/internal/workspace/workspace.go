@@ -33,6 +33,15 @@ const (
 	// verification revoked stops being accepted for new WebSocket handshakes
 	// within roughly this window, mirroring membershipCacheTTL above.
 	customDomainCacheTTL = 60 * time.Second
+	// customDomainCacheMaxEntries bounds the customDomains cache. Unlike the
+	// tournament/membership caches, this one is keyed by an Origin host that
+	// is fully attacker-controlled and reachable pre-handshake from a single
+	// unauthenticated HTTP GET (see ws.Handler.acceptOptionsFor), so it must
+	// never be allowed to grow without bound. 4096 comfortably covers any
+	// realistic number of concurrently-verified white-label custom domains
+	// plus headroom, while still capping worst-case memory from a
+	// distinct-host flood; see ttlCache's FIFO eviction.
+	customDomainCacheMaxEntries = 4096
 )
 
 // Store answers ACL lookups against the database, with small TTL caches.
@@ -53,7 +62,7 @@ func New(pool *pgxpool.Pool) *Store {
 		pool:          pool,
 		tournament:    newTTLCache[int64, int64](tournamentCacheTTL),
 		members:       newTTLCache[memberKey, bool](membershipCacheTTL),
-		customDomains: newTTLCache[string, bool](customDomainCacheTTL),
+		customDomains: newBoundedTTLCache[string, bool](customDomainCacheTTL, customDomainCacheMaxEntries),
 	}
 }
 
@@ -96,12 +105,26 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 // IsVerifiedCustomDomain reports whether host is a workspace's verified
 // white-label custom domain (Phase 2). host must already be normalized
 // (lowercase, no port) by the caller — this method does no normalization of
-// its own, matching how the other lookups here take pre-resolved keys.
+// its own, matching how the other lookups here take pre-resolved keys. The
+// caller (ws.Handler.acceptOptionsFor) is additionally responsible for only
+// invoking this for a genuine WS-upgrade request, bounding host's length,
+// and rate-limiting the call per client IP — none of that is this method's
+// job; it must stay a plain cached lookup.
 //
-// Fail-closed: on a query error, the error is returned and verified is
-// always false; callers (ws.Handler) must treat that as "not allowed", never
-// as "allowed", so a transient DB failure can't open the WS origin
-// allowlist.
+// Both outcomes are cached, not just the positive one: a host that is NOT a
+// verified custom domain (verified=false) is cached exactly like a verified
+// one, via the unconditional s.customDomains.set below, so a flood of
+// lookups for the SAME host — verified or not — costs at most one query per
+// customDomainCacheTTL. The cache itself is size-bounded (see
+// customDomainCacheMaxEntries) so a flood of DISTINCT hosts still can't grow
+// it past a fixed ceiling.
+//
+// Fail-closed: on a query error, the error is returned, verified is always
+// false, and — critically — the result is NOT cached (the set call below is
+// only reached after a successful Scan), so a transient DB failure can never
+// be memoized as either "allowed" or "denied"; the next lookup for that host
+// gets a fresh query. Callers (ws.Handler) must treat an error as "not
+// allowed", never as "allowed".
 func (s *Store) IsVerifiedCustomDomain(ctx context.Context, host string) (bool, error) {
 	if v, ok := s.customDomains.get(host); ok {
 		return v, nil
