@@ -16,6 +16,17 @@ identity to whichever user that bearer resolves to. See SECURITY INVARIANTS
 ``redeem`` uses Redis ``GETDEL`` so the read and the delete are one atomic
 op: a ticket can be redeemed at most once, and there is no window in which
 two concurrent redeems could both succeed.
+
+Task 10R fix 1: the ticket alone is single-use but not browser-bound -- a
+standalone GET redeem route has nothing stopping an attacker from running
+their own link flow, capturing their own ticket, and luring a victim (who
+has a live bearer session) into redeeming it -- attaching the ATTACKER's
+provider identity to the VICTIM's account (account takeover). ``issue``
+optionally stores a ``guard_hash`` (short key ``"lg"``) alongside the
+provider identity; ``oauth_flows.link_complete`` requires the raw guard
+cookie value at redemption and constant-time-compares its hash against this
+field -- even given an otherwise-valid bearer -- before ever linking
+anything. See ``oauth_flows``'s module docstring for the full rationale.
 """
 
 from __future__ import annotations
@@ -38,7 +49,7 @@ def _key(code: str) -> str:
     return f"{_TICKET_PREFIX}{code}"
 
 
-async def issue(oauth_info: OAuthUserInfo, token_data: dict[str, Any]) -> str:
+async def issue(oauth_info: OAuthUserInfo, token_data: dict[str, Any], *, guard_hash: str | None = None) -> str:
     """Mint a one-time ticket carrying ONLY the provider identity; return its
     opaque code.
 
@@ -52,12 +63,29 @@ async def issue(oauth_info: OAuthUserInfo, token_data: dict[str, Any]) -> str:
     anything other than a live session at redeem time is exactly the
     account-linking-hijack shape this task replaces.
 
+    ``guard_hash`` (Task 10R fix 1) is OPTIONAL here -- this module has no
+    opinion on whether a caller should supply one; it just faithfully stores
+    whatever it's given under the short key ``"lg"`` (omitted entirely when
+    ``None``). The fail-closed "never issue a ticket for a custom-domain link
+    with no guard hash" rule lives one layer up, in ``oauth_flows.link``
+    (``_require_guard_hash_for_ticket``) -- by the time it reaches here in the
+    real flow, ``guard_hash`` is always a non-empty string. It is later
+    compared (constant-time, in ``oauth_flows.link_complete``) against the
+    RAW guard cookie value presented at redemption -- the raw value itself is
+    never stored anywhere, only this hash.
+
     Like ``sso_tickets.issue``, this has no safe fallback if Redis is
     unreachable -- a ticket nobody could ever redeem is worse than an
     explicit failure, so this raises rather than minting one.
     """
     code = secrets.token_urlsafe(32)
-    payload = json.dumps({"oauth_info": oauth_info.model_dump(mode="json"), "token_data": token_data})
+    ticket_payload: dict[str, Any] = {
+        "oauth_info": oauth_info.model_dump(mode="json"),
+        "token_data": token_data,
+    }
+    if guard_hash is not None:
+        ticket_payload["lg"] = guard_hash
+    payload = json.dumps(ticket_payload)
     try:
         redis = get_redis()
         await redis.set(_key(code), payload, ex=_TICKET_TTL_SECONDS)

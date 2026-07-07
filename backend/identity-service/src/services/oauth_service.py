@@ -398,6 +398,17 @@ class StatePayload:
     dataclass never carries the raw token, only its hash, and does not
     compare it against anything; the caller (``oauth_flows``) does that with
     the raw cookie value it receives separately.
+
+    ``guard_hash`` (JSON key ``"lg"``) is the SAME kind of binding, one layer
+    further out: it is the SHA-256 hex digest of the raw ``owt_xdomain_guard``
+    cookie value set by the frontend's custom-domain apex bounce
+    (``oauth-login.ts``). It is OPTIONAL -- only present for a flow that
+    actually bounced through a custom domain -- and, like ``csrf``, this
+    dataclass only ever carries the hash, never the raw cookie value. When
+    present it is later stored on the cross-domain ticket issued by
+    ``oauth_flows.callback``/``link`` and compared (constant-time) against
+    the raw guard value presented at redemption (``sso_exchange``/
+    ``link_complete``) -- see the Task 10R fix-1 brief.
     """
 
     origin: str
@@ -407,6 +418,7 @@ class StatePayload:
     nonce: str
     exp: int
     csrf: str
+    guard_hash: str | None = None
 
 
 class OAuthService:
@@ -495,7 +507,9 @@ class OAuthService:
         return cls._encode_state_part(digest)
 
     @classmethod
-    def encode_state(cls, *, origin: str, redirect: str, action: str, provider: str, csrf: str) -> str:
+    def encode_state(
+        cls, *, origin: str, redirect: str, action: str, provider: str, csrf: str, guard_hash: str | None = None
+    ) -> str:
         """Build a signed, short-lived OAuth ``state`` carrying the originating
         host, post-auth redirect path, and action (``login``/``link``)
         alongside the provider.
@@ -509,6 +523,16 @@ class OAuthService:
         themselves and obtain a validly-signed ``state``, but cannot read the
         victim's HttpOnly cookie, so they cannot produce a ``csrf`` value
         whose hash matches this one.
+
+        ``guard_hash`` is OPTIONAL and, when given, is stored verbatim under
+        the short key ``"lg"`` -- it is ALREADY a hash (``sha256_hex`` of the
+        raw ``owt_xdomain_guard`` cookie, computed by the frontend before this
+        call), never a raw secret, so unlike ``csrf`` there is nothing further
+        to hash here. Omitted entirely (no ``"lg"`` key at all) when absent,
+        which is the case for every flow that never bounced through a custom
+        domain (see ``oauth-login.ts``) -- ``verify_state`` surfaces that as
+        ``guard_hash=None``, and downstream ticket issuance (``oauth_flows``)
+        treats that as "no cross-domain ticket may be issued" (fail closed).
 
         Pure and Redis/DB-free: the returned string is fully self-contained
         (``base64url(json) + "." + base64url(hmac)``), so it round-trips
@@ -530,6 +554,8 @@ class OAuthService:
             "e": now_ts + ttl_seconds,
             "c": csrf_hash,
         }
+        if guard_hash is not None:
+            payload["lg"] = guard_hash
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         signature = cls._build_payload_signature(payload_json)
         return f"{cls._encode_state_part(payload_json)}.{signature}"
@@ -545,9 +571,11 @@ class OAuthService:
         Nonce single-use / replay protection is intentionally NOT enforced
         here; the caller must consume ``StatePayload.nonce`` itself (see
         ``oauth_flows.callback``). Likewise, this function only returns the
-        stored ``csrf`` hash (``StatePayload.csrf``) -- it does NOT compare it
-        against a cookie, since that requires the raw cookie value which only
-        the RPC-layer caller (``oauth_flows``) has access to.
+        stored ``csrf``/``guard_hash`` hashes -- it does NOT compare either
+        against anything, since that requires the raw cookie values which
+        only the RPC-layer caller (``oauth_flows``) has access to. Both are
+        surfaced only AFTER the HMAC signature above is verified -- never
+        trust an unverified payload's fields.
         """
         if not state or not isinstance(state, str):
             raise ValueError("state is required")
@@ -566,6 +594,7 @@ class OAuthService:
             if now_ts > exp:
                 raise ValueError("state expired")
 
+            guard_hash = payload.get("lg")
             return StatePayload(
                 origin=str(payload["o"]),
                 redirect=str(payload["r"]),
@@ -574,6 +603,7 @@ class OAuthService:
                 nonce=str(payload["n"]),
                 exp=exp,
                 csrf=str(payload["c"]),
+                guard_hash=str(guard_hash) if guard_hash is not None else None,
             )
         except ValueError:
             raise
@@ -593,7 +623,14 @@ class OAuthService:
 
     @classmethod
     def generate_oauth_url(
-        cls, provider_name: str, *, origin: str, redirect: str, action: str, csrf: str
+        cls,
+        provider_name: str,
+        *,
+        origin: str,
+        redirect: str,
+        action: str,
+        csrf: str,
+        guard_hash: str | None = None,
     ) -> tuple[str, str]:
         """
         Generate an OAuth authorization URL for the given provider.
@@ -606,9 +643,13 @@ class OAuthService:
         started the flow. ``csrf`` is the RAW CSRF cookie token (never
         stored, never logged) -- only its SHA-256 hash is embedded in the
         signed state (see ``encode_state``), binding the eventual callback to
-        the same browser. Returns (url, state).
+        the same browser. ``guard_hash`` is OPTIONAL (only present for a flow
+        that bounced through a custom domain's apex redirect) and is already
+        a hash -- see ``encode_state``'s docstring. Returns (url, state).
         """
-        state = cls.encode_state(origin=origin, redirect=redirect, action=action, provider=provider_name, csrf=csrf)
+        state = cls.encode_state(
+            origin=origin, redirect=redirect, action=action, provider=provider_name, csrf=csrf, guard_hash=guard_hash
+        )
 
         provider = cls.get_provider(provider_name)
         url = provider.get_authorization_url(state)

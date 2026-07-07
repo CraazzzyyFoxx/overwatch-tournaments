@@ -39,7 +39,6 @@ from src.services import (
     player_flows,
     rbac_flows,
     service_flows,
-    sso_tickets,
 )
 from src.services.token_validation import validate_token
 
@@ -361,8 +360,16 @@ async def rpc_oauth_url(data: dict, msg: RabbitMessage) -> dict:
     csrf = data.get("csrf")
     if not csrf or not isinstance(csrf, str):
         return rpc_error("bad_request", "csrf is required")
+    # Optional (Task 10R fix 1): only the frontend's custom-domain apex bounce
+    # supplies this (see oauth-login.ts). Anything not a non-empty string is
+    # treated as absent -- get_url signs it into the state only when present.
+    guard_hash = data.get("guard_hash")
+    if not isinstance(guard_hash, str) or not guard_hash:
+        guard_hash = None
     try:
-        result = oauth_flows.get_url(provider, origin=origin, redirect=redirect, action=action, csrf=csrf)
+        result = oauth_flows.get_url(
+            provider, origin=origin, redirect=redirect, action=action, csrf=csrf, guard_hash=guard_hash
+        )
         return rpc_ok(result.model_dump(mode="json"))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
@@ -404,17 +411,23 @@ async def rpc_sso_exchange(data: dict, msg: RabbitMessage) -> dict:
     after `oauth_flows.callback` returned `mode="ticket"` (see `sso_tickets`).
     The ticket is single-use (Redis GETDEL); a missing, expired, already-
     redeemed, or unknown ticket all look identical from here.
+
+    ``guard`` (Task 10R fix 1) is the RAW value of the caller's
+    ``owt_xdomain_guard`` cookie, forwarded by the frontend's `/auth/sso`
+    route. `oauth_flows.sso_exchange` fails closed (returns ``None``, no
+    tokens) on a missing/mismatched guard exactly like an invalid ticket --
+    see its docstring.
     """
     data = data or {}
     ticket = data.get("ticket")
     if not ticket or not isinstance(ticket, str):
         return rpc_error("bad_request", "ticket is required")
 
-    payload = await sso_tickets.redeem(ticket)
-    if payload is None:
+    result = await oauth_flows.sso_exchange(data.get("guard"), ticket)
+    if result is None:
         return rpc_error("bad_request", "invalid or expired ticket")
 
-    return rpc_ok({"access_token": payload.get("access_token"), "refresh_token": payload.get("refresh_token")})
+    return rpc_ok(result)
 
 
 @broker.subscriber("rpc.identity.oauth_link")
@@ -471,14 +484,21 @@ async def rpc_link_complete(data: dict, msg: RabbitMessage) -> dict:
     INVARIANT #4): this is the step that actually resolves the linked-to
     site account, and that resolution must come from nothing but the live
     session presented on THIS call.
+
+    ``guard`` (Task 10R fix 1) is the RAW value of the caller's
+    ``owt_xdomain_guard`` cookie, forwarded by the frontend's
+    `/auth/link/complete` route. `oauth_flows.link_complete` fails closed on
+    a missing/mismatched guard EVEN THOUGH the bearer above is valid -- see
+    its docstring.
     """
     data = data or {}
     ticket = data.get("ticket")
+    guard = data.get("guard")
 
     async def op(session: Any, user: Any) -> dict:
         if not ticket or not isinstance(ticket, str):
             raise HTTPException(status_code=422, detail="ticket is required")
-        return await oauth_flows.link_complete(session, user, ticket)
+        return await oauth_flows.link_complete(session, user, ticket, guard)
 
     return await _with_active_user(data.get("access_token"), op)
 

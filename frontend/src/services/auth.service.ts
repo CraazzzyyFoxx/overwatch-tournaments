@@ -18,6 +18,12 @@ type OAuthUrlParams = {
   redirect: string;
   action: OAuthAction;
   csrf: string;
+  // Task 10R fix 1: OPTIONAL -- only present on the apex, and only when this
+  // start was itself bounced from a custom domain (oauth-login.ts's
+  // onCustomDomain branch). Already a hash (sha256_hex of the caller's
+  // owt_xdomain_guard cookie) -- never the raw value. Omitted entirely for
+  // every platform-host flow.
+  guardHash?: string;
 };
 
 export type OAuthLinkMode = "linked" | "link_ticket";
@@ -101,7 +107,16 @@ export class OAuthLinkAuthRequiredError extends Error {
 export const authService = {
   async getOAuthUrl(provider: OAuthProviderName, params: OAuthUrlParams): Promise<OAuthUrlResponse> {
     const res = await apiFetch(`/api/auth/oauth/${provider}/url`, {
-      query: { origin: params.origin, redirect: params.redirect, action: params.action, csrf: params.csrf },
+      query: {
+        origin: params.origin,
+        redirect: params.redirect,
+        action: params.action,
+        csrf: params.csrf,
+        // Omitted from the query string entirely when undefined (apiFetch's
+        // appendParams skips undefined/null) -- a platform-host flow never
+        // sends a guard_hash param at all.
+        guard_hash: params.guardHash
+      },
       skipWorkspace: true,
       throwOnError: false
     });
@@ -140,12 +155,15 @@ export const authService = {
   // Redeems a one-time SSO ticket (Task 9) minted by the apex OAuth callback
   // for a workspace custom domain that can't read a cookie set on the apex.
   // Called by /auth/sso/route.ts, which runs ON the custom domain itself —
-  // never by the apex. No bearer token: the ticket alone (single-use, 60s
-  // TTL, opaque) is the credential here.
-  async ssoExchange(ticket: string): Promise<TokenPair> {
+  // never by the apex. No bearer token: the ticket alone is no longer
+  // sufficient as the credential (Task 10R fix 1) -- `guard` (the RAW value
+  // of the caller's `owt_xdomain_guard` cookie) must ALSO match the hash
+  // bound into the ticket at issuance, or identity-svc fails closed (no
+  // tokens) even for an otherwise-valid ticket.
+  async ssoExchange(ticket: string, guard: string): Promise<TokenPair> {
     const res = await apiFetch("/api/auth/sso/exchange", {
       method: "POST",
-      body: { ticket },
+      body: { ticket, guard },
       throwOnError: false
     });
     if (!res.ok) throw new Error("Failed to exchange SSO ticket");
@@ -180,11 +198,17 @@ export const authService = {
   // caller's OWN bearer (the live session on whichever host this runs on).
   // Called by /auth/link/complete/route.ts, which runs ON the custom domain
   // itself. The bearer resolves the linked-to user; the ticket never does.
-  async completeLink(ticket: string, accessToken: string): Promise<{ message: string; provider?: string; username?: string }> {
+  //
+  // `guard` (Task 10R fix 1) is the RAW value of the caller's
+  // `owt_xdomain_guard` cookie. A valid bearer alone is NOT sufficient
+  // (that's exactly the reverse-CSRF this fix closes -- a victim's own live
+  // session redeeming an attacker's ticket): identity-svc additionally
+  // requires `guard`'s hash to match the ticket's bound hash, fail closed.
+  async completeLink(ticket: string, accessToken: string, guard: string): Promise<{ message: string; provider?: string; username?: string }> {
     const res = await apiFetch("/api/auth/link/complete", {
       method: "POST",
       token: accessToken,
-      body: { ticket },
+      body: { ticket, guard },
       throwOnError: false
     });
     if (!res.ok) throw new Error("Failed to complete OAuth account link");

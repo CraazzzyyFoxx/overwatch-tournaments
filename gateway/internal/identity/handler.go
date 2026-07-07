@@ -246,18 +246,23 @@ func (h *Handler) OAuthProviders(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueOAuthProviders, []byte("{}"), http.StatusOK)
 }
 
-// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=.
+// OAuthURL mirrors GET /oauth/{provider}/url?origin=&redirect=&action=&csrf=&guard_hash=.
 // origin/redirect/action/csrf get signed into the OAuth state server-side
 // (identity-service oauth_flows.get_url) so the callback can later redirect
 // back to the originating host and bind the browser via the csrf cookie.
+// guard_hash (Task 10R fix 1) is OPTIONAL -- only the frontend's
+// custom-domain apex bounce supplies one (oauth-login.ts); identity-svc
+// signs it into the state only when present and treats an empty string the
+// same as absent.
 func (h *Handler) OAuthURL(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	body, _ := json.Marshal(map[string]any{
-		"provider": r.PathValue("provider"),
-		"origin":   q.Get("origin"),
-		"redirect": q.Get("redirect"),
-		"action":   q.Get("action"),
-		"csrf":     q.Get("csrf"),
+		"provider":   r.PathValue("provider"),
+		"origin":     q.Get("origin"),
+		"redirect":   q.Get("redirect"),
+		"action":     q.Get("action"),
+		"csrf":       q.Get("csrf"),
+		"guard_hash": q.Get("guard_hash"),
 	})
 	h.callIdentity(w, r, queueOAuthURL, body, http.StatusOK)
 }
@@ -299,6 +304,13 @@ func (h *Handler) OAuthLink(w http.ResponseWriter, r *http.Request) {
 // account (SECURITY INVARIANTS #1/#4). A missing bearer is rejected here,
 // before ever reaching identity-svc -- there is no anonymous use case for
 // this route, unlike OAuthLink above.
+//
+// The client-supplied body (Task 10R fix 1: {ticket, guard}) round-trips
+// through mergeBody unfiltered -- it only OVERWRITES "access_token" with the
+// bearer above, never drops or renames any other client field -- so "guard"
+// (the raw owt_xdomain_guard cookie value the frontend route read) reaches
+// identity-svc's rpc.identity.link_complete alongside "ticket" with no
+// per-field wiring needed here.
 func (h *Handler) LinkComplete(w http.ResponseWriter, r *http.Request) {
 	token := bearerToken(r)
 	if token == "" {
@@ -312,11 +324,16 @@ func (h *Handler) LinkComplete(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueLinkComplete, body, http.StatusOK)
 }
 
-// SsoExchange mirrors POST /auth/sso/exchange (public; body {ticket}).
+// SsoExchange mirrors POST /auth/sso/exchange (public; body {ticket, guard}).
 // Redeems a one-time Redis SSO ticket minted by a custom-domain OAuth
 // callback (identity-svc oauth_flows.callback, mode="ticket") for the
 // session tokens -- called by the custom domain's own frontend route, never
 // by the apex. No client metadata is needed, so this skips bodyWithMeta.
+//
+// decodeRawBody re-marshals the ENTIRE client body verbatim, so "guard"
+// (Task 10R fix 1: the raw owt_xdomain_guard cookie value the frontend route
+// read) reaches identity-svc's rpc.identity.sso_exchange alongside "ticket"
+// with no per-field wiring needed here.
 func (h *Handler) SsoExchange(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeRawBody(w, r)
 	if !ok {

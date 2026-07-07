@@ -4,6 +4,15 @@ import { authService } from "@/services/auth.service";
 import { getAccessToken } from "@/lib/auth-cookies";
 import { safeRedirectTarget } from "@/lib/oauth-callback";
 
+// Task 10R fix 1: the single-use, HOST-ONLY guard cookie set by
+// oauth-login.ts's custom-domain apex bounce, on THIS exact domain, before
+// the flow ever left for the apex. Its raw value is required alongside the
+// ticket EVEN THOUGH the caller also presents a valid bearer below --
+// without it, a victim's own live session could be lured into completing an
+// attacker's link ticket (reverse CSRF / account takeover via linking, the
+// vulnerability this fix closes). See oauth-login.ts's module docstring.
+const GUARD_COOKIE = "owt_xdomain_guard";
+
 // Far side of the custom-domain account-linking end-ticket (Task 10R). This
 // route runs ON the workspace's custom domain itself -- never the platform
 // apex -- after oauth-callback.ts's "link" branch has already
@@ -20,21 +29,31 @@ import { safeRedirectTarget } from "@/lib/oauth-callback";
 // means there is nothing to link to, so this bounces to login rather than
 // guessing or falling back to any identity the ticket might carry.
 //
-// Sets NO cookies: unlike /auth/sso/route.ts (which establishes a brand-new
-// session from a ticket that DOES carry session tokens), linking never
-// changes the caller's session here -- it only calls an authenticated RPC
-// with the session that already exists.
+// Sets no SESSION cookies: unlike /auth/sso/route.ts (which establishes a
+// brand-new session from a ticket that DOES carry session tokens), linking
+// never changes the caller's session here -- it only calls an authenticated
+// RPC with the session that already exists. It DOES clear the single-use
+// GUARD_COOKIE above on every outcome (host-only, no `domain` attribute --
+// must match exactly what oauth-login.ts set, or the delete won't take).
+function clearGuardCookie(response: NextResponse): void {
+  response.cookies.delete({ name: GUARD_COOKIE, path: "/" });
+}
+
 function errorRedirect(origin: string, errorCode: string): NextResponse {
   const errorUrl = new URL("/", origin);
   errorUrl.searchParams.set("auth_error", errorCode);
-  return NextResponse.redirect(errorUrl);
+  const response = NextResponse.redirect(errorUrl);
+  clearGuardCookie(response);
+  return response;
 }
 
 function loginRedirect(origin: string, next: string): NextResponse {
   const loginUrl = new URL("/", origin);
   loginUrl.searchParams.set("login", "1");
   loginUrl.searchParams.set("next", next);
-  return NextResponse.redirect(loginUrl);
+  const response = NextResponse.redirect(loginUrl);
+  clearGuardCookie(response);
+  return response;
 }
 
 export async function GET(request: Request) {
@@ -56,9 +75,22 @@ export async function GET(request: Request) {
     return loginRedirect(currentOrigin, next);
   }
 
+  const guard = cookieStore.get(GUARD_COOKIE)?.value;
+
+  // Fail closed (Task 10R fix 1): with no guard cookie there is nothing to
+  // bind this redemption to the browser that started the flow -- identity-svc
+  // would reject a missing `guard` anyway, but there's no reason to spend an
+  // RPC round trip (and burn the single-use ticket) on a request that's
+  // already missing something required.
+  if (!guard) {
+    return errorRedirect(currentOrigin, "invalid_state");
+  }
+
   try {
-    await authService.completeLink(ticket, accessToken);
-    return NextResponse.redirect(safeRedirectTarget(next, currentOrigin));
+    await authService.completeLink(ticket, accessToken, guard);
+    const response = NextResponse.redirect(safeRedirectTarget(next, currentOrigin));
+    clearGuardCookie(response);
+    return response;
   } catch (err) {
     console.error("Link ticket exchange error:", err);
     return errorRedirect(currentOrigin, "exchange_failed");

@@ -16,6 +16,30 @@ close that gap by comparing ``sha256(csrf)`` (``csrf`` being the RAW value of
 an HttpOnly cookie set when the flow started) against the hash embedded in
 the state (see ``_verify_csrf_binding``); a missing or mismatched cookie is
 rejected exactly like an invalid state (fail closed).
+
+Task 10R fix 1 closes a SECOND, REVERSE CSRF one hop further out: the
+``csrf``/state binding above only covers the apex start->callback leg. The
+cross-domain tickets ``callback``/``link`` mint for a custom-domain origin
+(``sso_tickets``/``pending_link_tickets``) are redeemed by a standalone GET
+route on that custom domain with no equivalent binding -- so an attacker who
+runs their OWN flow (with ``origin=<victim-domain>``), captures their OWN
+ticket, and lures the victim into opening ``<victim-domain>/auth/sso?ticket=`` /
+``/auth/link/complete?ticket=`` gets the VICTIM's browser to redeem the
+ATTACKER's ticket (session fixation / account-takeover-via-linking). The fix
+mirrors the csrf binding across that domain boundary: the frontend's
+custom-domain apex bounce (``oauth-login.ts``) sets a host-only
+``owt_xdomain_guard`` cookie (raw value ``G``, never leaves that cookie) and
+signs ``H = sha256_hex(G)`` into the state as ``guard_hash`` (JSON key
+``"lg"``, see ``OAuthService``). When a cross-domain ticket is issued, ``H``
+is stored on the ticket itself (``ticket.lg``); redemption
+(``sso_exchange``/``link_complete`` below) requires the raw ``G`` again and
+constant-time-compares ``sha256_hex(G) == ticket.lg`` (``_verify_guard_binding``).
+The attacker's ticket is bound to the ATTACKER's ``G`` (in the attacker's own
+browser); the victim's browser never held that cookie (host-only, no
+``domain`` attribute) and cannot be made to hold it without XSS, so
+redemption fails closed. Issuance itself is fail-closed too: a ticket-mode
+callback/link with no ``guard_hash`` on the verified state is a NEVER-ISSUE
+error, not an unbound ticket (see ``callback``/``link`` below).
 """
 
 from __future__ import annotations
@@ -93,13 +117,23 @@ def _validate_origin(origin: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid origin") from None
 
 
-def get_url(provider: str, *, origin: str, redirect: str, action: str, csrf: str) -> schemas.OAuthURL:
+def get_url(
+    provider: str, *, origin: str, redirect: str, action: str, csrf: str, guard_hash: str | None = None
+) -> schemas.OAuthURL:
+    """``guard_hash`` is OPTIONAL: only the frontend's custom-domain apex
+    bounce (``oauth-login.ts``) supplies one (``H = sha256_hex(G)`` of its
+    host-only ``owt_xdomain_guard`` cookie). It is signed into the state
+    verbatim (already a hash -- see ``OAuthService.encode_state``) and, when
+    the eventual callback/link issues a cross-domain ticket, becomes that
+    ticket's ``lg`` -- the binding ``sso_exchange``/``link_complete`` verify
+    at redemption (Task 10R fix 1). A platform-host flow never supplies one.
+    """
     _validate_origin(origin)
     if action not in _VALID_OAUTH_ACTIONS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid OAuth action: {action}")
     try:
         url, state = OAuthService.generate_oauth_url(
-            provider, origin=origin, redirect=redirect, action=action, csrf=csrf
+            provider, origin=origin, redirect=redirect, action=action, csrf=csrf, guard_hash=guard_hash
         )
         return schemas.OAuthURL(provider=schemas.OAuthProvider(provider), url=url, state=state)
     except HTTPException:
@@ -153,6 +187,53 @@ def _verify_csrf_binding(payload: StatePayload, csrf: str | None) -> None:
     csrf_hash = hashlib.sha256(csrf.encode("utf-8")).hexdigest()
     if not hmac.compare_digest(csrf_hash, payload.csrf):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
+
+
+def _require_guard_hash_for_ticket(payload: StatePayload) -> str:
+    """Fail-closed gate for cross-domain ticket ISSUANCE (Task 10R fix 1).
+
+    Called by ``callback``/``link`` immediately before minting a cross-domain
+    ticket (``sso_tickets.issue``/``pending_link_tickets.issue``). A verified
+    state with no ``guard_hash`` means the flow never went through the
+    custom-domain apex bounce that sets the browser-binding guard cookie --
+    minting a ticket anyway would produce one with no ``lg``, which
+    ``sso_exchange``/``link_complete`` could never verify against anything,
+    defeating the whole binding. Raising here (same generic "invalid state"
+    error the rest of this module uses) means an unbound ticket is NEVER
+    issued, rather than issued-then-hopefully-rejected-later.
+    """
+    if not payload.guard_hash:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state")
+    return payload.guard_hash
+
+
+def _verify_guard_binding(guard: str | None, ticket_guard_hash: str | None) -> bool:
+    """Bind a redeemed cross-domain ticket to the browser that started the flow.
+
+    ``ticket_guard_hash`` is ``ticket.lg`` -- ``sha256_hex(G)``, stored on the
+    ticket at issuance time from the verified state's ``guard_hash`` (see
+    ``_require_guard_hash_for_ticket``). ``guard`` here is the RAW value of
+    the caller's ``owt_xdomain_guard`` cookie, forwarded by the frontend's
+    ticket-completion route. Mirrors ``_verify_csrf_binding`` one domain
+    boundary further out: an attacker who ran their own flow and captured
+    their own ticket cannot read the VICTIM's host-only guard cookie (no
+    ``domain`` attribute -- it never leaves the browser that set it), so they
+    cannot supply a ``guard`` whose hash matches ``ticket_guard_hash``.
+
+    Fails CLOSED and returns a plain ``bool`` (never raises) so both callers
+    -- ``sso_exchange`` (returns ``None``, no tokens) and ``link_complete``
+    (raises the same "invalid ticket" error it already uses) -- can each
+    apply their own existing fail-closed response shape. A missing ``guard``,
+    a ticket with no ``lg`` at all, and a hash mismatch are all indistinguishable
+    here; the raw guard value is only ever compared, in constant time, never
+    logged.
+    """
+    if not isinstance(guard, str) or not guard:
+        return False
+    if not isinstance(ticket_guard_hash, str) or not ticket_guard_hash:
+        return False
+    guard_hash = hashlib.sha256(guard.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(guard_hash, ticket_guard_hash)
 
 
 async def _consume_state_nonce(payload: StatePayload) -> None:
@@ -228,7 +309,8 @@ async def callback(
     # via rpc.identity.sso_exchange and sets host-only cookies itself.
     origin_host = urlparse(payload.origin).hostname
     if origin_host and not is_platform_host(origin_host):
-        ticket = await sso_tickets.issue(access_token, refresh_token, payload.redirect)
+        guard_hash = _require_guard_hash_for_ticket(payload)
+        ticket = await sso_tickets.issue(access_token, refresh_token, payload.redirect, guard_hash=guard_hash)
         return schemas.OAuthCallbackResult(
             mode="ticket",
             ticket=ticket,
@@ -280,6 +362,10 @@ async def link(
       just-exchanged PROVIDER identity (SECURITY INVARIANT #2); the custom
       domain's own frontend route resolves the actual linked-to user later,
       from ITS OWN live session (``link_complete``).
+
+    Task 10R fix 1: a custom-domain ticket is only ever issued when the
+    verified state carries a ``guard_hash`` (``_require_guard_hash_for_ticket``,
+    fail closed) -- see the module docstring.
     """
     payload = _verify_state_for(provider, state, expected_action="link")
     _verify_csrf_binding(payload, csrf)
@@ -291,7 +377,8 @@ async def link(
 
     origin_host = urlparse(payload.origin).hostname
     if origin_host and not is_platform_host(origin_host):
-        ticket = await pending_link_tickets.issue(oauth_user_info, token_data)
+        guard_hash = _require_guard_hash_for_ticket(payload)
+        ticket = await pending_link_tickets.issue(oauth_user_info, token_data, guard_hash=guard_hash)
         return schemas.OAuthLinkResult(
             mode="link_ticket",
             ticket=ticket,
@@ -315,7 +402,32 @@ async def link(
     )
 
 
-async def link_complete(session: AsyncSession, user: models.AuthUser, ticket: str) -> dict:
+async def sso_exchange(guard: str | None, ticket: str) -> dict | None:
+    """Redeem a one-time SSO ticket, guard-bound (Task 10R fix 1).
+
+    ``ticket`` is redeemed via ``sso_tickets.redeem`` (atomic GETDEL, single
+    use) FIRST, exactly as before this fix; ``guard`` -- the RAW value of the
+    caller's ``owt_xdomain_guard`` cookie -- is then checked against the
+    redeemed payload's ``lg`` via ``_verify_guard_binding``. The ticket is
+    already burned by the time that check runs, so a failed guard check can
+    never be retried against the same ticket either way.
+
+    Fails CLOSED: returns ``None`` (no tokens) for an invalid/expired/
+    already-redeemed ticket, a missing ``guard``, a ticket minted with no
+    ``lg`` at all, or a hash mismatch -- every one of those is indistinguishable
+    from here, mirroring ``sso_tickets.redeem``'s own single generic failure
+    shape. Called by ``serve.py``'s ``rpc_sso_exchange`` (public RPC, no
+    bearer -- the ticket + guard pair together are the credential).
+    """
+    payload = await sso_tickets.redeem(ticket)
+    if payload is None:
+        return None
+    if not _verify_guard_binding(guard, payload.get("lg")):
+        return None
+    return {"access_token": payload.get("access_token"), "refresh_token": payload.get("refresh_token")}
+
+
+async def link_complete(session: AsyncSession, user: models.AuthUser, ticket: str, guard: str | None) -> dict:
     """Redeem a pending-link ticket and attach its PROVIDER identity to the
     BEARER-authenticated caller (step 6 of the Task 10R end-ticket flow).
 
@@ -326,9 +438,21 @@ async def link_complete(session: AsyncSession, user: models.AuthUser, ticket: st
     That bearer user IS the linked-to site account; nothing here reads a
     user/account identifier out of ``ticket`` or anywhere else, because the
     ticket never carries one (SECURITY INVARIANTS #1, #2, #4).
+
+    Task 10R fix 1: ``guard`` -- the RAW value of the caller's
+    ``owt_xdomain_guard`` cookie -- must additionally match the redeemed
+    ticket's ``lg`` (``_verify_guard_binding``), fail closed, EVEN THOUGH the
+    caller already presented a valid bearer. Without this, a valid bearer
+    alone would let a victim's own browser complete an attacker's link
+    ticket (reverse CSRF / account takeover via linking) -- the whole point
+    of this fix. The ticket is already burned (single-use redeem, above) by
+    the time this check runs.
     """
     payload = await pending_link_tickets.redeem(ticket)
     if payload is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired link ticket")
+
+    if not _verify_guard_binding(guard, payload.get("lg")):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired link ticket")
 
     try:
