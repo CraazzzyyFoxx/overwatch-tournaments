@@ -927,5 +927,69 @@
       "close": "Закрыть",
       "help": "Как это работает"
     }
+  },
+  "tournamentsList": {
+    "meta": {
+      "description": "Турниры на {siteName}."
+    },
+    "heading": {
+      "all": "Все турниры",
+      "total": "{count, plural, one {всего #} few {всего #} many {всего #} other {всего #}}"
+    },
+    "empty": {
+      "title": "Турниры не найдены",
+      "body": "Попробуйте изменить фильтры или загляните позже — скоро появятся новые турниры."
+    },
+    "hero": {
+      "coord": "OWT // Турниры",
+      "sector": "Сектор · {name}",
+      "title": "Все <em>турниры</em> в одном месте",
+      "lede": "От драфта до титула: следите за каждым турниром вашего сообщества. Живые сетки, зафиксированные составы и коронованные чемпионы — всё в одном месте.",
+      "liveNow": "В эфире",
+      "matchesInFlight": "{count, plural, one {# матч в игре} few {# матча в игре} many {# матчей в игре} other {# матчей в игре}}",
+      "noMatchesInFlight": "Нет активных матчей",
+      "totalTournaments": "Всего турниров",
+      "activeCount": "{count, plural, one {# активный} few {# активных} many {# активных} other {# активных}}",
+      "teamsBalanced": "{count, plural, one {сбалансирована # команда} few {сбалансировано # команды} many {сбалансировано # команд} other {сбалансировано # команды}}"
+    },
+    "filters": {
+      "standard": "Обычные",
+      "searchPlaceholder": "Поиск по названию или номеру…",
+      "sort": {
+        "newest": "Сначала новые",
+        "oldest": "Сначала старые",
+        "participants": "Больше участников"
+      }
+    },
+    "card": {
+      "viewBracket": "Смотреть сетку",
+      "participantsCount": "{count, plural, one {# участник} few {# участника} many {# участников} other {# участников}}"
+    },
+    "featured": {
+      "liveRightNow": "Сейчас в эфире",
+      "eventsCount": "{count, plural, one {# турнир} few {# турнира} many {# турниров} other {# турниров}}",
+      "autoRefresh": "Автообновление · 30с",
+      "liveNow": "в эфире",
+      "liveWord": "в эфире",
+      "inProgress": "идёт",
+      "now": "СЕЙЧАС",
+      "started": "Начат {time}",
+      "playersCount": "{count, plural, one {# игрок} few {# игрока} many {# игроков} other {# игроков}}"
+    },
+    "stage": {
+      "final": "Финал",
+      "signups": "Приём заявок",
+      "setup": "Подготовка"
+    },
+    "time": {
+      "justNow": "только что",
+      "soon": "скоро",
+      "minutesAgo": "{count, plural, one {# мин назад} few {# мин назад} many {# мин назад} other {# мин назад}}",
+      "inMinutes": "{count, plural, one {через # мин} few {через # мин} many {через # мин} other {через # мин}}",
+      "hoursAgo": "{count, plural, one {# ч назад} few {# ч назад} many {# ч назад} other {# ч назад}}",
+      "inHours": "{count, plural, one {через # ч} few {через # ч} many {через # ч} other {через # ч}}",
+      "daysAgo": "{count, plural, one {# дн назад} few {# дн назад} many {# дн назад} other {# дн назад}}",
+      "inDays": "{count, plural, one {через # дн} few {через # дн} many {через # дн} other {через # дн}}"
+    }
   }
 }

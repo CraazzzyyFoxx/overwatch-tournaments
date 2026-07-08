@@ -1,6 +1,12 @@
+import type { useTranslations } from "next-intl";
+
 import type { Encounter } from "@/types/encounter.types";
 import type { Tournament } from "@/types/tournament.types";
 import type { TournamentStatus } from "@/types/tournament.types";
+
+// Loose translator alias matching next-intl's `useTranslations()` return type so
+// callers can hand their `t` straight through (strictFunctionTypes-safe).
+type Translate = ReturnType<typeof useTranslations>;
 
 // Derive 1-2 letter initials from a team name for avatar glyphs.
 export function teamInitials(name?: string | null): string {
@@ -17,6 +23,7 @@ export function teamInitials(name?: string | null): string {
 // and live-card timestamps. `now` is injectable for deterministic tests.
 export function relativeTime(
   value: Date | string | null | undefined,
+  t: Translate,
   now: Date = new Date()
 ): string {
   if (!value) return "—";
@@ -27,14 +34,24 @@ export function relativeTime(
   const past = diffMs >= 0;
   const minutes = Math.round(Math.abs(diffMs) / 60_000);
 
-  if (minutes < 1) return past ? "just now" : "soon";
-  if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
+  if (minutes < 1)
+    return past ? t("tournamentsList.time.justNow") : t("tournamentsList.time.soon");
+  if (minutes < 60)
+    return past
+      ? t("tournamentsList.time.minutesAgo", { count: minutes })
+      : t("tournamentsList.time.inMinutes", { count: minutes });
 
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return past ? `${hours}h ago` : `in ${hours}h`;
+  if (hours < 24)
+    return past
+      ? t("tournamentsList.time.hoursAgo", { count: hours })
+      : t("tournamentsList.time.inHours", { count: hours });
 
   const days = Math.round(hours / 24);
-  if (days < 30) return past ? `${days}d ago` : `in ${days}d`;
+  if (days < 30)
+    return past
+      ? t("tournamentsList.time.daysAgo", { count: days })
+      : t("tournamentsList.time.inDays", { count: days });
 
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -78,15 +95,19 @@ export interface StageProgress {
 // Coarse stage-progress proxy from stage completion flags. Real "X/Y matches"
 // requires a precomputed backend field (see plan C2); until then we render a
 // graceful label + bar derived from stages.is_completed / is_active.
-export function stageProgress(tournament: Tournament, status: TournamentStatus): StageProgress {
+export function stageProgress(
+  tournament: Tournament,
+  status: TournamentStatus,
+  t: Translate
+): StageProgress {
   if (status === "completed" || status === "archived") {
-    return { label: "Final", pct: 100, fill: "teal" };
+    return { label: t("tournamentsList.stage.final"), pct: 100, fill: "teal" };
   }
   if (status === "registration" || status === "check_in") {
-    return { label: "Sign-ups", pct: 30, fill: "amber" };
+    return { label: t("tournamentsList.stage.signups"), pct: 30, fill: "amber" };
   }
   if (status === "draft") {
-    return { label: "Setup", pct: 20, fill: "muted" };
+    return { label: t("tournamentsList.stage.setup"), pct: 20, fill: "muted" };
   }
 
   // live, playoffs
@@ -95,7 +116,7 @@ export function stageProgress(tournament: Tournament, status: TournamentStatus):
   const completed = stages.filter((stage) => stage.is_completed).length;
   const active = stages.find((stage) => stage.is_active);
   const pct = total > 0 ? Math.min(95, Math.max(10, Math.round((completed / total) * 100))) : 50;
-  return { label: active?.name ?? "Live", pct, fill: "teal" };
+  return { label: active?.name ?? t("common.live"), pct, fill: "teal" };
 }
 
 const AVATAR_GRADIENTS = [

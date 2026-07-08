@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 
@@ -23,20 +24,20 @@ const TournamentsHero = ({
   totalPlayers,
   totalTeams,
 }: TournamentsHeroProps) => {
+  const t = useTranslations();
+
   return (
     <PageHero
       eyebrow={
         <>
-          <HeroCoord>OWT // Tournaments</HeroCoord>
-          {workspaceName ? <HeroCoord>Sector · {workspaceName}</HeroCoord> : null}
+          <HeroCoord>{t("tournamentsList.hero.coord")}</HeroCoord>
+          {workspaceName ? (
+            <HeroCoord>{t("tournamentsList.hero.sector", { name: workspaceName })}</HeroCoord>
+          ) : null}
         </>
       }
-      title={
-        <>
-          All <em>tournaments</em> in one place
-        </>
-      }
-      lede="From draft to crown: track every event your community has run. Live brackets, locked rosters, and crowned champions — all in one ledger."
+      title={t.rich("tournamentsList.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+      lede={t("tournamentsList.hero.lede")}
       aside={
         <div className="grid grid-cols-3 gap-6">
           <HeroStat
@@ -45,7 +46,7 @@ const TournamentsHero = ({
                 {liveEvents > 0 ? (
                   <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--aqt-rose)] [animation:aqtPulse_2s_ease-in-out_infinite]" />
                 ) : null}
-                Live now
+                {t("tournamentsList.hero.liveNow")}
               </span>
             }
             value={
@@ -57,19 +58,19 @@ const TournamentsHero = ({
             }
             sub={
               liveMatches > 0
-                ? `${liveMatches} match${liveMatches === 1 ? "" : "es"} in flight`
-                : "No matches in flight"
+                ? t("tournamentsList.hero.matchesInFlight", { count: liveMatches })
+                : t("tournamentsList.hero.noMatchesInFlight")
             }
           />
           <HeroStat
-            label="Total tournaments"
+            label={t("tournamentsList.hero.totalTournaments")}
             value={totalTournaments}
-            sub={`${activeTournaments} active`}
+            sub={t("tournamentsList.hero.activeCount", { count: activeTournaments })}
           />
           <HeroStat
-            label="Players"
+            label={t("common.playersLabel")}
             value={totalPlayers}
-            sub={`${totalTeams} teams balanced`}
+            sub={t("tournamentsList.hero.teamsBalanced", { count: totalTeams })}
           />
         </div>
       }

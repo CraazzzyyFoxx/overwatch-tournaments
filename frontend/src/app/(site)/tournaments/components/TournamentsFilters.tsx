@@ -2,8 +2,9 @@
 
 import React from "react";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 
-import { TOURNAMENT_STATUS_ORDER, TOURNAMENT_STATUS_META } from "@/lib/tournament-status";
+import { TOURNAMENT_STATUS_ORDER } from "@/lib/tournament-status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {
   Select,
@@ -46,6 +47,7 @@ const TournamentsFilters = ({
   sortBy,
   onSortChange
 }: TournamentsFiltersProps) => {
+  const t = useTranslations();
   const toggleType = (value: Exclude<TypeFilter, "all">) =>
     onTypeChange(typeFilter === value ? "all" : value);
 
@@ -56,11 +58,10 @@ const TournamentsFilters = ({
         className={`filter-chip${statusFilter === "all" ? " active" : ""}`}
         onClick={() => onStatusChange("all")}
       >
-        All <span className="count">{total}</span>
+        {t("common.all")} <span className="count">{total}</span>
       </button>
 
       {TOURNAMENT_STATUS_ORDER.map((status) => {
-        const meta = TOURNAMENT_STATUS_META[status];
         const count = statusCounts[status] ?? 0;
         if (count === 0 && statusFilter !== status) return null;
 
@@ -81,7 +82,7 @@ const TournamentsFilters = ({
             onClick={() => onStatusChange(status)}
           >
             <span className={`dot ${designClass}`} />
-            {meta.badgeLabel} <span className="count">{count}</span>
+            {t(`common.statusBadge.${status}`)} <span className="count">{count}</span>
           </button>
         );
       })}
@@ -93,14 +94,14 @@ const TournamentsFilters = ({
         className={`filter-chip${typeFilter === "standard" ? " active" : ""}`}
         onClick={() => toggleType("standard")}
       >
-        Standard <span className="count">{standardCount}</span>
+        {t("tournamentsList.filters.standard")} <span className="count">{standardCount}</span>
       </button>
       <button
         type="button"
         className={`filter-chip${typeFilter === "league" ? " active" : ""}`}
         onClick={() => toggleType("league")}
       >
-        League <span className="count">{leagueCount}</span>
+        {t("common.league")} <span className="count">{leagueCount}</span>
       </button>
 
       <div className="filter-search">
@@ -108,18 +109,20 @@ const TournamentsFilters = ({
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Filter by name or number…"
+          placeholder={t("tournamentsList.filters.searchPlaceholder")}
         />
       </div>
 
       <Select value={sortBy} onValueChange={(value) => onSortChange(value as SortBy)}>
         <SelectTrigger className="filter-sort h-8 w-[155px] shadow-none focus:ring-0 focus:ring-offset-0">
-          <SelectValue placeholder="Sort by" />
+          <SelectValue placeholder={t("common.sortBy")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="latest">Newest first</SelectItem>
-          <SelectItem value="oldest">Oldest first</SelectItem>
-          <SelectItem value="participants">Most participants</SelectItem>
+          <SelectItem value="latest">{t("tournamentsList.filters.sort.newest")}</SelectItem>
+          <SelectItem value="oldest">{t("tournamentsList.filters.sort.oldest")}</SelectItem>
+          <SelectItem value="participants">
+            {t("tournamentsList.filters.sort.participants")}
+          </SelectItem>
         </SelectContent>
       </Select>
     </div>

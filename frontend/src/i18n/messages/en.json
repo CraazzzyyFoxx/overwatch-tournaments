@@ -927,5 +927,69 @@
       "close": "Close",
       "help": "How this works"
     }
+  },
+  "tournamentsList": {
+    "meta": {
+      "description": "View tournaments on {siteName}."
+    },
+    "heading": {
+      "all": "All tournaments",
+      "total": "{count, plural, one {# total} other {# total}}"
+    },
+    "empty": {
+      "title": "No tournaments found",
+      "body": "Try adjusting your filters or check back soon for upcoming tournaments."
+    },
+    "hero": {
+      "coord": "OWT // Tournaments",
+      "sector": "Sector · {name}",
+      "title": "All <em>tournaments</em> in one place",
+      "lede": "From draft to crown: track every event your community has run. Live brackets, locked rosters, and crowned champions — all in one ledger.",
+      "liveNow": "Live now",
+      "matchesInFlight": "{count, plural, one {# match in flight} other {# matches in flight}}",
+      "noMatchesInFlight": "No matches in flight",
+      "totalTournaments": "Total tournaments",
+      "activeCount": "{count, plural, one {# active} other {# active}}",
+      "teamsBalanced": "{count, plural, one {# team balanced} other {# teams balanced}}"
+    },
+    "filters": {
+      "standard": "Standard",
+      "searchPlaceholder": "Filter by name or number…",
+      "sort": {
+        "newest": "Newest first",
+        "oldest": "Oldest first",
+        "participants": "Most participants"
+      }
+    },
+    "card": {
+      "viewBracket": "View Bracket",
+      "participantsCount": "{count, plural, one {# participant} other {# participants}}"
+    },
+    "featured": {
+      "liveRightNow": "Live right now",
+      "eventsCount": "{count, plural, one {# event} other {# events}}",
+      "autoRefresh": "Auto-refresh · 30s",
+      "liveNow": "live now",
+      "liveWord": "live",
+      "inProgress": "in progress",
+      "now": "NOW",
+      "started": "Started {time}",
+      "playersCount": "{count, plural, one {# player} other {# players}}"
+    },
+    "stage": {
+      "final": "Final",
+      "signups": "Sign-ups",
+      "setup": "Setup"
+    },
+    "time": {
+      "justNow": "just now",
+      "soon": "soon",
+      "minutesAgo": "{count, plural, one {#m ago} other {#m ago}}",
+      "inMinutes": "{count, plural, one {in #m} other {in #m}}",
+      "hoursAgo": "{count, plural, one {#h ago} other {#h ago}}",
+      "inHours": "{count, plural, one {in #h} other {in #h}}",
+      "daysAgo": "{count, plural, one {#d ago} other {#d ago}}",
+      "inDays": "{count, plural, one {in #d} other {in #d}}"
+    }
   }
 }
