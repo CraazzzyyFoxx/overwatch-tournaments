@@ -16,8 +16,8 @@ import { Globe, LogOut, Settings, UserIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
-import { useTranslations, useLocale } from "next-intl";
-import { setUserLocale } from "@/i18n/locale-actions";
+import { useTranslations } from "next-intl";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 type UserMenuProps = {
   username: string;
@@ -32,7 +32,6 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
   const clearAuth = useAuthProfileStore((s) => s.clear);
   const openSettings = useAccountSettingsModalStore((s) => s.open);
   const t = useTranslations();
-  const locale = useLocale();
 
   const handleLogout = () => {
     // Clear auth store before redirecting
@@ -80,18 +79,16 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
             <Settings className="mr-2 h-4 w-4" />
             <span>{t("common.accountSettings")}</span>
           </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => void setUserLocale(locale === "en" ? "ru" : "en").then(() => router.refresh())}
-            className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
-          >
-            <Globe className="mr-2 h-4 w-4" />
-            <div className="flex flex-1 items-center justify-between">
+          {/* Language row: a real control, not a menu action — kept as a plain
+              row (not DropdownMenuItem) so clicking a segment neither closes the
+              menu nor fires a menu "select". The switcher manages its own state. */}
+          <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5">
+            <div className="flex items-center gap-2 text-sm">
+              <Globe className="h-4 w-4" />
               <span>{t("common.language")}</span>
-              <span className="uppercase text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/70 font-semibold">
-                {locale}
-              </span>
             </div>
-          </DropdownMenuItem>
+            <LanguageSwitcher />
+          </div>
           <DropdownMenuItem 
             onClick={handleLogout}
             className="cursor-pointer focus:bg-red-500/20 focus:text-red-400 text-red-500 transition-colors rounded-md"
