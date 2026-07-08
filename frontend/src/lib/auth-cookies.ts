@@ -27,15 +27,22 @@ interface CookieStore {
   get(name: string): { value: string } | undefined;
 }
 
-// Deletes a Domain-wide `owt_*` cookie, replicating the exact attributes it
-// was set with so the browser treats this as an overwrite of the real
-// cookie rather than creating a second, competing one.
+// Deletes an `owt_*` session cookie in BOTH scopes it can exist in:
+//   1. Domain-wide (`Domain=.owt…`) — set by oauth-callback.ts / refresh on the
+//      platform apex + subdomains (SSO across subdomains).
+//   2. Host-only (no `Domain`) — set by /auth/sso on a workspace CUSTOM domain
+//      (a foreign registrable domain can't carry a `.owt` cookie).
+// RFC 6265 keys a cookie by (name, domain, path), so a delete must match the
+// exact scope. On a custom domain the domain-wide delete is a no-op, so without
+// the host-only delete the session would survive logout (session resurrection).
+// Deleting the absent variant on either host type is harmless.
 function deleteOwtCookie(response: NextResponse, name: string): void {
-  response.cookies.delete({
-    name,
-    path: "/",
-    ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {}),
-  });
+  // Host-only (also the only scope in dev, where COOKIE_DOMAIN is omitted).
+  response.cookies.delete({ name, path: "/" });
+  // Domain-wide (production apex/subdomain sessions).
+  if (IS_PROD) {
+    response.cookies.delete({ name, path: "/", domain: COOKIE_DOMAIN });
+  }
 }
 
 // Reads the access-token cookie, preferring the canonical `owt_access_token`

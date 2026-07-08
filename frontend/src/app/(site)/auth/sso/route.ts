@@ -8,6 +8,7 @@ import {
   safeRedirectTarget
 } from "@/lib/oauth-callback";
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth-cookies";
+import { publicOrigin } from "@/lib/request-origin";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
@@ -49,7 +50,13 @@ function errorRedirect(origin: string, errorCode: string): NextResponse {
 }
 
 export async function GET(request: Request) {
-  const { origin: currentOrigin, searchParams } = new URL(request.url);
+  // This route runs ON the workspace's custom domain. `request.url`'s host
+  // behind the edge is the internal bind addr (0.0.0.0:3000), so derive the
+  // real origin from the forwarded headers — otherwise the post-login redirect
+  // (and error redirects) would send the user to https://0.0.0.0:3000. See
+  // request-origin.ts.
+  const currentOrigin = publicOrigin(request);
+  const searchParams = new URL(request.url).searchParams;
   const ticket = searchParams.get("ticket");
   const next = searchParams.get("next") ?? "";
 

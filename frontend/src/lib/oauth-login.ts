@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authService } from "@/services/auth.service";
 import type { OAuthProviderName } from "@/types/auth.types";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
+import { publicOrigin, publicHostname } from "@/lib/request-origin";
 
 // Browser-binding CSRF cookie for the OAuth start->callback round trip. The
 // signed state (produced by the backend) carries origin/redirect/action and
@@ -53,24 +54,14 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 export async function startOAuthLogin(request: Request, provider: OAuthProviderName): Promise<NextResponse> {
-  const reqUrl = new URL(request.url);
-  const searchParams = reqUrl.searchParams;
-
-  // Behind nginx -> gateway -> Next, request.url carries the frontend's
-  // INTERNAL bind host (e.g. https://0.0.0.0:3000), NOT the public host. Derive
-  // the real origin from the proxy's forwarded headers (the same x-forwarded-host
-  // middleware.ts relies on); fall back to request.url for local/dev where there
-  // is no proxy. Getting this wrong signs an internal origin into the OAuth
-  // state, so the callback mistakes an apex login for a custom-domain login and
-  // 400s on the missing guard hash (is_platform_host("0.0.0.0") is false).
-  const fwdHost = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? reqUrl.host)
-    .split(",")[0]
-    .trim();
-  const fwdProto =
-    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
-    (process.env.NODE_ENV === "production" ? "https" : reqUrl.protocol.replace(/:$/, ""));
-  const origin = `${fwdProto}://${fwdHost}`;
-  const currentHost = fwdHost.split(":")[0];
+  // Public origin/host from the edge's forwarded headers — NOT request.url,
+  // whose host behind the proxy is the internal bind addr (0.0.0.0:3000). See
+  // request-origin.ts. Getting this wrong signs an internal origin into the
+  // OAuth state, so the callback mistakes an apex login for a custom-domain
+  // login and 400s on the missing guard hash (is_platform_host("0.0.0.0") is false).
+  const searchParams = new URL(request.url).searchParams;
+  const origin = publicOrigin(request);
+  const currentHost = publicHostname(request);
 
   const nextParam = searchParams.get("next");
   const action = searchParams.get("action") === "link" ? "link" : "login";
