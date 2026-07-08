@@ -1,5 +1,5 @@
 import { getTokenExpMs } from "./jwt";
-import { PLATFORM_ZONE } from "./host";
+import { PLATFORM_ZONE, isPlatformHost } from "./host";
 
 // Canonical access-token cookie name. LEGACY_ACCESS_TOKEN_COOKIE is read as a
 // fallback during the aqt->owt rename so existing sessions are not logged out;
@@ -70,11 +70,16 @@ export async function setAccessTokenCookie(token: string): Promise<void> {
   try {
     const Cookies = (await import("js-cookie")).default;
     const expMs = getTokenExpMs(token);
+    // Domain-wide (`.owt`) only on the platform apex/subdomains; host-only on a
+    // custom domain (the browser rejects a `.owt` cookie there, so a domain-wide
+    // write silently no-ops and the refreshed token is lost). Mirrors the
+    // server-side /auth/refresh route.
+    const domainAttr = IS_PROD && isPlatformHost(window.location.hostname) ? { domain: COOKIE_DOMAIN } : {};
     Cookies.set(ACCESS_TOKEN_COOKIE, token, {
       path: "/",
       sameSite: "lax",
       secure: IS_PROD,
-      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {}),
+      ...domainAttr,
       ...(expMs !== undefined ? { expires: new Date(expMs) } : {}),
     });
   } catch {

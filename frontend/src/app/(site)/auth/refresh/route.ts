@@ -3,8 +3,9 @@ import { cookies } from "next/headers";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { authService } from "@/services/auth.service";
-import { PLATFORM_ZONE } from "@/lib/host";
+import { PLATFORM_ZONE, isPlatformHost } from "@/lib/host";
 import { clearAuthCookies, getRefreshToken } from "@/lib/auth-cookies";
+import { publicHostname } from "@/lib/request-origin";
 
 // Cookie lifetime used when the access token's `exp` can't be decoded.
 const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
@@ -33,13 +34,20 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json(tokens, { status: 200 });
 
+    // Domain-wide (`.owt`) ONLY on the platform apex/subdomains (SSO across
+    // subdomains). On a workspace CUSTOM domain the browser rejects a `.owt`
+    // cookie, so it must be host-only — otherwise the refreshed token is
+    // dropped and the session can't be sustained. Matches /auth/sso, which sets
+    // the login cookies host-only there.
+    const domainAttr = IS_PROD && isPlatformHost(publicHostname(request)) ? { domain: COOKIE_DOMAIN } : {};
+
     response.cookies.set("owt_access_token", tokens.access_token, {
       httpOnly: false,
       sameSite: "lax",
       secure: IS_PROD,
       path: "/",
       maxAge: getTokenMaxAgeSeconds(tokens.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS),
-      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
+      ...domainAttr
     });
 
     response.cookies.set("owt_refresh_token", tokens.refresh_token, {
@@ -48,7 +56,7 @@ export async function POST(request: Request) {
       secure: IS_PROD,
       path: "/",
       maxAge: 30 * 24 * 60 * 60,
-      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
+      ...domainAttr
     });
 
     return response;
