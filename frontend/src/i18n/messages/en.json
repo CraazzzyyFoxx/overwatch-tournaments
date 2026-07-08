@@ -337,11 +337,11 @@
     "saveErrorMessage": "Failed to save",
     "confirmErrorMessage": "Failed to confirm",
     "presetDescriptions": {
-      "Home sweep": "Home sweep",
-      "Home close win": "Home close win",
+      "Home sweep": "Home team sweep",
+      "Home close win": "Narrow home win",
       "Draw": "Draw",
-      "Away close win": "Away close win",
-      "Away sweep": "Away sweep"
+      "Away close win": "Narrow away win",
+      "Away sweep": "Away team sweep"
     }
   },
   "matchReport": {
