@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompareRow } from "@/app/(site)/users/compare/types";
@@ -180,28 +181,37 @@ const UnifiedSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
 /*  Header badges                                                      */
 /* ------------------------------------------------------------------ */
 
-const HeroBadge = ({ hero, label, align }: { hero: HeroInfo; label: string; align: "left" | "right" }) => (
-  <div className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
-    {hero.imagePath ? (
-      <Image
-        src={hero.imagePath}
-        alt={hero.name ?? "Hero"}
-        width={48}
-        height={48}
-        className="h-12 w-12 rounded-md object-cover"
-      />
-    ) : null}
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm font-medium">{label}</span>
-      <span className="text-xs text-muted-foreground">{hero.name ?? "All heroes"}</span>
-      {hero.playtimeSeconds !== undefined ? (
-        <span className="text-xs text-muted-foreground">
-          {hero.playtimeLabel ?? "Playtime"}: {formatDuration(hero.playtimeSeconds)}
-        </span>
+const HeroBadge = ({ hero, label, align }: { hero: HeroInfo; label: string; align: "left" | "right" }) => {
+  const t = useTranslations();
+  const durationUnits = {
+    h: t("users.compare.durationH"),
+    m: t("users.compare.durationM"),
+    s: t("users.compare.durationS")
+  };
+
+  return (
+    <div className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
+      {hero.imagePath ? (
+        <Image
+          src={hero.imagePath}
+          alt={hero.name ?? t("users.compare.heroAlt")}
+          width={48}
+          height={48}
+          className="h-12 w-12 rounded-md object-cover"
+        />
       ) : null}
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-xs text-muted-foreground">{hero.name ?? t("users.compare.allHeroes")}</span>
+        {hero.playtimeSeconds !== undefined ? (
+          <span className="text-xs text-muted-foreground">
+            {hero.playtimeLabel ?? t("users.compare.playtime")}: {formatDuration(hero.playtimeSeconds, durationUnits)}
+          </span>
+        ) : null}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
@@ -218,12 +228,13 @@ const CompareUnifiedTable = ({
   subjectHero,
   baselineHero
 }: CompareUnifiedTableProps) => {
+  const t = useTranslations();
   const subjectGlow = isHeroScope ? getGlowVarsFromColor(subjectHero?.dominantColor) : null;
   const baselineGlow = isHeroScope ? getGlowVarsFromColor(baselineHero?.dominantColor) : null;
 
   const glowVars = subjectGlow ?? baselineGlow;
   const showPercentile = !isHeroScope;
-  const rightLabel = isTargetBaseline ? baselineName : "Baseline";
+  const rightLabel = isTargetBaseline ? baselineName : t("users.compare.baseline");
 
   return (
     <Card className="relative overflow-hidden" style={glowVars ? (glowVars as React.CSSProperties) : undefined}>
@@ -238,7 +249,7 @@ const CompareUnifiedTable = ({
             <div className="mx-auto flex w-full max-w-200 items-center gap-2">
               <span className="w-18 shrink-0" />
               <div className="flex-1" />
-              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">vs</span>
+              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">{t("common.vs")}</span>
               <div className="flex-1" />
               <span className="w-18 shrink-0" />
             </div>
@@ -250,18 +261,18 @@ const CompareUnifiedTable = ({
           <div className="flex items-center gap-3 px-3">
             <div className="flex w-52 shrink-0 flex-col gap-0.5">
               <span className="text-sm font-medium">{subjectName}</span>
-              <span className="text-xs text-muted-foreground">Selected User</span>
+              <span className="text-xs text-muted-foreground">{t("users.compare.selectedUserColumn")}</span>
             </div>
             <div className="mx-auto flex w-full max-w-200 items-center gap-2">
               <span className="w-18 shrink-0" />
               <div className="flex-1" />
-              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">vs</span>
+              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">{t("common.vs")}</span>
               <div className="flex-1" />
               <span className="w-18 shrink-0" />
             </div>
             <div className="flex w-44 shrink-0 flex-col items-end gap-0.5">
               <span className="text-sm font-medium">{baselineName}</span>
-              <span className="text-xs text-muted-foreground">{isTargetBaseline ? "Compare against" : "Baseline"}</span>
+              <span className="text-xs text-muted-foreground">{isTargetBaseline ? t("users.compare.compareAgainst") : t("users.compare.baseline")}</span>
             </div>
           </div>
         )}
@@ -292,7 +303,7 @@ const CompareUnifiedTable = ({
         ) : errorMessage ? (
           <p className="text-sm text-destructive">{errorMessage}</p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No metrics available for current filters.</p>
+          <p className="text-sm text-muted-foreground">{t("users.compare.noMetrics")}</p>
         ) : (
           <div className="divide-y divide-border/30">
             {rows.map((row) => (

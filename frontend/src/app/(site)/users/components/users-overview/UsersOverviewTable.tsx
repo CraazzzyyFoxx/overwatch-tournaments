@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { PaginationWithLinks } from "@/components/ui/pagination-with-links";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,16 +30,20 @@ const UsersOverviewTable = ({
   expandedRows,
   onToggleRow
 }: UsersOverviewTableProps) => {
+  const t = useTranslations();
+
   if (isLoading && !data) {
     return <UsersOverviewTableSkeleton />;
   }
 
   if (isError) {
-    return <p className="text-sm text-destructive">{(error as Error)?.message || "Failed to load users overview."}</p>;
+    return (
+      <p className="text-sm text-destructive">{(error as Error)?.message || t("users.list.errors.overview")}</p>
+    );
   }
 
   if (!data || data.results.length === 0) {
-    return <p className="text-sm text-muted-foreground">No users found for current filters.</p>;
+    return <p className="text-sm text-muted-foreground">{t("users.list.empty")}</p>;
   }
 
   return (
@@ -53,13 +59,13 @@ const UsersOverviewTable = ({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[22%] text-left">User</TableHead>
-              <TableHead className="w-[28%] text-center">Divisions</TableHead>
-              <TableHead className="text-center">Tournaments</TableHead>
-              <TableHead className="text-center">Achievements</TableHead>
-              <TableHead className="text-center">Avg placement</TableHead>
-              <TableHead className="text-center">Top heroes</TableHead>
-              <TableHead className="text-center">Details</TableHead>
+              <TableHead className="w-[22%] text-left">{t("users.list.table.user")}</TableHead>
+              <TableHead className="w-[28%] text-center">{t("users.list.table.divisions")}</TableHead>
+              <TableHead className="text-center">{t("common.tournaments")}</TableHead>
+              <TableHead className="text-center">{t("users.list.table.achievements")}</TableHead>
+              <TableHead className="text-center">{t("users.list.table.avgPlacement")}</TableHead>
+              <TableHead className="text-center">{t("users.list.table.topHeroes")}</TableHead>
+              <TableHead className="text-center">{t("users.list.table.details")}</TableHead>
             </TableRow>
           </TableHeader>
 
@@ -77,7 +83,7 @@ const UsersOverviewTable = ({
 
         <div className="mt-4 flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            Page {data.page} of {maxPage} ({data.total} users)
+            {t("users.list.table.pageCount", { page: String(data.page), maxPage: String(maxPage), total: data.total })}
           </p>
           <PaginationWithLinks
             page={data.page}

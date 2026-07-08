@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,13 +48,15 @@ const SearchableImageSelect = ({
   onValueChange,
   options,
   placeholder,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   isLoading = false,
   disabled = false,
   triggerClassName,
 }: SearchableImageSelectProps) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
 
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("common.search");
   const selected = options.find((o) => o.value === value);
 
   const handleSelect = (nextValue: string | undefined) => {
@@ -98,9 +101,9 @@ const SearchableImageSelect = ({
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command className="liquid-glass-surface">
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={resolvedSearchPlaceholder} />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>{t("common.noResults")}</CommandEmpty>
             <CommandGroup>
               {/* Clear / "All" option */}
               <CommandItem

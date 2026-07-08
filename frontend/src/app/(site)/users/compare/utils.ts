@@ -33,15 +33,32 @@ export const normalizeNumber = (value: number | string | null | undefined): numb
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const formatDuration = (secondsRaw: number): string => {
+export type RoleLabelKey = "common.roles.tank" | "common.roles.dps" | "common.roles.support";
+
+export const roleLabelKey = (role: UserRoleType): RoleLabelKey => {
+  if (role === "Tank") return "common.roles.tank";
+  if (role === "Damage") return "common.roles.dps";
+  return "common.roles.support";
+};
+
+export interface DurationUnits {
+  h: string;
+  m: string;
+  s: string;
+}
+
+export const formatDuration = (
+  secondsRaw: number,
+  units: DurationUnits = { h: "h", m: "m", s: "s" }
+): string => {
   const seconds = Math.max(0, Math.floor(secondsRaw));
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
 
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (h > 0) return `${h}${units.h} ${m}${units.m} ${s}${units.s}`;
+  if (m > 0) return `${m}${units.m} ${s}${units.s}`;
+  return `${s}${units.s}`;
 };
 
 export const formatMetricValue = (value: number | null | undefined): string => {

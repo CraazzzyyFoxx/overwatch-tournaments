@@ -1949,6 +1949,241 @@
         "earnedCount": "· получено ×{count}",
         "earnedNoDetails": "Получено {count}× — данные о турнире или матче не сохранены."
       }
+    },
+    "list": {
+      "meta": {
+        "title": "Игроки",
+        "description": "Просмотр игроков на {siteName}."
+      },
+      "hero": {
+        "eyebrowRoster": "Ростер",
+        "eyebrowCurrent": "Игроки",
+        "title": "<em>Игроки</em>, что стоят за никами",
+        "lede": "Каждый участник каждого турнира — фильтруйте по роли, дивизиону и пулу героев. Переключайтесь между глубокой аналитикой и быстрым каталогом.",
+        "playtimeFormat": "{h}ч {m}м {s}с"
+      },
+      "stats": {
+        "totalPlayers": "Всего игроков",
+        "roleBreakdown": "Танк {tank} · Дамаг {dps} · Саппорт {support}",
+        "withLogs": "С логами",
+        "withParsedGames": "{count} с обработанными играми",
+        "avgTournamentsPerPlayer": "Ср. турниров на игрока",
+        "median": "медиана {value}",
+        "activeLast30d": "Активны за 30 дней",
+        "ofRoster": "{pct}% ростера"
+      },
+      "view": {
+        "analytics": "Аналитика",
+        "analyticsBadge": "глубокий разбор",
+        "catalog": "Каталог",
+        "catalogBadge": "быстрый просмотр",
+        "rosterLive": "Ростер · онлайн"
+      },
+      "filters": {
+        "divMin": "Див. мин: {value}",
+        "divMax": "Див. макс: {value}",
+        "minDivision": "Минимальный дивизион",
+        "maxDivision": "Максимальный дивизион",
+        "allDivisions": "Все дивизионы",
+        "allRoles": "Все роли",
+        "searchPlaceholder": "Поиск по нику или BattleTag…",
+        "searchByName": "Поиск по нику",
+        "sortValue": "Сортировка: {value}",
+        "reset": "Сбросить фильтры",
+        "heading": "Обзор игроков",
+        "subheading": "Основная информация в таблице. Разверните строку для подробных метрик по героям и средних показателей по турнирам."
+      },
+      "sort": {
+        "name": "Имя",
+        "tournaments": "Турниры",
+        "achievements": "Достижения",
+        "avgPlacement": "Ср. место"
+      },
+      "heroMetrics": {
+        "elims": "Уб.",
+        "fb": "ФБ",
+        "dmg": "Урон",
+        "heal": "Хил"
+      },
+      "table": {
+        "allPlayers": "Все игроки",
+        "pageMeta": "Стр. {page} из {maxPage} · сортировка по {x}",
+        "pageCount": "Стр. {page} из {maxPage} ({total, plural, one {# игрок} few {# игрока} many {# игроков} other {# игрока}})",
+        "player": "Игрок",
+        "user": "Игрок",
+        "divisions": "Дивизионы",
+        "achievements": "Достижения",
+        "avgPlacement": "Ср. место",
+        "topHeroes": "Топ героев",
+        "details": "Детали"
+      },
+      "division": {
+        "badgeTitle": "{role} • {tier}",
+        "noRoles": "Нет ролей"
+      },
+      "expanded": {
+        "avgPlacement": "Ср. место",
+        "avgPlayoff": "Ср. плей-офф",
+        "avgGroup": "Ср. группа",
+        "avgCloseness": "Ср. близость",
+        "topHeroesDetails": "Подробнее о топ героях",
+        "metricsNote": "Все метрики героев — средние за 10 минут.",
+        "noHeroData": "Нет данных о героях.",
+        "noMetrics": "Нет метрик",
+        "playtime": "Время в игре: {value}"
+      },
+      "roleLabel": {
+        "unranked": "Без ранга"
+      },
+      "catalog": {
+        "jumpTo": "Перейти к",
+        "showing": "Показано {count} из {total, plural, one {# игрока} few {# игроков} many {# игроков} other {# игроков}}",
+        "tournaments": "Турн.",
+        "achievements": "Дост.",
+        "avgPlacement": "Ср. место"
+      },
+      "empty": "Игроки по текущим фильтрам не найдены.",
+      "errors": {
+        "overview": "Не удалось загрузить обзор игроков.",
+        "catalog": "Не удалось загрузить каталог."
+      },
+      "pagination": {
+        "showingPlayers": "Показано {start}–{end} из {total, plural, one {# игрока} few {# игроков} many {# игроков} other {# игроков}}",
+        "refreshing": "обновление…"
+      },
+      "a11y": {
+        "viewMode": "Режим просмотра",
+        "searchPlayers": "Поиск игроков",
+        "collapseDetails": "Свернуть детали игрока",
+        "expandDetails": "Развернуть детали игрока",
+        "roleAlt": "Роль {role}",
+        "roleIconAlt": "Значок роли {role}",
+        "roleIcon": "Значок {role}"
+      }
+    },
+    "compare": {
+      "title": "Сравнение игроков",
+      "subtitle": "Сравнение общей игры на герое/карте.",
+      "guideAria": "Открыть гайд по сравнению",
+      "guide": {
+        "heading": "Как пользоваться",
+        "step1": "Выбери своего игрока в блоке Selected user.",
+        "step2": "В Compare against выбери пользователя для head-to-head, либо очисти выбор для сравнения с all players avg.",
+        "step3": "При выборе target user фильтры division автоматически очищаются, и сравнение идет в режиме target user.",
+        "step4": "Выбери scope: Overall performance или Hero/Map performance.",
+        "step5": "В Hero/Map primary hero синхронизирует compare hero; изменение compare hero не трогает primary.",
+        "step6": "Для all players avg можно сузить baseline через role/division фильтры."
+      },
+      "userNumber": "Пользователь #{id}",
+      "allHeroes": "Все герои",
+      "playtime": "Время игры",
+      "avgPlaytime": "Среднее время",
+      "selectUserPrompt": "Выберите игрока выше, чтобы начать сравнение",
+      "durationH": "ч",
+      "durationM": "м",
+      "durationS": "с",
+      "allRoles": "Все роли",
+      "comparingAgainstUser": "Сравнение с {name}",
+      "comparingAgainstSelected": "Сравнение с выбранным игроком",
+      "comparingAgainstCohort": "Сравнение со средними по когорте ({role}, дивизион {range})",
+      "comparingAgainstGlobal": "Сравнение со средними по всем игрокам",
+      "loadError": "Не удалось загрузить данные сравнения.",
+      "selectedUser": "Выбранный игрок",
+      "cohortAverage": "Среднее по когорте",
+      "allPlayersAverage": "Среднее по всем игрокам",
+      "heroAlt": "Герой",
+      "baseline": "База",
+      "selectedUserColumn": "Выбранный игрок",
+      "compareAgainst": "Сравнить с",
+      "noMetrics": "Нет метрик для текущих фильтров.",
+      "selectSubjectUser": "Выберите игрока",
+      "filters": {
+        "title": "Фильтры",
+        "compareScope": "Область сравнения",
+        "scopePlaceholder": "Область",
+        "overallPerformance": "Общая игра",
+        "heroMapPerformance": "Игра по герою / карте",
+        "roleFilter": "Фильтр по роли",
+        "roleIconAlt": "Иконка {role}",
+        "divisionMin": "Дивизион мин.",
+        "divisionMax": "Дивизион макс.",
+        "allTournaments": "Все турниры",
+        "searchTournament": "Поиск турнира...",
+        "heroAndMap": "Герой и карта",
+        "primaryHero": "Основной герой",
+        "compareHero": "Герой для сравнения",
+        "mapFilter": "Фильтр по карте",
+        "allMaps": "Все карты",
+        "searchHero": "Поиск героя...",
+        "searchMap": "Поиск карты..."
+      },
+      "loadingUsers": "Загрузка игроков...",
+      "usersLoadError": "Не удалось загрузить игроков.",
+      "typeToSearch": "Введите минимум 2 символа.",
+      "noUsers": "Игроки не найдены.",
+      "searchUser": "Поиск игрока...",
+      "compareWithAllAvg": "Сравнить со средним по всем игрокам"
+    },
+    "heroesCompare": {
+      "selectHeroPrompt": "Выберите героя выше, чтобы ранжировать всех игроков, кто на нём играл.",
+      "allTournaments": "Все турниры",
+      "sortAscending": "Сортировать по возрастанию",
+      "sortDescending": "Сортировать по убыванию",
+      "stat": {
+        "elims": "Убийства / 10",
+        "healing": "Хил / 10",
+        "damage": "Урон / 10",
+        "deaths": "Смерти / 10",
+        "kd": "K/D",
+        "kda": "KDA (Уб/См)",
+        "finalBlows": "Добивания / 10",
+        "blocked": "Блок / 10",
+        "soloKills": "Соло-килы / 10",
+        "objKills": "Килы на точке / 10",
+        "defAssists": "Защ. ассисты / 10",
+        "offAssists": "Атак. ассисты / 10",
+        "allDmg": "Весь урон / 10",
+        "dmgTaken": "Полученный урон / 10",
+        "selfHeal": "Самохил / 10",
+        "ults": "Ульты / 10",
+        "multikills": "Мультикиллы / 10",
+        "envKills": "Убийства окружением / 10",
+        "crits": "Криты / 10",
+        "weaponAcc": "Точность оружия %",
+        "critAcc": "Точность по криту %"
+      },
+      "filters": {
+        "heroLabel": "Герой",
+        "selectHero": "Выберите героя",
+        "searchHeroes": "Поиск героев...",
+        "tournamentScope": "Область турнира",
+        "searchTournaments": "Поиск турниров...",
+        "resetColumnsTitle": "Сбросить колонки к значениям по роли",
+        "resetColumns": "Сбросить колонки"
+      },
+      "table": {
+        "heroFallback": "Герой",
+        "scope": "область",
+        "playersCount": "<em>{count}</em> {count, plural, one {игрок} few {игрока} many {игроков} other {игроков}}",
+        "noData": "Нет данных по этому герою.",
+        "noDataInTournament": "Нет данных по этому герою в этом турнире."
+      },
+      "hero": {
+        "healing": "Хил",
+        "blocked": "Блок",
+        "damage": "Урон",
+        "playersRanked": "Игроков в рейтинге",
+        "withLoggedTime": "с записанным временем на {name}",
+        "pickToRank": "выберите героя для рейтинга",
+        "topStat": "Топ {stat}",
+        "bestKd": "Лучший K/D",
+        "role": "Роль",
+        "statColumns": "{name} · 5 столбцов статистики",
+        "usersBreadcrumb": "Игроки",
+        "breadcrumb": "Сравнение героев",
+        "title": "Кто играет <em>лучше</em> всех?",
+        "lede": "Выберите героя и ранжируйте всех игроков, кто на нём играл. Каждый столбец ранжирует один и тот же состав независимо — так что лидер по убийствам и лидер по хилу могут быть разными людьми, бок о бок."
+      }
     }
   }
 }

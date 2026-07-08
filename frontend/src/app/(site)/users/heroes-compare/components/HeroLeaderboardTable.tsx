@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Sword } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Hero, HeroLeaderboardEntry } from "@/types/hero.types";
 import HeroImage from "@/components/hero/HeroImage";
@@ -37,6 +38,7 @@ const HeroLeaderboardTable = ({
   onColumnSelect,
   onToggleSort,
 }: HeroLeaderboardTableProps) => {
+  const t = useTranslations();
   const [hoveredUserId, setHoveredUserId] = useState<number | null>(null);
   const variant = heroVariantFromRole(selectedHero?.type ?? selectedHero?.role);
 
@@ -56,7 +58,7 @@ const HeroLeaderboardTable = ({
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
             <span className="font-[family-name:var(--aqt-display)] text-2xl font-bold uppercase leading-none tracking-[0.03em]">
-              {selectedHero?.name ?? "Hero"}
+              {selectedHero?.name ?? t("users.heroesCompare.table.heroFallback")}
             </span>
             {selectedHero && (
               <span
@@ -71,13 +73,18 @@ const HeroLeaderboardTable = ({
             )}
           </div>
           <p className="mt-1 font-[family-name:var(--aqt-mono)] text-[11.5px] text-[var(--aqt-fg-dim)]">
-            {selectedTournamentName ?? "All tournaments"}
-            {tournamentId ? ` · scope #${tournamentId}` : ""}
+            {selectedTournamentName ?? t("users.heroesCompare.allTournaments")}
+            {tournamentId ? ` · ${t("users.heroesCompare.table.scope")} #${tournamentId}` : ""}
           </p>
         </div>
         {!isLoading && rows.length > 0 && (
           <span className="ml-auto rounded-full border border-[var(--aqt-border-2)] bg-white/[0.03] px-[11px] py-[5px] font-[family-name:var(--aqt-mono)] text-[11px] text-[var(--aqt-fg-muted)]">
-            <em className="not-italic font-semibold text-[var(--aqt-teal)]">{rows.length}</em> players
+            {t.rich("users.heroesCompare.table.playersCount", {
+              count: rows.length,
+              em: (chunks) => (
+                <em className="not-italic font-semibold text-[var(--aqt-teal)]">{chunks}</em>
+              )
+            })}
           </span>
         )}
       </div>
@@ -90,7 +97,9 @@ const HeroLeaderboardTable = ({
           ) : rows.length === 0 ? (
             <div className="flex w-full min-w-[600px] items-center justify-center gap-2 py-[90px] text-sm text-[var(--aqt-fg-dim)]">
               <Sword className="h-4 w-4 opacity-40" />
-              No data found for this hero{tournamentId ? " in this tournament" : ""}.
+              {tournamentId
+                ? t("users.heroesCompare.table.noDataInTournament")
+                : t("users.heroesCompare.table.noData")}
             </div>
           ) : (
             columnKeys.map((key, i) => (
@@ -114,7 +123,7 @@ const HeroLeaderboardTable = ({
       {!isLoading && legendTeams.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--aqt-border)] bg-white/[0.008] px-5 py-3 text-[11px] text-[var(--aqt-fg-dim)]">
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--aqt-fg-faint)]">
-            Teams
+            {t("common.teams")}
           </span>
           {legendTeams.slice(0, MAX_LEGEND_TEAMS).map(({ team, teamId }) => (
             <span key={team} className="inline-flex items-center gap-1.5 font-[family-name:var(--aqt-mono)] text-[var(--aqt-fg-muted)]">
@@ -126,7 +135,7 @@ const HeroLeaderboardTable = ({
             </span>
           ))}
           {legendTeams.length > MAX_LEGEND_TEAMS && (
-            <span className="text-[var(--aqt-fg-faint)]">+{legendTeams.length - MAX_LEGEND_TEAMS} more</span>
+            <span className="text-[var(--aqt-fg-faint)]">+{legendTeams.length - MAX_LEGEND_TEAMS} {t("common.more")}</span>
           )}
         </div>
       )}

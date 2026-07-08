@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import heroService from "@/services/hero.service";
 import mapService from "@/services/map.service";
@@ -11,7 +12,7 @@ import { UserRoleType, UserCompareBaselineMode } from "@/types/user.types";
 import { CompareRow } from "@/app/(site)/users/compare/types";
 import { getHumanizedStats } from "@/utils/stats";
 import { HERO_COMPARE_STATS } from "@/app/(site)/users/compare/constants";
-import { getMapIconSrc, normalizeNumber } from "@/app/(site)/users/compare/utils";
+import { getMapIconSrc, normalizeNumber, roleLabelKey } from "@/app/(site)/users/compare/utils";
 
 interface UseUserCompareDataParams {
   isHeroScope: boolean;
@@ -40,6 +41,8 @@ export const useUserCompareData = ({
   rightHeroId,
   mapId
 }: UseUserCompareDataParams) => {
+  const t = useTranslations();
+
   const compareQuery = useQuery({
     queryKey: ["user-compare", subjectUserId, effectiveBaseline, targetUserId, role, divMin, divMax, tournamentId],
     enabled: !isHeroScope && subjectUserId !== undefined,
@@ -128,17 +131,19 @@ export const useUserCompareData = ({
 
   const baselineSummary = useMemo(() => {
     if (effectiveBaseline === "target_user") {
-      return selectedTargetName ? `Comparing against ${selectedTargetName}` : "Comparing against selected user";
+      return selectedTargetName
+        ? t("users.compare.comparingAgainstUser", { name: selectedTargetName })
+        : t("users.compare.comparingAgainstSelected");
     }
 
     if (effectiveBaseline === "cohort") {
-      const roleText = role ?? "All roles";
-      const rangeText = `${divMin ?? "Any"} - ${divMax ?? "Any"}`;
-      return `Comparing against cohort averages (${roleText}, division ${rangeText})`;
+      const roleText = role ? t(roleLabelKey(role)) : t("users.compare.allRoles");
+      const rangeText = `${divMin ?? t("common.any")} - ${divMax ?? t("common.any")}`;
+      return t("users.compare.comparingAgainstCohort", { role: roleText, range: rangeText });
     }
 
-    return "Comparing against global all-players averages";
-  }, [effectiveBaseline, selectedTargetName, role, divMin, divMax]);
+    return t("users.compare.comparingAgainstGlobal");
+  }, [effectiveBaseline, selectedTargetName, role, divMin, divMax, t]);
 
   const rows = useMemo<CompareRow[]>(() => {
     if (isHeroScope) {
@@ -173,19 +178,19 @@ export const useUserCompareData = ({
   const activeLoading = isHeroScope ? heroCompareQuery.isLoading : compareQuery.isLoading;
   const activeError = isHeroScope ? heroCompareQuery.error : compareQuery.error;
   const activeErrorMessage =
-    activeError instanceof Error ? activeError.message : "Failed to load compare data.";
+    activeError instanceof Error ? activeError.message : t("users.compare.loadError");
 
   const compareDisplayName = useMemo(() => {
     if (effectiveBaseline === "target_user") {
-      return selectedTargetName ?? "Selected user";
+      return selectedTargetName ?? t("users.compare.selectedUser");
     }
 
     if (effectiveBaseline === "cohort") {
-      return "Cohort average";
+      return t("users.compare.cohortAverage");
     }
 
-    return "All players average";
-  }, [effectiveBaseline, selectedTargetName]);
+    return t("users.compare.allPlayersAverage");
+  }, [effectiveBaseline, selectedTargetName, t]);
 
   const selectedMapIcon = getMapIconSrc(selectedMap);
 

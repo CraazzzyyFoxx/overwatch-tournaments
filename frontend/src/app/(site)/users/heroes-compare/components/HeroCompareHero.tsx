@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Hero, HeroLeaderboardEntry } from "@/types/hero.types";
 import { heroVariantFromRole } from "@/components/hero/heroRole";
@@ -27,6 +28,8 @@ interface HeroCompareHeroProps {
 }
 
 const HeroCompareHero = ({ selectedHero, rows }: HeroCompareHeroProps) => {
+  const t = useTranslations();
+
   const stats = useMemo<SummaryStat[]>(() => {
     const variant = heroVariantFromRole(selectedHero?.type ?? selectedHero?.role);
     const sigKey =
@@ -35,7 +38,12 @@ const HeroCompareHero = ({ selectedHero, rows }: HeroCompareHeroProps) => {
         : variant === "tank"
           ? "per10_damage_blocked"
           : "per10_damage";
-    const sigShort = variant === "support" ? "Healing" : variant === "tank" ? "Blocked" : "Damage";
+    const sigShort =
+      variant === "support"
+        ? t("users.heroesCompare.hero.healing")
+        : variant === "tank"
+          ? t("users.heroesCompare.hero.blocked")
+          : t("users.heroesCompare.hero.damage");
     const sigDef = COL[sigKey];
     const kdDef = COL.kd;
     const roleLabel = selectedHero?.type ?? selectedHero?.role ?? "—";
@@ -47,48 +55,48 @@ const HeroCompareHero = ({ selectedHero, rows }: HeroCompareHeroProps) => {
 
     return [
       {
-        label: "Players ranked",
+        label: t("users.heroesCompare.hero.playersRanked"),
         value: rows.length || "—",
-        sub: selectedHero ? `with logged ${selectedHero.name} time` : "pick a hero to rank",
+        sub: selectedHero
+          ? t("users.heroesCompare.hero.withLoggedTime", { name: selectedHero.name })
+          : t("users.heroesCompare.hero.pickToRank"),
       },
       {
-        label: `Top ${sigShort}`,
+        label: t("users.heroesCompare.hero.topStat", { stat: sigShort }),
         value: topSig ? topSig.username : "—",
         sub: topSig ? `${sigDef.formatValue(sigDef.getValue(topSig))} / 10` : "",
         small: true,
       },
       {
-        label: "Best K/D",
+        label: t("users.heroesCompare.hero.bestKd"),
         value: bestKd ? kdDef.formatValue(bestKd.kd) : "—",
         sub: bestKd ? bestKd.username : "",
       },
       {
-        label: "Role",
+        label: t("users.heroesCompare.hero.role"),
         value: roleLabel,
-        sub: selectedHero ? `${selectedHero.name} · 5 stat columns` : "",
+        sub: selectedHero ? t("users.heroesCompare.hero.statColumns", { name: selectedHero.name }) : "",
         small: true,
         accent: true,
       },
     ];
-  }, [selectedHero, rows]);
+  }, [selectedHero, rows, t]);
 
   return (
     <PageHero
       eyebrow={
         <HeroCoord className="inline-flex items-center gap-2">
           <Link href="/users" className="transition-colors hover:text-[color:var(--aqt-teal)]">
-            Users
+            {t("users.heroesCompare.hero.usersBreadcrumb")}
           </Link>
           <ChevronRight className="h-3 w-3 opacity-50" />
-          <span>Hero compare</span>
+          <span>{t("users.heroesCompare.hero.breadcrumb")}</span>
         </HeroCoord>
       }
-      title={
-        <>
-          Who plays it <em>best</em>?
-        </>
-      }
-      lede="Pick a hero and rank every player who's logged time on it. Each column ranks the same roster independently — so the elims leader and the healing leader can be different people, side by side."
+      title={t.rich("users.heroesCompare.hero.title", {
+        em: (chunks) => <em>{chunks}</em>,
+      })}
+      lede={t("users.heroesCompare.hero.lede")}
       aside={
         <div className="grid grid-cols-2 gap-x-7 gap-y-5 text-left sm:grid-cols-4 lg:text-right">
           {stats.map((stat) => (

@@ -1949,6 +1949,241 @@
         "earnedCount": "· earned ×{count}",
         "earnedNoDetails": "Earned {count}× — no tournament or match details recorded."
       }
+    },
+    "list": {
+      "meta": {
+        "title": "Users",
+        "description": "View users on {siteName}."
+      },
+      "hero": {
+        "eyebrowRoster": "Roster",
+        "eyebrowCurrent": "Users",
+        "title": "The <em>players</em> behind the tags",
+        "lede": "Every competitor across every tournament — sliceable by role, division and hero pool. Switch between deep analytics and a fast browsing catalog.",
+        "playtimeFormat": "{h}h {m}m {s}s"
+      },
+      "stats": {
+        "totalPlayers": "Total players",
+        "roleBreakdown": "Tank {tank} · Dmg {dps} · Sup {support}",
+        "withLogs": "With logs",
+        "withParsedGames": "{count} with parsed games",
+        "avgTournamentsPerPlayer": "Avg tournaments / player",
+        "median": "median {value}",
+        "activeLast30d": "Active last 30d",
+        "ofRoster": "{pct}% of roster"
+      },
+      "view": {
+        "analytics": "Analytics",
+        "analyticsBadge": "deep dive",
+        "catalog": "Catalog",
+        "catalogBadge": "fast browse",
+        "rosterLive": "Roster · live"
+      },
+      "filters": {
+        "divMin": "Div min: {value}",
+        "divMax": "Div max: {value}",
+        "minDivision": "Minimum division",
+        "maxDivision": "Maximum division",
+        "allDivisions": "All divisions",
+        "allRoles": "All roles",
+        "searchPlaceholder": "Search by name or BattleTag…",
+        "searchByName": "Search by name",
+        "sortValue": "Sort: {value}",
+        "reset": "Reset filters",
+        "heading": "Users Overview",
+        "subheading": "Main info in table view. Expand a row for detailed hero metrics and tournament averages."
+      },
+      "sort": {
+        "name": "Name",
+        "tournaments": "Tournaments",
+        "achievements": "Achievements",
+        "avgPlacement": "Avg placement"
+      },
+      "heroMetrics": {
+        "elims": "Elims",
+        "fb": "FB",
+        "dmg": "Dmg",
+        "heal": "Heal"
+      },
+      "table": {
+        "allPlayers": "All players",
+        "pageMeta": "Page {page} of {maxPage} · sorted by {x}",
+        "pageCount": "Page {page} of {maxPage} ({total, plural, one {# user} other {# users}})",
+        "player": "Player",
+        "user": "User",
+        "divisions": "Divisions",
+        "achievements": "Achievements",
+        "avgPlacement": "Avg placement",
+        "topHeroes": "Top heroes",
+        "details": "Details"
+      },
+      "division": {
+        "badgeTitle": "{role} • {tier}",
+        "noRoles": "No roles"
+      },
+      "expanded": {
+        "avgPlacement": "Avg placement",
+        "avgPlayoff": "Avg playoff",
+        "avgGroup": "Avg group",
+        "avgCloseness": "Avg closeness",
+        "topHeroesDetails": "Top heroes details",
+        "metricsNote": "All hero metrics are averages per 10 minutes.",
+        "noHeroData": "No hero data.",
+        "noMetrics": "No metrics",
+        "playtime": "Playtime: {value}"
+      },
+      "roleLabel": {
+        "unranked": "Unranked"
+      },
+      "catalog": {
+        "jumpTo": "Jump to",
+        "showing": "Showing {count} of {total, plural, one {# player} other {# players}}",
+        "tournaments": "Tourn.",
+        "achievements": "Ach.",
+        "avgPlacement": "Avg pl."
+      },
+      "empty": "No users found for the current filters.",
+      "errors": {
+        "overview": "Failed to load users overview.",
+        "catalog": "Failed to load catalog."
+      },
+      "pagination": {
+        "showingPlayers": "Showing {start}–{end} of {total, plural, one {# player} other {# players}}",
+        "refreshing": "refreshing…"
+      },
+      "a11y": {
+        "viewMode": "View mode",
+        "searchPlayers": "Search players",
+        "collapseDetails": "Collapse user details",
+        "expandDetails": "Expand user details",
+        "roleAlt": "{role} role",
+        "roleIconAlt": "{role} role icon",
+        "roleIcon": "{role} icon"
+      }
+    },
+    "compare": {
+      "title": "Users Compare",
+      "subtitle": "Compare overall performance on a hero/map.",
+      "guideAria": "Open compare guide",
+      "guide": {
+        "heading": "How to use",
+        "step1": "Pick your player in the Selected user field.",
+        "step2": "In Compare against, pick a user for a head-to-head, or clear the selection to compare against the all-players average.",
+        "step3": "When you select a target user, the division filters clear automatically and the comparison switches to target-user mode.",
+        "step4": "Choose a scope: Overall performance or Hero/Map performance.",
+        "step5": "In Hero/Map, the primary hero syncs the compare hero; changing the compare hero leaves the primary untouched.",
+        "step6": "For the all-players average, you can narrow the baseline with the role/division filters."
+      },
+      "userNumber": "User #{id}",
+      "allHeroes": "All heroes",
+      "playtime": "Playtime",
+      "avgPlaytime": "Avg playtime",
+      "selectUserPrompt": "Select a user above to start comparing",
+      "durationH": "h",
+      "durationM": "m",
+      "durationS": "s",
+      "allRoles": "All roles",
+      "comparingAgainstUser": "Comparing against {name}",
+      "comparingAgainstSelected": "Comparing against selected user",
+      "comparingAgainstCohort": "Comparing against cohort averages ({role}, division {range})",
+      "comparingAgainstGlobal": "Comparing against global all-players averages",
+      "loadError": "Failed to load compare data.",
+      "selectedUser": "Selected user",
+      "cohortAverage": "Cohort average",
+      "allPlayersAverage": "All players average",
+      "heroAlt": "Hero",
+      "baseline": "Baseline",
+      "selectedUserColumn": "Selected User",
+      "compareAgainst": "Compare against",
+      "noMetrics": "No metrics available for current filters.",
+      "selectSubjectUser": "Select subject user",
+      "filters": {
+        "title": "Filters",
+        "compareScope": "Compare scope",
+        "scopePlaceholder": "Scope",
+        "overallPerformance": "Overall performance",
+        "heroMapPerformance": "Hero / map performance",
+        "roleFilter": "Role filter",
+        "roleIconAlt": "{role} icon",
+        "divisionMin": "Division min",
+        "divisionMax": "Division max",
+        "allTournaments": "All tournaments",
+        "searchTournament": "Search tournament...",
+        "heroAndMap": "Hero & Map",
+        "primaryHero": "Primary hero",
+        "compareHero": "Compare hero",
+        "mapFilter": "Map filter",
+        "allMaps": "All maps",
+        "searchHero": "Search hero...",
+        "searchMap": "Search map..."
+      },
+      "loadingUsers": "Loading users...",
+      "usersLoadError": "Failed to load users.",
+      "typeToSearch": "Type at least 2 characters.",
+      "noUsers": "No users found.",
+      "searchUser": "Search user...",
+      "compareWithAllAvg": "Compare with all players avg"
+    },
+    "heroesCompare": {
+      "selectHeroPrompt": "Select a hero above to rank every player who's logged time on it.",
+      "allTournaments": "All tournaments",
+      "sortAscending": "Sort ascending",
+      "sortDescending": "Sort descending",
+      "stat": {
+        "elims": "Elims / 10",
+        "healing": "Healing / 10",
+        "damage": "Damage / 10",
+        "deaths": "Deaths / 10",
+        "kd": "K/D",
+        "kda": "KDA (Elim/D)",
+        "finalBlows": "Final Blows / 10",
+        "blocked": "Blocked / 10",
+        "soloKills": "Solo Kills / 10",
+        "objKills": "Obj Kills / 10",
+        "defAssists": "Def Assists / 10",
+        "offAssists": "Off Assists / 10",
+        "allDmg": "All Dmg / 10",
+        "dmgTaken": "Dmg Taken / 10",
+        "selfHeal": "Self Heal / 10",
+        "ults": "Ults / 10",
+        "multikills": "Multikills / 10",
+        "envKills": "Env Kills / 10",
+        "crits": "Crits / 10",
+        "weaponAcc": "Weapon Acc %",
+        "critAcc": "Crit Acc %"
+      },
+      "filters": {
+        "heroLabel": "Hero",
+        "selectHero": "Select hero",
+        "searchHeroes": "Search heroes...",
+        "tournamentScope": "Tournament scope",
+        "searchTournaments": "Search tournaments...",
+        "resetColumnsTitle": "Reset columns to role defaults",
+        "resetColumns": "Reset columns"
+      },
+      "table": {
+        "heroFallback": "Hero",
+        "scope": "scope",
+        "playersCount": "<em>{count}</em> {count, plural, one {player} other {players}}",
+        "noData": "No data found for this hero.",
+        "noDataInTournament": "No data found for this hero in this tournament."
+      },
+      "hero": {
+        "healing": "Healing",
+        "blocked": "Blocked",
+        "damage": "Damage",
+        "playersRanked": "Players ranked",
+        "withLoggedTime": "with logged {name} time",
+        "pickToRank": "pick a hero to rank",
+        "topStat": "Top {stat}",
+        "bestKd": "Best K/D",
+        "role": "Role",
+        "statColumns": "{name} · 5 stat columns",
+        "usersBreadcrumb": "Users",
+        "breadcrumb": "Hero compare",
+        "title": "Who plays it <em>best</em>?",
+        "lede": "Pick a hero and rank every player who's logged time on it. Each column ranks the same roster independently — so the elims leader and the healing leader can be different people, side by side."
+      }
     }
   }
 }

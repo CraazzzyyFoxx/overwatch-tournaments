@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useDebounce } from "use-debounce";
+import { useTranslations } from "next-intl";
 
 import userService from "@/services/user.service";
 import { MinimizedUser } from "@/types/user.types";
@@ -37,6 +38,7 @@ const UserSearchCombobox = ({
   allowClear = true,
   isLabelLoading = false
 }: UserSearchComboboxProps) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch] = useDebounce(searchValue, 250);
@@ -57,9 +59,10 @@ const UserSearchCombobox = ({
     const fromResults = results.find((user) => user.id === value);
     if (fromResults) return fromResults.name;
     if (selectedName) return selectedName;
-    if (typeof value === "number" && value > 0) return `User #${value}`;
+    if (typeof value === "number" && value > 0)
+      return t("users.compare.userNumber", { id: String(value) });
     return placeholder;
-  }, [placeholder, results, selectedName, value]);
+  }, [placeholder, results, selectedName, value, t]);
 
   const handleSelect = useCallback(
     (nextUserId: number | undefined): void => {
@@ -71,12 +74,12 @@ const UserSearchCombobox = ({
   );
 
   const emptyMessage = usersQuery.isFetching
-    ? "Loading users..."
+    ? t("users.compare.loadingUsers")
     : usersQuery.isError
-      ? "Failed to load users."
+      ? t("users.compare.usersLoadError")
       : !shouldSearch
-        ? "Type at least 2 characters."
-        : "No users found.";
+        ? t("users.compare.typeToSearch")
+        : t("users.compare.noUsers");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -104,7 +107,7 @@ const UserSearchCombobox = ({
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
         <Command className="liquid-glass-surface">
-          <CommandInput value={searchValue} onValueChange={setSearchValue} placeholder="Search user..." />
+          <CommandInput value={searchValue} onValueChange={setSearchValue} placeholder={t("users.compare.searchUser")} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
@@ -124,7 +127,7 @@ const UserSearchCombobox = ({
                 <CommandSeparator />
                 <CommandGroup>
                   <CommandItem value="clear-user-selection" onSelect={() => handleSelect(undefined)}>
-                    Compare with all players avg
+                    {t("users.compare.compareWithAllAvg")}
                   </CommandItem>
                 </CommandGroup>
               </>

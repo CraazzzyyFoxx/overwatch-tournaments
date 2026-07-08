@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ type UsersOverviewTableRowProps = {
 };
 
 const UsersOverviewTableRow = ({ user, isExpanded, onToggleRow }: UsersOverviewTableRowProps) => {
+  const t = useTranslations();
   const topHeroesPreview = useMemo(() => user.top_heroes.slice(0, 3), [user.top_heroes]);
 
   return (
@@ -61,7 +63,7 @@ const UsersOverviewTableRow = ({ user, isExpanded, onToggleRow }: UsersOverviewT
           <Button
             variant="ghost"
             size="icon"
-            aria-label={isExpanded ? "Collapse user details" : "Expand user details"}
+            aria-label={isExpanded ? t("users.list.a11y.collapseDetails") : t("users.list.a11y.expandDetails")}
             onClick={() => onToggleRow(user.id)}
             className="mx-auto rounded-full border border-border/60 bg-background/50 hover:bg-muted/40"
           >

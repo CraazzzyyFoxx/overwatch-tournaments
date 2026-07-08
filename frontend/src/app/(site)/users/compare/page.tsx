@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect } from "react";
 import { Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Card } from "@/components/ui/card";
 import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
@@ -13,6 +14,7 @@ import { useUserCompareSearchParams } from "@/app/(site)/users/compare/hooks/use
 import { useUserCompareData } from "@/app/(site)/users/compare/hooks/useUserCompareData";
 
 const PageContent = () => {
+  const t = useTranslations();
   const compareParams = useUserCompareSearchParams();
 
   const {
@@ -117,7 +119,10 @@ const PageContent = () => {
 
       {compareParams.subjectUserId ? (
         <CompareUnifiedTable
-          subjectName={selectedSubjectName ?? `User #${compareParams.subjectUserId}`}
+          subjectName={
+            selectedSubjectName ??
+            t("users.compare.userNumber", { id: String(compareParams.subjectUserId) })
+          }
           baselineName={compareDisplayName}
           rows={rows}
           loading={activeLoading}
@@ -125,18 +130,24 @@ const PageContent = () => {
           isHeroScope={compareParams.isHeroScope}
           isTargetBaseline={compareParams.isTargetBaseline}
           subjectHero={{
-            name: heroCompareQuery.data?.subject_hero?.name ?? leftHero?.name ?? "All heroes",
+            name:
+              heroCompareQuery.data?.subject_hero?.name ??
+              leftHero?.name ??
+              t("users.compare.allHeroes"),
             imagePath: heroCompareQuery.data?.subject_hero?.image_path ?? leftHero?.image_path,
             dominantColor: heroCompareQuery.data?.subject_hero?.color ?? leftHero?.color,
             playtimeSeconds: heroCompareQuery.data?.left_playtime_seconds ?? 0,
-            playtimeLabel: "Playtime"
+            playtimeLabel: t("users.compare.playtime")
           }}
           baselineHero={{
-            name: heroCompareQuery.data?.target_hero?.name ?? rightHero?.name ?? "All heroes",
+            name:
+              heroCompareQuery.data?.target_hero?.name ??
+              rightHero?.name ??
+              t("users.compare.allHeroes"),
             imagePath: heroCompareQuery.data?.target_hero?.image_path ?? rightHero?.image_path,
             dominantColor: heroCompareQuery.data?.target_hero?.color ?? rightHero?.color,
             playtimeSeconds: heroCompareQuery.data?.right_playtime_seconds ?? 0,
-            playtimeLabel: "Avg playtime"
+            playtimeLabel: t("users.compare.avgPlaytime")
           }}
         />
       ) : (
@@ -145,7 +156,7 @@ const PageContent = () => {
           <div className="relative flex flex-col items-center justify-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
-              Select a user above to start comparing
+              {t("users.compare.selectUserPrompt")}
             </p>
           </div>
         </Card>
