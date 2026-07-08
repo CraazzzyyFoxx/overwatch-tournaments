@@ -1,5 +1,8 @@
+"use client";
+
 import React from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { PlayerWithStats, TeamWithStats } from "@/types/team.types";
 import {
   Table,
@@ -27,6 +30,7 @@ interface MatchTeamTableProps {
 }
 
 const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }: MatchTeamTableProps) => {
+  const t = useTranslations();
   // @ts-ignore
   const sortedPlayers: PlayerWithStats[] = sortTeamPlayers(team.players);
   const backgroundColor = isHome ? "[#104e48]" : "[#4c2332]";
@@ -44,24 +48,26 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
     <Table className="overflow-x-auto">
       <TableHeader>
         <TableRow className={`bg-${backgroundColor} hover:bg-${backgroundColor}`}>
-          <TableHead className="min-w-[240px] sticky left-0 z-5">Team {team.name}</TableHead>
-          <TableHead className="text-center">Division</TableHead>
-          <TableHead className="text-center">Heroes</TableHead>
-          <TableHead className="text-center">PRS</TableHead>
-          <TableHead className="text-center">FB</TableHead>
-          <TableHead className="text-center">E</TableHead>
-          <TableHead className="text-center">D</TableHead>
-          <TableHead className="text-center">A</TableHead>
-          <TableHead className="text-center">K/D</TableHead>
-          <TableHead className="text-center">KA/D</TableHead>
-          <TableHead className="text-center">SK</TableHead>
-          <TableHead className="text-center">OK</TableHead>
-          <TableHead className="text-center">Hero Damage</TableHead>
-          <TableHead className="text-center">Dmg/FB</TableHead>
-          <TableHead className="text-center">Healing Dealt</TableHead>
-          <TableHead className="text-center">Damage Blocked</TableHead>
-          <TableHead className="text-center">Dlt Damage</TableHead>
-          <TableHead className="text-center">Ult Used/Earned</TableHead>
+          <TableHead className="min-w-[240px] sticky left-0 z-5">
+            {t("matches.teamLabel", { name: team.name })}
+          </TableHead>
+          <TableHead className="text-center">{t("matches.col.division")}</TableHead>
+          <TableHead className="text-center">{t("common.heroes")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.prs")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.fb")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.e")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.d")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.a")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.kd")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.kad")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.sk")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.ok")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.heroDamage")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.dmgFb")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.healingDealt")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.damageBlocked")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.dltDamage")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.ultUsedEarned")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

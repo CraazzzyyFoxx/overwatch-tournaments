@@ -991,5 +991,59 @@
       "daysAgo": "{count, plural, one {# дн назад} few {# дн назад} many {# дн назад} other {# дн назад}}",
       "inDays": "{count, plural, one {через # дн} few {через # дн} many {через # дн} other {через # дн}}"
     }
+  },
+  "teams": {
+    "subtitle": "Просматривайте сбалансированные команды, переходите к нужной и настраивайте сортировку.",
+    "tournamentsLoadError": "Не удалось загрузить турниры",
+    "loadingTournaments": "Загрузка турниров...",
+    "selectTournament": "Выберите турнир",
+    "jumpToTeam": "Перейти к команде",
+    "sortAvgSr": "Средний SR",
+    "sortPlacement": "Место",
+    "sortGroup": "Группа",
+    "selectTournamentToView": "Выберите турнир, чтобы посмотреть команды.",
+    "teamsLoadError": "Не удалось загрузить команды.",
+    "noTeamsFound": "Для этого турнира команды не найдены.",
+    "meta": {
+      "description": "Команды на {siteName}."
+    }
+  },
+  "matches": {
+    "col": {
+      "map": "Карта",
+      "match": "Матч",
+      "score": "Счёт",
+      "division": "Дивизион",
+      "prs": "PRS",
+      "fb": "FB",
+      "e": "E",
+      "d": "D",
+      "a": "A",
+      "kd": "K/D",
+      "kad": "KA/D",
+      "sk": "SK",
+      "ok": "OK",
+      "heroDamage": "Урон по героям",
+      "dmgFb": "Dmg/FB",
+      "healingDealt": "Исцеление",
+      "damageBlocked": "Заблок. урон",
+      "dltDamage": "Dlt Damage",
+      "ultUsedEarned": "Ульты исп./получ."
+    },
+    "unassignedStage": "Без этапа",
+    "matchesTotal": "{count, plural, one {# матч всего} few {# матча всего} many {# матчей всего} other {# матчей всего}}",
+    "allTournaments": "Все турниры",
+    "noMatchesFound": "Матчи не найдены.",
+    "round": "Раунд {round}",
+    "gamemode": "Режим игры",
+    "playtime": "Игровое время",
+    "logName": "Имя лога",
+    "allMatch": "Весь матч",
+    "teamLabel": "Команда {name}",
+    "meta": {
+      "description": "Просмотр матчей на {siteName}.",
+      "matchTitle": "{home} vs {away}",
+      "matchDescription": "Обзор матча {home} vs {away} на {siteName}."
+    }
   }
 }

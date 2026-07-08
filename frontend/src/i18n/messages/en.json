@@ -991,5 +991,59 @@
       "daysAgo": "{count, plural, one {#d ago} other {#d ago}}",
       "inDays": "{count, plural, one {in #d} other {in #d}}"
     }
+  },
+  "teams": {
+    "subtitle": "Browse balanced teams, jump to a team, and adjust sorting.",
+    "tournamentsLoadError": "Failed to load tournaments",
+    "loadingTournaments": "Loading tournaments...",
+    "selectTournament": "Select a tournament",
+    "jumpToTeam": "Jump to team",
+    "sortAvgSr": "Avg. SR",
+    "sortPlacement": "Placement",
+    "sortGroup": "Group",
+    "selectTournamentToView": "Select a tournament to view teams.",
+    "teamsLoadError": "Failed to load teams.",
+    "noTeamsFound": "No teams found for this tournament.",
+    "meta": {
+      "description": "View teams on {siteName}."
+    }
+  },
+  "matches": {
+    "col": {
+      "map": "Map",
+      "match": "Match",
+      "score": "Score",
+      "division": "Division",
+      "prs": "PRS",
+      "fb": "FB",
+      "e": "E",
+      "d": "D",
+      "a": "A",
+      "kd": "K/D",
+      "kad": "KA/D",
+      "sk": "SK",
+      "ok": "OK",
+      "heroDamage": "Hero Damage",
+      "dmgFb": "Dmg/FB",
+      "healingDealt": "Healing Dealt",
+      "damageBlocked": "Damage Blocked",
+      "dltDamage": "Dlt Damage",
+      "ultUsedEarned": "Ult Used/Earned"
+    },
+    "unassignedStage": "Unassigned",
+    "matchesTotal": "{count, plural, one {# match total} other {# matches total}}",
+    "allTournaments": "All tournaments",
+    "noMatchesFound": "No matches found.",
+    "round": "Round {round}",
+    "gamemode": "Gamemode",
+    "playtime": "Playtime",
+    "logName": "Log name",
+    "allMatch": "All Match",
+    "teamLabel": "Team {name}",
+    "meta": {
+      "description": "View matches on {siteName}.",
+      "matchTitle": "{home} vs {away}",
+      "matchDescription": "Overview for {home} vs {away} on {siteName}."
+    }
   }
 }
