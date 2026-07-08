@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import {
   Sheet,
   SheetContent,
@@ -28,7 +28,7 @@ function Kicker({ children }: { children: React.ReactNode }) {
 }
 
 function TermBody({ term }: { term: GlossaryTerm }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   return (
     <SheetHeader>
       <Kicker>{t("analytics.sheet.glossaryKicker")}</Kicker>
@@ -41,7 +41,7 @@ function TermBody({ term }: { term: GlossaryTerm }) {
 }
 
 function HowBody() {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const steps = [1, 2, 3] as const;
   return (
     <>

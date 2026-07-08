@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BuiltInFieldConfig } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import {
   getBuiltInValueValidationError,
   normalizeBuiltInFieldValue,
@@ -31,7 +31,7 @@ export default function SmurfTagsInput({
   config,
   onValidationChange,
 }: SmurfTagsInputProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [inputValue, setInputValue] = useState("");
   const trimmedInputValue = inputValue.trim();
   const normalizedInputValue = normalizeBuiltInFieldValue("smurf_tags", inputValue);

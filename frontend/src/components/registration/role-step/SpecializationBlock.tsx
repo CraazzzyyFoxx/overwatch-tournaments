@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 export interface SpecializationOption {
   value: string;
@@ -25,7 +25,7 @@ export function SpecializationBlock({
   onDisabledSelect?: (nextValue: string) => void;
   hideLabel?: boolean;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const handleSelect = (nextValue: string) => {
     if (disabled) {
       onDisabledSelect?.(nextValue);

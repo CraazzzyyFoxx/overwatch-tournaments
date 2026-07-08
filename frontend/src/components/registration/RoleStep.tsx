@@ -23,7 +23,7 @@ import { SpecializationBlock } from "./role-step/SpecializationBlock";
 import { SecondaryRolesEmptyState } from "./role-step/SecondaryRolesEmptyState";
 import { HeroPickerBlock } from "./role-step/HeroPickerBlock";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 interface RoleStepProps {
   isFlex: boolean;
@@ -71,7 +71,7 @@ export default function RoleStep({
   flexHeroes,
   onSetFlexHeroes,
 }: RoleStepProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const isAdditionalRolesRequired =
     form.built_in_fields?.additional_roles?.enabled !== false
     && form.built_in_fields?.additional_roles?.required === true;

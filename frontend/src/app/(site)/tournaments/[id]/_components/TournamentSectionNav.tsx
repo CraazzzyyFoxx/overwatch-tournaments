@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Stage, TournamentStatus } from "@/types/tournament.types";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 const baseItems = [
   { title: "Teams", icon: Users, tab: "teams" },
@@ -80,7 +80,7 @@ export default function TournamentSectionNav({
   teamFormation,
   className,
 }: TournamentSectionNavProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const segment = useSelectedLayoutSegment();
   const activeTab = normalizeSegment(segment);
   const competitionEnabled = unlockedStatuses.has(status);

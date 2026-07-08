@@ -16,7 +16,8 @@ import { Globe, LogOut, Settings, UserIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
+import { setUserLocale } from "@/i18n/locale-actions";
 
 type UserMenuProps = {
   username: string;
@@ -27,10 +28,11 @@ type UserMenuProps = {
 
 const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout" }: UserMenuProps) => {
   const initials = username?.slice(0, 2).toUpperCase();
-  const { push } = useRouter();
+  const router = useRouter();
   const clearAuth = useAuthProfileStore((s) => s.clear);
   const openSettings = useAccountSettingsModalStore((s) => s.open);
-  const { locale, setLocale, t } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
 
   const handleLogout = () => {
     // Clear auth store before redirecting
@@ -64,8 +66,8 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
         <DropdownMenuLabel>{username}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup className="p-1 space-y-1">
-          <DropdownMenuItem 
-            onClick={() => push(profileHref)}
+          <DropdownMenuItem
+            onClick={() => router.push(profileHref)}
             className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
           >
             <UserIcon className="mr-2 h-4 w-4" />
@@ -79,7 +81,7 @@ const UserMenu = ({ username, avatarUrl, profileHref, logoutHref = "/auth/logout
             <span>{t("common.accountSettings")}</span>
           </DropdownMenuItem>
           <DropdownMenuItem 
-            onClick={() => setLocale(locale === "en" ? "ru" : "en")}
+            onClick={() => void setUserLocale(locale === "en" ? "ru" : "en").then(() => router.refresh())}
             className="cursor-pointer focus:bg-white/10 focus:text-white transition-colors rounded-md"
           >
             <Globe className="mr-2 h-4 w-4" />

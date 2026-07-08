@@ -1,9 +1,10 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useTranslation } from "@/i18n/LanguageContext";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
@@ -70,7 +71,7 @@ function playerLabel(player: RegistrationRankAutofillPlayer): string {
 }
 
 export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(role);
@@ -158,7 +159,7 @@ export function RankAutofillPreviewTables({
   onToggle,
   onToggleAll
 }: RankAutofillPreviewTablesProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   if (!preview && !loading) {
     return (

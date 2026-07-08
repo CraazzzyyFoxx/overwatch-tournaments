@@ -16,7 +16,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import RegistrationWizard from "@/components/registration/RegistrationWizard";
 
 type Props = {
@@ -26,7 +26,7 @@ type Props = {
 };
 
 export default function TournamentRegisterButton({ workspaceId, tournamentId, tournamentName }: Props) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const { user, status: authStatus } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;

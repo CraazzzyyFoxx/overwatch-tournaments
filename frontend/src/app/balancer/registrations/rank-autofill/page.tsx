@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   defaultRankAutofillStages,
@@ -18,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { useTranslation } from "@/i18n/LanguageContext";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import balancerAdminService from "@/services/balancer-admin.service";
@@ -40,7 +40,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 }
 
 export default function RankAutofillPage() {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const tournamentId = useBalancerTournamentId();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();

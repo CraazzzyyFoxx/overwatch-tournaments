@@ -2,12 +2,12 @@
 
 import { useParams, redirect } from "next/navigation";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
 import { DraftBoard } from "./_components/DraftBoard";
 
 export default function TournamentDraftRoutePage() {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const params = useParams<{ id: string }>();
   const tournamentId = Number(params.id);
   const tournamentQuery = useTournamentQuery(tournamentId);

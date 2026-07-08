@@ -4,7 +4,7 @@ import React from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Minus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -26,7 +26,7 @@ function MoveChip({
   player: PlayerVM;
   tournamentGrid?: DivisionGridVersion | null;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const target = player.predicted_division ?? player.division;
 
   if (player.predicted_direction === "flat") {
@@ -61,7 +61,7 @@ function MoveChip({
  * it opens the player detail.
  */
 export default function RosterRow({ player, tournamentGrid, onSelect }: RosterRowProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const isNew = player.is_newcomer || player.is_newcomer_role;
   const flag = player.anomalies[0];
 

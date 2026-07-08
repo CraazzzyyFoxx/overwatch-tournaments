@@ -27,7 +27,7 @@ import {
 import { useAnalyticsViewModel } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -37,7 +37,7 @@ const AnalyticsPage = () => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { hasPermission, canAccessPermission } = usePermissions();
-  const { t } = useTranslation();
+  const t = useTranslations();
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
 
   const parseId = useCallback((value: string | null) => {

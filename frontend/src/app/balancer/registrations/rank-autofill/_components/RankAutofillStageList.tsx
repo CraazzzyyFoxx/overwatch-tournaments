@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   STAGE_WINDOW_KIND,
@@ -25,7 +26,6 @@ import {
 } from "@/app/balancer/components/rank-autofill-stages";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useTranslation } from "@/i18n/LanguageContext";
 import { cn } from "@/lib/utils";
 import type {
   RankAutofillSourceKey,
@@ -55,7 +55,7 @@ function SortableStageRow({
   onToggle,
   onLookbackChange
 }: SortableStageRowProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stage.source
   });

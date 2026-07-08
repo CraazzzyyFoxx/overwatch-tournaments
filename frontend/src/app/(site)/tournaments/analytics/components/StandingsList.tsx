@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import { TeamVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import DeltaPill from "@/app/(site)/tournaments/analytics/components/DeltaPill";
@@ -47,7 +47,8 @@ function moveColor(delta: number | null): string {
 
 /** The per-row predicted → actual mini-connector — the horizon, inlined. */
 function RowHorizon({ team, maxPosition }: { team: TeamVM; maxPosition: number }) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
   const predicted = team.predicted_place;
   const actual = team.placement;
   if (predicted == null || actual == null || maxPosition < 2) {
@@ -96,7 +97,7 @@ export default function StandingsList({
   onModeChange,
   headerEnd,
 }: StandingsListProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const rows = useMemo(() => sortTeams(teams, mode), [teams, mode]);
   const maxPosition = useMemo(
     () => teams.reduce((max, team) => Math.max(max, team.placement ?? 0), 0),

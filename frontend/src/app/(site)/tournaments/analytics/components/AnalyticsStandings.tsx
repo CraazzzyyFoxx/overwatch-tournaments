@@ -18,7 +18,7 @@ import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/Anomal
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { sortTeamPlayers } from "@/utils/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -156,7 +156,7 @@ const ChangeDivisionModal = ({
 }) => {
   const [division, setDivision] = useState(player.shift ?? 0);
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -202,7 +202,7 @@ const TeamDetail = ({
 }) => {
   const [editingPlayer, setEditingPlayer] = useState<PlayerAnalytics | null>(null);
   const { hasPermission } = usePermissions();
-  const { t } = useTranslation();
+  const t = useTranslations();
   const canEdit = hasPermission("analytics.update");
   const tournamentGrid = team.tournament?.division_grid_version;
   const players = useMemo(() => sortTeamPlayers(team.players), [team.players]);
@@ -423,7 +423,7 @@ const TeamRow = ({
   performanceByPlayer: Map<number, PerformanceV2>;
   distribution?: StandingsDistribution;
 }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const groupName = team.group?.name ?? "-";
   const conf = confidenceWord(team.avg_confidence);
   const shiftDirection =
@@ -575,7 +575,7 @@ const AnalyticsStandings = ({
   distributionByTeam,
   headerEnd
 }: AnalyticsStandingsProps) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
   const visibleTeams = useMemo(() => sortedTeams(teams, mode), [teams, mode]);

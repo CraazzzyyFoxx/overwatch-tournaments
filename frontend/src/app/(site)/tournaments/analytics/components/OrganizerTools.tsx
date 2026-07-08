@@ -10,7 +10,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import MLAdminToolbar from "@/app/(site)/tournaments/analytics/components/MLAdminToolbar";
 
 interface OrganizerToolsProps {
@@ -24,7 +24,7 @@ interface OrganizerToolsProps {
  * admin controls. Only rendered for users with `analytics.update`.
  */
 export default function OrganizerTools({ tournamentId, workspaceId }: OrganizerToolsProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [open, setOpen] = React.useState(false);
 
   return (

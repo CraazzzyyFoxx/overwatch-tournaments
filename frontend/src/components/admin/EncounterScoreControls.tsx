@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import {
   GROUP_STAGE_SCORE_PRESETS,
   clampScoreValue,
@@ -32,7 +32,7 @@ export function EncounterScoreControls({
   onScoreChange,
   onPresetSelect,
 }: EncounterScoreControlsProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const selectedPreset = getMatchingScorePreset(homeScore, awayScore);
   const resolvedPresetLabel = presetLabel ?? t("matchEdit.resultPresets");
 

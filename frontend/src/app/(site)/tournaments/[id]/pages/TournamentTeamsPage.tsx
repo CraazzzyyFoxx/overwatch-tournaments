@@ -10,7 +10,7 @@ import { TournamentTeamCard, TournamentTeamCardSkeleton } from "@/components/Tou
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 type SortBy = "placement" | "sr" | "name";
 
@@ -45,7 +45,7 @@ function sortTeams(teams: Team[], sortBy: SortBy): Team[] {
 }
 
 const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const teamsQuery = useQuery({
     queryKey: tournamentQueryKeys.teams(tournament.id),
     queryFn: () => teamService.getAll(tournament.id),

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { isUrgent, remainingMs } from "../_lib/draft-logic";
 
 interface DraftClockProps {
@@ -16,7 +16,7 @@ interface DraftClockProps {
  * server event that will commit the autopick.
  */
 export function DraftClock({ expiresAt, paused, compact = false }: DraftClockProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {

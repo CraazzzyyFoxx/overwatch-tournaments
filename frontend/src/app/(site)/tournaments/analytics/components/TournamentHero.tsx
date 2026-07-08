@@ -4,7 +4,7 @@ import React from "react";
 
 import type { Tournament } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import { getTournamentStatusMeta } from "@/lib/tournament-status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
@@ -58,7 +58,8 @@ export default function TournamentHero({
   totals,
   controlsSlot,
 }: TournamentHeroProps) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
 
   if (!tournament) {
     return (

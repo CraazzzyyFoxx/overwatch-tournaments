@@ -11,7 +11,7 @@ import StandingsTable from "@/components/StandingsTable";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { isTournamentStatusEnded } from "@/lib/tournament-status";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 
 type StageView = "playoff" | "groups" | "combined";
@@ -22,7 +22,7 @@ function groupLetter(name: string): string {
 }
 
 const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const standingsQuery = useQuery({
     queryKey: tournamentQueryKeys.standings(tournament.id, tournament.workspace_id),
     queryFn: () => tournamentService.getStandings(tournament.id, tournament.workspace_id),

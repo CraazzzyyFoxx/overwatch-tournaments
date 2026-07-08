@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
@@ -40,7 +40,7 @@ export default function PlayerDetail({
   canReadV2 = false,
   onExplain,
 }: PlayerDetailProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const { hasPermission } = usePermissions();
   const [editing, setEditing] = useState(false);
   const canEdit = hasPermission("analytics.update");

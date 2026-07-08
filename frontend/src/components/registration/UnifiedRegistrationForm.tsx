@@ -4,7 +4,7 @@ import { useEffect, useReducer, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import heroService from "@/services/hero.service";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import type {
   RegistrationForm,
   RoleInput,
@@ -149,7 +149,7 @@ export default function UnifiedRegistrationForm({
   onCancel,
   submitPending = false,
 }: UnifiedRegistrationFormProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [state, dispatch] = useReducer(formReducer, initialState);
   const [error, setError] = useState<string | null>(null);
   const [liveValidationErrors, setLiveValidationErrors] = useState<Record<string, string | null>>({});

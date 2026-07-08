@@ -3,7 +3,7 @@
 import React from "react";
 import { ChevronRight } from "lucide-react";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface HowItWorksCardProps {
@@ -12,7 +12,7 @@ interface HowItWorksCardProps {
 
 /** The "New here? Read the analytics in 30s" prompt that opens the explainer. */
 export default function HowItWorksCard({ onOpen }: HowItWorksCardProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   return (
     <button type="button" className={styles.cHowCard} onClick={onOpen}>
       <span className={styles.cHowMark}>?</span>

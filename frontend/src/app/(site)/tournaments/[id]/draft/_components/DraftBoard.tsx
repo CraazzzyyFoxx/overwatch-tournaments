@@ -49,7 +49,7 @@ import { useQuery } from "@tanstack/react-query";
 import heroService from "@/services/hero.service";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { getRoleIconName, ROLE_LABELS } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID, getDivisionLabel } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,7 @@ const TEAM_ACCENT_CLASS: Record<TeamAccent, string> = {
 const FINAL_PICK_STATUSES = new Set<DraftPick["status"]>(["completed", "autopicked", "skipped"]);
 
 export function DraftBoard({ tournament }: DraftBoardProps) {
-  const { t } = useTranslation();
+  const t = useTranslations() as unknown as Translate;
   const tournamentId = tournament.id;
   const boardQuery = useDraftBoardQuery(tournamentId);
   const board = boardQuery.data ?? null;
@@ -1039,7 +1039,7 @@ interface TimerRingProps {
 }
 
 function TimerRing({ session, currentPick }: TimerRingProps) {
-  const { t } = useTranslation();
+  const t = useTranslations() as unknown as Translate;
   const paused = session.status === "paused";
   const now = useNow(!paused && currentPick?.clock_expires_at != null);
   const totalMs = Math.max(session.pick_time_seconds * 1000, 1);
@@ -2086,7 +2086,7 @@ interface RolePillProps {
 }
 
 function RolePill({ role }: RolePillProps) {
-  const { t } = useTranslation();
+  const t = useTranslations() as unknown as Translate;
   if (!role) {
     return <span className={styles.rolePill}>{t("common.roles.flex")}</span>;
   }

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import AnomalyLegend from "@/app/(site)/tournaments/analytics/components/AnomalyLegend";
 import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/AnomalyTooltip";
@@ -96,7 +96,7 @@ function anomalyTone(kind: AnomalyKind): string {
  */
 export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps) {
   const { hasPermission } = usePermissions();
-  const { t } = useTranslation();
+  const t = useTranslations();
   const canReview = hasPermission("analytics.update");
   const queryClient = useQueryClient();
 

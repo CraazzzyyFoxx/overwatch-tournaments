@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { PlayerAnalytics } from "@/types/analytics.types";
 import analyticsService from "@/services/analytics.service";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +30,7 @@ interface ChangeShiftDialogProps {
  * detail and the expert team table.
  */
 export default function ChangeShiftDialog({ player, open, onOpenChange }: ChangeShiftDialogProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [shift, setShift] = useState(player.shift ?? 0);
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();

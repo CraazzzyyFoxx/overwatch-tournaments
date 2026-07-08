@@ -11,7 +11,7 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 type RoleKey = "tank" | "dps" | "support";
 type RoleFilter = "all" | RoleKey;
@@ -26,7 +26,7 @@ function heroRole(playtime: HeroPlaytime): RoleKey {
 }
 
 const TournamentHeroPlaytimePage = ({ tournament }: { tournament: Tournament }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const statsQuery = useQuery({
     queryKey: tournamentQueryKeys.heroPlaytime(tournament.id),
     queryFn: () =>
@@ -81,7 +81,7 @@ const TournamentHeroPlaytimePage = ({ tournament }: { tournament: Tournament }) 
               className={cn("filter-chip", roleFilter === role && "active")}
               onClick={() => setRoleFilter(role)}
             >
-              {t("common.roles." + role)} <span className="count">{roleCounts[role]}</span>
+              {t(`common.roles.${role}`)} <span className="count">{roleCounts[role]}</span>
             </button>
           ))}
         </div>
@@ -109,7 +109,7 @@ const TournamentHeroPlaytimePage = ({ tournament }: { tournament: Tournament }) 
                     </Avatar>
                     <div className="stack">
                       <span className="nm">{hero.hero.name}</span>
-                      <span className="meta">{t("common.roles." + role)}</span>
+                      <span className="meta">{t(`common.roles.${role}`)}</span>
                     </div>
                   </div>
                   <div className="hero-bar">

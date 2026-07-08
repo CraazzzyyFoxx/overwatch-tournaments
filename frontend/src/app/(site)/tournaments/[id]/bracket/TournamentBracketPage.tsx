@@ -20,7 +20,7 @@ import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
 const BRACKET_REFRESH_INTERVAL_MS = 60_000;
@@ -56,7 +56,7 @@ function GroupStagePanel({
     isActive: boolean;
   }>;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const hasStandings = standings.length > 0;
   const title = stageItem?.name ?? stage.name;
   const subtitle = stageItem
@@ -156,7 +156,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       isWorkspaceAdmin(tournament.workspace_id) ||
       (authUser?.roles ?? []).some((r) => ADMIN_ROLES.has(r)));
 
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [editEncounter, setEditEncounter] = useState<Encounter | null>(null);
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
 

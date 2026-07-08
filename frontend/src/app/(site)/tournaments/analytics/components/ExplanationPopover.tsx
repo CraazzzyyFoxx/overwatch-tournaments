@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import analyticsService from "@/services/analytics.service";
 
 interface ExplanationPopoverProps {
@@ -44,7 +44,7 @@ export default function ExplanationPopover({
   tournamentId,
   algorithmId,
 }: ExplanationPopoverProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [open, setOpen] = React.useState(false);
 
   const { data, isLoading, isError } = useQuery({
@@ -56,7 +56,9 @@ export default function ExplanationPopover({
   });
 
   const featureLabel = (feature: string): string => {
-    const translated = t(`analytics.features.${feature}`);
+    // Runtime-dynamic feature name: assert it's a valid message key (next-intl
+    // types keys as literal unions; the humanize fallback below still runs).
+    const translated = t(`analytics.features.${feature}` as Parameters<typeof t>[0]);
     return translated === `analytics.features.${feature}`
       ? humanizeFeature(feature, t("analytics.features.per10minSuffix"))
       : translated;

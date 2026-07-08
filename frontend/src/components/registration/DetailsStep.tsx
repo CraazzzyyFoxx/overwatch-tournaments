@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { RegistrationForm } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import CustomField from "./CustomField";
 import FieldLabel from "./FieldLabel";
 import { getBuiltInFieldValidationError } from "./validation";
@@ -52,7 +52,7 @@ export default function DetailsStep({
   registrationStatusOptions,
   balancerStatusOptions,
 }: DetailsStepProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const fields = form.built_in_fields;
   const showNotes = fields?.notes?.enabled !== false;
   const showStreamPov = fields?.stream_pov?.enabled === true;

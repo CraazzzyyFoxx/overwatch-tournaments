@@ -14,7 +14,7 @@ import teamService from "@/services/team.service";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import type { Stage } from "@/types/tournament.types";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 
@@ -23,7 +23,9 @@ type TournamentClientLayoutProps = {
   children: React.ReactNode;
 };
 
-function formatLabel(stages: Stage[], t: (key: string) => string): string {
+type Translate = ReturnType<typeof useTranslations>;
+
+function formatLabel(stages: Stage[], t: Translate): string {
   const hasGroup = stages.some((s) => s.stage_type === "round_robin" || s.stage_type === "swiss");
   const hasElim = stages.some(
     (s) => s.stage_type === "single_elimination" || s.stage_type === "double_elimination"
@@ -49,7 +51,8 @@ export default function TournamentClientLayout({
   tournamentId,
   children
 }: TournamentClientLayoutProps) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
   const tournamentQuery = useTournamentQuery(tournamentId);
   const stagesQuery = useTournamentStagesQuery(tournamentId);
   const tournament = tournamentQuery.data;
@@ -128,7 +131,7 @@ export default function TournamentClientLayout({
             </span>
             <span className="meta-pill">
               <span className="k">{t("common.teamFormation")}</span>
-              <span className="v">{t(`common.${tournament.team_formation ?? "balancer"}`)}</span>
+              <span className="v">{t(`common.${(tournament.team_formation ?? "balancer") as "balancer" | "draft"}`)}</span>
             </span>
           </>
         }
