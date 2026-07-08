@@ -228,7 +228,15 @@
       "addSmurfButton": "Add",
       "verifiedHint": "Choose one of your OAuth-verified accounts.",
       "verifiedNone": "No verified {label} account is linked.",
-      "verifiedLink": "Link {label} via OAuth"
+      "verifiedLink": "Link {label} via OAuth",
+      "typeToUseCustom": "Type to use custom value",
+      "noLinkedAccounts": "No linked accounts",
+      "linkedAccounts": "Linked accounts",
+      "custom": "Custom",
+      "useValue": "Use \"{value}\"",
+      "discordPlaceholder": "username",
+      "twitchPlaceholder": "channel_name",
+      "verified": "Verified"
     },
     "roles": {
       "title": "Choose Your Role",
@@ -306,6 +314,12 @@
     "round": "Round",
     "pick": "Pick",
     "onTheClock": "On the clock",
+    "onTheClockUpper": "ON THE CLOCK",
+    "clockLabel": "CLOCK",
+    "paused": "PAUSED",
+    "enterKey": "Enter",
+    "roleFilled": "Role filled",
+    "playerFallback": "Player #{id}",
     "state": {
       "setup": "Setup",
       "ready": "Ready",
@@ -314,6 +328,27 @@
       "completed": "Completed",
       "cancelled": "Cancelled"
     },
+    "pickState": {
+      "upcoming": "Upcoming",
+      "on_clock": "On clock",
+      "completed": "Completed",
+      "skipped": "Skipped",
+      "autopicked": "Autopick"
+    },
+    "roundRule": {
+      "forward": "FWD",
+      "reverse": "REV",
+      "weakest": "WEAKEST",
+      "strongest": "STRONGEST",
+      "lowAvg": "LOW AVG",
+      "highAvg": "HIGH AVG"
+    },
+    "clock": {
+      "pauseCompact": "PAUSE",
+      "paused": "paused",
+      "autoCompact": "AUTO",
+      "autopicking": "autopicking…"
+    },
     "empty": {
       "title": "No draft yet",
       "body": "The draft hasn’t been set up for this tournament."
@@ -321,9 +356,65 @@
     "roster": {
       "empty": "Empty"
     },
+    "live": {
+      "progress": "Draft progress",
+      "pickMap": "Pick map",
+      "noActivePick": "No active pick",
+      "pickTime": "Pick time",
+      "teamSize": "Team size"
+    },
+    "order": {
+      "title": "Draft order",
+      "targetRole": "Target",
+      "pending": "Pending"
+    },
+    "team": {
+      "title": "Teams",
+      "position": "Seed",
+      "unknown": "Unknown team",
+      "yours": "Your team",
+      "roster": "Roster",
+      "avgRank": "Avg rank",
+      "emptySlot": "Open slot"
+    },
     "pool": {
       "title": "Available players",
-      "empty": "No available players"
+      "empty": "No available players",
+      "short": "Pool",
+      "roleFilter": "Role filter",
+      "allRoles": "All",
+      "search": "Search player",
+      "hero": "Hero",
+      "sort": "Sort",
+      "sortRank": "Rank",
+      "sortName": "Name",
+      "selectPromptTitle": "Select a player",
+      "selectPromptReadOnly": "Click a card to inspect the player pool.",
+      "allHeroes": "All Heroes",
+      "selectedCount": "Selected ({n})",
+      "selectedLabel": "Selected: {n}",
+      "clearAll": "Clear all",
+      "searchHeroPlaceholder": "Search hero…",
+      "noHeroes": "No heroes found."
+    },
+    "player": {
+      "captain": "Captain",
+      "flex": "Flex",
+      "idLabel": "ID: #{id}",
+      "secondary": "Secondary:"
+    },
+    "inspect": {
+      "roleDetails": "Role Breakdown:",
+      "notes": "Player Note"
+    },
+    "view": {
+      "myPickTitle": "You are on the clock",
+      "myPickBody": "Select a player from the pool and confirm the pick.",
+      "adminTitle": "Admin view",
+      "adminBody": "You can manage draft lifecycle while captains make picks.",
+      "waitingTitle": "Waiting for your turn",
+      "spectatorTitle": "Spectator view",
+      "spectatorBody": "Follow the board live. Pick actions are hidden for spectators."
     },
     "actions": {
       "confirm": "Confirm pick"
@@ -334,7 +425,9 @@
       "resume": "Resume",
       "rollback": "Rollback last pick",
       "cancel": "Cancel draft",
-      "export": "Export to teams"
+      "export": "Export to teams",
+      "controls": "Admin controls",
+      "autopick": "Autopick"
     },
     "bottomPanel": {
       "readyToPick": "Ready to pick",
@@ -349,12 +442,18 @@
       "draftPaused": "Draft paused",
       "draftCompleted": "Draft completed",
       "draftCancelled": "Draft cancelled",
-      "waitingStart": "Waiting for start"
+      "waitingStart": "Waiting for start",
+      "waitingResume": "Waiting for organizer to resume",
+      "exportPrompt": "Rosters are finalized",
+      "preparing": "Organizer is preparing to start",
+      "readyMeta": "SR · for {team}",
+      "pickProgress": "(Pick #{n} of {total})"
     },
     "presence": {
       "title": "Captains • {online} of {total} online",
       "watching": "{count} watching",
-      "offline": "offline"
+      "offline": "offline",
+      "you": "You"
     }
   },
   "matchEdit": {
@@ -384,7 +483,9 @@
       "Draw": "Draw",
       "Away close win": "Narrow away win",
       "Away sweep": "Away team sweep"
-    }
+    },
+    "starsAria": "{count, plural, one {# star} other {# stars}}",
+    "notSet": "Not set"
   },
   "matchReport": {
     "title": "Match Report",
@@ -410,7 +511,8 @@
     "qualityLegend": {
       "oneSided": "1 - one-sided match",
       "toTheEnd": "10 - to the end"
-    }
+    },
+    "qualityAria": "Match quality {score}/10: {description}"
   },
   "rankAutofill": {
     "title": "Rank autofill",
@@ -1180,6 +1282,339 @@
       "general": "General",
       "fields": "Fields",
       "customFields": "Custom Fields"
+    }
+  },
+  "home": {
+    "eyebrow": "OWT // Overwatch Tournament Platform",
+    "title": "What's happening <em>now</em>",
+    "ledeTenant": "Tournaments, player stats and rankings for this community.",
+    "ledePlatform": "Tournaments, player stats and rankings across all communities on the platform.",
+    "browseTournaments": "Browse Tournaments",
+    "byTheNumbers": "By the numbers",
+    "workspaces": "Workspaces",
+    "communitiesOnPlatform": "Communities on this platform",
+    "seasonOverview": "Season overview",
+    "communityDashboard": "Community Dashboard",
+    "avgDivisionDesc": "Average division rank per role across all tournaments.",
+    "noEventsTitle": "No active events right now",
+    "noEventsBody": "Check back soon — tournaments are organized across multiple communities on this platform.",
+    "browsePastTournaments": "Browse past tournaments"
+  },
+  "workspace": {
+    "eyebrow": "Workspace",
+    "dashboard": "Dashboard",
+    "dashboardLede": "Tournament history, role stats and performance data for <hl>{name}</hl>.",
+    "tournamentHistory": "History of tournament changes",
+    "avgDivisionByRoles": "Average division by roles",
+    "topPlayersByWinRatio": "Top Players by Win ratio",
+    "popularHeroes": "Popular Heroes"
+  },
+  "statistics": {
+    "navTitle": "Statistics",
+    "metaDescription": "View statistics on {siteName}.",
+    "eyebrow": "Platform statistics",
+    "title": "All-time leaderboards & trends",
+    "description": "Aggregate numbers across every tournament: how the field has grown, the average division per role over time, and the players who top the championship, win-rate and maps-won boards.",
+    "trendsOverTime": "Trends over time",
+    "leaderboards": "Leaderboards",
+    "overallStatistics": "Overall statistics",
+    "statTournamentsHeld": "Tournaments Held",
+    "statTeamsBalanced": "Teams Balanced",
+    "statPlayersParticipated": "Players Participated",
+    "liveCount": "{count, plural, other {# Live}}",
+    "upcomingCount": "{count, plural, other {# Upcoming}}",
+    "tournamentActivity": "Tournament activity",
+    "avgDivisionByRole": "Average division by role",
+    "mostChampionships": "Most championships",
+    "topWinRate": "Top win rate",
+    "mostMapsWon": "Most maps won",
+    "roleTank": "Tank",
+    "roleDamage": "Damage",
+    "roleSupport": "Support"
+  },
+  "owal": {
+    "metaDescription": "View OWAL Standings on {siteName}.",
+    "season": "Season:",
+    "selectSeason": "Select season",
+    "stacks": "Stacks",
+    "searchUser": "Search user...",
+    "only3Days": "Only 3+ days",
+    "playerOne": "Player One",
+    "playerTwo": "Player Two",
+    "days": "Days",
+    "averagePlacement": "Average Placement",
+    "place": "Place",
+    "player": "Player",
+    "role": "Role",
+    "division": "Division",
+    "played": "Played",
+    "totalBest3": "TOTAL (best 3 days)",
+    "average": "Average",
+    "wins": "W",
+    "losses": "L",
+    "draws": "D",
+    "winRatio": "Win ratio"
+  },
+  "notConfigured": {
+    "title": "Workspace not configured",
+    "description": "This address is not linked to a workspace yet."
+  },
+  "standings": {
+    "colTeam": "Team",
+    "colWDL": "W·D·L",
+    "colPts": "Pts",
+    "colH2H": "H2H",
+    "colForm": "Form",
+    "colRecord": "Record",
+    "colMaps": "Maps",
+    "colMapDiff": "Map Δ",
+    "advancing": "Adv",
+    "eliminated": "Out",
+    "priority": "Priority {n}"
+  },
+  "bracket": {
+    "round": "Round {n}",
+    "lowerRound": "Lower R{n}",
+    "viewMatch": "View match",
+    "pending": "Pending",
+    "disputed": "Disputed",
+    "editMatch": "Edit match",
+    "reportMatch": "Report match",
+    "doubleElimination": "Double Elimination",
+    "singleElimination": "Single Elimination"
+  },
+  "rankHistory": {
+    "title": "Rank history",
+    "emptyTitle": "No rank history",
+    "emptyBody": "No competitive rank history has been collected for this player yet.",
+    "noDataTitle": "No data for selection",
+    "noDataBody": "The selected account or role combination does not contain competitive records.",
+    "noProfileTitle": "No linked player profile",
+    "noProfileBody": "Rank history is unavailable because this BattleTag is not linked to a registered site account.",
+    "errorTitle": "Failed to load",
+    "errorBody": "Failed to load rank history. Please try again later.",
+    "groupByPlaceholder": "Group by...",
+    "byRole": "By role",
+    "byBattleNet": "By battle.net",
+    "granularityPlaceholder": "Granularity",
+    "daily": "Daily",
+    "hourly": "Hourly",
+    "allPoints": "All points"
+  },
+  "encounters": {
+    "meta": {
+      "title": "Encounters",
+      "description": "View encounters on {siteName}."
+    },
+    "dataUnavailable": "Encounter data is temporarily unavailable. Retrying in the background.",
+    "views": "Views",
+    "unassigned": "Unassigned",
+    "tournamentNumber": "Tournament {number}",
+    "searchPlaceholder": "Search by team, player, or matchup…",
+    "roundNum": "Round {round}",
+    "roundShort": "R{round}",
+    "mapsCount": "{count, plural, one {# map} other {# maps}}",
+    "aria": {
+      "views": "Encounter views",
+      "filters": "Encounter filters"
+    },
+    "view": {
+      "all": "All encounters",
+      "myTeam": "My team's series",
+      "finals": "Finals only",
+      "closeBo5": "Close Bo5s",
+      "upsets": "Upsets",
+      "withLogs": "With logs"
+    },
+    "state": {
+      "live": "Live",
+      "upcoming": "Upcoming",
+      "final": "Final",
+      "pending": "Pending",
+      "open": "Open",
+      "soon": "Soon",
+      "upset": "Upset"
+    },
+    "media": {
+      "logsAvailable": "Game logs available",
+      "noLogs": "No game logs",
+      "comingTwitch": "Coming with Twitch integration"
+    },
+    "sort": {
+      "date": "Date",
+      "closeness": "Closeness",
+      "upcoming": "Upcoming"
+    },
+    "filter": {
+      "withLogs": "With logs",
+      "tournamentAny": "Tournament: Any",
+      "tournamentNamed": "Tournament: {name}",
+      "bestOf": "Best-of",
+      "bestOfAny": "Best-of: Any",
+      "bestOfValue": "Best-of: {count}",
+      "closenessAny": "Closeness: Any",
+      "closenessMin": "Closeness ≥ {pct}%",
+      "statusAll": "Status: All",
+      "statusOpen": "Status: Open",
+      "statusPending": "Status: Pending",
+      "statusFinal": "Status: Final",
+      "sortDate": "Sort: Date",
+      "sortCloseness": "Sort: Closeness",
+      "sortUpcoming": "Sort: Upcoming",
+      "sortTrigger": "Sort: {label}"
+    },
+    "col": {
+      "matchup": "Matchup",
+      "round": "Round",
+      "score": "Score",
+      "maps": "Maps",
+      "closeness": "Closeness",
+      "media": "Media",
+      "played": "Played"
+    },
+    "savedView": {
+      "saved": "View saved",
+      "deleted": "View deleted",
+      "promptName": "Saved view name",
+      "promptDefault": "Current view",
+      "deleteAria": "Delete saved view {name}",
+      "confirmDelete": "Delete saved view \"{name}\"?",
+      "saveCurrent": "Save current view"
+    },
+    "insights": {
+      "title": "Insights",
+      "meta": "Past 30 days · {count, plural, one {# series} other {# series}}",
+      "avg": "Avg",
+      "max": "Max",
+      "fewer": "fewer",
+      "more": "more",
+      "series": "Series",
+      "closenessTitle": "Closeness distribution",
+      "closenessSub": "Series binned by how competitive they were",
+      "scoreTitle": "Score distribution",
+      "scoreSub": "Final series scores · Bo3 / Bo5",
+      "byStageTitle": "By stage",
+      "byStageSub": "Where series happen",
+      "noStageData": "No stage data yet."
+    },
+    "featured": {
+      "title": "Featured series",
+      "meta": "Auto-curated · Current filter scope",
+      "closestTitle": "Closest fights",
+      "closestSub": "Highest closeness reports",
+      "liveTitle": "Happening now",
+      "liveSub": "Live & upcoming series",
+      "empty": "No featured series in this slice."
+    },
+    "list": {
+      "title": "All encounters",
+      "pageMeta": "Page {page} of {total} · sorted by {sort, select, closeness {closeness} upcoming {upcoming} other {date}}",
+      "loading": "Loading encounters…",
+      "empty": "No encounters found.",
+      "showing": "Showing {start}–{end} of {total} series"
+    },
+    "hero": {
+      "eyebrow": "All tournaments · Encounters",
+      "title": "Every fight, <em>quantified</em>",
+      "lede": "All series across all tournaments and leagues on the platform — sliceable by stage, tournament, closeness and logs availability.",
+      "totalLabel": "Total encounters",
+      "last7Days": "last 7 days",
+      "allTime": "All time",
+      "withLogsLabel": "With game logs",
+      "ofSeries": "{count} of {total} series",
+      "avgClosenessLabel": "Avg closeness",
+      "acrossReported": "Across reported series",
+      "liveNowLabel": "Live now",
+      "upcomingCount": "{count} upcoming"
+    },
+    "pulse": {
+      "title": "This week's pulse",
+      "avgLength": "Avg series length",
+      "avgLengthMeta": "across {count} completed series",
+      "sweepRate": "Sweep rate",
+      "sweepMeta": "{sweeps} sweeps · {distance} went distance",
+      "reverseSweepRate": "Reverse-sweep rate",
+      "reverseSweepMeta": "series that came back from match point",
+      "mostDecisiveMap": "Most-decisive map"
+    },
+    "hotMaps": {
+      "title": "Hot maps",
+      "sub": "Current filter scope",
+      "empty": "No map data yet."
+    },
+    "sideBalance": {
+      "title": "Side balance",
+      "sub": "Home vs. away winner",
+      "homeWins": "Home wins",
+      "awayWins": "Away wins"
+    },
+    "detail": {
+      "metaTitle": "{home} vs {away}",
+      "metaDescription": "Overview for {home} vs {away} on {siteName}.",
+      "back": "Back to encounters",
+      "tie": "Tie",
+      "winner": "Winner",
+      "loser": "Loser"
+    },
+    "match": {
+      "roundTab": "Round {round}",
+      "mapAlt": "Map",
+      "gamemodeAlt": "Gamemode",
+      "playtime": "Playtime",
+      "logName": "Log name",
+      "openNewTab": "Open in New Tab",
+      "allMatch": "All Match"
+    },
+    "team": {
+      "placement": "Placement: {value}",
+      "colName": "Name",
+      "colDivision": "Division",
+      "colNew": "New",
+      "colNewRole": "New Role"
+    },
+    "chart": {
+      "title": "Kills and Assists Overview",
+      "kills": "Kills",
+      "assists": "Assists"
+    },
+    "veto": {
+      "title": "Map Veto",
+      "loading": "Loading map veto...",
+      "loadError": "Failed to load map veto",
+      "actionFailed": "Veto action failed",
+      "mapNumber": "Map #{id}",
+      "mapOrder": "Map order",
+      "sending": "Sending...",
+      "completed": "Completed",
+      "deciderResolving": "Decider map is being resolved",
+      "turn": "{side} team to {action}",
+      "yourTurn": "Your turn as {side} captain",
+      "ban": "Ban {map}",
+      "pick": "Pick {map}",
+      "side": {
+        "home": "home",
+        "away": "away"
+      },
+      "act": {
+        "ban": "ban",
+        "pick": "pick"
+      }
+    },
+    "result": {
+      "title": "Match Result",
+      "none": "No result",
+      "pendingConfirmation": "Pending confirmation",
+      "confirmed": "Confirmed",
+      "disputed": "Disputed",
+      "home": "Home",
+      "away": "Away",
+      "submit": "Submit Result",
+      "submitting": "Submitting...",
+      "submittedScore": "Submitted score: {home} - {away}",
+      "confirm": "Confirm Result",
+      "confirming": "Confirming...",
+      "dispute": "Dispute",
+      "disputedNotice": "Result disputed. An admin will resolve this."
     }
   }
 }

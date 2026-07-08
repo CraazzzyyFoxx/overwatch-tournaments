@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import captainService from "@/services/captain.service";
 import { Encounter } from "@/types/encounter.types";
 
@@ -28,9 +28,11 @@ interface MatchReportDialogProps {
 
 const MATCH_QUALITY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
-function closenessFloatToStars(closeness: number | null | undefined): number {
+type MatchQuality = (typeof MATCH_QUALITY_OPTIONS)[number];
+
+function closenessFloatToStars(closeness: number | null | undefined): MatchQuality {
   if (closeness == null || closeness <= 0) return 6;
-  return Math.max(1, Math.min(10, Math.round(closeness * 10)));
+  return Math.max(1, Math.min(10, Math.round(closeness * 10))) as MatchQuality;
 }
 
 export function MatchReportDialog({ open, onOpenChange, encounter }: MatchReportDialogProps) {
@@ -52,13 +54,13 @@ export function MatchReportDialog({ open, onOpenChange, encounter }: MatchReport
 
 function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDialogProps, "open">) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const homeTeamLabel = encounter.home_team?.name?.trim() || "Home team";
-  const awayTeamLabel = encounter.away_team?.name?.trim() || "Away team";
+  const t = useTranslations();
+  const homeTeamLabel = encounter.home_team?.name?.trim() || t("common.homeTeam");
+  const awayTeamLabel = encounter.away_team?.name?.trim() || t("common.awayTeam");
 
   const [homeScore, setHomeScore] = useState(() => encounter.score?.home ?? 0);
   const [awayScore, setAwayScore] = useState(() => encounter.score?.away ?? 0);
-  const [closeness, setCloseness] = useState<number>(() =>
+  const [closeness, setCloseness] = useState<MatchQuality>(() =>
     closenessFloatToStars(encounter.closeness)
   );
 
@@ -149,7 +151,10 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
                   )}
                   onClick={() => setCloseness(val)}
                   aria-pressed={isSelected}
-                  aria-label={`Качество матча ${val}/10: ${t(`matchReport.qualityDescriptions.${val}`)}`}
+                  aria-label={t("matchReport.qualityAria", {
+                    score: String(val),
+                    description: t(`matchReport.qualityDescriptions.${val}`)
+                  })}
                 >
                   <Star
                     className={cn(

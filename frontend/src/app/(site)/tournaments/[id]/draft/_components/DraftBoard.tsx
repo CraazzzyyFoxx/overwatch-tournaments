@@ -76,7 +76,7 @@ interface DraftBoardProps {
   tournament: Tournament;
 }
 
-type Translate = (key: string) => string;
+type Translate = (key: string, variables?: Record<string, string | number>) => string;
 type DraftMutations = ReturnType<typeof useDraftMutations>;
 type RoleFilter = DraftRole | "all";
 type SortMode = "rank" | "name";
@@ -202,7 +202,7 @@ function CaptainsPresenceBar({
               >
                 <span className={cap.isOnline ? styles.onlineDot : styles.offlineDot} />
                 <span>
-                  {cap.isMe ? "You" : cap.name.replace(/#\d+$/, "")}
+                  {cap.isMe ? t("draft.presence.you") : cap.name.replace(/#\d+$/, "")}
                   {!cap.isOnline && ` · ${t("draft.presence.offline")}`}
                 </span>
                 <span className={cn(styles.captainInitials, TEAM_ACCENT_CLASS[accent])}>
@@ -339,10 +339,10 @@ function BottomPanel({
               {t("draft.bottomPanel.readyToPick")}
             </span>
             <span className="text-lg font-black text-white uppercase tracking-wide truncate">
-              {playerName(selectedPlayer)}
+              {playerName(selectedPlayer, t)}
             </span>
             <span className="text-xs font-semibold text-white/50 truncate">
-              {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedRole ? getRoleRank(selectedPlayer, selectedRole).rank_value : selectedPlayer.rank_value)} SR · for {onClockTeam?.name}
+              {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedRole ? getRoleRank(selectedPlayer, selectedRole).rank_value : selectedPlayer.rank_value)} {t("draft.bottomPanel.readyMeta", { team: onClockTeam?.name ?? "" })}
             </span>
           </div>
 
@@ -364,7 +364,7 @@ function BottomPanel({
                         : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent",
                       filled && "opacity-30 cursor-not-allowed"
                     )}
-                    title={filled ? "Role filled" : undefined}
+                    title={filled ? t("draft.roleFilled") : undefined}
                   >
                     <PlayerRoleIcon role={getRoleIconName(role)} size={12} />
                     <span className="capitalize">{roleLabel(role)}</span>
@@ -410,7 +410,7 @@ function BottomPanel({
           {t("draft.bottomPanel.liveDraft")}
         </span>
         <span className="text-sm text-white/65">
-          {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name} (Pick #{currentPickNumber} of {totalPicks})
+          {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name} {t("draft.bottomPanel.pickProgress", { n: currentPickNumber, total: totalPicks })}
         </span>
       </div>
     );
@@ -446,7 +446,7 @@ function BottomPanel({
             <DraftClock expiresAt={currentPick?.clock_expires_at ?? null} paused={paused} compact />
           </span>
           <span className="text-[9px] font-bold tracking-wider text-white/30 uppercase mt-0.5">
-            {session.status === "paused" ? "PAUSED" : "ON THE CLOCK"}
+            {session.status === "paused" ? t("draft.paused") : t("draft.onTheClockUpper")}
           </span>
         </div>
       </div>
@@ -466,7 +466,7 @@ function BottomPanel({
             {isPending ? <Loader2 className={styles.smallSpin} aria-hidden /> : <Check aria-hidden />}
             <span>{t("draft.actions.confirm")}</span>
             <span className="text-[9px] bg-black/35 text-white/40 px-1 rounded font-mono ml-1">
-              Enter
+              {t("draft.enterKey")}
             </span>
           </button>
         )}
@@ -522,7 +522,7 @@ function DraftBoardView({
           (myAuthUserId != null && team.captain_auth_user_id === myAuthUserId) ||
           (team.captain_user_id != null && myPlayerIds.includes(team.captain_user_id));
 
-        const name = captainPlayer ? playerName(captainPlayer) : team.name;
+        const name = captainPlayer ? playerName(captainPlayer, t) : team.name;
 
         return {
           teamId: team.id,
@@ -534,7 +534,7 @@ function DraftBoardView({
         };
       })
       .sort((a, b) => a.draftPosition - b.draftPosition);
-  }, [board.teams, board.players, myAuthUserId, myPlayerIds]);
+  }, [board.teams, board.players, myAuthUserId, myPlayerIds, t]);
 
   const onlineCount = useMemo(() => captains.filter((c) => c.isOnline).length, [captains]);
   const totalCount = captains.length;
@@ -1039,6 +1039,7 @@ interface TimerRingProps {
 }
 
 function TimerRing({ session, currentPick }: TimerRingProps) {
+  const { t } = useTranslation();
   const paused = session.status === "paused";
   const now = useNow(!paused && currentPick?.clock_expires_at != null);
   const totalMs = Math.max(session.pick_time_seconds * 1000, 1);
@@ -1077,7 +1078,7 @@ function TimerRing({ session, currentPick }: TimerRingProps) {
           paused={paused}
           compact
         />
-        <span>{session.status === "paused" ? "PAUSED" : "CLOCK"}</span>
+        <span>{session.status === "paused" ? t("draft.paused") : t("draft.clockLabel")}</span>
       </div>
     </div>
   );
@@ -1168,16 +1169,18 @@ function DraftOrderPanel({ session, picks, teamById, playerById, tournamentGrid,
               const rules = session.settings_json?.round_rules || [];
               const rule = rules[roundNo - 1] || "linear";
               switch (rule) {
-                case "linear": return "FWD";
-                case "reverse": return "REV";
-                case "weakest_first": return "WEAKEST";
-                case "strongest_first": return "STRONGEST";
-                case "team_avg_asc": return "LOW AVG";
-                case "team_avg_desc": return "HIGH AVG";
+                case "linear": return t("draft.roundRule.forward");
+                case "reverse": return t("draft.roundRule.reverse");
+                case "weakest_first": return t("draft.roundRule.weakest");
+                case "strongest_first": return t("draft.roundRule.strongest");
+                case "team_avg_asc": return t("draft.roundRule.lowAvg");
+                case "team_avg_desc": return t("draft.roundRule.highAvg");
                 default: return rule.toUpperCase();
               }
             }
-            return session.format === "snake" && roundNo % 2 === 0 ? "REV" : "FWD";
+            return session.format === "snake" && roundNo % 2 === 0
+              ? t("draft.roundRule.reverse")
+              : t("draft.roundRule.forward");
           };
           const ruleLabel = getRoundLabel();
           return (
@@ -1219,7 +1222,7 @@ interface PickRowProps {
 function PickRow({ pick, team, pickedPlayer, tournamentGrid, t }: PickRowProps) {
   const displayPlayer =
     pickedPlayer != null
-      ? playerName(pickedPlayer)
+      ? playerName(pickedPlayer, t)
       : pick.status === "on_clock"
         ? t("draft.onTheClock")
         : label(t, "draft.order.pending", "Pending");
@@ -1360,10 +1363,10 @@ function PoolToolbar({
             >
               <span className="truncate max-w-[120px]">
                 {selectedHeroes.length === 0
-                  ? "All Heroes"
+                  ? t("draft.pool.allHeroes")
                   : selectedHeroes.length === 1
                   ? (heroesMap.get(selectedHeroes[0])?.name ?? selectedHeroes[0])
-                  : `Selected (${selectedHeroes.length})`}
+                  : t("draft.pool.selectedCount", { n: selectedHeroes.length })}
               </span>
               <ChevronDown className="h-3.5 w-3.5 opacity-80 shrink-0" />
             </button>
@@ -1372,19 +1375,19 @@ function PoolToolbar({
             <Command className="bg-transparent">
               {selectedHeroes.length > 0 && (
                 <div className="flex items-center justify-between p-2 border-b border-white/5 text-xs bg-white/[0.01]">
-                  <span className="text-white/40 font-semibold">Selected: {selectedHeroes.length}</span>
+                  <span className="text-white/40 font-semibold">{t("draft.pool.selectedLabel", { n: selectedHeroes.length })}</span>
                   <button
                     type="button"
                     onClick={() => onHeroFilterChange([])}
                     className="text-rose-400 hover:text-rose-300 font-bold transition"
                   >
-                    Clear all
+                    {t("draft.pool.clearAll")}
                   </button>
                 </div>
               )}
-              <CommandInput placeholder="Search hero..." className="h-9 text-xs text-white" />
+              <CommandInput placeholder={t("draft.pool.searchHeroPlaceholder")} className="h-9 text-xs text-white" />
               <CommandList className="max-h-[300px] overflow-y-auto">
-                <CommandEmpty className="py-4 text-center text-xs text-white/40">No heroes found.</CommandEmpty>
+                <CommandEmpty className="py-4 text-center text-xs text-white/40">{t("draft.pool.noHeroes")}</CommandEmpty>
                 <CommandGroup>
                   {sortedHeroes.map((h) => {
                     const isSelected = selectedHeroes.includes(h.slug);
@@ -1508,7 +1511,7 @@ function SelectedPlayerPanel({
         type="button"
         className="absolute top-3 right-3 text-white/40 hover:text-white/80 transition p-1.5 rounded-full hover:bg-white/5"
         onClick={onClear}
-        aria-label="Close"
+        aria-label={t("common.close")}
       >
         <X size={16} />
       </button>
@@ -1522,10 +1525,10 @@ function SelectedPlayerPanel({
               rel="noopener noreferrer"
               className="text-xl font-bold uppercase tracking-wide text-white hover:underline hover:text-emerald-400 transition"
             >
-              {playerName(selectedPlayer)}
+              {playerName(selectedPlayer, t)}
             </a>
           ) : (
-            <strong className="text-xl font-bold uppercase tracking-wide text-white">{playerName(selectedPlayer)}</strong>
+            <strong className="text-xl font-bold uppercase tracking-wide text-white">{playerName(selectedPlayer, t)}</strong>
           )}
           <RolePill role={selectedPlayer.primary_role} />
           {division != null && (
@@ -1540,7 +1543,7 @@ function SelectedPlayerPanel({
             </span>
           )}
           <span className="text-[10px] font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/40">
-            ID: #{selectedPlayer.id}
+            {t("draft.player.idLabel", { id: String(selectedPlayer.id) })}
           </span>
           {selectedPlayer.is_captain && (
             <span className={styles.captainTag}>
@@ -1564,7 +1567,7 @@ function SelectedPlayerPanel({
           )}
           {secondaryRoles.length > 0 && (
             <div className="flex items-center gap-1.5 ml-1">
-              <span>Secondary:</span>
+              <span>{t("draft.player.secondary")}</span>
               {secondaryRoles.map((role) => (
                 <span key={role} className={cn(styles.roleNeed, ROLE_CLASS[role as DraftRole])} style={{ padding: "3px 4px" }} title={roleLabel(role as DraftRole)}>
                   <PlayerRoleIcon role={getRoleIconName(role as DraftRole)} size={15} />
@@ -1734,10 +1737,10 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
               className="hover:underline cursor-pointer hover:text-emerald-400 transition"
               onClick={handleNameClick}
             >
-              {playerName(player)}
+              {playerName(player, t)}
             </strong>
           ) : (
-            <strong>{playerName(player)}</strong>
+            <strong>{playerName(player, t)}</strong>
           )}
         </span>
         <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
@@ -1804,9 +1807,9 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
         })()}
         {(player.is_flex || (player.secondary_roles_json && player.secondary_roles_json.length > 0)) && (
           <div className="flex items-center gap-1.5 mt-0.5">
-            {player.is_flex && <span className={styles.flexMark}>FLEX</span>}
+            {player.is_flex && <span className={styles.flexMark}>{t("common.roles.flex")}</span>}
             {player.secondary_roles_json && player.secondary_roles_json.length > 0 && (
-              <div className={styles.secondaryRoles} title={`Secondary: ${player.secondary_roles_json.map((r) => roleLabel(r as DraftRole)).join(", ")}`}>
+              <div className={styles.secondaryRoles} title={`${t("draft.player.secondary")} ${player.secondary_roles_json.map((r) => roleLabel(r as DraftRole)).join(", ")}`}>
                 {player.secondary_roles_json.map((secRole) => (
                   <span key={secRole} className={styles.secondaryRoleBadge}>
                     <PlayerRoleIcon role={getRoleIconName(secRole as DraftRole)} size={10} />
@@ -2021,10 +2024,10 @@ function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerPr
                 rel="noopener noreferrer"
                 className="hover:underline hover:text-emerald-400 transition"
               >
-                {playerName(player)}
+                {playerName(player, t)}
               </a>
             ) : (
-              playerName(player)
+              playerName(player, t)
             )}
           </strong>
           {player.sub_role && (
@@ -2083,8 +2086,9 @@ interface RolePillProps {
 }
 
 function RolePill({ role }: RolePillProps) {
+  const { t } = useTranslation();
   if (!role) {
-    return <span className={styles.rolePill}>FLEX</span>;
+    return <span className={styles.rolePill}>{t("common.roles.flex")}</span>;
   }
   return (
     <span className={cn(styles.rolePill, ROLE_CLASS[role])} style={{ padding: "4px" }} title={roleLabel(role)}>
@@ -2139,8 +2143,9 @@ function getRoleRank(player: DraftPlayer, role: DraftRole): {
   return { rank_value, division_number: null, top_heroes };
 }
 
-function playerName(player: DraftPlayer): string {
-  return player.battle_tag ?? `Player #${player.id}`;
+function playerName(player: DraftPlayer, t?: Translate): string {
+  if (player.battle_tag) return player.battle_tag;
+  return t ? t("draft.playerFallback", { id: String(player.id) }) : `Player #${player.id}`;
 }
 
 function playerInitials(player: DraftPlayer): string {

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import { SITE_NAME } from "@/config/site";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { name, origin } = await resolveSiteMetadata();
-  const title = `Encounters | ${SITE_NAME}`;
-  const description = `View encounters on ${SITE_NAME}.`;
+  const t = await getTranslations();
+  const title = `${t("encounters.meta.title")} | ${SITE_NAME}`;
+  const description = t("encounters.meta.description", { siteName: SITE_NAME });
   return {
     title,
     description,

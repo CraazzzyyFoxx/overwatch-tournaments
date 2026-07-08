@@ -24,7 +24,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import adminService from "@/services/admin.service";
 import type { EncounterUpdateInput } from "@/types/admin.types";
 import { Encounter } from "@/types/encounter.types";
@@ -66,9 +66,9 @@ function EncounterEditDialogBody({
   onOpenChange
 }: Omit<EncounterEditDialogProps, "open">) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const homeTeamLabel = encounter.home_team?.name?.trim() || "Home team";
-  const awayTeamLabel = encounter.away_team?.name?.trim() || "Away team";
+  const t = useTranslations();
+  const homeTeamLabel = encounter.home_team?.name?.trim() || t("common.homeTeam");
+  const awayTeamLabel = encounter.away_team?.name?.trim() || t("common.awayTeam");
 
   const [homeScore, setHomeScore] = useState(() => encounter.score?.home ?? 0);
   const [awayScore, setAwayScore] = useState(() => encounter.score?.away ?? 0);
@@ -186,7 +186,7 @@ function EncounterEditDialogBody({
                 type="button"
                 onClick={() => setStars(n === stars ? 0 : n)}
                 className="p-0.5 hover:scale-110 transition-transform focus-visible:outline-none"
-                aria-label={`${n} звезд`}
+                aria-label={t("matchEdit.starsAria", { count: n })}
               >
                 <Star
                   className={cn(
@@ -199,7 +199,7 @@ function EncounterEditDialogBody({
               </button>
             ))}
             <span className="ml-2 text-xs font-bold text-zinc-400">
-              {stars > 0 ? `${stars}/10` : "не задано"}
+              {stars > 0 ? `${stars}/10` : t("matchEdit.notSet")}
             </span>
           </div>
           <p className="text-[11px] text-zinc-500 font-medium leading-normal mt-1">

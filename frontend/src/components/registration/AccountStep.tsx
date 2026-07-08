@@ -1,6 +1,7 @@
+import { useTranslations } from "next-intl";
+
 import type { RegistrationForm } from "@/types/registration.types";
 import type { SocialAccount } from "@/types/user.types";
-import { useTranslation } from "@/i18n/LanguageContext";
 import AccountCombobox from "./AccountCombobox";
 import VerifiedAccountSelect from "./VerifiedAccountSelect";
 import SmurfTagsInput from "./SmurfTagsInput";
@@ -42,7 +43,7 @@ export default function AccountStep({
   accounts = [],
   verifiedErrors = {},
 }: AccountStepProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const fields = form.built_in_fields;
   const showBattleTag = fields?.battle_tag?.enabled !== false;
   const showSmurfTags = fields?.smurf_tags?.enabled !== false;
@@ -133,7 +134,7 @@ export default function AccountStep({
         ) : (
           <AccountCombobox
             label={t("registration.accounts.discord")}
-            placeholder="username"
+            placeholder={t("registration.accounts.discordPlaceholder")}
             value={values.discord_nick ?? ""}
             onChange={(v) => onUpdate("discord_nick", v)}
             suggestions={discordSuggestions}
@@ -160,7 +161,7 @@ export default function AccountStep({
         ) : (
           <AccountCombobox
             label={t("registration.accounts.twitch")}
-            placeholder="channel_name"
+            placeholder={t("registration.accounts.twitchPlaceholder")}
             value={values.twitch_nick ?? ""}
             onChange={(v) => onUpdate("twitch_nick", v)}
             suggestions={twitchSuggestions}

@@ -27,6 +27,7 @@ import { DataTableSortButton } from "@/components/DataTableSortButton";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 const getDayColor = (points: number) => {
@@ -47,6 +48,7 @@ const getDayColor = (points: number) => {
 };
 
 const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
+  const t = useTranslations();
   const VIRTUALIZATION_THRESHOLD = 120;
   const [sorting, setSorting] = React.useState<SortingState>([
     {
@@ -93,7 +95,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       {
         accessorKey: "place",
         header: ({ column }) => {
-          return <DataTableSortButton column={column} label={"Place"} />;
+          return <DataTableSortButton column={column} label={t("owal.place")} />;
         },
         id: "place",
         accessorFn: (row) => row.place
@@ -101,7 +103,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       {
         accessorKey: "user.name",
         id: "userName",
-        header: "Player",
+        header: t("owal.player"),
         cell: ({ row }) => {
           return (
             <div className="text-right">
@@ -115,7 +117,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       {
         accessorKey: "role",
         id: "role",
-        header: "Role",
+        header: t("owal.role"),
         cell: ({ row }) => {
           return <div className="text-right">{row.getValue<string>("role")}</div>;
         }
@@ -123,7 +125,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       {
         accessorKey: "division",
         id: "division",
-        header: "Division",
+        header: t("owal.division"),
         cell: ({ row }) => {
           return (
             <PlayerDivisionIcon
@@ -137,21 +139,21 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       ...days_columns,
       {
         accessorKey: "count_days",
-        header: "Played",
+        header: t("owal.played"),
         id: "count_days",
         cell: ({ row }) => <div>{row.getValue<number>("count_days")}</div>
       },
       {
         accessorKey: "best_3_days",
         id: "best_3_days",
-        header: "TOTAL (best 3 days)",
+        header: t("owal.totalBest3"),
         cell: ({ row }) => {
           return <div>{row.getValue<number>("best_3_days").toFixed(3)}</div>;
         }
       },
       {
         accessorKey: "avg_points",
-        header: "Average",
+        header: t("owal.average"),
         id: "avg_points",
         cell: ({ row }) => {
           return <div>{row.getValue<number>("avg_points").toFixed(3)}</div>;
@@ -159,7 +161,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       },
       {
         accessorKey: "wins",
-        header: "W",
+        header: t("owal.wins"),
         id: "wins",
         cell: ({ row }) => {
           return <div className="text-green-400">{row.getValue<number>("wins")}</div>;
@@ -167,7 +169,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       },
       {
         accessorKey: "losses",
-        header: "L",
+        header: t("owal.losses"),
         id: "losses",
         cell: ({ row }) => {
           return <div className="text-red-400">{row.getValue<number>("losses")}</div>;
@@ -175,7 +177,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
       },
       {
         accessorKey: "draws",
-        header: "D",
+        header: t("owal.draws"),
         id: "draws",
         cell: ({ row }) => {
           return <div className="text-gray-400">{row.getValue<number>("draws")}</div>;
@@ -185,7 +187,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
         accessorKey: "win_rate",
         id: "win_rate",
         header: ({ column }) => {
-          return <DataTableSortButton column={column} label={"Win ratio"} />;
+          return <DataTableSortButton column={column} label={t("owal.winRatio")} />;
         },
         cell: ({ row }) => {
           const winrate = row.getValue<number>("win_rate");
@@ -195,7 +197,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
         }
       }
     ],
-    [days_columns]
+    [days_columns, t]
   );
 
   const standingsData = React.useMemo(
@@ -244,7 +246,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
           <Input
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="Search user..."
+            placeholder={t("owal.searchUser")}
           />
         </div>
 
@@ -254,7 +256,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
             checked={show3Plus}
             onCheckedChange={(v) => setShow3Plus(v === true)}
           />
-          <Label htmlFor="only3plus">Only 3+ days</Label>
+          <Label htmlFor="only3plus">{t("owal.only3Days")}</Label>
         </div>
       </div>
       <div ref={parentRef} className="max-h-[70vh] overflow-auto">
@@ -337,7 +339,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStandings }) => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No results.
+                      {t("common.noResults")}
                     </TableCell>
                   </TableRow>
                 )}

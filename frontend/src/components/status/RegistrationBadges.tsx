@@ -1,7 +1,7 @@
 import React from "react";
 import { CheckCircle2, Circle, Clock, Lock, Unlock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import type { StatusMeta } from "@/types/balancer-admin.types";
 
@@ -53,8 +53,9 @@ export function CheckInStatusBadge({
   checkedIn,
   className,
 }: CheckInStatusBadgeProps) {
+  const t = useTranslations();
   const isCheckedIn = checkedIn === true;
-  const label = isCheckedIn ? "Checked In" : "Not Checked In";
+  const label = isCheckedIn ? t("common.checkedIn") : t("common.notCheckedIn");
 
   return (
     <span
@@ -118,7 +119,7 @@ export function AdmissionStatusBadge({
   profilesOpen,
   className,
 }: AdmissionStatusBadgeProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   const isProfileClosed = requireOpenProfile && profilesOpen === false;
   const isApprovedAndReady = registrationStatus === "approved" && balancerStatus === "ready" && !isProfileClosed;
@@ -167,12 +168,13 @@ interface ProfileStatusBadgeProps {
 }
 
 export function ProfileStatusBadge({ profilesOpen, className }: ProfileStatusBadgeProps) {
+  const t = useTranslations();
   const label =
     profilesOpen === true
-      ? "Profile open"
+      ? t("common.profileOpen")
       : profilesOpen === false
-        ? "Profile closed"
-        : "Profile not checked";
+        ? t("common.profileClosed")
+        : t("common.profileNotChecked");
 
   return (
     <span

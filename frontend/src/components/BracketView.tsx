@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, FileEdit, Maximize2, Minimize2, Search } from "lucide-react";
 import Link from "next/link";
 
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
 import type { Encounter } from "@/types/encounter.types";
 import type { StageType } from "@/types/tournament.types";
 import {
@@ -16,6 +17,8 @@ import {
   getGrandFinalLabel as getBracketGrandFinalLabel,
   getRoundSectionMatchCapacity
 } from "@/components/bracket-view.helpers";
+
+type Translate = ReturnType<typeof useTranslations>;
 
 interface BracketViewProps {
   encounters: Encounter[];
@@ -206,7 +209,7 @@ function addSequentialEdges(
   }
 }
 
-function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
+function buildLayout(encounters: Encounter[], type: StageType, t: Translate): BracketLayout {
   const hasBracketConnections = type === "single_elimination" || type === "double_elimination";
 
   const isDE = type === "double_elimination";
@@ -276,7 +279,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
       id: `upper-header-${group.round}`,
       x,
       y: upperHeaderY,
-      label: `Round ${group.round}`,
+      label: t("bracket.round", { n: String(group.round) }),
       section: "upper"
     });
 
@@ -311,7 +314,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
       id: `lower-header-${group.round}`,
       x,
       y: lowerHeaderY,
-      label: `Lower R${Math.abs(group.round)}`,
+      label: t("bracket.lowerRound", { n: String(Math.abs(group.round)) }),
       section: "lower"
     });
 
@@ -441,7 +444,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
   };
 }
 
-function getMatchMeta(encounter: Encounter) {
+function getMatchMeta(encounter: Encounter, t: Translate) {
   const isCompleted = COMPLETED_STATUSES.has(encounter.status);
   const isLive = !isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
   const played = (encounter.score?.home ?? 0) + (encounter.score?.away ?? 0);
@@ -449,7 +452,7 @@ function getMatchMeta(encounter: Encounter) {
 
   let timeLabel = "";
   if (isLive) {
-    timeLabel = "Live";
+    timeLabel = t("common.live");
   } else if (!isCompleted) {
     if (encounter.scheduled_at) {
       timeLabel = new Date(encounter.scheduled_at).toLocaleDateString("en-US", {
@@ -457,7 +460,7 @@ function getMatchMeta(encounter: Encounter) {
         day: "numeric"
       });
     } else {
-      timeLabel = "TBD";
+      timeLabel = t("common.tbd");
     }
   }
 
@@ -475,7 +478,8 @@ function MatchCard({
   hoveredTeamId: number | null;
   onHoveredTeamChange: (teamId: number | null) => void;
 }) {
-  const meta = getMatchMeta(encounter);
+  const t = useTranslations();
+  const meta = getMatchMeta(encounter, t);
   const hasVisibleScore = data.isCompleted || data.homeScore !== 0 || data.awayScore !== 0;
   const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
 
@@ -506,7 +510,7 @@ function MatchCard({
     const name = side === "home" ? data.homeName : data.awayName;
     if (name === "TBD") {
       const source = side === "home" ? data.homeSource : data.awaySource;
-      return source ?? "TBD";
+      return source ?? t("common.tbd");
     }
     return name;
   };
@@ -574,7 +578,7 @@ function MatchCard({
           <Link
             href={`/encounters/${encounter.id}`}
             className="flex items-center justify-center rounded p-0.5 text-[var(--aqt-fg-muted)] hover:bg-white/10 hover:text-[var(--aqt-fg)] transition-colors"
-            title="Посмотреть матч"
+            title={t("bracket.viewMatch")}
             onClick={(e) => {
               // Предотвращаем срабатывание других кликов на карточке, если они будут добавлены
               e.stopPropagation();
@@ -604,12 +608,16 @@ function MatchCard({
   );
 }
 
-function resultStatusBadge(encounter: Encounter) {
+function resultStatusBadge(encounter: Encounter, t: Translate) {
   const status = encounter.result_status;
   if (!status || status === "none") return null;
   if (status === "confirmed") return null;
   const label =
-    status === "pending_confirmation" ? "Ожидает" : status === "disputed" ? "Спор" : status;
+    status === "pending_confirmation"
+      ? t("bracket.pending")
+      : status === "disputed"
+        ? t("bracket.disputed")
+        : status;
   const color =
     status === "pending_confirmation"
       ? "bg-amber-500/80"
@@ -633,7 +641,7 @@ export function BracketView({
   canEdit,
   canReport
 }: BracketViewProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [hoveredTeamId, setHoveredTeamId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const panRef = useRef({ active: false, startX: 0, startY: 0, left: 0, top: 0 });
@@ -660,7 +668,7 @@ export function BracketView({
     };
   }, [isFullscreen]);
 
-  const layout = useMemo(() => buildLayout(encounters, type), [encounters, type]);
+  const layout = useMemo(() => buildLayout(encounters, type, t), [encounters, type, t]);
 
   // Drag-to-pan with the mouse; touch keeps native scrolling.
   const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -694,7 +702,7 @@ export function BracketView({
 
   if (layout.nodes.length === 0) {
     return (
-      <div className="py-8 text-center text-muted-foreground">No bracket matches to display</div>
+      <div className="py-8 text-center text-muted-foreground">{t("common.noBracketMatches")}</div>
     );
   }
 
@@ -710,10 +718,10 @@ export function BracketView({
           <div>
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">
               {type === "double_elimination"
-                ? "Double Elimination"
+                ? t("bracket.doubleElimination")
                 : type === "single_elimination"
-                  ? "Single Elimination"
-                  : "Bracket"}
+                  ? t("bracket.singleElimination")
+                  : t("common.bracket")}
             </h2>
             <p className="text-xs text-[var(--aqt-fg-muted)]">
               {t("common.bracketInstructions")}
@@ -828,14 +836,14 @@ export function BracketView({
                     {node.data.matchLabel}
                   </span>
                 </div>
-                {resultStatusBadge(node.encounter)}
+                {resultStatusBadge(node.encounter, t)}
                 {(editable || reportable) && (
                   <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     {editable && (
                       <button
                         type="button"
                         className="rounded-md border border-[var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.6)] p-1 text-[var(--aqt-fg-muted)] hover:text-[var(--aqt-fg)]"
-                        aria-label="Редактировать матч"
+                        aria-label={t("bracket.editMatch")}
                         onClick={(e) => {
                           e.stopPropagation();
                           onEdit?.(node.encounter);
@@ -848,7 +856,7 @@ export function BracketView({
                       <button
                         type="button"
                         className="rounded-md border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] p-1 text-[var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)]"
-                        aria-label="Репорт матча"
+                        aria-label={t("bracket.reportMatch")}
                         onClick={(e) => {
                           e.stopPropagation();
                           onReport?.(node.encounter);

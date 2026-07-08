@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { BuiltInFieldConfig } from "@/types/registration.types";
 
 import {
@@ -45,6 +46,7 @@ export default function AccountCombobox({
   config,
   onValidationChange,
 }: AccountComboboxProps) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);
   const [contentWidth, setContentWidth] = useState<number>();
@@ -152,9 +154,11 @@ export default function AccountCombobox({
               />
               <CommandList>
                 <CommandEmpty>
-                  {inputValue ? "Type to use custom value" : "No linked accounts"}
+                  {inputValue
+                    ? t("registration.accounts.typeToUseCustom")
+                    : t("registration.accounts.noLinkedAccounts")}
                 </CommandEmpty>
-                <CommandGroup heading="Linked accounts">
+                <CommandGroup heading={t("registration.accounts.linkedAccounts")}>
                   {filtered.map((s) => (
                     <CommandItem key={s} value={s} onSelect={() => handleSelect(s)}>
                       <span className="flex-1 truncate">{s}</span>
@@ -163,9 +167,9 @@ export default function AccountCombobox({
                   ))}
                 </CommandGroup>
                 {inputValue && !suggestions.includes(inputValue) && !validationError && (
-                  <CommandGroup heading="Custom">
+                  <CommandGroup heading={t("registration.accounts.custom")}>
                     <CommandItem value={normalizedInputValue} onSelect={() => handleSelect(inputValue)}>
-                      Use &quot;{normalizedInputValue}&quot;
+                      {t("registration.accounts.useValue", { value: normalizedInputValue })}
                     </CommandItem>
                   </CommandGroup>
                 )}

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart as ChartIcon, Compass } from "lucide-react";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 
 type Granularity = "date" | "hour" | "raw";
@@ -181,20 +181,17 @@ export default function RankHistoryChart({
     return [domainMin, domainMax];
   }, [data]);
 
-  const { locale } = useTranslation();
-  const isRu = locale.startsWith("ru");
+  const t = useTranslations();
 
   if (series.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center text-center p-6 rounded-xl border border-white/[0.06] bg-zinc-950/20 ${className || ""}`}>
         <ChartIcon className="h-5 w-5 text-white/30 mb-2" />
         <h4 className="text-xs font-semibold text-white/70 mb-1">
-          {isRu ? "История рангов отсутствует" : "No rank history"}
+          {t("rankHistory.emptyTitle")}
         </h4>
         <p className="text-[11px] text-white/45 max-w-xs leading-normal">
-          {isRu
-            ? "Соревновательная статистика для этого игрока еще не была собрана."
-            : "No competitive rank history has been collected for this player yet."}
+          {t("rankHistory.emptyBody")}
         </p>
       </div>
     );
@@ -205,11 +202,11 @@ export default function RankHistoryChart({
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <Select value={groupBy} onValueChange={(val) => setGroupBy(val as GroupBy)}>
           <SelectTrigger className="w-[130px] h-8 text-xs bg-background/50 border-white/[0.08]">
-            <SelectValue placeholder="Group by..." />
+            <SelectValue placeholder={t("rankHistory.groupByPlaceholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="role" className="text-xs">By role</SelectItem>
-            <SelectItem value="battle_tag" className="text-xs">By battle.net</SelectItem>
+            <SelectItem value="role" className="text-xs">{t("rankHistory.byRole")}</SelectItem>
+            <SelectItem value="battle_tag" className="text-xs">{t("rankHistory.byBattleNet")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -249,12 +246,12 @@ export default function RankHistoryChart({
 
         <Select value={granularity} onValueChange={(val) => setGranularity(val as Granularity)}>
           <SelectTrigger className="w-[120px] h-8 text-xs bg-background/50 border-white/[0.08]">
-            <SelectValue placeholder="Granularity" />
+            <SelectValue placeholder={t("rankHistory.granularityPlaceholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="date" className="text-xs">{isRu ? "По дням" : "Daily"}</SelectItem>
-            <SelectItem value="hour" className="text-xs">{isRu ? "По часам" : "Hourly"}</SelectItem>
-            <SelectItem value="raw" className="text-xs">{isRu ? "Все точки" : "All points"}</SelectItem>
+            <SelectItem value="date" className="text-xs">{t("rankHistory.daily")}</SelectItem>
+            <SelectItem value="hour" className="text-xs">{t("rankHistory.hourly")}</SelectItem>
+            <SelectItem value="raw" className="text-xs">{t("rankHistory.allPoints")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -281,12 +278,10 @@ export default function RankHistoryChart({
         <div className="flex flex-col items-center justify-center text-center p-6 rounded-xl border border-white/[0.06] bg-zinc-950/20">
           <Compass className="h-5 w-5 text-white/30 mb-2" />
           <h4 className="text-xs font-semibold text-white/70 mb-1">
-            {isRu ? "Нет данных для выбора" : "No data for selection"}
+            {t("rankHistory.noDataTitle")}
           </h4>
           <p className="text-[11px] text-white/45 max-w-xs leading-normal">
-            {isRu
-              ? "Выбранная комбинация учетной записи и роли не содержит соревновательных записей."
-              : "The selected account or role combination does not contain competitive records."}
+            {t("rankHistory.noDataBody")}
           </p>
         </div>
       ) : (

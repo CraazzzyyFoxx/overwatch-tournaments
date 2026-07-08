@@ -19,15 +19,17 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { CardContent, Card } from "@/components/ui/card";
 import Link from "next/link";
 
 const OwalStandingsTable = ({ data }: { data: OwalStack[] }) => {
+  const t = useTranslations();
   const columns: ColumnDef<OwalStack>[] = [
     {
       accessorKey: "user_1.name",
       id: "userName1",
-      header: "Player One",
+      header: t("owal.playerOne"),
       cell: ({ row }) => {
         const userName = row.getValue<string>("userName1");
 
@@ -44,7 +46,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStack[] }) => {
     {
       accessorKey: "user_2.name",
       id: "userName2",
-      header: "Player Two",
+      header: t("owal.playerTwo"),
       cell: ({ row }) => {
         const userName = row.getValue<string>("userName2");
 
@@ -60,13 +62,13 @@ const OwalStandingsTable = ({ data }: { data: OwalStack[] }) => {
     },
     {
       accessorKey: "games",
-      header: "Days",
+      header: t("owal.days"),
       id: "games",
       cell: ({ row }) => <div>{row.getValue("games")}</div>
     },
     {
       accessorKey: "avg_position",
-      header: "Average Placement",
+      header: t("owal.averagePlacement"),
       id: "avg_position",
       cell: ({ row }) => {
         const avgPosition = row.getValue<number>("avg_position");
@@ -132,7 +134,7 @@ const OwalStandingsTable = ({ data }: { data: OwalStack[] }) => {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                  {t("common.noResults")}
                 </TableCell>
               </TableRow>
             )}

@@ -64,20 +64,30 @@ export const DEFAULT_FILTERS: EncounterFilterState = {
 
 export type BuiltInViewId = "all" | "my_team" | "finals" | "close_bo5" | "upsets" | "with_logs";
 
+// Translation keys for the built-in view tabs. Kept as a literal union so the
+// strictly-typed `t()` in the client accepts `t(view.labelKey)` directly.
+export type BuiltInViewLabelKey =
+  | "encounters.view.all"
+  | "encounters.view.myTeam"
+  | "encounters.view.finals"
+  | "encounters.view.closeBo5"
+  | "encounters.view.upsets"
+  | "encounters.view.withLogs";
+
 export interface BuiltInViewMeta {
   id: BuiltInViewId;
-  label: string;
+  labelKey: BuiltInViewLabelKey;
   swatch: TeamColor | null;
   showPin?: boolean;
 }
 
 export const BUILT_IN_VIEWS: readonly BuiltInViewMeta[] = [
-  { id: "all", label: "All encounters", swatch: "teal" },
-  { id: "my_team", label: "My team's series", swatch: null, showPin: true },
-  { id: "finals", label: "Finals only", swatch: "rose" },
-  { id: "close_bo5", label: "Close Bo5s", swatch: "amber" },
-  { id: "upsets", label: "Upsets", swatch: "violet" },
-  { id: "with_logs", label: "With logs", swatch: "blue" },
+  { id: "all", labelKey: "encounters.view.all", swatch: "teal" },
+  { id: "my_team", labelKey: "encounters.view.myTeam", swatch: null, showPin: true },
+  { id: "finals", labelKey: "encounters.view.finals", swatch: "rose" },
+  { id: "close_bo5", labelKey: "encounters.view.closeBo5", swatch: "amber" },
+  { id: "upsets", labelKey: "encounters.view.upsets", swatch: "violet" },
+  { id: "with_logs", labelKey: "encounters.view.withLogs", swatch: "blue" },
 ] as const;
 
 export function buildPageList(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
@@ -186,6 +196,10 @@ export function getPlayedAt(encounter: Encounter): string | Date | null {
   );
 }
 
+// Returns a raw English state SENTINEL ("Live" | "Upcoming" | "Final" |
+// "Pending" | "Open"). This value is used for control flow (status styling,
+// live/upcoming branches) AND as a stable map key for the translated display
+// label — callers must translate it via `encounters.state.*` before rendering.
 export function getEncounterStateLabel(encounter: Encounter, now = new Date()): string {
   const scheduledAt = encounter.scheduled_at ? new Date(encounter.scheduled_at) : null;
   if (encounter.started_at && !encounter.ended_at) return "Live";

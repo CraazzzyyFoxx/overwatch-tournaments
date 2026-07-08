@@ -5,9 +5,9 @@ import { Encounter } from "@/types/encounter.types";
 import { Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament-match-order";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { formatTiebreakOrder, tiebreakerLabel } from "@/lib/tiebreakers";
+import { formatTiebreakOrder, tiebreakerLabel, type TiebreakerMetricId } from "@/lib/tiebreakers";
 import tournamentService from "@/services/tournament.service";
 
 export interface StandingTableProps {
@@ -63,12 +63,17 @@ function FormChips({ results }: { results: ResultKind[] }) {
 }
 
 function TeamCell({ standing, showGroup }: { standing: Standings; showGroup: boolean }) {
+  const t = useTranslations();
   const groupName = standing.team?.group?.name;
   return (
     <div className="st-team">
       <div className="stack">
         <span className="nm">{standing.team?.name ?? "—"}</span>
-        {showGroup && groupName && <span className="sub">Group {groupName}</span>}
+        {showGroup && groupName && (
+          <span className="sub">
+            {t("common.group")} {groupName}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -80,7 +85,7 @@ const StandingsTable = ({
   advanceCount = 2,
   crownTop = false,
 }: StandingTableProps) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   const tournamentId = standings[0]?.tournament_id;
   const stagesQuery = useQuery({
@@ -143,7 +148,7 @@ const StandingsTable = ({
   // "Ranked by …" legend — resolve metric ids through i18n, falling back to the
   // shared English labels when a key is missing.
   const labelFor = (id: string) => {
-    const key = `common.tiebreakerMetrics.${id}`;
+    const key = `common.tiebreakerMetrics.${id as TiebreakerMetricId}` as const;
     const label = t(key);
     return label === key ? undefined : label;
   };
@@ -159,15 +164,15 @@ const StandingsTable = ({
           {is_groups ? (
             <tr>
               <th style={{ width: 36 }}>#</th>
-              <th>Team</th>
+              <th>{t("standings.colTeam")}</th>
               <th className="c" style={{ width: 70 }}>
-                W·D·L
+                {t("standings.colWDL")}
               </th>
               <th className="r" style={{ width: 48 }}>
-                Pts
+                {t("standings.colPts")}
               </th>
               <th className="r" style={{ width: 48 }} title={t("common.headToHead")}>
-                H2H
+                {t("standings.colH2H")}
               </th>
               <th className="r" style={{ width: 72 }}>
                 {t("common.buchholz")}
@@ -176,25 +181,25 @@ const StandingsTable = ({
                 +/−
               </th>
               <th className="c" style={{ width: 110 }}>
-                Form
+                {t("standings.colForm")}
               </th>
               <th className="c" style={{ width: 80 }} />
             </tr>
           ) : (
             <tr>
               <th style={{ width: 56 }}>#</th>
-              <th>Team</th>
+              <th>{t("standings.colTeam")}</th>
               <th className="c" style={{ width: 90 }}>
-                Record
+                {t("standings.colRecord")}
               </th>
               <th className="r" style={{ width: 170 }}>
-                Maps
+                {t("standings.colMaps")}
               </th>
               <th className="r" style={{ width: 80 }}>
-                Map Δ
+                {t("standings.colMapDiff")}
               </th>
               <th className="c" style={{ width: 130 }}>
-                Form
+                {t("standings.colForm")}
               </th>
             </tr>
           )}
@@ -251,10 +256,10 @@ const StandingsTable = ({
                         {advancing ? (
                           <span className="st-status adv">
                             <span className="arrow" />
-                            Adv
+                            {t("standings.advancing")}
                           </span>
                         ) : (
-                          <span className="st-status out">Out</span>
+                          <span className="st-status out">{t("standings.eliminated")}</span>
                         )}
                       </td>
                     </>
@@ -332,7 +337,7 @@ const StandingsTable = ({
               return (
                 <React.Fragment key={metricId}>
                   {idx > 0 && <span className="sep">→</span>}
-                  <span className="badge" title={`Priority ${idx + 1}`}>
+                  <span className="badge" title={t("standings.priority", { n: String(idx + 1) })}>
                     {label}
                   </span>
                 </React.Fragment>

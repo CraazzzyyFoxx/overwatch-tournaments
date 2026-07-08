@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Award, BarChart3, Scale, Trophy, Users } from "lucide-react";
 
 import StatisticsCard from "@/components/StatisticsCard";
@@ -41,6 +42,7 @@ export default async function WorkspaceHome({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const t = await getTranslations();
 
   let workspace: Workspace;
   try {
@@ -84,11 +86,15 @@ export default async function WorkspaceHome({
       >
         <div className="flex flex-col gap-1.5 p-6">
           <h2 className="text-3xl font-bold tracking-tight text-foreground font-display uppercase">
-            Dashboard
+            {t("workspace.dashboard")}
           </h2>
           <p className="text-base text-muted-foreground max-w-lg">
-            Tournament history, role stats and performance data for{" "}
-            <span className="text-foreground font-medium">{workspace.name}</span>.
+            {t.rich("workspace.dashboardLede", {
+              name: workspace.name,
+              hl: (chunks) => (
+                <span className="text-foreground font-medium">{chunks}</span>
+              ),
+            })}
           </p>
         </div>
       </div>
@@ -179,7 +185,8 @@ export default async function WorkspaceHome({
 // Workspace header
 // ─────────────────────────────────────────────────────────────────────────────
 
-function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
+async function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
+  const t = await getTranslations();
   return (
     <div
       className="liquid-glass rounded-xl p-6 flex flex-col gap-6 md:flex-row md:items-center md:justify-between"
@@ -193,7 +200,7 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
     >
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Workspace
+          {t("workspace.eyebrow")}
         </p>
         <h1 className="text-3xl font-bold tracking-tight text-foreground font-display uppercase">
           {workspace.name}
@@ -209,13 +216,13 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
         <Button asChild size="lg" className="shadow-lg shadow-primary/20">
           <Link href={`/tournaments`}>
             <Trophy className="mr-2 h-5 w-5" />
-            Tournaments
+            {t("common.tournaments")}
           </Link>
         </Button>
         <Button asChild variant="secondary" size="lg">
           <Link href="/tournaments/analytics">
             <BarChart3 className="mr-2 h-5 w-5" />
-            Analytics
+            {t("common.analytics")}
           </Link>
         </Button>
       </div>
@@ -230,12 +237,13 @@ function WorkspaceHeader({ workspace }: { workspace: Workspace }) {
 type TournamentWithCount = Tournament & { registrations_count?: number };
 
 async function WorkspaceEventsSection({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let activeTournaments: TournamentWithCount[] = [];
 
   try {
     const data = await tournamentService.getActive();
     activeTournaments = (data.results as TournamentWithCount[])
-      .filter((t) => t.workspace_id === workspaceId && isTournamentStatusActive(t.status))
+      .filter((tour) => tour.workspace_id === workspaceId && isTournamentStatusActive(tour.status))
       .slice(0, 6);
   } catch {
     // silently fail
@@ -244,7 +252,7 @@ async function WorkspaceEventsSection({ workspaceId }: { workspaceId: number }) 
   if (activeTournaments.length === 0) return null;
 
   const liveCount = activeTournaments.filter(
-    (t) => t.status === "live" || t.status === "playoffs"
+    (tour) => tour.status === "live" || tour.status === "playoffs"
   ).length;
   const upcomingCount = activeTournaments.length - liveCount;
 
@@ -256,22 +264,23 @@ async function WorkspaceEventsSection({ workspaceId }: { workspaceId: number }) 
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
         </span>
         <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-emerald-400">
-          {liveCount > 0 && `${liveCount} Live`}
+          {liveCount > 0 && t("statistics.liveCount", { count: liveCount })}
           {liveCount > 0 && upcomingCount > 0 && " · "}
-          {upcomingCount > 0 && `${upcomingCount} Upcoming`}
+          {upcomingCount > 0 && t("statistics.upcomingCount", { count: upcomingCount })}
         </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {activeTournaments.map((t) => (
-          <EventCard key={t.id} tournament={t} />
+        {activeTournaments.map((tour) => (
+          <EventCard key={tour.id} tournament={tour} />
         ))}
       </div>
     </div>
   );
 }
 
-function EventCard({ tournament }: { tournament: TournamentWithCount }) {
+async function EventCard({ tournament }: { tournament: TournamentWithCount }) {
+  const t = await getTranslations();
   const isLive = tournament.status === "live" || tournament.status === "playoffs";
   const statusMeta = getTournamentStatusMeta(tournament.status);
 
@@ -294,7 +303,7 @@ function EventCard({ tournament }: { tournament: TournamentWithCount }) {
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
                 </span>
                 <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-emerald-400">
-                  Live
+                  {t("common.live")}
                 </span>
               </>
             ) : (
@@ -315,7 +324,7 @@ function EventCard({ tournament }: { tournament: TournamentWithCount }) {
                 color: "var(--aqt-violet)",
               }}
             >
-              League
+              {t("common.league")}
             </span>
           )}
         </div>
@@ -332,13 +341,13 @@ function EventCard({ tournament }: { tournament: TournamentWithCount }) {
           <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <UsersIcon className="h-3 w-3 shrink-0" />
             {tournament.registrations_count ?? 0}{" "}
-            {isLive ? "participants" : "registered"}
+            {isLive ? t("common.participants") : t("common.registered")}
           </div>
         </div>
 
         <div className="pt-2.5 border-t border-border/50 flex justify-end">
           <span className="text-[12px] font-semibold tracking-[0.02em] text-indigo-400">
-            View →
+            {t("common.view")} →
           </span>
         </div>
       </div>
@@ -361,6 +370,7 @@ function EventsSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function StatsGrid({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let overall = null;
   let hasError = false;
   try {
@@ -373,9 +383,9 @@ async function StatsGrid({ workspaceId }: { workspaceId: number }) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="md:col-span-2 lg:col-span-4 border-destructive/50">
-          <CardHeader><CardTitle>Overall statistics</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("statistics.overallStatistics")}</CardTitle></CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Failed to load overall statistics.
+            {t("common.loadError")}
           </CardContent>
         </Card>
       </div>
@@ -385,25 +395,25 @@ async function StatsGrid({ workspaceId }: { workspaceId: number }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatisticsCard
-        name="Tournaments Held"
+        name={t("statistics.statTournamentsHeld")}
         value={overall.tournaments}
         icon={<Trophy className="h-4 w-4" />}
         iconClassName="bg-indigo-500/10 text-indigo-400"
       />
       <StatisticsCard
-        name="Teams Balanced"
+        name={t("statistics.statTeamsBalanced")}
         value={overall.teams}
         icon={<Scale className="h-4 w-4" />}
         iconClassName="bg-blue-500/10 text-blue-400"
       />
       <StatisticsCard
-        name="Players Participated"
+        name={t("statistics.statPlayersParticipated")}
         value={overall.players}
         icon={<Users className="h-4 w-4" />}
         iconClassName="bg-emerald-500/10 text-emerald-400"
       />
       <StatisticsCard
-        name="Champions"
+        name={t("common.champions")}
         value={overall.champions}
         icon={<Award className="h-4 w-4" />}
         iconClassName="bg-amber-500/10 text-amber-400"
@@ -417,6 +427,7 @@ async function StatsGrid({ workspaceId }: { workspaceId: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function TournamentsChartCard({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let tournaments = null;
   let hasError = false;
   try {
@@ -428,9 +439,9 @@ async function TournamentsChartCard({ workspaceId }: { workspaceId: number }) {
   if (hasError || !tournaments) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>History of tournament changes</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("workspace.tournamentHistory")}</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Failed to load tournament history.
+          {t("common.loadError")}
         </CardContent>
       </Card>
     );
@@ -444,6 +455,7 @@ async function TournamentsChartCard({ workspaceId }: { workspaceId: number }) {
 }
 
 async function TournamentsDivisionChartCard({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let data = null;
   let hasError = false;
   try {
@@ -455,9 +467,9 @@ async function TournamentsDivisionChartCard({ workspaceId }: { workspaceId: numb
   if (hasError || !data) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>Average division by roles</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("workspace.avgDivisionByRoles")}</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Failed to load tournament division data.
+          {t("common.loadError")}
         </CardContent>
       </Card>
     );
@@ -471,6 +483,7 @@ async function TournamentsDivisionChartCard({ workspaceId }: { workspaceId: numb
 }
 
 async function ChampionsTableCard({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let champions = null;
   let hasError = false;
   try {
@@ -482,8 +495,8 @@ async function ChampionsTableCard({ workspaceId }: { workspaceId: number }) {
   if (hasError || !champions) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>Champions</CardTitle></CardHeader>
-        <CardContent className="text-sm text-muted-foreground">Failed to load champions.</CardContent>
+        <CardHeader><CardTitle>{t("common.champions")}</CardTitle></CardHeader>
+        <CardContent className="text-sm text-muted-foreground">{t("common.loadError")}</CardContent>
       </Card>
     );
   }
@@ -496,6 +509,7 @@ async function ChampionsTableCard({ workspaceId }: { workspaceId: number }) {
 }
 
 async function TopWinratePlayersTableCard({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let players = null;
   let hasError = false;
   try {
@@ -507,9 +521,9 @@ async function TopWinratePlayersTableCard({ workspaceId }: { workspaceId: number
   if (hasError || !players) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>Top Players by Win ratio</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("workspace.topPlayersByWinRatio")}</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Failed to load top players.
+          {t("common.loadError")}
         </CardContent>
       </Card>
     );
@@ -523,6 +537,7 @@ async function TopWinratePlayersTableCard({ workspaceId }: { workspaceId: number
 }
 
 async function PopularHeroesCard({ workspaceId }: { workspaceId: number }) {
+  const t = await getTranslations();
   let heroPlaytime = null;
   let hasError = false;
   try {
@@ -534,9 +549,9 @@ async function PopularHeroesCard({ workspaceId }: { workspaceId: number }) {
   if (hasError || !heroPlaytime) {
     return (
       <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-        <CardHeader><CardTitle>Popular Heroes</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("workspace.popularHeroes")}</CardTitle></CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Failed to load hero playtime.
+          {t("common.loadError")}
         </CardContent>
       </Card>
     );
@@ -544,7 +559,7 @@ async function PopularHeroesCard({ workspaceId }: { workspaceId: number }) {
 
   return (
     <Card className="border-0 shadow-none bg-card/80 backdrop-blur-sm h-full">
-      <CardHeader><CardTitle>Popular Heroes</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{t("workspace.popularHeroes")}</CardTitle></CardHeader>
       <CardContent className="p-0 pb-2">
         <HeroPlaytimeChart heroes={heroPlaytime.results} />
       </CardContent>

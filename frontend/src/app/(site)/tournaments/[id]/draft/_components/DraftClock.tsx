@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useTranslation } from "@/i18n/LanguageContext";
 import { isUrgent, remainingMs } from "../_lib/draft-logic";
 
 interface DraftClockProps {
@@ -15,6 +16,7 @@ interface DraftClockProps {
  * server event that will commit the autopick.
  */
 export function DraftClock({ expiresAt, paused, compact = false }: DraftClockProps) {
+  const { t } = useTranslation();
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
@@ -24,7 +26,11 @@ export function DraftClock({ expiresAt, paused, compact = false }: DraftClockPro
   }, [paused, expiresAt]);
 
   if (paused) {
-    return <span className="font-mono tabular-nums text-amber-400">{compact ? "PAUSE" : "paused"}</span>;
+    return (
+      <span className="font-mono tabular-nums text-amber-400">
+        {compact ? t("draft.clock.pauseCompact") : t("draft.clock.paused")}
+      </span>
+    );
   }
   if (!expiresAt || now === null) {
     return <span className="font-mono tabular-nums text-[var(--aqt-fg-muted)]">--</span>;
@@ -32,7 +38,11 @@ export function DraftClock({ expiresAt, paused, compact = false }: DraftClockPro
 
   const ms = remainingMs(expiresAt, now);
   if (ms <= 0) {
-    return <span className="font-mono tabular-nums text-rose-500">{compact ? "AUTO" : "autopicking..."}</span>;
+    return (
+      <span className="font-mono tabular-nums text-rose-500">
+        {compact ? t("draft.clock.autoCompact") : t("draft.clock.autopicking")}
+      </span>
+    );
   }
   const seconds = Math.ceil(ms / 1000);
   const className = isUrgent(ms)

@@ -228,7 +228,15 @@
       "addSmurfButton": "Добавить",
       "verifiedHint": "Выберите один из ваших подтверждённых через OAuth аккаунтов.",
       "verifiedNone": "Подтверждённый аккаунт {label} не привязан.",
-      "verifiedLink": "Привязать {label} через OAuth"
+      "verifiedLink": "Привязать {label} через OAuth",
+      "typeToUseCustom": "Введите, чтобы использовать своё значение",
+      "noLinkedAccounts": "Нет привязанных аккаунтов",
+      "linkedAccounts": "Привязанные аккаунты",
+      "custom": "Своё значение",
+      "useValue": "Использовать «{value}»",
+      "discordPlaceholder": "имя пользователя",
+      "twitchPlaceholder": "название канала",
+      "verified": "Подтверждён"
     },
     "roles": {
       "title": "Выберите свою роль",
@@ -306,6 +314,12 @@
     "round": "Раунд",
     "pick": "Пик",
     "onTheClock": "На часах",
+    "onTheClockUpper": "НА ЧАСАХ",
+    "clockLabel": "ЧАСЫ",
+    "paused": "ПАУЗА",
+    "enterKey": "Enter",
+    "roleFilled": "Роль занята",
+    "playerFallback": "Игрок #{id}",
     "state": {
       "setup": "Настройка",
       "ready": "Готов",
@@ -314,6 +328,27 @@
       "completed": "Завершён",
       "cancelled": "Отменён"
     },
+    "pickState": {
+      "upcoming": "Ожидается",
+      "on_clock": "На часах",
+      "completed": "Завершён",
+      "skipped": "Пропущен",
+      "autopicked": "Автопик"
+    },
+    "roundRule": {
+      "forward": "ПРЯМ",
+      "reverse": "ОБР",
+      "weakest": "СЛАБЫЕ",
+      "strongest": "СИЛЬНЫЕ",
+      "lowAvg": "НИЗ. СР.",
+      "highAvg": "ВЫС. СР."
+    },
+    "clock": {
+      "pauseCompact": "ПАУЗА",
+      "paused": "пауза",
+      "autoCompact": "АВТО",
+      "autopicking": "автопик…"
+    },
     "empty": {
       "title": "Драфта пока нет",
       "body": "Драфт ещё не настроен для этого турнира."
@@ -321,9 +356,65 @@
     "roster": {
       "empty": "Пусто"
     },
+    "live": {
+      "progress": "Ход драфта",
+      "pickMap": "Карта пиков",
+      "noActivePick": "Нет активного пика",
+      "pickTime": "Время на пик",
+      "teamSize": "Размер команды"
+    },
+    "order": {
+      "title": "Порядок драфта",
+      "targetRole": "Цель",
+      "pending": "Ожидание"
+    },
+    "team": {
+      "title": "Команды",
+      "position": "Посев",
+      "unknown": "Неизвестная команда",
+      "yours": "Ваша команда",
+      "roster": "Ростер",
+      "avgRank": "Средний ранг",
+      "emptySlot": "Свободный слот"
+    },
     "pool": {
       "title": "Доступные игроки",
-      "empty": "Нет доступных игроков"
+      "empty": "Нет доступных игроков",
+      "short": "Пул",
+      "roleFilter": "Фильтр по роли",
+      "allRoles": "Все",
+      "search": "Поиск игрока",
+      "hero": "Герой",
+      "sort": "Сортировка",
+      "sortRank": "Ранг",
+      "sortName": "Имя",
+      "selectPromptTitle": "Выберите игрока",
+      "selectPromptReadOnly": "Нажмите на карточку, чтобы изучить пул игроков.",
+      "allHeroes": "Все герои",
+      "selectedCount": "Выбрано ({n})",
+      "selectedLabel": "Выбрано: {n}",
+      "clearAll": "Очистить всё",
+      "searchHeroPlaceholder": "Поиск героя…",
+      "noHeroes": "Герои не найдены."
+    },
+    "player": {
+      "captain": "Капитан",
+      "flex": "Флекс",
+      "idLabel": "ID: #{id}",
+      "secondary": "Доп. роли:"
+    },
+    "inspect": {
+      "roleDetails": "Разбор по ролям:",
+      "notes": "Заметка об игроке"
+    },
+    "view": {
+      "myPickTitle": "Вы на часах",
+      "myPickBody": "Выберите игрока из пула и подтвердите пик.",
+      "adminTitle": "Режим администратора",
+      "adminBody": "Вы можете управлять ходом драфта, пока капитаны делают пики.",
+      "waitingTitle": "Ожидание вашей очереди",
+      "spectatorTitle": "Режим зрителя",
+      "spectatorBody": "Следите за доской в реальном времени. Действия пика скрыты для зрителей."
     },
     "actions": {
       "confirm": "Подтвердить пик"
@@ -334,7 +425,9 @@
       "resume": "Продолжить",
       "rollback": "Откатить последний пик",
       "cancel": "Отменить драфт",
-      "export": "Экспорт в команды"
+      "export": "Экспорт в команды",
+      "controls": "Управление драфтом",
+      "autopick": "Автопик"
     },
     "bottomPanel": {
       "readyToPick": "Готов к выбору",
@@ -349,12 +442,18 @@
       "draftPaused": "Драфт на паузе",
       "draftCompleted": "Драфт завершен",
       "draftCancelled": "Драфт отменен",
-      "waitingStart": "Ожидание начала"
+      "waitingStart": "Ожидание начала",
+      "waitingResume": "Ожидаем, пока организатор продолжит",
+      "exportPrompt": "Ростеры сформированы",
+      "preparing": "Организатор готовится начать",
+      "readyMeta": "SR · за {team}",
+      "pickProgress": "(Пик #{n} из {total})"
     },
     "presence": {
       "title": "Капитаны • {online} из {total} в сети",
       "watching": "{count, plural, one {# смотрит} few {# смотрят} many {# смотрят} other {# смотрят}}",
-      "offline": "офлайн"
+      "offline": "офлайн",
+      "you": "Вы"
     }
   },
   "matchEdit": {
@@ -384,7 +483,9 @@
       "Draw": "Ничья",
       "Away close win": "Плотная победа гостей",
       "Away sweep": "Сухая победа гостей"
-    }
+    },
+    "starsAria": "{count, plural, one {# звезда} few {# звезды} many {# звёзд} other {# звёзд}}",
+    "notSet": "не задано"
   },
   "matchReport": {
     "title": "Репорт матча",
@@ -410,7 +511,8 @@
     "qualityLegend": {
       "oneSided": "1 - односторонний матч",
       "toTheEnd": "10 - до последнего"
-    }
+    },
+    "qualityAria": "Качество матча {score}/10: {description}"
   },
   "rankAutofill": {
     "title": "Автозаполнение рангов",
@@ -1180,6 +1282,339 @@
       "general": "Общие",
       "fields": "Поля",
       "customFields": "Свои поля"
+    }
+  },
+  "home": {
+    "eyebrow": "OWT // Платформа турниров Overwatch",
+    "title": "Что происходит <em>сейчас</em>",
+    "ledeTenant": "Турниры, статистика игроков и рейтинги этого сообщества.",
+    "ledePlatform": "Турниры, статистика игроков и рейтинги всех сообществ на платформе.",
+    "browseTournaments": "Смотреть турниры",
+    "byTheNumbers": "В цифрах",
+    "workspaces": "Рабочие пространства",
+    "communitiesOnPlatform": "Сообщества на платформе",
+    "seasonOverview": "Обзор сезона",
+    "communityDashboard": "Панель сообщества",
+    "avgDivisionDesc": "Средний дивизион по каждой роли за все турниры.",
+    "noEventsTitle": "Сейчас нет активных событий",
+    "noEventsBody": "Загляните позже — турниры проводятся в разных сообществах на этой платформе.",
+    "browsePastTournaments": "Смотреть прошедшие турниры"
+  },
+  "workspace": {
+    "eyebrow": "Рабочее пространство",
+    "dashboard": "Панель",
+    "dashboardLede": "История турниров, статистика по ролям и показатели для <hl>{name}</hl>.",
+    "tournamentHistory": "История изменений турниров",
+    "avgDivisionByRoles": "Средний дивизион по ролям",
+    "topPlayersByWinRatio": "Лучшие игроки по винрейту",
+    "popularHeroes": "Популярные герои"
+  },
+  "statistics": {
+    "navTitle": "Статистика",
+    "metaDescription": "Смотрите статистику на {siteName}.",
+    "eyebrow": "Статистика платформы",
+    "title": "Рейтинги и тренды за всё время",
+    "description": "Сводные показатели по всем турнирам: как рос состав участников, средний дивизион по ролям со временем и игроки, возглавляющие рейтинги по чемпионствам, винрейту и выигранным картам.",
+    "trendsOverTime": "Тренды со временем",
+    "leaderboards": "Рейтинги",
+    "overallStatistics": "Общая статистика",
+    "statTournamentsHeld": "Проведено турниров",
+    "statTeamsBalanced": "Сбалансировано команд",
+    "statPlayersParticipated": "Участвовало игроков",
+    "liveCount": "{count, plural, other {# Live}}",
+    "upcomingCount": "{count, plural, one {# предстоящее} few {# предстоящих} many {# предстоящих} other {# предстоящих}}",
+    "tournamentActivity": "Активность турниров",
+    "avgDivisionByRole": "Средний дивизион по роли",
+    "mostChampionships": "Больше всего чемпионств",
+    "topWinRate": "Лучший винрейт",
+    "mostMapsWon": "Больше всего выигранных карт",
+    "roleTank": "Танк",
+    "roleDamage": "Дамаг",
+    "roleSupport": "Саппорт"
+  },
+  "owal": {
+    "metaDescription": "Смотрите таблицу OWAL на {siteName}.",
+    "season": "Сезон:",
+    "selectSeason": "Выберите сезон",
+    "stacks": "Стаки",
+    "searchUser": "Поиск игрока...",
+    "only3Days": "Только 3+ дней",
+    "playerOne": "Игрок 1",
+    "playerTwo": "Игрок 2",
+    "days": "Дни",
+    "averagePlacement": "Среднее место",
+    "place": "Место",
+    "player": "Игрок",
+    "role": "Роль",
+    "division": "Дивизион",
+    "played": "Сыграно",
+    "totalBest3": "ИТОГО (лучшие 3 дня)",
+    "average": "Среднее",
+    "wins": "W",
+    "losses": "L",
+    "draws": "D",
+    "winRatio": "Винрейт"
+  },
+  "notConfigured": {
+    "title": "Рабочее пространство не настроено",
+    "description": "Этот адрес пока не привязан к рабочему пространству."
+  },
+  "standings": {
+    "colTeam": "Команда",
+    "colWDL": "В·Н·П",
+    "colPts": "Очки",
+    "colH2H": "ЛВ",
+    "colForm": "Форма",
+    "colRecord": "Счёт",
+    "colMaps": "Карты",
+    "colMapDiff": "Δ карт",
+    "advancing": "Проходит",
+    "eliminated": "Вылет",
+    "priority": "Приоритет {n}"
+  },
+  "bracket": {
+    "round": "Раунд {n}",
+    "lowerRound": "Нижняя R{n}",
+    "viewMatch": "Посмотреть матч",
+    "pending": "Ожидает",
+    "disputed": "Спор",
+    "editMatch": "Редактировать матч",
+    "reportMatch": "Репорт матча",
+    "doubleElimination": "Двойное выбывание",
+    "singleElimination": "Одиночное выбывание"
+  },
+  "rankHistory": {
+    "title": "История рангов",
+    "emptyTitle": "История рангов отсутствует",
+    "emptyBody": "Соревновательная статистика для этого игрока еще не была собрана.",
+    "noDataTitle": "Нет данных для выбора",
+    "noDataBody": "Выбранная комбинация учетной записи и роли не содержит соревновательных записей.",
+    "noProfileTitle": "Нет привязанного профиля",
+    "noProfileBody": "История рангов недоступна, так как этот BattleTag не связан с зарегистрированным аккаунтом на сайте.",
+    "errorTitle": "Ошибка загрузки",
+    "errorBody": "Не удалось загрузить историю рангов. Пожалуйста, попробуйте позже.",
+    "groupByPlaceholder": "Группировать по…",
+    "byRole": "По роли",
+    "byBattleNet": "По battle.net",
+    "granularityPlaceholder": "Детализация",
+    "daily": "По дням",
+    "hourly": "По часам",
+    "allPoints": "Все точки"
+  },
+  "encounters": {
+    "meta": {
+      "title": "Встречи",
+      "description": "Встречи на {siteName}."
+    },
+    "dataUnavailable": "Данные о встречах временно недоступны. Повторная попытка в фоновом режиме.",
+    "views": "Виды",
+    "unassigned": "Не назначено",
+    "tournamentNumber": "Турнир {number}",
+    "searchPlaceholder": "Поиск по команде, игроку или паре…",
+    "roundNum": "Раунд {round}",
+    "roundShort": "Р{round}",
+    "mapsCount": "{count, plural, one {# карта} few {# карты} many {# карт} other {# карт}}",
+    "aria": {
+      "views": "Виды встреч",
+      "filters": "Фильтры встреч"
+    },
+    "view": {
+      "all": "Все встречи",
+      "myTeam": "Серии моей команды",
+      "finals": "Только финалы",
+      "closeBo5": "Напряжённые Bo5",
+      "upsets": "Апсеты",
+      "withLogs": "С логами"
+    },
+    "state": {
+      "live": "Live",
+      "upcoming": "Предстоит",
+      "final": "Завершён",
+      "pending": "Ожидание",
+      "open": "Открыт",
+      "soon": "Скоро",
+      "upset": "Апсет"
+    },
+    "media": {
+      "logsAvailable": "Логи матча доступны",
+      "noLogs": "Нет логов матча",
+      "comingTwitch": "Появится с интеграцией Twitch"
+    },
+    "sort": {
+      "date": "Дата",
+      "closeness": "Напряжённость",
+      "upcoming": "Ближайшие"
+    },
+    "filter": {
+      "withLogs": "С логами",
+      "tournamentAny": "Турнир: любой",
+      "tournamentNamed": "Турнир: {name}",
+      "bestOf": "Best-of",
+      "bestOfAny": "Best-of: любой",
+      "bestOfValue": "Best-of: {count}",
+      "closenessAny": "Напряжённость: любая",
+      "closenessMin": "Напряжённость ≥ {pct}%",
+      "statusAll": "Статус: все",
+      "statusOpen": "Статус: открыт",
+      "statusPending": "Статус: ожидание",
+      "statusFinal": "Статус: завершён",
+      "sortDate": "Сортировка: дата",
+      "sortCloseness": "Сортировка: напряжённость",
+      "sortUpcoming": "Сортировка: ближайшие",
+      "sortTrigger": "Сортировка: {label}"
+    },
+    "col": {
+      "matchup": "Пара",
+      "round": "Раунд",
+      "score": "Счёт",
+      "maps": "Карты",
+      "closeness": "Напряжённость",
+      "media": "Медиа",
+      "played": "Сыграно"
+    },
+    "savedView": {
+      "saved": "Вид сохранён",
+      "deleted": "Вид удалён",
+      "promptName": "Название вида",
+      "promptDefault": "Текущий вид",
+      "deleteAria": "Удалить сохранённый вид {name}",
+      "confirmDelete": "Удалить сохранённый вид «{name}»?",
+      "saveCurrent": "Сохранить текущий вид"
+    },
+    "insights": {
+      "title": "Сводка",
+      "meta": "За последние 30 дней · {count, plural, one {# серия} few {# серии} many {# серий} other {# серий}}",
+      "avg": "Сред.",
+      "max": "Макс.",
+      "fewer": "меньше",
+      "more": "больше",
+      "series": "Серии",
+      "closenessTitle": "Распределение напряжённости",
+      "closenessSub": "Серии, сгруппированные по накалу",
+      "scoreTitle": "Распределение счёта",
+      "scoreSub": "Итоговый счёт серий · Bo3 / Bo5",
+      "byStageTitle": "По этапам",
+      "byStageSub": "Где проходят серии",
+      "noStageData": "Пока нет данных по этапам."
+    },
+    "featured": {
+      "title": "Избранные серии",
+      "meta": "Автоподборка · Текущая область фильтра",
+      "closestTitle": "Самые напряжённые",
+      "closestSub": "Отчёты с наивысшей напряжённостью",
+      "liveTitle": "Прямо сейчас",
+      "liveSub": "Идущие и предстоящие серии",
+      "empty": "Нет избранных серий в этой выборке."
+    },
+    "list": {
+      "title": "Все встречи",
+      "pageMeta": "Страница {page} из {total} · сортировка по {sort, select, closeness {напряжённости} upcoming {ближайшим} other {дате}}",
+      "loading": "Загрузка встреч…",
+      "empty": "Встречи не найдены.",
+      "showing": "Показано {start}–{end} из {total} серий"
+    },
+    "hero": {
+      "eyebrow": "Все турниры · Встречи",
+      "title": "Каждый бой — <em>в цифрах</em>",
+      "lede": "Все серии всех турниров и лиг на платформе — с фильтрами по этапу, турниру, напряжённости и наличию логов.",
+      "totalLabel": "Всего встреч",
+      "last7Days": "за 7 дней",
+      "allTime": "За всё время",
+      "withLogsLabel": "С логами матча",
+      "ofSeries": "{count} из {total} серий",
+      "avgClosenessLabel": "Средняя напряжённость",
+      "acrossReported": "По сериям с отчётами",
+      "liveNowLabel": "Идёт сейчас",
+      "upcomingCount": "{count} предстоящих"
+    },
+    "pulse": {
+      "title": "Пульс недели",
+      "avgLength": "Средняя длина серии",
+      "avgLengthMeta": "по {count} завершённым сериям",
+      "sweepRate": "Доля всухую",
+      "sweepMeta": "{sweeps} всухую · {distance} до конца",
+      "reverseSweepRate": "Доля камбэков",
+      "reverseSweepMeta": "серии, отыгранные с матчпоинта",
+      "mostDecisiveMap": "Самая решающая карта"
+    },
+    "hotMaps": {
+      "title": "Популярные карты",
+      "sub": "Текущая область фильтра",
+      "empty": "Пока нет данных по картам."
+    },
+    "sideBalance": {
+      "title": "Баланс сторон",
+      "sub": "Победитель: дома vs в гостях",
+      "homeWins": "Победы дома",
+      "awayWins": "Победы в гостях"
+    },
+    "detail": {
+      "metaTitle": "{home} против {away}",
+      "metaDescription": "Обзор встречи {home} против {away} на {siteName}.",
+      "back": "Назад к встречам",
+      "tie": "Ничья",
+      "winner": "Победитель",
+      "loser": "Проигравший"
+    },
+    "match": {
+      "roundTab": "Раунд {round}",
+      "mapAlt": "Карта",
+      "gamemodeAlt": "Режим игры",
+      "playtime": "Время игры",
+      "logName": "Имя лога",
+      "openNewTab": "Открыть в новой вкладке",
+      "allMatch": "Весь матч"
+    },
+    "team": {
+      "placement": "Место: {value}",
+      "colName": "Имя",
+      "colDivision": "Дивизион",
+      "colNew": "Новый",
+      "colNewRole": "Новая роль"
+    },
+    "chart": {
+      "title": "Обзор убийств и ассистов",
+      "kills": "Убийства",
+      "assists": "Ассисты"
+    },
+    "veto": {
+      "title": "Вето карт",
+      "loading": "Загрузка вето карт...",
+      "loadError": "Не удалось загрузить вето карт",
+      "actionFailed": "Не удалось выполнить действие вето",
+      "mapNumber": "Карта №{id}",
+      "mapOrder": "Порядок карт",
+      "sending": "Отправка...",
+      "completed": "Завершено",
+      "deciderResolving": "Идёт определение решающей карты",
+      "turn": "Ход команды {side}: {action}",
+      "yourTurn": "Ваш ход как капитана {side}",
+      "ban": "Забанить {map}",
+      "pick": "Выбрать {map}",
+      "side": {
+        "home": "хозяев",
+        "away": "гостей"
+      },
+      "act": {
+        "ban": "забанить",
+        "pick": "выбрать"
+      }
+    },
+    "result": {
+      "title": "Результат матча",
+      "none": "Нет результата",
+      "pendingConfirmation": "Ожидает подтверждения",
+      "confirmed": "Подтверждён",
+      "disputed": "Оспорен",
+      "home": "Дома",
+      "away": "В гостях",
+      "submit": "Отправить результат",
+      "submitting": "Отправка...",
+      "submittedScore": "Отправленный счёт: {home} - {away}",
+      "confirm": "Подтвердить результат",
+      "confirming": "Подтверждение...",
+      "dispute": "Оспорить",
+      "disputedNotice": "Результат оспорен. Администратор рассмотрит спор."
     }
   }
 }

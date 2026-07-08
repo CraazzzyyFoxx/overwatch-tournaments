@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import type { CustomFieldDefinition } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
@@ -20,6 +21,7 @@ export default function CustomField({
   onChange,
   onValidationChange,
 }: CustomFieldProps) {
+  const t = useTranslations();
   const inputType = definition.type === "number" ? "number" : definition.type === "url" ? "url" : "text";
   const validationError = getCustomFieldValidationError(definition, value);
 
@@ -36,7 +38,7 @@ export default function CustomField({
           onChange={(e) => onChange(e.target.value)}
           className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white outline-none"
         >
-          <option value="">Select...</option>
+          <option value="">{t("common.selectPlaceholder")}</option>
           {definition.options.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}

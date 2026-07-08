@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Match } from "@/types/encounter.types";
@@ -13,6 +14,7 @@ import MatchStatsChart from "@/app/(site)/encounters/[id]/components/MatchStatsC
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 
 const EncounterMatch = async ({ match }: { match: Match }) => {
+  const t = await getTranslations();
   const mapImagePath: string = match.map ? match.map?.image_path : "";
   const data = await encounterService.getMatch(match.id);
 
@@ -39,7 +41,9 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
   const tabsContent: ReactNode[] = [];
   Object.keys(data.home_team.players[0].stats).forEach((key) => {
     if (key != "0") {
-      tabsTriggers.push(<TabsTrigger value={key}>Round {key}</TabsTrigger>);
+      tabsTriggers.push(
+        <TabsTrigger value={key}>{t("encounters.match.roundTab", { round: key })}</TabsTrigger>
+      );
     }
     tabsContent.push(
       <TabsContent value={key}>
@@ -65,7 +69,7 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
     <Dialog>
       <DialogTrigger asChild>
         <Card className="overflow-hidden relative h-[115px] max-w-[230px]">
-          <Image src={mapImagePath} alt="Map" fill={true} />
+          <Image src={mapImagePath} alt={t("encounters.match.mapAlt")} fill={true} />
           <h4 className="absolute bottom-0 left-0 m-2 text-xl font-semibold tracking-tight text-white p-1">
             {match.map?.name}
           </h4>
@@ -81,7 +85,7 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
               <div className="flex flex-row gap-4 items-center">
                 <Image
                   src={data.map?.gamemode.image_path || ""}
-                  alt={data.map?.gamemode.name || "Gamemode"}
+                  alt={data.map?.gamemode.name || t("encounters.match.gamemodeAlt")}
                   height={40}
                   width={40}
                 />
@@ -108,7 +112,7 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
               </div>
               <div className="flex flex-row gap-4">
                 <div className="flex flex-col text-right">
-                  <p className="leading-7">Playtime</p>
+                  <p className="leading-7">{t("encounters.match.playtime")}</p>
                   <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
                     {Math.floor(match.time / 60)}m {(match.time % 60).toFixed(0)}s
                   </h4>
@@ -116,7 +120,7 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
               </div>
 
               <div className="flex flex-col text-right">
-                <p className="leading-7">Log name</p>
+                <p className="leading-7">{t("encounters.match.logName")}</p>
                 <div className="flex items-center justify-end gap-2">
                   <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
                     {match.log_name}
@@ -131,13 +135,13 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
             <Link href={`/matches/${data.id}`} target="_blank" rel="noopener noreferrer">
               <div className="flex gap-2 scroll-m-20 text-xl font-semibold tracking-tight">
                 <ExternalLink />
-                Open in New Tab
+                {t("encounters.match.openNewTab")}
               </div>
             </Link>
           </div>
           <Tabs defaultValue="0">
             <TabsList className="ml-8">
-              <TabsTrigger value="0">All Match</TabsTrigger>
+              <TabsTrigger value="0">{t("encounters.match.allMatch")}</TabsTrigger>
               {...tabsTriggers}
             </TabsList>
             {...tabsContent}

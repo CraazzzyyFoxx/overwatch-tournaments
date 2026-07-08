@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import {
   BarChart,
   Bar,
@@ -21,6 +22,7 @@ interface MatchStatsChartProps {
 }
 
 const MatchStatsChart = ({ homeTeam, awayTeam, matchRound }: MatchStatsChartProps) => {
+  const t = useTranslations();
   const data = [
     ...homeTeam.players.map((p) => ({
       name: p.name,
@@ -38,7 +40,7 @@ const MatchStatsChart = ({ homeTeam, awayTeam, matchRound }: MatchStatsChartProp
 
   return (
     <div className="h-[400px] w-full mt-8">
-      <h3 className="text-xl font-semibold mb-4 text-center">Kills and Assists Overview</h3>
+      <h3 className="text-xl font-semibold mb-4 text-center">{t("encounters.chart.title")}</h3>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -58,8 +60,18 @@ const MatchStatsChart = ({ homeTeam, awayTeam, matchRound }: MatchStatsChartProp
             cursor={{ fill: 'var(--muted)' }}
           />
           <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
-          <Bar dataKey="Kills" fill="#16e5b4" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="Assists" fill="#ff4655" radius={[4, 4, 0, 0]} />
+          <Bar
+            dataKey="Kills"
+            name={t("encounters.chart.kills")}
+            fill="#16e5b4"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey="Assists"
+            name={t("encounters.chart.assists")}
+            fill="#ff4655"
+            radius={[4, 4, 0, 0]}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

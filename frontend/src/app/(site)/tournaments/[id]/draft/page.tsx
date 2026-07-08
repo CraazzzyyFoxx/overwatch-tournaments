@@ -2,10 +2,12 @@
 
 import { useParams, redirect } from "next/navigation";
 
+import { useTranslation } from "@/i18n/LanguageContext";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
 import { DraftBoard } from "./_components/DraftBoard";
 
 export default function TournamentDraftRoutePage() {
+  const { t } = useTranslation();
   const params = useParams<{ id: string }>();
   const tournamentId = Number(params.id);
   const tournamentQuery = useTournamentQuery(tournamentId);
@@ -13,7 +15,7 @@ export default function TournamentDraftRoutePage() {
   if (tournamentQuery.isLoading) {
     return (
       <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
-        Loading…
+        {t("common.loading")}
       </div>
     );
   }
@@ -21,7 +23,7 @@ export default function TournamentDraftRoutePage() {
   if (!tournamentQuery.data) {
     return (
       <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
-        Tournament not found.
+        {t("common.tournamentNotFound")}
       </div>
     );
   }

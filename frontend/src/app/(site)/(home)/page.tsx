@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { headers } from "next/headers";
+import { getTranslations } from "next-intl/server";
 import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
 
 import StatisticsCard from "@/components/StatisticsCard";
@@ -39,6 +40,7 @@ export default async function Home() {
   // workspace, so the cross-workspace "communities on this platform" list
   // is hidden. See middleware.ts (Task 6) for the header injection.
   const tenantMode = (await headers()).get("x-owt-host-mode") === "tenant";
+  const t = await getTranslations();
 
   return (
     <div className="space-y-8">
@@ -55,7 +57,7 @@ export default async function Home() {
       {/* Platform stats */}
       <section>
         <p className="mb-4 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-          By the numbers
+          {t("home.byTheNumbers")}
         </p>
         <Suspense fallback={<StatsGridSkeleton />}>
           <StatsGrid />
@@ -66,10 +68,10 @@ export default async function Home() {
       {!tenantMode && (
         <section>
           <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-            Workspaces
+            {t("home.workspaces")}
           </p>
           <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground mb-5">
-            Communities on this platform
+            {t("home.communitiesOnPlatform")}
           </h2>
           <Suspense fallback={<CommunitiesSkeleton />}>
             <CommunitiesSection />
@@ -81,10 +83,10 @@ export default async function Home() {
       <section className="pb-8 space-y-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-            Season overview
+            {t("home.seasonOverview")}
           </p>
           <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground">
-            Community Dashboard
+            {t("home.communityDashboard")}
           </h2>
         </div>
 
@@ -124,33 +126,26 @@ export default async function Home() {
 // Page intro (cinematic header)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
+async function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
+  const t = await getTranslations();
   return (
     <PageHero
       align="center"
-      eyebrow={<HeroCoord>OWT // Overwatch Tournament Platform</HeroCoord>}
-      title={
-        <>
-          What&apos;s happening <em>now</em>
-        </>
-      }
-      lede={
-        tenantMode
-          ? "Tournaments, player stats and rankings for this community."
-          : "Tournaments, player stats and rankings across all communities on the platform."
-      }
+      eyebrow={<HeroCoord>{t("home.eyebrow")}</HeroCoord>}
+      title={t.rich("home.title", { em: (chunks) => <em>{chunks}</em> })}
+      lede={tenantMode ? t("home.ledeTenant") : t("home.ledePlatform")}
       actions={
         <>
           <Button asChild size="lg" className="shadow-lg shadow-primary/20">
             <Link href="/tournaments">
               <Trophy className="mr-2 h-5 w-5" />
-              Browse Tournaments
+              {t("home.browseTournaments")}
             </Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
             <Link href="/tournaments/analytics">
               <BarChart3 className="mr-2 h-5 w-5" />
-              Analytics
+              {t("common.analytics")}
             </Link>
           </Button>
         </>
@@ -166,6 +161,7 @@ function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
 type TournamentWithCount = Tournament & { registrations_count?: number };
 
 async function LiveEventsSection() {
+  const t = await getTranslations();
   let activeTournaments: TournamentWithCount[] = [];
   let workspaceMap = new Map<number, Workspace>();
 
@@ -176,7 +172,7 @@ async function LiveEventsSection() {
     ]);
 
     activeTournaments = (tournamentsData.results as TournamentWithCount[])
-      .filter((t) => isTournamentStatusActive(t.status))
+      .filter((tour) => isTournamentStatusActive(tour.status))
       .slice(0, 6);
 
     workspaceMap = new Map(workspaces.map((w) => [w.id, w]));
@@ -185,7 +181,7 @@ async function LiveEventsSection() {
   }
 
   const liveCount = activeTournaments.filter(
-    (t) => t.status === "live" || t.status === "playoffs"
+    (tour) => tour.status === "live" || tour.status === "playoffs"
   ).length;
   const upcomingCount = activeTournaments.length - liveCount;
 
@@ -201,18 +197,18 @@ async function LiveEventsSection() {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
         </span>
         <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-emerald-400">
-          {liveCount > 0 && `${liveCount} Live`}
+          {liveCount > 0 && t("statistics.liveCount", { count: liveCount })}
           {liveCount > 0 && upcomingCount > 0 && " · "}
-          {upcomingCount > 0 && `${upcomingCount} Upcoming`}
+          {upcomingCount > 0 && t("statistics.upcomingCount", { count: upcomingCount })}
         </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {activeTournaments.map((t) => (
+        {activeTournaments.map((tour) => (
           <EventCard
-            key={t.id}
-            tournament={t}
-            workspace={workspaceMap.get(t.workspace_id)}
+            key={tour.id}
+            tournament={tour}
+            workspace={workspaceMap.get(tour.workspace_id)}
           />
         ))}
       </div>
@@ -220,13 +216,14 @@ async function LiveEventsSection() {
   );
 }
 
-function EventCard({
+async function EventCard({
   tournament,
   workspace,
 }: {
   tournament: TournamentWithCount;
   workspace?: Workspace;
 }) {
+  const t = await getTranslations();
   const isLive =
     tournament.status === "live" || tournament.status === "playoffs";
   const statusMeta = getTournamentStatusMeta(tournament.status);
@@ -256,7 +253,7 @@ function EventCard({
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
                 </span>
                 <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-emerald-400">
-                  Live
+                  {t("common.live")}
                 </span>
               </>
             ) : (
@@ -281,7 +278,7 @@ function EventCard({
                   color: "hsl(270 60% 72%)",
                 }}
               >
-                League
+                {t("common.league")}
               </span>
             )}
             {workspace && (
@@ -313,7 +310,7 @@ function EventCard({
           <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <Users className="h-3 w-3 flex-shrink-0" />
             {tournament.registrations_count ?? 0}{" "}
-            {isLive ? "participants" : "registered"}
+            {isLive ? t("common.participants") : t("common.registered")}
           </div>
         </div>
 
@@ -323,7 +320,7 @@ function EventCard({
             className="text-[12px] font-semibold tracking-[0.02em]"
             style={{ color: `hsl(${hue} 72% 55%)` }}
           >
-            View →
+            {t("common.view")} →
           </span>
         </div>
       </div>
@@ -331,21 +328,21 @@ function EventCard({
   );
 }
 
-function NoEventsState() {
+async function NoEventsState() {
+  const t = await getTranslations();
   return (
     <div className="flex flex-col items-center gap-3 p-8 rounded-xl border border-dashed border-border/50 max-w-sm mx-auto text-center">
       <Calendar className="h-7 w-7 text-muted-foreground/30" />
       <div>
         <p className="text-sm font-semibold text-muted-foreground mb-1">
-          No active events right now
+          {t("home.noEventsTitle")}
         </p>
         <p className="text-xs text-muted-foreground/50 leading-relaxed">
-          Check back soon — tournaments are organized across multiple communities
-          on this platform.
+          {t("home.noEventsBody")}
         </p>
       </div>
       <Button variant="outline" size="sm" asChild className="mt-1">
-        <Link href="/tournaments">Browse past tournaments</Link>
+        <Link href="/tournaments">{t("home.browsePastTournaments")}</Link>
       </Button>
     </div>
   );
@@ -440,6 +437,7 @@ function CommunitiesSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function StatsGrid() {
+  const t = await getTranslations();
   let overall = null;
   try {
     overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
@@ -452,10 +450,10 @@ async function StatsGrid() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="md:col-span-2 lg:col-span-4 border-destructive/50">
           <CardHeader>
-            <CardTitle>Overall statistics</CardTitle>
+            <CardTitle>{t("statistics.overallStatistics")}</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Failed to load overall statistics.
+            {t("common.loadError")}
           </CardContent>
         </Card>
       </div>
@@ -465,25 +463,25 @@ async function StatsGrid() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatisticsCard
-        name="Tournaments Held"
+        name={t("statistics.statTournamentsHeld")}
         value={overall.tournaments}
         icon={<Trophy className="h-4 w-4" />}
         iconClassName="bg-indigo-500/10 text-indigo-400"
       />
       <StatisticsCard
-        name="Teams Balanced"
+        name={t("statistics.statTeamsBalanced")}
         value={overall.teams}
         icon={<Scale className="h-4 w-4" />}
         iconClassName="bg-blue-500/10 text-blue-400"
       />
       <StatisticsCard
-        name="Players Participated"
+        name={t("statistics.statPlayersParticipated")}
         value={overall.players}
         icon={<Users className="h-4 w-4" />}
         iconClassName="bg-emerald-500/10 text-emerald-400"
       />
       <StatisticsCard
-        name="Champions"
+        name={t("common.champions")}
         value={overall.champions}
         icon={<Award className="h-4 w-4" />}
         iconClassName="bg-amber-500/10 text-amber-400"
@@ -534,6 +532,7 @@ function PlaceBadge({ n }: { n: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function TournamentActivityCard() {
+  const t = await getTranslations();
   let visible = null;
   let max = 1;
   try {
@@ -549,9 +548,9 @@ async function TournamentActivityCard() {
   if (!visible) {
     return (
       <>
-        <DashCardHeader>Tournament Activity</DashCardHeader>
+        <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
       </>
     );
@@ -559,7 +558,7 @@ async function TournamentActivityCard() {
 
   return (
     <>
-      <DashCardHeader>Tournament Activity</DashCardHeader>
+      <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
       <div className="px-5 pb-3 pt-5">
         <div className="flex items-end gap-[4px]" style={{ height: 110 }}>
           {visible.map((t, i) => (
@@ -599,6 +598,7 @@ async function TournamentActivityCard() {
 }
 
 async function DivisionRingsCard() {
+  const t = await getTranslations();
   let roles = null;
   try {
     const data = await statisticsService.getTournamentsDivision({
@@ -618,9 +618,9 @@ async function DivisionRingsCard() {
       const globalMax = Math.max(meanTank, meanDamage, meanSupport, 0.001);
 
       roles = [
-        { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: "var(--aqt-tank)" },
-        { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: "var(--aqt-damage)" },
-        { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: "var(--aqt-support)" },
+        { label: t("statistics.roleTank"), val: meanTank, pct: (meanTank / globalMax) * 100, color: "var(--aqt-tank)" },
+        { label: t("statistics.roleDamage"), val: meanDamage, pct: (meanDamage / globalMax) * 100, color: "var(--aqt-damage)" },
+        { label: t("statistics.roleSupport"), val: meanSupport, pct: (meanSupport / globalMax) * 100, color: "var(--aqt-support)" },
       ];
     }
   } catch {
@@ -630,9 +630,9 @@ async function DivisionRingsCard() {
   if (!roles) {
     return (
       <>
-        <DashCardHeader>Avg Division by Role</DashCardHeader>
+        <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
       </>
     );
@@ -643,7 +643,7 @@ async function DivisionRingsCard() {
 
   return (
     <>
-      <DashCardHeader>Avg Division by Role</DashCardHeader>
+      <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
       <div className="px-5 py-5 flex gap-4 items-start flex-wrap">
         {roles.map((role) => (
           <div
@@ -690,7 +690,7 @@ async function DivisionRingsCard() {
           className="flex-[2] text-[12px] leading-relaxed self-center"
           style={{ color: "var(--aqt-fg-dim)", minWidth: 90 }}
         >
-          Average division rank per role across all tournaments.
+          {t("home.avgDivisionDesc")}
         </p>
       </div>
     </>
@@ -698,6 +698,7 @@ async function DivisionRingsCard() {
 }
 
 async function ChampionsCard() {
+  const t = await getTranslations();
   let top = null;
   try {
     const data = await statisticsService.getChampions({ skipWorkspace: true });
@@ -709,9 +710,9 @@ async function ChampionsCard() {
   if (!top) {
     return (
       <>
-        <DashCardHeader>Most Championships</DashCardHeader>
+        <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
       </>
     );
@@ -719,7 +720,7 @@ async function ChampionsCard() {
 
   return (
     <>
-      <DashCardHeader>Most Championships</DashCardHeader>
+      <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
       {top.map((p, i) => (
         <div
           key={p.id}
@@ -751,6 +752,7 @@ async function ChampionsCard() {
 }
 
 async function TopWinRateCard() {
+  const t = await getTranslations();
   let top = null;
   try {
     const data = await statisticsService.getTopWinratePlayers({
@@ -764,9 +766,9 @@ async function TopWinRateCard() {
   if (!top) {
     return (
       <>
-        <DashCardHeader>Top Win Rate</DashCardHeader>
+        <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
       </>
     );
@@ -774,7 +776,7 @@ async function TopWinRateCard() {
 
   return (
     <>
-      <DashCardHeader>Top Win Rate</DashCardHeader>
+      <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
       {top.map((p, i) => (
         <div
           key={p.id}

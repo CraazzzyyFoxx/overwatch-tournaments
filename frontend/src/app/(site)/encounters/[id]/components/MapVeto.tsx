@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,14 +26,31 @@ interface MapVetoProps {
   encounterId: number;
 }
 
-function getStepLabel(state: EncounterMapPoolState): string | null {
-  if (state.is_complete) return "Completed";
-  if (state.expected_action === "decider") return "Decider map is being resolved";
+type Translate = ReturnType<typeof useTranslations>;
+
+// veto side/action are raw enum values from the API; map them to display keys.
+const VETO_SIDE_KEY = {
+  home: "encounters.veto.side.home",
+  away: "encounters.veto.side.away"
+} as const;
+
+const VETO_ACTION_KEY = {
+  ban: "encounters.veto.act.ban",
+  pick: "encounters.veto.act.pick"
+} as const;
+
+function getStepLabel(state: EncounterMapPoolState, t: Translate): string | null {
+  if (state.is_complete) return t("encounters.veto.completed");
+  if (state.expected_action === "decider") return t("encounters.veto.deciderResolving");
   if (!state.turn_side || !state.expected_action) return null;
-  return `${state.turn_side} team to ${state.expected_action}`;
+  return t("encounters.veto.turn", {
+    side: t(VETO_SIDE_KEY[state.turn_side]),
+    action: t(VETO_ACTION_KEY[state.expected_action])
+  });
 }
 
 export function MapVeto({ encounterId }: MapVetoProps) {
+  const t = useTranslations();
   const [mapNames, setMapNames] = useState<Record<number, string>>({});
   const [vetoState, setVetoState] = useState<EncounterMapPoolState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,12 +76,12 @@ export function MapVeto({ encounterId }: MapVetoProps) {
         setError(null);
       }
     } catch {
-      setError("Failed to load map veto");
+      setError(t("encounters.veto.loadError"));
     } finally {
       setIsLoading(false);
       setPendingAction(null);
     }
-  }, [encounterId]);
+  }, [encounterId, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +137,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
     [vetoState],
   );
 
-  const stepLabel = vetoState ? getStepLabel(vetoState) : null;
+  const stepLabel = vetoState ? getStepLabel(vetoState, t) : null;
 
   const performAction = async (mapId: number, action: MapVetoAction) => {
     if (!vetoState?.allowed_actions.includes(action)) {
@@ -134,7 +152,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
       // realtime "map_veto.updated" signal that this commit publishes.
       await refetchState();
     } catch {
-      setError("Veto action failed");
+      setError(t("encounters.veto.actionFailed"));
       setPendingAction(null);
       // Resync to the server's authoritative state after a rejected action.
       await refetchState();
@@ -153,11 +171,11 @@ export function MapVeto({ encounterId }: MapVetoProps) {
     return (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Map Veto</CardTitle>
+          <CardTitle className="text-base">{t("encounters.veto.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">
-            {error ?? "Loading map veto..."}
+            {error ?? t("encounters.veto.loading")}
           </div>
         </CardContent>
       </Card>
@@ -168,7 +186,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between gap-3 text-base">
-          <span>Map Veto</span>
+          <span>{t("encounters.veto.title")}</span>
           {stepLabel && <Badge variant="secondary">{stepLabel}</Badge>}
         </CardTitle>
       </CardHeader>
@@ -180,7 +198,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
               className={`rounded-md p-2 text-center text-sm ${STATUS_COLORS[entry.status]}`}
             >
               <div className="font-medium">
-                {mapNames[entry.map_id] ?? `Map #${entry.map_id}`}
+                {mapNames[entry.map_id] ?? t("encounters.veto.mapNumber", { id: entry.map_id })}
               </div>
               {entry.picked_by && (
                 <div className="text-xs opacity-75">{entry.picked_by}</div>
@@ -192,7 +210,9 @@ export function MapVeto({ encounterId }: MapVetoProps) {
         {vetoState.viewer_can_act && availableMaps.length > 0 && (
           <div className="space-y-2">
             <div className="text-sm font-medium">
-              Your turn as {vetoState.viewer_side} captain
+              {t("encounters.veto.yourTurn", {
+                side: vetoState.viewer_side ? t(VETO_SIDE_KEY[vetoState.viewer_side]) : ""
+              })}
             </div>
             <div className="flex flex-wrap gap-2">
               {availableMaps.map((entry: EncounterMapPoolEntry) => (
@@ -210,8 +230,14 @@ export function MapVeto({ encounterId }: MapVetoProps) {
                   }
                 >
                   {pendingAction?.mapId === entry.map_id
-                    ? "Sending..."
-                    : `${vetoState.allowed_actions[0] === "ban" ? "Ban" : "Pick"} ${mapNames[entry.map_id] ?? entry.map_id}`}
+                    ? t("encounters.veto.sending")
+                    : vetoState.allowed_actions[0] === "ban"
+                      ? t("encounters.veto.ban", {
+                          map: mapNames[entry.map_id] ?? String(entry.map_id)
+                        })
+                      : t("encounters.veto.pick", {
+                          map: mapNames[entry.map_id] ?? String(entry.map_id)
+                        })}
                 </Button>
               ))}
             </div>
@@ -220,7 +246,7 @@ export function MapVeto({ encounterId }: MapVetoProps) {
 
         {pickedMaps.length > 0 && (
           <div>
-            <div className="mb-1 text-sm font-medium">Map order</div>
+            <div className="mb-1 text-sm font-medium">{t("encounters.veto.mapOrder")}</div>
             <div className="flex flex-wrap gap-2">
               {pickedMaps.map((entry: EncounterMapPoolEntry, index: number) => (
                 <Badge key={entry.id} variant="secondary">
