@@ -550,7 +550,11 @@
       "colManual": "Manual",
       "colFlags": "Flags",
       "editManualShift": "Edit manual shift",
-      "save": "Save changes"
+      "save": "Save changes",
+      "shiftLabel": "Shift",
+      "localPercentileTitle": "Local percentile {value} / n={n}",
+      "monteCarloTitle": "Monte Carlo: mean {mean}, P(top1) {prob}%",
+      "shiftBreakdownTooltip": "Balancer {balancer} · manual {manual}"
     },
     "forecast": {
       "up": "Moving up",
@@ -613,7 +617,8 @@
       "unavailable": "Match Quality not available. Run the inference pipeline first.",
       "noData": "No match-quality rows yet.",
       "confirm": "Confirm — true positive",
-      "dismiss": "Dismiss — false positive"
+      "dismiss": "Dismiss — false positive",
+      "vs": "vs"
     },
     "anomalyLegend": {
       "trigger": "What flags mean",
@@ -666,7 +671,8 @@
       "is_home": "Played at home",
       "is_newcomer": "Newcomer",
       "home_score": "Home score",
-      "away_score": "Away score"
+      "away_score": "Away score",
+      "per10minSuffix": " / 10 min"
     },
     "glossary": {
       "confidence": {
@@ -926,6 +932,42 @@
       "glossaryKicker": "Glossary",
       "close": "Close",
       "help": "How this works"
+    },
+    "job": {
+      "runAnalytics": "Run analytics",
+      "trainMl": "Train ML",
+      "compute": "Compute",
+      "startTraining": "Start training",
+      "jobLabel": "Job #{id}",
+      "trainingDispatched": "Training dispatched",
+      "recalculationDispatched": "Recalculation dispatched",
+      "dispatchedDescription": "Job #{id} - listening for live updates.",
+      "trainDialogTitle": "Train ML models",
+      "trainDialogDescription": "Choose which workspaces should be included in the training sample. Inference will still run for the selected tournament separately.",
+      "scopeAll": "All workspaces",
+      "scopeAllHint": "Largest sample",
+      "scopeCurrent": "Current",
+      "scopeCurrentHint": "This workspace",
+      "scopeSelected": "Selected",
+      "scopeSelectedHint": "Manual scope",
+      "trainingSample": "Training sample",
+      "sampleAll": "All historical tournaments across all workspaces.",
+      "sampleCurrent": "Only tournaments from the current workspace.",
+      "sampleSelected": "{count, plural, one {# selected workspace} other {# selected workspaces}}.",
+      "workspaces": "Workspaces",
+      "workspaceListNotLoaded": "Workspace list is not loaded.",
+      "selectAtLeastOneWorkspace": "Select at least one workspace.",
+      "relativeJustNow": "just now",
+      "relativeMinutes": "{count}m ago",
+      "relativeHours": "{count}h ago",
+      "relativeDays": "{count}d ago",
+      "finishedRelative": "finished {relative}",
+      "startedRelative": "started {relative}",
+      "createdRelative": "created {relative}"
+    },
+    "meta": {
+      "title": "Tournaments Analytics | {siteName}",
+      "description": "View tournaments analytics on {siteName}."
     }
   },
   "tournamentsList": {
@@ -1044,6 +1086,100 @@
       "description": "View matches on {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Overview for {home} vs {away} on {siteName}."
+    }
+  },
+  "achievements": {
+    "title": "Achievements",
+    "subtitle": "Browse all achievements, filter by category, and view earning conditions.",
+    "category": {
+      "overall": "Overall",
+      "hero": "Hero",
+      "division": "Division",
+      "team": "Team",
+      "standing": "Standing",
+      "match": "Match"
+    },
+    "scope": {
+      "global": "Global",
+      "tournament": "Tournament",
+      "match": "Match"
+    },
+    "stats": {
+      "total": "Total Achievements",
+      "rarest": "Rarest",
+      "avgRarity": "Avg Rarity",
+      "totalEarned": "Total Earned"
+    },
+    "sort": {
+      "placeholder": "Sort by...",
+      "rarityAsc": "Rarest First",
+      "rarityDesc": "Most Common First",
+      "countDesc": "Most Earned",
+      "countAsc": "Least Earned",
+      "nameAsc": "Name A-Z"
+    },
+    "empty": {
+      "title": "No achievements found",
+      "body": "Try adjusting your filters."
+    },
+    "viewRules": "View rules for {name}",
+    "rarity": "{percent}% rarity",
+    "conditionsTitle": "Conditions",
+    "noConditionsDefined": "No conditions defined",
+    "emptyCondition": "Empty condition",
+    "condition": {
+      "stat_threshold": "Stat Threshold",
+      "match_criteria": "Match Criteria",
+      "match_win": "Match Win",
+      "hero_stat": "Hero Stat",
+      "standing_position": "Standing Position",
+      "standing_record": "Standing Record",
+      "div_change": "Division Change",
+      "div_level": "Division Level",
+      "is_captain": "Is Captain",
+      "is_newcomer": "Is Newcomer",
+      "tournament_type": "Tournament Type",
+      "hero_kd_best": "Hero K/D Best",
+      "team_players_match": "Team Players Match",
+      "captain_property": "Captain Property",
+      "encounter_score": "Encounter Score",
+      "encounter_revenge": "Encounter Revenge",
+      "global_stat_sum": "Global Stat Sum",
+      "tournament_count": "Tournament Count",
+      "global_winrate": "Global Winrate",
+      "distinct_count": "Distinct Count",
+      "consecutive": "Consecutive",
+      "stable_streak": "Stable Streak"
+    },
+    "logic": {
+      "and": "AND",
+      "or": "OR",
+      "not": "NOT"
+    },
+    "users": {
+      "user": "User",
+      "count": "Count",
+      "lastTournament": "Last Tournament",
+      "lastMatch": "Last Match"
+    }
+  },
+  "tournamentDetail": {
+    "metaTitle": "{name} | AQT",
+    "metaDescription": "Overview for {name} on AQT.",
+    "metaTitleFallback": "Tournament | AQT",
+    "metaDescriptionFallback": "Tournament overview on AQT.",
+    "sectionsNav": "Tournament sections",
+    "sortTeams": "Sort teams",
+    "rankHistory": "Rank history",
+    "allFieldsVisible": "All fields visible in table",
+    "topHeroes": "Top Heroes",
+    "newBadge": "New",
+    "previousTournaments": "{count, plural, one {# previous tournament} other {# previous tournaments}}",
+    "resetColumns": "Reset to defaults",
+    "columnCategory": {
+      "general": "General",
+      "fields": "Fields",
+      "customFields": "Custom Fields"
     }
   }
 }

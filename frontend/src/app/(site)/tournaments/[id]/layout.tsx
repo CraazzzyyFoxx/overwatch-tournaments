@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 
 import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { getTournament } from "./_data";
@@ -14,11 +15,14 @@ export async function generateMetadata(props: {
   const tournamentId = Number(params.id);
   const { name, origin } = await resolveSiteMetadata();
   const metadataBase = new URL(origin);
+  const t = await getTranslations();
 
   try {
     const tournament = await getTournament(tournamentId);
-    const title = `${tournament.name} | AQT`;
-    const description = `Overview for ${tournament.name} on AQT.`;
+    const title = t("tournamentDetail.metaTitle", { name: tournament.name });
+    const description = t("tournamentDetail.metaDescription", {
+      name: tournament.name,
+    });
 
     return {
       title,
@@ -35,8 +39,8 @@ export async function generateMetadata(props: {
     };
   } catch {
     return {
-      title: "Tournament | AQT",
-      description: "Tournament overview on AQT.",
+      title: t("tournamentDetail.metaTitleFallback"),
+      description: t("tournamentDetail.metaDescriptionFallback"),
       metadataBase
     };
   }

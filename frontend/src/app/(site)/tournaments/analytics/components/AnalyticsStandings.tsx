@@ -156,6 +156,7 @@ const ChangeDivisionModal = ({
 }) => {
   const [division, setDivision] = useState(player.shift ?? 0);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -168,12 +169,12 @@ const ChangeDivisionModal = ({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit manual shift</DialogTitle>
+          <DialogTitle>{t("analytics.standings.editManualShift")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor={`analytics-shift-${player.id}`} className="text-right">
-              Shift
+              {t("analytics.standings.shiftLabel")}
             </Label>
             <Input
               id={`analytics-shift-${player.id}`}
@@ -184,7 +185,7 @@ const ChangeDivisionModal = ({
             />
           </div>
           <DialogFooter>
-            <Button type="submit">Save changes</Button>
+            <Button type="submit">{t("analytics.standings.save")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -323,7 +324,12 @@ const TeamDetail = ({
                   </td>
                   <td className={styles.center}>
                     {performance ? (
-                      <span title={`Local percentile ${formatAnalyticsNumber(performance.local_percentile, 0)} / n=${performance.local_reference_n}`}>
+                      <span
+                        title={t("analytics.standings.localPercentileTitle", {
+                          value: formatAnalyticsNumber(performance.local_percentile, 0),
+                          n: performance.local_reference_n
+                        })}
+                      >
                         {performance.local_zscore > 0 ? "+" : ""}
                         {formatAnalyticsNumber(performance.local_zscore, 2)}
                       </span>
@@ -472,7 +478,10 @@ const TeamRow = ({
             <span>{t("common.group")} {groupName}</span>
             {distribution ? (
               <span
-                title={`Monte Carlo: mean ${distribution.mean_position.toFixed(1)}, P(top1) ${(distribution.prob_top1 * 100).toFixed(0)}%`}
+                title={t("analytics.standings.monteCarloTitle", {
+                  mean: distribution.mean_position.toFixed(1),
+                  prob: (distribution.prob_top1 * 100).toFixed(0)
+                })}
               >
                 {t("analytics.standings.predictedRange", {
                   mean: distribution.mean_position.toFixed(1),
@@ -511,7 +520,10 @@ const TeamRow = ({
             direction={shiftDirection}
             magnitude={Math.abs(team.total_shift)}
             focusable={false}
-            rawTooltip={`Balancer ${formatAnalyticsNumber(team.balancer_shift, 1)} · manual ${formatAnalyticsNumber(team.manual_shift, 1)}`}
+            rawTooltip={t("analytics.standings.shiftBreakdownTooltip", {
+              balancer: formatAnalyticsNumber(team.balancer_shift, 1),
+              manual: formatAnalyticsNumber(team.manual_shift, 1)
+            })}
           />
         </div>
         <div className={styles.chips}>

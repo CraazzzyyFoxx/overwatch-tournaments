@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Achievement } from "@/types/achievement.types";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import achievementsService from "@/services/achievements.service";
@@ -18,6 +19,7 @@ import { useRouter } from "next/navigation";
 import PlayerName from "@/components/PlayerName";
 
 const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
+  const t = useTranslations();
   const router = useRouter();
 
   const fetchUsers = async ({ pageParam = 1 }) => {
@@ -59,10 +61,14 @@ const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Count</TableHead>
-              {data?.pages[0].results[0].last_tournament && <TableHead>Last Tournament</TableHead>}
-              {data?.pages[0].results[0].last_match && <TableHead>Last Match</TableHead>}
+              <TableHead>{t("achievements.users.user")}</TableHead>
+              <TableHead>{t("achievements.users.count")}</TableHead>
+              {data?.pages[0].results[0].last_tournament && (
+                <TableHead>{t("achievements.users.lastTournament")}</TableHead>
+              )}
+              {data?.pages[0].results[0].last_match && (
+                <TableHead>{t("achievements.users.lastMatch")}</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -90,7 +96,7 @@ const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
                     }
                   >
                     {achievement.last_match
-                      ? `${achievement.last_match.home_team?.name ?? "?"} vs ${
+                      ? `${achievement.last_match.home_team?.name ?? "?"} ${t("common.vs")} ${
                           achievement.last_match.away_team?.name ?? "?"
                         }`
                       : null}
@@ -104,7 +110,7 @@ const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
       <div className="flex justify-center mt-8">
         {hasNextPage && (
           <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            Load More
+            {t("common.loadMore")}
           </Button>
         )}
       </div>

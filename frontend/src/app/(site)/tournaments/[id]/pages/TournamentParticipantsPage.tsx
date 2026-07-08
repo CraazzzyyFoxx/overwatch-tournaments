@@ -41,7 +41,7 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import BattleTagRankHistory from "@/components/BattleTagRankHistory";
@@ -114,15 +114,22 @@ const ROLE_TO_ICON: Record<string, string> = {
   flex: "Flex",
 };
 
-const ROLE_DISPLAY_NAMES: Record<string, string> = {
-  tank: "Tank",
-  dps: "DPS",
-  support: "Support",
-  flex: "Flex",
-};
-
-function getRoleLabel(role: string): string {
-  return ROLE_DISPLAY_NAMES[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+function getRoleLabel(
+  role: string,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  switch (role.toLowerCase()) {
+    case "tank":
+      return t("common.roles.tank");
+    case "dps":
+      return t("common.roles.dps");
+    case "support":
+      return t("common.roles.support");
+    case "flex":
+      return t("common.roles.flex");
+    default:
+      return role.charAt(0).toUpperCase() + role.slice(1);
+  }
 }
 
 const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -170,7 +177,7 @@ function MyRegistrationCard({
   isWithdrawing: boolean;
   tournament: Tournament;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [isExpanded, setIsExpanded] = useState(false);
   
   const primaryRole = registration.roles.find((r) => r.is_primary);
@@ -274,7 +281,7 @@ function MyRegistrationCard({
                   role={ROLE_TO_ICON[primaryRole.role] ?? primaryRole.role}
                   size={12}
                 />
-                <span>{getRoleLabel(primaryRole.role)}</span>
+                <span>{getRoleLabel(primaryRole.role, t)}</span>
                 {primaryRole.subrole && (
                   <span className="opacity-60 text-[10px]">
                     ({formatSubroleSlug(primaryRole.subrole)})
@@ -355,7 +362,7 @@ function MyRegistrationCard({
                           role={ROLE_TO_ICON[r.role] ?? r.role}
                           size={11}
                         />
-                        <span>{getRoleLabel(r.role)}</span>
+                        <span>{getRoleLabel(r.role, t)}</span>
                         {r.subrole && (
                           <span className="text-[10px] opacity-60">
                             ({formatSubroleSlug(r.subrole)})
@@ -490,7 +497,8 @@ export default function TournamentParticipantsPage({
 }: {
   tournament: Tournament;
 }) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useLocalStorageState<string>(
@@ -817,7 +825,7 @@ export default function TournamentParticipantsPage({
                             type="button"
                             onClick={() => toggleExpanded(reg.id)}
                             className="inline-flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/5 hover:text-white"
-                            aria-label={isExpanded ? "Collapse" : "Expand"}
+                            aria-label={isExpanded ? t("common.collapse") : t("common.expand")}
                             aria-expanded={isExpanded}
                           >
                             {isExpanded ? (
@@ -849,7 +857,7 @@ export default function TournamentParticipantsPage({
                             <div className="grid gap-4 lg:grid-cols-4">
                               <div className="space-y-2 lg:col-span-3">
                                 <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                                  Rank history
+                                  {t("tournamentDetail.rankHistory")}
                                 </div>
                                 <BattleTagRankHistory
                                   userId={reg.user_id}
@@ -862,7 +870,7 @@ export default function TournamentParticipantsPage({
                                 </div>
                                 {hiddenColumns.length === 0 ? (
                                   <div className="text-white/30 italic py-1 text-center">
-                                    {locale.startsWith("ru") ? "Все поля видны в таблице" : "All fields visible in table"}
+                                    {t("tournamentDetail.allFieldsVisible")}
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">

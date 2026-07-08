@@ -145,13 +145,13 @@ export default function MatchQualityCard({ tournamentId }: MatchQualityCardProps
     (encounters?.results ?? []).forEach((encounter) => {
       const teams =
         encounter.home_team?.name && encounter.away_team?.name
-          ? `${encounter.home_team.name} vs ${encounter.away_team.name}`
+          ? `${encounter.home_team.name} ${t("analytics.matchQuality.vs")} ${encounter.away_team.name}`
           : null;
       const label = encounter.name?.trim() || teams;
       if (label) map.set(encounter.id, label);
     });
     return map;
-  }, [encounters]);
+  }, [encounters, t]);
 
   const rows: MatchQuality[] = React.useMemo(() => {
     if (!data) return [];

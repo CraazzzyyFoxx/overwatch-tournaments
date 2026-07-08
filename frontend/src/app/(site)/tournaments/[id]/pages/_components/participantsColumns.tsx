@@ -33,7 +33,7 @@ import {
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
 import TournamentHistoryCell from "./TournamentHistoryCell";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { formatSubroleSlug } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
 import type { DivisionGrid } from "@/types/workspace.types";
@@ -43,6 +43,8 @@ import { getPlayerSlug } from "@/utils/player";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+type Translator = ReturnType<typeof useTranslations>;
 
 export interface ColumnDefinition {
   id: string;
@@ -69,33 +71,44 @@ const ROLE_TO_ICON: Record<string, string> = {
   support: "Support",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  tank: "Tank",
-  dps: "DPS",
-  support: "Support",
-  flex: "Flex",
-};
-
-const SUBROLE_SHORT_LABELS: Record<string, string> = {
-  hitscan: "HS",
-  projectile: "PROJ",
-  main_heal: "MH",
-  light_heal: "LH",
-  main_tank: "MT",
-  off_tank: "OT",
-  flanker: "FLK",
-  flex_dps: "FD",
-  flex_support: "FS",
-  flex: "FLX",
-  main: "MAIN",
-};
-
-function getRoleLabel(role: string): string {
-  return ROLE_LABELS[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+function getRoleLabel(role: string, t: Translator): string {
+  switch (role.toLowerCase()) {
+    case "tank":
+      return t("common.roles.tank");
+    case "dps":
+      return t("common.roles.dps");
+    case "support":
+      return t("common.roles.support");
+    case "flex":
+      return t("common.roles.flex");
+    default:
+      return role.charAt(0).toUpperCase() + role.slice(1);
+  }
 }
 
-function getSubroleShortLabel(subrole: string): string {
-  return SUBROLE_SHORT_LABELS[subrole.toLowerCase()] ?? subrole.toUpperCase();
+function getSubroleShortLabel(subrole: string, t: Translator): string {
+  switch (subrole.toLowerCase()) {
+    case "hitscan":
+      return t("common.subrolesShort.hitscan");
+    case "projectile":
+      return t("common.subrolesShort.projectile");
+    case "main_heal":
+      return t("common.subrolesShort.main_heal");
+    case "light_heal":
+      return t("common.subrolesShort.light_heal");
+    case "main_tank":
+      return t("common.subrolesShort.main_tank");
+    case "off_tank":
+      return t("common.subrolesShort.off_tank");
+    case "flanker":
+      return t("common.subrolesShort.flanker");
+    case "flex_dps":
+      return t("common.subrolesShort.flex_dps");
+    case "flex_support":
+      return t("common.subrolesShort.flex_support");
+    default:
+      return subrole.toUpperCase();
+  }
 }
 
 function RolesCell({
@@ -107,7 +120,7 @@ function RolesCell({
   grid?: DivisionGrid | null;
   showRanks?: boolean;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const resolvedGrid = grid || DEFAULT_DIVISION_GRID;
   if (!roles || roles.length === 0)
     return <span className="text-white/30">&mdash;</span>;
@@ -115,9 +128,9 @@ function RolesCell({
   return (
     <div className="flex flex-wrap items-start justify-center gap-x-0.5 gap-y-2">
       {roles.map((r) => {
-        const roleLabel = getRoleLabel(r.role);
+        const roleLabel = getRoleLabel(r.role, t);
         const subroleLabel = r.subrole ? formatSubroleSlug(r.subrole) : null;
-        const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole) : null;
+        const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole, t) : null;
         const division = r.rank_value != null ? resolveDivisionFromRank(resolvedGrid, r.rank_value) : null;
 
         return (
@@ -290,7 +303,7 @@ function SmurfTagsCell({
 }: {
   tags: string[] | null | undefined;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const smurfTags = tags?.filter(Boolean) ?? [];
 
   if (smurfTags.length === 0) {
@@ -349,13 +362,38 @@ function SmurfTagsCell({
 }
 
 // ---------------------------------------------------------------------------
+// Stream POV cell
+// ---------------------------------------------------------------------------
+
+function StreamPovCell({ value }: { value: boolean | null | undefined }) {
+  const t = useTranslations();
+  const label = value ? t("common.yes") : t("common.no");
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={cn(
+        "inline-flex size-5 items-center justify-center",
+        value ? "text-emerald-400" : "text-red-400",
+      )}
+    >
+      {value ? (
+        <CheckCircle2 className="size-4" />
+      ) : (
+        <XCircle className="size-4" />
+      )}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Custom field value renderer
 // ---------------------------------------------------------------------------
 
 function renderCustomFieldValue(
   field: CustomFieldDefinition,
   value: unknown,
-  t: (key: string) => string,
+  t: Translator,
 ): ReactNode {
   if (value === null || value === undefined)
     return <span className="text-white/30">&mdash;</span>;
@@ -507,22 +545,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: false,
     responsive: "lg",
     align: "center",
-    render: (reg) => (
-       <span
-      title={reg.stream_pov ? "Yes" : "No"}
-      aria-label={reg.stream_pov ? "Yes" : "No"}
-      className={cn(
-        "inline-flex size-5 items-center justify-center",
-        reg.stream_pov ? "text-emerald-400" : "text-red-400",
-      )}
-    >
-      {reg.stream_pov ? (
-        <CheckCircle2 className="size-4" />
-      ) : (
-        <XCircle className="size-4" />
-      )}
-    </span>
-    ),
+    render: (reg) => <StreamPovCell value={reg.stream_pov} />,
   },
   notes: {
     id: "notes",
@@ -548,7 +571,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
 
 export function buildParticipantColumns(
   form: RegistrationForm | null,
-  t: (key: string, variables?: Record<string, string | number>) => string,
+  t: Translator,
   locale: string = "ru",
   grid?: DivisionGrid | null,
 ): ColumnDefinition[] {
@@ -567,6 +590,8 @@ export function buildParticipantColumns(
       case "primary_role":
       case "roles":
         return t("common.rolesList");
+      case "top_heroes":
+        return t("tournamentDetail.topHeroes");
       case "stream_pov":
         return t("registration.details.streamPov");
       case "notes":
@@ -720,7 +745,7 @@ export function buildParticipantColumns(
   if (form?.require_open_profile) {
     columns.push({
       id: "_profile",
-      label: "Profile",
+      label: t("common.profile"),
       category: "meta",
       defaultVisible: true,
       responsive: "always",

@@ -27,11 +27,11 @@ function formatFeatureValue(value: number | null): string | null {
 }
 
 /** Fallback when a feature has no translation: "final_blows_p10" → "Final blows / 10 min". */
-function humanizeFeature(feature: string): string {
+function humanizeFeature(feature: string, per10minSuffix: string): string {
   const base = feature.endsWith("_p10") ? feature.slice(0, -4) : feature;
   const words = base.replace(/_/g, " ").trim();
   const capitalized = words.charAt(0).toUpperCase() + words.slice(1);
-  return feature.endsWith("_p10") ? `${capitalized} / 10 min` : capitalized;
+  return feature.endsWith("_p10") ? `${capitalized}${per10minSuffix}` : capitalized;
 }
 
 /**
@@ -57,7 +57,9 @@ export default function ExplanationPopover({
 
   const featureLabel = (feature: string): string => {
     const translated = t(`analytics.features.${feature}`);
-    return translated === `analytics.features.${feature}` ? humanizeFeature(feature) : translated;
+    return translated === `analytics.features.${feature}`
+      ? humanizeFeature(feature, t("analytics.features.per10minSuffix"))
+      : translated;
   };
 
   return (

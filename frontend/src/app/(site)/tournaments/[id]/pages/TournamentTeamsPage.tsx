@@ -109,7 +109,7 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
           style={{ marginLeft: "auto" }}
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as SortBy)}
-          aria-label="Sort teams"
+          aria-label={t("tournamentDetail.sortTeams")}
         >
           <option value="placement">{t("common.byPlacement")}</option>
           <option value="sr">{t("common.byAvgSr")}</option>

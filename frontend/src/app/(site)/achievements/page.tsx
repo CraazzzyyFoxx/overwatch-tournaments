@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { Award, Sparkles, Users, ScrollText } from "lucide-react";
 import achievementsService from "@/services/achievements.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -25,21 +26,6 @@ import {
 } from "@/components/ui/dialog";
 import type { Achievement, AchievementCategory } from "@/types/achievement.types";
 import ConditionTreeView from "@/app/(site)/achievements/components/ConditionTreeView";
-
-const CATEGORY_LABELS: Record<AchievementCategory, string> = {
-  overall: "Overall",
-  hero: "Hero",
-  division: "Division",
-  team: "Team",
-  standing: "Standing",
-  match: "Match",
-};
-
-const SCOPE_LABELS: Record<string, string> = {
-  global: "Global",
-  tournament: "Tournament",
-  match: "Match",
-};
 
 type CategoryFilter = "all" | AchievementCategory;
 type SortBy = "rarity_asc" | "rarity_desc" | "count_desc" | "count_asc" | "name_asc";
@@ -74,6 +60,7 @@ const PageSkeleton = () => (
 );
 
 const AchievementsPage = () => {
+  const t = useTranslations();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("rarity_asc");
   const [ruleDialogAchievement, setRuleDialogAchievement] = useState<Achievement | null>(null);
@@ -144,34 +131,34 @@ const AchievementsPage = () => {
     <div className="space-y-8">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold leading-none tracking-tight">
-          Achievements
+          {t("achievements.title")}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Browse all achievements, filter by category, and view earning conditions.
+          {t("achievements.subtitle")}
         </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatisticsCard
-          name="Total Achievements"
+          name={t("achievements.stats.total")}
           value={stats.total}
           icon={<Award className="h-4 w-4" />}
           iconClassName="bg-indigo-500/10 text-indigo-400"
         />
         <StatisticsCard
-          name="Rarest"
+          name={t("achievements.stats.rarest")}
           value={`${stats.rarest.toFixed(2)}%`}
           icon={<Sparkles className="h-4 w-4" />}
           iconClassName="bg-amber-500/10 text-amber-400"
         />
         <StatisticsCard
-          name="Avg Rarity"
+          name={t("achievements.stats.avgRarity")}
           value={`${stats.avgRarity.toFixed(1)}%`}
           icon={<ScrollText className="h-4 w-4" />}
           iconClassName="bg-purple-500/10 text-purple-400"
         />
         <StatisticsCard
-          name="Total Earned"
+          name={t("achievements.stats.totalEarned")}
           value={stats.totalEarned}
           icon={<Users className="h-4 w-4" />}
           iconClassName="bg-emerald-500/10 text-emerald-400"
@@ -185,26 +172,26 @@ const AchievementsPage = () => {
           onValueChange={(value) => value && setCategoryFilter(value as CategoryFilter)}
           variant="outline"
         >
-          <ToggleGroupItem value="all">All</ToggleGroupItem>
+          <ToggleGroupItem value="all">{t("common.all")}</ToggleGroupItem>
           {Array.from(categories)
             .sort()
             .map((cat) => (
               <ToggleGroupItem key={cat} value={cat}>
-                {CATEGORY_LABELS[cat]}
+                {t(`achievements.category.${cat}`)}
               </ToggleGroupItem>
             ))}
         </ToggleGroup>
 
         <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
           <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Sort by..." />
+            <SelectValue placeholder={t("achievements.sort.placeholder")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="rarity_asc">Rarest First</SelectItem>
-            <SelectItem value="rarity_desc">Most Common First</SelectItem>
-            <SelectItem value="count_desc">Most Earned</SelectItem>
-            <SelectItem value="count_asc">Least Earned</SelectItem>
-            <SelectItem value="name_asc">Name A-Z</SelectItem>
+            <SelectItem value="rarity_asc">{t("achievements.sort.rarityAsc")}</SelectItem>
+            <SelectItem value="rarity_desc">{t("achievements.sort.rarityDesc")}</SelectItem>
+            <SelectItem value="count_desc">{t("achievements.sort.countDesc")}</SelectItem>
+            <SelectItem value="count_asc">{t("achievements.sort.countAsc")}</SelectItem>
+            <SelectItem value="name_asc">{t("achievements.sort.nameAsc")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -212,9 +199,9 @@ const AchievementsPage = () => {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
           <Award className="w-16 h-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">No achievements found</h2>
+          <h2 className="text-xl font-semibold mb-2">{t("achievements.empty.title")}</h2>
           <p className="text-muted-foreground">
-            Try adjusting your filters.
+            {t("achievements.empty.body")}
           </p>
         </div>
       ) : (
@@ -235,7 +222,7 @@ const AchievementsPage = () => {
                     setRuleDialogAchievement(achievement);
                   }}
                   className="absolute bottom-2 left-2 z-[15] inline-flex cursor-pointer items-center justify-center rounded-full border border-white/[0.12] bg-black/55 p-1.5 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/75 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                  aria-label={`View rules for ${achievement.name}`}
+                  aria-label={t("achievements.viewRules", { name: achievement.name })}
                 >
                   <ScrollText className="h-3.5 w-3.5" aria-hidden />
                 </button>
@@ -264,28 +251,32 @@ const AchievementsPage = () => {
               <div className="flex flex-wrap gap-2">
                 {ruleDialogAchievement.category && (
                   <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                    {CATEGORY_LABELS[ruleDialogAchievement.category]}
+                    {t(`achievements.category.${ruleDialogAchievement.category}`)}
                   </span>
                 )}
                 {ruleDialogAchievement.scope && (
                   <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                    {SCOPE_LABELS[ruleDialogAchievement.scope] ?? ruleDialogAchievement.scope}
+                    {t(`achievements.scope.${ruleDialogAchievement.scope}`)}
                   </span>
                 )}
                 <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                  {(ruleDialogAchievement.rarity * 100).toFixed(2)}% rarity
+                  {t("achievements.rarity", {
+                    percent: (ruleDialogAchievement.rarity * 100).toFixed(2),
+                  })}
                 </span>
               </div>
 
               <div className="flex flex-col gap-2">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-white/35">
-                  Conditions
+                  {t("achievements.conditionsTitle")}
                 </div>
                 <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
                   {ruleDialogAchievement.condition_tree ? (
                     <ConditionTreeView tree={ruleDialogAchievement.condition_tree} />
                   ) : (
-                    <span className="text-xs text-white/30">No conditions defined</span>
+                    <span className="text-xs text-white/30">
+                      {t("achievements.noConditionsDefined")}
+                    </span>
                   )}
                 </div>
               </div>

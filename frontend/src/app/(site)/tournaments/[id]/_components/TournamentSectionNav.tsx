@@ -88,7 +88,7 @@ export default function TournamentSectionNav({
   const bracketHref = resolveBracketHref(tournamentId, stages);
 
   return (
-    <nav className={cn("tabs", className)} aria-label="Tournament sections">
+    <nav className={cn("tabs", className)} aria-label={t("tournamentDetail.sectionsNav")}>
       {!competitionEnabled ? (
         <span className="tab disabled" aria-disabled="true">
           <LayoutGrid className="h-3.5 w-3.5" />

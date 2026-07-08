@@ -45,7 +45,9 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
       const key = standing.stage_item_id ?? standing.stage_id;
       if (key == null) continue;
       const name =
-        standing.stage_item?.name ?? standing.stage?.name ?? `Stage ${standing.stage_id}`;
+        standing.stage_item?.name ??
+        standing.stage?.name ??
+        t("common.stageWithId", { id: standing.stage_id });
       const bucket = stageStandings.get(key) ?? { name, standings: [] };
       bucket.standings.push(standing);
       stageStandings.set(key, bucket);
@@ -55,7 +57,7 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
       groups: Array.from(stageStandings.entries()).sort((a, b) => a[0] - b[0]),
       playoffStandings,
     };
-  }, [standings]);
+  }, [standings, t]);
 
   if (standingsQuery.isLoading) {
     return (

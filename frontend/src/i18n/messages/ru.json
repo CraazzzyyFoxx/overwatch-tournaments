@@ -550,7 +550,11 @@
       "colManual": "Вручную",
       "colFlags": "Флаги",
       "editManualShift": "Изменить ручной сдвиг",
-      "save": "Сохранить"
+      "save": "Сохранить",
+      "shiftLabel": "Сдвиг",
+      "localPercentileTitle": "Локальный процентиль {value} / n={n}",
+      "monteCarloTitle": "Монте-Карло: среднее {mean}, P(топ-1) {prob}%",
+      "shiftBreakdownTooltip": "Балансер {balancer} · вручную {manual}"
     },
     "forecast": {
       "up": "Вверх",
@@ -613,7 +617,8 @@
       "unavailable": "Качество матчей недоступно. Сначала запустите инференс.",
       "noData": "Строк качества матчей пока нет.",
       "confirm": "Подтвердить — это правда",
-      "dismiss": "Отклонить — ложный флаг"
+      "dismiss": "Отклонить — ложный флаг",
+      "vs": "vs"
     },
     "anomalyLegend": {
       "trigger": "Что значат флаги",
@@ -666,7 +671,8 @@
       "is_home": "Игра дома",
       "is_newcomer": "Новичок",
       "home_score": "Счёт дома",
-      "away_score": "Счёт в гостях"
+      "away_score": "Счёт в гостях",
+      "per10minSuffix": " / 10 мин"
     },
     "glossary": {
       "confidence": {
@@ -926,6 +932,42 @@
       "glossaryKicker": "Глоссарий",
       "close": "Закрыть",
       "help": "Как это работает"
+    },
+    "job": {
+      "runAnalytics": "Запустить аналитику",
+      "trainMl": "Обучить ML",
+      "compute": "Расчёт",
+      "startTraining": "Запустить обучение",
+      "jobLabel": "Задача #{id}",
+      "trainingDispatched": "Обучение запущено",
+      "recalculationDispatched": "Пересчёт запущен",
+      "dispatchedDescription": "Задача #{id} — слежу за обновлениями в реальном времени.",
+      "trainDialogTitle": "Обучение ML-моделей",
+      "trainDialogDescription": "Выберите, какие воркспейсы войдут в обучающую выборку. Инференс для выбранного турнира всё равно будет запущен отдельно.",
+      "scopeAll": "Все воркспейсы",
+      "scopeAllHint": "Максимальная выборка",
+      "scopeCurrent": "Текущий",
+      "scopeCurrentHint": "Этот воркспейс",
+      "scopeSelected": "Выбранные",
+      "scopeSelectedHint": "Ручной выбор",
+      "trainingSample": "Обучающая выборка",
+      "sampleAll": "Все прошедшие турниры из всех воркспейсов.",
+      "sampleCurrent": "Только турниры из текущего воркспейса.",
+      "sampleSelected": "{count, plural, one {# выбранный воркспейс} few {# выбранных воркспейса} many {# выбранных воркспейсов} other {# выбранных воркспейсов}}.",
+      "workspaces": "Воркспейсы",
+      "workspaceListNotLoaded": "Список воркспейсов не загружен.",
+      "selectAtLeastOneWorkspace": "Выберите хотя бы один воркспейс.",
+      "relativeJustNow": "только что",
+      "relativeMinutes": "{count, plural, one {# минуту назад} few {# минуты назад} many {# минут назад} other {# минут назад}}",
+      "relativeHours": "{count, plural, one {# час назад} few {# часа назад} many {# часов назад} other {# часов назад}}",
+      "relativeDays": "{count, plural, one {# день назад} few {# дня назад} many {# дней назад} other {# дней назад}}",
+      "finishedRelative": "завершено {relative}",
+      "startedRelative": "запущено {relative}",
+      "createdRelative": "создано {relative}"
+    },
+    "meta": {
+      "title": "Аналитика турниров | {siteName}",
+      "description": "Смотрите аналитику турниров на {siteName}."
     }
   },
   "tournamentsList": {
@@ -1044,6 +1086,100 @@
       "description": "Просмотр матчей на {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Обзор матча {home} vs {away} на {siteName}."
+    }
+  },
+  "achievements": {
+    "title": "Достижения",
+    "subtitle": "Просматривайте все достижения, фильтруйте по категориям и смотрите условия получения.",
+    "category": {
+      "overall": "Общие",
+      "hero": "Герой",
+      "division": "Дивизион",
+      "team": "Команда",
+      "standing": "Место",
+      "match": "Матч"
+    },
+    "scope": {
+      "global": "Глобальный",
+      "tournament": "Турнир",
+      "match": "Матч"
+    },
+    "stats": {
+      "total": "Всего достижений",
+      "rarest": "Самое редкое",
+      "avgRarity": "Средняя редкость",
+      "totalEarned": "Всего получено"
+    },
+    "sort": {
+      "placeholder": "Сортировка...",
+      "rarityAsc": "Сначала редкие",
+      "rarityDesc": "Сначала частые",
+      "countDesc": "Больше всего получено",
+      "countAsc": "Меньше всего получено",
+      "nameAsc": "По имени (А-Я)"
+    },
+    "empty": {
+      "title": "Достижения не найдены",
+      "body": "Попробуйте изменить фильтры."
+    },
+    "viewRules": "Посмотреть условия для {name}",
+    "rarity": "редкость {percent}%",
+    "conditionsTitle": "Условия",
+    "noConditionsDefined": "Условия не заданы",
+    "emptyCondition": "Пустое условие",
+    "condition": {
+      "stat_threshold": "Порог статистики",
+      "match_criteria": "Критерий матча",
+      "match_win": "Победа в матче",
+      "hero_stat": "Статистика героя",
+      "standing_position": "Место в таблице",
+      "standing_record": "Рекорд в таблице",
+      "div_change": "Смена дивизиона",
+      "div_level": "Уровень дивизиона",
+      "is_captain": "Капитан",
+      "is_newcomer": "Новичок",
+      "tournament_type": "Тип турнира",
+      "hero_kd_best": "Лучший K/D на герое",
+      "team_players_match": "Игроки команды в матче",
+      "captain_property": "Свойство капитана",
+      "encounter_score": "Счёт встречи",
+      "encounter_revenge": "Реванш во встрече",
+      "global_stat_sum": "Сумма глобальной статистики",
+      "tournament_count": "Количество турниров",
+      "global_winrate": "Глобальный винрейт",
+      "distinct_count": "Количество уникальных",
+      "consecutive": "Подряд",
+      "stable_streak": "Стабильная серия"
+    },
+    "logic": {
+      "and": "И",
+      "or": "ИЛИ",
+      "not": "НЕ"
+    },
+    "users": {
+      "user": "Игрок",
+      "count": "Количество",
+      "lastTournament": "Последний турнир",
+      "lastMatch": "Последний матч"
+    }
+  },
+  "tournamentDetail": {
+    "metaTitle": "{name} | AQT",
+    "metaDescription": "Обзор турнира {name} на AQT.",
+    "metaTitleFallback": "Турнир | AQT",
+    "metaDescriptionFallback": "Обзор турнира на AQT.",
+    "sectionsNav": "Разделы турнира",
+    "sortTeams": "Сортировать команды",
+    "rankHistory": "История рангов",
+    "allFieldsVisible": "Все поля видны в таблице",
+    "topHeroes": "Топ героев",
+    "newBadge": "Новичок",
+    "previousTournaments": "{count, plural, one {# предыдущий турнир} few {# предыдущих турнира} many {# предыдущих турниров} other {# предыдущих турниров}}",
+    "resetColumns": "Сбросить по умолчанию",
+    "columnCategory": {
+      "general": "Общие",
+      "fields": "Поля",
+      "customFields": "Свои поля"
     }
   }
 }

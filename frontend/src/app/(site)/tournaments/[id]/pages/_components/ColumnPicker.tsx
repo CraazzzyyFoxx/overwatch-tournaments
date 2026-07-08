@@ -1,6 +1,7 @@
 "use client";
 
 import { Settings2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -10,12 +11,6 @@ import {
 } from "@/components/ui/popover";
 
 import type { ColumnDefinition } from "./participantsColumns";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  meta: "General",
-  built_in: "Fields",
-  custom: "Custom Fields",
-};
 
 interface ColumnPickerProps {
   columns: ColumnDefinition[];
@@ -30,6 +25,19 @@ export default function ColumnPicker({
   onToggle,
   onReset,
 }: ColumnPickerProps) {
+  const t = useTranslations();
+
+  const categoryLabel = (category: "meta" | "built_in" | "custom"): string => {
+    switch (category) {
+      case "meta":
+        return t("tournamentDetail.columnCategory.general");
+      case "built_in":
+        return t("tournamentDetail.columnCategory.fields");
+      case "custom":
+        return t("tournamentDetail.columnCategory.customFields");
+    }
+  };
+
   // Group columns by category
   const groups = new Map<string, ColumnDefinition[]>();
   for (const col of columns) {
@@ -46,7 +54,7 @@ export default function ColumnPicker({
           className="flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-3 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70"
         >
           <Settings2 className="size-3.5" />
-          Columns
+          {t("common.columns")}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-3">
@@ -58,7 +66,7 @@ export default function ColumnPicker({
             return (
               <div key={category}>
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
-                  {CATEGORY_LABELS[category]}
+                  {categoryLabel(category)}
                 </p>
                 <div className="space-y-1">
                   {cols.map((col) => (
@@ -83,7 +91,7 @@ export default function ColumnPicker({
             onClick={onReset}
             className="w-full rounded px-2 py-1 text-[11px] text-white/40 transition-colors hover:bg-white/5 hover:text-white/60"
           >
-            Reset to defaults
+            {t("tournamentDetail.resetColumns")}
           </button>
         </div>
       </PopoverContent>
