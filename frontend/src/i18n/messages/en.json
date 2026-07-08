@@ -2185,5 +2185,61 @@
         "lede": "Pick a hero and rank every player who's logged time on it. Each column ranks the same roster independently — so the elims leader and the healing leader can be different people, side by side."
       }
     }
+  },
+  "nav": {
+    "login": "Login",
+    "toggleMenu": "Toggle navigation menu",
+    "groups": {
+      "tournaments": "Tournaments",
+      "users": "Players",
+      "matches": "Matches",
+      "organization": "Organization"
+    },
+    "items": {
+      "tournaments": {
+        "title": "Tournaments",
+        "desc": "Every tournament run on the platform"
+      },
+      "teams": {
+        "title": "Teams",
+        "desc": "Balanced team rosters across tournaments"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "desc": "Tournament analytics, forecasts and standings"
+      },
+      "users": {
+        "title": "Players",
+        "desc": "Every competitor across every tournament"
+      },
+      "compare": {
+        "title": "Compare",
+        "desc": "Compare two players head-to-head"
+      },
+      "heroesLeaderboard": {
+        "title": "Heroes Leaderboard",
+        "desc": "Per-hero performance ranking across all players"
+      },
+      "achievements": {
+        "title": "Achievements",
+        "desc": "All achievements and how to earn them"
+      },
+      "encounters": {
+        "title": "Encounters",
+        "desc": "Every series across all tournaments"
+      },
+      "matches": {
+        "title": "Matches",
+        "desc": "Every match played on the platform"
+      },
+      "balancer": {
+        "title": "Balancer",
+        "desc": "Balance teams by player roles and ratings"
+      },
+      "admin": {
+        "title": "Admin",
+        "desc": "Manage tournaments, access and operations"
+      }
+    }
   }
 }
