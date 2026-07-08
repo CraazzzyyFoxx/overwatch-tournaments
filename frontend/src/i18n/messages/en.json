@@ -2240,6 +2240,28 @@
         "title": "Admin",
         "desc": "Manage tournaments, access and operations"
       }
+    },
+    "workspaces": "Workspaces",
+    "switchWorkspace": "Switch workspace",
+    "activeEvents": {
+      "title": "Active Events",
+      "badge": "{count} Active",
+      "summary": "{count, plural, one {# ongoing} other {# ongoing}} across {workspaces, plural, one {# workspace} other {# workspaces}}"
+    },
+    "search": {
+      "placeholder": "Search users...",
+      "searching": "Searching users...",
+      "empty": "No users found.",
+      "minChars": "Type at least 2 characters.",
+      "clear": "Clear search",
+      "resultsLabel": "User search results"
     }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "continueTo": "to continue to {siteName}",
+    "continueWith": "Continue with {provider}",
+    "unavailable": "OAuth login is currently unavailable.",
+    "agreement": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>"
   }
 }

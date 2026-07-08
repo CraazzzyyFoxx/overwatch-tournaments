@@ -2240,6 +2240,28 @@
         "title": "Админка",
         "desc": "Управление турнирами, доступом и операциями"
       }
+    },
+    "workspaces": "Рабочие пространства",
+    "switchWorkspace": "Сменить рабочее пространство",
+    "activeEvents": {
+      "title": "Активные события",
+      "badge": "{count, plural, one {# активный} few {# активных} many {# активных} other {# активных}}",
+      "summary": "{count, plural, one {идёт #} few {идёт #} many {идёт #} other {идёт #}} в {workspaces, plural, one {# пространстве} few {# пространствах} many {# пространствах} other {# пространствах}}"
+    },
+    "search": {
+      "placeholder": "Поиск игроков...",
+      "searching": "Поиск игроков...",
+      "empty": "Игроки не найдены.",
+      "minChars": "Введите минимум 2 символа.",
+      "clear": "Очистить поиск",
+      "resultsLabel": "Результаты поиска игроков"
     }
+  },
+  "auth": {
+    "signIn": "Вход",
+    "continueTo": "чтобы продолжить в {siteName}",
+    "continueWith": "Продолжить через {provider}",
+    "unavailable": "Вход через OAuth сейчас недоступен.",
+    "agreement": "Продолжая, вы соглашаетесь с <terms>Условиями использования</terms> и <privacy>Политикой конфиденциальности</privacy>"
   }
 }

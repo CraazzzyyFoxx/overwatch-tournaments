@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ function WorkspaceAvatar({ workspace, size = "sm" }: { workspace: Workspace; siz
 }
 
 export default function WorkspaceSwitcher() {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout>>(null);
   const router = useRouter();
@@ -111,7 +113,7 @@ export default function WorkspaceSwitcher() {
               "hover:bg-accent transition-colors",
               "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             )}
-            aria-label="Switch workspace"
+            aria-label={t("nav.switchWorkspace")}
           >
             <ChevronsUpDown className="size-3.5 text-muted-foreground" />
           </button>
@@ -126,7 +128,7 @@ export default function WorkspaceSwitcher() {
         onMouseLeave={handleMouseLeave}
       >
         <div className="px-2 py-1.5">
-          <p className="text-xs font-medium text-muted-foreground">Workspaces</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("nav.workspaces")}</p>
         </div>
         <div className="flex flex-col gap-0.5">
           {workspaces.map((workspace) => {

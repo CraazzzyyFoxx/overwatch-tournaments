@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogTitle
 } from "@/components/ui/dialog";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
@@ -40,6 +41,7 @@ const ProviderButton = ({ href, title, icon }: ProviderButtonProps) => {
 };
 
 const AuthModal = () => {
+  const t = useTranslations();
   const isOpen = useAuthModalStore((state) => state.isOpen);
   const nextPath = useAuthModalStore((state) => state.nextPath);
   const close = useAuthModalStore((state) => state.close);
@@ -64,10 +66,10 @@ const AuthModal = () => {
           </div>
 
           <DialogTitle className="text-[15px] font-semibold text-white tracking-[-0.01em]">
-            Sign in
+            {t("auth.signIn")}
           </DialogTitle>
           <DialogDescription className="mt-1 text-[12px] text-white/40 font-normal">
-            to continue to {SITE_NAME}
+            {t("auth.continueTo", { siteName: SITE_NAME })}
           </DialogDescription>
         </div>
 
@@ -87,7 +89,7 @@ const AuthModal = () => {
                   <ProviderButton
                     key={provider}
                     href={`/auth/${provider}/login?next=${next}`}
-                    title={`Continue with ${meta.title}`}
+                    title={t("auth.continueWith", { provider: meta.title })}
                     icon={
                       <Image
                         src={meta.icon}
@@ -103,7 +105,7 @@ const AuthModal = () => {
 
           {!isLoading && providers.length === 0 && (
             <p className="text-[12px] text-white/30 text-center py-1">
-              OAuth login is currently unavailable.
+              {t("auth.unavailable")}
             </p>
           )}
         </div>
@@ -112,14 +114,18 @@ const AuthModal = () => {
         <div className="h-px bg-white/[0.06]" />
         <div className="px-8 py-4 flex justify-center">
           <p className="text-[11px] text-white/25 text-center leading-relaxed">
-            By continuing, you agree to our{" "}
-            <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
-              Terms of Service
-            </span>{" "}
-            and{" "}
-            <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
-              Privacy Policy
-            </span>
+            {t.rich("auth.agreement", {
+              terms: (chunks) => (
+                <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
+                  {chunks}
+                </span>
+              ),
+              privacy: (chunks) => (
+                <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
+                  {chunks}
+                </span>
+              )
+            })}
           </p>
         </div>
       </DialogContent>
