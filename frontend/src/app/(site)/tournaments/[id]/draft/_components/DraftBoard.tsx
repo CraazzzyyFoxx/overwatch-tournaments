@@ -185,9 +185,7 @@ function CaptainsPresenceBar({
     <section className={styles.presenceBar}>
       <div className={styles.presenceLeft}>
         <div className={styles.presenceTitle}>
-          {t("draft.presence.title")
-            .replace("{online}", String(onlineCount))
-            .replace("{total}", String(totalCount))}
+          {t("draft.presence.title", { online: onlineCount, total: totalCount })}
         </div>
         <div className={styles.presenceGrid}>
           {captains.map((cap) => {
@@ -218,7 +216,7 @@ function CaptainsPresenceBar({
       <div className={styles.presenceRight}>
         <Eye size={16} aria-hidden />
         <span>
-          {t("draft.presence.watching").replace("{count}", String(watchingCount))}
+          {t("draft.presence.watching", { count: watchingCount })}
         </span>
       </div>
     </section>
@@ -381,14 +379,7 @@ function BottomPanel({
 
     if (gating.myTeamId != null) {
       if (picksBeforeMe !== null && picksBeforeMe > 0) {
-        let turnText = t("draft.bottomPanel.yourTurnIn").replace("{count}", String(picksBeforeMe));
-        if (t("draft.bottomPanel.yourTurnInSingular") !== "draft.bottomPanel.yourTurnInSingular") {
-          if (picksBeforeMe === 1) {
-            turnText = t("draft.bottomPanel.yourTurnInSingular").replace("{count}", String(picksBeforeMe));
-          } else if (picksBeforeMe >= 5) {
-            turnText = t("draft.bottomPanel.yourTurnInPlural").replace("{count}", String(picksBeforeMe));
-          }
-        }
+        const turnText = t("draft.bottomPanel.yourTurnIn", { count: picksBeforeMe });
         return (
           <div className="flex flex-col">
             <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">

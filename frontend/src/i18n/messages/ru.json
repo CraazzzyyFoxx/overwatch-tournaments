@@ -37,7 +37,7 @@
     "noBracketMatches": "Для выбранного этапа матчи сетки не найдены",
     "noHeroData": "Нет данных о героях.",
     "playtimeLabel": "% игр. времени",
-    "teamsCount": "{count} команд",
+    "teamsCount": "{count, plural, one {# команда} few {# команды} many {# команд} other {# команды}}",
     "roundRobin": "круговая система",
     "swiss": "швейцарская система",
     "byPlaytime": "По игровому времени",
@@ -49,7 +49,7 @@
     "groups": "Группы",
     "playoff": "Плей-офф",
     "playoffStandings": "Таблица плей-офф",
-    "topAdvance": "ТОП {count} ПРОХОДЯТ",
+    "topAdvance": "ТОП {count, plural, one {# ПРОХОДИТ} other {# ПРОХОДЯТ}}",
     "buchholz": "Бухгольц",
     "headToHead": "Личные встречи",
     "scoreDiff": "Разница карт",
@@ -120,26 +120,26 @@
     },
     "roles": {
       "tank": "Танк",
-      "dps": "Урон",
-      "support": "Поддержка",
+      "dps": "Дамаг",
+      "support": "Саппорт",
       "flex": "Flex"
     },
     "subroles": {
       "hitscan": "Хитскан",
       "projectile": "Проджектайл",
-      "main_heal": "Мейн Саппорт",
-      "light_heal": "Флекс Саппорт",
+      "main_heal": "Мейн Хил",
+      "light_heal": "Лайт Хил",
       "main_tank": "Мейн Танк",
       "off_tank": "Офф Танк",
       "flanker": "Фланкер",
-      "flex_dps": "Флекс ДД",
+      "flex_dps": "Флекс Дамаг",
       "flex_support": "Флекс Саппорт"
     },
     "subrolesShort": {
       "hitscan": "ХС",
       "projectile": "ПРОДЖ",
-      "main_heal": "МС",
-      "light_heal": "ФС",
+      "main_heal": "МХ",
+      "light_heal": "ЛХ",
       "main_tank": "МТ",
       "off_tank": "ОТ",
       "flanker": "ФЛК",
@@ -300,9 +300,7 @@
       "selectPlayer": "Выберите игрока",
       "selectPrompt": "Выберите игрока из списка ниже, чтобы подготовить пик",
       "waitingTurn": "Ожидание очереди",
-      "yourTurnIn": "Ваша очередь через {count} пика(ов)",
-      "yourTurnInSingular": "Ваша очередь через {count} пик",
-      "yourTurnInPlural": "Ваша очередь через {count} пиков",
+      "yourTurnIn": "Ваша очередь через {count, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}",
       "allPicksDone": "Все ваши пики завершены",
       "liveDraft": "Идет драфт",
       "currentlyPicking": "Сейчас выбирает",
@@ -313,7 +311,7 @@
     },
     "presence": {
       "title": "Капитаны • {online} из {total} в сети",
-      "watching": "{count} смотрят",
+      "watching": "{count, plural, one {# смотрит} few {# смотрят} many {# смотрят} other {# смотрят}}",
       "offline": "офлайн"
     }
   },
@@ -373,7 +371,7 @@
     }
   },
   "rankAutofill": {
-    "title": "Autofill рангов",
+    "title": "Автозаполнение рангов",
     "subtitle": "Настройте цепочку источников и точечно выберите игроков для обновления.",
     "backToRegistrations": "К регистрациям",
     "chainTitle": "Цепочка источников",
@@ -399,7 +397,7 @@
     "selectedCount": "Выбрано игроков: {count}",
     "apply": "Применить к {count}",
     "noTournamentTitle": "Выберите турнир",
-    "noTournamentDescription": "Выберите турнир в сайдбаре, прежде чем настраивать autofill рангов.",
+    "noTournamentDescription": "Выберите турнир в сайдбаре, прежде чем настраивать автозаполнение рангов.",
     "successTitle": "Ранги проставлены",
     "successDescription": "{applied} игрок(ов), {roles} ранг(ов) обновлено. Пропущено: {skipped}.",
     "successBalancerSuffix": " {count} → balancer.",
@@ -706,7 +704,7 @@
         "plain": "Похоже, перестал стараться по ходу серии — игра резко просела относительно его обычного уровня."
       },
       "troll": {
-        "label": "Возможный griefing",
+        "label": "Возможный грифинг",
         "plain": "Регулярно играет ниже собственного уровня и тянет команду вниз."
       },
       "sandbag": {
