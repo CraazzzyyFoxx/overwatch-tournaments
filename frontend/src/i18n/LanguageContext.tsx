@@ -1,96 +1,38 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import Cookies from "js-cookie";
+import { useTranslations, useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 
-import { en } from "./locales/en";
-import { ru } from "./locales/ru";
+import { setUserLocale } from "./locale-actions";
+import type { Locale } from "./resolve-locale";
 
-export type Locale = "en" | "ru";
+export type { Locale };
 
-interface LanguageContextType {
-  locale: Locale;
-  setLocale: (locale: Locale) => void;
-  t: (key: string, variables?: Record<string, string | number>) => string;
-}
-
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
-
-const translations: Record<Locale, Record<string, any>> = { en, ru };
-
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("ru");
-
-  useEffect(() => {
-    const savedLocale = Cookies.get("NEXT_LOCALE") as Locale;
-    if (savedLocale === "en" || savedLocale === "ru") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocaleState(savedLocale);
-    } else {
-      const browserLang = navigator.language.split("-")[0];
-      const defaultLocale: Locale = browserLang === "ru" ? "ru" : "en";
-      setLocaleState(defaultLocale);
-      Cookies.set("NEXT_LOCALE", defaultLocale, { expires: 365 });
-    }
-  }, []);
-
-  const setLocale = (newLocale: Locale) => {
-    setLocaleState(newLocale);
-    Cookies.set("NEXT_LOCALE", newLocale, { expires: 365 });
-  };
-
-  const t = (key: string, variables?: Record<string, string | number>): string => {
-    const dict = translations[locale] || translations.ru;
-    const parts = key.split(".");
-    let value: any = dict;
-
-    for (const part of parts) {
-      if (value && typeof value === "object" && part in value) {
-        value = value[part];
-      } else {
-        value = undefined;
-        break;
-      }
-    }
-
-    if (typeof value !== "string") {
-      // Fallback to English dictionary if key is missing in the current dictionary
-      let fallbackValue: any = translations.en;
-      for (const part of parts) {
-        if (fallbackValue && typeof fallbackValue === "object" && part in fallbackValue) {
-          fallbackValue = fallbackValue[part];
-        } else {
-          fallbackValue = undefined;
-          break;
-        }
-      }
-      if (typeof fallbackValue === "string") {
-        value = fallbackValue;
-      } else {
-        return key;
-      }
-    }
-
-    if (variables) {
-      return Object.entries(variables).reduce((str, [k, v]) => {
-        return str.replace(new RegExp(`{${k}}`, "g"), String(v));
-      }, value);
-    }
-
-    return value;
-  };
-
-  return (
-    <LanguageContext.Provider value={{ locale, setLocale, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
-}
-
+/**
+ * Backwards-compatible shim over next-intl.
+ *
+ * The previous hand-rolled i18n exposed `{ t, locale, setLocale }` with a
+ * loosely-typed `t(key, variables)`. Many call-sites build keys dynamically
+ * (e.g. `t(\`analytics.glossary.${kind}.label\`)`), which next-intl's strictly
+ * typed `t` would reject at compile time. This shim keeps the original loose
+ * contract so all existing call-sites work unchanged during the migration.
+ *
+ * Removed in Phase 4 once every call-site uses `useTranslations`/`useLocale`
+ * from next-intl directly.
+ */
 export function useTranslation() {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error("useTranslation must be used within a LanguageProvider");
-  }
-  return context;
+  const translate = useTranslations();
+  const locale = useLocale() as Locale;
+  const router = useRouter();
+
+  const t = translate as unknown as (
+    key: string,
+    variables?: Record<string, string | number>,
+  ) => string;
+
+  const setLocale = (next: Locale) => {
+    void setUserLocale(next).then(() => router.refresh());
+  };
+
+  return { t, locale, setLocale };
 }

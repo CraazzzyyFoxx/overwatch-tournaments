@@ -34,9 +34,14 @@ import LoginModalTrigger from "@/components/LoginModalTrigger";
 import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { name, description, origin, icon } = await resolveSiteMetadata();
+  const [{ name, description, origin, icon }, locale] = await Promise.all([
+    resolveSiteMetadata(),
+    getLocale()
+  ]);
   return {
     title: name,
     description,
@@ -50,18 +55,19 @@ export async function generateMetadata(): Promise<Metadata> {
       url: origin,
       type: "website",
       siteName: name,
-      locale: "en_US"
+      locale: locale === "ru" ? "ru_RU" : "en_US"
     }
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         className={cn(
           inter.className,
@@ -72,17 +78,19 @@ export default function RootLayout({
         )}
       >
         <GoogleAnalytics gaId="G-6TYE0K6SQM" />
-        <Providers>
-          <Suspense fallback={null}>
-            <LoginModalTrigger />
-          </Suspense>
-          <AuthModal />
-          <Suspense fallback={null}>
-            <AccountSettingsModal />
-          </Suspense>
-          <Toaster />
-          {children}
-        </Providers>
+        <NextIntlClientProvider>
+          <Providers>
+            <Suspense fallback={null}>
+              <LoginModalTrigger />
+            </Suspense>
+            <AuthModal />
+            <Suspense fallback={null}>
+              <AccountSettingsModal />
+            </Suspense>
+            <Toaster />
+            {children}
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
