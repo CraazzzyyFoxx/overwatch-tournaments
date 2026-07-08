@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { UserTournament } from "@/types/user.types";
 import { TournamentTeamTable } from "@/components/TournamentTeamCard";
@@ -72,6 +73,7 @@ const TournamentItem = ({
   isOpen: boolean;
   onToggle: () => void;
 }) => {
+  const tr = useTranslations();
   const cls = tournamentClass(t);
   const stats = computeTournamentResults(t, selfUserId);
   const tournamentNumber = t.number ? `${t.number}` : t.name.split(" | ")[1] ?? "—";
@@ -107,11 +109,15 @@ const TournamentItem = ({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[14px] text-[color:var(--aqt-fg-dim)]">
             <StagePill kind={stageKindForTournament(t)}>
-              {t.placement === 1 ? "Grand finals" : t.placement <= 3 ? "Playoffs reached" : "Groups"}
+              {t.placement === 1
+                ? tr("users.tournaments.result.grandFinals")
+                : t.placement <= 3
+                  ? tr("users.tournaments.result.playoffsReached")
+                  : tr("users.tournaments.result.groups")}
             </StagePill>
             <span className="inline-flex items-center gap-1.5" title={t.role}>
               <PlayerRoleIcon role={t.role} size={15} color={roleColor(t.role)} />
-              Team {t.team}
+              {tr("users.tournaments.teamName", { name: String(t.team) })}
             </span>
           </div>
         </div>
@@ -142,21 +148,27 @@ const TournamentItem = ({
             <div className="flex flex-col gap-3 rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
               <div className="flex items-baseline justify-between">
                 <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-                  Matches
+                  {tr("common.matches")}
                 </span>
                 <span className="aqt-display text-[26px] font-bold leading-none">{t.won + t.lost + t.draw}</span>
               </div>
-              <StatLine label="Record">
-                <span style={{ color: "var(--aqt-emerald)" }}>{t.won}W</span>{" "}
-                <span style={{ color: "var(--aqt-rose)" }}>{t.lost}L</span>{" "}
-                <span style={{ color: "var(--aqt-amber)" }}>{t.draw}D</span>
-              </StatLine>
-              <StatLine label="Maps won">
-                <span className="font-semibold text-[color:var(--aqt-fg)]">
-                  {t.maps_won} of {maps}
+              <StatLine label={tr("users.tournaments.stat.record")}>
+                <span style={{ color: "var(--aqt-emerald)" }}>
+                  {tr("users.tournaments.stat.wins", { count: String(t.won) })}
+                </span>{" "}
+                <span style={{ color: "var(--aqt-rose)" }}>
+                  {tr("users.tournaments.stat.losses", { count: String(t.lost) })}
+                </span>{" "}
+                <span style={{ color: "var(--aqt-amber)" }}>
+                  {tr("users.tournaments.stat.draws", { count: String(t.draw) })}
                 </span>
               </StatLine>
-              <StatLine label="Winrate">
+              <StatLine label={tr("users.tournaments.stat.mapsWon")}>
+                <span className="font-semibold text-[color:var(--aqt-fg)]">
+                  {tr("users.tournaments.stat.mapsWonValue", { won: String(t.maps_won), total: String(maps) })}
+                </span>
+              </StatLine>
+              <StatLine label={tr("users.tournaments.stat.winrate")}>
                 <span
                   className="font-semibold"
                   style={{
@@ -166,7 +178,7 @@ const TournamentItem = ({
                   {maps > 0 ? `${winrate}%` : "—"}
                 </span>
               </StatLine>
-              <StatLine label="Closeness">
+              <StatLine label={tr("users.tournaments.stat.closeness")}>
                 <span className="font-semibold text-[color:var(--aqt-fg)]">{(t.closeness * 100).toFixed(0)}%</span>
               </StatLine>
             </div>
@@ -174,7 +186,7 @@ const TournamentItem = ({
             {/* Roster (full) */}
             <div className="rounded-[10px] border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] p-3.5">
               <div className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-                Roster
+                {tr("users.tournaments.roster")}
               </div>
               <TournamentTeamTable players={t.players ?? []} tournamentGrid={t.division_grid_version} />
             </div>
@@ -184,12 +196,12 @@ const TournamentItem = ({
           {encounters.length > 0 ? (
             <div className="mx-4 mb-4 overflow-hidden rounded-[10px] border border-[color:var(--aqt-border)]">
               <div className="grid grid-cols-[1fr_auto_auto] border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-4 py-2 md:grid-cols-[1fr_auto_auto_auto_auto_auto]">
-                <HeaderCell>Opponent</HeaderCell>
-                <HeaderCell className="hidden md:block">Heroes</HeaderCell>
-                <HeaderCell className="hidden md:block">MVP</HeaderCell>
-                <HeaderCell className="hidden md:block">Close.</HeaderCell>
-                <HeaderCell className="text-right">Score</HeaderCell>
-                <HeaderCell className="hidden text-right md:block">Logs</HeaderCell>
+                <HeaderCell>{tr("users.tournaments.col.opponent")}</HeaderCell>
+                <HeaderCell className="hidden md:block">{tr("common.heroes")}</HeaderCell>
+                <HeaderCell className="hidden md:block">{tr("users.tournaments.col.mvp")}</HeaderCell>
+                <HeaderCell className="hidden md:block">{tr("users.tournaments.col.closeness")}</HeaderCell>
+                <HeaderCell className="text-right">{tr("users.tournaments.col.score")}</HeaderCell>
+                <HeaderCell className="hidden text-right md:block">{tr("users.tournaments.col.logs")}</HeaderCell>
               </div>
               {encounters.map((enc) => (
                 <EncounterRow key={enc.id} enc={enc} selfUserId={selfUserId} teamId={t.team_id} />

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -71,6 +72,7 @@ const StatBlock = ({
 );
 
 const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -98,13 +100,13 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
         tournaments.length > 0 ? (
           <Select value={String(tournament.id)} onValueChange={onSelectTournament}>
             <SelectTrigger className="h-7 w-44 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[12.5px]">
-              <SelectValue placeholder="Select tournament" />
+              <SelectValue placeholder={t("users.overview.lastTournament.selectTournament")} />
             </SelectTrigger>
             <SelectContent className="liquid-glass-panel max-h-[min(var(--radix-select-content-available-height),20rem)]">
               <SelectGroup>
-                {tournaments.map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)} className="text-[13px]">
-                    {t.name}
+                {tournaments.map((tour) => (
+                  <SelectItem key={tour.id} value={String(tour.id)} className="text-[13px]">
+                    {tour.name}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -130,29 +132,36 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
               {tournament.role}
             </div>
             <div className="aqt-mono mt-1 text-[13px] text-[color:var(--aqt-fg-muted)]">
-              Placed <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
+              {t("users.overview.lastTournament.placed")} <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
                 {tournament.group_placement ?? tournament.playoff_placement ?? "—"}
               </span>
               {" · "}
-              {playtimeH > 0 ? `${playtimeH}h ` : ""}{playtimeM}m playtime · {tournament.maps} maps
+              {playtimeH > 0
+                ? t("users.overview.lastTournament.playtime", {
+                    hours: String(playtimeH),
+                    minutes: String(playtimeM)
+                  })
+                : t("users.overview.lastTournament.playtimeNoHours", { minutes: String(playtimeM) })}
+              {" · "}
+              {t("users.overview.mapsCount", { count: tournament.maps })}
             </div>
           </div>
           <div className="text-right">
             <div className="aqt-display text-[28px] font-bold leading-none">
               <span style={{ color: "var(--aqt-emerald)" }}>{tournament.maps_won}</span>
-              <span className="text-[18px] text-[color:var(--aqt-fg-faint)]"> W</span>
+              <span className="text-[18px] text-[color:var(--aqt-fg-faint)]"> {t("users.overview.win")}</span>
               <span className="mx-1.5">·</span>
               <span style={{ color: "var(--aqt-rose)" }}>{mapsLost}</span>
-              <span className="text-[18px] text-[color:var(--aqt-fg-faint)]"> L</span>
+              <span className="text-[18px] text-[color:var(--aqt-fg-faint)]"> {t("users.overview.loss")}</span>
             </div>
-            <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} map winrate</div>
+            <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} {t("users.overview.lastTournament.mapWinrate")}</div>
           </div>
         </div>
         {tournament.stats ? (
           <div className="grid grid-cols-2 gap-2.5 border-t border-[color:var(--aqt-border)] pt-3 sm:grid-cols-4">
             {tournament.stats.kda ? (
               <StatBlock
-                label="KDA"
+                label={t("users.overview.lastTournament.stat.kda")}
                 value={compactNumber(tournament.stats.kda.value)}
                 rank={tournament.stats.kda.rank}
                 total={tournament.stats.kda.total}
@@ -160,7 +169,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
             ) : null}
             {tournament.stats.performance ? (
               <StatBlock
-                label="MVP score"
+                label={t("users.overview.lastTournament.stat.mvpScore")}
                 value={compactNumber(tournament.stats.performance.value)}
                 rank={tournament.stats.performance.rank}
                 total={tournament.stats.performance.total}
@@ -168,7 +177,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
             ) : null}
             {tournament.stats.hero_damage_dealt ? (
               <StatBlock
-                label="Dmg/map"
+                label={t("users.overview.lastTournament.stat.dmgPerMap")}
                 value={compactNumber(tournament.stats.hero_damage_dealt.value)}
                 rank={tournament.stats.hero_damage_dealt.rank}
                 total={tournament.stats.hero_damage_dealt.total}
@@ -176,7 +185,7 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
             ) : null}
             {tournament.stats.damage_delta ? (
               <StatBlock
-                label="Δ Damage"
+                label={t("users.overview.lastTournament.stat.dmgDelta")}
                 value={tournament.stats.damage_delta.value >= 0 ? `+${compactNumber(tournament.stats.damage_delta.value)}` : compactNumber(tournament.stats.damage_delta.value)}
                 rank={tournament.stats.damage_delta.rank}
                 total={tournament.stats.damage_delta.total}

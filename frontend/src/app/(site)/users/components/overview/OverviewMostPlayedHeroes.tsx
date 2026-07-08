@@ -1,4 +1,5 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import { Star } from "lucide-react";
 import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
@@ -23,19 +24,20 @@ const heroBarBackground = (color: string | null | undefined): string => {
   return `linear-gradient(90deg, ${base}, ${base}aa)`;
 };
 
-const OverviewMostPlayedHeroes = ({ heroes, userSlug, totalCount, limit = 9 }: Props) => {
+const OverviewMostPlayedHeroes = async ({ heroes, userSlug, totalCount, limit = 9 }: Props) => {
   if (heroes.length === 0) return null;
 
+  const t = await getTranslations();
   const top = heroes.slice(0, limit);
   const maxPlay = top[0]?.playtime ?? 1;
 
   return (
     <CardSurface
-      title="Most played heroes"
+      title={t("users.overview.mostPlayed.title")}
       icon={<Star size={15} />}
       action={
         <Link href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
-          All {totalCount} →
+          {t("common.all")} {totalCount} →
         </Link>
       }
     >

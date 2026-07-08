@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
 import type { Hero } from "@/types/hero.types";
@@ -27,6 +28,7 @@ const EncounterRow = ({
   selfUserId: number;
   teamId: number;
 }) => {
+  const t = useTranslations();
   const isUserHome =
     enc.home_team_id === teamId || (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
 
@@ -104,7 +106,10 @@ const EncounterRow = ({
           hasLogs={enc.has_logs}
           logs={
             enc.has_logs
-              ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
+              ? (enc.matches ?? []).map((m, i) => ({
+                  matchId: m.id,
+                  label: m.map?.name ?? t("users.tournaments.mapNumber", { n: String(i + 1) })
+                }))
               : undefined
           }
         />

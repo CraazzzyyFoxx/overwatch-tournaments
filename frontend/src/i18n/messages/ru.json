@@ -1616,5 +1616,339 @@
       "dispute": "Оспорить",
       "disputedNotice": "Результат оспорен. Администратор рассмотрит спор."
     }
+  },
+  "users": {
+    "profile": {
+      "breadcrumb": "Игроки",
+      "meta": {
+        "title": "{name} — профиль игрока | {siteName}",
+        "description": "Профиль игрока {name} по Overwatch на {siteName}: история матчей, герои, карты, тиммейты, достижения и статистика карьеры.",
+        "notFoundTitle": "Пользователь не найден | {siteName}",
+        "notFoundDescription": "Запрошенный профиль пользователя не найден на {siteName}."
+      },
+      "header": {
+        "avatarAlt": "Аватар {name}",
+        "divisionTitle": "{role} · Див {division}",
+        "verifiedIdentity": "Подтверждённая личность",
+        "tournamentsCount": "{count, plural, one {# турнир} few {# турнира} many {# турниров} other {# турнира}}",
+        "mapsCount": "{count, plural, one {# карта} few {# карты} many {# карт} other {# карты}}",
+        "formLast": "Форма · последние {count}",
+        "noRecentMatches": "Нет недавних матчей"
+      },
+      "stats": {
+        "tournaments": "Турниры",
+        "won": "выиграно {count}",
+        "winrate": "Винрейт",
+        "maps": "Карты",
+        "avgPlace": "Ср. место",
+        "playoffs": "Плей-офф {place}",
+        "deltaTitle": "Последний турнир против карьеры"
+      },
+      "tabs": {
+        "overview": "Обзор",
+        "tournaments": "Турниры",
+        "maps": "Карты",
+        "achievements": "Достижения"
+      },
+      "toolbar": {
+        "copyLink": "Скопировать ссылку на профиль",
+        "copied": "Скопировано",
+        "share": "Поделиться",
+        "comparePlayers": "Сравнить игроков",
+        "compare": "Сравнить"
+      },
+      "atoms": {
+        "recentForm": "Недавняя форма",
+        "mapsTitle": "{label}: {count, plural, one {# карта} few {# карты} many {# карт} other {# карты}}"
+      }
+    },
+    "overview": {
+      "mapsCount": "{count, plural, one {# карта} few {# карты} many {# карт} other {# карты}}",
+      "win": "W",
+      "loss": "L",
+      "career": {
+        "title": "Карьера",
+        "tournaments": "Турниры",
+        "tournamentsWon": "Побед на турнирах",
+        "winrate": "Винрейт",
+        "maps": "Карты",
+        "proximity": "Близость",
+        "avgPlacement": "Среднее место",
+        "avgPlayoffPlace": "Среднее место в плей-офф",
+        "avgGroupPlace": "Среднее место в группе"
+      },
+      "mostPlayed": {
+        "title": "Самые играемые герои"
+      },
+      "placement": {
+        "title": "Динамика мест",
+        "subtitle": "последние {count, plural, one {# ивент} few {# ивента} many {# ивентов} other {# ивента}} · ниже = лучше",
+        "best": "Лучшее",
+        "median": "Медиана",
+        "worst": "Худшее"
+      },
+      "recent": {
+        "title": "Недавние встречи",
+        "allMatches": "Все матчи"
+      },
+      "roleSplit": {
+        "title": "Распределение по ролям",
+        "subtitle": "{maps, plural, one {# карта} few {# карты} many {# карт} other {# карты}} · {tournaments, plural, one {# турнир} few {# турнира} many {# турниров} other {# турнира}}",
+        "main": "Основная",
+        "ofPool": "от пула",
+        "short": {
+          "tank": "Т",
+          "damage": "Дамаг",
+          "support": "Сап"
+        }
+      },
+      "teammates": {
+        "title": "Лучшие тиммейты",
+        "dialogSubtitle": "{count, plural, one {# уникальный тиммейт} few {# уникальных тиммейта} many {# уникальных тиммейтов} other {# уникальных тиммейта}} · {maps, plural, one {# карта вместе} few {# карты вместе} many {# карт вместе} other {# карты вместе}}",
+        "you": "Вы",
+        "edgesHint": "Толщина связей — по числу совместных турниров",
+        "footer": "{count, plural, one {# уникальный} few {# уникальных} many {# уникальных} other {# уникальных}} · {maps, plural, one {# карта} few {# карты} many {# карт} other {# карты}}",
+        "searchPlaceholder": "Поиск тиммейтов…",
+        "noMatch": "Нет тиммейтов по запросу",
+        "pageRange": "{start}–{end} из {total}",
+        "col": {
+          "player": "Игрок",
+          "played": "×игр",
+          "maps": "Карты",
+          "wr": "WR",
+          "kda": "KDA",
+          "mvp": "MVP"
+        }
+      },
+      "lastTournament": {
+        "selectTournament": "Выберите турнир",
+        "placed": "Место",
+        "playtime": "{hours}ч {minutes}м в игре",
+        "playtimeNoHours": "{minutes}м в игре",
+        "mapWinrate": "винрейт по картам",
+        "stat": {
+          "kda": "KDA",
+          "mvpScore": "Очки MVP",
+          "dmgPerMap": "Урон/карта",
+          "dmgDelta": "Δ урона"
+        }
+      }
+    },
+    "heroes": {
+      "searchStats": "Поиск по статам…",
+      "recordLegend": "♔ = рекорд среди всех игроков",
+      "recordTitle": "Рекорд среди всех игроков",
+      "noStatsMatch": "Нет статов по запросу",
+      "col": {
+        "stat": "Стата",
+        "overall": "Всего",
+        "bestYou": "Лучший (вы)",
+        "avg10": "Сред. /10",
+        "bestAll": "Лучший (все)",
+        "global10": "Глоб. /10"
+      },
+      "radar": {
+        "dmg": "УРОН",
+        "elims": "УБ.",
+        "crits": "КРИТЫ",
+        "surv": "ВЫЖ.",
+        "heal": "ХИЛ"
+      },
+      "you": "Вы",
+      "globalAvg": "Глоб. среднее",
+      "careerBest": "Лучшие игры за карьеру",
+      "bestGamesSubtitle": "{hero} · личные рекорды",
+      "allTimeBest": "Абсолютный рекорд",
+      "mapsFor": "Карты на {hero}",
+      "mapsSubtitle": "{count, plural, one {# карта · от лучшей к худшей} few {# карты · от лучших к худшим} many {# карт · от лучших к худшим} other {# карт · от лучших к худшим}}",
+      "noMapData": "Пока нет данных по картам для этого героя.",
+      "sort": {
+        "playtime": "Тайм на героях",
+        "winrate": "Винрейт",
+        "kda": "KDA",
+        "dmg10": "Урон/10",
+        "impact": "Импакт"
+      },
+      "yourHeroes": "Ваши герои",
+      "tracked": "{count, plural, one {# герой} few {# героя} many {# героев} other {# героев}}",
+      "sortHeroes": "Сортировать героев",
+      "wr": "WR {value}",
+      "noHeroes": "Нет героев",
+      "noStats": "Пока нет статистики по героям.",
+      "insights": "Инсайты",
+      "insightsSubtitle": "{hero} · против глоб. среднего/10",
+      "highlights": "Основное",
+      "allStats": "Все статы",
+      "radarAxes": "Оси радара · 3–8",
+      "notEnoughData": "Недостаточно данных для сравнения",
+      "addAxis": "Добавить ось",
+      "upToAxes": "{count, plural, one {До # оси} few {До # осей} many {До # осей} other {До # осей}}",
+      "allStatsAdded": "Все статы добавлены",
+      "noMatch": "Ничего не найдено",
+      "allTournaments": "Все турниры",
+      "searchTournament": "Поиск турнира...",
+      "quick": {
+        "winrate": "Винрейт",
+        "kda": "KDA",
+        "dmg10": "Урон/10",
+        "elims10": "Убийства/10"
+      },
+      "played": "{time} наиграно",
+      "poolShare": "{pct}% от пула",
+      "playtimeShare": "Доля тайма"
+    },
+    "maps": {
+      "overallWinrate": "Общий винрейт",
+      "mostPlayed": "Больше всего игр",
+      "bestMap": "Лучшая карта",
+      "weakest": "Слабейшая",
+      "gamesUnit": " игр",
+      "gamesShort": "{count} g",
+      "gamesCount": "{count, plural, one {# игра} few {# игры} many {# игр} other {# игры}}",
+      "mapsCount": "{count, plural, one {# карта} few {# карты} many {# карт} other {# карт}}",
+      "byMode": "По режимам",
+      "byModeSubtitle": "Винрейт по режимам · {modes, plural, one {# режим} few {# режима} many {# режимов} other {# режима}} · {games, plural, one {# игра} few {# игры} many {# игр} other {# игры}}",
+      "allModes": "Все режимы",
+      "allTournaments": "Все турниры",
+      "searchTournament": "Поиск турнира…",
+      "minGamesTitle": "Минимум игр",
+      "minGames": "Мин. {count} игр",
+      "rowsTitle": "Строк на странице",
+      "rowsAll": "Строк: все",
+      "rows": "Строк: {count}",
+      "sort": "Сортировка: {label}",
+      "sortWinrate": "Винрейт",
+      "sortGames": "Игры",
+      "sortName": "Название",
+      "searchMaps": "Поиск карт…",
+      "colMap": "Карта",
+      "colWinrate": "Винрейт",
+      "colRecord": "Счёт",
+      "colGames": "Игры",
+      "noMaps": "Нет карт по заданным фильтрам"
+    },
+    "matches": {
+      "loadError": "Не удалось загрузить матчи. Повторите попытку позже.",
+      "achievementsLoadError": "Не удалось загрузить достижения. Повторите попытку позже.",
+      "filters": {
+        "wins": "Победы",
+        "losses": "Поражения",
+        "draws": "Ничьи",
+        "group": "Группа",
+        "playoffs": "Плей-офф",
+        "finals": "Финалы",
+        "mvp1": "MVP 1-й",
+        "hasLogs": "С логами"
+      },
+      "searchOpponent": "Поиск соперника…",
+      "mostFoughtOpponents": "Частые соперники",
+      "noData": "Нет данных",
+      "byStage": "По этапам",
+      "tTag": "T {number}",
+      "mapLabel": "Карта {number}",
+      "colTournament": "Турнир",
+      "colStage": "Этап",
+      "colMatch": "Матч",
+      "colScore": "Счёт",
+      "colMvp": "MVP",
+      "colCloseness": "Напр.",
+      "colLogs": "Логи",
+      "noMatches": "Нет матчей по текущему фильтру"
+    },
+    "tournaments": {
+      "title": "История турниров",
+      "clickToExpand": "нажмите, чтобы развернуть",
+      "mapNumber": "Карта {n}",
+      "leagueBadge": "Лига",
+      "divisionsCount": "{count, plural, one {# дивизион} few {# дивизиона} many {# дивизионов} other {# дивизиона}}",
+      "bestPlacement": "· лучшее #{n}",
+      "teamName": "Команда {name}",
+      "roster": "Состав",
+      "result": {
+        "grandFinals": "Гранд-финал",
+        "playoffsReached": "Вышел в плей-офф",
+        "groups": "Группы"
+      },
+      "stat": {
+        "record": "Баланс",
+        "wins": "{count}В",
+        "losses": "{count}П",
+        "draws": "{count}Н",
+        "mapsWon": "Выиграно карт",
+        "mapsWonValue": "{won} из {total}",
+        "winrate": "Винрейт",
+        "closeness": "Напряжённость"
+      },
+      "col": {
+        "opponent": "Соперник",
+        "mvp": "MVP",
+        "closeness": "Напр.",
+        "score": "Счёт",
+        "logs": "Логи"
+      },
+      "timeline": {
+        "title": "Динамика мест",
+        "subtitle": "{count, plural, one {# турнир} few {# турнира} many {# турниров} other {# турнира}} · место относительно числа команд",
+        "axisTop": "топ",
+        "axisLast": "посл.",
+        "dotTitle": "Т#{number} · место {placement}/{count}",
+        "legend": {
+          "first": "1-е место",
+          "podium": "Подиум",
+          "topHalf": "Верхняя половина",
+          "bottomHalf": "Нижняя половина"
+        }
+      }
+    },
+    "achievements": {
+      "unlocked": "Открыто",
+      "locked": "Закрыто",
+      "searchPlaceholder": "Поиск достижений…",
+      "sectionUnlocked": "{unlocked} из {total} открыто",
+      "emptyState": "У пользователя пока нет достижений.",
+      "filter": {
+        "allTournaments": "Все турниры",
+        "withoutTournament": "Без турнира"
+      },
+      "sort": {
+        "title": "Сортировать достижения",
+        "rarity": "Сортировка: редкость",
+        "name": "Сортировка: название",
+        "earned": "Сортировка: получено"
+      },
+      "rarity": {
+        "mythic": {
+          "title": "Мифическое · < 1% всех игроков",
+          "range": "< 1% получают"
+        },
+        "legendary": {
+          "title": "Легендарное · 1-5%",
+          "range": "1-5%"
+        },
+        "epic": {
+          "title": "Эпическое · 5-15%",
+          "range": "5-15%"
+        },
+        "rare": {
+          "title": "Редкое · 15-30%",
+          "range": "15-30%"
+        },
+        "uncommon": {
+          "title": "Необычное · 30-50%",
+          "range": "30-50%"
+        },
+        "common": {
+          "title": "Обычное · > 50%",
+          "range": "> 50%"
+        }
+      },
+      "detail": {
+        "fallbackDescription": "Описание достижения.",
+        "locked": "Вы ещё не получили это достижение.",
+        "earnedIn": "Получено в",
+        "earnedCount": "· получено ×{count}",
+        "earnedNoDetails": "Получено {count}× — данные о турнире или матче не сохранены."
+      }
+    }
   }
 }

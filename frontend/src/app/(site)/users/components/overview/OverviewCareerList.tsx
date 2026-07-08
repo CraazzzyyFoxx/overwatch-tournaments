@@ -1,4 +1,5 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import { Medal } from "lucide-react";
 import { UserProfile } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
@@ -24,24 +25,25 @@ const Row = ({ label, value, highlight }: { label: string; value: string; highli
   </div>
 );
 
-const OverviewCareerList = ({ profile }: Props) => {
+const OverviewCareerList = async ({ profile }: Props) => {
+  const t = await getTranslations();
   const winrate = profile.maps_total > 0 ? (profile.maps_won / profile.maps_total) * 100 : null;
   const proximity = profile.avg_closeness === null ? null : profile.avg_closeness * 100;
 
   return (
-    <CardSurface flush title="Career" icon={<Medal size={15} />}>
-      <Row label="Tournaments" value={`${profile.tournaments_count}`} />
+    <CardSurface flush title={t("users.overview.career.title")} icon={<Medal size={15} />}>
+      <Row label={t("users.overview.career.tournaments")} value={`${profile.tournaments_count}`} />
       <Row
-        label="Tournaments won"
+        label={t("users.overview.career.tournamentsWon")}
         value={`${profile.tournaments_won}`}
         highlight={profile.tournaments_won > 0 ? "var(--aqt-amber)" : undefined}
       />
-      <Row label="Winrate" value={fmt(winrate, 2, "%")} />
-      <Row label="Maps" value={`${profile.maps_won} / ${profile.maps_total}`} />
-      <Row label="Proximity" value={fmt(proximity, 0, "%")} />
-      <Row label="Avg placement" value={fmt(profile.avg_placement)} />
-      <Row label="Avg playoff place" value={fmt(profile.avg_playoff_placement)} />
-      <Row label="Avg group place" value={fmt(profile.avg_group_placement, 0)} />
+      <Row label={t("users.overview.career.winrate")} value={fmt(winrate, 2, "%")} />
+      <Row label={t("users.overview.career.maps")} value={`${profile.maps_won} / ${profile.maps_total}`} />
+      <Row label={t("users.overview.career.proximity")} value={fmt(proximity, 0, "%")} />
+      <Row label={t("users.overview.career.avgPlacement")} value={fmt(profile.avg_placement)} />
+      <Row label={t("users.overview.career.avgPlayoffPlace")} value={fmt(profile.avg_playoff_placement)} />
+      <Row label={t("users.overview.career.avgGroupPlace")} value={fmt(profile.avg_group_placement, 0)} />
     </CardSurface>
   );
 };

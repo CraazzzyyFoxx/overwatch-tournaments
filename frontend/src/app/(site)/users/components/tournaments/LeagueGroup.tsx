@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { UserTournament } from "@/types/user.types";
 import TournamentItem from "@/app/(site)/users/components/tournaments/TournamentItem";
@@ -23,6 +24,7 @@ const LeagueGroup = ({
   isTournamentOpen: (t: UserTournament) => boolean;
   onToggleTournament: (t: UserTournament) => void;
 }) => {
+  const tr = useTranslations();
   const bestPlacement = entries.reduce((best, t) => (t.placement && t.placement < best ? t.placement : best), Infinity);
 
   return (
@@ -44,12 +46,12 @@ const LeagueGroup = ({
             color: "var(--aqt-violet)"
           }}
         >
-          League
+          {tr("users.tournaments.leagueBadge")}
         </span>
         <span className="flex-1 truncate text-[17px] font-semibold text-[color:var(--aqt-fg)]">{name}</span>
         <span className="aqt-mono text-[13.5px] text-[color:var(--aqt-fg-dim)]">
-          {entries.length} divisions
-          {bestPlacement !== Infinity ? ` · best #${bestPlacement}` : ""}
+          {tr("users.tournaments.divisionsCount", { count: entries.length })}
+          {bestPlacement !== Infinity ? ` ${tr("users.tournaments.bestPlacement", { n: String(bestPlacement) })}` : ""}
         </span>
         <div
           className={cn("transition-transform", isOpen && "rotate-180")}

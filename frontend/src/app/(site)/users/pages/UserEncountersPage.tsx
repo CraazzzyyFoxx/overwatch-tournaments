@@ -1,4 +1,5 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +31,7 @@ export const UserEncountersPage = async ({
   filters?: MatchesFilters;
 }) => {
   const perPage = 15;
+  const t = await getTranslations();
 
   let encounters: Awaited<ReturnType<typeof userService.getUserEncounters>>;
   // Most-fought opponents + per-stage record are aggregated server-side over
@@ -43,7 +45,7 @@ export const UserEncountersPage = async ({
   } catch {
     return (
       <div className="aqt-player rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] px-6 py-10 text-center text-[13px] text-[color:var(--aqt-fg-muted)]">
-        Could not load matches. Please try again later.
+        {t("users.matches.loadError")}
       </div>
     );
   }

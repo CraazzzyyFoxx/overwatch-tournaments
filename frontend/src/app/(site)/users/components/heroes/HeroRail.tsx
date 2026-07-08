@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import HeroImage from "@/components/hero/HeroImage";
@@ -29,20 +30,9 @@ export interface HeroRow {
 
 type SortKey = "playtime" | "winratePct" | "kda" | "dmg10" | "impact";
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "playtime", label: "Playtime" },
-  { key: "winratePct", label: "Winrate" },
-  { key: "kda", label: "KDA" },
-  { key: "dmg10", label: "Dmg/10" },
-  { key: "impact", label: "Impact" }
-];
+const SORT_OPTIONS: SortKey[] = ["playtime", "winratePct", "kda", "dmg10", "impact"];
 
-const ROLE_FILTERS: { key: "all" | AqtRoleKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "tank", label: "Tank" },
-  { key: "damage", label: "Damage" },
-  { key: "support", label: "Support" }
-];
+const ROLE_FILTERS: ("all" | AqtRoleKey)[] = ["all", "tank", "damage", "support"];
 
 const num = (v: number | null) => (v == null || !Number.isFinite(v) ? -Infinity : v);
 
@@ -71,9 +61,38 @@ interface Props {
  *  tracked hero by the chosen metric (so cross-hero comparison stays possible)
  *  while keeping the detail panel beside it — switching heroes needs no scroll. */
 const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
+  const t = useTranslations();
   const [sort, setSort] = useState<SortKey>("playtime");
   const [role, setRole] = useState<"all" | AqtRoleKey>("all");
   const [query, setQuery] = useState("");
+
+  const sortLabel = (key: SortKey): string => {
+    switch (key) {
+      case "playtime":
+        return t("users.heroes.sort.playtime");
+      case "winratePct":
+        return t("users.heroes.sort.winrate");
+      case "kda":
+        return t("users.heroes.sort.kda");
+      case "dmg10":
+        return t("users.heroes.sort.dmg10");
+      case "impact":
+        return t("users.heroes.sort.impact");
+    }
+  };
+
+  const roleLabel = (key: "all" | AqtRoleKey): string => {
+    switch (key) {
+      case "all":
+        return t("common.all");
+      case "tank":
+        return t("common.roles.tank");
+      case "damage":
+        return t("common.roles.dps");
+      case "support":
+        return t("common.roles.support");
+    }
+  };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,21 +104,21 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
   return (
     <CardSurface
       flush
-      title="Your heroes"
-      subtitle={`${rows.length} tracked`}
+      title={t("users.heroes.yourHeroes")}
+      subtitle={t("users.heroes.tracked", { count: rows.length })}
       className="xl:sticky xl:top-22"
     >
       <div className="flex flex-col gap-2 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
         <div className="flex flex-wrap gap-1.5">
           {ROLE_FILTERS.map((rf) => (
             <span
-              key={rf.key}
+              key={rf}
               role="button"
               tabIndex={0}
-              onClick={() => setRole(rf.key)}
-              className={cn("aqt-filter-chip", role === rf.key && "active")}
+              onClick={() => setRole(rf)}
+              className={cn("aqt-filter-chip", role === rf && "active")}
             >
-              {rf.label}
+              {roleLabel(rf)}
             </span>
           ))}
         </div>
@@ -110,7 +129,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
               <path d="m20 20-3.5-3.5" />
             </svg>
             <input
-              placeholder="Search…"
+              placeholder={t("common.search")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[13.5px] text-[color:var(--aqt-fg)] outline-none"
@@ -118,15 +137,15 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
           </div>
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
             <SelectTrigger
-              title="Sort heroes"
+              title={t("users.heroes.sortHeroes")}
               className="aqt-mono h-9 w-[116px] shrink-0 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] text-[12px] text-[color:var(--aqt-fg)] shadow-none"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {SORT_OPTIONS.map((o) => (
-                <SelectItem key={o.key} value={o.key}>
-                  {o.label}
+                <SelectItem key={o} value={o}>
+                  {sortLabel(o)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -151,7 +170,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
               <div className="min-w-0">
                 <div className="truncate text-[14px] font-semibold text-[color:var(--aqt-fg)]">{r.hero.name}</div>
                 <div className="truncate text-[12px] capitalize text-[color:var(--aqt-fg-dim)]">
-                  {r.role} · WR {r.winratePct == null ? "—" : `${r.winratePct.toFixed(0)}%`} · {(r.share * 100).toFixed(0)}%
+                  {r.role} · {t("users.heroes.wr", { value: r.winratePct == null ? "—" : `${r.winratePct.toFixed(0)}%` })} · {(r.share * 100).toFixed(0)}%
                 </div>
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-sm bg-[hsl(0_0%_100%/0.05)]">
                   <div
@@ -171,7 +190,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
           );
         })}
         {visible.length === 0 ? (
-          <div className="px-3 py-8 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">No heroes</div>
+          <div className="px-3 py-8 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">{t("users.heroes.noHeroes")}</div>
         ) : null}
       </div>
     </CardSurface>

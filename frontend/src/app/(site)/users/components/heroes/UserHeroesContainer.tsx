@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import userService from "@/services/user.service";
 import SearchableImageSelect, {
@@ -15,6 +16,7 @@ interface UserHeroesContainerProps {
 }
 
 const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
+  const t = useTranslations();
   const [tournamentId, setTournamentId] = useState<number | undefined>(undefined);
 
   const tournamentsQuery = useQuery({
@@ -67,8 +69,8 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
         value={tournamentId ? String(tournamentId) : undefined}
         onValueChange={(val) => setTournamentId(val ? Number(val) : undefined)}
         options={tournamentOptions}
-        placeholder="All tournaments"
-        searchPlaceholder="Search tournament..."
+        placeholder={t("users.heroes.allTournaments")}
+        searchPlaceholder={t("users.heroes.searchTournament")}
         isLoading={tournamentsQuery.isLoading}
         disabled={tournamentsQuery.isLoading || tournamentsQuery.isError}
       />

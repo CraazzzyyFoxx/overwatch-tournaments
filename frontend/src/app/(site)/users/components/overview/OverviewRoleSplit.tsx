@@ -1,20 +1,29 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import { Layers } from "lucide-react";
 import { UserProfile, UserRole } from "@/types/user.types";
 import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 
-const ROLE_LABELS: Record<AqtRoleKey, string> = {
+// Canonical English role names used ONLY for icon selection in PlayerRoleIcon.
+const ROLE_ICON: Record<AqtRoleKey, string> = {
   tank: "Tank",
   damage: "Damage",
   support: "Support"
 };
 
-const ROLE_SHORT: Record<AqtRoleKey, string> = {
-  tank: "T",
-  damage: "Damage",
-  support: "Sup"
+// Reuse the shared role labels (common.roles); damage maps to the dps entry.
+const ROLE_LABEL_KEY: Record<AqtRoleKey, string> = {
+  tank: "common.roles.tank",
+  damage: "common.roles.dps",
+  support: "common.roles.support"
+};
+
+const ROLE_SHORT_KEY: Record<AqtRoleKey, string> = {
+  tank: "users.overview.roleSplit.short.tank",
+  damage: "users.overview.roleSplit.short.damage",
+  support: "users.overview.roleSplit.short.support"
 };
 
 const ROLE_COLOR: Record<AqtRoleKey, string> = {
@@ -39,9 +48,10 @@ interface Props {
   profile: UserProfile;
 }
 
-const OverviewRoleSplit = ({ profile }: Props) => {
+const OverviewRoleSplit = async ({ profile }: Props) => {
   if (!profile.roles.length) return null;
 
+  const t = await getTranslations();
   const totalMaps = profile.maps_total;
   const buckets = ["tank", "damage", "support"]
     .map<Bucket | null>((roleKey) => {
@@ -66,16 +76,19 @@ const OverviewRoleSplit = ({ profile }: Props) => {
 
   return (
     <CardSurface
-      title="Role split"
+      title={t("users.overview.roleSplit.title")}
       icon={<Layers size={15} />}
-      subtitle={`${totalMaps} maps · ${profile.tournaments_count} tournaments`}
+      subtitle={t("users.overview.roleSplit.subtitle", {
+        maps: totalMaps,
+        tournaments: profile.tournaments_count
+      })}
     >
       <div className="flex flex-col gap-3.5">
         <RolePyramid
           segments={buckets.map((b) => ({
             role: b.key,
             maps: b.maps,
-            label: b.maps > 0 ? `${ROLE_SHORT[b.key]} ${b.maps}` : ""
+            label: b.maps > 0 ? `${t(ROLE_SHORT_KEY[b.key])} ${b.maps}` : ""
           }))}
         />
         <div className="flex flex-col gap-3">
@@ -109,14 +122,14 @@ const OverviewRoleSplit = ({ profile }: Props) => {
                   className="aqt-display flex items-center gap-1.5 text-[16px] font-bold uppercase leading-none tracking-[0.04em]"
                   style={{ color: ROLE_COLOR[b.key] }}
                 >
-                  <PlayerRoleIcon role={ROLE_LABELS[b.key]} size={14} color={ROLE_COLOR[b.key]} />
-                  {ROLE_LABELS[b.key]}
+                  <PlayerRoleIcon role={ROLE_ICON[b.key]} size={14} color={ROLE_COLOR[b.key]} />
+                  {t(ROLE_LABEL_KEY[b.key])}
                   {primary && b.key === primary.key ? (
-                    <span className="ml-1 text-[11px] font-semibold tracking-[0.1em] text-[color:var(--aqt-fg-muted)]"> · Main</span>
+                    <span className="ml-1 text-[11px] font-semibold tracking-[0.1em] text-[color:var(--aqt-fg-muted)]"> · {t("users.overview.roleSplit.main")}</span>
                   ) : null}
                 </div>
                 <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-muted)]">
-                  {b.won}W · {b.lost}L · {b.maps} maps
+                  {b.won}W · {b.lost}L · {t("users.overview.mapsCount", { count: b.maps })}
                 </div>
               </div>
               <div className="text-right">
@@ -133,7 +146,7 @@ const OverviewRoleSplit = ({ profile }: Props) => {
                   {formatPercent(b.winrate)}
                 </div>
                 <div className="aqt-mono mt-0.5 text-[11.5px] text-[color:var(--aqt-fg-dim)]">
-                  {formatPercent(b.share)} of pool
+                  {formatPercent(b.share)} {t("users.overview.roleSplit.ofPool")}
                 </div>
               </div>
             </div>

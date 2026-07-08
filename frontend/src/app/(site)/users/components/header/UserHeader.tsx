@@ -1,6 +1,8 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
 import { User, UserProfile } from "@/types/user.types";
 import { hasVerifiedSocial } from "@/lib/social-providers";
 import { SocialAccountList } from "@/components/social/SocialAccountList";
@@ -47,6 +49,7 @@ const primaryRoleOf = (profile: UserProfile) => {
 };
 
 const UserHeader = async ({ profile, user }: UserHeaderProps) => {
+  const t = await getTranslations();
   const [name, tag] = user.name.split("#");
   const primaryRole = primaryRoleOf(profile);
   const avatarSrc = getPlayerImage(profile, user);
@@ -81,7 +84,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
     <HeroFrame className="aqt-player">
       <div className="flex items-center justify-between gap-3 px-9 pt-5">
         <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-          <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">Users</Link>
+          <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</Link>
           <span className="mx-1">·</span>
           <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
         </p>
@@ -95,12 +98,15 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             style={{ background: "var(--aqt-teal)" }}
           />
           <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:var(--aqt-border-2)]">
-            <Image src={avatarSrc} alt={`${name} avatar`} fill sizes="110px" className="object-cover" priority />
+            <Image src={avatarSrc} alt={t("users.profile.header.avatarAlt", { name })} fill sizes="110px" className="object-cover" priority />
           </div>
           {primaryRole ? (
             <div
               className="absolute -bottom-2 -right-2"
-              title={`${primaryRole.role} · Div ${primaryRole.division}`}
+              title={t("users.profile.header.divisionTitle", {
+                role: primaryRole.role,
+                division: String(primaryRole.division)
+              })}
             >
               <DivisionIcon
                 division={primaryRole.division}
@@ -117,7 +123,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
             <span>{name}</span>
             {tag ? <span className="text-[22px] font-medium tracking-[0.04em] text-[color:var(--aqt-fg-faint)]">#{tag}</span> : null}
             {hasVerifiedSocial(user.social_accounts) ? (
-              <span className="text-[18px] text-[color:var(--aqt-teal)]" title="Verified identity">
+              <span className="text-[18px] text-[color:var(--aqt-teal)]" title={t("users.profile.header.verifiedIdentity")}>
                 ✓
               </span>
             ) : null}
@@ -128,8 +134,8 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
                 <PlayerRoleIcon role={primaryRole.role} size={14} color={roleSwatchColor} />
               </span>
               <span>{primaryRole.role}</span>
-              <span>· {profile.tournaments_count} tournaments</span>
-              <span>· {profile.maps_total} maps</span>
+              <span>· {t("users.profile.header.tournamentsCount", { count: profile.tournaments_count })}</span>
+              <span>· {t("users.profile.header.mapsCount", { count: profile.maps_total })}</span>
             </div>
           ) : null}
           <SocialAccountList accounts={user.social_accounts} className="mt-1 flex flex-wrap gap-1.5" />
@@ -137,35 +143,35 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
 
         <div className="grid w-full items-end gap-4 md:w-auto md:min-w-[460px] md:grid-cols-4">
           <PfStat
-            label="Tournaments"
+            label={t("users.profile.stats.tournaments")}
             value={`${profile.tournaments_count}`}
-            sub={profile.tournaments_won > 0 ? `${profile.tournaments_won} won` : "—"}
+            sub={profile.tournaments_won > 0 ? t("users.profile.stats.won", { count: String(profile.tournaments_won) }) : "—"}
           />
           <PfStat
-            label="Winrate"
+            label={t("users.profile.stats.winrate")}
             value={winrate !== null ? `${winrate.toFixed(2)}` : "-"}
             unit="%"
             delta={winrateDelta !== null ? { value: winrateDelta, good: winrateDelta >= 0 } : undefined}
           />
           <PfStat
-            label="Maps"
+            label={t("users.profile.stats.maps")}
             value={`${profile.maps_won}`}
             valueSuffix={`/${profile.maps_total}`}
           />
           <PfStat
-            label="Avg Place"
+            label={t("users.profile.stats.avgPlace")}
             value={formatPlace(profile.avg_placement)}
-            sub={profile.avg_playoff_placement !== null ? `Playoffs ${formatPlace(profile.avg_playoff_placement)}` : null}
+            sub={profile.avg_playoff_placement !== null ? t("users.profile.stats.playoffs", { place: formatPlace(profile.avg_playoff_placement) }) : null}
           />
 
           <div className="col-span-full mt-2 flex flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-              Form · last {formStreak.length}
+              {t("users.profile.header.formLast", { count: String(formStreak.length) })}
             </span>
             {formStreak.length > 0 ? (
               <FormStreak results={formStreak} />
             ) : (
-              <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">No recent matches</span>
+              <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">{t("users.profile.header.noRecentMatches")}</span>
             )}
           </div>
         </div>
@@ -184,7 +190,9 @@ interface PfStatProps {
   delta?: { value: number; good: boolean };
 }
 
-const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => (
+const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => {
+  const t = useTranslations();
+  return (
   <div className="flex flex-col gap-1">
     <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{label}</span>
     <span className="font-onest aqt-tnum text-[30px] font-bold leading-none text-[color:var(--aqt-fg)]">
@@ -198,13 +206,14 @@ const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) =>
       <span
         className="aqt-mono inline-flex items-center gap-0.5 text-[12px] font-bold"
         style={{ color: delta.good ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-        title="Last tournament vs career"
+        title={t("users.profile.stats.deltaTitle")}
       >
         {delta.good ? "↑" : "↓"} {Math.abs(delta.value).toFixed(1)}
       </span>
     ) : null}
     {sub ? <span className="text-[12px] text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
   </div>
-);
+  );
+};
 
 export default UserHeader;

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { History } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { UserTournament } from "@/types/user.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import {
@@ -20,6 +21,7 @@ interface Props {
 // ─── Main component ─────────────────────────────────────────────────────────────
 
 const TournamentsHistory = ({ tournaments, selfUserId }: Props) => {
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const selectedId = useMemo(() => {
     const raw = searchParams?.get("selectedTournamentId");
@@ -53,7 +55,12 @@ const TournamentsHistory = ({ tournaments, selfUserId }: Props) => {
     expandedLeagues[name] ?? entries.some((t) => t.id === selectedId);
 
   return (
-    <CardSurface flush title="Tournament history" icon={<History size={15} />} subtitle="click to expand">
+    <CardSurface
+      flush
+      title={t("users.tournaments.title")}
+      icon={<History size={15} />}
+      subtitle={t("users.tournaments.clickToExpand")}
+    >
       {grouped.map((entry) => {
         if (!Array.isArray(entry)) {
           return (

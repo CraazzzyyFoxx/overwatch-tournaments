@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { CardSurface, StagePill } from "@/app/(site)/users/components/shared/atoms";
 import { ArrowLeftRight, ListOrdered } from "lucide-react";
 
@@ -23,9 +24,15 @@ interface MatchesSidebarsProps {
 }
 
 const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) => {
+  const t = useTranslations();
+  const stageLabels: Record<"group" | "playoffs" | "finals", string> = {
+    group: t("users.matches.filters.group"),
+    playoffs: t("users.matches.filters.playoffs"),
+    finals: t("users.matches.filters.finals")
+  };
   return (
     <aside className="flex flex-col gap-3.5 xl:sticky xl:top-22">
-      <CardSurface flush title="Most-fought opponents" icon={<ArrowLeftRight size={15} />}>
+      <CardSurface flush title={t("users.matches.mostFoughtOpponents")} icon={<ArrowLeftRight size={15} />}>
         {opponentStats.map((opp, i) => (
           <div key={opp.name} className="aqt-opp-row">
             <span className="aqt-rank">{String(i + 1).padStart(2, "0")}</span>
@@ -41,11 +48,11 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
           </div>
         ))}
         {opponentStats.length === 0 ? (
-          <div className="p-4 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">No data</div>
+          <div className="p-4 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">{t("users.matches.noData")}</div>
         ) : null}
       </CardSurface>
 
-      <CardSurface flush title="By stage" icon={<ListOrdered size={15} />}>
+      <CardSurface flush title={t("users.matches.byStage")} icon={<ListOrdered size={15} />}>
         {(["group", "playoffs", "finals"] as const).map((k) => {
           const stats = stageStats[k];
           const total = stats.w + stats.l;
@@ -53,7 +60,7 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
           return (
             <div key={k} className="aqt-opp-row" style={{ gridTemplateColumns: "1fr auto auto" }}>
               <span className="aqt-nm inline-flex items-center gap-2">
-                <StagePill kind={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</StagePill>
+                <StagePill kind={k}>{stageLabels[k]}</StagePill>
               </span>
               <span className="aqt-pct">{stats.w}-{stats.l}</span>
               <span

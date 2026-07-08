@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
 import type { AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
@@ -14,13 +15,6 @@ export const QUICK_CANDIDATES: LogStatsName[] = [
   LogStatsName.HeroDamageDealt,
   LogStatsName.Eliminations
 ];
-
-export const QUICK_LABELS: Partial<Record<LogStatsName, string>> = {
-  [LogStatsName.Winrate]: "Winrate",
-  [LogStatsName.KDA]: "KDA",
-  [LogStatsName.HeroDamageDealt]: "Dmg/10",
-  [LogStatsName.Eliminations]: "Elims/10"
-};
 
 export interface QuickStatData {
   name: LogStatsName;
@@ -58,7 +52,9 @@ const HeroSpotlight = ({
   selected: SpotlightHero;
   heroVariant: AqtRoleKey;
   quickStats: QuickStatData[];
-}) => (
+}) => {
+  const t = useTranslations();
+  return (
   <div
     className="relative grid grid-cols-[auto_1fr_auto] items-center gap-6 overflow-hidden rounded-xl border p-5"
     style={{
@@ -90,12 +86,12 @@ const HeroSpotlight = ({
           {selected.hero.hero.type ?? selected.hero.hero.role}
         </span>
         <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-muted)]">
-          {formatSeconds(selected.playtime, { withSeconds: false })} played
+          {t("users.heroes.played", { time: formatSeconds(selected.playtime, { withSeconds: false }) })}
         </span>
         <span
           className="aqt-mono inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.06)] px-2 py-0.5 text-[12px]"
         >
-          ▎ {(selected.share * 100).toFixed(0)}% pool share
+          ▎ {t("users.heroes.poolShare", { pct: (selected.share * 100).toFixed(0) })}
         </span>
       </div>
     </div>
@@ -103,10 +99,11 @@ const HeroSpotlight = ({
       {quickStats.length > 0 ? (
         quickStats.map((qs) => <QuickStat key={qs.name} label={qs.label} value={qs.value} delta={qs.delta} />)
       ) : (
-        <QuickStat label="Playtime share" value={`${(selected.share * 100).toFixed(0)}%`} delta={null} />
+        <QuickStat label={t("users.heroes.playtimeShare")} value={`${(selected.share * 100).toFixed(0)}%`} delta={null} />
       )}
     </div>
   </div>
-);
+  );
+};
 
 export default HeroSpotlight;

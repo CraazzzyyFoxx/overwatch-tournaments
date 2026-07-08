@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Share2, GitCompare, Check } from "lucide-react";
 
 interface ProfileToolbarProps {
@@ -18,6 +19,7 @@ const BTN =
  * for a later phase — Export needs a per-tab data export, Follow needs backend.)
  */
 const ProfileToolbar = ({ comparePath = "/users/compare" }: ProfileToolbarProps) => {
+  const t = useTranslations();
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
@@ -33,13 +35,13 @@ const ProfileToolbar = ({ comparePath = "/users/compare" }: ProfileToolbarProps)
 
   return (
     <div className="flex items-center gap-2">
-      <button type="button" onClick={handleShare} className={BTN} title="Copy link to this profile">
+      <button type="button" onClick={handleShare} className={BTN} title={t("users.profile.toolbar.copyLink")}>
         {copied ? <Check size={13} /> : <Share2 size={13} />}
-        {copied ? "Copied" : "Share"}
+        {copied ? t("users.profile.toolbar.copied") : t("users.profile.toolbar.share")}
       </button>
-      <Link href={comparePath} className={BTN} title="Compare players">
+      <Link href={comparePath} className={BTN} title={t("users.profile.toolbar.comparePlayers")}>
         <GitCompare size={13} />
-        Compare
+        {t("users.profile.toolbar.compare")}
       </Link>
     </div>
   );

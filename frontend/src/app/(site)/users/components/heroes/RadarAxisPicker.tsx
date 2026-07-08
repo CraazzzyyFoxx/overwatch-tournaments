@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogStatsName } from "@/types/stats.types";
@@ -23,6 +24,7 @@ interface Props {
  *  opens a searchable list of the remaining stats to add. Mirrors the mockup —
  *  add/remove any number of axes (kept within 3–8). */
 const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -45,7 +47,7 @@ const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
               type="button"
               onClick={() => onToggle(name)}
               className="-mr-0.5 inline-flex items-center justify-center rounded-sm text-(--aqt-fg-muted) hover:text-[color:var(--aqt-fg)]"
-              aria-label={`Remove ${getHumanizedStats(name)}`}
+              aria-label={t("common.remove")}
             >
               <X className="h-3 w-3" />
             </button>
@@ -62,10 +64,10 @@ const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
               "aqt-filter-chip inline-flex items-center gap-1",
               !canAdd && "cursor-not-allowed opacity-40"
             )}
-            title={canAdd ? "Add an axis" : `Up to ${MAX_AXES} axes`}
+            title={canAdd ? t("users.heroes.addAxis") : t("users.heroes.upToAxes", { count: MAX_AXES })}
           >
             <Plus className="h-3 w-3" />
-            Add
+            {t("common.add")}
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -75,7 +77,7 @@ const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
           <div className="border-b border-[color:var(--aqt-border)] p-2">
             <input
               autoFocus
-              placeholder="Search stats…"
+              placeholder={t("users.heroes.searchStats")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full rounded-md border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-2.5 py-1.5 text-[13px] text-[color:var(--aqt-fg)] outline-none"
@@ -94,7 +96,7 @@ const RadarAxisPicker = ({ selected, candidates, onToggle }: Props) => {
             ))}
             {filtered.length === 0 ? (
               <div className="px-3 py-3 text-center text-[12px] text-[color:var(--aqt-fg-dim)]">
-                {available.length === 0 ? "All stats added" : "No match"}
+                {available.length === 0 ? t("users.heroes.allStatsAdded") : t("users.heroes.noMatch")}
               </div>
             ) : null}
           </div>

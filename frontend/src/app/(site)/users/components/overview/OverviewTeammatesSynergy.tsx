@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -37,6 +38,7 @@ const formatStat = (value: number | null | undefined, digits: number) =>
   value != null && Number.isFinite(value) ? value.toFixed(digits) : "—";
 
 const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }: Props) => {
+  const t = useTranslations();
   const [search, setSearch] = useState("");
 
   const top = teammates.slice(0, 6);
@@ -47,21 +49,21 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
   return (
     <CardSurface
       flush
-      title="Best teammates"
+      title={t("users.overview.teammates.title")}
       icon={<Users size={15} />}
       action={
         <Dialog>
           <DialogTrigger asChild>
             <button type="button" className="aqt-seeall">
-              All →
+              {t("common.all")} →
             </button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
             <div className="aqt-player flex max-h-[80vh] flex-col">
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
-                <DialogTitle className="text-[color:var(--aqt-fg)]">Best teammates</DialogTitle>
+                <DialogTitle className="text-[color:var(--aqt-fg)]">{t("users.overview.teammates.title")}</DialogTitle>
                 <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
-                  {totalCount} unique stack-mates · {totalMaps} maps together
+                  {t("users.overview.teammates.dialogSubtitle", { count: totalCount, maps: totalMaps })}
                 </DialogDescription>
               </DialogHeader>
               <AllTeammatesTable teammates={teammates} search={search} onSearchChange={setSearch} />
@@ -88,9 +90,10 @@ const NetworkView = ({
   totalCount: number;
   totalMaps: number;
 }) => {
+  const t = useTranslations();
   const nodes = useMemo(() => {
     const n = top.length;
-    const maxApp = Math.max(...top.map((t) => t.tournaments), 1);
+    const maxApp = Math.max(...top.map((tm) => tm.tournaments), 1);
     return top.map((tm, i) => {
       // Evenly distribute around the centre, starting at the top.
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
@@ -143,7 +146,7 @@ const NetworkView = ({
             {meInitials}
           </div>
           <span className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--aqt-amber)" }}>
-            You
+            {t("users.overview.teammates.you")}
           </span>
         </div>
 
@@ -185,9 +188,9 @@ const NetworkView = ({
         })}
       </div>
       <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
-        <span>Edges sized by appearances</span>
+        <span>{t("users.overview.teammates.edgesHint")}</span>
         <span>
-          {totalCount} unique · {totalMaps} maps
+          {t("users.overview.teammates.footer", { count: totalCount, maps: totalMaps })}
         </span>
       </div>
     </>
@@ -205,11 +208,12 @@ const AllTeammatesTable = ({
   search: string;
   onSearchChange: (value: string) => void;
 }) => {
+  const t = useTranslations();
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = [...teammates].sort((a, b) => b.tournaments - a.tournaments);
     if (!q) return rows;
-    return rows.filter((t) => t.user.name.toLowerCase().includes(q));
+    return rows.filter((tm) => tm.user.name.toLowerCase().includes(q));
   }, [teammates, search]);
 
   const perPage = 12;
@@ -233,7 +237,7 @@ const AllTeammatesTable = ({
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
-            placeholder="Search teammates…"
+            placeholder={t("users.overview.teammates.searchPlaceholder")}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[14px] text-[color:var(--aqt-fg)] outline-none"
@@ -244,9 +248,16 @@ const AllTeammatesTable = ({
         <table className="aqt-tnum w-full border-collapse text-[13.5px]">
           <thead className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
             <tr>
-              {["Player", "×played", "Maps", "WR", "KDA", "MVP"].map((h, i) => (
-                <th key={h} className={cnHeader(i === 0)}>
-                  {h}
+              {[
+                { id: "player", label: t("users.overview.teammates.col.player"), left: true },
+                { id: "played", label: t("users.overview.teammates.col.played"), left: false },
+                { id: "maps", label: t("users.overview.teammates.col.maps"), left: false },
+                { id: "wr", label: t("users.overview.teammates.col.wr"), left: false },
+                { id: "kda", label: t("users.overview.teammates.col.kda"), left: false },
+                { id: "mvp", label: t("users.overview.teammates.col.mvp"), left: false }
+              ].map((h) => (
+                <th key={h.id} className={cnHeader(h.left)}>
+                  {h.label}
                 </th>
               ))}
             </tr>
@@ -284,7 +295,7 @@ const AllTeammatesTable = ({
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
-                  No teammates match search
+                  {t("users.overview.teammates.noMatch")}
                 </td>
               </tr>
             ) : null}
@@ -294,7 +305,11 @@ const AllTeammatesTable = ({
       {filtered.length > perPage ? (
         <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] px-5 py-2.5">
           <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
-            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+            {t("users.overview.teammates.pageRange", {
+              start: String((safePage - 1) * perPage + 1),
+              end: String(Math.min(safePage * perPage, filtered.length)),
+              total: String(filtered.length)
+            })}
           </span>
           <div className="flex items-center gap-1">
             <button

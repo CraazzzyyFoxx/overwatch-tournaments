@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ interface Props {
 /** Detail modal for a single achievement: shows where/when the player earned it
  *  (tournaments + matches with dates), or a locked state if not yet earned. */
 export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
+  const tr = useTranslations();
   const ach = achievement;
   const rarity: Rarity | null = ach ? classifyRarity(ach.rarity * 100) : null;
   const locked = ach ? ach.count === 0 : false;
@@ -76,7 +78,11 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                     <div className="flex items-center gap-2 text-[12px] text-[color:var(--aqt-fg-muted)]">
                       {rarity ? <span className="capitalize">◆ {rarity}</span> : null}
                       <span className="aqt-mono">{(ach.rarity * 100).toFixed(2)}%</span>
-                      {ach.count > 0 ? <span className="aqt-mono">· earned ×{ach.count}</span> : null}
+                      {ach.count > 0 ? (
+                        <span className="aqt-mono">
+                          {tr("users.achievements.detail.earnedCount", { count: String(ach.count) })}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -84,19 +90,19 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
 
               <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
                 <DialogDescription className="text-[14px] leading-snug text-[color:var(--aqt-fg-dim)]">
-                  {description || "Achievement details."}
+                  {description || tr("users.achievements.detail.fallbackDescription")}
                 </DialogDescription>
 
                 {locked ? (
                   <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-3 text-center text-[13.5px] text-[color:var(--aqt-fg-muted)]">
-                    You haven&apos;t earned this achievement yet.
+                    {tr("users.achievements.detail.locked")}
                   </div>
                 ) : (
                   <>
                     {ach.tournaments.length > 0 ? (
                       <section className="flex flex-col gap-1.5">
                         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-                          Earned in
+                          {tr("users.achievements.detail.earnedIn")}
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                           {ach.tournaments.map((t) => (
@@ -112,7 +118,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                     {ach.matches.length > 0 ? (
                       <section className="flex flex-col gap-1.5">
                         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
-                          Matches
+                          {tr("common.matches")}
                         </h3>
                         <div className="flex flex-col gap-1">
                           {ach.matches.map((m) => (
@@ -124,7 +130,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
 
                     {ach.tournaments.length === 0 && ach.matches.length === 0 ? (
                       <div className="text-center text-[13.5px] text-[color:var(--aqt-fg-muted)]">
-                        Earned {ach.count}× — no tournament or match details recorded.
+                        {tr("users.achievements.detail.earnedNoDetails", { count: String(ach.count) })}
                       </div>
                     ) : null}
                   </>

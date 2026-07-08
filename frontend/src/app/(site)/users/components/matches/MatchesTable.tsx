@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
@@ -37,6 +38,17 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId, opponents,
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const t = useTranslations();
+  const headers = [
+    t("users.matches.colTournament"),
+    t("users.matches.colStage"),
+    t("users.matches.colMatch"),
+    t("users.matches.colScore"),
+    t("common.heroes"),
+    t("users.matches.colMvp"),
+    t("users.matches.colCloseness"),
+    t("users.matches.colLogs")
+  ];
   // Filters live in the URL and are applied server-side (the page refetches),
   // so they work across all pages — not just the current one.
   const urlOpp = searchParams.get("mOpp") ?? "";
@@ -117,7 +129,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId, opponents,
             <table className="aqt-tnum w-full border-collapse text-[14px]">
               <thead>
                 <tr>
-                  {["Tournament", "Stage", "Match", "Score", "Heroes", "MVP", "Close.", "Logs"].map((h) => (
+                  {headers.map((h) => (
                     <th
                       key={h}
                       className="aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
@@ -134,7 +146,7 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId, opponents,
                 {encounters.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-3.5 py-10 text-center text-[color:var(--aqt-fg-dim)]">
-                      No matches for current filter
+                      {t("users.matches.noMatches")}
                     </td>
                   </tr>
                 ) : null}
@@ -143,7 +155,11 @@ const MatchesTable = ({ encounters, total, page, perPage, selfUserId, opponents,
           </div>
           <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
             <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-dim)]">
-              Showing {(page - 1) * perPage + 1}–{(page - 1) * perPage + encounters.length} of {total}
+              {t("common.showingRange", {
+                start: String((page - 1) * perPage + 1),
+                end: String((page - 1) * perPage + encounters.length),
+                total: String(total)
+              })}
             </span>
             <div className="flex gap-1">
               <PageBtn disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>‹</PageBtn>

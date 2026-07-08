@@ -1616,5 +1616,339 @@
       "dispute": "Dispute",
       "disputedNotice": "Result disputed. An admin will resolve this."
     }
+  },
+  "users": {
+    "profile": {
+      "breadcrumb": "Users",
+      "meta": {
+        "title": "{name} — Player Profile | {siteName}",
+        "description": "{name}'s Overwatch tournament profile on {siteName}: match history, heroes, maps, teammates, achievements and career stats.",
+        "notFoundTitle": "User Not Found | {siteName}",
+        "notFoundDescription": "The requested user profile could not be found on {siteName}."
+      },
+      "header": {
+        "avatarAlt": "{name} avatar",
+        "divisionTitle": "{role} · Div {division}",
+        "verifiedIdentity": "Verified identity",
+        "tournamentsCount": "{count, plural, one {# tournament} other {# tournaments}}",
+        "mapsCount": "{count, plural, one {# map} other {# maps}}",
+        "formLast": "Form · last {count}",
+        "noRecentMatches": "No recent matches"
+      },
+      "stats": {
+        "tournaments": "Tournaments",
+        "won": "{count} won",
+        "winrate": "Winrate",
+        "maps": "Maps",
+        "avgPlace": "Avg Place",
+        "playoffs": "Playoffs {place}",
+        "deltaTitle": "Last tournament vs career"
+      },
+      "tabs": {
+        "overview": "Overview",
+        "tournaments": "Tournaments",
+        "maps": "Maps",
+        "achievements": "Achievements"
+      },
+      "toolbar": {
+        "copyLink": "Copy link to this profile",
+        "copied": "Copied",
+        "share": "Share",
+        "comparePlayers": "Compare players",
+        "compare": "Compare"
+      },
+      "atoms": {
+        "recentForm": "Recent form",
+        "mapsTitle": "{label}: {count, plural, one {# map} other {# maps}}"
+      }
+    },
+    "overview": {
+      "mapsCount": "{count, plural, one {# map} other {# maps}}",
+      "win": "W",
+      "loss": "L",
+      "career": {
+        "title": "Career",
+        "tournaments": "Tournaments",
+        "tournamentsWon": "Tournaments won",
+        "winrate": "Winrate",
+        "maps": "Maps",
+        "proximity": "Proximity",
+        "avgPlacement": "Avg placement",
+        "avgPlayoffPlace": "Avg playoff place",
+        "avgGroupPlace": "Avg group place"
+      },
+      "mostPlayed": {
+        "title": "Most played heroes"
+      },
+      "placement": {
+        "title": "Placement trend",
+        "subtitle": "last {count, plural, one {# event} other {# events}} · lower = better",
+        "best": "Best",
+        "median": "Median",
+        "worst": "Worst"
+      },
+      "recent": {
+        "title": "Recent encounters",
+        "allMatches": "All matches"
+      },
+      "roleSplit": {
+        "title": "Role split",
+        "subtitle": "{maps, plural, one {# map} other {# maps}} · {tournaments, plural, one {# tournament} other {# tournaments}}",
+        "main": "Main",
+        "ofPool": "of pool",
+        "short": {
+          "tank": "T",
+          "damage": "Damage",
+          "support": "Sup"
+        }
+      },
+      "teammates": {
+        "title": "Best teammates",
+        "dialogSubtitle": "{count, plural, one {# unique stack-mate} other {# unique stack-mates}} · {maps, plural, one {# map together} other {# maps together}}",
+        "you": "You",
+        "edgesHint": "Edges sized by appearances",
+        "footer": "{count, plural, one {# unique} other {# unique}} · {maps, plural, one {# map} other {# maps}}",
+        "searchPlaceholder": "Search teammates…",
+        "noMatch": "No teammates match search",
+        "pageRange": "{start}–{end} of {total}",
+        "col": {
+          "player": "Player",
+          "played": "×played",
+          "maps": "Maps",
+          "wr": "WR",
+          "kda": "KDA",
+          "mvp": "MVP"
+        }
+      },
+      "lastTournament": {
+        "selectTournament": "Select tournament",
+        "placed": "Placed",
+        "playtime": "{hours}h {minutes}m playtime",
+        "playtimeNoHours": "{minutes}m playtime",
+        "mapWinrate": "map winrate",
+        "stat": {
+          "kda": "KDA",
+          "mvpScore": "MVP score",
+          "dmgPerMap": "Dmg/map",
+          "dmgDelta": "Δ Damage"
+        }
+      }
+    },
+    "heroes": {
+      "searchStats": "Search stats…",
+      "recordLegend": "♔ = holds the all-players record",
+      "recordTitle": "Holds the all-players record",
+      "noStatsMatch": "No stats match search",
+      "col": {
+        "stat": "Stat",
+        "overall": "Overall",
+        "bestYou": "Best (you)",
+        "avg10": "Avg /10",
+        "bestAll": "Best (all)",
+        "global10": "Global /10"
+      },
+      "radar": {
+        "dmg": "DMG",
+        "elims": "ELIMS",
+        "crits": "CRITS",
+        "surv": "SURV",
+        "heal": "HEAL"
+      },
+      "you": "You",
+      "globalAvg": "Global avg",
+      "careerBest": "Career-best games",
+      "bestGamesSubtitle": "{hero} · personal records",
+      "allTimeBest": "All-time best",
+      "mapsFor": "Maps for {hero}",
+      "mapsSubtitle": "{count, plural, one {# map · best → worst} other {# maps · best → worst}}",
+      "noMapData": "No map data for this hero yet.",
+      "sort": {
+        "playtime": "Playtime",
+        "winrate": "Winrate",
+        "kda": "KDA",
+        "dmg10": "Dmg/10",
+        "impact": "Impact"
+      },
+      "yourHeroes": "Your heroes",
+      "tracked": "{count, plural, one {# tracked} other {# tracked}}",
+      "sortHeroes": "Sort heroes",
+      "wr": "WR {value}",
+      "noHeroes": "No heroes",
+      "noStats": "No hero stats available yet.",
+      "insights": "Insights",
+      "insightsSubtitle": "{hero} · vs global avg/10",
+      "highlights": "Highlights",
+      "allStats": "All stats",
+      "radarAxes": "Radar axes · 3–8",
+      "notEnoughData": "Not enough data for comparisons",
+      "addAxis": "Add an axis",
+      "upToAxes": "{count, plural, one {Up to # axis} other {Up to # axes}}",
+      "allStatsAdded": "All stats added",
+      "noMatch": "No match",
+      "allTournaments": "All tournaments",
+      "searchTournament": "Search tournament...",
+      "quick": {
+        "winrate": "Winrate",
+        "kda": "KDA",
+        "dmg10": "Dmg/10",
+        "elims10": "Elims/10"
+      },
+      "played": "{time} played",
+      "poolShare": "{pct}% pool share",
+      "playtimeShare": "Playtime share"
+    },
+    "maps": {
+      "overallWinrate": "Overall winrate",
+      "mostPlayed": "Most played",
+      "bestMap": "Best map",
+      "weakest": "Weakest",
+      "gamesUnit": " games",
+      "gamesShort": "{count} g",
+      "gamesCount": "{count, plural, one {# game} other {# games}}",
+      "mapsCount": "{count, plural, one {# map} other {# maps}}",
+      "byMode": "By mode",
+      "byModeSubtitle": "Winrate by game mode · {modes, plural, one {# mode} other {# modes}} · {games, plural, one {# game} other {# games}}",
+      "allModes": "All modes",
+      "allTournaments": "All tournaments",
+      "searchTournament": "Search tournament…",
+      "minGamesTitle": "Minimum games",
+      "minGames": "Min {count} games",
+      "rowsTitle": "Rows per page",
+      "rowsAll": "Rows: All",
+      "rows": "Rows: {count}",
+      "sort": "Sort: {label}",
+      "sortWinrate": "Winrate",
+      "sortGames": "Games",
+      "sortName": "Name",
+      "searchMaps": "Search maps…",
+      "colMap": "Map",
+      "colWinrate": "Winrate",
+      "colRecord": "Record",
+      "colGames": "Games",
+      "noMaps": "No maps match the filters"
+    },
+    "matches": {
+      "loadError": "Could not load matches. Please try again later.",
+      "achievementsLoadError": "Could not load achievements. Please try again later.",
+      "filters": {
+        "wins": "Wins",
+        "losses": "Losses",
+        "draws": "Draws",
+        "group": "Group",
+        "playoffs": "Playoffs",
+        "finals": "Finals",
+        "mvp1": "MVP 1st",
+        "hasLogs": "Has logs"
+      },
+      "searchOpponent": "Search opponent…",
+      "mostFoughtOpponents": "Most-fought opponents",
+      "noData": "No data",
+      "byStage": "By stage",
+      "tTag": "T {number}",
+      "mapLabel": "Map {number}",
+      "colTournament": "Tournament",
+      "colStage": "Stage",
+      "colMatch": "Match",
+      "colScore": "Score",
+      "colMvp": "MVP",
+      "colCloseness": "Close.",
+      "colLogs": "Logs",
+      "noMatches": "No matches for current filter"
+    },
+    "tournaments": {
+      "title": "Tournament history",
+      "clickToExpand": "click to expand",
+      "mapNumber": "Map {n}",
+      "leagueBadge": "League",
+      "divisionsCount": "{count, plural, one {# division} other {# divisions}}",
+      "bestPlacement": "· best #{n}",
+      "teamName": "Team {name}",
+      "roster": "Roster",
+      "result": {
+        "grandFinals": "Grand finals",
+        "playoffsReached": "Playoffs reached",
+        "groups": "Groups"
+      },
+      "stat": {
+        "record": "Record",
+        "wins": "{count}W",
+        "losses": "{count}L",
+        "draws": "{count}D",
+        "mapsWon": "Maps won",
+        "mapsWonValue": "{won} of {total}",
+        "winrate": "Winrate",
+        "closeness": "Closeness"
+      },
+      "col": {
+        "opponent": "Opponent",
+        "mvp": "MVP",
+        "closeness": "Close.",
+        "score": "Score",
+        "logs": "Logs"
+      },
+      "timeline": {
+        "title": "Placement timeline",
+        "subtitle": "{count, plural, one {# tournament} other {# tournaments}} · finish position vs field size",
+        "axisTop": "top",
+        "axisLast": "last",
+        "dotTitle": "T#{number} · placed {placement}/{count}",
+        "legend": {
+          "first": "1st place",
+          "podium": "Podium",
+          "topHalf": "Top half",
+          "bottomHalf": "Bottom half"
+        }
+      }
+    },
+    "achievements": {
+      "unlocked": "Unlocked",
+      "locked": "Locked",
+      "searchPlaceholder": "Search achievements…",
+      "sectionUnlocked": "{unlocked} of {total} unlocked",
+      "emptyState": "This user has no achievements yet.",
+      "filter": {
+        "allTournaments": "All tournaments",
+        "withoutTournament": "Without tournament"
+      },
+      "sort": {
+        "title": "Sort achievements",
+        "rarity": "Sort: Rarity",
+        "name": "Sort: Name",
+        "earned": "Sort: Earned"
+      },
+      "rarity": {
+        "mythic": {
+          "title": "Mythic · < 1% of all players",
+          "range": "< 1% earn"
+        },
+        "legendary": {
+          "title": "Legendary · 1-5%",
+          "range": "1-5%"
+        },
+        "epic": {
+          "title": "Epic · 5-15%",
+          "range": "5-15%"
+        },
+        "rare": {
+          "title": "Rare · 15-30%",
+          "range": "15-30%"
+        },
+        "uncommon": {
+          "title": "Uncommon · 30-50%",
+          "range": "30-50%"
+        },
+        "common": {
+          "title": "Common · > 50%",
+          "range": "> 50%"
+        }
+      },
+      "detail": {
+        "fallbackDescription": "Achievement details.",
+        "locked": "You haven't earned this achievement yet.",
+        "earnedIn": "Earned in",
+        "earnedCount": "· earned ×{count}",
+        "earnedNoDetails": "Earned {count}× — no tournament or match details recorded."
+      }
+    }
   }
 }

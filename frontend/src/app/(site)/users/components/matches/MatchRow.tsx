@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ResTag, ScoreCell, StagePill } from "@/app/(site)/users/components/shared/atoms";
 import MvpMatchPill from "@/components/match/MvpMatchPill";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
@@ -29,6 +30,7 @@ interface MatchRowProps {
 
 const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
   const router = useRouter();
+  const t = useTranslations();
   const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
   const userScore = isUserHome ? enc.score.home : enc.score.away;
   const oppScore = isUserHome ? enc.score.away : enc.score.home;
@@ -69,7 +71,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
             color: "var(--aqt-teal)"
           }}
         >
-          T {tNum}
+          {t("users.matches.tTag", { number: String(tNum) })}
         </Link>
       </td>
       <td className="px-3.5 py-3">
@@ -83,7 +85,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
             onClick={(e) => e.stopPropagation()}
             className="hover:text-[color:var(--aqt-teal)]"
           >
-            {userTeamName} vs {opponentName}
+            {userTeamName} {t("common.vs")} {opponentName}
           </Link>
         </span>
       </td>
@@ -114,7 +116,10 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           hasLogs={enc.has_logs}
           logs={
             enc.has_logs
-              ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
+              ? (enc.matches ?? []).map((m, i) => ({
+                  matchId: m.id,
+                  label: m.map?.name ?? t("users.matches.mapLabel", { number: String(i + 1) })
+                }))
               : undefined
           }
         />

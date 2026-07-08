@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { type AqtRoleKey } from "@/components/hero/heroRole";
 import { type ScoreKind } from "@/components/match/cells";
@@ -36,8 +37,9 @@ export const HeroAvatar = ({ initials, variant = "damage", size = "md", title, c
 export type FormResult = "W" | "L" | "D";
 
 export const FormStreak = ({ results, className }: { results: FormResult[]; className?: string }) => {
+  const t = useTranslations();
   return (
-    <span className={cn("inline-flex gap-[3px]", className)} aria-label="Recent form">
+    <span className={cn("inline-flex gap-[3px]", className)} aria-label={t("users.profile.atoms.recentForm")}>
       {results.map((r, i) => (
         <span key={i} className={cn("aqt-form-chip", r === "W" && "w", r === "L" && "l", r === "D" && "d")}>
           {r}
@@ -107,6 +109,7 @@ interface RolePyramidSegment {
 }
 
 export const RolePyramid = ({ segments }: { segments: RolePyramidSegment[] }) => {
+  const t = useTranslations();
   const total = segments.reduce((sum, s) => sum + s.maps, 0);
   if (total === 0) return null;
   return (
@@ -117,7 +120,7 @@ export const RolePyramid = ({ segments }: { segments: RolePyramidSegment[] }) =>
             key={seg.role}
             className={cn("aqt-pyramid-seg", `aqt-bg-${seg.role}`)}
             style={{ width: `${(seg.maps / total) * 100}%` }}
-            title={`${seg.label}: ${seg.maps} maps`}
+            title={t("users.profile.atoms.mapsTitle", { label: seg.label, count: seg.maps })}
           >
             {seg.label}
           </div>
