@@ -379,44 +379,39 @@ git commit -m "feat(i18n): wire next-intl plugin, SSR locale, locale-switch acti
 ### Task 5: Manual + automated smoke of locale switching
 
 **Files:**
-- Create: `frontend/src/i18n/i18n-smoke.test.tsx`
+- Create: `frontend/src/i18n/translator.smoke.test.ts`
 
-- [ ] **Step 1: Render smoke test per locale**
+Note: the repo has **no** React/DOM test infrastructure (all existing tests are
+logic-only `.test.ts`). So the smoke uses next-intl's non-React
+`createTranslator` API — no JSX/DOM — which matches repo conventions.
 
-```tsx
-// frontend/src/i18n/i18n-smoke.test.tsx
+- [ ] **Step 1: Translator smoke test per locale**
+
+```ts
+// frontend/src/i18n/translator.smoke.test.ts
 import { describe, it, expect } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
-import { NextIntlClientProvider } from "next-intl";
-import ru from "./messages/ru.json";
+import { createTranslator } from "next-intl";
 import en from "./messages/en.json";
-import { useTranslations } from "next-intl";
+import ru from "./messages/ru.json";
 
-function Probe() {
-  const t = useTranslations("common");
-  return <span>{t("back")}</span>;
-}
-
-describe("i18n smoke", () => {
-  it("renders ru message", () => {
-    const html = renderToStaticMarkup(
-      <NextIntlClientProvider locale="ru" messages={ru}><Probe /></NextIntlClientProvider>,
-    );
-    expect(html).toContain(ru.common.back);
+describe("next-intl translator over the JSON bundles", () => {
+  it("resolves the same key to each locale's text", () => {
+    const tRu = createTranslator({ locale: "ru", messages: ru });
+    const tEn = createTranslator({ locale: "en", messages: en });
+    expect(tRu("common.back")).toBe(ru.common.back);
+    expect(tEn("common.back")).toBe(en.common.back);
   });
-  it("renders en message", () => {
-    const html = renderToStaticMarkup(
-      <NextIntlClientProvider locale="en" messages={en}><Probe /></NextIntlClientProvider>,
-    );
-    expect(html).toContain(en.common.back);
+  it("interpolates {var} placeholders", () => {
+    const tEn = createTranslator({ locale: "en", messages: en });
+    expect(tEn("common.teamsCount", { count: 3 })).toContain("3");
   });
 });
 ```
 
 - [ ] **Step 2: Run**
 
-Run: `bun test src/i18n/i18n-smoke.test.tsx`
-Expected: PASS. (If bun cannot resolve JSX in `.tsx` tests, mirror the existing test setup used by other `*.test.tsx` in the repo; check one before writing.)
+Run: `bun test src/i18n/translator.smoke.test.ts`
+Expected: PASS.
 
 - [ ] **Step 3: Manual dev check**
 
