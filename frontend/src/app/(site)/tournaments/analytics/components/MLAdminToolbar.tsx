@@ -72,7 +72,7 @@ function StageRow({ name, stage }: { name: string; stage: AnalyticsJobProgressSt
 // Module-scoped so the impure `Date.now()` read is not flagged by the React
 // Compiler purity rule (matches the pattern used elsewhere for relative time).
 function formatRelative(
-  t: ReturnType<typeof useTranslations>,
+  t: ReturnType<typeof useTranslations<never>>,
   iso: string | null | undefined
 ): string {
   if (!iso) return "-";

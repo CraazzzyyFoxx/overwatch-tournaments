@@ -88,7 +88,7 @@ const OverviewRoleSplit = async ({ profile }: Props) => {
           segments={buckets.map((b) => ({
             role: b.key,
             maps: b.maps,
-            label: b.maps > 0 ? `${t(ROLE_SHORT_KEY[b.key])} ${b.maps}` : ""
+            label: b.maps > 0 ? `${t(ROLE_SHORT_KEY[b.key] as Parameters<typeof t>[0])} ${b.maps}` : ""
           }))}
         />
         <div className="flex flex-col gap-3">
@@ -123,7 +123,7 @@ const OverviewRoleSplit = async ({ profile }: Props) => {
                   style={{ color: ROLE_COLOR[b.key] }}
                 >
                   <PlayerRoleIcon role={ROLE_ICON[b.key]} size={14} color={ROLE_COLOR[b.key]} />
-                  {t(ROLE_LABEL_KEY[b.key])}
+                  {t(ROLE_LABEL_KEY[b.key] as Parameters<typeof t>[0])}
                   {primary && b.key === primary.key ? (
                     <span className="ml-1 text-[11px] font-semibold tracking-[0.1em] text-[color:var(--aqt-fg-muted)]"> · {t("users.overview.roleSplit.main")}</span>
                   ) : null}

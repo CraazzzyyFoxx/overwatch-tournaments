@@ -6,7 +6,7 @@ import type { useTranslations } from "next-intl";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // callers can hand their `t` straight through (strictFunctionTypes-safe).
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 export type Rarity = "mythic" | "legendary" | "epic" | "rare" | "uncommon" | "common";
 

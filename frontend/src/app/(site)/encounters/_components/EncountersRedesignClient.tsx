@@ -61,7 +61,7 @@ import styles from "./EncountersRedesign.module.css";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // module-level helpers can accept `t` straight through (strictFunctionTypes-safe).
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 // Maps the raw English state SENTINEL from `getEncounterStateLabel` to its
 // translation key. The sentinel itself is preserved for control flow; only the

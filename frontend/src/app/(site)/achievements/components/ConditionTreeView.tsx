@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ConditionNode } from "@/types/achievement.types";
 import { Badge } from "@/components/ui/badge";
 
-type Translator = ReturnType<typeof useTranslations>;
+type Translator = ReturnType<typeof useTranslations<never>>;
 
 const CONDITION_TYPES = [
   "stat_threshold",

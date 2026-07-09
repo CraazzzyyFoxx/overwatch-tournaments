@@ -102,7 +102,7 @@ const navTriggerActiveClass =
   "data-[state=open]:bg-[hsl(174_72%_46%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
 
 function isNavGroupActive(
-  items: { href: string }[],
+  items: readonly { href: string }[],
   pathname: string
 ): boolean {
   return items.some((item) => {
@@ -217,10 +217,10 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                   {getVisibleItems(group.items).map((item) => (
                     <ListItem
                       key={item.key}
-                      title={t(`nav.items.${item.key}.title`)}
+                      title={t(`nav.items.${item.key}.title` as Parameters<typeof t>[0])}
                       href={item.href}
                     >
-                      {t(`nav.items.${item.key}.desc`)}
+                      {t(`nav.items.${item.key}.desc` as Parameters<typeof t>[0])}
                     </ListItem>
                   ))}
                 </ul>
@@ -258,7 +258,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
                           href={item.href}
                           className="text-muted-foreground hover:text-foreground text-sm"
                         >
-                          {t(`nav.items.${item.key}.title`)}
+                          {t(`nav.items.${item.key}.title` as Parameters<typeof t>[0])}
                         </Link>
                       ))}
                     </div>

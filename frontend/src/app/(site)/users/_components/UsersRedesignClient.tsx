@@ -39,7 +39,7 @@ import styles from "./UsersRedesign.module.css";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // module-scope helpers can accept the caller's `t` (strictFunctionTypes-safe).
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 type SortValue = "name" | "tournaments_count" | "achievements_count" | "avg_placement";
 type OrderValue = "asc" | "desc";

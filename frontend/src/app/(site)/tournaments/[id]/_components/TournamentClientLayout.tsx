@@ -23,7 +23,7 @@ type TournamentClientLayoutProps = {
   children: React.ReactNode;
 };
 
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 function formatLabel(stages: Stage[], t: Translate): string {
   const hasGroup = stages.some((s) => s.stage_type === "round_robin" || s.stage_type === "swiss");

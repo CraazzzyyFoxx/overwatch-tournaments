@@ -12,7 +12,7 @@ export { getDivisionOptions };
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // callers can hand their `t` straight through (strictFunctionTypes-safe).
-export type Translate = ReturnType<typeof useTranslations>;
+export type Translate = ReturnType<typeof useTranslations<never>>;
 
 // Maps a role type to its shared `common.roles.*` message key (dps = "Damage").
 export const ROLE_LABEL_KEY: Record<

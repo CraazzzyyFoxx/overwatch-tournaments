@@ -21,7 +21,7 @@ const ROLE_TO_ICON: Record<string, string> = {
 
 function getHistoryRoleLabel(
   role: string,
-  t: ReturnType<typeof useTranslations>,
+  t: ReturnType<typeof useTranslations<never>>,
 ): string {
   switch (role.toLowerCase()) {
     case "tank":

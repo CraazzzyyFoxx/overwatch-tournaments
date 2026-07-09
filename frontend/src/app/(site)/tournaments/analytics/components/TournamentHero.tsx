@@ -74,7 +74,7 @@ export default function TournamentHero({
   }
 
   const statusMeta = getTournamentStatusMeta(tournament.status);
-  const stage = stageProgress(tournament, tournament.status);
+  const stage = stageProgress(tournament, tournament.status, t);
   const dates = formatDateRange(tournament.start_date, tournament.end_date, locale);
   const statusText = stage?.label ? `${statusMeta?.label} · ${stage.label}` : statusMeta?.label;
 

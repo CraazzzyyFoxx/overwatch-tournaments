@@ -44,7 +44,7 @@ import { getPlayerSlug } from "@/utils/player";
 // Types
 // ---------------------------------------------------------------------------
 
-type Translator = ReturnType<typeof useTranslations>;
+type Translator = ReturnType<typeof useTranslations<never>>;
 
 export interface ColumnDefinition {
   id: string;

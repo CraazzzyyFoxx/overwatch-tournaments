@@ -26,7 +26,7 @@ interface MapVetoProps {
   encounterId: number;
 }
 
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 // veto side/action are raw enum values from the API; map them to display keys.
 const VETO_SIDE_KEY = {

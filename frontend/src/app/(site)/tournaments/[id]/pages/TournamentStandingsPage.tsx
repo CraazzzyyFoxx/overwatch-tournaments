@@ -47,7 +47,7 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
       const name =
         standing.stage_item?.name ??
         standing.stage?.name ??
-        t("common.stageWithId", { id: standing.stage_id });
+        t("common.stageWithId", { id: standing.stage_id ?? key });
       const bucket = stageStandings.get(key) ?? { name, standings: [] };
       bucket.standings.push(standing);
       stageStandings.set(key, bucket);

@@ -6,7 +6,7 @@ import type { TournamentStatus } from "@/types/tournament.types";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // callers can hand their `t` straight through (strictFunctionTypes-safe).
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 // Derive 1-2 letter initials from a team name for avatar glyphs.
 export function teamInitials(name?: string | null): string {

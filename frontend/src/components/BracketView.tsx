@@ -18,7 +18,7 @@ import {
   getRoundSectionMatchCapacity
 } from "@/components/bracket-view.helpers";
 
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 interface BracketViewProps {
   encounters: Encounter[];
