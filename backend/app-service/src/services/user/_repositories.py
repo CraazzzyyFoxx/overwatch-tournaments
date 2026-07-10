@@ -53,7 +53,19 @@ def _encounter_match_identity(
 
 async def get_user_encounter_matches_unpaginated(
     session: AsyncSession, user_id: int
-) -> typing.Sequence[tuple[models.Team, models.Encounter, models.Match | None, int | None, list[dict] | None]]:
+) -> typing.Sequence[
+    tuple[
+        models.Team,
+        models.Encounter,
+        models.Match | None,
+        int | None,
+        list[dict] | None,
+        int | None,
+        float | None,
+        float | None,
+        int | None,
+    ]
+]:
     """All (team, encounter, match) rows the user participated in.
 
     Used to assemble UserTournament.encounters. Loads:
@@ -61,6 +73,11 @@ async def get_user_encounter_matches_unpaginated(
       - Encounter.home_team / away_team + their players (so the encounter
         mapper can identify the viewer side and roster)
       - Encounter.stage / stage_item — to surface the bracket stage label
+
+    Row shape: (team, encounter, match, performance, heroes, impact_rank,
+    impact_points, overperformance_score, overperf_pos). ``overperf_pos`` is
+    the viewer's rank (1 = best) among all match participants by
+    OverperformanceScore, used to compute the MVP-impact badge.
     """
     performance_cte = (
         sa.select(
@@ -77,6 +94,62 @@ async def get_user_encounter_matches_unpaginated(
             )
         )
         .cte("performance_cte")
+    )
+
+    impact_rank_cte = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.value.label("value"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.match_id == models.Match.id,
+                models.MatchStatistics.user_id == user_id,
+                models.MatchStatistics.name == enums.LogStatsName.ImpactRank,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+            )
+        )
+        .cte("impact_rank_cte")
+    )
+
+    impact_points_cte = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.value.label("value"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.match_id == models.Match.id,
+                models.MatchStatistics.user_id == user_id,
+                models.MatchStatistics.name == enums.LogStatsName.ImpactPoints,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+            )
+        )
+        .cte("impact_points_cte")
+    )
+
+    overperf_cte = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.value.label("value"),
+            sa.func.rank()
+            .over(
+                partition_by=models.MatchStatistics.match_id,
+                order_by=models.MatchStatistics.value.desc(),
+            )
+            .label("pos"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.name == enums.LogStatsName.OverperformanceScore,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+            )
+        )
+        .cte("overperf_cte")
     )
 
     heroes_cte = (
@@ -107,6 +180,10 @@ async def get_user_encounter_matches_unpaginated(
             models.Match,
             performance_cte.c.value.label("performance"),
             heroes_cte.c.value.label("heroes"),
+            impact_rank_cte.c.value.label("impact_rank"),
+            impact_points_cte.c.value.label("impact_points"),
+            overperf_cte.c.value.label("overperformance_score"),
+            overperf_cte.c.pos.label("overperf_pos"),
         )
         .select_from(models.Player)
         .options(
@@ -132,6 +209,12 @@ async def get_user_encounter_matches_unpaginated(
         .join(models.Match, models.Encounter.id == models.Match.encounter_id, isouter=True)
         .outerjoin(performance_cte, performance_cte.c.match_id == models.Match.id)
         .outerjoin(heroes_cte, heroes_cte.c.match_id == models.Match.id)
+        .outerjoin(impact_rank_cte, impact_rank_cte.c.match_id == models.Match.id)
+        .outerjoin(impact_points_cte, impact_points_cte.c.match_id == models.Match.id)
+        .outerjoin(
+            overperf_cte,
+            sa.and_(overperf_cte.c.match_id == models.Match.id, overperf_cte.c.user_id == user_id),
+        )
         .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
         .where(
             sa.and_(
@@ -158,7 +241,18 @@ async def get_user_encounters_paginated(
     has_logs: bool | None = None,
     opponent: str | None = None,
 ) -> tuple[
-    typing.Sequence[tuple[models.Encounter, models.Match | None, int | None, list[dict] | None]],
+    typing.Sequence[
+        tuple[
+            models.Encounter,
+            models.Match | None,
+            int | None,
+            list[dict] | None,
+            int | None,
+            float | None,
+            float | None,
+            int | None,
+        ]
+    ],
     int,
 ]:
     """Paginated user encounters with the viewer's per-match performance + heroes.
@@ -166,6 +260,11 @@ async def get_user_encounters_paginated(
     Loads `Encounter.tournament`, `Encounter.home_team`, `Encounter.away_team`
     and `Match.map` so the mapper can populate the narrow EncounterReadWithUserStats
     shape without any further round-trips.
+
+    Row shape: (encounter, match, performance, heroes, impact_rank,
+    impact_points, overperformance_score, overperf_pos). ``overperf_pos`` is
+    the viewer's rank (1 = best) among all match participants by
+    OverperformanceScore, used to compute the MVP-impact badge.
     """
     user_player_filter = sa.and_(
         models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
@@ -336,12 +435,73 @@ async def get_user_encounters_paginated(
         .cte("heroes_cte")
     )
 
+    impact_rank_cte = (
+        sa.select(
+            models.MatchStatistics.match_id,
+            models.MatchStatistics.value.label("impact_rank"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.user_id == user_id,
+                models.MatchStatistics.name == enums.LogStatsName.ImpactRank,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+                models.MatchStatistics.match_id.in_(sa.select(paginated_match_ids.c.match_id)),
+            )
+        )
+        .cte("impact_rank_cte")
+    )
+
+    impact_points_cte = (
+        sa.select(
+            models.MatchStatistics.match_id,
+            models.MatchStatistics.value.label("impact_points"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.user_id == user_id,
+                models.MatchStatistics.name == enums.LogStatsName.ImpactPoints,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+                models.MatchStatistics.match_id.in_(sa.select(paginated_match_ids.c.match_id)),
+            )
+        )
+        .cte("impact_points_cte")
+    )
+
+    overperf_cte = (
+        sa.select(
+            models.MatchStatistics.match_id.label("match_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.value.label("overperformance_score"),
+            sa.func.rank()
+            .over(
+                partition_by=models.MatchStatistics.match_id,
+                order_by=models.MatchStatistics.value.desc(),
+            )
+            .label("overperf_pos"),
+        )
+        .where(
+            sa.and_(
+                models.MatchStatistics.name == enums.LogStatsName.OverperformanceScore,
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+                models.MatchStatistics.match_id.in_(sa.select(paginated_match_ids.c.match_id)),
+            )
+        )
+        .cte("overperf_cte")
+    )
+
     query = (
         sa.select(
             models.Encounter,
             models.Match,
             performance_cte.c.performance,
             heroes_cte.c.heroes,
+            impact_rank_cte.c.impact_rank,
+            impact_points_cte.c.impact_points,
+            overperf_cte.c.overperformance_score,
+            overperf_cte.c.overperf_pos,
         )
         .select_from(encounters_query)
         .options(
@@ -360,6 +520,13 @@ async def get_user_encounters_paginated(
         .join(models.Match, models.Encounter.id == models.Match.encounter_id, isouter=True)
         .join(performance_cte, performance_cte.c.match_id == models.Match.id, isouter=True)
         .join(heroes_cte, heroes_cte.c.match_id == models.Match.id, isouter=True)
+        .join(impact_rank_cte, impact_rank_cte.c.match_id == models.Match.id, isouter=True)
+        .join(impact_points_cte, impact_points_cte.c.match_id == models.Match.id, isouter=True)
+        .join(
+            overperf_cte,
+            sa.and_(overperf_cte.c.match_id == models.Match.id, overperf_cte.c.user_id == user_id),
+            isouter=True,
+        )
     )
     query = params.apply_sort(query)
     result = await session.execute(query)

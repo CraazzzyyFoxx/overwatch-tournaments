@@ -1022,7 +1022,17 @@ async def get_tournaments(
     matches = await _repositories.get_user_encounter_matches_unpaginated(session, user.id)
     placements = await _repositories.count_teams_by_tournament_bulk(session, tournaments_ids)
 
-    for team, encounter, match, performance, heroes in matches:
+    for (
+        team,
+        encounter,
+        match,
+        performance,
+        heroes,
+        impact_rank,
+        impact_points,
+        overperformance_score,
+        overperf_pos,
+    ) in matches:
         encounters.setdefault(team.id, [])
         encounters_cache.setdefault(team.id, {})
         matches_cache.setdefault(team.id, {})
@@ -1031,7 +1041,15 @@ async def get_tournaments(
 
         if match:
             matches_cache[team.id][encounter.id].append(
-                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
+                _mappers.to_match_with_user_stats(
+                    match,
+                    performance=performance,
+                    heroes=heroes,
+                    impact_rank=impact_rank,
+                    impact_points=impact_points,
+                    overperformance_score=overperformance_score,
+                    overperf_pos=overperf_pos,
+                )
             )
 
     for team_id, encounter_dict in encounters_cache.items():
@@ -1362,13 +1380,30 @@ async def get_encounters_by_user(
     encounters_cache: dict[int, models.Encounter] = {}
     matches_cache: dict[int, list[schemas.MatchReadWithUserStats]] = {}
 
-    for encounter, match, performance, heroes in encounters:
+    for (
+        encounter,
+        match,
+        performance,
+        heroes,
+        impact_rank,
+        impact_points,
+        overperformance_score,
+        overperf_pos,
+    ) in encounters:
         encounters_cache.setdefault(encounter.id, encounter)
         matches_cache.setdefault(encounter.id, [])
 
         if match:
             matches_cache[encounter.id].append(
-                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
+                _mappers.to_match_with_user_stats(
+                    match,
+                    performance=performance,
+                    heroes=heroes,
+                    impact_rank=impact_rank,
+                    impact_points=impact_points,
+                    overperformance_score=overperformance_score,
+                    overperf_pos=overperf_pos,
+                )
             )
 
     for encounter_id, encounter in encounters_cache.items():

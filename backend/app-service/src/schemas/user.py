@@ -176,6 +176,10 @@ class MatchReadWithUserStats(BaseModel):
     code: str | None = None
     map: MapRead | None = None
     performance: int | None = None
+    impact_rank: int | None = None
+    impact_points: float | None = None
+    overperformance_score: float | None = None
+    overperformance_badge: bool = False
     heroes: list[schemas.HeroRead] = Field(default_factory=list)
 
 
