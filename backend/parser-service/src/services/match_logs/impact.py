@@ -21,6 +21,7 @@ from src.core import enums
 
 __all__ = (
     "BaselineSet",
+    "ImpactContext",
     "PlayerRef",
     "add_impact_scores",
     "build_event_counts",
@@ -62,6 +63,19 @@ class BaselineSet:
             return 0.0
         z = (rate - mean) / std
         return max(-WINSOR_LIMIT, min(WINSOR_LIMIT, z))
+
+
+@dataclass(frozen=True)
+class ImpactContext:
+    """Everything :func:`add_impact_scores` needs, resolved once per match.
+
+    ``baselines`` is ``None`` when no active baseline set exists yet (fresh
+    system); callers must skip impact emission gracefully in that case.
+    """
+
+    players: Mapping[int, PlayerRef]
+    baselines: "BaselineSet | None"
+    has_killfeed: bool
 
 
 def build_event_counts(
