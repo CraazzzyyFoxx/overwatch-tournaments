@@ -1173,7 +1173,15 @@
       "healingDealt": "Исцеление",
       "damageBlocked": "Заблок. урон",
       "dltDamage": "Dlt Damage",
-      "ultUsedEarned": "Ульты исп./получ."
+      "ultUsedEarned": "Ульты исп./получ.",
+      "firstPicks": "Первые киллы",
+      "firstDeaths": "Первые смерти",
+      "ultimateKills": "Киллы с ульты",
+      "supportKills": "Киллы саппортов"
+    },
+    "stats": {
+      "impactPoints": "Impact",
+      "classicPoints": "Очки (классика)"
     },
     "unassignedStage": "Без этапа",
     "matchesTotal": "{count, plural, one {# матч всего} few {# матча всего} many {# матчей всего} other {# матчей всего}}",
@@ -1847,6 +1855,7 @@
       "byStage": "По этапам",
       "tTag": "T {number}",
       "mapLabel": "Карта {number}",
+      "overperformanceBadge": "Сверх ожиданий",
       "colTournament": "Турнир",
       "colStage": "Этап",
       "colMatch": "Матч",

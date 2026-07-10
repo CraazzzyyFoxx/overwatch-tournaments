@@ -1173,7 +1173,15 @@
       "healingDealt": "Healing Dealt",
       "damageBlocked": "Damage Blocked",
       "dltDamage": "Dlt Damage",
-      "ultUsedEarned": "Ult Used/Earned"
+      "ultUsedEarned": "Ult Used/Earned",
+      "firstPicks": "First picks",
+      "firstDeaths": "First deaths",
+      "ultimateKills": "Ultimate kills",
+      "supportKills": "Support kills"
+    },
+    "stats": {
+      "impactPoints": "Impact",
+      "classicPoints": "Points (classic)"
     },
     "unassignedStage": "Unassigned",
     "matchesTotal": "{count, plural, one {# match total} other {# matches total}}",
@@ -1847,6 +1855,7 @@
       "byStage": "By stage",
       "tTag": "T {number}",
       "mapLabel": "Map {number}",
+      "overperformanceBadge": "Above expectations",
       "colTournament": "Tournament",
       "colStage": "Stage",
       "colMatch": "Match",

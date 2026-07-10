@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ResTag, ScoreCell, StagePill } from "@/app/(site)/users/components/shared/atoms";
 import MvpMatchPill from "@/components/match/MvpMatchPill";
+import { resolveMvpPlacement } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -53,7 +54,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
     });
   });
 
-  const mvpMatches = (enc.matches ?? []).filter((m) => m.performance != null);
+  const mvpMatches = (enc.matches ?? []).filter((m) => resolveMvpPlacement(m) != null);
 
   return (
     <tr

@@ -133,6 +133,10 @@ export interface MatchWithUserStats {
   code: string | null;
   map: MapRead | null;
   performance: number | null;
+  impact_rank?: number | null;
+  impact_points?: number | null;
+  overperformance_score?: number | null;
+  overperformance_badge?: boolean;
   heroes: Hero[];
 }
 

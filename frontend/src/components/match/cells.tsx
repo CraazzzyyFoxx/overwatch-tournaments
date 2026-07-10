@@ -39,6 +39,10 @@ export const mvpRank = (performance: number | null | undefined): MvpRank => {
   return "default";
 };
 
+/** Official MVP placement: impact rank when computed, legacy performance otherwise. */
+export const resolveMvpPlacement = (m: { impact_rank?: number | null; performance?: number | null }): number | null =>
+  m.impact_rank ?? m.performance ?? null;
+
 /** English ordinal for a positive integer (1 → "1st", 2 → "2nd", …). */
 export const ordinal = (n: number): string => {
   const mod100 = n % 100;

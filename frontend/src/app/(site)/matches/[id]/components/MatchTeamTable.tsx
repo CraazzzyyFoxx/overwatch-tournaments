@@ -53,7 +53,8 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
           </TableHead>
           <TableHead className="text-center">{t("matches.col.division")}</TableHead>
           <TableHead className="text-center">{t("common.heroes")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.prs")}</TableHead>
+          <TableHead className="text-center">{t("matches.stats.classicPoints")}</TableHead>
+          <TableHead className="text-center">{t("matches.stats.impactPoints")}</TableHead>
           <TableHead className="text-center">{t("matches.col.fb")}</TableHead>
           <TableHead className="text-center">{t("matches.col.e")}</TableHead>
           <TableHead className="text-center">{t("matches.col.d")}</TableHead>
@@ -62,6 +63,10 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
           <TableHead className="text-center">{t("matches.col.kad")}</TableHead>
           <TableHead className="text-center">{t("matches.col.sk")}</TableHead>
           <TableHead className="text-center">{t("matches.col.ok")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.firstPicks")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.firstDeaths")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.ultimateKills")}</TableHead>
+          <TableHead className="text-center">{t("matches.col.supportKills")}</TableHead>
           <TableHead className="text-center">{t("matches.col.heroDamage")}</TableHead>
           <TableHead className="text-center">{t("matches.col.dmgFb")}</TableHead>
           <TableHead className="text-center">{t("matches.col.healingDealt")}</TableHead>
@@ -123,6 +128,7 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
                   <PerformanceBadge performance={player.stats[matchRound].performance} />
                 </div>
               </TableCell>
+              <TableCell className="text-center">{player.stats[matchRound].impact_points}</TableCell>
               <TableCell className="text-center">{player.stats[matchRound].final_blows}</TableCell>
               <TableCell className="text-center">{player.stats[matchRound].eliminations}</TableCell>
               <TableCell className="text-center">{player.stats[matchRound].deaths}</TableCell>
@@ -133,6 +139,10 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
               <TableCell className="text-center">
                 {player.stats[matchRound].objective_kills}
               </TableCell>
+              <TableCell className="text-center">{player.stats[matchRound].first_picks}</TableCell>
+              <TableCell className="text-center">{player.stats[matchRound].first_deaths}</TableCell>
+              <TableCell className="text-center">{player.stats[matchRound].ultimate_kills}</TableCell>
+              <TableCell className="text-center">{player.stats[matchRound].support_kills}</TableCell>
               <TableCell className="text-center">
                 {player.stats[matchRound].hero_damage_dealt.toFixed(0)}
               </TableCell>
