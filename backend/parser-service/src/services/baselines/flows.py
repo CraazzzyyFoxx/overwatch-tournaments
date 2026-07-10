@@ -237,6 +237,12 @@ async def _load_stats_frame(session: AsyncSession) -> pd.DataFrame:
     df["has_killfeed"] = df["has_killfeed"].fillna(False).astype(bool)
     df["rank"] = df["rank"].astype(int)
 
+    # Exclude non-positive-minute rows before computing rates: dividing by
+    # zero minutes yields inf/nan and raises a RuntimeWarning on every real
+    # recompute() run. Safe — build_baseline_rows already drops everything
+    # below BASELINE_MIN_MINUTES (> 0), so no currently-kept row is lost.
+    df = df[df["minutes"] > 0].copy()
+
     # rate unit MUST match impact.py: rate = value / seconds * 600 (per-10-min).
     # seconds/600 == minutes/10, so value / (minutes/10) is the same rate.
     ten_minute_units = df["minutes"] / 10.0
@@ -251,6 +257,8 @@ async def recompute(session: AsyncSession) -> int:
     """Recompute the active ``FORMULA_VERSION`` baselines and replace them atomically."""
     stats = await _load_stats_frame(session)
     rows = build_baseline_rows(stats)
+    if not rows:
+        raise RuntimeError("impact baseline recompute produced 0 rows; refusing to wipe existing baselines")
 
     await session.execute(sa.delete(models.StatBaseline).where(models.StatBaseline.formula_version == FORMULA_VERSION))
     session.add_all(
