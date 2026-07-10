@@ -165,7 +165,8 @@ def add_impact_scores(
         rank_score = 0.0
         for stat_name, weight in IMPACT_WEIGHTS.items():
             member = enums.LogStatsName[stat_name]
-            value = float(row.get(member, 0.0) or 0.0)
+            raw = row.get(member, 0.0)
+            value = 0.0 if pd.isna(raw) else float(raw)
             if stat_name in EVENT_STATS and not has_killfeed:
                 continue
             rate = value / secs * 600.0

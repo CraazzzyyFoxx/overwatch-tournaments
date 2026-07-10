@@ -183,6 +183,30 @@ class TestAddImpactScores:
         )
         assert out[enums.LogStatsName.ImpactPoints].iloc[0] == 0.0
 
+    def test_nan_stat_cell_contributes_zero(self):
+        # Eliminations baseline mean is 0 so a correctly-zeroed NaN cell
+        # contributes exactly 0 to ImpactPoints (rate=0 -> z=(0-0)/std=0).
+        # On the buggy code the NaN cell survives into `rate`/`z` and the
+        # winsorize clamp silently resolves it to +WINSOR_LIMIT instead.
+        baselines = impact.BaselineSet(
+            formula_version="impact_v1",
+            bucket_bounds=(500.0, 1000.0),
+            values={
+                ("damage", -1, "Eliminations"): (0.0, 5.0),
+                ("damage", -1, "FirstPicks"): (1.0, 1.0),
+            },
+        )
+        out = impact.add_impact_scores(
+            self._frame(elims=float("nan")),
+            players=self._players(),
+            baselines=baselines,
+            has_killfeed=True,
+        )
+        # first_picks rate 3 -> z=2; NaN Eliminations term must drop to 0,
+        # NOT IMPACT_WEIGHTS["Eliminations"] * WINSOR_LIMIT.
+        expected = IMPACT_WEIGHTS["FirstPicks"] * 2.0
+        assert out[enums.LogStatsName.ImpactPoints].iloc[0] == pytest.approx(expected)
+
 
 class TestDominantRoles:
     def test_picks_role_with_most_playtime(self):
