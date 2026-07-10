@@ -48,6 +48,9 @@ from src.rpc import (
     bootstrap as rpc_bootstrap,
 )
 from src.rpc import (
+    impact as rpc_impact,
+)
+from src.rpc import (
     logs as rpc_logs,
 )
 from src.rpc import (
@@ -94,6 +97,7 @@ rpc_rank.register(broker, logger)
 rpc_achievements.register(broker, logger)
 rpc_misc.register(broker, logger)
 rpc_bootstrap.register(broker, logger)
+rpc_impact.register(broker, logger)
 
 
 @app.on_startup
