@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 __all__ = (
+    "MAX_CONSECUTIVE_FAILURES",
     "NEW_STAT_MEMBERS",
     "backfill_all",
     "backfill_match",
@@ -65,6 +66,14 @@ NEW_STAT_MEMBERS: tuple[enums.LogStatsName, ...] = tuple(
     enums.LogStatsName[name]
     for name in (*impact_consts.EVENT_STATS, "ImpactPoints", "ImpactRank", "OverperformanceScore")
 )
+
+#: Circuit breaker for ``backfill_all``: abort the run after this many
+#: per-match failures IN A ROW (resets on any success). Guards against a
+#: systemic bug (e.g. schema/code mismatch) silently burning a multi-hour
+#: run over thousands of matches before anyone reads the summary — isolated
+#: bad matches below this threshold still just increment ``failed`` and
+#: the loop continues.
+MAX_CONSECUTIVE_FAILURES = 10
 
 # Per-process cache of hero_id -> HeroClass; heroes are effectively static
 # reference data, so one load per worker process is enough (mirrors the
@@ -324,8 +333,18 @@ async def _load_player_refs(session: AsyncSession, match_id: int) -> dict[int, i
 
     refs: dict[int, impact.PlayerRef] = {}
     for user_id, team_id in team_by_user.items():
-        declared_role, rank = roster_by_key.get((team_id, user_id), (None, 0))
-        role = dominant_roles.get(user_id) or declared_role
+        roster_entry = roster_by_key.get((team_id, user_id))
+        has_roster = roster_entry is not None
+        declared_role, rank = roster_entry if has_roster else (None, 0)
+        # Only trust a dominant/declared role when a roster row actually
+        # exists for this (team_id, user_id) pair. Without a roster row,
+        # `rank` is meaningless (0), so leaking a role through here would
+        # make `add_impact_scores` score the player against baseline
+        # bucket 0 (elite/top) via `baselines.bucket_for(0)` — role=None
+        # is what routes the player to the safe zero-score path instead
+        # (impact.py zeroes both ImpactPoints and OverperformanceScore
+        # when role is None).
+        role = (dominant_roles.get(user_id) or declared_role) if has_roster else None
         refs[user_id] = impact.PlayerRef(
             player_id=user_id,
             user_id=user_id,
@@ -388,6 +407,14 @@ async def backfill_all(
     Commits once per match, so a mid-run failure only loses the in-flight
     match — ``backfill_match``'s delete-then-insert is idempotent per match,
     so rerunning after a fix safely reprocesses everything from the start.
+
+    Raises ``RuntimeError`` if ``MAX_CONSECUTIVE_FAILURES`` matches fail in a
+    row — that pattern indicates a systemic bug (e.g. a schema/code
+    mismatch that fails every match), not isolated bad data, so the run
+    aborts fast instead of burning hours over thousands of matches before
+    anyone reads the summary. The consecutive-failure counter resets on any
+    success (processed or skipped); the total ``failed`` count keeps
+    accumulating for genuinely-isolated bad matches under the threshold.
     """
     async with session_factory() as session:
         if await baselines_service.get_active(session) is None:
@@ -407,6 +434,7 @@ async def backfill_all(
         + (f" (tournament_id={tournament_id})" if tournament_id is not None else "")
     )
 
+    consecutive_failures = 0
     for i, match_id in enumerate(match_ids, start=1):
         try:
             async with session_factory() as session:
@@ -415,7 +443,18 @@ async def backfill_all(
         except Exception:
             logger.exception(f"Impact backfill failed for match_id={match_id}")
             failed += 1
+            consecutive_failures += 1
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                summary = {"total": total, "processed": processed, "skipped": skipped, "failed": failed}
+                logger.error(f"Impact backfill aborting: {summary}")
+                raise RuntimeError(
+                    f"Impact backfill aborted after {consecutive_failures} consecutive failures "
+                    f"(most recently match_id={match_id}) — likely a systemic bug, not isolated "
+                    f"bad matches; summary so far: {summary}"
+                )
             continue
+        else:
+            consecutive_failures = 0
 
         if did_backfill:
             processed += 1

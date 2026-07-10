@@ -25,8 +25,11 @@ def _stat_rows():
             # match totals
             {"user_id": 10, "round": 0, "hero_id": None, "name": enums.LogStatsName.Eliminations, "value": 5.0},
             {"user_id": 10, "round": 0, "hero_id": None, "name": enums.LogStatsName.HeroTimePlayed, "value": 300.0},
-            # per-hero row must be ignored by pivots
-            {"user_id": 10, "round": 0, "hero_id": 3, "name": enums.LogStatsName.Eliminations, "value": 5.0},
+            # per-hero row must be ignored by pivots — value deliberately
+            # distinct from the hero-NULL round-0 Eliminations row (5.0) so a
+            # regression that let this leak into the pivot's mean would
+            # change the asserted value and fail the test.
+            {"user_id": 10, "round": 0, "hero_id": 3, "name": enums.LogStatsName.Eliminations, "value": 999.0},
         ]
     )
 
