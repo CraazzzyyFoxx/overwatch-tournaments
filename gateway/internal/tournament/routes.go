@@ -31,6 +31,7 @@ var PublicReadRoutes = []edge.RouteSpec{
 	// match.py
 	{Method: "GET", Pattern: "/api/v1/matches", Queue: "rpc.tournament.list_matches", AllQuery: true, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/matches/{id}", Queue: "rpc.tournament.get_match", IDParam: "id", Query: []string{"entities", "workspace_id"}, Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/matches/{id}/kill-feed", Queue: "rpc.tournament.get_match_kill_feed", IDParam: "id", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
 	// team.py
 	{Method: "GET", Pattern: "/api/v1/teams", Queue: "rpc.tournament.list_teams", AllQuery: true, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/teams/{id}", Queue: "rpc.tournament.get_team", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthNone},

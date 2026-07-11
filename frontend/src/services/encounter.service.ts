@@ -5,6 +5,7 @@ import {
   EncounterSavedView,
   MatchWithStats
 } from "@/types/encounter.types";
+import { MatchKillFeed } from "@/types/killfeed.types";
 import { PaginatedResponse } from "@/types/pagination.types";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -43,6 +44,9 @@ export default class encounterService {
         ]
       }
     }).then((res) => res.json());
+  }
+  static async getMatchKillFeed(match_id: number): Promise<MatchKillFeed> {
+    return apiFetch(`/api/v1/matches/${match_id}/kill-feed`).then((res) => res.json());
   }
   static async getAll(
     page: number,

@@ -1065,6 +1065,46 @@ async def get_match_stats_for_users(
     return out
 
 
+async def get_match_kill_feed(
+    session: AsyncSession,
+    match_id: int,
+) -> tuple[list[typing.Any], list[typing.Any]]:
+    """Raw kill-feed + timeline-event rows for one match, ordered chronologically.
+
+    Returns ``(kill_rows, event_rows)`` where each kill row is
+    ``(MatchKillFeed, killer_hero, victim_hero)`` and each event row is
+    ``(MatchEvent, hero | None)``. The hero *at event time* is joined (it can
+    differ from the aggregate roster hero); player names are resolved by the
+    caller/client from the roster to keep the payload lean. Only timeline-worthy
+    events (ultimate casts, resurrects) are returned — per-hit assists are
+    already surfaced as aggregate stats.
+    """
+    killer_hero = aliased(models.Hero)
+    victim_hero = aliased(models.Hero)
+    kf = models.MatchKillFeed
+
+    kills_query = (
+        sa.select(kf, killer_hero, victim_hero)
+        .join(killer_hero, killer_hero.id == kf.killer_hero_id)
+        .join(victim_hero, victim_hero.id == kf.victim_hero_id)
+        .where(kf.match_id == match_id)
+        .order_by(kf.round.asc(), kf.time.asc(), kf.id.asc())
+    )
+
+    ev = models.MatchEvent
+    timeline_events = (enums.MatchEvent.UltimateStart, enums.MatchEvent.MercyRez)
+    events_query = (
+        sa.select(ev, models.Hero)
+        .outerjoin(models.Hero, models.Hero.id == ev.hero_id)
+        .where(sa.and_(ev.match_id == match_id, ev.name.in_(timeline_events)))
+        .order_by(ev.round.asc(), ev.time.asc(), ev.id.asc())
+    )
+
+    kill_rows = (await session.execute(kills_query)).all()
+    event_rows = (await session.execute(events_query)).all()
+    return list(kill_rows), list(event_rows)
+
+
 async def get_by_stage_id(
     session: AsyncSession,
     tournament_id: int,

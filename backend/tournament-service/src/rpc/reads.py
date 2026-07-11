@@ -147,6 +147,15 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _read(logger, op)
 
+    @broker.subscriber("rpc.tournament.get_match_kill_feed")
+    async def _get_match_kill_feed(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            return await encounter_flows.get_match_kill_feed(
+                session, _require_id(data), workspace_id=_q1(data, "workspace_id", int)
+            )
+
+        return await _read(logger, op)
+
     @broker.subscriber("rpc.tournament.get_team")
     async def _get_team(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:

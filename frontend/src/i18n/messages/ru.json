@@ -1181,7 +1181,79 @@
     },
     "stats": {
       "impactPoints": "Impact",
-      "classicPoints": "Очки (классика)"
+      "classicPoints": "Очки (классика)",
+      "rating": "Рейтинг"
+    },
+    "comparison": {
+      "title": "Команда против команды"
+    },
+    "leaders": {
+      "title": "Лидеры матча"
+    },
+    "contribution": {
+      "title": "Вклад игроков"
+    },
+    "timeline": {
+      "title": "Хронология убийств",
+      "loading": "Загрузка хронологии…",
+      "error": "Не удалось загрузить хронологию.",
+      "empty": "Для этого матча нет данных об убийствах.",
+      "ultimate": "Ульта",
+      "resurrect": "Воскрешение",
+      "killCount": "{count, plural, one {# убийство} few {# убийства} many {# убийств} other {# убийств}}"
+    },
+    "roundLabel": "Раунд",
+    "tableView": "Столбцы",
+    "preset": {
+      "overview": "Обзор",
+      "combat": "Бой",
+      "damage": "Урон",
+      "healing": "Саппорт",
+      "accuracy": "Точность",
+      "utility": "Утилити",
+      "all": "Все"
+    },
+    "stat": {
+      "eliminations": "Убийства",
+      "finalBlows": "Добивания",
+      "deaths": "Смерти",
+      "assists": "Помощь",
+      "kd": "К/С",
+      "kda": "КП/С",
+      "soloKills": "Соло-убийства",
+      "objectiveKills": "Убийства на точке",
+      "multikills": "Мультиубийства",
+      "multikillBest": "Лучшее мультиубийство",
+      "environmentalKills": "Убийства окружением",
+      "environmentalDeaths": "Смерти от окружения",
+      "firstPicks": "Первые киллы",
+      "firstDeaths": "Первые смерти",
+      "ultimateKills": "Киллы с ульты",
+      "supportKills": "Киллы саппортов",
+      "heroDamageDealt": "Урон по героям",
+      "allDamageDealt": "Весь урон",
+      "barrierDamageDealt": "Урон по щитам",
+      "damageFb": "Урон / добивание",
+      "damageDelta": "Дельта урона",
+      "damageTaken": "Полученный урон",
+      "damageBlocked": "Заблок. урон",
+      "selfHealing": "Самолечение",
+      "healingDealt": "Исцеление",
+      "healingReceived": "Полученное исцеление",
+      "defensiveAssists": "Защитная помощь",
+      "offensiveAssists": "Атакующая помощь",
+      "ultimatesEarned": "Заряжено ультов",
+      "ultimatesUsed": "Использовано ультов",
+      "heroTimePlayed": "Время игры",
+      "weaponAccuracy": "Точность",
+      "criticalHits": "Криты",
+      "criticalHitAccuracy": "Точность критов",
+      "scopedAccuracy": "Точность в прицеле",
+      "scopedCriticalHitAccuracy": "Точность критов в прицеле",
+      "scopedCriticalHitKills": "Убийства критами в прицеле",
+      "shotsFired": "Выстрелов",
+      "shotsHit": "Попаданий",
+      "shotsMissed": "Промахов"
     },
     "unassignedStage": "Без этапа",
     "matchesTotal": "{count, plural, one {# матч всего} few {# матча всего} many {# матчей всего} other {# матчей всего}}",
@@ -1327,7 +1399,16 @@
     "avgDivisionDesc": "Средний дивизион по каждой роли за все турниры.",
     "noEventsTitle": "Сейчас нет активных событий",
     "noEventsBody": "Загляните позже — турниры проводятся в разных сообществах на этой платформе.",
-    "browsePastTournaments": "Смотреть прошедшие турниры"
+    "browsePastTournaments": "Смотреть прошедшие турниры",
+    "byTheNumbersHeading": "Все турниры за всё время",
+    "statLiveNow": "В эфире",
+    "statCommunities": "Сообщества",
+    "nowLive": "Сейчас в эфире //",
+    "communitiesCount": "{count, plural, one {# сообщество} few {# сообщества} many {# сообществ} other {# сообществ}}",
+    "featured": "Главное",
+    "standingsSnapshot": "Срез таблицы",
+    "viewStandings": "Смотреть таблицу",
+    "colDiff": "Разн."
   },
   "workspace": {
     "eyebrow": "Рабочее пространство",
@@ -1681,8 +1762,15 @@
       },
       "toolbar": {
         "copyLink": "Скопировать ссылку на профиль",
+        "copyLinkShort": "Скопировать ссылку",
         "copied": "Скопировано",
         "share": "Поделиться",
+        "card": "Карточка игрока",
+        "cardDescription": "Скачайте или скопируйте карточку игрока.",
+        "copyImage": "Скопировать изображение",
+        "imageCopied": "Скопировано",
+        "download": "Скачать",
+        "downloaded": "Скачано",
         "comparePlayers": "Сравнить игроков",
         "compare": "Сравнить"
       },
@@ -1755,6 +1843,10 @@
         "playtime": "{hours}ч {minutes}м в игре",
         "playtimeNoHours": "{minutes}м в игре",
         "mapWinrate": "винрейт по картам",
+        "lobbyRank": "Ранг в лобби",
+        "percentileHint": "полоса = перцентиль · полнее — лучше",
+        "rankTop": "Топ {pct}%",
+        "players": "{count, plural, one {# игрок} few {# игрока} many {# игроков} other {# игрока}}",
         "stat": {
           "kda": "KDA",
           "mvpScore": "Очки MVP",

@@ -1181,7 +1181,79 @@
     },
     "stats": {
       "impactPoints": "Impact",
-      "classicPoints": "Points (classic)"
+      "classicPoints": "Points (classic)",
+      "rating": "Rating"
+    },
+    "comparison": {
+      "title": "Head to Head"
+    },
+    "leaders": {
+      "title": "Match Leaders"
+    },
+    "contribution": {
+      "title": "Player Contribution"
+    },
+    "timeline": {
+      "title": "Kill Timeline",
+      "loading": "Loading timeline…",
+      "error": "Couldn't load the timeline.",
+      "empty": "No kill data recorded for this match.",
+      "ultimate": "Ultimate",
+      "resurrect": "Resurrect",
+      "killCount": "{count, plural, one {# kill} other {# kills}}"
+    },
+    "roundLabel": "Round",
+    "tableView": "Columns",
+    "preset": {
+      "overview": "Overview",
+      "combat": "Combat",
+      "damage": "Damage",
+      "healing": "Support",
+      "accuracy": "Accuracy",
+      "utility": "Utility",
+      "all": "All"
+    },
+    "stat": {
+      "eliminations": "Eliminations",
+      "finalBlows": "Final Blows",
+      "deaths": "Deaths",
+      "assists": "Assists",
+      "kd": "K/D Ratio",
+      "kda": "KDA Ratio",
+      "soloKills": "Solo Kills",
+      "objectiveKills": "Objective Kills",
+      "multikills": "Multikills",
+      "multikillBest": "Best Multikill",
+      "environmentalKills": "Environmental Kills",
+      "environmentalDeaths": "Environmental Deaths",
+      "firstPicks": "First Picks",
+      "firstDeaths": "First Deaths",
+      "ultimateKills": "Ultimate Kills",
+      "supportKills": "Support Kills",
+      "heroDamageDealt": "Hero Damage",
+      "allDamageDealt": "All Damage",
+      "barrierDamageDealt": "Barrier Damage",
+      "damageFb": "Damage / Final Blow",
+      "damageDelta": "Damage Delta",
+      "damageTaken": "Damage Taken",
+      "damageBlocked": "Damage Blocked",
+      "selfHealing": "Self Healing",
+      "healingDealt": "Healing Dealt",
+      "healingReceived": "Healing Received",
+      "defensiveAssists": "Defensive Assists",
+      "offensiveAssists": "Offensive Assists",
+      "ultimatesEarned": "Ultimates Earned",
+      "ultimatesUsed": "Ultimates Used",
+      "heroTimePlayed": "Time Played",
+      "weaponAccuracy": "Weapon Accuracy",
+      "criticalHits": "Critical Hits",
+      "criticalHitAccuracy": "Critical Hit Accuracy",
+      "scopedAccuracy": "Scoped Accuracy",
+      "scopedCriticalHitAccuracy": "Scoped Crit Accuracy",
+      "scopedCriticalHitKills": "Scoped Crit Kills",
+      "shotsFired": "Shots Fired",
+      "shotsHit": "Shots Hit",
+      "shotsMissed": "Shots Missed"
     },
     "unassignedStage": "Unassigned",
     "matchesTotal": "{count, plural, one {# match total} other {# matches total}}",
@@ -1327,7 +1399,16 @@
     "avgDivisionDesc": "Average division rank per role across all tournaments.",
     "noEventsTitle": "No active events right now",
     "noEventsBody": "Check back soon — tournaments are organized across multiple communities on this platform.",
-    "browsePastTournaments": "Browse past tournaments"
+    "browsePastTournaments": "Browse past tournaments",
+    "byTheNumbersHeading": "Every tournament so far",
+    "statLiveNow": "Live now",
+    "statCommunities": "Communities",
+    "nowLive": "Now live //",
+    "communitiesCount": "{count, plural, one {# community} other {# communities}}",
+    "featured": "Featured",
+    "standingsSnapshot": "Standings snapshot",
+    "viewStandings": "View standings",
+    "colDiff": "Diff"
   },
   "workspace": {
     "eyebrow": "Workspace",
@@ -1681,8 +1762,15 @@
       },
       "toolbar": {
         "copyLink": "Copy link to this profile",
+        "copyLinkShort": "Copy link",
         "copied": "Copied",
         "share": "Share",
+        "card": "Player card",
+        "cardDescription": "Download or copy a shareable player card.",
+        "copyImage": "Copy image",
+        "imageCopied": "Copied",
+        "download": "Download",
+        "downloaded": "Downloaded",
         "comparePlayers": "Compare players",
         "compare": "Compare"
       },
@@ -1755,6 +1843,10 @@
         "playtime": "{hours}h {minutes}m playtime",
         "playtimeNoHours": "{minutes}m playtime",
         "mapWinrate": "map winrate",
+        "lobbyRank": "Rank in lobby",
+        "percentileHint": "bar = percentile · fuller is better",
+        "rankTop": "Top {pct}%",
+        "players": "{count, plural, one {# player} other {# players}}",
         "stat": {
           "kda": "KDA",
           "mvpScore": "MVP score",

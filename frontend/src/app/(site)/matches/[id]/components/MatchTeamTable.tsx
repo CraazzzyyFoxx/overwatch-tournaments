@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { PlayerWithStats, TeamWithStats } from "@/types/team.types";
+import { LogStatsName } from "@/types/stats.types";
 import {
   Table,
   TableBody,
@@ -13,88 +13,113 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { sortTeamPlayers } from "@/utils/player";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import PlayerName from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { PerformanceBadge } from "@/components/PerformanceBagde";
-import { ScrollBar, ScrollArea } from "@/components/ui/scroll-area";
 import DivisionIcon from "@/components/DivisionIcon";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import type { DivisionGridVersion } from "@/types/workspace.types";
+import {
+  STAT_META,
+  GROUP_COLOR,
+  formatStat,
+  playerStat,
+  activePlayers
+} from "@/utils/matchStats";
 
 interface MatchTeamTableProps {
   team: TeamWithStats;
   isHome: boolean;
-  maxHeroes: number;
   matchRound: number;
+  /** Dynamic stat columns to render (from the active preset). */
+  columns: LogStatsName[];
+  /** Per-column max across both teams — scales the inline magnitude bars. */
+  columnMax: Record<string, number>;
   tournamentGrid?: DivisionGridVersion | null;
 }
 
-const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }: MatchTeamTableProps) => {
-  const t = useTranslations();
-  // @ts-ignore
-  const sortedPlayers: PlayerWithStats[] = sortTeamPlayers(team.players);
-  // Token-based team tint (was hardcoded #104e48/#4c2332 built into a dynamic
-  // `bg-${…}` class that Tailwind's scanner never generated → the header tint
-  // silently did nothing). Applied via inline style with the role/result tokens.
-  const teamAccent = isHome ? "var(--aqt-teal)" : "var(--aqt-rose)";
-
-  const validatedPlayers = [];
-
-  for (let playerI = 0; playerI < sortedPlayers.length; playerI++) {
-    const player = sortedPlayers[playerI];
-    if (player.heroes[matchRound]?.length > 0) {
-      validatedPlayers.push(player);
-    }
-  }
+const StatCell = ({
+  name,
+  value,
+  max
+}: {
+  name: LogStatsName;
+  value: number;
+  max: number;
+}) => {
+  const meta = STAT_META[name];
+  const showBar = Boolean(meta?.bar) && max > 0;
+  const pct = showBar ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const color = meta ? GROUP_COLOR[meta.group] : "var(--aqt-teal)";
 
   return (
-    <Table className="overflow-x-auto">
+    <div className="flex flex-col items-center gap-1">
+      <span className="aqt-tnum text-[13px] text-[color:var(--aqt-fg)]">{formatStat(name, value)}</span>
+      {showBar ? (
+        <div className="h-[3px] w-full max-w-[64px] overflow-hidden rounded-full bg-[hsl(0_0%_100%/0.06)]">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${pct}%`, background: color, opacity: 0.85 }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const MatchTeamTable = ({
+  team,
+  isHome,
+  matchRound,
+  columns,
+  columnMax,
+  tournamentGrid
+}: MatchTeamTableProps) => {
+  const t = useTranslations<never>();
+  const teamAccent = isHome ? "var(--aqt-teal)" : "var(--aqt-rose)";
+
+  const sortedPlayers = sortTeamPlayers(team.players);
+  const activeIds = new Set(activePlayers(team, matchRound).map((player) => player.id));
+  const players: PlayerWithStats[] = sortedPlayers.filter((player) => activeIds.has(player.id));
+
+  return (
+    <Table>
       <TableHeader>
         <TableRow style={{ backgroundColor: `color-mix(in srgb, ${teamAccent} 12%, transparent)` }}>
-          <TableHead className="min-w-[240px] sticky left-0 z-5">
+          <TableHead
+            className="min-w-[220px] sticky left-0 z-5"
+            style={{
+              background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 26%, var(--aqt-bg)), color-mix(in srgb, ${teamAccent} 12%, var(--aqt-bg)) 60%)`
+            }}
+          >
             {t("matches.teamLabel", { name: team.name })}
           </TableHead>
           <TableHead className="text-center">{t("matches.col.division")}</TableHead>
           <TableHead className="text-center">{t("common.heroes")}</TableHead>
-          <TableHead className="text-center">{t("matches.stats.classicPoints")}</TableHead>
-          <TableHead className="text-center">{t("matches.stats.impactPoints")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.fb")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.e")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.d")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.a")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.kd")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.kad")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.sk")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.ok")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.firstPicks")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.firstDeaths")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.ultimateKills")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.supportKills")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.heroDamage")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.dmgFb")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.healingDealt")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.damageBlocked")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.dltDamage")}</TableHead>
-          <TableHead className="text-center">{t("matches.col.ultUsedEarned")}</TableHead>
+          <TableHead className="text-center whitespace-nowrap">{t("matches.stats.rating")}</TableHead>
+          {columns.map((name) => {
+            const meta = STAT_META[name];
+            return (
+              <TableHead
+                key={name}
+                className="text-center whitespace-nowrap"
+                title={meta ? t(meta.labelKey as Parameters<typeof t>[0]) : name}
+              >
+                {meta?.abbr ?? name}
+              </TableHead>
+            );
+          })}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {validatedPlayers.map((player) => {
-          const missingHeroes = maxHeroes - player.heroes[matchRound].length;
-
-          if (missingHeroes > 0) {
-            for (let i = 0; i < missingHeroes; i++) {
-              // @ts-ignore
-              player.heroes[matchRound].push({ id: i, name: " ", image_path: "" });
-            }
-          }
-
+        {players.map((player) => {
+          const heroes = player.heroes[matchRound] ?? [];
           return (
-            <TableRow key={player.id} className="hover:bg-background">
+            <TableRow key={player.id} className="hover:bg-[hsl(0_0%_100%/0.02)]">
               <TableCell
-                className="flex flex-row items-center gap-2 min-w-[240px] sticky left-0 z-10"
+                className="flex flex-row items-center gap-2 min-w-[220px] sticky left-0 z-10"
                 style={{
-                  backgroundImage: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, transparent), var(--aqt-bg) 55%)`
+                  background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, var(--aqt-bg)), var(--aqt-bg) 60%)`
                 }}
               >
                 <PlayerRoleIcon role={player.role} />
@@ -106,65 +131,23 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex flex-row gap-1.5">
-                  {player.heroes[matchRound].map((hero) => {
-                    return (
-                      // Возможно надо будет вернуть AvatarImage
-                      <Avatar key={`hero-${hero.id}`}>
-                        {hero.image_path ? (
-                          <Image src={hero.image_path} alt={hero.name} fill className="object-cover" />
-                        ) : (
-                          // Empty padding slot (keeps hero columns aligned across
-                          // rows): a faint dashed circle, not a solid dark disc
-                          // that reads like a broken image.
-                          <AvatarFallback className="border border-dashed border-[color:var(--aqt-border-2)] bg-transparent text-[10px] text-[color:var(--aqt-fg-faint)]">
-                            {hero.name.trim().slice(0, 3)}
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                    );
-                  })}
-                </div>
-              </TableCell>
-              <TableCell>
                 <div className="flex justify-center">
-                  <PerformanceBadge performance={player.stats[matchRound].performance} />
+                  <HeroStrip heroes={heroes} size="sm" limit={6} />
                 </div>
               </TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].impact_points}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].final_blows}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].eliminations}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].deaths}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].assists}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].kd}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].kda}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].solo_kills}</TableCell>
               <TableCell className="text-center">
-                {player.stats[matchRound].objective_kills}
+                <div className="flex flex-col items-center gap-1">
+                  <span className="aqt-tnum text-[15px] font-bold leading-none text-[color:var(--aqt-teal)]">
+                    {formatStat(LogStatsName.ImpactPoints, player.stats[matchRound]?.impact_points)}
+                  </span>
+                  <PerformanceBadge performance={player.stats[matchRound]?.performance} />
+                </div>
               </TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].first_picks}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].first_deaths}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].ultimate_kills}</TableCell>
-              <TableCell className="text-center">{player.stats[matchRound].support_kills}</TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].hero_damage_dealt.toFixed(0)}
-              </TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].damage_fb.toFixed(0)}
-              </TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].healing_dealt.toFixed(0)}
-              </TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].damage_blocked.toFixed(0)}
-              </TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].damage_delta.toFixed(0)}
-              </TableCell>
-              <TableCell className="text-center">
-                {player.stats[matchRound].ultimates_used}/
-                {player.stats[matchRound].ultimates_earned}
-              </TableCell>
+              {columns.map((name) => (
+                <TableCell key={name} className="text-center">
+                  <StatCell name={name} value={playerStat(player, matchRound, name)} max={columnMax[name] ?? 0} />
+                </TableCell>
+              ))}
             </TableRow>
           );
         })}

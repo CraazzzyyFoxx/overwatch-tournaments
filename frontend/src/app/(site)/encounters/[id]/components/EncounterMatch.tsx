@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React from "react";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
@@ -6,11 +6,9 @@ import { Match } from "@/types/encounter.types";
 import { Dialog, DialogContent, DialogHeader, DialogTrigger } from "@/components/ui/dialog";
 import encounterService from "@/services/encounter.service";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import MatchTeamTable from "@/app/(site)/matches/[id]/components/MatchTeamTable";
+import MatchStatsSection from "@/app/(site)/matches/[id]/components/MatchStatsSection";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import MatchStatsChart from "@/app/(site)/encounters/[id]/components/MatchStatsChart";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 
 const EncounterMatch = async ({ match }: { match: Match }) => {
@@ -18,52 +16,7 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
   const mapImagePath: string = match.map ? match.map?.image_path : "";
   const data = await encounterService.getMatch(match.id);
 
-  const maxHeroesHome: Record<number, number> = {};
-  const maxHeroesAway: Record<number, number> = {};
-  const maxHeroes: Record<number, number> = {};
-  let maxRoundI = 0;
-  for (let roundI = 0; roundI < data.rounds + 1; roundI++) {
-    maxRoundI = Math.max(maxRoundI, roundI);
-    maxHeroesHome[roundI] = data.home_team.players.reduce(
-      (max, player) => Math.max(max, player.heroes[roundI] ? player.heroes[roundI].length : 0),
-      0
-    );
-    maxHeroesAway[roundI] = data.away_team.players.reduce(
-      (max, player) => Math.max(max, player.heroes[roundI] ? player.heroes[roundI].length : 0),
-      0
-    );
-    maxHeroes[roundI] = Math.max(maxHeroesHome[roundI], maxHeroesAway[roundI]);
-  }
-
   const tournamentGrid = data.encounter?.tournament?.division_grid_version ?? null;
-
-  const tabsTriggers: ReactNode[] = [];
-  const tabsContent: ReactNode[] = [];
-  Object.keys(data.home_team.players[0].stats).forEach((key) => {
-    if (key != "0") {
-      tabsTriggers.push(
-        <TabsTrigger value={key}>{t("encounters.match.roundTab", { round: key })}</TabsTrigger>
-      );
-    }
-    tabsContent.push(
-      <TabsContent value={key}>
-        <MatchTeamTable
-          team={data.home_team}
-          isHome={true}
-          matchRound={parseInt(key)}
-          maxHeroes={maxHeroes[parseInt(key)]}
-          tournamentGrid={tournamentGrid}
-        />
-        <MatchTeamTable
-          team={data.away_team}
-          isHome={false}
-          matchRound={parseInt(key)}
-          maxHeroes={maxHeroes[parseInt(key)]}
-          tournamentGrid={tournamentGrid}
-        />
-      </TabsContent>
-    );
-  });
 
   return (
     <Dialog>
@@ -139,13 +92,9 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
               </div>
             </Link>
           </div>
-          <Tabs defaultValue="0">
-            <TabsList className="ml-8">
-              <TabsTrigger value="0">{t("encounters.match.allMatch")}</TabsTrigger>
-              {...tabsTriggers}
-            </TabsList>
-            {...tabsContent}
-          </Tabs>
+          <div className="px-4 pb-4">
+            <MatchStatsSection match={data} tournamentGrid={tournamentGrid} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
