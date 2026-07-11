@@ -210,7 +210,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
             : `${stat.avg_10.toFixed(0)}%`
           : formatStatValue(name, stat.avg_10);
       out.push({ name, label: quickLabel(name), value, delta });
-      if (out.length === 3) break;
+      if (out.length === 4) break;
     }
     return out;
   }, [selected, quickLabel]);
@@ -336,7 +336,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
 
       {/* Sticky hero rail (cross-hero compare) + detail, side by side so
           switching heroes never requires a long scroll up/down. */}
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_340px] xl:items-start">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_360px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
           {/* Spotlight */}
           <HeroSpotlight selected={selected} heroVariant={heroVariant} quickStats={quickStats} />

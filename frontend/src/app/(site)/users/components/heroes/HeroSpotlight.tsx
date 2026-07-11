@@ -8,7 +8,7 @@ import type { AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
 import { formatDelta, formatSeconds } from "@/app/(site)/users/components/heroes/utils";
 
-// Quick-stats shown in the spotlight (first 3 present, in this order).
+// Quick-stats shown in the spotlight (first 4 present, in this order).
 export const QUICK_CANDIDATES: LogStatsName[] = [
   LogStatsName.Winrate,
   LogStatsName.KDA,
