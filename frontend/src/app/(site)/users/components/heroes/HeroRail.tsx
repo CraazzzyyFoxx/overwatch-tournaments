@@ -163,7 +163,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
               onClick={() => onSelect(r.id)}
               className={cn(
                 "grid w-full grid-cols-[36px_1fr_auto] items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-left transition-colors hover:bg-[hsl(0_0%_100%/0.025)]",
-                active && "border-l-2 border-l-[color:var(--aqt-teal)] bg-[hsl(174_72%_46%/0.08)] pl-[10px]"
+                active && "border-l-2 border-l-[color:var(--aqt-teal)] bg-[hsl(172_70%_49%/0.08)] pl-[10px]"
               )}
             >
               <HeroImage hero={r.hero} size="md" />

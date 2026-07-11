@@ -96,10 +96,10 @@ const navTriggerClass =
   "data-[state=open]:bg-[hsl(0_0%_100%/0.04)] data-[state=open]:text-[var(--aqt-fg)]";
 
 const navTriggerActiveClass =
-  "bg-[hsl(174_72%_46%/0.1)] text-[var(--aqt-teal)] " +
-  "hover:bg-[hsl(174_72%_46%/0.16)] hover:text-[var(--aqt-teal)] " +
-  "focus:bg-[hsl(174_72%_46%/0.16)] focus:text-[var(--aqt-teal)] " +
-  "data-[state=open]:bg-[hsl(174_72%_46%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
+  "bg-[hsl(172_70%_49%/0.1)] text-[var(--aqt-teal)] " +
+  "hover:bg-[hsl(172_70%_49%/0.16)] hover:text-[var(--aqt-teal)] " +
+  "focus:bg-[hsl(172_70%_49%/0.16)] focus:text-[var(--aqt-teal)] " +
+  "data-[state=open]:bg-[hsl(172_70%_49%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
 
 function isNavGroupActive(
   items: readonly { href: string }[],

@@ -50,7 +50,7 @@ export default function LanguageSwitcher({ className }: { className?: string }) 
       {/* Sliding teal pill — the memorable anchor; marks the active language. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-[3px] left-[3px] w-9 rounded-[calc(var(--aqt-radius-sm)-3px)] bg-[hsl(174_72%_46%/0.12)] ring-1 ring-inset ring-[hsl(174_72%_46%/0.35)] transition-transform duration-200 ease-out motion-reduce:transition-none"
+        className="pointer-events-none absolute inset-y-[3px] left-[3px] w-9 rounded-[calc(var(--aqt-radius-sm)-3px)] bg-[hsl(172_70%_49%/0.12)] ring-1 ring-inset ring-[hsl(172_70%_49%/0.35)] transition-transform duration-200 ease-out motion-reduce:transition-none"
         style={{ transform: `translateX(${activeIndex * SEGMENT_W}px)` }}
       />
       {ORDER.map((loc) => {

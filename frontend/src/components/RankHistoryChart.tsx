@@ -28,10 +28,13 @@ type Granularity = "date" | "hour" | "raw";
 
 type GroupBy = "role" | "battle_tag";
 
+// Design-book role hues (tank=blue, damage=pink, support=green) so this chart
+// matches role colours everywhere else. Concrete hex because recharts applies
+// stroke/fill as SVG attributes, where CSS var() doesn't resolve reliably.
 const ROLE_COLORS: Record<string, string> = {
-  tank: "#f97316",
-  damage: "#ef4444",
-  support: "#22c55e"
+  tank: "#5aa6ef",
+  damage: "#ef6398",
+  support: "#3fcb86"
 };
 
 const PALETTE = ["#2563eb", "#a855f7", "#06b6d4", "#f59e0b", "#ec4899", "#14b8a6"];

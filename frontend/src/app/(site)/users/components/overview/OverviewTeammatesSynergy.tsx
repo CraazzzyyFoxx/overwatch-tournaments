@@ -111,7 +111,7 @@ const NetworkView = ({
           <defs>
             <linearGradient id="syn-edge" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="hsl(38 95% 55% / 0.85)" />
-              <stop offset="1" stopColor="hsl(174 72% 46% / 0.85)" />
+              <stop offset="1" stopColor="hsl(172 70% 49% / 0.85)" />
             </linearGradient>
           </defs>
           {nodes.map(({ tm, left, top: top_, strength }) => (

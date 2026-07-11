@@ -45,31 +45,33 @@
        Tactical" palette (mirrors the global --aqt-* set), so every shadcn
        component (bg-background, bg-card, border-border, bg-primary, ring, …)
        renders in-brand instead of the default neutral greyscale. */
-    --background: 222 30% 6%;
-    --foreground: 210 20% 95%;
-    --muted: 215 16% 13%;
-    --muted-foreground: 215 12% 60%;
-    --popover: 215 20% 8%;
-    --popover-foreground: 210 20% 95%;
-    --card: 215 20% 8%;
-    --card-foreground: 210 20% 95%;
-    --border: 215 20% 12%;
-    --input: 215 20% 12%;
-    --primary: 174 72% 46%;
+    --background: 220 21% 5%;
+    --foreground: 214 33% 96%;
+    --muted: 219 21% 13%;
+    --muted-foreground: 212 13% 65%;
+    --popover: 220 22% 8%;
+    --popover-foreground: 214 33% 96%;
+    --card: 220 22% 8%;
+    --card-foreground: 214 33% 96%;
+    --border: 219 19% 15%;
+    --input: 219 19% 15%;
+    --primary: 172 70% 49%;
     --primary-foreground: 180 20% 8%;
-    --secondary: 215 20% 16%;
-    --secondary-foreground: 210 20% 95%;
-    --accent: 215 20% 16%;
-    --accent-foreground: 210 20% 95%;
-    --destructive: 0 72% 51%;
+    --secondary: 217 17% 21%;
+    --secondary-foreground: 214 33% 96%;
+    --accent: 217 17% 21%;
+    --accent-foreground: 214 33% 96%;
+    /* Loss/live hue (349°) from the book, kept a touch darker than the raw
+       #f0506e so white text on destructive buttons stays legible. */
+    --destructive: 349 75% 51%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 174 72% 46%;
-    /* Chart palette — OW2-inspired categorical hues (was greyscale). */
-    --chart-1: 174 72% 46%;
-    --chart-2: 30 100% 50%;
+    --ring: 172 70% 49%;
+    /* Chart palette — design-book categorical hues (teal/amber/violet/gold/pink). */
+    --chart-1: 172 70% 49%;
+    --chart-2: 36 88% 65%;
     --chart-3: 262 83% 58%;
-    --chart-4: 43 96% 56%;
-    --chart-5: 340 75% 55%;
+    --chart-4: 42 63% 60%;
+    --chart-5: 337 81% 66%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -182,16 +184,16 @@
   --accent-foreground: 210 20% 95%;
   --secondary: 215 24% 20%;
   --secondary-foreground: 210 20% 95%;
-  --primary: 174 72% 46%;
+  --primary: 172 70% 49%;
   --primary-foreground: 180 20% 5%;
   --border: 215 16% 15%;
   --input: 215 16% 15%;
-  --ring: 174 72% 46%;
+  --ring: 172 70% 49%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
   /* Chart palette — OW2 inspired */
-  --chart-1: 174 72% 46%;
+  --chart-1: 172 70% 49%;
   --chart-2: 30 100% 50%;
   --chart-3: 262 83% 58%;
   --chart-4: 43 96% 56%;
@@ -199,12 +201,12 @@
 
   --sidebar: hsl(225 30% 7%);
   --sidebar-foreground: hsl(210 20% 92%);
-  --sidebar-primary: hsl(174 72% 46%);
+  --sidebar-primary: hsl(172 70% 49%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(215 20% 12%);
   --sidebar-accent-foreground: hsl(210 20% 92%);
   --sidebar-border: hsl(215 16% 13%);
-  --sidebar-ring: hsl(174 72% 46%);
+  --sidebar-ring: hsl(172 70% 49%);
 }
 
 /* Player-profile scope. The --aqt-* palette now lives globally on :root (see
@@ -454,8 +456,8 @@
   font-family: var(--aqt-mono);
 }
 .aqt-stage-pill.playoffs {
-  background: hsl(38 95% 55% / 0.08);
-  border-color: hsl(38 95% 55% / 0.25);
+  background: hsl(36 88% 65% / 0.08);
+  border-color: hsl(36 88% 65% / 0.25);
   color: var(--aqt-amber);
 }
 .aqt-stage-pill.group {
@@ -464,8 +466,8 @@
   color: var(--aqt-blue);
 }
 .aqt-stage-pill.finals {
-  background: hsl(340 75% 58% / 0.08);
-  border-color: hsl(340 75% 58% / 0.25);
+  background: hsl(349 84% 63% / 0.08);
+  border-color: hsl(349 84% 63% / 0.25);
   color: var(--aqt-rose);
 }
 
@@ -572,8 +574,8 @@
   color: var(--aqt-fg);
 }
 .aqt-filter-chip.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--aqt-teal);
 }
 .aqt-filter-chip .aqt-count {
@@ -585,7 +587,7 @@
   border-radius: 4px;
 }
 .aqt-filter-chip.active .aqt-count {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--aqt-teal);
 }
 .aqt-filter-divider {
@@ -616,7 +618,7 @@
 }
 .aqt-place-spark .aqt-bar {
   width: 100%;
-  background: linear-gradient(180deg, var(--aqt-teal), hsl(174 72% 46% / 0.35));
+  background: linear-gradient(180deg, var(--aqt-teal), hsl(172 70% 49% / 0.35));
   border-radius: 3px 3px 0 0;
   transition: 0.15s;
   min-height: 4px;
@@ -625,7 +627,7 @@
   filter: brightness(1.2);
 }
 .aqt-place-spark .aqt-col.podium .aqt-bar {
-  background: linear-gradient(180deg, var(--aqt-amber), hsl(38 95% 55% / 0.4));
+  background: linear-gradient(180deg, var(--aqt-amber), hsl(36 88% 65% / 0.4));
 }
 .aqt-place-spark .aqt-col.first .aqt-bar {
   background: linear-gradient(180deg, hsl(45 95% 60%), hsl(38 90% 48%));
@@ -1050,8 +1052,8 @@
 }
 .aqt-ach-card .aqt-stamp.x {
   color: var(--aqt-teal);
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.28);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.28);
 }
 
 /* radar */
@@ -1068,7 +1070,7 @@
   stroke-width: 1.2;
 }
 .aqt-radar-you {
-  fill: hsl(174 72% 46% / 0.22);
+  fill: hsl(172 70% 49% / 0.22);
   stroke: var(--aqt-teal);
   stroke-width: 1.8;
 }
@@ -1099,10 +1101,10 @@
   border-left: 3px solid var(--aqt-amber);
 }
 .aqt-t-item.podium {
-  border-left: 3px solid hsl(38 95% 55% / 0.5);
+  border-left: 3px solid hsl(36 88% 65% / 0.5);
 }
 .aqt-t-item.expanded {
-  background: hsl(174 72% 46% / 0.04);
+  background: hsl(172 70% 49% / 0.04);
   border-bottom-color: transparent;
 }
 
@@ -1216,27 +1218,34 @@
    .aqt-* component library + new redesign pages can use them globally.
    ═══════════════════════════════════════════════════════════════════════ */
 :root {
-  --aqt-bg: hsl(222 30% 6%);
-  --aqt-bg-2: hsl(215 22% 7%);
-  --aqt-card: hsl(215 20% 8%);
-  --aqt-card-2: hsl(215 22% 9%);
-  --aqt-border: hsl(215 20% 12%);
-  --aqt-border-2: hsl(215 20% 16%);
-  --aqt-border-3: hsl(215 20% 20%);
-  --aqt-fg: hsl(210 20% 95%);
-  --aqt-fg-muted: hsl(215 12% 60%);
-  --aqt-fg-dim: hsl(215 12% 40%);
-  --aqt-fg-faint: hsl(215 12% 30%);
-  --aqt-teal: hsl(174 72% 46%);
-  --aqt-emerald: hsl(142 70% 50%);
-  --aqt-amber: hsl(38 95% 55%);
-  --aqt-rose: hsl(340 75% 58%);
+  /* Values are the design-book palette (public/docs/design-book.html :root),
+     converted hex→HSL. bg/surface/line ladder, text ramp, brand + role/result
+     hues all mirror the book. Note "Results ≠ roles": --aqt-damage (dps 337°)
+     is intentionally distinct from --aqt-rose (loss/live 349°). */
+  --aqt-bg: hsl(220 21% 5%);
+  --aqt-bg-2: hsl(220 22% 7%);
+  --aqt-card: hsl(220 22% 8%);
+  --aqt-card-2: hsl(222 24% 11%);
+  --aqt-border: hsl(219 19% 15%);
+  --aqt-border-2: hsl(217 17% 21%);
+  --aqt-border-3: hsl(216 16% 26%);
+  --aqt-fg: hsl(214 33% 96%);
+  --aqt-fg-muted: hsl(212 13% 65%);
+  --aqt-fg-dim: hsl(213 9% 46%);
+  --aqt-fg-faint: hsl(214 10% 34%);
+  --aqt-teal: hsl(172 70% 49%);
+  --aqt-teal-deep: hsl(173 81% 32%);
+  --aqt-emerald: hsl(150 57% 52%);
+  --aqt-amber: hsl(36 88% 65%);
+  --aqt-rose: hsl(349 84% 63%);
   --aqt-violet: hsl(270 70% 62%);
-  --aqt-blue: hsl(210 80% 60%);
-  --aqt-gold: hsl(45 90% 60%);
-  --aqt-tank: hsl(210 78% 60%);
-  --aqt-damage: hsl(340 78% 60%);
-  --aqt-support: hsl(142 60% 52%);
+  --aqt-blue: hsl(215 83% 66%);
+  --aqt-gold: hsl(42 63% 60%);
+  --aqt-silver: hsl(212 21% 73%);
+  --aqt-bronze: hsl(26 49% 54%);
+  --aqt-tank: hsl(209 82% 65%);
+  --aqt-damage: hsl(337 81% 66%);
+  --aqt-support: hsl(150 57% 52%);
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
   --aqt-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
@@ -1246,7 +1255,7 @@
      restrained teal glow. The spectrum is the single sanctioned multi-hue
      accent — everywhere else, one teal leads. */
   --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
-  --aqt-hero-glow: radial-gradient(ellipse at 30% 45%, hsl(174 72% 46% / 0.1), transparent 60%);
+  --aqt-hero-glow: radial-gradient(ellipse at 30% 45%, hsl(172 70% 49% / 0.1), transparent 60%);
 }
 
 /* Page-hero title accent — role-spectrum gradient text. Callers wrap the
@@ -1351,7 +1360,7 @@
   left: -5%;
   width: 65%;
   height: 130%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18), transparent 62%);
+  background: radial-gradient(ellipse at 30% 50%, hsl(172 70% 49% / 0.18), transparent 62%);
   pointer-events: none;
 }
 .aqt-tn .glow-2 {
@@ -1360,7 +1369,7 @@
   right: 0;
   width: 55%;
   height: 100%;
-  background: radial-gradient(ellipse at 70% 30%, hsl(340 75% 58% / 0.1), transparent 58%);
+  background: radial-gradient(ellipse at 70% 30%, hsl(349 84% 63% / 0.1), transparent 58%);
   pointer-events: none;
 }
 .aqt-tn .hero-grid {
@@ -1420,7 +1429,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   margin-right: 6px;
   vertical-align: middle;
@@ -1460,12 +1469,12 @@
   color: var(--fg);
 }
 .aqt-tn .tn-btn.primary {
-  background: hsl(174 72% 46% / 0.14);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.14);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--teal);
 }
 .aqt-tn .tn-btn.primary:hover {
-  background: hsl(174 72% 46% / 0.2);
+  background: hsl(172 70% 49% / 0.2);
 }
 .aqt-tn .tn-btn .kbd {
   font-family: var(--mono);
@@ -1506,8 +1515,8 @@
   color: var(--fg);
 }
 .aqt-tn .filter-chip.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--teal);
 }
 .aqt-tn .filter-chip .count {
@@ -1519,7 +1528,7 @@
   border-radius: 4px;
 }
 .aqt-tn .filter-chip.active .count {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--teal);
 }
 .aqt-tn .filter-chip .dot {
@@ -1529,7 +1538,7 @@
 }
 .aqt-tn .filter-chip .dot.live {
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
 }
 .aqt-tn .filter-chip .dot.upcoming {
   background: var(--amber);
@@ -1646,21 +1655,21 @@
   background: var(--card-2);
 }
 .aqt-tn .feat-card.live {
-  border-color: hsl(340 75% 58% / 0.25);
+  border-color: hsl(349 84% 63% / 0.25);
 }
 .aqt-tn .feat-card.live:hover {
-  border-color: hsl(340 75% 58% / 0.4);
+  border-color: hsl(349 84% 63% / 0.4);
 }
 .aqt-tn .feat-glow {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at 0% 0%, hsl(340 75% 58% / 0.14), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, hsl(174 72% 46% / 0.08), transparent 55%);
+  background: radial-gradient(ellipse at 0% 0%, hsl(349 84% 63% / 0.14), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, hsl(172 70% 49% / 0.08), transparent 55%);
 }
 .aqt-tn .feat-card.upcoming .feat-glow {
-  background: radial-gradient(ellipse at 0% 0%, hsl(38 95% 55% / 0.1), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, hsl(174 72% 46% / 0.06), transparent 60%);
+  background: radial-gradient(ellipse at 0% 0%, hsl(36 88% 65% / 0.1), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, hsl(172 70% 49% / 0.06), transparent 60%);
 }
 .aqt-tn .feat-hex {
   position: absolute;
@@ -1712,22 +1721,22 @@
   font-family: Inter, sans-serif;
 }
 .aqt-tn .status-pill.live {
-  background: hsl(340 75% 58% / 0.14);
+  background: hsl(349 84% 63% / 0.14);
   color: var(--rose);
-  border: 1px solid hsl(340 75% 58% / 0.3);
+  border: 1px solid hsl(349 84% 63% / 0.3);
 }
 .aqt-tn .status-pill.live .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
 }
 .aqt-tn .status-pill.upcoming {
-  background: hsl(38 95% 55% / 0.12);
+  background: hsl(36 88% 65% / 0.12);
   color: var(--amber);
-  border: 1px solid hsl(38 95% 55% / 0.3);
+  border: 1px solid hsl(36 88% 65% / 0.3);
 }
 .aqt-tn .status-pill.finished {
   background: hsl(215 12% 40% / 0.18);
@@ -2054,7 +2063,7 @@
   font-family: Inter, sans-serif;
 }
 .aqt-tn .tn-status.live {
-  background: hsl(340 75% 58% / 0.14);
+  background: hsl(349 84% 63% / 0.14);
   color: var(--rose);
 }
 .aqt-tn .tn-status.live .dot {
@@ -2062,11 +2071,11 @@
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 2.5px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 2.5px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
 }
 .aqt-tn .tn-status.upcoming {
-  background: hsl(38 95% 55% / 0.12);
+  background: hsl(36 88% 65% / 0.12);
   color: var(--amber);
 }
 .aqt-tn .tn-status.upcoming .dot {
@@ -2252,8 +2261,8 @@
   color: var(--fg);
 }
 .aqt-tn .page-btn.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--teal);
 }
 .aqt-tn .page-btn.disabled {
@@ -2291,7 +2300,7 @@
 .aqt-tn .tn-hero {
   position: relative;
   overflow: hidden;
-  border: 1px solid hsl(340 75% 58% / 0.25);
+  border: 1px solid hsl(349 84% 63% / 0.25);
   border-radius: 14px;
   padding: 28px 36px 24px;
   background: var(--bg);
@@ -2300,7 +2309,7 @@
   border-color: var(--border-2);
 }
 .aqt-tn .tn-hero.status-upcoming {
-  border-color: hsl(38 95% 55% / 0.28);
+  border-color: hsl(36 88% 65% / 0.28);
 }
 .aqt-tn .tn-hero.status-draft {
   border-color: hsl(210 80% 60% / 0.24);
@@ -2311,7 +2320,7 @@
   left: -10%;
   width: 60%;
   height: 160%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(340 75% 58% / 0.18), transparent 60%);
+  background: radial-gradient(ellipse at 30% 50%, hsl(349 84% 63% / 0.18), transparent 60%);
   pointer-events: none;
 }
 .aqt-tn .glow-teal {
@@ -2320,7 +2329,7 @@
   right: -5%;
   width: 55%;
   height: 130%;
-  background: radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.14), transparent 60%);
+  background: radial-gradient(ellipse at 70% 40%, hsl(172 70% 49% / 0.14), transparent 60%);
   pointer-events: none;
 }
 .aqt-tn .tn-hero-inner {
@@ -2473,14 +2482,14 @@
 }
 .aqt-tn .tab.active .count {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
 }
 .aqt-tn .tab .live-tag {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   margin-left: 2px;
 }
@@ -2553,9 +2562,9 @@
   color: var(--fg);
 }
 .aqt-tn .stage-tab.active {
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
-  box-shadow: inset 0 0 0 1px hsl(174 72% 46% / 0.3);
+  box-shadow: inset 0 0 0 1px hsl(172 70% 49% / 0.3);
 }
 .aqt-tn .stage-tab .count {
   font-family: var(--mono);
@@ -2567,7 +2576,7 @@
 }
 .aqt-tn .stage-tab.active .count {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
 }
 
 .aqt-tn .groups-layout {
@@ -2609,7 +2618,7 @@
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
   font-family: var(--display);
   font-weight: 800;
@@ -2748,8 +2757,8 @@
   cursor: default;
 }
 .aqt-tn .st-footer .badge:hover {
-  background: hsl(174 72% 46% / 0.08);
-  border-color: hsl(174 72% 46% / 0.2);
+  background: hsl(172 70% 49% / 0.08);
+  border-color: hsl(172 70% 49% / 0.2);
   color: var(--teal);
 }
 @media (max-width: 640px) {
@@ -2775,10 +2784,10 @@
   text-align: center;
 }
 .aqt-tn table.st tr.advance {
-  background: hsl(174 72% 46% / 0.05);
+  background: hsl(172 70% 49% / 0.05);
 }
 .aqt-tn table.st tr.advance:hover td {
-  background: hsl(174 72% 46% / 0.09);
+  background: hsl(172 70% 49% / 0.09);
 }
 .aqt-tn table.st tr.crown {
   background: hsl(45 90% 60% / 0.06);
@@ -2905,7 +2914,7 @@
 }
 .aqt-tn .st-maps .bar .l {
   height: 100%;
-  background: hsl(340 75% 58% / 0.4);
+  background: hsl(349 84% 63% / 0.4);
 }
 .aqt-tn .st-diff {
   font-family: var(--mono);
@@ -2942,7 +2951,7 @@
   background: var(--emerald);
 }
 .aqt-tn .form-chips .fc.l {
-  background: hsl(340 75% 58% / 0.7);
+  background: hsl(349 84% 63% / 0.7);
   color: hsl(0 0% 100%);
 }
 .aqt-tn .form-chips .fc.t {
@@ -2961,7 +2970,7 @@
   font-family: Inter, sans-serif;
 }
 .aqt-tn .st-status.adv {
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
 }
 .aqt-tn .st-status.adv .arrow {
@@ -2989,7 +2998,7 @@
   left: 14px;
   right: 14px;
   top: 0;
-  border-top: 1.5px dashed hsl(174 72% 46% / 0.4);
+  border-top: 1.5px dashed hsl(172 70% 49% / 0.4);
 }
 .aqt-tn .st-cut::after {
   content: attr(data-label);
@@ -3181,9 +3190,9 @@
   --fg-muted: var(--aqt-fg-muted, hsl(215 12% 60%));
   --fg-dim: var(--aqt-fg-dim, hsl(215 12% 40%));
   --fg-faint: var(--aqt-fg-faint, hsl(215 12% 30%));
-  --teal: var(--aqt-teal, hsl(174 72% 46%));
-  --rose: var(--aqt-rose, hsl(340 75% 58%));
-  --amber: var(--aqt-amber, hsl(38 95% 55%));
+  --teal: var(--aqt-teal, hsl(172 70% 49%));
+  --rose: var(--aqt-rose, hsl(349 84% 63%));
+  --amber: var(--aqt-amber, hsl(36 88% 65%));
   --mono: var(--aqt-mono, "JetBrains Mono", ui-monospace, monospace);
   --display: var(--aqt-display, "Barlow Condensed", Inter, system-ui, sans-serif);
   color: var(--fg);
@@ -3263,10 +3272,10 @@
   border-bottom: 0;
 }
 .aqt-matches table.m tbody tr.live td {
-  background: hsl(340 75% 58% / 0.045);
+  background: hsl(349 84% 63% / 0.045);
 }
 .aqt-matches table.m tbody tr.live:hover td {
-  background: hsl(340 75% 58% / 0.08);
+  background: hsl(349 84% 63% / 0.08);
 }
 .aqt-matches table.m td.r {
   text-align: right;
@@ -3312,7 +3321,7 @@
   font-weight: 700;
 }
 .aqt-matches .m-up .row.winner .av {
-  box-shadow: 0 0 0 1.5px hsl(174 72% 46% / 0.6);
+  box-shadow: 0 0 0 1.5px hsl(172 70% 49% / 0.6);
 }
 .aqt-matches .m-up .row.loser .av {
   opacity: 0.6;
@@ -3418,8 +3427,8 @@
 }
 .aqt-matches .m-media .pill.has {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.08);
-  border-color: hsl(174 72% 46% / 0.25);
+  background: hsl(172 70% 49% / 0.08);
+  border-color: hsl(172 70% 49% / 0.25);
 }
 .aqt-matches .m-media .pill.empty {
   opacity: 0.4;
@@ -3429,7 +3438,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   display: inline-block;
 }

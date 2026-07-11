@@ -8,7 +8,7 @@
   --enc-muted: hsl(215 12% 60%);
   --enc-dim: hsl(215 12% 40%);
   --enc-faint: hsl(215 12% 30%);
-  --enc-teal: hsl(174 72% 46%);
+  --enc-teal: hsl(172 70% 49%);
   --enc-emerald: hsl(142 70% 50%);
   --enc-amber: hsl(38 95% 55%);
   --enc-rose: hsl(340 75% 58%);
@@ -156,8 +156,8 @@
 }
 
 .viewTabActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
 }
 
@@ -184,7 +184,7 @@
 }
 
 .viewTabActive .viewCount {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
   color: var(--enc-teal);
 }
 
@@ -198,8 +198,8 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  background: hsl(174 72% 46% / 0.1);
-  border: 1px dashed hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.1);
+  border: 1px dashed hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   font-size: 12px;
   font-weight: 600;
@@ -210,7 +210,7 @@
 }
 
 .viewSave:hover:not(:disabled) {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
 }
 
 .viewSave:disabled {
@@ -287,8 +287,8 @@
 }
 
 .filterChipActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--enc-teal);
 }
 
@@ -302,7 +302,7 @@
 }
 
 .filterChipActive .filterChipCount {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--enc-teal);
 }
 
@@ -460,7 +460,7 @@
 
 .histBar {
   flex: 1;
-  background: linear-gradient(180deg, var(--enc-teal), hsl(174 72% 46% / 0.4));
+  background: linear-gradient(180deg, var(--enc-teal), hsl(172 70% 49% / 0.4));
   border-radius: 4px 4px 2px 2px;
   position: relative;
   cursor: pointer;
@@ -521,7 +521,7 @@
   color: var(--enc-fg);
   font-weight: 600;
   font-size: 11px;
-  background: hsl(174 72% 46% / var(--alpha, 0.12));
+  background: hsl(172 70% 49% / var(--alpha, 0.12));
 }
 
 .scoreCellEmpty {
@@ -543,7 +543,7 @@
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(90deg, hsl(174 72% 46% / 0.08), hsl(174 72% 46% / 0.7));
+  background: linear-gradient(90deg, hsl(172 70% 49% / 0.08), hsl(172 70% 49% / 0.7));
 }
 
 /* Donut chart */
@@ -676,9 +676,9 @@
 }
 
 .tgTeal {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
   color: var(--enc-teal);
-  border: 1px solid hsl(174 72% 46% / 0.3);
+  border: 1px solid hsl(172 70% 49% / 0.3);
 }
 
 .tgAmber {
@@ -744,8 +744,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: hsl(174 72% 46% / 0.12);
-  border: 1px solid hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border: 1px solid hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   font-size: 10px;
   font-weight: 700;
@@ -987,7 +987,7 @@
 
 .closenessFill {
   height: 100%;
-  background: linear-gradient(90deg, hsl(174 72% 46%), hsl(38 95% 55%));
+  background: linear-gradient(90deg, hsl(172 70% 49%), hsl(38 95% 55%));
   border-radius: 2px;
 }
 
@@ -1141,8 +1141,8 @@
 }
 
 .pageBtnActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   cursor: default;
 }

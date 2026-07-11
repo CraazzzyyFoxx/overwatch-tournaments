@@ -10,7 +10,7 @@
   --draft-muted: var(--aqt-fg-muted, hsl(215 12% 60%));
   --draft-dim: var(--aqt-fg-dim, hsl(215 12% 40%));
   --draft-faint: var(--aqt-fg-faint, hsl(215 12% 30%));
-  --draft-teal: var(--aqt-teal, hsl(174 72% 46%));
+  --draft-teal: var(--aqt-teal, hsl(172 70% 49%));
   --draft-emerald: var(--aqt-emerald, hsl(142 70% 50%));
   --draft-amber: var(--aqt-amber, hsl(38 95% 55%));
   --draft-rose: var(--aqt-rose, hsl(340 75% 58%));
@@ -104,7 +104,7 @@
   left: -6%;
   width: 56%;
   height: 145%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.16), transparent 62%);
+  background: radial-gradient(ellipse at 30% 50%, hsl(172 70% 49% / 0.16), transparent 62%);
 }
 
 .glowTwo {
@@ -399,8 +399,8 @@
 
 .status_completed {
   color: var(--draft-teal);
-  border-color: hsl(174 72% 46% / 0.3);
-  background: hsl(174 72% 46% / 0.08);
+  border-color: hsl(172 70% 49% / 0.3);
+  background: hsl(172 70% 49% / 0.08);
 }
 
 .status_cancelled {
@@ -472,7 +472,7 @@
 
 .actionPrimary {
   color: hsl(180 20% 5%);
-  border-color: hsl(174 72% 46% / 0.6);
+  border-color: hsl(172 70% 49% / 0.6);
   background: var(--draft-teal);
 }
 
@@ -516,13 +516,13 @@
 }
 
 .bannerPick {
-  border-color: hsl(174 72% 46% / 0.28);
-  background: hsl(174 72% 46% / 0.055);
+  border-color: hsl(172 70% 49% / 0.28);
+  background: hsl(172 70% 49% / 0.055);
 }
 
 .bannerPick .bannerIcon {
   color: var(--draft-teal);
-  background: hsl(174 72% 46% / 0.12);
+  background: hsl(172 70% 49% / 0.12);
 }
 
 .bannerAdmin {
@@ -858,9 +858,9 @@
 
 .selectedCard {
   margin-bottom: 10px;
-  border: 1px solid hsl(174 72% 46% / 0.26);
+  border: 1px solid hsl(172 70% 49% / 0.26);
   border-radius: 12px;
-  background: linear-gradient(135deg, hsl(174 72% 46% / 0.07), hsl(210 80% 60% / 0.04));
+  background: linear-gradient(135deg, hsl(172 70% 49% / 0.07), hsl(210 80% 60% / 0.04));
 }
 
 .selectedEmpty {
@@ -907,7 +907,7 @@
   width: 58px;
   height: 58px;
   place-items: center;
-  border: 1px solid hsl(174 72% 46% / 0.45);
+  border: 1px solid hsl(172 70% 49% / 0.45);
   border-radius: 12px;
   background: linear-gradient(135deg, hsl(215 30% 20%), hsl(215 28% 10%));
   color: var(--draft-fg);
@@ -1216,9 +1216,9 @@
 }
 
 .teamCardMine {
-  border-color: hsl(174 72% 46% / 0.6);
-  background: linear-gradient(135deg, hsl(174 72% 46% / 0.04), var(--draft-card));
-  box-shadow: 0 4px 20px hsl(174 72% 46% / 0.1), inset 0 0 0 1px hsl(174 72% 46% / 0.22);
+  border-color: hsl(172 70% 49% / 0.6);
+  background: linear-gradient(135deg, hsl(172 70% 49% / 0.04), var(--draft-card));
+  box-shadow: 0 4px 20px hsl(172 70% 49% / 0.1), inset 0 0 0 1px hsl(172 70% 49% / 0.22);
 }
 
 .teamCardHead {
@@ -1474,7 +1474,7 @@
   gap: 14px;
   width: min(760px, calc(100% - 24px));
   margin: 0 auto;
-  border: 1px solid hsl(174 72% 46% / 0.34);
+  border: 1px solid hsl(172 70% 49% / 0.34);
   border-radius: 12px;
   background: hsl(215 22% 8% / 0.92);
   box-shadow: 0 18px 60px hsl(0 0% 0% / 0.34);
@@ -1763,8 +1763,8 @@
 }
 
 .bottomPanelActive {
-  border-color: hsl(174 72% 46% / 0.34);
-  box-shadow: 0 20px 50px hsl(174 72% 46% / 0.15), 0 0 0 1px hsl(174 72% 46% / 0.1);
+  border-color: hsl(172 70% 49% / 0.34);
+  box-shadow: 0 20px 50px hsl(172 70% 49% / 0.15), 0 0 0 1px hsl(172 70% 49% / 0.1);
 }
 
 .bottomTimerRing {

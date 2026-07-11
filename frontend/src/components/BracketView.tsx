@@ -785,7 +785,7 @@ export function BracketView({
                 key={edge.id}
                 d={edge.path}
                 stroke={
-                  edge.isCompleted ? "hsl(174 72% 46% / 0.55)" : "hsl(0 0% 100% / 0.12)"
+                  edge.isCompleted ? "hsl(172 70% 49% / 0.55)" : "hsl(0 0% 100% / 0.12)"
                 }
                 strokeWidth="2"
                 strokeLinecap="round"
