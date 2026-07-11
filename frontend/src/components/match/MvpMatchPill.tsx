@@ -3,12 +3,12 @@
 import React from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MvpPill, formatOverperformance, mvpRank, ordinal, resolveMvpPlacement } from "@/components/match/cells";
 import { cn } from "@/lib/utils";
 import type { MatchWithUserStats } from "@/types/user.types";
 
-/** One "<label> … <rank chip>" line in the popover. Shows an em dash when the rank is absent. */
+/** One "<label> … <rank chip>" line in the card. Shows an em dash when the rank is absent. */
 const RankRow = ({ label, rank }: { label: string; rank: number | null | undefined }) => (
   <div className="flex items-center justify-between gap-3">
     <span className="text-xs text-muted-foreground">{label}</span>
@@ -23,10 +23,11 @@ const RankRow = ({ label, rank }: { label: string; rank: number | null | undefin
 /**
  * MVP-placement pill for a single map. The anchor shows the OFFICIAL placement
  * on the 1 (best) … 10 (worst) scale — the new impact rank when computed,
- * falling back to legacy performance. Clicking opens a popover that compares
- * the old rank, the new rank, and how much better/worse than expected the
- * player performed (overperformance). Renders nothing when the match has no
- * recorded placement.
+ * falling back to legacy performance. Hovering opens a card that compares the
+ * old rank, the new rank, and how much better/worse than expected the player
+ * performed (overperformance). Requires a <TooltipProvider> ancestor (the
+ * profile match/encounter rows provide one). Renders nothing when the match
+ * has no recorded placement.
  */
 export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
   const t = useTranslations();
@@ -37,17 +38,17 @@ export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
   const over = formatOverperformance(match.overperformance_score);
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={t("users.matches.mvp.title")}
-          className="inline-flex rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-default">
           <MvpPill rank={mvpRank(placement)} label={ordinal(placement)} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 overflow-hidden p-0">
+        </span>
+      </TooltipTrigger>
+      {/* Override the tooltip's default solid-primary surface with the popover card look. */}
+      <TooltipContent
+        align="start"
+        className="w-64 overflow-hidden border bg-popover p-0 text-popover-foreground shadow-md"
+      >
         {map ? (
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <span className="truncate text-[13px] font-semibold text-foreground">{map.name}</span>
@@ -81,8 +82,8 @@ export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
             </div>
           ) : null}
         </div>
-      </PopoverContent>
-    </Popover>
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
