@@ -1092,7 +1092,11 @@ async def get_match_kill_feed(
     )
 
     ev = models.MatchEvent
-    timeline_events = (enums.MatchEvent.UltimateStart, enums.MatchEvent.MercyRez)
+    timeline_events = (
+        enums.MatchEvent.UltimateStart,
+        enums.MatchEvent.UltimateEnd,
+        enums.MatchEvent.MercyRez,
+    )
     events_query = (
         sa.select(ev, models.Hero)
         .outerjoin(models.Hero, models.Hero.id == ev.hero_id)

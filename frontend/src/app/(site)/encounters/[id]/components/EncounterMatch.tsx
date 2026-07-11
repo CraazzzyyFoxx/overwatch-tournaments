@@ -28,73 +28,60 @@ const EncounterMatch = async ({ match }: { match: Match }) => {
           </h4>
         </Card>
       </DialogTrigger>
-      <DialogContent className="xl:min-w-fit min-h-fit p-0">
+      <DialogContent className="flex max-h-[90vh] w-[95vw] max-w-[1100px] flex-col gap-0 overflow-hidden p-0">
         <VisuallyHidden>
           <DialogHeader />
         </VisuallyHidden>
-        <div className="flex flex-col">
-          <div className="flex justify-between items-center p-4 mr-16">
-            <div className="flex flex-row gap-8 items-center">
-              <div className="flex flex-row gap-4 items-center">
-                <Image
-                  src={data.map?.gamemode.image_path || ""}
-                  alt={data.map?.gamemode.name || t("encounters.match.gamemodeAlt")}
-                  height={40}
-                  width={40}
-                />
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                  {data.map?.name}
-                </h4>
-              </div>
-              <div className="flex flex-row gap-4">
-                <div className="flex flex-col text-right">
-                  <p className="leading-7 text-[color:var(--aqt-teal)]">{data.home_team.name}</p>
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
-                    {data.score.home}
-                  </h4>
-                </div>
-                <div className="flex items-end">
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">:</h4>
-                </div>
-                <div className="flex flex-col text-left">
-                  <p className="leading-7  text-[color:var(--aqt-rose)]">{data.away_team.name}</p>
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
-                    {data.score.away}
-                  </h4>
-                </div>
-              </div>
-              <div className="flex flex-row gap-4">
-                <div className="flex flex-col text-right">
-                  <p className="leading-7">{t("encounters.match.playtime")}</p>
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                    {Math.floor(match.time / 60)}m {(match.time % 60).toFixed(0)}s
-                  </h4>
-                </div>
-              </div>
-
-              <div className="flex flex-col text-right">
-                <p className="leading-7">{t("encounters.match.logName")}</p>
-                <div className="flex items-center justify-end gap-2">
-                  <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
-                    {match.log_name}
-                  </h4>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] p-4 pr-14">
+            <div className="flex items-center gap-2.5">
+              <Image
+                src={data.map?.gamemode.image_path || ""}
+                alt={data.map?.gamemode.name || t("encounters.match.gamemodeAlt")}
+                height={32}
+                width={32}
+              />
+              <h4 className="text-lg font-semibold tracking-tight">{data.map?.name}</h4>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="max-w-[160px] truncate text-sm font-semibold text-[color:var(--aqt-teal)]">
+                {data.home_team.name}
+              </span>
+              <span className="aqt-tnum text-xl font-bold text-[color:var(--aqt-teal)]">{data.score.home}</span>
+              <span className="text-[color:var(--aqt-fg-dim)]">:</span>
+              <span className="aqt-tnum text-xl font-bold text-[color:var(--aqt-rose)]">{data.score.away}</span>
+              <span className="max-w-[160px] truncate text-sm font-semibold text-[color:var(--aqt-rose)]">
+                {data.away_team.name}
+              </span>
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[color:var(--aqt-fg-muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-[color:var(--aqt-fg-faint)]">{t("encounters.match.playtime")}</span>
+                <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
+                  {Math.floor(match.time / 60)}m {(match.time % 60).toFixed(0)}s
+                </span>
+              </span>
+              {match.log_name ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="aqt-tnum">{match.log_name}</span>
                   <MatchLogIndicator
                     hasLogs={Boolean(match.log_name)}
-                    logs={match.log_name ? [{ matchId: match.id, label: match.map?.name ?? undefined }] : undefined}
+                    logs={[{ matchId: match.id, label: match.map?.name ?? undefined }]}
                   />
-                </div>
-              </div>
+                </span>
+              ) : null}
+              <Link
+                href={`/matches/${data.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-[color:var(--aqt-teal)] hover:underline"
+              >
+                <ExternalLink className="h-4 w-4" />
+                <span className="hidden sm:inline">{t("encounters.match.openNewTab")}</span>
+              </Link>
             </div>
-            <Link href={`/matches/${data.id}`} target="_blank" rel="noopener noreferrer">
-              <div className="flex gap-2 scroll-m-20 text-xl font-semibold tracking-tight">
-                <ExternalLink />
-                {t("encounters.match.openNewTab")}
-              </div>
-            </Link>
           </div>
-          <div className="px-4 pb-4">
-            <MatchStatsSection match={data} tournamentGrid={tournamentGrid} />
-          </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <MatchStatsSection match={data} tournamentGrid={tournamentGrid} />
         </div>
       </DialogContent>
     </Dialog>

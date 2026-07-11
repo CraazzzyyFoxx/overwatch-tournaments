@@ -20,15 +20,47 @@ from src import models
 from src.core import enums
 
 __all__ = (
+    "FIGHT_GAP_SECONDS",
     "BaselineSet",
     "ImpactContext",
     "PlayerRef",
     "add_impact_scores",
+    "assign_fights",
     "build_event_counts",
     "dominant_roles",
 )
 
 _EVENT_COLS = list(EVENT_STATS)
+
+#: A new "fight" (teamfight cluster) starts after a lull longer than this many
+#: seconds between consecutive kills — or at any round boundary (see
+#: :func:`assign_fights`). Fights feed first_picks / first_deaths in scoring.
+FIGHT_GAP_SECONDS = 15.0
+
+
+def assign_fights(kill_feed: Sequence[models.MatchKillFeed]) -> None:
+    """Assign 1-indexed ``fight`` ids in place (mutates each row's ``.fight``).
+
+    A new fight begins on a **new round** OR after a gap longer than
+    ``FIGHT_GAP_SECONDS`` between consecutive kills. Kills are ordered by time
+    first; ``round`` is monotonic in time (``round_number`` = RoundStart
+    cumsum), so a round change is a hard fight boundary and a fight never spans
+    rounds.
+
+    Shared by the live parser pipeline (``flows.process_kills``) and the history
+    backfill so both agree on fight boundaries — this matters because fights
+    determine first_picks / first_deaths, which feed impact scoring. Deterministic,
+    so re-running the backfill produces identical fight ids (idempotent).
+    """
+    fight = 0
+    prev: models.MatchKillFeed | None = None
+    for kill in sorted(kill_feed, key=lambda k: k.time):
+        if prev is None:
+            fight = 1
+        elif kill.round != prev.round or (kill.time - prev.time) > FIGHT_GAP_SECONDS:
+            fight += 1
+        kill.fight = fight
+        prev = kill
 
 
 @dataclass(frozen=True)

@@ -89,7 +89,7 @@ const MatchTeamTable = ({
           <TableHead
             className="min-w-[220px] sticky left-0 z-5"
             style={{
-              background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 26%, var(--aqt-bg)), color-mix(in srgb, ${teamAccent} 12%, var(--aqt-bg)) 60%)`
+              background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 26%, var(--aqt-card)), color-mix(in srgb, ${teamAccent} 12%, var(--aqt-card)) 60%)`
             }}
           >
             {t("matches.teamLabel", { name: team.name })}
@@ -119,7 +119,7 @@ const MatchTeamTable = ({
               <TableCell
                 className="flex flex-row items-center gap-2 min-w-[220px] sticky left-0 z-10"
                 style={{
-                  background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, var(--aqt-bg)), var(--aqt-bg) 60%)`
+                  background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, var(--aqt-card)), var(--aqt-card) 60%)`
                 }}
               >
                 <PlayerRoleIcon role={player.role} />

@@ -448,13 +448,9 @@ class MatchLogProcessor:
         if not kill_feed_objects:
             return []
 
-        current_fight_id = 1
-        kill_feed_objects[0].fight = current_fight_id
-        for i in range(1, len(kill_feed_objects)):
-            if kill_feed_objects[i].time - kill_feed_objects[i - 1].time > 15:
-                current_fight_id += 1
-            kill_feed_objects[i].fight = current_fight_id
-
+        # Cluster kills into fights (new round OR >15s lull). Shared with the
+        # history backfill so live and backfilled first_picks/impact agree.
+        impact.assign_fights(kill_feed_objects)
         return kill_feed_objects
 
     def _format_match_event_generic(

@@ -47,6 +47,34 @@ def _kill(
 HERO_TYPES = {1: DAMAGE, 2: SUPPORT, 3: TANK}
 
 
+class TestAssignFights:
+    def test_new_fight_on_gap_and_round_change(self):
+        feed = [
+            _kill(time=1.0, rnd=1),
+            _kill(time=5.0, rnd=1),  # same fight: 4s gap, same round
+            _kill(time=25.0, rnd=1),  # new fight: 20s gap (>15) same round
+            _kill(time=30.0, rnd=2),  # new fight: round change (even though 5s gap)
+            _kill(time=31.0, rnd=2),  # same fight
+        ]
+        impact.assign_fights(feed)
+        assert [k.fight for k in feed] == [1, 1, 2, 3, 3]
+
+    def test_round_change_within_gap_still_splits(self):
+        # <15s apart but different rounds → still a hard fight boundary.
+        feed = [_kill(time=100.0, rnd=1), _kill(time=105.0, rnd=2)]
+        impact.assign_fights(feed)
+        assert [k.fight for k in feed] == [1, 2]
+
+    def test_orders_by_time_before_assigning(self):
+        later = _kill(time=30.0, rnd=1)
+        earlier = _kill(time=1.0, rnd=1)
+        impact.assign_fights([later, earlier])  # unsorted input
+        assert earlier.fight == 1 and later.fight == 2  # 29s gap → two fights
+
+    def test_empty_feed_is_noop(self):
+        impact.assign_fights([])  # must not raise
+
+
 class TestBuildEventCounts:
     def test_first_kill_of_each_fight_is_first_pick_and_first_death(self):
         feed = [

@@ -24,6 +24,10 @@ Idempotency contract (a rerun must produce byte-identical rows):
 * ``backfill_match`` deletes every existing row named one of the 7 derived
   stats for the match *before* inserting the freshly computed set, so a
   rerun replaces rather than accumulates.
+* ``backfill_match`` also recomputes ``kill_feed.fight`` in place
+  (``impact.assign_fights``: round-aware, >15s gap) before deriving event
+  counts, so first_picks/first_deaths reflect the current fight rule. It is
+  deterministic, so a rerun re-derives identical fight ids.
 
 Scoring itself is not reimplemented here — ``rebuild_frames`` + the merged
 event columns are fed straight into ``impact.add_impact_scores`` and ranked
@@ -366,6 +370,11 @@ async def backfill_match(session: AsyncSession, match_id: int) -> bool:
         .scalars()
         .all()
     )
+    # Recompute fight boundaries (round-aware, >15s gap) and persist them — the
+    # mutated ORM rows flush on the per-match commit. MUST run before
+    # build_event_counts, which derives first_picks/first_deaths from `fight`.
+    # Deterministic, so it stays idempotent across reruns.
+    impact.assign_fights(kill_feed)
     refs = await _load_player_refs(session, match_id)
     hero_types = await _load_hero_types(session)
     baselines = await baselines_service.get_active(session)

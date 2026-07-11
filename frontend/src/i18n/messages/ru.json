@@ -1193,13 +1193,28 @@
     "contribution": {
       "title": "Вклад игроков"
     },
+    "view": {
+      "simple": "Просто",
+      "extended": "Расширенно"
+    },
+    "tab": {
+      "tables": "Таблицы",
+      "comparison": "Сравнение",
+      "timeline": "Хронология"
+    },
     "timeline": {
       "title": "Хронология убийств",
       "loading": "Загрузка хронологии…",
       "error": "Не удалось загрузить хронологию.",
       "empty": "Для этого матча нет данных об убийствах.",
       "ultimate": "Ульта",
+      "ultStart": "Начало ульты",
+      "ultKill": "Килл с ульты",
+      "ultEnd": "Конец ульты",
       "resurrect": "Воскрешение",
+      "critical": "Крит",
+      "environmental": "Окружение",
+      "fight": "Бой {n}",
       "killCount": "{count, plural, one {# убийство} few {# убийства} many {# убийств} other {# убийств}}"
     },
     "roundLabel": "Раунд",
@@ -1789,20 +1804,63 @@
         "tournamentsWon": "Побед на турнирах",
         "winrate": "Винрейт",
         "maps": "Карты",
-        "proximity": "Близость",
+        "closeness": "Близость",
+        "closenessGlossary": "Насколько равными были ваши матчи в среднем — выше значит более близкая игра.",
         "avgPlacement": "Среднее место",
         "avgPlayoffPlace": "Среднее место в плей-офф",
-        "avgGroupPlace": "Среднее место в группе"
+        "avgGroupPlace": "Среднее место в группе",
+        "finishes": "Распределение мест",
+        "events": "{count, plural, one {# ивент} few {# ивента} many {# ивентов} other {# ивента}}",
+        "finish": {
+          "first": "1-е",
+          "second": "2-е",
+          "third": "3-е",
+          "topHalf": "Верхняя половина",
+          "bottom": "Нижняя половина"
+        },
+        "verdictPodium": "Подиум в {pct}% случаев ({count, plural, one {# ивент} few {# ивента} many {# ивентов} other {# ивента}})."
       },
       "mostPlayed": {
         "title": "Самые играемые герои"
+      },
+      "topHeroes": {
+        "title": "Топ героев",
+        "played": "сыграно {count}",
+        "lowSample": "мало игр",
+        "lowSampleTitle": "Скрыто при менее чем {games} играх",
+        "vsAvgTitle": "Ваш % побед против среднего по всем игрокам на этом герое",
+        "col": {
+          "hero": "Герой",
+          "role": "Роль",
+          "games": "Игр",
+          "winrate": "% побед",
+          "kda": "KDA",
+          "dmg10": "Урон/10",
+          "vsAvg": "vs сред."
+        }
+      },
+      "achievementsPreview": {
+        "title": "Достижения",
+        "tier": {
+          "mythic": "Мифическое",
+          "legendary": "Легендарное",
+          "epic": "Эпическое",
+          "rare": "Редкое",
+          "uncommon": "Необычное",
+          "common": "Обычное"
+        }
       },
       "placement": {
         "title": "Динамика мест",
         "subtitle": "последние {count, plural, one {# ивент} few {# ивента} many {# ивентов} other {# ивента}} · ниже = лучше",
         "best": "Лучшее",
         "median": "Медиана",
-        "worst": "Худшее"
+        "worst": "Худшее",
+        "legend": {
+          "podium": "Подиум",
+          "mid": "Середина",
+          "bottom": "Нижняя половина"
+        }
       },
       "recent": {
         "title": "Недавние встречи",
@@ -1817,7 +1875,10 @@
           "tank": "Т",
           "damage": "Дамаг",
           "support": "Сап"
-        }
+        },
+        "signatureTitle": "Коронный герой по ролям",
+        "games": "{count, plural, one {# игра} few {# игры} many {# игр} other {# игры}}",
+        "kda": "KDA {value}"
       },
       "teammates": {
         "title": "Лучшие тиммейты",
@@ -1837,6 +1898,13 @@
           "mvp": "MVP"
         }
       },
+      "leaderboard": {
+        "open": "Открыть таблицу лобби · {stat}",
+        "vsLeader": "полоса = относительно лидера",
+        "lowerIsBetter": "меньше — лучше",
+        "yourRank": "Твой ранг: #{rank} из {total} · топ {pct}%",
+        "you": "ты"
+      },
       "lastTournament": {
         "selectTournament": "Выберите турнир",
         "placed": "Место",
@@ -1847,6 +1915,10 @@
         "percentileHint": "полоса = перцентиль · полнее — лучше",
         "rankTop": "Топ {pct}%",
         "players": "{count, plural, one {# игрок} few {# игрока} many {# игроков} other {# игрока}}",
+        "mapResults": "Результаты карт",
+        "mapResultsAggregate": "агрегат · порядок карт не сохранён",
+        "mapWon": "Карта выиграна",
+        "mapLost": "Карта проиграна",
         "stat": {
           "kda": "KDA",
           "mvpScore": "Очки MVP",
@@ -1965,6 +2037,9 @@
       "mostFoughtOpponents": "Частые соперники",
       "noData": "Нет данных",
       "byStage": "По этапам",
+      "allOpponents": "Все соперники",
+      "colOpponent": "Соперник",
+      "colWinrate": "% побед",
       "tTag": "T {number}",
       "mapLabel": "Карта {number}",
       "overperformanceBadge": "Сверх ожиданий",
@@ -1991,6 +2066,53 @@
       "bestPlacement": "· лучшее #{n}",
       "teamName": "Команда {name}",
       "roster": "Состав",
+      "you": "вы",
+      "kpi": {
+        "played": "Сыграно",
+        "titles": "Титулы",
+        "podiumRate": "Подиумы",
+        "avgPlacement": "Среднее место",
+        "leaguesSub": "{count, plural, one {# лига} few {# лиги} many {# лиг} other {# лиги}}",
+        "podiumsSub": "{count, plural, one {# подиум} few {# подиума} many {# подиумов} other {# подиума}}",
+        "ofEvents": "{podium} из {total} турниров",
+        "bestSub": "лучшее #{n}"
+      },
+      "list": {
+        "title": "Все события",
+        "eventsCount": "{count, plural, one {# событие} few {# события} many {# событий} other {# события}}",
+        "searchPlaceholder": "Поиск событий…",
+        "empty": "Нет событий по заданным фильтрам.",
+        "resetFilters": "Сбросить фильтры",
+        "mapsWr": "{maps} карт · {wr}%",
+        "filter": {
+          "all": "Все",
+          "titles": "Титулы",
+          "podium": "Подиум",
+          "leagues": "Лиги"
+        }
+      },
+      "dossier": {
+        "empty": "Выберите событие, чтобы открыть досье.",
+        "run": "Путь",
+        "noRun": "По этому событию нет сыгранных матчей.",
+        "divisions": "Дивизионы",
+        "champions": "Чемпионы турнира",
+        "championsSub": "Заняли 1-е место",
+        "summary": {
+          "placement": "Место",
+          "record": "Баланс",
+          "maps": "Карты",
+          "winrate": "Винрейт",
+          "closeness": "Напряжённость",
+          "avgMvp": "Средн. MVP"
+        },
+        "verdict": {
+          "champion": "Победа на турнире — 1-е из {count}.",
+          "podium": "Подиум — {placement}-е из {count}.",
+          "topHalf": "Верхняя половина — {placement}-е из {count}.",
+          "group": "Итог — {placement}-е из {count}."
+        }
+      },
       "result": {
         "grandFinals": "Гранд-финал",
         "playoffsReached": "Вышел в плей-офф",

@@ -1193,13 +1193,28 @@
     "contribution": {
       "title": "Player Contribution"
     },
+    "view": {
+      "simple": "Simple",
+      "extended": "Extended"
+    },
+    "tab": {
+      "tables": "Tables",
+      "comparison": "Comparison",
+      "timeline": "Timeline"
+    },
     "timeline": {
       "title": "Kill Timeline",
       "loading": "Loading timeline…",
       "error": "Couldn't load the timeline.",
       "empty": "No kill data recorded for this match.",
       "ultimate": "Ultimate",
+      "ultStart": "Ult start",
+      "ultKill": "Ult kill",
+      "ultEnd": "Ult end",
       "resurrect": "Resurrect",
+      "critical": "Critical",
+      "environmental": "Environmental",
+      "fight": "Fight {n}",
       "killCount": "{count, plural, one {# kill} other {# kills}}"
     },
     "roundLabel": "Round",
@@ -1789,20 +1804,63 @@
         "tournamentsWon": "Tournaments won",
         "winrate": "Winrate",
         "maps": "Maps",
-        "proximity": "Proximity",
+        "closeness": "Closeness",
+        "closenessGlossary": "How competitive your matches were on average — higher means tighter games.",
         "avgPlacement": "Avg placement",
         "avgPlayoffPlace": "Avg playoff place",
-        "avgGroupPlace": "Avg group place"
+        "avgGroupPlace": "Avg group place",
+        "finishes": "Finishes",
+        "events": "{count, plural, one {# event} other {# events}}",
+        "finish": {
+          "first": "1st",
+          "second": "2nd",
+          "third": "3rd",
+          "topHalf": "Top half",
+          "bottom": "Bottom"
+        },
+        "verdictPodium": "Podium finish in {pct}% of {count, plural, one {# event} other {# events}}."
       },
       "mostPlayed": {
         "title": "Most played heroes"
+      },
+      "topHeroes": {
+        "title": "Top heroes",
+        "played": "{count, plural, one {# played} other {# played}}",
+        "lowSample": "low sample",
+        "lowSampleTitle": "Hidden under {games} games",
+        "vsAvgTitle": "Your win% vs the global average on this hero",
+        "col": {
+          "hero": "Hero",
+          "role": "Role",
+          "games": "Games",
+          "winrate": "Win%",
+          "kda": "KDA",
+          "dmg10": "Dmg/10",
+          "vsAvg": "vs avg"
+        }
+      },
+      "achievementsPreview": {
+        "title": "Achievements",
+        "tier": {
+          "mythic": "Mythic",
+          "legendary": "Legendary",
+          "epic": "Epic",
+          "rare": "Rare",
+          "uncommon": "Uncommon",
+          "common": "Common"
+        }
       },
       "placement": {
         "title": "Placement trend",
         "subtitle": "last {count, plural, one {# event} other {# events}} · lower = better",
         "best": "Best",
         "median": "Median",
-        "worst": "Worst"
+        "worst": "Worst",
+        "legend": {
+          "podium": "Podium",
+          "mid": "Mid",
+          "bottom": "Bottom half"
+        }
       },
       "recent": {
         "title": "Recent encounters",
@@ -1817,7 +1875,10 @@
           "tank": "T",
           "damage": "Damage",
           "support": "Sup"
-        }
+        },
+        "signatureTitle": "Signature hero per role",
+        "games": "{count, plural, one {# game} other {# games}}",
+        "kda": "KDA {value}"
       },
       "teammates": {
         "title": "Best teammates",
@@ -1837,6 +1898,13 @@
           "mvp": "MVP"
         }
       },
+      "leaderboard": {
+        "open": "Open lobby leaderboard · {stat}",
+        "vsLeader": "bar = vs leader",
+        "lowerIsBetter": "lower is better",
+        "yourRank": "Your rank: #{rank} of {total} · top {pct}%",
+        "you": "you"
+      },
       "lastTournament": {
         "selectTournament": "Select tournament",
         "placed": "Placed",
@@ -1847,6 +1915,10 @@
         "percentileHint": "bar = percentile · fuller is better",
         "rankTop": "Top {pct}%",
         "players": "{count, plural, one {# player} other {# players}}",
+        "mapResults": "Map results",
+        "mapResultsAggregate": "aggregate · map order not recorded",
+        "mapWon": "Map won",
+        "mapLost": "Map lost",
         "stat": {
           "kda": "KDA",
           "mvpScore": "MVP score",
@@ -1965,6 +2037,9 @@
       "mostFoughtOpponents": "Most-fought opponents",
       "noData": "No data",
       "byStage": "By stage",
+      "allOpponents": "All opponents",
+      "colOpponent": "Opponent",
+      "colWinrate": "Win%",
       "tTag": "T {number}",
       "mapLabel": "Map {number}",
       "overperformanceBadge": "Above expectations",
@@ -1991,6 +2066,53 @@
       "bestPlacement": "· best #{n}",
       "teamName": "Team {name}",
       "roster": "Roster",
+      "you": "you",
+      "kpi": {
+        "played": "Played",
+        "titles": "Titles",
+        "podiumRate": "Podium rate",
+        "avgPlacement": "Avg placement",
+        "leaguesSub": "{count, plural, one {# league} other {# leagues}}",
+        "podiumsSub": "{count, plural, one {# podium} other {# podiums}}",
+        "ofEvents": "{podium} of {total} events",
+        "bestSub": "best #{n}"
+      },
+      "list": {
+        "title": "All events",
+        "eventsCount": "{count, plural, one {# event} other {# events}}",
+        "searchPlaceholder": "Search events…",
+        "empty": "No events match the filters.",
+        "resetFilters": "Reset filters",
+        "mapsWr": "{maps} maps · {wr}%",
+        "filter": {
+          "all": "All",
+          "titles": "Titles",
+          "podium": "Podium",
+          "leagues": "Leagues"
+        }
+      },
+      "dossier": {
+        "empty": "Select an event to open its dossier.",
+        "run": "The run",
+        "noRun": "No matches recorded for this event.",
+        "divisions": "Divisions",
+        "champions": "Tournament champions",
+        "championsSub": "Finished 1st",
+        "summary": {
+          "placement": "Placement",
+          "record": "Record",
+          "maps": "Maps",
+          "winrate": "Winrate",
+          "closeness": "Closeness",
+          "avgMvp": "Avg MVP"
+        },
+        "verdict": {
+          "champion": "Won the event — 1st of {count}.",
+          "podium": "Podium finish — {placement} of {count}.",
+          "topHalf": "Top-half finish — {placement} of {count}.",
+          "group": "Finished {placement} of {count}."
+        }
+      },
       "result": {
         "grandFinals": "Grand finals",
         "playoffsReached": "Playoffs reached",
