@@ -88,13 +88,13 @@ export default function SmurfTagsInput({
           {tags.map((tag, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70"
+              className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-2 py-0.5 text-xs text-[color:var(--aqt-fg-muted)]"
             >
               {tag}
               <button
                 type="button"
                 onClick={() => removeTag(i)}
-                className="ml-0.5 text-white/30 hover:text-white/60"
+                className="ml-0.5 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)]"
               >
                 &times;
               </button>
@@ -111,7 +111,7 @@ export default function SmurfTagsInput({
           onKeyDown={handleKeyDown}
           aria-invalid={Boolean(inputValidationError)}
           className={cn(
-            "h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 pr-16 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20",
+            "h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 pr-16 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]",
             inputValidationError && "border-red-500/70 text-red-100 placeholder:text-red-200/60 focus:border-red-500/70",
           )}
         />
@@ -119,7 +119,7 @@ export default function SmurfTagsInput({
           type="button"
           onClick={() => addTag(inputValue, { clearInput: true })}
           disabled={!trimmedInputValue || Boolean(inputValidationError) || tags.includes(normalizedInputValue)}
-          className="absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-md border border-white/10 bg-white/6 px-2.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-md border border-[color:var(--aqt-border-2)] bg-white/6 px-2.5 text-xs font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("registration.accounts.addSmurfButton")}
         </button>
@@ -134,7 +134,7 @@ export default function SmurfTagsInput({
               key={s}
               type="button"
               onClick={() => addTag(s, { clearInput: false })}
-              className="rounded border border-white/7 bg-white/2 px-2 py-0.5 text-[11px] text-white/40 transition-colors hover:bg-white/5 hover:text-white/60"
+              className="rounded border border-[color:var(--aqt-border)] bg-white/2 px-2 py-0.5 text-[11px] text-[color:var(--aqt-fg-dim)] transition-colors hover:bg-white/5 hover:text-[color:var(--aqt-fg-muted)]"
             >
               + {s}
             </button>

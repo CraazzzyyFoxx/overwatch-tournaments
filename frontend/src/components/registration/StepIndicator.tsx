@@ -36,8 +36,8 @@ export default function StepIndicator({ steps, current }: StepIndicatorProps) {
                   isActive
                     ? "bg-white text-black"
                     : isCompleted
-                      ? "bg-white/20 text-white/70"
-                      : "bg-white/5 text-white/25",
+                      ? "bg-white/20 text-[color:var(--aqt-fg-muted)]"
+                      : "bg-white/5 text-[color:var(--aqt-fg-faint)]",
                 )}
               >
                 {isCompleted ? <Check className="size-3.5" /> : i + 1}
@@ -45,7 +45,7 @@ export default function StepIndicator({ steps, current }: StepIndicatorProps) {
               <span
                 className={cn(
                   "hidden text-xs font-medium sm:inline",
-                  isActive ? "text-white" : isCompleted ? "text-white/50" : "text-white/25",
+                  isActive ? "text-[color:var(--aqt-fg)]" : isCompleted ? "text-[color:var(--aqt-fg-muted)]" : "text-[color:var(--aqt-fg-faint)]",
                 )}
               >
                 {step.label}

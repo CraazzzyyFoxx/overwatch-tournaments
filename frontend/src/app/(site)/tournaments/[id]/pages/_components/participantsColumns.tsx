@@ -123,7 +123,7 @@ function RolesCell({
   const t = useTranslations();
   const resolvedGrid = grid || DEFAULT_DIVISION_GRID;
   if (!roles || roles.length === 0)
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
 
   return (
     <div className="flex flex-wrap items-start justify-center gap-x-0.5 gap-y-2">
@@ -151,7 +151,7 @@ function RolesCell({
                 "relative inline-flex h-8 w-8 items-center justify-center p-1",
                 r.is_primary
                   ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
-                  : "text-white/70",
+                  : "text-[color:var(--aqt-fg-muted)]",
               )}
             >
               <PlayerRoleIcon
@@ -160,7 +160,7 @@ function RolesCell({
               />
             </span>
             {subroleShortLabel ? (
-              <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-white/45 uppercase">
+              <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-[color:var(--aqt-fg-dim)] uppercase">
                 {subroleShortLabel}
               </span>
             ) : null}
@@ -270,7 +270,7 @@ function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
   }, [heroesByRole]);
 
   if (topHeroesList.length === 0) {
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   }
 
   return (
@@ -278,7 +278,7 @@ function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
       {activeRoles.map((role) => (
         <div
           key={role}
-          className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.04] rounded-full pl-2 pr-1 py-0.5 shadow-sm"
+          className="flex items-center gap-1.5 bg-white/[0.02] border border-[color:var(--aqt-border)] rounded-full pl-2 pr-1 py-0.5 shadow-sm"
         >
           <span
             className={cn("inline-flex items-center shrink-0", ROLE_COLORS[role])}
@@ -307,7 +307,7 @@ function SmurfTagsCell({
   const smurfTags = tags?.filter(Boolean) ?? [];
 
   if (smurfTags.length === 0) {
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   }
 
   const visibleTags = smurfTags.slice(0, MAX_VISIBLE_SMURF_TAGS);
@@ -318,7 +318,7 @@ function SmurfTagsCell({
       {visibleTags.map((tag, index) => (
         <span
           key={`${tag}-${index}`}
-          className="block max-w-full truncate text-xs leading-5 text-white/50"
+          className="block max-w-full truncate text-xs leading-5 text-[color:var(--aqt-fg-muted)]"
           title={tag}
         >
           {tag}
@@ -335,10 +335,10 @@ function SmurfTagsCell({
               +{hiddenCount} {t("common.more")}
             </button>
           </DialogTrigger>
-          <DialogContent className="border-white/[0.08] bg-[#111113] sm:max-w-md">
+          <DialogContent className="border-[color:var(--aqt-border)] bg-[#111113] sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-white">{t("common.smurfBattleTags")}</DialogTitle>
-              <DialogDescription className="text-white/50">
+              <DialogTitle className="text-[color:var(--aqt-fg)]">{t("common.smurfBattleTags")}</DialogTitle>
+              <DialogDescription className="text-[color:var(--aqt-fg-muted)]">
                 {t("common.smurfDesc")}
               </DialogDescription>
             </DialogHeader>
@@ -347,7 +347,7 @@ function SmurfTagsCell({
                 {smurfTags.map((tag, index) => (
                   <div
                     key={`${tag}-${index}`}
-                    className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+                    className="rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-3 py-2 text-sm text-[color:var(--aqt-fg)]"
                   >
                     {tag}
                   </div>
@@ -396,12 +396,12 @@ function renderCustomFieldValue(
   t: Translator,
 ): ReactNode {
   if (value === null || value === undefined)
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
 
   switch (field.type) {
     case "checkbox":
       return (
-        <span className="text-white/60">{value ? t("common.yes") : t("common.no")}</span>
+        <span className="text-[color:var(--aqt-fg-muted)]">{value ? t("common.yes") : t("common.no")}</span>
       );
     case "url":
       return (
@@ -409,7 +409,7 @@ function renderCustomFieldValue(
           href={String(value)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-white/60 underline decoration-white/20 hover:text-white/80"
+          className="inline-flex items-center gap-1 text-[color:var(--aqt-fg-muted)] underline decoration-white/20 hover:text-[color:var(--aqt-fg)]"
         >
           <span className="max-w-[120px] truncate">{String(value)}</span>
           <ExternalLink className="size-3 shrink-0" />
@@ -417,12 +417,12 @@ function renderCustomFieldValue(
       );
     case "select":
       return (
-        <span className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-xs font-medium text-white/60">
+        <span className="inline-flex items-center rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-1.5 py-0.5 text-xs font-medium text-[color:var(--aqt-fg-muted)]">
           {String(value)}
         </span>
       );
     default:
-      return <span className="text-white/60">{String(value)}</span>;
+      return <span className="text-[color:var(--aqt-fg-muted)]">{String(value)}</span>;
   }
 }
 
@@ -431,11 +431,11 @@ function renderCustomFieldValue(
 // ---------------------------------------------------------------------------
 
 function formatDate(iso: string | null, locale: string = "ru"): ReactNode {
-  if (!iso) return <span className="text-white/30">&mdash;</span>;
+  if (!iso) return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   const d = new Date(iso);
   const formatLocale = locale.startsWith("ru") ? "ru-RU" : "en-GB";
   return (
-    <span className="text-white/50 tabular-nums text-xs">
+    <span className="text-[color:var(--aqt-fg-muted)] tabular-nums text-xs">
       {d.toLocaleDateString(formatLocale, {
         day: "2-digit",
         month: "short",
@@ -467,7 +467,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: true,
     responsive: "always",
     render: (reg) => (
-      <span className="font-medium text-white/80">
+      <span className="font-medium text-[color:var(--aqt-fg)]">
         {reg.battle_tag ? (
           <a
             href={`/users/${getPlayerSlug(reg.battle_tag)}`}
@@ -498,7 +498,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: false,
     responsive: "sm",
     render: (reg) => (
-      <span className="text-white/50">{reg.discord_nick ?? "\u2014"}</span>
+      <span className="text-[color:var(--aqt-fg-muted)]">{reg.discord_nick ?? "\u2014"}</span>
     ),
     searchValue: (reg) => reg.discord_nick,
   },
@@ -508,7 +508,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: false,
     responsive: "md",
     render: (reg) => (
-      <span className="text-white/50">{reg.twitch_nick ?? "\u2014"}</span>
+      <span className="text-[color:var(--aqt-fg-muted)]">{reg.twitch_nick ?? "\u2014"}</span>
     ),
     searchValue: (reg) => reg.twitch_nick,
   },
@@ -555,11 +555,11 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     widthClass: "max-w-50",
     render: (reg) =>
       reg.notes ? (
-        <span className="block max-w-50 whitespace-pre-wrap wrap-break-word text-xs text-white/50">
+        <span className="block max-w-50 whitespace-pre-wrap wrap-break-word text-xs text-[color:var(--aqt-fg-muted)]">
           {reg.notes}
         </span>
       ) : (
-        <span className="text-white/30">&mdash;</span>
+        <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>
       ),
     searchValue: (reg) => reg.notes,
   },
@@ -609,7 +609,7 @@ export function buildParticipantColumns(
     defaultVisible: false,
     responsive: "always",
     render: (_reg, index) => (
-      <span className="text-white/30 tabular-nums">{index + 1}</span>
+      <span className="text-[color:var(--aqt-fg-dim)] tabular-nums">{index + 1}</span>
     ),
   });
 

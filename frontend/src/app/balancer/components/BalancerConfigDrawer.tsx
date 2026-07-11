@@ -285,9 +285,9 @@ function ConfigFieldControl({
           value={[numeric]}
           onValueChange={(next) => onChange(next[0])}
         />
-        <div className="flex justify-between text-[11px] text-white/45">
+        <div className="flex justify-between text-[11px] text-[color:var(--aqt-fg-dim)]">
           <span>balance</span>
-          <span className="tabular-nums text-white/70">{numeric.toFixed(2)}</span>
+          <span className="tabular-nums text-[color:var(--aqt-fg-muted)]">{numeric.toFixed(2)}</span>
           <span>comfort</span>
         </div>
       </div>
@@ -318,10 +318,10 @@ export function BalancerConfigDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white sm:max-w-2xl">
-        <SheetHeader className="border-b border-white/10 px-5 py-4">
-          <SheetTitle className="text-white">Balancer settings</SheetTitle>
-          <SheetDescription className="text-white/52">
+      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] sm:max-w-2xl">
+        <SheetHeader className="border-b border-[color:var(--aqt-border-2)] px-5 py-4">
+          <SheetTitle className="text-[color:var(--aqt-fg)]">Balancer settings</SheetTitle>
+          <SheetDescription className="text-[color:var(--aqt-fg-muted)]">
             Active preset: {selectedPresetLabel}. Changes are saved for this tournament.
           </SheetDescription>
         </SheetHeader>
@@ -330,7 +330,7 @@ export function BalancerConfigDrawer({
           <div className="space-y-5">
             {fieldsByGroup.map(({ group, fields: groupFields }) => (
               <section key={group} className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
                   {group}
                 </div>
                 <div className="space-y-3">
@@ -339,17 +339,17 @@ export function BalancerConfigDrawer({
                     return (
                       <div
                         key={field.key}
-                        className="rounded-lg border border-white/10 bg-black/15 p-3"
+                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 p-3"
                       >
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                           <div>
-                            <Label htmlFor={`config-${field.key}`} className="text-sm text-white/90">
+                            <Label htmlFor={`config-${field.key}`} className="text-sm text-[color:var(--aqt-fg)]">
                               {field.label}
                             </Label>
-                            <p className="mt-1 text-xs leading-5 text-white/48">
+                            <p className="mt-1 text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
                               {field.description}
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-white/35">
+                            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[color:var(--aqt-fg-dim)]">
                               <span>Default: {formatValue(field.default)}</span>
                               {field.limits ? (
                                 <span>
@@ -375,9 +375,9 @@ export function BalancerConfigDrawer({
           </div>
         </div>
 
-        <SheetFooter className="border-t border-white/10 px-5 py-4">
+        <SheetFooter className="border-t border-[color:var(--aqt-border-2)] px-5 py-4">
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-white/42">
+            <div className="text-xs text-[color:var(--aqt-fg-dim)]">
               {dirty ? "Unsaved settings will be saved before the next run." : "Settings are saved."}
             </div>
             <div className="flex gap-2">

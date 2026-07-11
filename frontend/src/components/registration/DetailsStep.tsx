@@ -73,10 +73,10 @@ export default function DetailsStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
           {mode === "admin" ? "Details and Notes" : t("registration.details.title")}
         </h3>
-        <p className="text-xs leading-5 text-white/42">
+        <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
           {mode === "admin"
             ? "Final step for notes and status updates."
             : hasAnyField
@@ -96,7 +96,7 @@ export default function DetailsStep({
               checked={values.stream_pov === "true"}
               onCheckedChange={(checked) => onUpdate("stream_pov", checked ? "true" : "false")}
             />
-            <span className="text-sm text-white/70">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {mode === "admin"
                 ? "Participant can provide a point-of-view stream."
                 : t("registration.details.streamPovLabel")}
@@ -117,7 +117,7 @@ export default function DetailsStep({
             onChange={(e) => onUpdate("notes", e.target.value)}
             rows={2}
             className={cn(
-              "w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20",
+              "w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 py-2 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]",
               notesValidationError && "border-red-500/70 text-red-100 placeholder:text-red-200/60 focus:border-red-500/70",
             )}
           />
@@ -135,7 +135,7 @@ export default function DetailsStep({
             value={adminNotes ?? ""}
             onChange={(e) => onAdminNotesChange(e.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-white/10 bg-white/3 px-3 py-2 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20"
+            className="w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 py-2 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]"
           />
         </div>
       )}
@@ -144,7 +144,7 @@ export default function DetailsStep({
         <div className="space-y-1.5">
           <FieldLabel label="Registration Status" icon={<BadgeInfo className="size-3.5 opacity-50" />} />
           <Select value={status ?? "pending"} onValueChange={onStatusChange}>
-            <SelectTrigger className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white focus-visible:ring-0 focus-visible:border-white/20">
+            <SelectTrigger className="h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] focus-visible:ring-0 focus-visible:border-[color:var(--aqt-border-2)]">
               <SelectValue placeholder="Select registration status" />
             </SelectTrigger>
             <SelectContent>
@@ -169,7 +169,7 @@ export default function DetailsStep({
         <div className="space-y-1.5">
           <FieldLabel label="Balancer Status" icon={<BadgeInfo className="size-3.5 opacity-50" />} />
           <Select value={balancerStatus ?? "not_in_balancer"} onValueChange={onBalancerStatusChange}>
-            <SelectTrigger className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white focus-visible:ring-0 focus-visible:border-white/20">
+            <SelectTrigger className="h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] focus-visible:ring-0 focus-visible:border-[color:var(--aqt-border-2)]">
               <SelectValue placeholder="Select balancer status" />
             </SelectTrigger>
             <SelectContent>

@@ -22,7 +22,7 @@ export default function FieldLabel({
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       {icon ? <span className="flex shrink-0 items-center justify-center">{icon}</span> : null}
-      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/55">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
         {label}
       </span>
       {required && (

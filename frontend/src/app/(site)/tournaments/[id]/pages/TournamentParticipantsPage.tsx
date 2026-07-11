@@ -88,7 +88,7 @@ const STATUS_BAR_CONFIG: Record<
   },
   withdrawn: {
     icon: XCircle,
-    color: "text-white/40 border-white/10 bg-white/5",
+    color: "text-[color:var(--aqt-fg-dim)] border-[color:var(--aqt-border-2)] bg-white/5",
   },
   banned: {
     icon: ShieldBan,
@@ -223,7 +223,7 @@ function MyRegistrationCard({
 
   const isCheckedIn = registration.checked_in === true;
 
-  let checkInBadgeClass = "bg-white/5 border-white/10 text-white/50";
+  let checkInBadgeClass = "bg-white/5 border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)]";
   let checkInBadgeText = t("registration.myCard.checkInNotStarted");
 
   if (isCheckedIn) {
@@ -243,7 +243,7 @@ function MyRegistrationCard({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] shadow-md backdrop-blur-md transition-all duration-200">
+    <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] shadow-md backdrop-blur-md transition-all duration-200">
       {/* Decorative gradient blurs */}
       <div className="absolute -right-16 -top-16 -z-10 size-32 rounded-full bg-blue-500/5 blur-2xl" />
       <div className="absolute -bottom-16 -left-16 -z-10 size-32 rounded-full bg-violet-500/5 blur-2xl" />
@@ -253,7 +253,7 @@ function MyRegistrationCard({
         {/* Left Side: Title, Status, Primary Role */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-white/90 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[color:var(--aqt-fg)] uppercase tracking-wider">
               {t("registration.myCard.title")}
             </span>
             <span
@@ -267,8 +267,8 @@ function MyRegistrationCard({
 
           {/* Primary Role indicator */}
           {primaryRole && (
-            <div className="flex items-center gap-2 border-l border-white/10 pl-4 text-xs">
-              <span className="text-white/40">{t("registration.myCard.primaryRole")}:</span>
+            <div className="flex items-center gap-2 border-l border-[color:var(--aqt-border-2)] pl-4 text-xs">
+              <span className="text-[color:var(--aqt-fg-dim)]">{t("registration.myCard.primaryRole")}:</span>
               <div
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium border",
@@ -296,7 +296,7 @@ function MyRegistrationCard({
         <div className="flex flex-wrap items-center gap-3">
           {/* Check-in status indicator */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-white/40">{t("registration.myCard.checkInStatus")}:</span>
+            <span className="text-[color:var(--aqt-fg-dim)]">{t("registration.myCard.checkInStatus")}:</span>
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]",
@@ -316,7 +316,7 @@ function MyRegistrationCard({
                 onCheckIn();
               }}
               disabled={isCheckingIn}
-              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
               {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
               {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
@@ -327,7 +327,7 @@ function MyRegistrationCard({
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white/95 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg)] transition-colors"
           >
             <span>{isExpanded ? t("registration.myCard.hideDetails") : t("registration.myCard.showDetails")}</span>
             {isExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
@@ -337,13 +337,13 @@ function MyRegistrationCard({
 
       {/* Expanded Content Details */}
       {isExpanded && (
-        <div className="border-t border-white/[0.06] bg-white/[0.01] p-4 transition-all duration-200">
+        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4 transition-all duration-200">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Left Column: Fallbacks & Accounts */}
             <div className="space-y-4">
               {/* Secondary roles */}
               <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                   {t("registration.myCard.secondaryRoles")}
                 </h4>
                 {secondaryRoles.length > 0 ? (
@@ -372,7 +372,7 @@ function MyRegistrationCard({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs italic text-white/30">
+                  <p className="text-xs italic text-[color:var(--aqt-fg-dim)]">
                     {t("registration.myCard.noSecondaryRoles")}
                   </p>
                 )}
@@ -380,26 +380,26 @@ function MyRegistrationCard({
 
               {/* Linked accounts */}
               <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                   {t("registration.myCard.accounts")}
                 </h4>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
                   {registration.battle_tag && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
-                      <Gamepad2 className="size-3.5 text-white/40" />
-                      <span className="font-semibold text-white/85">{registration.battle_tag}</span>
+                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                      <Gamepad2 className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
+                      <span className="font-semibold text-[color:var(--aqt-fg)]">{registration.battle_tag}</span>
                     </div>
                   )}
                   {registration.discord_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
+                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
                       <DiscordIcon className="size-3.5 text-[#5865F2]" />
-                      <span className="text-white/70">{registration.discord_nick}</span>
+                      <span className="text-[color:var(--aqt-fg-muted)]">{registration.discord_nick}</span>
                     </div>
                   )}
                   {registration.twitch_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
+                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
                       <Twitch className="size-3.5 text-[#9146FF]" />
-                      <span className="text-white/70">{registration.twitch_nick}</span>
+                      <span className="text-[color:var(--aqt-fg-muted)]">{registration.twitch_nick}</span>
                     </div>
                   )}
                 </div>
@@ -411,11 +411,11 @@ function MyRegistrationCard({
               {/* POV and Notes */}
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2 text-xs">
-                  <Tv className="size-3.5 text-white/40" />
+                  <Tv className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
                   <span
                     className={cn(
                       "font-medium",
-                      registration.stream_pov ? "text-emerald-400" : "text-white/50",
+                      registration.stream_pov ? "text-emerald-400" : "text-[color:var(--aqt-fg-muted)]",
                     )}
                   >
                     {registration.stream_pov
@@ -424,13 +424,13 @@ function MyRegistrationCard({
                   </span>
                 </div>
 
-                <div className="rounded-lg border border-white/[0.04] bg-white/[0.02] p-2.5 text-xs">
+                <div className="rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.02] p-2.5 text-xs">
                   {registration.notes ? (
-                    <p className="italic text-white/60 leading-normal">
+                    <p className="italic text-[color:var(--aqt-fg-muted)] leading-normal">
                       &ldquo;{registration.notes}&rdquo;
                     </p>
                   ) : (
-                    <span className="italic text-white/30">
+                    <span className="italic text-[color:var(--aqt-fg-dim)]">
                       {t("registration.myCard.noNotes")}
                     </span>
                   )}
@@ -438,9 +438,9 @@ function MyRegistrationCard({
               </div>
 
               {/* Action row at bottom of details */}
-              <div className="flex items-center justify-between border-t border-white/[0.04] pt-3 mt-2">
+              <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-3 mt-2">
                 {/* Pending check-in state helper text */}
-                <div className="text-[11px] text-white/40">
+                <div className="text-[11px] text-[color:var(--aqt-fg-dim)]">
                   {isCheckedIn ? (
                     <span className="text-emerald-400 font-medium">
                       {t("registration.myCard.checkInSuccess")}
@@ -699,7 +699,7 @@ export default function TournamentParticipantsPage({
                 checkInMutation.mutate();
               }}
               disabled={checkInMutation.isPending}
-              className="border border-emerald-500/30 bg-emerald-600 text-white hover:bg-emerald-500"
+              className="border border-emerald-500/30 bg-emerald-600 text-[color:var(--aqt-fg)] hover:bg-emerald-500"
             >
               {checkInMutation.isPending ? t("common.checkingIn") : t("common.checkIn")}
             </AlertDialogAction>
@@ -728,7 +728,7 @@ export default function TournamentParticipantsPage({
                 withdrawMutation.mutate();
               }}
               disabled={withdrawMutation.isPending}
-              className="bg-red-600 text-white hover:bg-red-500"
+              className="bg-red-600 text-[color:var(--aqt-fg)] hover:bg-red-500"
             >
               {withdrawMutation.isPending ? t("common.withdrawing") : t("common.confirmWithdraw")}
             </AlertDialogAction>
@@ -788,7 +788,7 @@ export default function TournamentParticipantsPage({
       {/* Participants list */}
       {listQuery.isLoading ? (
         <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <Loader2 className="mx-auto size-6 animate-spin text-white/30" />
+          <Loader2 className="mx-auto size-6 animate-spin text-[color:var(--aqt-fg-dim)]" />
         </div>
       ) : filtered.length > 0 ? (
         <div className="tn-card">
@@ -824,7 +824,7 @@ export default function TournamentParticipantsPage({
                           <button
                             type="button"
                             onClick={() => toggleExpanded(reg.id)}
-                            className="inline-flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+                            className="inline-flex size-6 items-center justify-center rounded text-[color:var(--aqt-fg-dim)] transition-colors hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                             aria-label={isExpanded ? t("common.collapse") : t("common.expand")}
                             aria-expanded={isExpanded}
                           >
@@ -852,11 +852,11 @@ export default function TournamentParticipantsPage({
                         <tr>
                           <td
                             colSpan={visibleColumns.length + 1}
-                            className="border-t border-white/[0.06] bg-white/[0.015] p-4"
+                            className="border-t border-[color:var(--aqt-border)] bg-white/[0.015] p-4"
                           >
                             <div className="grid gap-4 lg:grid-cols-4">
                               <div className="space-y-2 lg:col-span-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                                   {t("tournamentDetail.rankHistory")}
                                 </div>
                                 <BattleTagRankHistory
@@ -864,22 +864,22 @@ export default function TournamentParticipantsPage({
                                   battleTag={reg.battle_tag}
                                 />
                               </div>
-                              <div className="rounded-xl border border-white/[0.05] bg-black/10 p-4 space-y-3.5 text-xs lg:col-span-1">
-                                <div className="text-[11px] font-bold uppercase tracking-widest text-white/80 border-b border-white/[0.06] pb-1.5 mb-2">
+                              <div className="rounded-xl border border-[color:var(--aqt-border)] bg-black/10 p-4 space-y-3.5 text-xs lg:col-span-1">
+                                <div className="text-[11px] font-bold uppercase tracking-widest text-[color:var(--aqt-fg)] border-b border-[color:var(--aqt-border)] pb-1.5 mb-2">
                                   {t("registration.myCard.details")}
                                 </div>
                                 {hiddenColumns.length === 0 ? (
-                                  <div className="text-white/30 italic py-1 text-center">
+                                  <div className="text-[color:var(--aqt-fg-dim)] italic py-1 text-center">
                                     {t("tournamentDetail.allFieldsVisible")}
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">
                                     {hiddenColumns.map((col) => (
                                       <div key={col.id} className="space-y-1">
-                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                                           {col.label}
                                         </div>
-                                        <div className="text-white/80">
+                                        <div className="text-[color:var(--aqt-fg)]">
                                           {col.render(reg, idx)}
                                         </div>
                                       </div>
@@ -900,7 +900,7 @@ export default function TournamentParticipantsPage({
         </div>
       ) : (
         <div className="tn-card" style={{ padding: "56px 24px", textAlign: "center" }}>
-          <UserPlus className="mx-auto size-9 text-white/15" />
+          <UserPlus className="mx-auto size-9 text-[color:var(--aqt-fg-faint)]" />
           <p className="mt-3 text-sm" style={{ color: "var(--fg-dim)" }}>
             {t("common.noParticipants")}
           </p>

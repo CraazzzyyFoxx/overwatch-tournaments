@@ -146,9 +146,9 @@ const ADMIN_ROLE_FORM: RegistrationForm = {
 };
 
 const ADMIN_INPUT_CLASS =
-  "h-9 rounded-lg border-white/10 bg-white/[0.03] px-3 text-sm text-white placeholder:text-white/28 focus-visible:ring-0 focus-visible:border-white/20";
+  "h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 text-sm text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)] focus-visible:ring-0 focus-visible:border-[color:var(--aqt-border-2)]";
 const ADMIN_TEXTAREA_CLASS =
-  "min-h-[96px] rounded-lg border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/28 focus-visible:ring-0 focus-visible:border-white/20";
+  "min-h-[96px] rounded-lg border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 py-2 text-sm text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)] focus-visible:ring-0 focus-visible:border-[color:var(--aqt-border-2)]";
 
 const STATUS_CONFIG: Record<string, { icon: typeof Clock; className: string; label: string }> = {
   pending: { icon: Clock, className: "text-amber-500", label: "Pending" },
@@ -698,7 +698,7 @@ export default function BalancerRegistrationsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/30" />
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--aqt-fg-dim)]" />
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -782,11 +782,11 @@ export default function BalancerRegistrationsPage() {
         </CardHeader>
 
         <CardContent className="min-h-0 flex-1 overflow-auto">
-          <div className="overflow-x-auto overflow-hidden rounded-xl border border-white/[0.07]">
+          <div className="overflow-x-auto overflow-hidden rounded-xl border border-[color:var(--aqt-border)]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/[0.07] bg-white/[0.02]">
-                  <th className="w-10 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-white/40">
+                <tr className="border-b border-[color:var(--aqt-border)] bg-white/[0.02]">
+                  <th className="w-10 px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                     <Checkbox
                       checked={allSelectableRowsChecked}
                       onCheckedChange={(checked) =>
@@ -811,7 +811,7 @@ export default function BalancerRegistrationsPage() {
                         key={column.id}
                         onClick={() => handleSort(column.id)}
                         className={cn(
-                          "group cursor-pointer select-none px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-white/40 hover:bg-white/[0.01] hover:text-white/70 transition-colors",
+                          "group cursor-pointer select-none px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)] hover:bg-white/[0.01] hover:text-[color:var(--aqt-fg-muted)] transition-colors",
                           RESPONSIVE_CLASS[column.responsive ?? "always"],
                           column.widthClass
                         )}
@@ -835,14 +835,14 @@ export default function BalancerRegistrationsPage() {
                                 <ArrowUp className="size-3 text-emerald-400" />
                               )
                             ) : (
-                              <ArrowUpDown className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-white/20" />
+                              <ArrowUpDown className="size-3 opacity-0 group-hover:opacity-100 transition-opacity text-[color:var(--aqt-fg-faint)]" />
                             )}
                           </span>
                         </div>
                       </th>
                     );
                   })}
-                  <th className="w-[112px] px-3 py-2.5 text-right text-xs font-medium uppercase tracking-wider text-white/40">
+                  <th className="w-[112px] px-3 py-2.5 text-right text-xs font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                     Actions
                   </th>
                 </tr>
@@ -852,7 +852,7 @@ export default function BalancerRegistrationsPage() {
                   <tr>
                     <td
                       colSpan={visibleColumns.length + 2}
-                      className="py-10 text-center text-sm text-white/40"
+                      className="py-10 text-center text-sm text-[color:var(--aqt-fg-dim)]"
                     >
                       No registrations match the current filters.
                     </td>
@@ -861,13 +861,13 @@ export default function BalancerRegistrationsPage() {
                   groupedRegistrations.map((group) => (
                     <Fragment key={group.key}>
                       {groupBy !== "none" ? (
-                        <tr className="border-b border-white/[0.07] bg-white/[0.035]">
+                        <tr className="border-b border-[color:var(--aqt-border)] bg-white/[0.035]">
                           <td
                             colSpan={visibleColumns.length + 2}
-                            className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white/55"
+                            className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-muted)]"
                           >
-                            <span className="text-white/80">{group.label}</span>
-                            <span className="ml-2 text-white/35">
+                            <span className="text-[color:var(--aqt-fg)]">{group.label}</span>
+                            <span className="ml-2 text-[color:var(--aqt-fg-dim)]">
                               {group.registrations.length}{" "}
                               {group.registrations.length === 1 ? "registration" : "registrations"}
                             </span>
@@ -883,13 +883,13 @@ export default function BalancerRegistrationsPage() {
                         const isExpanded = expandedIds.has(registration.id);
                         return (
                           <Fragment key={registration.id}>
-                            <tr className="border-b border-white/4 transition-colors hover:bg-white/[0.02]">
+                            <tr className="border-b border-[color:var(--aqt-border)] transition-colors hover:bg-white/[0.02]">
                               <td className="px-3 py-2.5 align-top">
                                 <div className="flex items-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() => toggleExpanded(registration.id)}
-                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/40 hover:bg-white/5 hover:text-white"
+                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                                     aria-label={isExpanded ? "Collapse details" : "Expand details"}
                                     aria-expanded={isExpanded}
                                   >
@@ -1114,11 +1114,11 @@ export default function BalancerRegistrationsPage() {
                               )}
                             </tr>
                             {isExpanded ? (
-                              <tr className="border-b border-white/[0.06] bg-white/[0.015]">
+                              <tr className="border-b border-[color:var(--aqt-border)] bg-white/[0.015]">
                                 <td colSpan={visibleColumns.length + 2} className="px-4 py-4">
                                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
                                     <div className="space-y-2">
-                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                                         Rank history
                                       </div>
                                       <BattleTagRankHistory
@@ -1126,12 +1126,12 @@ export default function BalancerRegistrationsPage() {
                                         battleTag={registration.battle_tag}
                                       />
                                     </div>
-                                    <dl className="space-y-2 text-xs text-white/70">
-                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                                    <dl className="space-y-2 text-xs text-[color:var(--aqt-fg-muted)]">
+                                      <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                                         Details
                                       </div>
                                       <div>
-                                        <dt className="mb-1 text-white/40">Declared roles</dt>
+                                        <dt className="mb-1 text-[color:var(--aqt-fg-dim)]">Declared roles</dt>
                                         <dd>
                                           <RolesCell
                                             roles={registration.roles}
@@ -1141,7 +1141,7 @@ export default function BalancerRegistrationsPage() {
                                       </div>
                                       {registration.smurf_tags_json.length > 0 ? (
                                         <div className="flex justify-between gap-3">
-                                          <dt className="text-white/40">Smurfs</dt>
+                                          <dt className="text-[color:var(--aqt-fg-dim)]">Smurfs</dt>
                                           <dd className="text-right">
                                             {registration.smurf_tags_json.join(", ")}
                                           </dd>
@@ -1149,7 +1149,7 @@ export default function BalancerRegistrationsPage() {
                                       ) : null}
                                       {registration.discord_nick || registration.twitch_nick ? (
                                         <div className="flex justify-between gap-3">
-                                          <dt className="text-white/40">Contact</dt>
+                                          <dt className="text-[color:var(--aqt-fg-dim)]">Contact</dt>
                                           <dd className="text-right">
                                             {[registration.discord_nick, registration.twitch_nick]
                                               .filter(Boolean)
@@ -1158,18 +1158,18 @@ export default function BalancerRegistrationsPage() {
                                         </div>
                                       ) : null}
                                       <div className="flex justify-between gap-3">
-                                        <dt className="text-white/40">Source</dt>
+                                        <dt className="text-[color:var(--aqt-fg-dim)]">Source</dt>
                                         <dd className="text-right">{registration.source}</dd>
                                       </div>
                                       <div className="flex justify-between gap-3">
-                                        <dt className="text-white/40">Submitted</dt>
+                                        <dt className="text-[color:var(--aqt-fg-dim)]">Submitted</dt>
                                         <dd className="text-right">
                                           {formatSubmittedAt(registration.submitted_at)}
                                         </dd>
                                       </div>
                                       {registration.reviewed_at ? (
                                         <div className="flex justify-between gap-3">
-                                          <dt className="text-white/40">Reviewed</dt>
+                                          <dt className="text-[color:var(--aqt-fg-dim)]">Reviewed</dt>
                                           <dd className="text-right">
                                             {formatSubmittedAt(registration.reviewed_at)}
                                             {registration.reviewed_by_username
@@ -1180,13 +1180,13 @@ export default function BalancerRegistrationsPage() {
                                       ) : null}
                                       {registration.notes ? (
                                         <div>
-                                          <dt className="text-white/40">Notes</dt>
+                                          <dt className="text-[color:var(--aqt-fg-dim)]">Notes</dt>
                                           <dd className="mt-0.5">{registration.notes}</dd>
                                         </div>
                                       ) : null}
                                       {registration.admin_notes ? (
                                         <div>
-                                          <dt className="text-white/40">Admin notes</dt>
+                                          <dt className="text-[color:var(--aqt-fg-dim)]">Admin notes</dt>
                                           <dd className="mt-0.5">{registration.admin_notes}</dd>
                                         </div>
                                       ) : null}
@@ -1213,12 +1213,12 @@ export default function BalancerRegistrationsPage() {
           setCreateOpen(open);
         }}
       >
-        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
-          <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
-            <DialogTitle className="text-xl font-semibold tracking-tight text-white">
+        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50 sm:rounded-xl">
+          <DialogHeader className="border-b border-[color:var(--aqt-border-2)] px-4 py-3.5 text-left sm:px-5">
+            <DialogTitle className="text-xl font-semibold tracking-tight text-[color:var(--aqt-fg)]">
               Create Manual Registration
             </DialogTitle>
-            <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-white/50">
+            <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-[color:var(--aqt-fg-muted)]">
               Open the same multi-step visual shell used by the public flow, but keep every admin
               field available in one fixed editor.
             </DialogDescription>
@@ -1249,12 +1249,12 @@ export default function BalancerRegistrationsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50 sm:rounded-xl">
-          <DialogHeader className="border-b border-white/10 px-4 py-3.5 text-left sm:px-5">
-            <DialogTitle className="text-xl font-semibold tracking-tight text-white">
+        <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50 sm:rounded-xl">
+          <DialogHeader className="border-b border-[color:var(--aqt-border-2)] px-4 py-3.5 text-left sm:px-5">
+            <DialogTitle className="text-xl font-semibold tracking-tight text-[color:var(--aqt-fg)]">
               Edit Registration
             </DialogTitle>
-            <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-white/50">
+            <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-[color:var(--aqt-fg-muted)]">
               Update balancer-facing participant data in the fixed admin editor, while keeping the
               public multi-step look and hierarchy.
             </DialogDescription>

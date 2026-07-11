@@ -138,7 +138,7 @@ export const PANEL_CLASS =
   "rounded-xl border border-border bg-card";
 
 export const MUTED_BUTTON_CLASS =
-  "rounded-xl border-white/10 bg-black/15 text-white/70 hover:bg-white/[0.05] hover:text-white";
+  "rounded-xl border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]";
 
 export function createVariantLabel(index: number): string {
   return `Balance ${index}`;

@@ -242,7 +242,7 @@ export default function RankAutofillPage() {
               onLookbackChange={handleLookbackChange}
             />
 
-            <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-3">
+            <div className="flex flex-wrap items-center gap-4 border-t border-[color:var(--aqt-border-2)] pt-3">
               <label className="flex cursor-pointer items-center gap-2">
                 <Checkbox
                   checked={overwriteExisting}
@@ -250,7 +250,7 @@ export default function RankAutofillPage() {
                   disabled={applyMutation.isPending}
                   aria-label={t("rankAutofill.overwriteAria")}
                 />
-                <span className="text-xs text-white/65 select-none">{t("rankAutofill.overwrite")}</span>
+                <span className="text-xs text-[color:var(--aqt-fg-muted)] select-none">{t("rankAutofill.overwrite")}</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2">
                 <Checkbox
@@ -259,7 +259,7 @@ export default function RankAutofillPage() {
                   disabled={applyMutation.isPending}
                   aria-label={t("rankAutofill.addToBalancerAria")}
                 />
-                <span className="text-xs text-white/65 select-none">
+                <span className="text-xs text-[color:var(--aqt-fg-muted)] select-none">
                   {t("rankAutofill.addToBalancer")}
                 </span>
               </label>
@@ -270,12 +270,12 @@ export default function RankAutofillPage() {
                   disabled={applyMutation.isPending}
                   aria-label={t("rankAutofill.allowPartialAria")}
                 />
-                <span className="text-xs text-white/65 select-none">
+                <span className="text-xs text-[color:var(--aqt-fg-muted)] select-none">
                   {t("rankAutofill.allowPartial")}
                 </span>
               </label>
               {previewQuery.isFetching && (
-                <div className="ml-auto flex items-center gap-1.5 text-xs text-white/40">
+                <div className="ml-auto flex items-center gap-1.5 text-xs text-[color:var(--aqt-fg-dim)]">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   {t("rankAutofill.previewUpdating")}
                 </div>
@@ -292,13 +292,13 @@ export default function RankAutofillPage() {
             <CardDescription>{t("rankAutofill.previewDescription")}</CardDescription>
           </div>
           {preview && (
-            <div className="flex shrink-0 items-center divide-x divide-white/10 rounded-lg border border-white/10 bg-white/[0.03]">
+            <div className="flex shrink-0 items-center divide-x divide-[color:var(--aqt-border)] rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03]">
               {stats.map(({ label, value, color }) => (
                 <div key={label} className="px-3 py-2 text-center">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                     {label}
                   </div>
-                  <div className={cn("text-base font-semibold tabular-nums", color || "text-white/80")}>
+                  <div className={cn("text-base font-semibold tabular-nums", color || "text-[color:var(--aqt-fg)]")}>
                     {value}
                   </div>
                 </div>
@@ -309,7 +309,7 @@ export default function RankAutofillPage() {
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--aqt-fg-dim)]" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -323,7 +323,7 @@ export default function RankAutofillPage() {
                 onCheckedChange={(checked) => setMismatchOnly(checked === true)}
                 aria-label={t("rankAutofill.mismatchOnlyAria")}
               />
-              <span className="text-xs text-white/65 select-none">{t("rankAutofill.mismatchOnly")}</span>
+              <span className="text-xs text-[color:var(--aqt-fg-muted)] select-none">{t("rankAutofill.mismatchOnly")}</span>
             </label>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -349,8 +349,8 @@ export default function RankAutofillPage() {
             )}
           </div>
         </CardContent>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-6 py-3">
-          <span className="text-xs text-white/45">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--aqt-border-2)] px-6 py-3">
+          <span className="text-xs text-[color:var(--aqt-fg-dim)]">
             {t("rankAutofill.selectedCount", { count: selectedIds.size })}
           </span>
           <Button onClick={() => applyMutation.mutate()} disabled={applyDisabled}>

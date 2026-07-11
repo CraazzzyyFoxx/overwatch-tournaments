@@ -625,12 +625,12 @@ export default function UnifiedRegistrationForm({
     <div className="flex flex-col gap-5 sm:min-h-[560px] lg:min-h-[640px]">
       {mode === "public" && (
         <div>
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-[color:var(--aqt-fg)]">
             {tournamentName
               ? t("registration.wizard.titleFor", { name: tournamentName })
               : t("registration.wizard.title")}
           </h2>
-          <p className="mt-1 text-sm text-white/50">
+          <p className="mt-1 text-sm text-[color:var(--aqt-fg-muted)]">
             {state.step === 0 && t("registration.wizard.step1Desc")}
             {state.step === 1 && t("registration.wizard.step2Desc")}
             {state.step === 2 && t("registration.wizard.step3Desc")}
@@ -720,12 +720,12 @@ export default function UnifiedRegistrationForm({
         <p className="text-sm text-red-400">{error ?? footerValidationError}</p>
       )}
 
-      <div className="flex items-center justify-between border-t border-white/8 pt-4">
+      <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-4">
         {state.step > 0 ? (
           <button
             type="button"
             onClick={handleBack}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/4"
           >
             <ArrowLeft className="size-3.5" />
             {mode === "admin" ? "Back" : t("common.back")}
@@ -734,7 +734,7 @@ export default function UnifiedRegistrationForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
+            className="rounded-lg border border-[color:var(--aqt-border-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/4"
           >
             {mode === "admin" ? "Cancel" : t("common.cancel")}
           </button>

@@ -57,10 +57,10 @@ export default function AccountStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
           {mode === "admin" ? "Identity and Contact Handles" : t("registration.accounts.title")}
         </h3>
-        <p className="text-xs leading-5 text-white/42">
+        <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
           {mode === "admin"
             ? "Only the registration identity fields that matter in admin editing."
             : t("registration.accounts.desc")}
@@ -75,7 +75,7 @@ export default function AccountStep({
             placeholder="Display name"
             value={displayName ?? ""}
             onChange={(e) => onDisplayNameChange(e.target.value)}
-            className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20"
+            className="h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]"
           />
         </div>
       )}

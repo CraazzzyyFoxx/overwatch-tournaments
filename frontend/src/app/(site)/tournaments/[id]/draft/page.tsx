@@ -14,7 +14,7 @@ export default function TournamentDraftRoutePage() {
 
   if (tournamentQuery.isLoading) {
     return (
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
+      <div className="rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
         {t("common.loading")}
       </div>
     );
@@ -22,7 +22,7 @@ export default function TournamentDraftRoutePage() {
 
   if (!tournamentQuery.data) {
     return (
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
+      <div className="rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
         {t("common.tournamentNotFound")}
       </div>
     );

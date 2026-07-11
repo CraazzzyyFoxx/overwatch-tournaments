@@ -82,26 +82,26 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
       {variantSelector ? <div className="mb-2">{variantSelector}</div> : null}
       <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[11px] uppercase tracking-[0.16em] text-white/28">
+          <span className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--aqt-fg-faint)]">
             Team distribution
           </span>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-white/55">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-[color:var(--aqt-fg-muted)]">
             <span>
-              <span className="text-white/38">Avg</span>{" "}
+              <span className="text-[color:var(--aqt-fg-dim)]">Avg</span>{" "}
               <span className="font-semibold text-cyan-300">
                 {average ?? stats?.average_mmr ?? "-"}
               </span>
             </span>
             <span>
-              <span className="text-white/38">Spread</span>{" "}
+              <span className="text-[color:var(--aqt-fg-dim)]">Spread</span>{" "}
               <span className="font-semibold text-amber-300">{spread ?? "-"}</span>
             </span>
             <span>
-              <span className="text-white/38">Range</span> {min ?? "-"}
+              <span className="text-[color:var(--aqt-fg-dim)]">Range</span> {min ?? "-"}
               {min != null && max != null ? `–${max}` : ""}
             </span>
             <span>
-              <span className="text-white/38">σ</span>{" "}
+              <span className="text-[color:var(--aqt-fg-dim)]">σ</span>{" "}
               {stats?.mmr_std_dev != null ? stats.mmr_std_dev.toFixed(1) : "-"}
             </span>
           </div>
@@ -111,14 +111,14 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
           onClick={() => setCollapsed((value) => !value)}
           aria-expanded={!collapsed}
           aria-label={collapsed ? "Expand team distribution chart" : "Collapse team distribution chart"}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/40 transition hover:bg-white/5 hover:text-white/70"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-dim)] transition hover:bg-white/5 hover:text-[color:var(--aqt-fg-muted)]"
         >
           {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
       </div>
 
       {collapsed ? null : (
-      <div className="mt-2 rounded-xl border border-white/8 bg-black/15 px-3 py-2">
+      <div className="mt-2 rounded-xl border border-[color:var(--aqt-border)] bg-black/15 px-3 py-2">
         <div className="relative min-h-8">
           <div className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full bg-white/4" />
           {buckets.map((bucket) => {
@@ -153,7 +153,7 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
                 {isGroup ? (
                   <div
                     className={cn(
-                      "relative flex flex-row flex-wrap items-center gap-y-0.5 rounded-lg bg-white/4 p-0.5 ring-1 ring-white/14 backdrop-blur-sm",
+                      "relative flex flex-row flex-wrap items-center gap-y-0.5 rounded-lg bg-white/4 p-0.5 ring-1 ring-[color:var(--aqt-border-2)] backdrop-blur-sm",
                       wrapJustifyClass
                     )}
                   >
@@ -185,7 +185,7 @@ export function TeamDistributionPanel({ variant, variantSelector }: TeamDistribu
             );
           })}
         </div>
-        <div className="mt-2 flex items-center justify-between text-[10px] text-white/28">
+        <div className="mt-2 flex items-center justify-between text-[10px] text-[color:var(--aqt-fg-faint)]">
           <span>{min ?? "-"}</span>
           <span>{max ?? "-"}</span>
         </div>

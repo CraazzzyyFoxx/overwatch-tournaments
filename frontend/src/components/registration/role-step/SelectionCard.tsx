@@ -50,8 +50,8 @@ export function SelectionCard({
         selected
           ? visuals.selectedCard
           : disabled
-            ? "border-white/10 bg-white/[0.015] opacity-55"
-            : "border-white/10 hover:border-white/15 hover:bg-white/[0.04]",
+            ? "border-[color:var(--aqt-border-2)] bg-white/[0.015] opacity-55"
+            : "border-[color:var(--aqt-border-2)] hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.04]",
       )}
     >
       <button
@@ -73,11 +73,11 @@ export function SelectionCard({
             icon={icon ?? <PlayerRoleIcon role={getRoleIconName(roleCode)} size={18} />}
           />
           <div className="min-w-0 text-left">
-            <p className={cn("text-[12px] font-semibold", disabled ? "text-white/65" : "text-white")}>
+            <p className={cn("text-[12px] font-semibold", disabled ? "text-[color:var(--aqt-fg-muted)]" : "text-[color:var(--aqt-fg)]")}>
               {label}
             </p>
             {hint && (
-              <p className={cn("text-xs leading-5", disabled ? "text-white/35" : "text-white/45")}>
+              <p className={cn("text-xs leading-5", disabled ? "text-[color:var(--aqt-fg-dim)]" : "text-[color:var(--aqt-fg-dim)]")}>
                 {hint}
               </p>
             )}
@@ -103,7 +103,7 @@ export function SelectionCard({
       {shouldRenderDetailsSlot && (
         <div
           className={cn(
-            "border-t border-white/10 px-2.5 pb-2.5 pt-1.5",
+            "border-t border-[color:var(--aqt-border-2)] px-2.5 pb-2.5 pt-1.5",
             detailsAreaInteractive && "cursor-pointer",
           )}
           onClick={detailsAreaInteractive ? onClick : undefined}

@@ -131,13 +131,13 @@ export default function AccountCombobox({
               aria-controls={listboxId}
               aria-expanded={open}
               className={cn(
-                "flex h-9 w-full items-center justify-between rounded-lg border border-white/10 bg-white/3 px-3 text-sm transition-colors hover:border-white/15",
-                value ? "text-white" : "text-white/30",
+                "flex h-9 w-full items-center justify-between rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm transition-colors hover:border-[color:var(--aqt-border-2)]",
+                value ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
                 validationError && "border-red-500/70 text-red-100 hover:border-red-500/70",
               )}
             >
               <span className="truncate">{value || placeholder}</span>
-              <ChevronsUpDown className="ml-2 size-3.5 shrink-0 text-white/30" />
+              <ChevronsUpDown className="ml-2 size-3.5 shrink-0 text-[color:var(--aqt-fg-dim)]" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -184,7 +184,7 @@ export default function AccountCombobox({
           value={inputValue}
           onChange={(e) => handleInputChange(e.target.value)}
           className={cn(
-            "h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20",
+            "h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]",
             validationError && "border-red-500/70 text-red-100 placeholder:text-red-200/60 focus:border-red-500/70",
           )}
         />

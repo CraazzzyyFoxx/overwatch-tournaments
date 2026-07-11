@@ -136,7 +136,7 @@ function CompactStatusMenu({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          className="h-7 max-w-[128px] justify-start rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+          className="h-7 max-w-[128px] justify-start rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
         >
           <span className="truncate">{getStatusName(statusOptions, value)}</span>
         </Button>
@@ -265,7 +265,7 @@ function TriagePlayerCard({
             <button
               type="button"
               data-card-action
-              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-white/10 bg-black/20 text-white/45 hover:text-white active:cursor-grabbing"
+              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-black/20 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
               {...attributes}
               {...listeners}
             >
@@ -281,10 +281,10 @@ function TriagePlayerCard({
                       <PlayerRoleIcon key={roleCode} role={ROLE_LABELS[roleCode]} size={15} />
                     ))
                   ) : (
-                    <span className="text-[11px] text-white/28">No roles</span>
+                    <span className="text-[11px] text-[color:var(--aqt-fg-faint)]">No roles</span>
                   )}
-                  <span className="truncate text-[13px] font-semibold text-white/88">{name}</span>
-                  {suffix ? <span className="shrink-0 text-[12px] text-white/30">{suffix}</span> : null}
+                  <span className="truncate text-[13px] font-semibold text-[color:var(--aqt-fg)]">{name}</span>
+                  {suffix ? <span className="shrink-0 text-[12px] text-[color:var(--aqt-fg-dim)]">{suffix}</span> : null}
                 </div>
               </div>
               {state.player.is_flex || isReady || state.issues.length > 0 || smurfTags.length > 0 ? (
@@ -316,7 +316,7 @@ function TriagePlayerCard({
                   {primaryEntry.rank_value}
                 </span>
               ) : (
-                <span className="text-[12px] text-white/24">-</span>
+                <span className="text-[12px] text-[color:var(--aqt-fg-faint)]">-</span>
               )}
             </div>
           </div>
@@ -335,7 +335,7 @@ function TriagePlayerCard({
                 variant="ghost"
                 size="sm"
                 disabled={actionsDisabled || !onSetPoolMembership}
-                className="h-7 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                 onClick={() => onSetPoolMembership?.(state.player.id, !state.player.is_in_pool)}
               >
                 {state.player.is_in_pool ? <ShieldX className="mr-1 h-3 w-3" /> : <PlusCircle className="mr-1 h-3 w-3" />}
@@ -410,10 +410,10 @@ function TriageLaneColumn({
     >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-white/90">{POOL_LANE_LABELS[lane]}</div>
-          <div className="mt-0.5 text-[11px] text-white/38">{LANE_COPY[lane]}</div>
+          <div className="text-sm font-semibold text-[color:var(--aqt-fg)]">{POOL_LANE_LABELS[lane]}</div>
+          <div className="mt-0.5 text-[11px] text-[color:var(--aqt-fg-dim)]">{LANE_COPY[lane]}</div>
         </div>
-        <div className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-white/60">
+        <div className="rounded-full border border-[color:var(--aqt-border-2)] bg-black/20 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
           {states.length}
         </div>
       </div>
@@ -434,7 +434,7 @@ function TriageLaneColumn({
               />
             ))
           ) : (
-            <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-8 text-center text-xs text-white/35">
+            <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-black/10 px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
               Drop players here
             </div>
           )}
@@ -491,10 +491,10 @@ export function PoolTriageBoard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/50">
-        <DialogHeader className="shrink-0 border-b border-white/8 px-5 py-4">
-          <DialogTitle className="text-base text-white">Balancing Pool Triage</DialogTitle>
-          <DialogDescription className="text-xs text-white/42">
+      <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50">
+        <DialogHeader className="shrink-0 border-b border-[color:var(--aqt-border)] px-5 py-4">
+          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool Triage</DialogTitle>
+          <DialogDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
             Drag players to include or exclude them. Need Fix and Ready are computed from validation, so included players settle into the correct lane automatically.
           </DialogDescription>
         </DialogHeader>

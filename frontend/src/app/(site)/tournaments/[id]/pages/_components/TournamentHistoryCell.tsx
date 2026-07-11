@@ -66,22 +66,22 @@ export default function TournamentHistoryCell({
           <button
             type="button"
             aria-label={t("tournamentDetail.previousTournaments", { count: total })}
-            className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-xs font-medium text-white/65 transition hover:border-white/20 hover:bg-white/8 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]"
+            className="inline-flex items-center rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-1.5 py-0.5 text-xs font-medium text-[color:var(--aqt-fg-muted)] transition hover:border-[color:var(--aqt-border-2)] hover:bg-white/8 hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111113]"
           >
             {total}x
           </button>
         </TooltipTrigger>
         <TooltipContent
           side="top"
-          className="max-w-xs border border-white/[0.08] bg-[#111113] px-3 py-2 text-white shadow-xl shadow-black/40"
+          className="max-w-xs border border-[color:var(--aqt-border)] bg-[#111113] px-3 py-2 text-[color:var(--aqt-fg)] shadow-xl shadow-black/40"
         >
           <ul className="space-y-1 text-xs">
             {history.map((h) => {
               return (
                 <li key={h.tournament_id} className="space-y-1">
-                  <div className="text-white/80">{h.tournament_name}</div>
+                  <div className="text-[color:var(--aqt-fg)]">{h.tournament_name}</div>
                   {(h.role || h.division != null) ? (
-                    <div className="flex items-center gap-2 text-white/45">
+                    <div className="flex items-center gap-2 text-[color:var(--aqt-fg-dim)]">
                       {h.role ? (
                         <span
                           className="inline-flex items-center"
@@ -117,7 +117,7 @@ export default function TournamentHistoryCell({
               );
             })}
             {total > history.length && (
-              <li className="text-white/30">
+              <li className="text-[color:var(--aqt-fg-dim)]">
                 +{total - history.length} {t("common.more")}
               </li>
             )}

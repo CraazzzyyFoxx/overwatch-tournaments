@@ -49,7 +49,7 @@ function WorkflowStep({
               ? "bg-emerald-500/20 text-emerald-300 ring-emerald-500/8"
               : status === "active"
                 ? "bg-primary/25 text-primary ring-primary/10"
-                : "bg-white/5 text-white/20 ring-white/3",
+                : "bg-white/5 text-[color:var(--aqt-fg-faint)] ring-[color:var(--aqt-border-2)]",
           )}
         >
           {status === "done" ? <CheckCircle2 className="h-4.5 w-4.5" /> : step}
@@ -68,7 +68,7 @@ function WorkflowStep({
         <div
           className={cn(
             "mt-1.5 text-sm font-semibold leading-none",
-            status === "pending" ? "text-white/25" : "text-white/90",
+            status === "pending" ? "text-[color:var(--aqt-fg-faint)]" : "text-[color:var(--aqt-fg)]",
           )}
         >
           {label}
@@ -76,7 +76,7 @@ function WorkflowStep({
         <div
           className={cn(
             "mt-1.5 text-xs",
-            status === "pending" ? "text-white/18" : "text-white/40",
+            status === "pending" ? "text-[color:var(--aqt-fg-faint)]" : "text-[color:var(--aqt-fg-dim)]",
           )}
         >
           {detail}
@@ -90,7 +90,7 @@ function WorkflowStep({
               "mt-3 rounded-lg",
               action.variant === "primary"
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "border border-white/10 bg-black/15 text-white/70 hover:bg-white/5 hover:text-white",
+                : "border border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]",
             )}
           >
             {action.label}
@@ -114,7 +114,7 @@ export function BalancerSetupChecklist({
   const hasInvalidPlayers = invalidPlayerCount > 0;
 
   return (
-    <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/2">
+    <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[color:var(--aqt-border-2)] bg-white/2">
       <div className="w-full max-w-sm px-6">
         <WorkflowStep
           step={1}

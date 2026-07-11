@@ -278,7 +278,7 @@ function BottomPanel({
             <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
               {t("draft.bottomPanel.draftPaused")}
             </span>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {label(t, "draft.bottomPanel.waitingResume", "Waiting for organizer to resume")}
             </span>
           </div>
@@ -290,7 +290,7 @@ function BottomPanel({
             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
               {t("draft.bottomPanel.draftCompleted")}
             </span>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {label(t, "draft.bottomPanel.exportPrompt", "Rosters are finalized")}
             </span>
           </div>
@@ -302,7 +302,7 @@ function BottomPanel({
             <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
               {t("draft.bottomPanel.waitingStart")}
             </span>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {label(t, "draft.bottomPanel.preparing", "Organizer is preparing to start")}
             </span>
           </div>
@@ -324,7 +324,7 @@ function BottomPanel({
             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
               {t("draft.bottomPanel.yourTurn")}
             </span>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {t("draft.bottomPanel.selectPrompt")}
             </span>
           </div>
@@ -338,16 +338,16 @@ function BottomPanel({
             <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-widest font-mono">
               {t("draft.bottomPanel.readyToPick")}
             </span>
-            <span className="text-lg font-black text-white uppercase tracking-wide truncate">
+            <span className="text-lg font-black text-[color:var(--aqt-fg)] uppercase tracking-wide truncate">
               {playerName(selectedPlayer, t)}
             </span>
-            <span className="text-xs font-semibold text-white/50 truncate">
+            <span className="text-xs font-semibold text-[color:var(--aqt-fg-muted)] truncate">
               {selectedRole ? roleLabel(selectedRole) : "—"} · {formatRank(selectedRole ? getRoleRank(selectedPlayer, selectedRole).rank_value : selectedPlayer.rank_value)} {t("draft.bottomPanel.readyMeta", { team: onClockTeam?.name ?? "" })}
             </span>
           </div>
 
           {selectedPlayerRoles.length > 1 && (
-            <div className="flex items-center gap-1.5 bg-white/[0.03] p-1 rounded-lg border border-white/5 shrink-0">
+            <div className="flex items-center gap-1.5 bg-white/[0.03] p-1 rounded-lg border border-[color:var(--aqt-border)] shrink-0">
               {selectedPlayerRoles.map((role) => {
                 const filled = isRoleFilled(role);
                 const active = selectedRole === role;
@@ -361,7 +361,7 @@ function BottomPanel({
                       "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition",
                       active
                         ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent",
+                        : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)] hover:bg-white/5 border border-transparent",
                       filled && "opacity-30 cursor-not-allowed"
                     )}
                     title={filled ? t("draft.roleFilled") : undefined}
@@ -385,7 +385,7 @@ function BottomPanel({
             <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
               {turnText}
             </span>
-            <span className="text-sm text-white/60">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name}
             </span>
           </div>
@@ -394,10 +394,10 @@ function BottomPanel({
 
       return (
         <div className="flex flex-col">
-          <span className="text-xs font-bold text-white/40 uppercase tracking-wider">
+          <span className="text-xs font-bold text-[color:var(--aqt-fg-dim)] uppercase tracking-wider">
             {t("draft.bottomPanel.allPicksDone")}
           </span>
-          <span className="text-sm text-white/55">
+          <span className="text-sm text-[color:var(--aqt-fg-muted)]">
             {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name}
           </span>
         </div>
@@ -409,7 +409,7 @@ function BottomPanel({
         <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
           {t("draft.bottomPanel.liveDraft")}
         </span>
-        <span className="text-sm text-white/65">
+        <span className="text-sm text-[color:var(--aqt-fg-muted)]">
           {t("draft.bottomPanel.currentlyPicking")}: {onClockTeam?.name} {t("draft.bottomPanel.pickProgress", { n: currentPickNumber, total: totalPicks })}
         </span>
       </div>
@@ -442,10 +442,10 @@ function BottomPanel({
           </svg>
         </div>
         <div className="flex flex-col justify-center font-mono">
-          <span className="text-2xl font-bold tracking-tight text-white leading-none">
+          <span className="text-2xl font-bold tracking-tight text-[color:var(--aqt-fg)] leading-none">
             <DraftClock expiresAt={currentPick?.clock_expires_at ?? null} paused={paused} compact />
           </span>
-          <span className="text-[9px] font-bold tracking-wider text-white/30 uppercase mt-0.5">
+          <span className="text-[9px] font-bold tracking-wider text-[color:var(--aqt-fg-dim)] uppercase mt-0.5">
             {session.status === "paused" ? t("draft.paused") : t("draft.onTheClockUpper")}
           </span>
         </div>
@@ -465,7 +465,7 @@ function BottomPanel({
           >
             {isPending ? <Loader2 className={styles.smallSpin} aria-hidden /> : <Check aria-hidden />}
             <span>{t("draft.actions.confirm")}</span>
-            <span className="text-[9px] bg-black/35 text-white/40 px-1 rounded font-mono ml-1">
+            <span className="text-[9px] bg-black/35 text-[color:var(--aqt-fg-dim)] px-1 rounded font-mono ml-1">
               {t("draft.enterKey")}
             </span>
           </button>
@@ -1255,7 +1255,7 @@ function PickRow({ pick, team, pickedPlayer, tournamentGrid, t }: PickRowProps) 
         <span className={styles.pickMeta}>
           {team?.name ?? label(t, "draft.team.unknown", "Unknown team")}
           {pickedDivision != null && (
-            <span className="inline-flex items-center gap-1 ml-1 align-middle text-white/50" title={`${getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, pickedDivision)} (${formatRank(pickedPlayer?.rank_value)})`}>
+            <span className="inline-flex items-center gap-1 ml-1 align-middle text-[color:var(--aqt-fg-muted)]" title={`${getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, pickedDivision)} (${formatRank(pickedPlayer?.rank_value)})`}>
               <span>/</span>
               <PlayerDivisionIcon
                 division={pickedDivision}
@@ -1374,8 +1374,8 @@ function PoolToolbar({
           <PopoverContent className="w-[240px] p-0 border border-[var(--draft-border)] bg-[var(--draft-card-2)] shadow-xl rounded-lg overflow-hidden" align="start">
             <Command className="bg-transparent">
               {selectedHeroes.length > 0 && (
-                <div className="flex items-center justify-between p-2 border-b border-white/5 text-xs bg-white/[0.01]">
-                  <span className="text-white/40 font-semibold">{t("draft.pool.selectedLabel", { n: selectedHeroes.length })}</span>
+                <div className="flex items-center justify-between p-2 border-b border-[color:var(--aqt-border)] text-xs bg-white/[0.01]">
+                  <span className="text-[color:var(--aqt-fg-dim)] font-semibold">{t("draft.pool.selectedLabel", { n: selectedHeroes.length })}</span>
                   <button
                     type="button"
                     onClick={() => onHeroFilterChange([])}
@@ -1385,9 +1385,9 @@ function PoolToolbar({
                   </button>
                 </div>
               )}
-              <CommandInput placeholder={t("draft.pool.searchHeroPlaceholder")} className="h-9 text-xs text-white" />
+              <CommandInput placeholder={t("draft.pool.searchHeroPlaceholder")} className="h-9 text-xs text-[color:var(--aqt-fg)]" />
               <CommandList className="max-h-[300px] overflow-y-auto">
-                <CommandEmpty className="py-4 text-center text-xs text-white/40">{t("draft.pool.noHeroes")}</CommandEmpty>
+                <CommandEmpty className="py-4 text-center text-xs text-[color:var(--aqt-fg-dim)]">{t("draft.pool.noHeroes")}</CommandEmpty>
                 <CommandGroup>
                   {sortedHeroes.map((h) => {
                     const isSelected = selectedHeroes.includes(h.slug);
@@ -1401,14 +1401,14 @@ function PoolToolbar({
                             : [...selectedHeroes, h.slug];
                           onHeroFilterChange(next);
                         }}
-                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-md hover:bg-white/5 data-[selected=true]:bg-white/5 text-white/90 data-[selected=true]:text-white transition"
+                        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-md hover:bg-white/5 data-[selected=true]:bg-white/5 text-[color:var(--aqt-fg)] data-[selected=true]:text-[color:var(--aqt-fg)] transition"
                       >
                         <Checkbox
                           checked={isSelected}
-                          className="pointer-events-none border-white/20 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                          className="pointer-events-none border-[color:var(--aqt-border-2)] data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
                         />
                         {h.image_path ? (
-                          <Avatar className="w-5 h-5 rounded-full shrink-0 select-none border border-white/10">
+                          <Avatar className="w-5 h-5 rounded-full shrink-0 select-none border border-[color:var(--aqt-border-2)]">
                             <AvatarImage
                               src={getHeroIconUrl(h.slug, h.image_path)}
                               alt={h.name}
@@ -1509,7 +1509,7 @@ function SelectedPlayerPanel({
     <section className={cn(styles.selectedCard, "relative")} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "16px", position: "relative" }}>
       <button
         type="button"
-        className="absolute top-3 right-3 text-white/40 hover:text-white/80 transition p-1.5 rounded-full hover:bg-white/5"
+        className="absolute top-3 right-3 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] transition p-1.5 rounded-full hover:bg-white/5"
         onClick={onClear}
         aria-label={t("common.close")}
       >
@@ -1523,16 +1523,16 @@ function SelectedPlayerPanel({
               href={`/users/${getPlayerSlug(selectedPlayer.battle_tag)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xl font-bold uppercase tracking-wide text-white hover:underline hover:text-emerald-400 transition"
+              className="text-xl font-bold uppercase tracking-wide text-[color:var(--aqt-fg)] hover:underline hover:text-emerald-400 transition"
             >
               {playerName(selectedPlayer, t)}
             </a>
           ) : (
-            <strong className="text-xl font-bold uppercase tracking-wide text-white">{playerName(selectedPlayer, t)}</strong>
+            <strong className="text-xl font-bold uppercase tracking-wide text-[color:var(--aqt-fg)]">{playerName(selectedPlayer, t)}</strong>
           )}
           <RolePill role={selectedPlayer.primary_role} />
           {division != null && (
-            <span className="inline-flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded text-xs font-semibold text-white/80">
+            <span className="inline-flex items-center gap-1 bg-white/5 border border-[color:var(--aqt-border-2)] px-2 py-0.5 rounded text-xs font-semibold text-[color:var(--aqt-fg)]">
               <PlayerDivisionIcon
                 division={division}
                 width={20}
@@ -1542,7 +1542,7 @@ function SelectedPlayerPanel({
               <span>{getDivisionLabel(tournamentGrid || DEFAULT_DIVISION_GRID, division)}</span>
             </span>
           )}
-          <span className="text-[10px] font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/40">
+          <span className="text-[10px] font-mono bg-white/5 border border-[color:var(--aqt-border-2)] px-1.5 py-0.5 rounded text-[color:var(--aqt-fg-dim)]">
             {t("draft.player.idLabel", { id: String(selectedPlayer.id) })}
           </span>
           {selectedPlayer.is_captain && (
@@ -1554,9 +1554,9 @@ function SelectedPlayerPanel({
         </div>
 
         {/* Subtitles / Tags row: Sub-roles, Flex, Secondary roles */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-white/50">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[color:var(--aqt-fg-muted)]">
           {selectedPlayer.sub_role && (
-            <span className="bg-white/[0.03] border border-white/5 px-2 py-0.5 rounded">
+            <span className="bg-white/[0.03] border border-[color:var(--aqt-border)] px-2 py-0.5 rounded">
               {formatSubRoleLabel(selectedPlayer.sub_role)}
             </span>
           )}
@@ -1579,15 +1579,15 @@ function SelectedPlayerPanel({
       </div>
 
       {/* Detailed Roles Breakdown */}
-      <div className="flex flex-col gap-3 border-t border-white/[0.05] pt-3 w-full">
-        <span className="text-xs font-bold text-white/40">{label(t, "draft.inspect.roleDetails", "Role Breakdown:")}</span>
+      <div className="flex flex-col gap-3 border-t border-[color:var(--aqt-border)] pt-3 w-full">
+        <span className="text-xs font-bold text-[color:var(--aqt-fg-dim)]">{label(t, "draft.inspect.roleDetails", "Role Breakdown:")}</span>
         <div className="flex flex-col gap-2">
           {selectedPlayerRoles.map((role) => {
             const roleRank = getRoleRank(selectedPlayer, role);
             const roleDiv = roleRank.division_number ?? (roleRank.rank_value != null ? resolveDivisionFromRank(tournamentGrid || DEFAULT_DIVISION_GRID, roleRank.rank_value) : null);
             if (roleDiv == null) return null;
             return (
-              <div key={role} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-2 rounded-lg gap-2">
+              <div key={role} className="flex items-center justify-between bg-white/[0.02] border border-[color:var(--aqt-border)] p-2 rounded-lg gap-2">
                 <div className="flex items-center gap-2">
                   <div
                     className={cn("p-1.5 rounded-md flex items-center justify-center shrink-0", ROLE_CLASS[role])}
@@ -1600,8 +1600,8 @@ function SelectedPlayerPanel({
                     <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-white capitalize">{roleLabel(role)}</span>
-                    <span className="text-[10px] font-mono text-white/40">{formatRank(roleRank.rank_value)} SR</span>
+                    <span className="text-xs font-bold text-[color:var(--aqt-fg)] capitalize">{roleLabel(role)}</span>
+                    <span className="text-[10px] font-mono text-[color:var(--aqt-fg-dim)]">{formatRank(roleRank.rank_value)} SR</span>
                   </div>
                 </div>
 
@@ -1613,7 +1613,7 @@ function SelectedPlayerPanel({
                         const heroObj = heroesMap.get(slug);
                         const imagePath = heroObj?.image_path || (typeof hero === "string" ? undefined : hero.image_path);
                         return (
-                          <Avatar key={slug} className="w-8 h-8 rounded-full border border-white/10 shrink-0 select-none hover:scale-105 transition" title={heroObj?.name || slug}>
+                          <Avatar key={slug} className="w-8 h-8 rounded-full border border-[color:var(--aqt-border-2)] shrink-0 select-none hover:scale-105 transition" title={heroObj?.name || slug}>
                             <AvatarImage
                               src={getHeroIconUrl(slug, imagePath)}
                               alt={slug}
@@ -1647,7 +1647,7 @@ function SelectedPlayerPanel({
       {playerNote && playerNote.trim() ? (
         <div className={styles.selectedNotesBlock}>
           <span className={styles.selectedNotesTitle}>{label(t, "draft.inspect.notes", "Player Note")}</span>
-          <p className="italic text-white/80 whitespace-pre-wrap">
+          <p className="italic text-[color:var(--aqt-fg)] whitespace-pre-wrap">
             &ldquo;{playerNote}&rdquo;
           </p>
         </div>
@@ -1800,7 +1800,7 @@ function PlayerCard({ player, selected, tournamentGrid, onSelect, t, heroesMap }
                   />
                 </div>
               ) : (
-                <span className="text-xs text-white/30">&mdash;</span>
+                <span className="text-xs text-[color:var(--aqt-fg-dim)]">&mdash;</span>
               )}
             </div>
           );
@@ -2015,7 +2015,7 @@ function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerPr
           </div>
         )}
         <div className="min-w-0">
-          <strong className="block truncate text-xs font-bold text-white">
+          <strong className="block truncate text-xs font-bold text-[color:var(--aqt-fg)]">
             {player.is_captain && <Crown aria-hidden className="inline mr-1 text-amber-400" />}
             {player.battle_tag ? (
               <a
@@ -2031,7 +2031,7 @@ function RosterPlayer({ player, draftedRole, tournamentGrid, t }: RosterPlayerPr
             )}
           </strong>
           {player.sub_role && (
-            <span className="block text-xs font-semibold text-white/65 truncate mt-0.5">
+            <span className="block text-xs font-semibold text-[color:var(--aqt-fg-muted)] truncate mt-0.5">
               {formatSubRoleLabel(player.sub_role)}
             </span>
           )}

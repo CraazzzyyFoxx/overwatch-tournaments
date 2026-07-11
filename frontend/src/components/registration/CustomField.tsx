@@ -36,7 +36,7 @@ export default function CustomField({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white outline-none"
+          className="h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] outline-none"
         >
           <option value="">{t("common.selectPlaceholder")}</option>
           {definition.options.map((opt) => (
@@ -70,7 +70,7 @@ export default function CustomField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20",
+          "h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]",
           validationError && "border-red-500/70 text-red-100 placeholder:text-red-200/60 focus:border-red-500/70",
         )}
       />
