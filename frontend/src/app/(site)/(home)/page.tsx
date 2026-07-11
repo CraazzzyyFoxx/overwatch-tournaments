@@ -1,7 +1,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
+import { Award, BarChart3, Calendar, Inbox, Scale, Trophy, Users } from "lucide-react";
 
 import StatisticsCard from "@/components/StatisticsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -515,6 +515,19 @@ function DashCardHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Empty-state placeholder for dashboard cards. Shown when a request succeeds
+// but the (workspace-scoped) result set is empty — e.g. a fresh tenant
+// community with no completed tournaments yet. Distinct from the load-error
+// note, which stays reserved for a genuine fetch failure.
+function DashCardEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+      <Inbox className="h-6 w-6 text-muted-foreground/25" />
+      <p className="text-xs text-muted-foreground/60">{message}</p>
+    </div>
+  );
+}
+
 function PlaceBadge({ n }: { n: number }) {
   const map: Record<number, { bg: string; color: string }> = {
     1: { bg: "#cbb765", color: "#121009" },
@@ -543,21 +556,30 @@ async function TournamentActivityCard() {
   let max = 1;
   try {
     const data = await statisticsService.getTournaments({ skipWorkspace });
-    if (data.length > 0) {
-      visible = data.slice(-24);
+    visible = data.slice(-24);
+    if (visible.length > 0) {
       max = Math.max(...visible.map((d) => d.players_count), 1);
     }
   } catch {
-    // Fail silently
+    // visible stays null on a genuine fetch error
   }
 
-  if (!visible) {
+  if (visible === null) {
     return (
       <>
         <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
           {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (visible.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
@@ -606,11 +628,12 @@ async function TournamentActivityCard() {
 async function DivisionRingsCard() {
   const t = await getTranslations();
   const skipWorkspace = !(await isTenantHost());
-  let roles = null;
+  let roles: { label: string; val: number; pct: number; color: string }[] | null = null;
   try {
     const data = await statisticsService.getTournamentsDivision({
       skipWorkspace,
     });
+    roles = [];
     if (data.length > 0) {
       const mean = (vals: (number | null)[]) => {
         const nums = vals.filter((v): v is number => v != null);
@@ -634,13 +657,22 @@ async function DivisionRingsCard() {
     // Fail silently
   }
 
-  if (!roles) {
+  if (roles === null) {
     return (
       <>
         <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
           {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (roles.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
@@ -726,6 +758,15 @@ async function ChampionsCard() {
     );
   }
 
+  if (top.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
+      </>
+    );
+  }
+
   return (
     <>
       <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
@@ -779,6 +820,15 @@ async function TopWinRateCard() {
         <div className="px-5 py-4 text-sm text-muted-foreground">
           {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (top.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
