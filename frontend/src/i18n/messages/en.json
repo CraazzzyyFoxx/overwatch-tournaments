@@ -1275,10 +1275,10 @@
     }
   },
   "tournamentDetail": {
-    "metaTitle": "{name} | AQT",
-    "metaDescription": "Overview for {name} on AQT.",
-    "metaTitleFallback": "Tournament | AQT",
-    "metaDescriptionFallback": "Tournament overview on AQT.",
+    "metaTitle": "{name}",
+    "metaDescription": "Overview for {name}.",
+    "metaTitleFallback": "Tournament",
+    "metaDescriptionFallback": "Tournament overview.",
     "sectionsNav": "Tournament sections",
     "sortTeams": "Sort teams",
     "rankHistory": "Rank history",

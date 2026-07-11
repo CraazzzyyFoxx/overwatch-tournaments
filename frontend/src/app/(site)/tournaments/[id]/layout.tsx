@@ -19,7 +19,7 @@ export async function generateMetadata(props: {
 
   try {
     const tournament = await getTournament(tournamentId);
-    const title = t("tournamentDetail.metaTitle", { name: tournament.name });
+    const title = `${t("tournamentDetail.metaTitle", { name: tournament.name })} | ${name}`;
     const description = t("tournamentDetail.metaDescription", {
       name: tournament.name,
     });
@@ -39,7 +39,7 @@ export async function generateMetadata(props: {
     };
   } catch {
     return {
-      title: t("tournamentDetail.metaTitleFallback"),
+      title: `${t("tournamentDetail.metaTitleFallback")} | ${name}`,
       description: t("tournamentDetail.metaDescriptionFallback"),
       metadataBase
     };

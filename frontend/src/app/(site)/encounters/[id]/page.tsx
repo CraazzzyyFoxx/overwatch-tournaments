@@ -6,7 +6,7 @@ import { Metadata } from "next";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import EncounterMatch from "@/app/(site)/encounters/[id]/components/EncounterMatch";
 import { Swords, ArrowLeft } from "lucide-react";
-import { SITE_NAME } from "@/config/site";
+import { SITE_NAME, SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { MapVeto } from "@/app/(site)/encounters/[id]/components/MapVeto";
@@ -37,7 +37,7 @@ export async function generateMetadata(props: {
     openGraph: {
       title,
       description,
-      url: "https://aqt.craazzzyyfoxx.me",
+      url: SITE_URL,
       type: "website",
       siteName: SITE_NAME,
       locale: "en_US"

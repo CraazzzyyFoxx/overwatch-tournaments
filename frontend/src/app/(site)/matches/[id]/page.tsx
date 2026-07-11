@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MatchTeamTable from "@/app/(site)/matches/[id]/components/MatchTeamTable";
 import { Card, CardHeader } from "@/components/ui/card";
 import { getTranslations } from "next-intl/server";
-import { SITE_NAME } from "@/config/site";
+import { SITE_NAME, SITE_URL } from "@/config/site";
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,7 @@ export async function generateMetadata(props: {
     openGraph: {
       title: `${matchTitle} | ${SITE_NAME}`,
       description: matchDescription,
-      url: "https://aqt.craazzzyyfoxx.me",
+      url: SITE_URL,
       type: "website",
       siteName: SITE_NAME,
       images: [

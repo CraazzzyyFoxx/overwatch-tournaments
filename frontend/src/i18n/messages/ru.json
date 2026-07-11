@@ -1275,10 +1275,10 @@
     }
   },
   "tournamentDetail": {
-    "metaTitle": "{name} | AQT",
-    "metaDescription": "Обзор турнира {name} на AQT.",
-    "metaTitleFallback": "Турнир | AQT",
-    "metaDescriptionFallback": "Обзор турнира на AQT.",
+    "metaTitle": "{name}",
+    "metaDescription": "Обзор турнира {name}.",
+    "metaTitleFallback": "Турнир",
+    "metaDescriptionFallback": "Обзор турнира.",
     "sectionsNav": "Разделы турнира",
     "sortTeams": "Сортировать команды",
     "rankHistory": "История рангов",
