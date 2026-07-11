@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trophy } from "lucide-react";
 import Link from "next/link";
@@ -17,10 +17,13 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import LobbyLeaderboardModal from "@/app/(site)/users/components/overview/LobbyLeaderboardModal";
 
 interface Props {
   tournament: UserTournamentWithStats;
   tournaments: UserTournamentSummary[];
+  /** Profile owner's user id — the row highlighted in the lobby leaderboard. */
+  userId: number;
 }
 
 const compactNumber = (value: number | null | undefined) => {
@@ -42,37 +45,74 @@ const roleColor = (role: string) => {
   return "var(--aqt-damage)";
 };
 
-const StatBlock = ({
+interface StatEntry {
+  rank: number;
+  total: number;
+}
+
+/** Lobby rank → "Top X%" label + a horizontal, fuller-is-better bar width.
+ * (design-book §6 percentile language; rank 1 = best → full bar.) */
+const percentile = (entry: StatEntry) => {
+  const topPct = Math.max(1, Math.round((entry.rank / entry.total) * 100));
+  const barPct = entry.total > 1 ? Math.round(((entry.total - entry.rank) / (entry.total - 1)) * 100) : 100;
+  return { topPct, barPct };
+};
+
+const PercentileTile = ({
   label,
   value,
-  rank,
-  total,
-  highlight
+  topLabel,
+  barPct,
+  highlight,
+  onOpen,
+  openLabel
 }: {
   label: string;
   value: string;
-  rank?: number;
-  total?: number;
+  topLabel?: string | null;
+  barPct?: number | null;
   highlight?: "good" | "bad";
-}) => (
-  <div>
-    <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{label}</div>
-    <div
-      className="aqt-display aqt-tnum text-[22px] font-bold leading-[1.1]"
-      style={{ color: highlight === "good" ? "var(--aqt-emerald)" : highlight === "bad" ? "var(--aqt-rose)" : "var(--aqt-fg)" }}
-    >
-      {value}
-    </div>
-    {rank !== undefined && total !== undefined ? (
-      <div className="aqt-mono text-[11.5px] text-[color:var(--aqt-fg-dim)]">
-        #{rank} / {total}
+  /** When set, the tile becomes a button that opens the lobby leaderboard. */
+  onOpen?: () => void;
+  openLabel?: string;
+}) => {
+  const inner = (
+    <>
+      <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{label}</div>
+      <div
+        className="aqt-display aqt-tnum text-[22px] font-bold leading-[1.05]"
+        style={{ color: highlight === "good" ? "var(--aqt-emerald)" : highlight === "bad" ? "var(--aqt-rose)" : "var(--aqt-fg)" }}
+      >
+        {value}
       </div>
-    ) : null}
-  </div>
-);
+      {topLabel ? <div className="aqt-mono text-[11.5px] text-[color:var(--aqt-fg-muted)]">{topLabel}</div> : null}
+      {barPct != null ? (
+        <div className="mt-0.5 h-[5px] w-full overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${barPct}%`, background: "linear-gradient(90deg, var(--aqt-teal-deep), var(--aqt-teal))" }}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+  const base = "flex flex-col gap-1.5 rounded-[8px] border border-[color:var(--aqt-border)] px-3 py-2.5 text-left";
+  if (!onOpen) return <div className={base}>{inner}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={openLabel}
+      className={`${base} cursor-pointer transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]`}
+    >
+      {inner}
+    </button>
+  );
+};
 
-const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
+const OverviewLastTournamentCard = ({ tournament, tournaments, userId }: Props) => {
   const t = useTranslations();
+  const [lb, setLb] = useState<{ stat: string; label: string } | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -88,7 +128,42 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
     router.push(`${pathname}?${nextSearchParams.toString()}`);
   };
 
+  const s = tournament.stats;
+  type Tile = {
+    key: string;
+    /** Backend LogStatsName value the leaderboard modal fetches. */
+    statName: string;
+    label: string;
+    entry: StatEntry;
+    value: string;
+    highlight?: "good" | "bad";
+  };
+  const statTiles: Tile[] = [];
+  if (s) {
+    if (s.kda) {
+      statTiles.push({ key: "kda", statName: "kda", label: t("users.overview.lastTournament.stat.kda"), entry: s.kda, value: compactNumber(s.kda.value) });
+    }
+    if (s.performance) {
+      statTiles.push({ key: "mvp", statName: "performance", label: t("users.overview.lastTournament.stat.mvpScore"), entry: s.performance, value: compactNumber(s.performance.value) });
+    }
+    if (s.hero_damage_dealt) {
+      statTiles.push({ key: "dmg", statName: "hero_damage_dealt", label: t("users.overview.lastTournament.stat.dmgPerMap"), entry: s.hero_damage_dealt, value: compactNumber(s.hero_damage_dealt.value) });
+    }
+    if (s.damage_delta) {
+      statTiles.push({
+        key: "delta",
+        statName: "damage_delta",
+        label: t("users.overview.lastTournament.stat.dmgDelta"),
+        entry: s.damage_delta,
+        value: s.damage_delta.value >= 0 ? `+${compactNumber(s.damage_delta.value)}` : compactNumber(s.damage_delta.value),
+        highlight: s.damage_delta.value >= 0 ? "good" : "bad"
+      });
+    }
+  }
+  const lobbySize = statTiles[0]?.entry.total ?? null;
+
   return (
+    <>
     <CardSurface
       title={
         <Link href={`/tournaments/${tournament.id}`} className="hover:text-[color:var(--aqt-teal)]">
@@ -157,45 +232,98 @@ const OverviewLastTournamentCard = ({ tournament, tournaments }: Props) => {
             <div className="aqt-mono mt-1 text-[12px] text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} {t("users.overview.lastTournament.mapWinrate")}</div>
           </div>
         </div>
-        {tournament.stats ? (
-          <div className="grid grid-cols-2 gap-2.5 border-t border-[color:var(--aqt-border)] pt-3 sm:grid-cols-4">
-            {tournament.stats.kda ? (
-              <StatBlock
-                label={t("users.overview.lastTournament.stat.kda")}
-                value={compactNumber(tournament.stats.kda.value)}
-                rank={tournament.stats.kda.rank}
-                total={tournament.stats.kda.total}
-              />
-            ) : null}
-            {tournament.stats.performance ? (
-              <StatBlock
-                label={t("users.overview.lastTournament.stat.mvpScore")}
-                value={compactNumber(tournament.stats.performance.value)}
-                rank={tournament.stats.performance.rank}
-                total={tournament.stats.performance.total}
-              />
-            ) : null}
-            {tournament.stats.hero_damage_dealt ? (
-              <StatBlock
-                label={t("users.overview.lastTournament.stat.dmgPerMap")}
-                value={compactNumber(tournament.stats.hero_damage_dealt.value)}
-                rank={tournament.stats.hero_damage_dealt.rank}
-                total={tournament.stats.hero_damage_dealt.total}
-              />
-            ) : null}
-            {tournament.stats.damage_delta ? (
-              <StatBlock
-                label={t("users.overview.lastTournament.stat.dmgDelta")}
-                value={tournament.stats.damage_delta.value >= 0 ? `+${compactNumber(tournament.stats.damage_delta.value)}` : compactNumber(tournament.stats.damage_delta.value)}
-                rank={tournament.stats.damage_delta.rank}
-                total={tournament.stats.damage_delta.total}
-                highlight={tournament.stats.damage_delta.value >= 0 ? "good" : "bad"}
-              />
-            ) : null}
+        {/* Heroes played per THIS tournament is intentionally omitted: the
+            UserTournamentWithStats shape carries no per-hero breakdown, so there
+            is nothing real to show (design-book §5 — never fabricate data). */}
+        {tournament.maps > 0 ? (
+          <div className="flex flex-col gap-2 border-t border-[color:var(--aqt-border)] pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">
+                {t("users.overview.lastTournament.mapResults")}
+              </span>
+              <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+                {t("users.overview.mapsCount", { count: tournament.maps })}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Array.from({ length: tournament.maps_won }).map((_, i) => (
+                <span
+                  key={`w${i}`}
+                  className="aqt-display inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-[11px] font-bold"
+                  style={{
+                    color: "var(--aqt-emerald)",
+                    background: "hsl(150 57% 52% / 0.14)",
+                    border: "1px solid hsl(150 57% 52% / 0.35)"
+                  }}
+                  title={t("users.overview.lastTournament.mapWon")}
+                >
+                  {t("users.overview.win")}
+                </span>
+              ))}
+              {Array.from({ length: Math.max(0, mapsLost) }).map((_, i) => (
+                <span
+                  key={`l${i}`}
+                  className="aqt-display inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-[11px] font-bold"
+                  style={{
+                    color: "var(--aqt-rose)",
+                    background: "hsl(349 84% 63% / 0.14)",
+                    border: "1px solid hsl(349 84% 63% / 0.35)"
+                  }}
+                  title={t("users.overview.lastTournament.mapLost")}
+                >
+                  {t("users.overview.loss")}
+                </span>
+              ))}
+            </div>
+            <span className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-faint)]">
+              {t("users.overview.lastTournament.mapResultsAggregate")}
+            </span>
+          </div>
+        ) : null}
+        {statTiles.length > 0 ? (
+          <div className="flex flex-col gap-2.5 border-t border-[color:var(--aqt-border)] pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">
+                {t("users.overview.lastTournament.lobbyRank")}
+              </span>
+              {lobbySize ? (
+                <span className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+                  {t("users.overview.lastTournament.players", { count: lobbySize })}
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              {statTiles.map((tile) => {
+                const p = percentile(tile.entry);
+                return (
+                  <PercentileTile
+                    key={tile.key}
+                    label={tile.label}
+                    value={tile.value}
+                    topLabel={t("users.overview.lastTournament.rankTop", { pct: p.topPct })}
+                    barPct={p.barPct}
+                    highlight={tile.highlight}
+                    onOpen={() => setLb({ stat: tile.statName, label: tile.label })}
+                    openLabel={t("users.overview.leaderboard.open", { stat: tile.label })}
+                  />
+                );
+              })}
+            </div>
+            <span className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-faint)]">
+              {t("users.overview.lastTournament.percentileHint")}
+            </span>
           </div>
         ) : null}
       </div>
     </CardSurface>
+      <LobbyLeaderboardModal
+        userId={userId}
+        tournamentId={tournament.id}
+        stat={lb?.stat ?? null}
+        statLabel={lb?.label ?? ""}
+        onClose={() => setLb(null)}
+      />
+    </>
   );
 };
 

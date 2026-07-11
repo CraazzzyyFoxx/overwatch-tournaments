@@ -73,22 +73,35 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
     lastTournament && lastTournament.maps > 0 ? (lastTournament.maps_won / lastTournament.maps) * 100 : null;
   const winrateDelta = lastWinrate !== null && winrate !== null ? lastWinrate - winrate : null;
 
-  const roleSwatchColor =
-    primaryRole?.role === "Tank"
-      ? "var(--aqt-tank)"
-      : primaryRole?.role === "Support"
-        ? "var(--aqt-support)"
-        : "var(--aqt-damage)";
+  const roleTint: "tank" | "damage" | "support" =
+    primaryRole?.role === "Tank" ? "tank" : primaryRole?.role === "Support" ? "support" : "damage";
+  const roleSwatchColor = `var(--aqt-${roleTint})`;
 
   return (
-    <HeroFrame className="aqt-player">
+    <HeroFrame className="aqt-player" variant="profile" roleTint={primaryRole ? roleTint : undefined}>
       <div className="flex items-center justify-between gap-3 px-9 pt-5">
-        <p className="m-0 text-[12px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
+        <p className="aqt-mono m-0 text-[12px] uppercase tracking-[0.16em] text-[color:var(--aqt-fg-faint)]">
+          <span aria-hidden className="mr-1.5 text-[color:var(--aqt-fg-dim)]">{"//"}</span>
           <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</Link>
           <span className="mx-1">·</span>
           <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
         </p>
-        <ProfileToolbar />
+        <ProfileToolbar
+          card={{
+            name,
+            tag: tag ?? null,
+            role: primaryRole?.role ?? null,
+            roleTint: primaryRole ? roleTint : null,
+            division: primaryRole?.division ?? null,
+            winrate,
+            avgPlacement: profile.avg_placement,
+            titles: profile.tournaments_won,
+            tournaments: profile.tournaments_count,
+            mapsWon: profile.maps_won,
+            mapsTotal: profile.maps_total,
+            form: formStreak
+          }}
+        />
       </div>
 
       <div className="grid items-center gap-8 p-7 pt-6 md:grid-cols-[auto_1fr_auto] md:px-9 md:py-7">

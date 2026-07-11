@@ -53,6 +53,7 @@ var ReadRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/users/{id}/profile", Queue: "rpc.app.users.get_profile", IDParam: "id", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/tournaments", Queue: "rpc.app.users.tournaments", IDParam: "id", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/tournaments/{tournament_id}", Queue: "rpc.app.users.tournament", IDParam: "id", Path: []string{"tournament_id"}, Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/users/{id}/tournaments/{tournament_id}/leaderboard", Queue: "rpc.app.users.tournament_leaderboard", IDParam: "id", Path: []string{"tournament_id"}, Query: []string{"stat"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/maps", Queue: "rpc.app.users.maps", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/maps/summary", Queue: "rpc.app.users.maps_summary", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/encounters", Queue: "rpc.app.users.encounters", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},

@@ -678,6 +678,166 @@ async def count_teams_by_tournament_bulk(session: AsyncSession, tournaments_ids:
     return dict(result.all())
 
 
+async def get_roster_avg_mvp_bulk(
+    session: AsyncSession,
+    tournament_ids: list[int],
+    user_ids: list[int],
+) -> dict[tuple[int, int], float]:
+    """Average MVP placement per (tournament_id, user_id) for a set of roster players.
+
+    Mirrors the dossier "Avg MVP" summary metric: for each match the player
+    played, take ``COALESCE(ImpactRank, Performance)`` (1 = best; ImpactRank is
+    the newer impact-scoring rank, Performance the legacy fallback — same
+    preference the frontend applies), then average across the player's matches in
+    that tournament.
+
+    ONE bulk query keyed by (tournament_id, user_id) — no per-roster-player
+    round-trips. Scoped to ``tournament_ids`` (which are already
+    workspace-scoped by the caller) via ``Encounter.tournament_id``.
+    """
+    if not tournament_ids or not user_ids:
+        return {}
+
+    per_match = (
+        sa.select(
+            models.Encounter.tournament_id.label("tournament_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.match_id.label("match_id"),
+            sa.func.max(
+                sa.case(
+                    (
+                        models.MatchStatistics.name == enums.LogStatsName.ImpactRank,
+                        models.MatchStatistics.value,
+                    )
+                )
+            ).label("impact_rank"),
+            sa.func.max(
+                sa.case(
+                    (
+                        models.MatchStatistics.name == enums.LogStatsName.Performance,
+                        models.MatchStatistics.value,
+                    )
+                )
+            ).label("performance"),
+        )
+        .select_from(models.MatchStatistics)
+        .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .where(
+            sa.and_(
+                models.MatchStatistics.user_id.in_(user_ids),
+                models.MatchStatistics.name.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                models.MatchStatistics.hero_id.is_(None),
+                models.MatchStatistics.round == 0,
+                models.Encounter.tournament_id.in_(tournament_ids),
+            )
+        )
+        .group_by(
+            models.Encounter.tournament_id,
+            models.MatchStatistics.user_id,
+            models.MatchStatistics.match_id,
+        )
+        .cte("roster_mvp_per_match")
+    )
+
+    placement = sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance)
+
+    query = (
+        sa.select(
+            per_match.c.tournament_id,
+            per_match.c.user_id,
+            sa.func.avg(placement).label("avg_mvp"),
+        )
+        .where(placement.isnot(None))
+        .group_by(per_match.c.tournament_id, per_match.c.user_id)
+    )
+
+    result = await session.execute(query)
+    return {(row.tournament_id, row.user_id): float(row.avg_mvp) for row in result}
+
+
+async def get_roster_top_heroes_bulk(
+    session: AsyncSession,
+    tournament_ids: list[int],
+    user_ids: list[int],
+    *,
+    top_n: int = 3,
+) -> dict[tuple[int, int], list[dict]]:
+    """Top-N heroes by playtime per (tournament_id, user_id) for roster players.
+
+    Reuses the HeroTimePlayed playtime convention used elsewhere in this module
+    (value > 60s, round 0) and emits each hero in the same ``_HERO_JSON`` shape
+    the encounter/match reads use, so ``schemas.HeroRead`` validates identically.
+
+    ONE bulk query, ranked with a window function partitioned by
+    (tournament_id, user_id) — no per-roster-player round-trips. Scoped to
+    ``tournament_ids`` (already workspace-scoped by the caller) via
+    ``Encounter.tournament_id``.
+    """
+    if not tournament_ids or not user_ids:
+        return {}
+
+    playtime = (
+        sa.select(
+            models.Encounter.tournament_id.label("tournament_id"),
+            models.MatchStatistics.user_id.label("user_id"),
+            models.MatchStatistics.hero_id.label("hero_id"),
+            sa.func.sum(models.MatchStatistics.value).label("playtime"),
+        )
+        .select_from(models.MatchStatistics)
+        .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .where(
+            sa.and_(
+                models.MatchStatistics.user_id.in_(user_ids),
+                models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+                models.MatchStatistics.hero_id.isnot(None),
+                models.MatchStatistics.value > 60,
+                models.MatchStatistics.round == 0,
+                models.Encounter.tournament_id.in_(tournament_ids),
+            )
+        )
+        .group_by(
+            models.Encounter.tournament_id,
+            models.MatchStatistics.user_id,
+            models.MatchStatistics.hero_id,
+        )
+        .cte("roster_hero_playtime")
+    )
+
+    ranked = sa.select(
+        playtime.c.tournament_id,
+        playtime.c.user_id,
+        playtime.c.hero_id,
+        playtime.c.playtime,
+        sa.func.row_number()
+        .over(
+            partition_by=(playtime.c.tournament_id, playtime.c.user_id),
+            # hero_id tiebreak keeps the ordering deterministic on equal playtime.
+            order_by=(playtime.c.playtime.desc(), playtime.c.hero_id.asc()),
+        )
+        .label("rn"),
+    ).cte("roster_hero_ranked")
+
+    query = (
+        sa.select(
+            ranked.c.tournament_id,
+            ranked.c.user_id,
+            _HERO_JSON.label("hero"),
+        )
+        .select_from(ranked)
+        .join(models.Hero, models.Hero.id == ranked.c.hero_id)
+        .where(ranked.c.rn <= top_n)
+        .order_by(ranked.c.tournament_id, ranked.c.user_id, ranked.c.playtime.desc(), ranked.c.hero_id.asc())
+    )
+
+    result = await session.execute(query)
+    heroes_map: dict[tuple[int, int], list[dict]] = {}
+    for row in result:
+        heroes_map.setdefault((row.tournament_id, row.user_id), []).append(row.hero)
+    return heroes_map
+
+
 async def get_player_by_user_and_tournament(
     session: AsyncSession, user_id: int, tournament_id: int
 ) -> models.Player | None:

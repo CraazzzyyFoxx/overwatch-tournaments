@@ -283,6 +283,67 @@ async def get_tournament_avg_match_stat_for_user_bulk(
     return result.all()  # type: ignore
 
 
+async def get_tournament_stat_leaderboard(
+    session: AsyncSession,
+    tournament_id: int,
+    stat_name: enums.LogStatsName,
+    *,
+    limit: int = 500,
+) -> typing.Sequence[tuple[int, str, float, int]]:
+    """Full ranked list of every player in a tournament for a single stat.
+
+    Generalizes ``get_tournament_avg_match_stat_for_user_bulk``: the same
+    per-user ``AVG(value)`` cast to ``Numeric(10, 2)`` + ``dense_rank()`` window
+    over ``MatchStatistics`` filtered to the tournament (``round == 0``,
+    hero-agnostic totals via ``hero_id IS NULL``), but WITHOUT narrowing to a
+    single ``user_id`` — so it returns EVERY player's row. Inverse
+    "lower-is-better" stats (Deaths, etc. — see ``enums.is_ascending_stat``)
+    rank ascending so the lowest average is rank 1; every other stat ranks
+    descending. This mirrors the ``rank_asc``/``rank`` pick the tournament-stats
+    flow makes, so a player's rank/value here matches their tournament-stats row.
+
+    Returns rows shaped ``(user_id, name, value, rank)`` ordered by rank.
+    ``limit`` is a defensive cap — lobbies are small (< ~200 players).
+    """
+    avg_value = sa.func.avg(models.MatchStatistics.value)
+    order_by = sa.asc(avg_value) if enums.is_ascending_stat(stat_name) else sa.desc(avg_value)
+
+    stats_query = (
+        sa.select(
+            models.MatchStatistics.user_id.label("user_id"),
+            avg_value.cast(sa.Numeric(10, 2)).label("value"),
+            sa.func.dense_rank().over(order_by=order_by).label("rank"),
+        )
+        .select_from(models.MatchStatistics)
+        .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .where(
+            sa.and_(
+                models.MatchStatistics.name == stat_name,
+                models.Encounter.tournament_id == tournament_id,
+                models.MatchStatistics.round == 0,
+                models.MatchStatistics.hero_id.is_(None),
+            )
+        )
+        .group_by(models.MatchStatistics.user_id)
+    ).cte("leaderboard_stats")
+
+    query = (
+        sa.select(
+            stats_query.c.user_id,
+            models.User.name.label("name"),
+            stats_query.c.value,
+            stats_query.c.rank,
+        )
+        .join(models.User, models.User.id == stats_query.c.user_id)
+        .order_by(stats_query.c.rank.asc(), models.User.name.asc())
+        .limit(limit)
+    )
+
+    result = await session.execute(query)
+    return result.all()  # type: ignore
+
+
 async def get_tournament_winrate(
     session: AsyncSession, tournament: models.Tournament, user_id: int
 ) -> tuple[int, float, int, int] | None:

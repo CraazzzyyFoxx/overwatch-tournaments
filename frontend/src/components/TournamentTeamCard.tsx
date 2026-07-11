@@ -6,6 +6,7 @@ import { Team } from "@/types/team.types";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Skeleton } from "@/components/ui/skeleton";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 
@@ -25,14 +26,42 @@ function NewMark({ active }: { active: boolean }) {
   );
 }
 
+/** Threshold color for the average MVP placement (1 = best). */
+function avgMvpColor(value: number): string {
+  if (value <= 2.5) return "var(--aqt-emerald)";
+  if (value >= 4.5) return "var(--aqt-fg-dim)";
+  return "var(--aqt-fg)";
+}
+
 export const TournamentTeamTable = ({
   players,
   tournamentGrid,
+  highlightUserId,
+  youLabel,
+  avgMvpLabel,
+  heroesLabel,
+  signatureHeroesLabel,
 }: {
   players: TeamRosterPlayer[];
   tournamentGrid?: DivisionGridVersion | null;
+  /** When a roster row belongs to this user id, it gets a "you" tag. */
+  highlightUserId?: number;
+  /** Localized label for the "you" tag (supplied by i18n-aware callers). */
+  youLabel?: string;
+  /** Localized header for the Avg MVP column (falls back to English). */
+  avgMvpLabel?: string;
+  /** Localized header for the Heroes column (falls back to English). */
+  heroesLabel?: string;
+  /** Localized title/aria for the signature-heroes strip (falls back to English). */
+  signatureHeroesLabel?: string;
 }) => {
   const sortedPlayers = sortTeamPlayers(players);
+
+  // Only render the dossier columns when at least one row carries the data;
+  // other callers (team cards) pass rosters without these fields and render
+  // exactly as before.
+  const showExtra = players.some((p) => p.avg_mvp != null || (p.heroes?.length ?? 0) > 0);
+  const signatureTitle = signatureHeroesLabel ?? "Signature heroes";
 
   return (
     <div className="roster-scroll">
@@ -50,6 +79,12 @@ export const TournamentTeamTable = ({
             <th className="c" style={{ width: 48 }}>
               Role
             </th>
+            {showExtra ? (
+              <>
+                <th style={{ width: 64, textAlign: "right" }}>{avgMvpLabel ?? "Avg MVP"}</th>
+                <th style={{ width: 100 }}>{heroesLabel ?? "Heroes"}</th>
+              </>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -63,7 +98,21 @@ export const TournamentTeamTable = ({
                 )}
               </td>
               <td>
-                <PlayerName player={player} includeSpecialization={true} />
+                <div className="flex items-center gap-2">
+                  <PlayerName player={player} includeSpecialization={true} />
+                  {youLabel && highlightUserId != null && player.user_id === highlightUserId ? (
+                    <span
+                      className="aqt-mono rounded-[4px] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em]"
+                      style={{
+                        background: "hsl(172 70% 49% / 0.12)",
+                        border: "1px solid hsl(172 70% 49% / 0.3)",
+                        color: "var(--aqt-teal)",
+                      }}
+                    >
+                      {youLabel}
+                    </span>
+                  ) : null}
+                </div>
               </td>
               <td className="c">
                 <div className="flex justify-center">
@@ -81,6 +130,28 @@ export const TournamentTeamTable = ({
               <td className="c">
                 <NewMark active={player.is_newcomer_role} />
               </td>
+              {showExtra ? (
+                <>
+                  <td
+                    className="aqt-mono"
+                    style={{
+                      textAlign: "right",
+                      color: player.avg_mvp != null ? avgMvpColor(player.avg_mvp) : "var(--aqt-fg-dim)",
+                    }}
+                  >
+                    {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
+                  </td>
+                  <td>
+                    {player.heroes && player.heroes.length > 0 ? (
+                      <div title={signatureTitle} aria-label={signatureTitle}>
+                        <HeroStrip heroes={player.heroes} size="sm" limit={3} />
+                      </div>
+                    ) : (
+                      <span className="text-[color:var(--aqt-fg-dim)]">—</span>
+                    )}
+                  </td>
+                </>
+              ) : null}
             </tr>
           ))}
         </tbody>

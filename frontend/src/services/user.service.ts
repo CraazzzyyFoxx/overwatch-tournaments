@@ -1,5 +1,6 @@
 import {
   EncounterWithUserStats,
+  LobbyLeaderboard,
   UserCatalogResponse,
   UserCompareBaselineMode,
   UserCompareResponse,
@@ -247,6 +248,16 @@ export default class userService {
   static async getUserMatchesSummary(id: number): Promise<UserMatchesSummary> {
     return apiFetch(`/api/v1/users/${id}/matches/summary`, {
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}:encounters`] }
+    }).then((res) => res.json());
+  }
+  /** Full per-stat ranking of every player in a tournament lobby (public). */
+  static async getTournamentLeaderboard(
+    userId: number,
+    tournamentId: number,
+    stat: string
+  ): Promise<LobbyLeaderboard> {
+    return apiFetch(`/api/v1/users/${userId}/tournaments/${tournamentId}/leaderboard`, {
+      query: { stat }
     }).then((res) => res.json());
   }
   static async searchUsers(query: string, signal?: AbortSignal): Promise<MinimizedUser[]> {

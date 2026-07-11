@@ -2065,7 +2065,12 @@
       "divisionsCount": "{count, plural, one {# дивизион} few {# дивизиона} many {# дивизионов} other {# дивизиона}}",
       "bestPlacement": "· лучшее #{n}",
       "teamName": "Команда {name}",
-      "roster": "Состав",
+      "roster": {
+        "title": "Состав",
+        "avgMvp": "Средн. MVP",
+        "heroes": "Герои",
+        "signatureHeroes": "Коронные герои"
+      },
       "you": "вы",
       "kpi": {
         "played": "Сыграно",
@@ -2095,6 +2100,7 @@
         "empty": "Выберите событие, чтобы открыть досье.",
         "run": "Путь",
         "noRun": "По этому событию нет сыгранных матчей.",
+        "mapResults": "Карты: {won}В {lost}П",
         "divisions": "Дивизионы",
         "champions": "Чемпионы турнира",
         "championsSub": "Заняли 1-е место",

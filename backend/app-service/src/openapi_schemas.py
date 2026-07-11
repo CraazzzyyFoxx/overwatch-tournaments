@@ -109,6 +109,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.users.by_name": Op(response=schemas.UserRead),
     "rpc.app.users.tournaments": Op(response=schemas.UserTournament, response_array=True),
     "rpc.app.users.tournament": Op(response=schemas.UserTournamentWithStats),
+    "rpc.app.users.tournament_leaderboard": Op(
+        response=schemas.LobbyLeaderboard, query_params=(QueryParam("stat"),)
+    ),
     "rpc.app.users.maps": Op(response=Paginated[schemas.UserMap], query=schemas.UserMapsSearchQueryParams),
     "rpc.app.users.maps_summary": Op(response=schemas.UserMapsSummary, query=schemas.UserMapsSearchQueryParams),
     "rpc.app.users.encounters": Op(

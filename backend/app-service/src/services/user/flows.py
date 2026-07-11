@@ -1022,6 +1022,21 @@ async def get_tournaments(
     matches = await _repositories.get_user_encounter_matches_unpaginated(session, user.id)
     placements = await _repositories.count_teams_by_tournament_bulk(session, tournaments_ids)
 
+    # Per-roster-player enrichment (avg MVP + signature heroes), scoped to the
+    # tournaments this history covers. Gather every teammate's canonical user id
+    # (workspace_member.player_id) up front and resolve both metrics in two bulk
+    # queries keyed by (tournament_id, user_id) — no N+1 across roster players.
+    roster_user_ids = list(
+        {
+            player.workspace_member.player_id
+            for team, *_ in tournaments
+            for player in team.players
+            if player.workspace_member is not None
+        }
+    )
+    avg_mvp_map = await _repositories.get_roster_avg_mvp_bulk(session, tournaments_ids, roster_user_ids)
+    top_heroes_map = await _repositories.get_roster_top_heroes_bulk(session, tournaments_ids, roster_user_ids)
+
     for (
         team,
         encounter,
@@ -1098,7 +1113,23 @@ async def get_tournaments(
             else None
         )
 
-        players_read = [_mappers.to_user_tournament_player(player, grid=tournament_grid) for player in team.players]
+        players_read = [
+            _mappers.to_user_tournament_player(
+                player,
+                grid=tournament_grid,
+                avg_mvp=(
+                    avg_mvp_map.get((team.tournament_id, player.workspace_member.player_id))
+                    if player.workspace_member is not None
+                    else None
+                ),
+                heroes=(
+                    top_heroes_map.get((team.tournament_id, player.workspace_member.player_id), [])
+                    if player.workspace_member is not None
+                    else []
+                ),
+            )
+            for player in team.players
+        ]
 
         tournament = schemas.UserTournament(
             id=team.tournament.id,
@@ -1203,6 +1234,43 @@ async def get_tournament_with_stats(
         playoff_placement=last_playoff_placement,
         stats=stats,
     )
+
+
+async def get_tournament_leaderboard(
+    session: AsyncSession,
+    tournament_id: int,
+    stat: enums.LogStatsName,
+) -> schemas.LobbyLeaderboard:
+    """Per-stat lobby leaderboard: every player in a tournament ranked by one stat.
+
+    Exposes the full ranked population that backs a single user's
+    ``UserTournamentWithStats.stats[stat].{rank,total}`` on the tournament-stats
+    page. It reuses the exact ranking scheme
+    (``statistics_service.get_tournament_stat_leaderboard``, a generalization of
+    ``get_tournament_avg_match_stat_for_user_bulk``) — same AVG + dense_rank
+    window and same inverse-stat direction handling — so an entry's rank/value
+    here matches that user's row.
+
+    ``stat`` must be one of the tournament-stats feature's ranked stats
+    (``tournament_stats``); any other stat raises 400.
+    """
+    if stat not in tournament_stats:
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[
+                errors.ApiExc(
+                    code="invalid_stat",
+                    msg=f"Stat [{stat.value}] is not a ranked tournament stat.",
+                )
+            ],
+        )
+
+    rows = await statistics_service.get_tournament_stat_leaderboard(session, tournament_id, stat)
+    entries = [
+        schemas.LobbyLeaderboardEntry(rank=row.rank, player_id=row.user_id, name=row.name, value=row.value)
+        for row in rows
+    ]
+    return schemas.LobbyLeaderboard(stat=stat, total_players=len(entries), entries=entries)
 
 
 async def get_heroes(

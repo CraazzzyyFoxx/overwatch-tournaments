@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { LineChart } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -6,6 +8,10 @@ import { UserTournament } from "@/types/user.types";
 
 interface Props {
   tournaments: UserTournament[];
+  /** Tournament ids that belong to the currently-selected dossier event. */
+  selectedIds?: number[];
+  /** Selecting a point selects that event in the dossier (and scrolls to it). */
+  onSelect?: (tournamentId: number) => void;
 }
 
 const colorClass = (placement: number, field: number): "gold" | "silver" | "bronze" | "mid" | "bottom" => {
@@ -15,13 +21,14 @@ const colorClass = (placement: number, field: number): "gold" | "silver" | "bron
   return placement / field < 0.5 ? "mid" : "bottom";
 };
 
-const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
+const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect }: Props) => {
   const tr = useTranslations();
   const valid = tournaments
     .filter((t) => t.number && t.placement && t.count_teams)
     .sort((a, b) => a.number - b.number);
   if (valid.length === 0) return null;
 
+  const selected = new Set(selectedIds);
   const minN = valid[0].number;
   const maxN = valid[valid.length - 1].number;
   const range = maxN - minN || 1;
@@ -51,18 +58,32 @@ const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
             const left = ((t.number - minN) / range) * 100;
             const top = ratio * 100;
             const cls = colorClass(t.placement, t.count_teams);
-            return (
-              <div
-                key={t.id}
-                className={`aqt-dot ${cls}`}
-                style={{ left: `${left}%`, top: `${top}%` }}
-                title={tr("users.tournaments.timeline.dotTitle", {
-                  number: String(t.number),
-                  placement: String(t.placement),
-                  count: String(t.count_teams)
-                })}
-              />
-            );
+            const isSelected = selected.has(t.id);
+            const label = tr("users.tournaments.timeline.dotTitle", {
+              number: String(t.number),
+              placement: String(t.placement),
+              count: String(t.count_teams)
+            });
+            const style: React.CSSProperties = {
+              left: `${left}%`,
+              top: `${top}%`,
+              ...(isSelected ? { boxShadow: "0 0 0 3px var(--aqt-teal)", zIndex: 4 } : null)
+            };
+            if (onSelect) {
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`aqt-dot ${cls} appearance-none p-0`}
+                  style={style}
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelect(t.id)}
+                />
+              );
+            }
+            return <div key={t.id} className={`aqt-dot ${cls}`} style={style} title={label} />;
           })}
         </div>
         <div className="aqt-x-axis">

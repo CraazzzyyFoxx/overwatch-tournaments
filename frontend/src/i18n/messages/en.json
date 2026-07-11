@@ -2065,7 +2065,12 @@
       "divisionsCount": "{count, plural, one {# division} other {# divisions}}",
       "bestPlacement": "· best #{n}",
       "teamName": "Team {name}",
-      "roster": "Roster",
+      "roster": {
+        "title": "Roster",
+        "avgMvp": "Avg MVP",
+        "heroes": "Heroes",
+        "signatureHeroes": "Signature heroes"
+      },
       "you": "you",
       "kpi": {
         "played": "Played",
@@ -2095,6 +2100,7 @@
         "empty": "Select an event to open its dossier.",
         "run": "The run",
         "noRun": "No matches recorded for this event.",
+        "mapResults": "Maps: {won}W {lost}L",
         "divisions": "Divisions",
         "champions": "Tournament champions",
         "championsSub": "Finished 1st",

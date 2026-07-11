@@ -50,8 +50,19 @@ def to_user_tournament_summary(
     )
 
 
-def to_user_tournament_player(player: models.Player, *, grid: DivisionGrid) -> schemas.UserTournamentPlayer:
-    """Player card inside UserTournament.players."""
+def to_user_tournament_player(
+    player: models.Player,
+    *,
+    grid: DivisionGrid,
+    avg_mvp: float | None = None,
+    heroes: list[dict] | None = None,
+) -> schemas.UserTournamentPlayer:
+    """Player card inside UserTournament.players.
+
+    ``avg_mvp`` and ``heroes`` are supplied by the caller from bulk lookups
+    keyed by (tournament_id, user_id) — see ``_repositories`` — so this stays a
+    pure ORM→DTO conversion with no per-player queries.
+    """
     return schemas.UserTournamentPlayer(
         id=player.id,
         name=player.name,
@@ -67,6 +78,8 @@ def to_user_tournament_player(player: models.Player, *, grid: DivisionGrid) -> s
         is_newcomer_role=player.is_newcomer_role,
         related_player_id=player.related_player_id,
         relative_player=getattr(player, "relative_player", None),
+        avg_mvp=avg_mvp,
+        heroes=[schemas.HeroRead.model_validate(h) for h in (heroes or [])],
     )
 
 

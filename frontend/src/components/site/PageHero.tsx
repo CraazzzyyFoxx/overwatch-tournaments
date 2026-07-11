@@ -15,14 +15,32 @@ import { cn } from "@/lib/utils";
  * components alike. Colours come from the global `--aqt-*` tokens.
  */
 
+/** Role hue for the profile wash — maps to the `--aqt-{role}` role tokens. */
+export type HeroRoleTint = "tank" | "damage" | "support";
+
+interface HeroFrameProps {
+  children: React.ReactNode;
+  className?: string;
+  /**
+   * Accent treatment. `"default"` (used by every list/dashboard hero) keeps the
+   * calm teal top hairline. `"profile"` is the player-page signature from the
+   * design-book: the role-spectrum hairline moves to the BASE and a role-tinted
+   * wash bleeds from the top-left — the one place the multi-hue spectrum reads
+   * as identity rather than decoration.
+   */
+  variant?: "default" | "profile";
+  /** Role hue for the `"profile"` wash. Omit to skip the tint. */
+  roleTint?: HeroRoleTint;
+}
+
 /** The decorative shell only — for heroes with bespoke inner content. */
 export function HeroFrame({
   children,
   className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+  variant = "default",
+  roleTint,
+}: HeroFrameProps) {
+  const isProfile = variant === "profile";
   return (
     <section
       className={cn(
@@ -30,11 +48,21 @@ export function HeroFrame({
         className
       )}
     >
-      {/* 2px teal top hairline */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-0.5 bg-[color:var(--aqt-teal)]"
-      />
+      {/* Accent hairline: teal at the top by default; role-spectrum at the base
+          for the player profile (its signature treatment). `overflow-hidden`
+          on the section clips the bar cleanly inside the rounded corners. */}
+      {isProfile ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-0.5 opacity-90"
+          style={{ background: "var(--aqt-spectrum)" }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-0.5 bg-[color:var(--aqt-teal)]"
+        />
+      )}
       {/* faint square grid, radially masked so it fades out */}
       <span
         aria-hidden
@@ -54,6 +82,16 @@ export function HeroFrame({
         className="pointer-events-none absolute -left-[8%] -top-[30%] h-[150%] w-3/5"
         style={{ background: "var(--aqt-hero-glow)" }}
       />
+      {/* profile-only role-tinted wash from the top-left corner */}
+      {isProfile && roleTint ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(70% 120% at 12% -20%, color-mix(in srgb, var(--aqt-${roleTint}) 16%, transparent), transparent 55%)`,
+          }}
+        />
+      ) : null}
       <div className="relative z-[1]">{children}</div>
     </section>
   );

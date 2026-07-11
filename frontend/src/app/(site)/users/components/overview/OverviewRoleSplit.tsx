@@ -1,10 +1,14 @@
 import React from "react";
 import { getTranslations } from "next-intl/server";
 import { Layers } from "lucide-react";
-import { UserProfile, UserRole } from "@/types/user.types";
+import { UserProfile, UserRole, UserMapRead } from "@/types/user.types";
+import { HeroWithUserStats } from "@/types/hero.types";
+import { LogStatsName } from "@/types/stats.types";
 import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
+import { getOverall } from "@/app/(site)/users/components/heroes/utils";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import HeroImage from "@/components/hero/HeroImage";
 
 // Canonical English role names used ONLY for icon selection in PlayerRoleIcon.
 const ROLE_ICON: Record<AqtRoleKey, string> = {
@@ -32,7 +36,27 @@ const ROLE_COLOR: Record<AqtRoleKey, string> = {
   support: "var(--aqt-support)"
 };
 
+const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
+
 const formatPercent = (value: number, digits = 1) => `${(value * 100).toFixed(digits)}%`;
+
+// Winrate can arrive as a 0..1 fraction or an already-scaled percent; normalize.
+const toFraction = (value: number | null | undefined): number | null => {
+  if (value == null || !Number.isFinite(value)) return null;
+  return value <= 1 ? value : value / 100;
+};
+
+// ≥60 good · 50–59 mid · <50 bad (design-book §1 winrate thresholds).
+const winrateColor = (pct: number): string => {
+  if (pct >= 60) return "var(--aqt-emerald)";
+  if (pct >= 50) return "var(--aqt-amber)";
+  return "var(--aqt-rose)";
+};
+
+const statAvg10 = (stats: HeroWithUserStats["stats"], name: LogStatsName): number | null => {
+  const stat = stats.find((s) => s.name === name);
+  return stat && Number.isFinite(stat.avg_10) ? stat.avg_10 : null;
+};
 
 interface Bucket {
   key: AqtRoleKey;
@@ -44,35 +68,72 @@ interface Bucket {
   share: number;
 }
 
-interface Props {
-  profile: UserProfile;
+interface Signature {
+  key: AqtRoleKey;
+  hero: HeroWithUserStats["hero"];
+  games: number;
+  kda: number | null;
+  winPct: number | null;
 }
 
-const OverviewRoleSplit = async ({ profile }: Props) => {
+interface Props {
+  profile: UserProfile;
+  /** Aggregate per-hero stats (already fetched) — source for the signature hero. */
+  heroes?: HeroWithUserStats[];
+  /** User maps with per-hero games — the only real per-hero game count. */
+  maps?: UserMapRead[];
+}
+
+const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => {
   if (!profile.roles.length) return null;
 
   const t = await getTranslations();
   const totalMaps = profile.maps_total;
-  const buckets = ["tank", "damage", "support"]
-    .map<Bucket | null>((roleKey) => {
-      const role = profile.roles.find((r) => normalizeRole(r.role) === roleKey);
-      if (!role) return null;
-      return {
-        key: roleKey as AqtRoleKey,
-        role,
-        maps: role.maps,
-        won: role.maps_won,
-        lost: role.maps - role.maps_won,
-        winrate: role.maps > 0 ? role.maps_won / role.maps : 0,
-        share: totalMaps > 0 ? role.maps / totalMaps : 0
-      };
-    })
-    .filter((b): b is Bucket => b !== null);
+  const buckets = ROLE_ORDER.map<Bucket | null>((roleKey) => {
+    const role = profile.roles.find((r) => normalizeRole(r.role) === roleKey);
+    if (!role) return null;
+    return {
+      key: roleKey as AqtRoleKey,
+      role,
+      maps: role.maps,
+      won: role.maps_won,
+      lost: role.maps - role.maps_won,
+      winrate: role.maps > 0 ? role.maps_won / role.maps : 0,
+      share: totalMaps > 0 ? role.maps / totalMaps : 0
+    };
+  }).filter((b): b is Bucket => b !== null);
 
   const primary: Bucket | undefined = buckets.reduce<Bucket | undefined>(
     (best, current) => (best === undefined || current.role.tournaments > best.role.tournaments ? current : best),
     undefined
   );
+
+  // Signature hero per role: the most-played hero the player owns in that role.
+  const hasGamesData = maps.length > 0;
+  const gamesByHero = new Map<number, number>();
+  for (const m of maps) {
+    for (const hs of m.hero_stats ?? []) {
+      gamesByHero.set(hs.hero.id, (gamesByHero.get(hs.hero.id) ?? 0) + (hs.games ?? 0));
+    }
+  }
+  const signatures: Signature[] = [];
+  for (const key of ROLE_ORDER) {
+    if (!buckets.some((b) => b.key === key)) continue;
+    const roleHeroes = heroes.filter((h) => normalizeRole(h.hero.type ?? h.hero.role) === key);
+    if (roleHeroes.length === 0) continue;
+    const top = roleHeroes.reduce((best, h) =>
+      getOverall(h, LogStatsName.HeroTimePlayed) > getOverall(best, LogStatsName.HeroTimePlayed) ? h : best
+    );
+    if (getOverall(top, LogStatsName.HeroTimePlayed) <= 0) continue;
+    const winFrac = toFraction(statAvg10(top.stats, LogStatsName.Winrate));
+    signatures.push({
+      key,
+      hero: top.hero,
+      games: gamesByHero.get(top.hero.id) ?? 0,
+      kda: statAvg10(top.stats, LogStatsName.KDA),
+      winPct: winFrac == null ? null : winFrac * 100
+    });
+  }
 
   return (
     <CardSurface
@@ -152,6 +213,37 @@ const OverviewRoleSplit = async ({ profile }: Props) => {
             </div>
           ))}
         </div>
+        {signatures.length > 0 ? (
+          <div className="flex flex-col gap-2 border-t border-[color:var(--aqt-border)] pt-3.5">
+            <span className="aqt-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">
+              {t("users.overview.roleSplit.signatureTitle")}
+            </span>
+            {signatures.map((sig) => {
+              const roleName = t(ROLE_LABEL_KEY[sig.key] as Parameters<typeof t>[0]);
+              return (
+                <div key={sig.key} className="grid grid-cols-[16px_26px_1fr_auto] items-center gap-2.5">
+                  <div className="flex justify-center" title={roleName} aria-label={roleName}>
+                    <PlayerRoleIcon role={ROLE_ICON[sig.key]} size={14} color={ROLE_COLOR[sig.key]} />
+                  </div>
+                  <HeroImage hero={sig.hero} size={26} title={sig.hero.name} />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-bold text-[color:var(--aqt-fg)]">{sig.hero.name}</div>
+                    <div className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+                      {hasGamesData && sig.games > 0 ? <>{t("users.overview.roleSplit.games", { count: sig.games })} · </> : null}
+                      {sig.kda != null ? t("users.overview.roleSplit.kda", { value: sig.kda.toFixed(2) }) : "—"}
+                    </div>
+                  </div>
+                  <div
+                    className="aqt-display aqt-tnum text-[15px] font-bold"
+                    style={{ color: sig.winPct != null ? winrateColor(sig.winPct) : "var(--aqt-fg-muted)" }}
+                  >
+                    {sig.winPct != null ? `${sig.winPct.toFixed(0)}%` : "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </CardSurface>
   );

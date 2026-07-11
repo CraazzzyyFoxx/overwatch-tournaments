@@ -87,6 +87,10 @@ export interface UserTournamentPlayer {
   is_newcomer_role: boolean;
   related_player_id: number | null;
   relative_player?: number | null;
+  /** Average MVP placement across the player's matches (1 = MVP/best). */
+  avg_mvp?: number | null;
+  /** Player's top signature heroes (same shape as per-match `heroes`). */
+  heroes?: Hero[];
 }
 
 export interface UserEncounterTournament {
@@ -272,6 +276,22 @@ export interface UserStageRecord {
 export interface UserMatchesSummary {
   opponents: UserOpponentStat[];
   stages: Record<"group" | "playoffs" | "finals", UserStageRecord>;
+}
+
+/** One player's standing in a tournament lobby for a single stat. */
+export interface LobbyLeaderboardEntry {
+  rank: number;
+  /** The player's user id (matches the profile route id). */
+  player_id: number;
+  name: string;
+  value: number;
+}
+
+/** Full per-stat ranking of every player in a tournament lobby. */
+export interface LobbyLeaderboard {
+  stat: string;
+  total_players: number;
+  entries: LobbyLeaderboardEntry[];
 }
 
 export interface MinimizedUser {
