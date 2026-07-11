@@ -67,9 +67,9 @@ export default class tournamentService {
       }
     }).then((response) => response.json());
   }
-  static async getActive(): Promise<PaginatedResponse<Tournament>> {
+  static async getActive(opts?: { skipWorkspace?: boolean }): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
-      skipWorkspace: true,
+      skipWorkspace: opts?.skipWorkspace ?? true,
       query: {
         page: 1,
         per_page: -1,
