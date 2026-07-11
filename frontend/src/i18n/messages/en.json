@@ -2002,6 +2002,8 @@
       "byMode": "By mode",
       "byModeSubtitle": "Winrate by game mode · {modes, plural, one {# mode} other {# modes}} · {games, plural, one {# game} other {# games}}",
       "allModes": "All modes",
+      "filterByMode": "Filter by {mode}",
+      "clearModeFilter": "Clear mode filter",
       "allTournaments": "All tournaments",
       "searchTournament": "Search tournament…",
       "minGamesTitle": "Minimum games",

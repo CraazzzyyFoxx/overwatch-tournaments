@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { cn } from "@/lib/utils";
 
 import SearchableImageSelect, {
   type SearchableImageOption
@@ -17,9 +16,6 @@ const PER_PAGE_OPTIONS = [15, 30, -1];
 const SORT_KEYS: SortKey[] = ["winrate", "count", "name"];
 
 interface MapsFiltersProps {
-  modes: string[];
-  modeFilter: string | null;
-  onModeFilterChange: (mode: string | null) => void;
   tournamentId: number | undefined;
   onTournamentIdChange: (id: number | undefined) => void;
   tournamentOptions: SearchableImageOption[];
@@ -38,9 +34,6 @@ interface MapsFiltersProps {
 }
 
 const MapsFilters = ({
-  modes,
-  modeFilter,
-  onModeFilterChange,
   tournamentId,
   onTournamentIdChange,
   tournamentOptions,
@@ -65,27 +58,6 @@ const MapsFilters = ({
   };
   return (
     <div className="aqt-filters">
-      <span
-        className={cn("aqt-filter-chip", modeFilter === null && "active")}
-        onClick={() => onModeFilterChange(null)}
-        role="button"
-        tabIndex={0}
-      >
-        {t("users.maps.allModes")}
-      </span>
-      {modes.map((mode) => (
-        <span
-          key={mode}
-          className={cn("aqt-filter-chip", modeFilter === mode && "active")}
-          onClick={() => onModeFilterChange(mode)}
-          role="button"
-          tabIndex={0}
-        >
-          {mode}
-        </span>
-      ))}
-      <span className="aqt-filter-divider" />
-
       <div className="w-48">
         <SearchableImageSelect
           value={tournamentId ? String(tournamentId) : undefined}

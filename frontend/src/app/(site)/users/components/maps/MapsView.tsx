@@ -184,8 +184,24 @@ const MapsView = ({ userId }: Props) => {
           {modeStats.map((b) => {
             const totalDecisive = b.win + b.loss;
             const wr = totalDecisive > 0 ? (b.win / totalDecisive) * 100 : 0;
+            const active = modeFilter === b.mode;
             return (
-              <div key={b.mode} className={cn("aqt-mode-card", modeClass(b.mode))}>
+              <button
+                key={b.mode}
+                type="button"
+                onClick={() => setModeFilter(active ? null : b.mode)}
+                aria-pressed={active}
+                title={active ? t("users.maps.clearModeFilter") : t("users.maps.filterByMode", { mode: b.mode })}
+                className={cn(
+                  "aqt-mode-card w-full cursor-pointer text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]",
+                  modeClass(b.mode)
+                )}
+                style={
+                  active
+                    ? { borderColor: "var(--aqt-teal)", background: "color-mix(in srgb, var(--aqt-teal) 10%, transparent)" }
+                    : undefined
+                }
+              >
                 <div className="aqt-l">{b.mode}</div>
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="aqt-display text-[30px] font-bold leading-none">{wr.toFixed(0)}%</div>
@@ -200,7 +216,7 @@ const MapsView = ({ userId }: Props) => {
                   <span>{t("users.maps.mapsCount", { count: b.maps.size })}</span>
                   <span>{t("users.maps.gamesCount", { count: b.games })}</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -208,9 +224,6 @@ const MapsView = ({ userId }: Props) => {
 
       {/* Filter chips + controls */}
       <MapsFilters
-        modes={modeStats.map((b) => b.mode)}
-        modeFilter={modeFilter}
-        onModeFilterChange={setModeFilter}
         tournamentId={tournamentId}
         onTournamentIdChange={setTournamentId}
         tournamentOptions={tournamentOptions}

@@ -2002,6 +2002,8 @@
       "byMode": "По режимам",
       "byModeSubtitle": "Винрейт по режимам · {modes, plural, one {# режим} few {# режима} many {# режимов} other {# режима}} · {games, plural, one {# игра} few {# игры} many {# игр} other {# игры}}",
       "allModes": "Все режимы",
+      "filterByMode": "Фильтр по режиму {mode}",
+      "clearModeFilter": "Сбросить фильтр режима",
       "allTournaments": "Все турниры",
       "searchTournament": "Поиск турнира…",
       "minGamesTitle": "Минимум игр",
