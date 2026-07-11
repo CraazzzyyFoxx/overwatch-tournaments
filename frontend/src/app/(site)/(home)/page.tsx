@@ -1,6 +1,5 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
 
@@ -11,6 +10,7 @@ import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import statisticsService from "@/services/statistics.service";
 import workspaceService from "@/services/workspace.service";
 import tournamentService from "@/services/tournament.service";
+import { isTenantHost } from "@/lib/tenant-host";
 import {
   ChartCardSkeleton,
   StatsGridSkeleton,
@@ -39,7 +39,7 @@ export default async function Home() {
   // On a tenant (white-label) host the whole site is locked to one
   // workspace, so the cross-workspace "communities on this platform" list
   // is hidden. See middleware.ts (Task 6) for the header injection.
-  const tenantMode = (await headers()).get("x-owt-host-mode") === "tenant";
+  const tenantMode = await isTenantHost();
   const t = await getTranslations();
 
   return (
@@ -162,12 +162,13 @@ type TournamentWithCount = Tournament & { registrations_count?: number };
 
 async function LiveEventsSection() {
   const t = await getTranslations();
+  const tenantMode = await isTenantHost();
   let activeTournaments: TournamentWithCount[] = [];
   let workspaceMap = new Map<number, Workspace>();
 
   try {
     const [tournamentsData, workspaces] = await Promise.all([
-      tournamentService.getActive(),
+      tournamentService.getActive({ skipWorkspace: !tenantMode }),
       workspaceService.getAll(),
     ]);
 
@@ -209,6 +210,7 @@ async function LiveEventsSection() {
             key={tour.id}
             tournament={tour}
             workspace={workspaceMap.get(tour.workspace_id)}
+            showWorkspaceBadge={!tenantMode}
           />
         ))}
       </div>
@@ -219,9 +221,11 @@ async function LiveEventsSection() {
 async function EventCard({
   tournament,
   workspace,
+  showWorkspaceBadge = true,
 }: {
   tournament: TournamentWithCount;
   workspace?: Workspace;
+  showWorkspaceBadge?: boolean;
 }) {
   const t = await getTranslations();
   const isLive =
@@ -281,7 +285,7 @@ async function EventCard({
                 {t("common.league")}
               </span>
             )}
-            {workspace && (
+            {workspace && showWorkspaceBadge && (
               <span
                 className="text-[9px] font-bold tracking-[0.08em] uppercase px-1.5 py-0.5 rounded-full"
                 style={{
@@ -438,9 +442,10 @@ function CommunitiesSkeleton() {
 
 async function StatsGrid() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let overall = null;
   try {
-    overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
+    overall = await statisticsService.getOverallStatistics({ skipWorkspace });
   } catch {
     // Fail silently
   }
@@ -533,10 +538,11 @@ function PlaceBadge({ n }: { n: number }) {
 
 async function TournamentActivityCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let visible = null;
   let max = 1;
   try {
-    const data = await statisticsService.getTournaments({ skipWorkspace: true });
+    const data = await statisticsService.getTournaments({ skipWorkspace });
     if (data.length > 0) {
       visible = data.slice(-24);
       max = Math.max(...visible.map((d) => d.players_count), 1);
@@ -599,10 +605,11 @@ async function TournamentActivityCard() {
 
 async function DivisionRingsCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let roles = null;
   try {
     const data = await statisticsService.getTournamentsDivision({
-      skipWorkspace: true,
+      skipWorkspace,
     });
     if (data.length > 0) {
       const mean = (vals: (number | null)[]) => {
@@ -699,9 +706,10 @@ async function DivisionRingsCard() {
 
 async function ChampionsCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let top = null;
   try {
-    const data = await statisticsService.getChampions({ skipWorkspace: true });
+    const data = await statisticsService.getChampions({ skipWorkspace });
     top = data.results.slice(0, 5);
   } catch {
     // Fail silently
@@ -753,10 +761,11 @@ async function ChampionsCard() {
 
 async function TopWinRateCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let top = null;
   try {
     const data = await statisticsService.getTopWinratePlayers({
-      skipWorkspace: true,
+      skipWorkspace,
     });
     top = data.results.slice(0, 5);
   } catch {
