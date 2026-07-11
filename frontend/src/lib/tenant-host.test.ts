@@ -4,9 +4,15 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 // /auth/sso route test — lets us drive the request header from the test.
 let requestHeaders: Record<string, string | undefined> = {};
 
+// bun's mock.module is process-global, so this replaces `next/headers` for the
+// whole run. Export `cookies` too (a benign stub) so we don't strip an export
+// other suites' modules import from next/headers.
 mock.module("next/headers", () => ({
   headers: async () => ({
     get: (name: string) => requestHeaders[name] ?? null,
+  }),
+  cookies: async () => ({
+    get: () => undefined,
   }),
 }));
 
