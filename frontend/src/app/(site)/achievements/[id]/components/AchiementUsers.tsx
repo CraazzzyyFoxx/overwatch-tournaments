@@ -1,120 +1,133 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
+import Link from "next/link";
+import { Swords, Trophy, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Achievement } from "@/types/achievement.types";
 import { useInfiniteQuery } from "@tanstack/react-query";
+
+import { Achievement } from "@/types/achievement.types";
 import achievementsService from "@/services/achievements.service";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import { Card } from "@/components/ui/card";
-import { useRouter } from "next/navigation";
 import PlayerName from "@/components/PlayerName";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const PER_PAGE = 30;
 
 const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
   const t = useTranslations();
-  const router = useRouter();
 
-  const fetchUsers = async ({ pageParam = 1 }) => {
-    return achievementsService.getUsers(achievement.id, pageParam, 30);
-  };
-
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage
-    // @ts-ignore
-  } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } =
+    useInfiniteQuery({
     queryKey: ["achievement", "users", achievement.id],
-    queryFn: fetchUsers,
+    queryFn: ({ pageParam }) => achievementsService.getUsers(achievement.id, pageParam, PER_PAGE),
+    initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.total / lastPage.per_page > lastPage.page ? lastPage.page + 1 : undefined
   });
 
+  const earners = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data?.pages]);
+  const total = data?.pages[0]?.total ?? 0;
+
+  // Infinite scroll: fetch the next page as the viewport nears the document end.
   useEffect(() => {
-    const handleScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop ===
-        document.documentElement.offsetHeight
-      ) {
-        if (hasNextPage && !isFetchingNextPage) {
-          fetchNextPage().then();
-        }
+    const onScroll = () => {
+      const nearBottom =
+        window.innerHeight + document.documentElement.scrollTop >=
+        document.documentElement.offsetHeight - 400;
+      if (nearBottom && hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
       }
     };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div>
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("achievements.users.user")}</TableHead>
-              <TableHead>{t("achievements.users.count")}</TableHead>
-              {data?.pages[0].results[0].last_tournament && (
-                <TableHead>{t("achievements.users.lastTournament")}</TableHead>
-              )}
-              {data?.pages[0].results[0].last_match && (
-                <TableHead>{t("achievements.users.lastMatch")}</TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.pages.map((group) =>
-              group.results.map((achievement) => (
-                <TableRow key={achievement.user.id}>
-                  <TableCell>
-                    <PlayerName player={achievement.user} includeSpecialization={false} />
-                  </TableCell>
-                  <TableCell>{achievement.count}</TableCell>
-                  <TableCell
-                    onClick={() =>
-                      achievement.last_tournament
-                        ? router.push(`/tournaments/${achievement.last_tournament.id}`)
-                        : undefined
-                    }
-                  >
-                    {achievement.last_tournament?.name}
-                  </TableCell>
-                  <TableCell
-                    onClick={() =>
-                      achievement.last_match
-                        ? router.push(`/matches/${achievement.last_match.id}`)
-                        : undefined
-                    }
-                  >
-                    {achievement.last_match
-                      ? `${achievement.last_match.home_team?.name ?? "?"} ${t("common.vs")} ${
-                          achievement.last_match.away_team?.name ?? "?"
-                        }`
-                      : null}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-      <div className="flex justify-center mt-8">
-        {hasNextPage && (
-          <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            {t("common.loadMore")}
-          </Button>
-        )}
+    <section className="aqt-card-surface min-w-0">
+      <div className="aqt-card-head">
+        <div className="aqt-card-title">
+          <span className="aqt-card-title-ic">
+            <Users size={15} />
+          </span>
+          <span>{t("achievements.detail.earnedBy")}</span>
+        </div>
+        {total > 0 ? (
+          <span className="aqt-card-sub">
+            {t("achievements.detail.earnersCount", { count: total })}
+          </span>
+        ) : null}
       </div>
-    </div>
+
+      {isError ? (
+        <div className="aqt-card-body text-center text-sm text-[color:var(--aqt-fg-muted)]">
+          {t("common.loadError")}
+        </div>
+      ) : isLoading ? (
+        <div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="aqt-earner-row">
+              <Skeleton className="h-4 w-5 justify-self-end" />
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-8 justify-self-end" />
+            </div>
+          ))}
+        </div>
+      ) : earners.length === 0 ? (
+        <div className="aqt-card-body text-center text-sm text-[color:var(--aqt-fg-dim)]">
+          {t("achievements.detail.noEarners")}
+        </div>
+      ) : (
+        <div>
+          {earners.map((earned, i) => (
+            <div key={`${earned.user.id}-${i}`} className="aqt-earner-row">
+              <span className="aqt-earner-rank">{i + 1}</span>
+              <div className="min-w-0">
+                <PlayerName player={earned.user} includeSpecialization={false} />
+                {(earned.last_tournament || earned.last_match) && (
+                  <div className="aqt-earner-meta">
+                    {earned.last_tournament ? (
+                      <Link
+                        href={`/tournaments/${earned.last_tournament.id}`}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <Trophy size={12} aria-hidden />
+                        <span className="truncate">{earned.last_tournament.name}</span>
+                      </Link>
+                    ) : null}
+                    {earned.last_match ? (
+                      <Link
+                        href={`/matches/${earned.last_match.id}`}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <Swords size={12} aria-hidden />
+                        <span className="truncate">
+                          {earned.last_match.home_team?.name ?? "?"} {t("common.vs")}{" "}
+                          {earned.last_match.away_team?.name ?? "?"}
+                        </span>
+                      </Link>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+              <span className="aqt-earner-count">×{earned.count}</span>
+            </div>
+          ))}
+
+          {hasNextPage ? (
+            <div className="flex justify-center border-t border-[color:var(--aqt-border)] p-4">
+              <button
+                type="button"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.02)] px-4 py-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-[color:var(--aqt-fg-muted)] transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-fg)] disabled:opacity-50"
+              >
+                {t("common.loadMore")}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
   );
 };
 

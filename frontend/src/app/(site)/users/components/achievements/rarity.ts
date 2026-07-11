@@ -21,6 +21,11 @@ export const classifyRarity = (rarityPercent: number): Rarity => {
   return "common";
 };
 
+// CSS class that sets the `--rar` HSL triplet for a tier (see globals.css
+// `.aqt-rar-*`). Every rarity-tinted element (tile, crest, dot, pill) reads
+// `hsl(var(--rar))`, so it only needs this one class on an ancestor.
+export const rarityVarClass = (rarity: Rarity): string => `aqt-rar-${rarity}`;
+
 // Localized tier titles (e.g. "Mythic · < 1% of all players"), keyed by rarity.
 export const rarityTitles = (t: Translate): Record<Rarity, string> => ({
   mythic: t("users.achievements.rarity.mythic.title"),

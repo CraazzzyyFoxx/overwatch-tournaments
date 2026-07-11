@@ -1,59 +1,74 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Award, Sparkles, Users, ScrollText } from "lucide-react";
+import { AlertTriangle, Award, Crown, Flame, Gem, Search, Sparkles } from "lucide-react";
+
 import achievementsService from "@/services/achievements.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import AchievementCard from "@/components/AchievementCard";
-import StatisticsCard from "@/components/StatisticsCard";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type { Achievement, AchievementCategory } from "@/types/achievement.types";
-import ConditionTreeView from "@/app/(site)/achievements/components/ConditionTreeView";
+import {
+  classifyRarity,
+  rarityRanges,
+  rarityTitles,
+  rarityVarClass,
+  RARITY_ORDER,
+  type Rarity
+} from "@/app/(site)/users/components/achievements/rarity";
 
-type CategoryFilter = "all" | AchievementCategory;
-type SortBy = "rarity_asc" | "rarity_desc" | "count_desc" | "count_asc" | "name_asc";
+import AchievementsHero from "./components/AchievementsHero";
+import AchievementTile from "./components/AchievementTile";
+import AchievementConditionsDialog from "./components/AchievementConditionsDialog";
 
-const AchievementCardSkeleton = () => (
-  <div className="aspect-square rounded-xl border border-white/[0.07] bg-white/[0.02]">
-    <Skeleton className="h-full w-full rounded-xl" />
-  </div>
-);
+type SortBy = "rarity" | "name" | "count";
+
+const RARITY_ICON: Record<Rarity, React.ReactNode> = {
+  mythic: <Flame size={15} />,
+  legendary: <Crown size={15} />,
+  epic: <Gem size={15} />,
+  rare: <Sparkles size={15} />,
+  uncommon: <Award size={15} />,
+  common: <Award size={15} />
+};
+
+// Enter/Space activation for the `role="button"` filter chips + rarity strip
+// (native buttons do this for free; ARIA buttons must wire it themselves).
+const activateOnKey =
+  (fn: () => void) =>
+  (e: React.KeyboardEvent): void => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
+  };
+
+const emptyBuckets = (): Record<Rarity, Achievement[]> => ({
+  mythic: [],
+  legendary: [],
+  epic: [],
+  rare: [],
+  uncommon: [],
+  common: []
+});
 
 const PageSkeleton = () => (
-  <div className="space-y-8">
-    <div className="flex flex-col gap-1">
-      <Skeleton className="h-9 w-52" />
-      <Skeleton className="h-4 w-80" />
-    </div>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-20 rounded-xl" />
-      ))}
-    </div>
-    <div className="flex gap-4">
-      <Skeleton className="h-9 w-80" />
-      <Skeleton className="h-9 w-44" />
-    </div>
-    <div className="grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 gap-3">
+  <div className="aqt-player space-y-6">
+    <Skeleton className="h-[220px] w-full rounded-2xl" />
+    <Skeleton className="h-[92px] w-full rounded-xl" />
+    <Skeleton className="h-10 w-full rounded-lg" />
+    <div className="aqt-ach-tiles">
       {Array.from({ length: 12 }).map((_, i) => (
-        <AchievementCardSkeleton key={i} />
+        <Skeleton key={i} className="aspect-square rounded-xl" />
       ))}
     </div>
   </div>
@@ -61,229 +76,269 @@ const PageSkeleton = () => (
 
 const AchievementsPage = () => {
   const t = useTranslations();
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
-  const [sortBy, setSortBy] = useState<SortBy>("rarity_asc");
-  const [ruleDialogAchievement, setRuleDialogAchievement] = useState<Achievement | null>(null);
-  const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const titles = rarityTitles(t);
+  const ranges = rarityRanges(t);
 
-  const { data, isLoading } = useQuery({
+  const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
+
+  const [rarityFilter, setRarityFilter] = useState<Rarity | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<AchievementCategory | null>(null);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortBy>("rarity");
+  const [rulesFor, setRulesFor] = useState<Achievement | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["achievements", "all", workspaceId],
-    queryFn: () => achievementsService.getAll(1, -1, workspaceId),
+    queryFn: () => achievementsService.getAll(1, -1, workspaceId)
   });
 
-  const filtered = useMemo(() => {
-    const results = data?.results;
-    if (!results) return [];
+  const results = useMemo(() => data?.results ?? [], [data?.results]);
 
-    let items = results;
-
-    if (categoryFilter !== "all") {
-      items = items.filter((a) => a.category === categoryFilter);
+  const grouped = useMemo(() => {
+    const buckets = emptyBuckets();
+    for (const ach of results) {
+      buckets[classifyRarity(ach.rarity * 100)].push(ach);
     }
+    return buckets;
+  }, [results]);
 
-    const sorted = [...items].sort((a, b) => {
-      switch (sortBy) {
-        case "rarity_asc":
-          return a.rarity - b.rarity;
-        case "rarity_desc":
-          return b.rarity - a.rarity;
-        case "count_desc":
-          return (b.count ?? 0) - (a.count ?? 0);
-        case "count_asc":
-          return (a.count ?? 0) - (b.count ?? 0);
-        case "name_asc":
-          return a.name.localeCompare(b.name);
-        default:
-          return 0;
-      }
-    });
-
-    return sorted;
-  }, [data?.results, categoryFilter, sortBy]);
-
-  const stats = useMemo(() => {
-    const results = data?.results;
-    if (!results) return { total: 0, rarest: 0, avgRarity: 0, totalEarned: 0 };
-
-    const rarestPct = results.length > 0 ? Math.min(...results.map((a) => a.rarity)) * 100 : 0;
-    const avgRarity = results.length > 0
-      ? (results.reduce((sum, a) => sum + a.rarity, 0) / results.length) * 100
-      : 0;
-    const totalEarned = results.reduce((sum, a) => sum + (a.count ?? 0), 0);
-
-    return {
-      total: results.length,
-      rarest: rarestPct,
-      avgRarity,
-      totalEarned,
-    };
-  }, [data?.results]);
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(RARITY_ORDER.map((r) => [r, grouped[r].length])) as Record<Rarity, number>,
+    [grouped]
+  );
 
   const categories = useMemo(() => {
-    const results = data?.results;
-    if (!results) return new Set<AchievementCategory>();
-    return new Set(results.map((a) => a.category).filter(Boolean) as AchievementCategory[]);
-  }, [data?.results]);
+    const present = new Set<AchievementCategory>();
+    for (const ach of results) {
+      if (ach.category) present.add(ach.category);
+    }
+    return Array.from(present).sort();
+  }, [results]);
+
+  const stats = useMemo(() => {
+    if (results.length === 0) return { total: 0, rarest: 0, totalEarned: 0 };
+    return {
+      total: results.length,
+      rarest: Math.min(...results.map((a) => a.rarity)) * 100,
+      totalEarned: results.reduce((sum, a) => sum + (a.count ?? 0), 0)
+    };
+  }, [results]);
+
+  const visibleGrouped = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const forTier = (r: Rarity): Achievement[] => {
+      if (rarityFilter && rarityFilter !== r) return [];
+      let list = grouped[r];
+      if (categoryFilter) list = list.filter((a) => a.category === categoryFilter);
+      if (q) {
+        list = list.filter(
+          (a) =>
+            a.name.toLowerCase().includes(q) ||
+            a.description_ru?.toLowerCase().includes(q) ||
+            a.description_en?.toLowerCase().includes(q)
+        );
+      }
+      return [...list].sort((a, b) => {
+        if (sort === "name") return a.name.localeCompare(b.name);
+        if (sort === "count") return (b.count ?? 0) - (a.count ?? 0);
+        return a.rarity - b.rarity; // rarest first
+      });
+    };
+    return Object.fromEntries(RARITY_ORDER.map((r) => [r, forTier(r)])) as Record<
+      Rarity,
+      Achievement[]
+    >;
+  }, [grouped, rarityFilter, categoryFilter, search, sort]);
+
+  const visibleCount = useMemo(
+    () => RARITY_ORDER.reduce((sum, r) => sum + visibleGrouped[r].length, 0),
+    [visibleGrouped]
+  );
 
   if (isLoading) return <PageSkeleton />;
 
+  if (isError) {
+    return (
+      <div className="aqt-player">
+        <div className="aqt-card-surface">
+          <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+            <AlertTriangle
+              className="mb-1 h-10 w-10 text-[color:var(--aqt-rose)]"
+              aria-hidden
+            />
+            <p className="text-sm text-[color:var(--aqt-fg-muted)]">{t("common.loadError")}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const filtersActive = rarityFilter !== null || categoryFilter !== null || search.trim() !== "";
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold leading-none tracking-tight">
-          {t("achievements.title")}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {t("achievements.subtitle")}
-        </p>
+    <div className="aqt-player space-y-6">
+      <AchievementsHero
+        workspaceName={workspaceName}
+        total={stats.total}
+        rarestPct={stats.rarest}
+        totalEarned={stats.totalEarned}
+        mythicCount={counts.mythic}
+      />
+
+      {/* Rarity distribution strip — click a tier to filter to it */}
+      <div className="aqt-ach-rank">
+        {RARITY_ORDER.map((r) => (
+          <div
+            key={r}
+            role="button"
+            tabIndex={0}
+            aria-pressed={rarityFilter === r}
+            onClick={() => setRarityFilter(rarityFilter === r ? null : r)}
+            onKeyDown={activateOnKey(() => setRarityFilter(rarityFilter === r ? null : r))}
+            className={cn(
+              "aqt-tier cursor-pointer transition-opacity",
+              r,
+              rarityFilter && rarityFilter !== r && "opacity-40"
+            )}
+          >
+            <span className="aqt-l">{r}</span>
+            <span className="aqt-n">{counts[r]}</span>
+            <span className="aqt-sub">{ranges[r]}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatisticsCard
-          name={t("achievements.stats.total")}
-          value={stats.total}
-          icon={<Award className="h-4 w-4" />}
-          iconClassName="bg-indigo-500/10 text-indigo-400"
-        />
-        <StatisticsCard
-          name={t("achievements.stats.rarest")}
-          value={`${stats.rarest.toFixed(2)}%`}
-          icon={<Sparkles className="h-4 w-4" />}
-          iconClassName="bg-amber-500/10 text-amber-400"
-        />
-        <StatisticsCard
-          name={t("achievements.stats.avgRarity")}
-          value={`${stats.avgRarity.toFixed(1)}%`}
-          icon={<ScrollText className="h-4 w-4" />}
-          iconClassName="bg-purple-500/10 text-purple-400"
-        />
-        <StatisticsCard
-          name={t("achievements.stats.totalEarned")}
-          value={stats.totalEarned}
-          icon={<Users className="h-4 w-4" />}
-          iconClassName="bg-emerald-500/10 text-emerald-400"
-        />
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-        <ToggleGroup
-          type="single"
-          value={categoryFilter}
-          onValueChange={(value) => value && setCategoryFilter(value as CategoryFilter)}
-          variant="outline"
+      {/* Toolbar: rarity + category filters, sort, search */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn("aqt-filter-chip", !filtersActive && "active")}
+          onClick={() => {
+            setRarityFilter(null);
+            setCategoryFilter(null);
+            setSearch("");
+          }}
+          onKeyDown={activateOnKey(() => {
+            setRarityFilter(null);
+            setCategoryFilter(null);
+            setSearch("");
+          })}
+          role="button"
+          tabIndex={0}
         >
-          <ToggleGroupItem value="all">{t("common.all")}</ToggleGroupItem>
-          {Array.from(categories)
-            .sort()
-            .map((cat) => (
-              <ToggleGroupItem key={cat} value={cat}>
-                {t(`achievements.category.${cat}`)}
-              </ToggleGroupItem>
-            ))}
-        </ToggleGroup>
+          {t("common.all")} <span className="aqt-count">{stats.total}</span>
+        </span>
 
-        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder={t("achievements.sort.placeholder")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="rarity_asc">{t("achievements.sort.rarityAsc")}</SelectItem>
-            <SelectItem value="rarity_desc">{t("achievements.sort.rarityDesc")}</SelectItem>
-            <SelectItem value="count_desc">{t("achievements.sort.countDesc")}</SelectItem>
-            <SelectItem value="count_asc">{t("achievements.sort.countAsc")}</SelectItem>
-            <SelectItem value="name_asc">{t("achievements.sort.nameAsc")}</SelectItem>
-          </SelectContent>
-        </Select>
+        <span className="aqt-filter-divider" />
+
+        {RARITY_ORDER.map((r) => (
+          <span
+            key={r}
+            className={cn("aqt-filter-chip", rarityFilter === r && "active")}
+            onClick={() => setRarityFilter(rarityFilter === r ? null : r)}
+            onKeyDown={activateOnKey(() => setRarityFilter(rarityFilter === r ? null : r))}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="capitalize">{r}</span>
+            <span className="aqt-count">{counts[r]}</span>
+          </span>
+        ))}
+
+        {categories.length > 0 ? (
+          <>
+            <span className="aqt-filter-divider" />
+            {categories.map((cat) => (
+              <span
+                key={cat}
+                className={cn("aqt-filter-chip", categoryFilter === cat && "active")}
+                onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+                onKeyDown={activateOnKey(() =>
+                  setCategoryFilter(categoryFilter === cat ? null : cat)
+                )}
+                role="button"
+                tabIndex={0}
+              >
+                {t(`achievements.category.${cat}`)}
+              </span>
+            ))}
+          </>
+        ) : null}
+
+        <div className="ml-auto flex items-center gap-2">
+          <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
+            {t("achievements.results", { count: visibleCount })}
+          </span>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortBy)}>
+            <SelectTrigger
+              title={t("users.achievements.sort.title")}
+              className="aqt-mono h-8 w-[150px] border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rarity">{t("users.achievements.sort.rarity")}</SelectItem>
+              <SelectItem value="name">{t("users.achievements.sort.name")}</SelectItem>
+              <SelectItem value="count">{t("users.achievements.sort.earned")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="relative min-w-[180px]">
+            <input
+              placeholder={t("achievements.searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] py-1.5 pl-8 pr-3 text-[14px] outline-none focus:border-[color:var(--aqt-border-3)]"
+            />
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[color:var(--aqt-fg-faint)]"
+              aria-hidden
+            />
+          </div>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16">
-          <Award className="w-16 h-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">{t("achievements.empty.title")}</h2>
-          <p className="text-muted-foreground">
-            {t("achievements.empty.body")}
-          </p>
+      {/* Rarity sections */}
+      {visibleCount === 0 ? (
+        <div className="aqt-card-surface">
+          <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+            <Award className="mb-1 h-10 w-10 text-[color:var(--aqt-fg-faint)]" aria-hidden />
+            <h2 className="font-onest text-lg font-semibold text-[color:var(--aqt-fg)]">
+              {t("achievements.empty.title")}
+            </h2>
+            <p className="text-sm text-[color:var(--aqt-fg-dim)]">{t("achievements.empty.body")}</p>
+          </div>
         </div>
       ) : (
-        <div className="grid 2xl:grid-cols-5 xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 gap-3 w-full">
-          {filtered.map((achievement) => (
-            <div key={achievement.id} className="relative group/wrapper">
-              <AchievementCard
-                achievement={achievement}
-                href={`/achievements/${achievement.id}`}
-                descriptionLocale="ru"
-              />
-              {achievement.condition_tree && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setRuleDialogAchievement(achievement);
-                  }}
-                  className="absolute bottom-2 left-2 z-[15] inline-flex cursor-pointer items-center justify-center rounded-full border border-white/[0.12] bg-black/55 p-1.5 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/75 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                  aria-label={t("achievements.viewRules", { name: achievement.name })}
-                >
-                  <ScrollText className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Dialog
-        open={!!ruleDialogAchievement}
-        onOpenChange={(open) => !open && setRuleDialogAchievement(null)}
-      >
-        {ruleDialogAchievement && (
-          <DialogContent className="gap-0 border-white/[0.07] p-5 sm:max-w-lg max-h-[80vh] overflow-y-auto">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-base font-semibold leading-snug text-white">
-                {ruleDialogAchievement.name}
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-relaxed text-white/55">
-                {ruleDialogAchievement.description_ru}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-2">
-                {ruleDialogAchievement.category && (
-                  <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                    {t(`achievements.category.${ruleDialogAchievement.category}`)}
-                  </span>
-                )}
-                {ruleDialogAchievement.scope && (
-                  <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                    {t(`achievements.scope.${ruleDialogAchievement.scope}`)}
-                  </span>
-                )}
-                <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2.5 py-0.5 text-xs text-white/60">
-                  {t("achievements.rarity", {
-                    percent: (ruleDialogAchievement.rarity * 100).toFixed(2),
-                  })}
+        RARITY_ORDER.map((r) => {
+          const list = visibleGrouped[r];
+          if (list.length === 0) return null;
+          return (
+            <section key={r} className={cn("aqt-card-surface", rarityVarClass(r))}>
+              <div className="aqt-card-head">
+                <div className="aqt-card-title">
+                  <span className="aqt-card-title-ic aqt-rar-fg">{RARITY_ICON[r]}</span>
+                  <span>{titles[r]}</span>
+                </div>
+                <span className="aqt-card-sub">
+                  {t("achievements.sectionCount", { count: list.length })}
                 </span>
               </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-white/35">
-                  {t("achievements.conditionsTitle")}
-                </div>
-                <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
-                  {ruleDialogAchievement.condition_tree ? (
-                    <ConditionTreeView tree={ruleDialogAchievement.condition_tree} />
-                  ) : (
-                    <span className="text-xs text-white/30">
-                      {t("achievements.noConditionsDefined")}
-                    </span>
-                  )}
+              <div className="aqt-card-body">
+                <div className="aqt-ach-tiles">
+                  {list.map((ach) => (
+                    <AchievementTile key={ach.id} achievement={ach} onViewRules={setRulesFor} />
+                  ))}
                 </div>
               </div>
-            </div>
-          </DialogContent>
-        )}
-      </Dialog>
+            </section>
+          );
+        })
+      )}
+
+      <AchievementConditionsDialog achievement={rulesFor} onClose={() => setRulesFor(null)} />
     </div>
   );
 };

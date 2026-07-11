@@ -1202,6 +1202,17 @@
   "achievements": {
     "title": "Achievements",
     "subtitle": "Browse all achievements, filter by category, and view earning conditions.",
+    "hero": {
+      "coord": "ACHIEVEMENTS // CATALOG",
+      "title": "Every <em>badge</em> in the vault",
+      "lede": "The full catalog of earnable achievements, ranked by how rare they are across the roster. Filter by tier or category, search by name, and open any badge to see exactly how it's won — and who holds it.",
+      "mythicCount": "{count, plural, one {# mythic badge} other {# mythic badges}}",
+      "rarestSub": "Hardest badge to earn",
+      "earnedSub": "Total awards, all-time"
+    },
+    "searchPlaceholder": "Search achievements…",
+    "results": "{count, plural, one {# result} other {# results}}",
+    "sectionCount": "{count, plural, one {# badge} other {# badges}}",
     "category": {
       "overall": "Overall",
       "hero": "Hero",
@@ -1272,6 +1283,15 @@
       "count": "Count",
       "lastTournament": "Last Tournament",
       "lastMatch": "Last Match"
+    },
+    "detail": {
+      "backToCatalog": "All achievements",
+      "earnedBy": "Earned by",
+      "viewEarners": "See who earned it",
+      "noEarners": "No one has earned this achievement yet.",
+      "rarityShare": "Share of players",
+      "timesAwarded": "Times awarded",
+      "earnersCount": "{count, plural, one {# player} other {# players}}"
     }
   },
   "tournamentDetail": {

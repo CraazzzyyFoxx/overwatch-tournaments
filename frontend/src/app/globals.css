@@ -1056,6 +1056,309 @@
   border-color: hsl(172 70% 49% / 0.28);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Achievements catalog (redesign) — the public /achievements showcase.
+   Rarity is the organizing visual principle: a single `--rar` HSL triplet
+   per tier (shadcn-style, so `hsl(var(--rar) / a)` alpha tints work) drives
+   every hairline, badge, ring and glow. Image-forward tiles keep the badge
+   art as the hero, framed in the Editorial-Tactical language (mono numerals,
+   thin rarity edge, calm hover reveal).
+   ═══════════════════════════════════════════════════════════════════════ */
+.aqt-rar-mythic {
+  --rar: 40 96% 62%;
+}
+.aqt-rar-legendary {
+  --rar: 350 80% 64%;
+}
+.aqt-rar-epic {
+  --rar: 270 72% 68%;
+}
+.aqt-rar-rare {
+  --rar: 210 82% 64%;
+}
+.aqt-rar-uncommon {
+  --rar: 150 57% 55%;
+}
+.aqt-rar-common {
+  --rar: 215 14% 60%;
+}
+
+/* rarity-tinted text/dot helpers (used by section heads, pills, legends) */
+.aqt-rar-fg {
+  color: hsl(var(--rar));
+}
+
+/* ── image-forward tile grid ── */
+.aqt-ach-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .aqt-ach-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.aqt-ach-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--aqt-border);
+  background: var(--aqt-card-2);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.aqt-ach-tile:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--rar) / 0.5);
+  box-shadow:
+    0 16px 34px -18px hsl(0 0% 0% / 0.75),
+    0 0 0 1px hsl(var(--rar) / 0.22);
+}
+/* keyboard focus lands on the inner overlay link → show the ring on the tile */
+.aqt-ach-tile:focus-within {
+  border-color: hsl(var(--rar) / 0.6);
+  box-shadow: 0 0 0 2px hsl(var(--rar) / 0.5);
+}
+/* rarity top hairline */
+.aqt-ach-tile::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  z-index: 6;
+  background: linear-gradient(90deg, hsl(var(--rar)), hsl(var(--rar) / 0.15));
+}
+.aqt-ach-tile__img {
+  object-fit: cover;
+  z-index: 0;
+}
+/* legibility scrim so the name (top) and stats (bottom) read on any art */
+.aqt-ach-tile__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    hsl(220 30% 4% / 0.72) 0%,
+    hsl(220 30% 4% / 0) 34%,
+    hsl(220 30% 4% / 0) 58%,
+    hsl(220 30% 4% / 0.78) 100%
+  );
+}
+.aqt-ach-tile__name {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  font-family: var(--aqt-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1.2;
+  color: hsl(0 0% 100%);
+  text-shadow: 0 1px 6px hsl(220 30% 4% / 0.9);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.aqt-ach-tile__rarity {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  font-family: var(--aqt-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: hsl(var(--rar));
+  background: hsl(220 30% 4% / 0.55);
+  border: 1px solid hsl(var(--rar) / 0.4);
+  border-radius: 999px;
+  padding: 2px 7px;
+  backdrop-filter: blur(4px);
+  /* hidden until hover — the name owns the top edge at rest */
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__rarity,
+.aqt-ach-tile:focus-within .aqt-ach-tile__rarity {
+  opacity: 1;
+  transform: translateY(0);
+}
+.aqt-ach-tile__count {
+  position: absolute;
+  bottom: 9px;
+  right: 10px;
+  z-index: 4;
+  font-family: var(--aqt-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: hsl(210 20% 90%);
+  background: hsl(220 30% 4% / 0.5);
+  border: 1px solid hsl(0 0% 100% / 0.12);
+  border-radius: 999px;
+  padding: 2px 7px;
+  backdrop-filter: blur(4px);
+}
+/* hover description reveal */
+.aqt-ach-tile__desc {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px 34px;
+  text-align: center;
+  background: hsl(220 30% 4% / 0.82);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__desc,
+.aqt-ach-tile:focus-within .aqt-ach-tile__desc {
+  opacity: 1;
+}
+.aqt-ach-tile__desc p {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: hsl(210 18% 88%);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* rules button — sibling of the overlay link, kept clickable above it */
+.aqt-ach-tile__rules {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: hsl(210 16% 82%);
+  background: hsl(220 30% 4% / 0.62);
+  border: 1px solid hsl(0 0% 100% / 0.14);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__rules,
+.aqt-ach-tile:focus-within .aqt-ach-tile__rules {
+  opacity: 1;
+}
+.aqt-ach-tile__rules:hover {
+  color: hsl(var(--rar));
+  background: hsl(220 30% 4% / 0.85);
+  border-color: hsl(var(--rar) / 0.5);
+}
+
+/* ── detail-page crest (rarity-framed badge art) ── */
+.aqt-ach-crest {
+  position: relative;
+  width: clamp(96px, 12vw, 132px);
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid hsl(var(--rar) / 0.5);
+  box-shadow:
+    0 0 0 1px hsl(var(--rar) / 0.14),
+    0 24px 48px -24px hsl(var(--rar) / 0.55);
+}
+.aqt-ach-crest::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, hsl(var(--rar)), hsl(var(--rar) / 0.2));
+}
+.aqt-ach-crest img {
+  object-fit: cover;
+}
+/* small rarity meta pill (detail + shared) */
+.aqt-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--aqt-fg-muted);
+  background: hsl(0 0% 100% / 0.03);
+  border: 1px solid var(--aqt-border-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.aqt-meta-pill.rar {
+  color: hsl(var(--rar));
+  border-color: hsl(var(--rar) / 0.4);
+  background: hsl(var(--rar) / 0.08);
+  font-family: var(--aqt-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── earners list (detail page) ── */
+.aqt-earner-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--aqt-border);
+  transition: background 0.15s ease;
+}
+.aqt-earner-row:last-child {
+  border-bottom: 0;
+}
+.aqt-earner-row:hover {
+  background: hsl(0 0% 100% / 0.02);
+}
+.aqt-earner-rank {
+  font-family: var(--aqt-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aqt-fg-faint);
+  text-align: right;
+}
+.aqt-earner-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--aqt-fg-dim);
+}
+.aqt-earner-meta svg {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+.aqt-earner-meta a {
+  color: var(--aqt-fg-muted);
+  transition: color 0.15s ease;
+}
+.aqt-earner-meta a:hover {
+  color: var(--aqt-teal);
+}
+.aqt-earner-count {
+  font-family: var(--aqt-mono);
+  font-weight: 700;
+  color: var(--aqt-teal);
+}
+
 /* radar */
 .aqt-radar-grid {
   fill: none;
@@ -1246,6 +1549,10 @@
   --aqt-tank: hsl(209 82% 65%);
   --aqt-damage: hsl(337 81% 66%);
   --aqt-support: hsl(150 57% 52%);
+  /* Achievement rarity accent (HSL triplet so `hsl(var(--rar) / a)` alpha tints
+     work). Global fallback = "common" grey; the `.aqt-rar-*` classes override
+     it per tier. Kept as a triplet, not a full color, on purpose. */
+  --rar: 215 14% 60%;
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
   --aqt-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
