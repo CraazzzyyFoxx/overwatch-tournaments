@@ -199,7 +199,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         <span className="aqt-filter-divider" />
         {uniqueTournaments.length > 0 && (
           <Select value={selectedTournamentValue} onValueChange={onTournamentChange}>
-            <SelectTrigger className="h-8 w-48 border-white/[0.07] bg-white/[0.02] text-[14px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
+            <SelectTrigger className="h-8 w-48 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[14px] text-[color:var(--aqt-fg-muted)] shadow-none hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0">
               <SelectValue placeholder={tr("users.achievements.filter.allTournaments")} />
             </SelectTrigger>
             <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
@@ -216,7 +216,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         <Select value={sort} onValueChange={(v) => setSort(v as "rarity" | "name" | "count")}>
           <SelectTrigger
             title={tr("users.achievements.sort.title")}
-            className="aqt-mono h-8 w-[150px] shadow-none border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
+            className="aqt-mono h-8 w-[150px] shadow-none border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0"
           >
             <SelectValue />
           </SelectTrigger>
