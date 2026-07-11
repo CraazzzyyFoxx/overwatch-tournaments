@@ -7,6 +7,7 @@ import StatisticsCard from "@/components/StatisticsCard";
 import TournamentsChart from "@/components/TournamentsChart";
 import TournamentsDivisionChart from "@/components/TournamentsDivisionChart";
 import statisticsService from "@/services/statistics.service";
+import { isTenantHost } from "@/lib/tenant-host";
 import type {
   PlayerStatistics,
   TournamentDivisionStatistics,
@@ -134,9 +135,10 @@ function ErrorBody({ message }: { message: string }) {
 
 async function OverallStats() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let overall = null;
   try {
-    overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
+    overall = await statisticsService.getOverallStatistics({ skipWorkspace });
   } catch {
     overall = null;
   }
@@ -185,9 +187,10 @@ async function OverallStats() {
 
 async function ActivityTrendCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let data: TournamentStatistics[] | null = null;
   try {
-    data = await statisticsService.getTournaments({ skipWorkspace: true });
+    data = await statisticsService.getTournaments({ skipWorkspace });
   } catch {
     data = null;
   }
@@ -205,9 +208,10 @@ async function ActivityTrendCard() {
 
 async function DivisionTrendCard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let data: TournamentDivisionStatistics[] | null = null;
   try {
-    data = await statisticsService.getTournamentsDivision({ skipWorkspace: true });
+    data = await statisticsService.getTournamentsDivision({ skipWorkspace });
   } catch {
     data = null;
   }
@@ -284,9 +288,10 @@ async function LeaderboardCard({
 
 async function ChampionsLeaderboard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let rows: PlayerStatistics[] = [];
   try {
-    rows = (await statisticsService.getChampions({ skipWorkspace: true })).results.slice(
+    rows = (await statisticsService.getChampions({ skipWorkspace })).results.slice(
       0,
       LEADERBOARD_SIZE,
     );
@@ -306,9 +311,10 @@ async function ChampionsLeaderboard() {
 
 async function WinRateLeaderboard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let rows: PlayerStatistics[] = [];
   try {
-    rows = (await statisticsService.getTopWinratePlayers({ skipWorkspace: true })).results.slice(
+    rows = (await statisticsService.getTopWinratePlayers({ skipWorkspace })).results.slice(
       0,
       LEADERBOARD_SIZE,
     );
@@ -328,9 +334,10 @@ async function WinRateLeaderboard() {
 
 async function WonMapsLeaderboard() {
   const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let rows: PlayerStatistics[] = [];
   try {
-    rows = (await statisticsService.getTopWonMapsPlayers({ skipWorkspace: true })).results.slice(
+    rows = (await statisticsService.getTopWonMapsPlayers({ skipWorkspace })).results.slice(
       0,
       LEADERBOARD_SIZE,
     );
