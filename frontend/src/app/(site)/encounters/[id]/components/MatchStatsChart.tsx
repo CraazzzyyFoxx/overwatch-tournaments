@@ -52,24 +52,24 @@ const MatchStatsChart = ({ homeTeam, awayTeam, matchRound }: MatchStatsChartProp
           }}
         >
           <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-          <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{ fill: 'var(--foreground)' }} />
-          <YAxis tick={{ fill: 'var(--foreground)' }} />
+          <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{ fill: 'hsl(var(--foreground))' }} />
+          <YAxis tick={{ fill: 'hsl(var(--foreground))' }} />
           <Tooltip
-            contentStyle={{ backgroundColor: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
-            itemStyle={{ color: "var(--foreground)" }}
-            cursor={{ fill: 'var(--muted)' }}
+            contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", color: "hsl(var(--foreground))" }}
+            itemStyle={{ color: "hsl(var(--foreground))" }}
+            cursor={{ fill: 'hsl(var(--muted))' }}
           />
           <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
           <Bar
             dataKey="Kills"
             name={t("encounters.chart.kills")}
-            fill="#16e5b4"
+            fill="hsl(var(--chart-1))"
             radius={[4, 4, 0, 0]}
           />
           <Bar
             dataKey="Assists"
             name={t("encounters.chart.assists")}
-            fill="#ff4655"
+            fill="hsl(var(--chart-5))"
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

@@ -93,18 +93,18 @@ const EncounterTeamCard = ({
                   <TableCell>
                     <div className="flex justify-center">
                       {player.is_newcomer ? (
-                        <CirclePlus className="text-red-500" />
+                        <CirclePlus className="text-[color:var(--aqt-amber)]" />
                       ) : (
-                        <CircleMinus className="text-green-500" />
+                        <CircleMinus className="text-[color:var(--aqt-fg-faint)]" />
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center">
                       {player.is_newcomer_role ? (
-                        <CirclePlus className="text-red-500" />
+                        <CirclePlus className="text-[color:var(--aqt-amber)]" />
                       ) : (
-                        <CircleMinus className="text-green-500" />
+                        <CircleMinus className="text-[color:var(--aqt-fg-faint)]" />
                       )}
                     </div>
                   </TableCell>

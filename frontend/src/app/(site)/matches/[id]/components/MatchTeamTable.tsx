@@ -33,7 +33,10 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
   const t = useTranslations();
   // @ts-ignore
   const sortedPlayers: PlayerWithStats[] = sortTeamPlayers(team.players);
-  const backgroundColor = isHome ? "[#104e48]" : "[#4c2332]";
+  // Token-based team tint (was hardcoded #104e48/#4c2332 built into a dynamic
+  // `bg-${…}` class that Tailwind's scanner never generated → the header tint
+  // silently did nothing). Applied via inline style with the role/result tokens.
+  const teamAccent = isHome ? "var(--aqt-teal)" : "var(--aqt-rose)";
 
   const validatedPlayers = [];
 
@@ -47,7 +50,7 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
   return (
     <Table className="overflow-x-auto">
       <TableHeader>
-        <TableRow className={`bg-${backgroundColor} hover:bg-${backgroundColor}`}>
+        <TableRow style={{ backgroundColor: `color-mix(in srgb, ${teamAccent} 12%, transparent)` }}>
           <TableHead className="min-w-[240px] sticky left-0 z-5">
             {t("matches.teamLabel", { name: team.name })}
           </TableHead>
@@ -77,7 +80,6 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
       </TableHeader>
       <TableBody>
         {validatedPlayers.map((player) => {
-          const color = isHome ? "from-[#104e48]" : "from-[#4c2332]";
           const missingHeroes = maxHeroes - player.heroes[matchRound].length;
 
           if (missingHeroes > 0) {
@@ -90,7 +92,10 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
           return (
             <TableRow key={player.id} className="hover:bg-background">
               <TableCell
-                className={`flex flex-row items-center gap-2 bg-gradient-to-r ${color} via-background to-background min-w-[240px] sticky left-0 z-10`}
+                className="flex flex-row items-center gap-2 min-w-[240px] sticky left-0 z-10"
+                style={{
+                  backgroundImage: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, transparent), var(--aqt-bg) 55%)`
+                }}
               >
                 <PlayerRoleIcon role={player.role} />
                 <PlayerName player={player} includeSpecialization={true} />
@@ -107,15 +112,13 @@ const MatchTeamTable = ({ team, isHome, maxHeroes, matchRound, tournamentGrid }:
                       // Возможно надо будет вернуть AvatarImage
                       <Avatar key={`hero-${hero.id}`}>
                         {hero.image_path ? (
-                          <Image
-                            src={hero.image_path}
-                            alt={hero.name}
-                            layout="fill"
-                            objectFit="cover"
-                          />
+                          <Image src={hero.image_path} alt={hero.name} fill className="object-cover" />
                         ) : (
-                          <AvatarFallback delayMs={200} className="bg-background">
-                            {hero.name.slice(0, 3)}
+                          // Empty padding slot (keeps hero columns aligned across
+                          // rows): a faint dashed circle, not a solid dark disc
+                          // that reads like a broken image.
+                          <AvatarFallback className="border border-dashed border-[color:var(--aqt-border-2)] bg-transparent text-[10px] text-[color:var(--aqt-fg-faint)]">
+                            {hero.name.trim().slice(0, 3)}
                           </AvatarFallback>
                         )}
                       </Avatar>

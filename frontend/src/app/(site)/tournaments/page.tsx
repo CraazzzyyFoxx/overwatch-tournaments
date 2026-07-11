@@ -179,7 +179,7 @@ const TournamentsPage = () => {
             style={{
               marginLeft: 6,
               background: "hsl(0 0% 100% / 0.03)",
-              border: "1px solid var(--border)",
+              border: "1px solid hsl(var(--border))",
               padding: "3px 8px",
               borderRadius: 6
             }}
