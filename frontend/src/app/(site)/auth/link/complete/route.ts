@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { authService } from "@/services/auth.service";
 import { getAccessToken } from "@/lib/auth-cookies";
 import { safeRedirectTarget } from "@/lib/oauth-callback";
+import { publicOrigin } from "@/lib/request-origin";
 
 // Task 10R fix 1: the single-use, HOST-ONLY guard cookie set by
 // oauth-login.ts's custom-domain apex bounce, on THIS exact domain, before
@@ -57,7 +58,12 @@ function loginRedirect(origin: string, next: string): NextResponse {
 }
 
 export async function GET(request: Request) {
-  const { origin: currentOrigin, searchParams } = new URL(request.url);
+  // Runs ON the workspace's custom domain. request.url's host behind the edge
+  // is the internal bind addr (0.0.0.0:3000), so derive the real origin from
+  // the forwarded headers — otherwise the post-link redirect (e.g. back to
+  // /?settings=profile) sends the user to https://0.0.0.0:3000. See request-origin.ts.
+  const currentOrigin = publicOrigin(request);
+  const searchParams = new URL(request.url).searchParams;
   const ticket = searchParams.get("ticket");
   const next = searchParams.get("next") || "/account";
 
