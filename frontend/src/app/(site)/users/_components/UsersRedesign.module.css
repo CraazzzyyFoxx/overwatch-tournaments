@@ -1,25 +1,27 @@
 .surface {
-  --u-bg: hsl(222 30% 6%);
-  --u-card: hsl(215 20% 8%);
-  --u-card-2: hsl(215 22% 9%);
-  --u-border: hsl(215 20% 12%);
-  --u-border-2: hsl(215 20% 16%);
-  --u-fg: hsl(210 20% 95%);
-  --u-muted: hsl(215 12% 60%);
-  --u-dim: hsl(215 12% 40%);
-  --u-faint: hsl(215 12% 30%);
-  --u-teal: hsl(172 70% 49%);
-  --u-emerald: hsl(142 70% 50%);
-  --u-amber: hsl(38 95% 55%);
-  --u-rose: hsl(340 75% 58%);
-  --u-violet: hsl(270 70% 62%);
-  --u-blue: hsl(210 80% 60%);
-  --u-tank: hsl(210 78% 60%);
-  --u-damage: hsl(340 78% 60%);
-  --u-support: hsl(142 60% 52%);
+  /* Reference the global OWT tokens so the list stays in lockstep with the
+     rest of the app (was a stale hardcoded copy of the palette). */
+  --u-bg: var(--aqt-bg);
+  --u-card: var(--aqt-card);
+  --u-card-2: var(--aqt-card-2);
+  --u-border: var(--aqt-border);
+  --u-border-2: var(--aqt-border-2);
+  --u-fg: var(--aqt-fg);
+  --u-muted: var(--aqt-fg-muted);
+  --u-dim: var(--aqt-fg-dim);
+  --u-faint: var(--aqt-fg-faint);
+  --u-teal: var(--aqt-teal);
+  --u-emerald: var(--aqt-emerald);
+  --u-amber: var(--aqt-amber);
+  --u-rose: var(--aqt-rose);
+  --u-violet: var(--aqt-violet);
+  --u-blue: var(--aqt-blue);
+  --u-tank: var(--aqt-tank);
+  --u-damage: var(--aqt-damage);
+  --u-support: var(--aqt-support);
 
-  --u-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
-  --u-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+  --u-display: var(--aqt-display);
+  --u-mono: var(--aqt-mono);
 
   color: var(--u-fg);
   display: flex;
