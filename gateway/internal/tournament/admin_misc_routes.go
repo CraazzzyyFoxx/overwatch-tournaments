@@ -24,4 +24,8 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// computation.py — read-only job get/list.
 	{Method: "GET", Pattern: "/api/v1/admin/tournament-jobs/{job_id}", Queue: "rpc.tournament.job_get", IDParam: "job_id", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/admin/tournament-jobs", Queue: "rpc.tournament.job_list", Query: []string{"tournament_id", "stage_id", "active_only", "limit"}, Auth: edge.AuthRequired},
+	// preview access allowlist (hidden tournaments) — workspace-admin gated in the worker.
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access", Queue: "rpc.tournament.preview_access_list", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access", Queue: "rpc.tournament.preview_access_add", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 201},
+	{Method: "DELETE", Pattern: "/api/v1/admin/tournaments/{tournament_id}/preview-access/{auth_user_id}", Queue: "rpc.tournament.preview_access_remove", IDParam: "tournament_id", Path: []string{"auth_user_id"}, Auth: edge.AuthRequired, Success: 204},
 }

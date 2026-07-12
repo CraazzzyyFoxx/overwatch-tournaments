@@ -138,7 +138,7 @@ func run() error {
 	// WS origin allowlist.
 	hub := ws.NewHub()
 	wsStore := workspace.New(pool)
-	authz := acl.New(wsStore, wsStore)
+	authz := acl.New(wsStore, wsStore, wsStore)
 	wsHandler := ws.NewHandler(
 		hub,
 		authn,

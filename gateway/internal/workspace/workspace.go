@@ -25,10 +25,20 @@ const (
 	// (get_by_verified_custom_domain).
 	customDomainVerifiedSQL = `SELECT EXISTS(SELECT 1 FROM workspace WHERE custom_domain = $1 AND custom_domain_verified_at IS NOT NULL)`
 
+	// Hidden-tournament visibility (issue #115): the WS topic ACL must not leak
+	// a hidden tournament's live bracket/draft/map-veto to outsiders.
+	tournamentHiddenSQL    = `SELECT is_hidden FROM tournament.tournament WHERE id = $1`
+	previewAllowedSQL      = `SELECT EXISTS(SELECT 1 FROM tournament.tournament_preview_access WHERE tournament_id = $1 AND auth_user_id = $2)`
+	encounterTournamentSQL = `SELECT tournament_id FROM tournament.encounter WHERE id = $1`
+
 	tournamentCacheTTL = 5 * time.Minute
 	// Matches the auth-service RBAC cache TTL, so membership changes propagate
 	// within roughly the same window.
 	membershipCacheTTL = 60 * time.Second
+	// Hidden flag + preview allowlist change when an admin toggles them; keep the
+	// window short so the WS gate reflects changes within roughly a minute.
+	hiddenCacheTTL  = 60 * time.Second
+	previewCacheTTL = 60 * time.Second
 	// Short TTL so a domain that is unclaimed, re-pointed, or has its
 	// verification revoked stops being accepted for new WebSocket handshakes
 	// within roughly this window, mirroring membershipCacheTTL above.
@@ -50,10 +60,17 @@ type Store struct {
 	tournament    *ttlCache[int64, int64]
 	members       *ttlCache[memberKey, bool]
 	customDomains *ttlCache[string, bool]
+	hidden        *ttlCache[int64, bool]
+	preview       *ttlCache[previewKey, bool]
+	encTournament *ttlCache[int64, int64]
 }
 
 type memberKey struct {
 	userID, workspaceID int64
+}
+
+type previewKey struct {
+	userID, tournamentID int64
 }
 
 // New returns a workspace Store backed by the given pool.
@@ -63,6 +80,9 @@ func New(pool *pgxpool.Pool) *Store {
 		tournament:    newTTLCache[int64, int64](tournamentCacheTTL),
 		members:       newTTLCache[memberKey, bool](membershipCacheTTL),
 		customDomains: newBoundedTTLCache[string, bool](customDomainCacheTTL, customDomainCacheMaxEntries),
+		hidden:        newTTLCache[int64, bool](hiddenCacheTTL),
+		preview:       newTTLCache[previewKey, bool](previewCacheTTL),
+		encTournament: newTTLCache[int64, int64](tournamentCacheTTL),
 	}
 }
 
@@ -137,4 +157,61 @@ func (s *Store) IsVerifiedCustomDomain(ctx context.Context, host string) (bool, 
 
 	s.customDomains.set(host, verified)
 	return verified, nil
+}
+
+// TournamentIsHidden reports whether a tournament is hidden. found is false when
+// the tournament does not exist (callers must deny — no existence disclosure).
+func (s *Store) TournamentIsHidden(ctx context.Context, tournamentID int64) (bool, bool, error) {
+	if v, ok := s.hidden.get(tournamentID); ok {
+		return v, true, nil
+	}
+
+	var hidden bool
+	err := s.pool.QueryRow(ctx, tournamentHiddenSQL, tournamentID).Scan(&hidden)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, fmt.Errorf("tournament hidden lookup: %w", err)
+	}
+
+	s.hidden.set(tournamentID, hidden)
+	return hidden, true, nil
+}
+
+// IsPreviewAllowed reports whether the user is on a tournament's preview
+// allowlist. Both outcomes are cached (short TTL).
+func (s *Store) IsPreviewAllowed(ctx context.Context, userID, tournamentID int64) (bool, error) {
+	key := previewKey{userID: userID, tournamentID: tournamentID}
+	if v, ok := s.preview.get(key); ok {
+		return v, nil
+	}
+
+	var allowed bool
+	if err := s.pool.QueryRow(ctx, previewAllowedSQL, tournamentID, userID).Scan(&allowed); err != nil {
+		return false, fmt.Errorf("preview access lookup: %w", err)
+	}
+
+	s.preview.set(key, allowed)
+	return allowed, nil
+}
+
+// EncounterTournamentID returns the tournament that owns an encounter. found is
+// false when the encounter does not exist.
+func (s *Store) EncounterTournamentID(ctx context.Context, encounterID int64) (int64, bool, error) {
+	if v, ok := s.encTournament.get(encounterID); ok {
+		return v, true, nil
+	}
+
+	var tournamentID int64
+	err := s.pool.QueryRow(ctx, encounterTournamentSQL, encounterID).Scan(&tournamentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("encounter tournament lookup: %w", err)
+	}
+
+	s.encTournament.set(encounterID, tournamentID)
+	return tournamentID, true, nil
 }
