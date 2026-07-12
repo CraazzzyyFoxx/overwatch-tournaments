@@ -89,7 +89,7 @@ const UserSearchCombobox = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-10 w-full justify-between border-border/60 bg-background/15 font-normal hover:bg-background/20"
+          className="h-10 w-full justify-between border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] font-normal text-[color:var(--aqt-fg)] hover:bg-[hsl(0_0%_100%/0.04)]"
         >
           {isLabelLoading ? (
             <Skeleton className="h-4 w-32" />

@@ -16,7 +16,6 @@ import { Hero } from "@/types/hero.types";
 import { MapRead } from "@/types/map.types";
 import { Tournament } from "@/types/tournament.types";
 import { UserRoleType } from "@/types/user.types";
-import { CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface CompareFiltersPanelProps {
@@ -110,15 +109,15 @@ const CompareFiltersPanel = ({
   const isHeroScope = scope === "hero";
 
   return (
-    <CardContent className="relative space-y-0">
+    <div className="space-y-0">
       {/* ── Row 1: Players ── */}
       <div className="space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="aqt-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           {t("common.playersLabel")}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.selectedUser")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.selectedUser")}</div>
             <UserSearchCombobox
               value={subjectUserId}
               selectedName={selectedSubjectName}
@@ -134,7 +133,7 @@ const CompareFiltersPanel = ({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.compareAgainst")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.compareAgainst")}</div>
             <UserSearchCombobox
               value={targetUserId}
               selectedName={selectedTargetName}
@@ -158,16 +157,16 @@ const CompareFiltersPanel = ({
       </div>
 
       {/* ── Separator ── */}
-      <div className="border-t border-border/40 my-4" />
+      <div className="border-t border-[color:var(--aqt-border)] my-4" />
 
       {/* ── Row 2: Filters ── */}
       <div className="space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="aqt-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           {t("users.compare.filters.title")}
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.compareScope")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.compareScope")}</div>
             <Select value={scope} onValueChange={(value) => updateParams({ scope: value as CompareScope })}>
               <SelectTrigger className="liquid-glass-panel">
                 <SelectValue placeholder={t("users.compare.filters.scopePlaceholder")} />
@@ -180,7 +179,7 @@ const CompareFiltersPanel = ({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.roleFilter")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.roleFilter")}</div>
             <Select
               value={role ?? "all"}
               disabled={isTargetBaseline}
@@ -222,7 +221,7 @@ const CompareFiltersPanel = ({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.divisionMin")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.divisionMin")}</div>
             <Select
               value={divMin ? String(divMin) : "all"}
               disabled={isTargetBaseline}
@@ -265,7 +264,7 @@ const CompareFiltersPanel = ({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.divisionMax")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.divisionMax")}</div>
             <Select
               value={divMax ? String(divMax) : "all"}
               disabled={isTargetBaseline}
@@ -308,7 +307,7 @@ const CompareFiltersPanel = ({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs font-semibold text-muted-foreground">{t("common.tournament")}</div>
+            <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("common.tournament")}</div>
             <SearchableImageSelect
               value={tournamentId ? String(tournamentId) : undefined}
               onValueChange={(val) =>
@@ -330,15 +329,15 @@ const CompareFiltersPanel = ({
         style={{ gridTemplateRows: isHeroScope ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-border/40 mt-4 mb-4" />
+          <div className="border-t border-[color:var(--aqt-border)] mt-4 mb-4" />
 
           <div className="space-y-2 pb-0.5">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="aqt-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
               {t("users.compare.filters.heroAndMap")}
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.primaryHero")}</div>
+                <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.primaryHero")}</div>
                 <SearchableImageSelect
                   value={leftHeroId ? String(leftHeroId) : undefined}
                   onValueChange={(val) => {
@@ -354,7 +353,7 @@ const CompareFiltersPanel = ({
               </div>
 
               <div className="space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.compareHero")}</div>
+                <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.compareHero")}</div>
                 <SearchableImageSelect
                   value={rightHeroId ? String(rightHeroId) : undefined}
                   onValueChange={(val) =>
@@ -369,7 +368,7 @@ const CompareFiltersPanel = ({
               </div>
 
               <div className="space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground">{t("users.compare.filters.mapFilter")}</div>
+                <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.mapFilter")}</div>
                 <SearchableImageSelect
                   value={mapId ? String(mapId) : undefined}
                   onValueChange={(val) =>
@@ -386,7 +385,7 @@ const CompareFiltersPanel = ({
           </div>
         </div>
       </div>
-    </CardContent>
+    </div>
   );
 };
 

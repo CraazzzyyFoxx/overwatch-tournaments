@@ -1,11 +1,10 @@
 "use client";
 
-import React, { Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Card } from "@/components/ui/card";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import ComparePageHeader from "@/app/(site)/users/compare/components/ComparePageHeader";
 import CompareFiltersPanel from "@/app/(site)/users/compare/components/CompareFiltersPanel";
 import CompareSummaryBadges from "@/app/(site)/users/compare/components/CompareSummaryBadges";
@@ -64,19 +63,8 @@ const PageContent = () => {
   ]);
 
   return (
-    <div
-      className="liquid-glass space-y-6"
-      style={
-        {
-          "--lg-a": "16 185 129",
-          "--lg-b": "14 165 233",
-          "--lg-c": "245 158 11"
-        } as React.CSSProperties
-      }
-    >
-      <Card className="relative overflow-hidden">
-        <GlassGlow />
-
+    <div className="aqt-player space-y-3.5">
+      <CardSurface bodyClassName="space-y-5">
         <ComparePageHeader />
 
         <CompareFiltersPanel
@@ -107,15 +95,13 @@ const PageContent = () => {
           updateParams={compareParams.updateParams}
         />
 
-        {/* <div className="relative px-6 pb-6">
-          <CompareSummaryBadges
-            effectiveBaseline={compareParams.effectiveBaseline}
-            baselineSummary={baselineSummary}
-            isHeroScope={compareParams.isHeroScope}
-            selectedMapName={heroCompareQuery.data?.map?.name}
-          />
-        </div> */}
-      </Card>
+        {/* <CompareSummaryBadges
+          effectiveBaseline={compareParams.effectiveBaseline}
+          baselineSummary={baselineSummary}
+          isHeroScope={compareParams.isHeroScope}
+          selectedMapName={heroCompareQuery.data?.map?.name}
+        /> */}
+      </CardSurface>
 
       {compareParams.subjectUserId ? (
         <CompareUnifiedTable
@@ -151,15 +137,14 @@ const PageContent = () => {
           }}
         />
       ) : (
-        <Card className="relative overflow-hidden">
-          <GlassGlow />
-          <div className="relative flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Users className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
+        <CardSurface>
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <Users className="h-10 w-10 text-[color:var(--aqt-fg-dim)]" />
+            <p className="text-sm text-[color:var(--aqt-fg-muted)]">
               {t("users.compare.selectUserPrompt")}
             </p>
           </div>
-        </Card>
+        </CardSurface>
       )}
     </div>
   );

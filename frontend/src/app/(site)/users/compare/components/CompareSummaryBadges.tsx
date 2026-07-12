@@ -16,11 +16,22 @@ const CompareSummaryBadges = ({
   isHeroScope,
   selectedMapName
 }: CompareSummaryBadgesProps) => {
+  const badgeClass =
+    "aqt-mono border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg-muted)]";
+
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <Badge variant="outline">Baseline: {effectiveBaseline.replace("_", " ")}</Badge>
-      <Badge variant="outline">{baselineSummary}</Badge>
-      {isHeroScope && selectedMapName ? <Badge variant="outline">Map: {selectedMapName}</Badge> : null}
+      <Badge variant="outline" className={badgeClass}>
+        Baseline: {effectiveBaseline.replace("_", " ")}
+      </Badge>
+      <Badge variant="outline" className={badgeClass}>
+        {baselineSummary}
+      </Badge>
+      {isHeroScope && selectedMapName ? (
+        <Badge variant="outline" className={badgeClass}>
+          Map: {selectedMapName}
+        </Badge>
+      ) : null}
     </div>
   );
 };

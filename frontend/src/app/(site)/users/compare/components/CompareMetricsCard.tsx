@@ -1,12 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CompareRow } from "@/app/(site)/users/compare/types";
-import { formatDuration, formatMetricValue, formatPercent, getGlowVarsFromColor } from "@/app/(site)/users/compare/utils";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
+import { formatDuration, formatMetricValue, formatPercent } from "@/app/(site)/users/compare/utils";
 import TrendDelta from "@/app/(site)/users/compare/components/TrendDelta";
 
 interface CompareMetricsCardProps {
@@ -24,50 +22,56 @@ interface CompareMetricsCardProps {
   playtimeLabel?: string;
 }
 
+const numHeader =
+  "aqt-mono border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--aqt-fg-faint)]";
+const textHeader =
+  "aqt-mono border-b border-[color:var(--aqt-border)] px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-[color:var(--aqt-fg-faint)]";
+const numCell = "aqt-mono px-3 py-2.5 text-right text-[13px] tabular-nums text-[color:var(--aqt-fg-muted)]";
+
 const CompareMetricsSkeleton = ({ mode, isHeroScope }: { mode: "subject" | "baseline"; isHeroScope: boolean }) => {
   const rowCount = isHeroScope ? 6 : 8;
 
   return (
-    <div className="rounded-xl border bg-background/10 p-1">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Metric</TableHead>
-            {mode === "subject" ? <TableHead className="text-right">Value</TableHead> : null}
-            {mode === "subject" && !isHeroScope ? <TableHead className="text-right">Percentile</TableHead> : null}
-            {mode === "baseline" ? <TableHead className="text-right">Baseline</TableHead> : null}
-            {mode === "baseline" ? <TableHead className="text-right">Delta</TableHead> : null}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className={textHeader}>Metric</th>
+            {mode === "subject" ? <th className={numHeader}>Value</th> : null}
+            {mode === "subject" && !isHeroScope ? <th className={numHeader}>Percentile</th> : null}
+            {mode === "baseline" ? <th className={numHeader}>Baseline</th> : null}
+            {mode === "baseline" ? <th className={numHeader}>Delta</th> : null}
+          </tr>
+        </thead>
+        <tbody>
           {Array.from({ length: rowCount }).map((_, index) => (
-            <TableRow key={`skeleton-${mode}-${index}`} className="h-12">
-              <TableCell className="align-middle">
+            <tr key={`skeleton-${mode}-${index}`} className="border-b border-[color:var(--aqt-border)] last:border-b-0">
+              <td className="px-3 py-2.5">
                 <Skeleton className="h-4 w-38" />
-              </TableCell>
-              <TableCell className="align-middle">
+              </td>
+              <td className="px-3 py-2.5">
                 <div className="flex justify-end">
                   <Skeleton className="h-4 w-16" />
                 </div>
-              </TableCell>
+              </td>
               {mode === "subject" && !isHeroScope ? (
-                <TableCell className="align-middle">
+                <td className="px-3 py-2.5">
                   <div className="flex justify-end">
                     <Skeleton className="h-4 w-14" />
                   </div>
-                </TableCell>
+                </td>
               ) : null}
               {mode === "baseline" ? (
-                <TableCell className="align-middle">
+                <td className="px-3 py-2.5">
                   <div className="flex justify-end">
                     <Skeleton className="h-4 w-20" />
                   </div>
-                </TableCell>
+                </td>
               ) : null}
-            </TableRow>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -82,101 +86,92 @@ const CompareMetricsCard = ({
   isHeroScope,
   heroName,
   heroImagePath,
-  heroDominantColor,
   playtimeSeconds,
   playtimeLabel = "Playtime"
 }: CompareMetricsCardProps) => {
-  const heroGlowVars = isHeroScope ? getGlowVarsFromColor(heroDominantColor) : null;
-
   return (
-    <Card className="relative overflow-hidden min-h-125" style={heroGlowVars ? (heroGlowVars as React.CSSProperties) : undefined}>
-      <GlassGlow />
-
-      {isHeroScope && heroImagePath ? (
-        <div className="absolute top-5 right-5 z-20 rounded-lg p-1 shadow-lg">
+    <CardSurface
+      className="relative min-h-125"
+      title={title}
+      subtitle={description}
+      action={
+        isHeroScope && heroImagePath ? (
           <Image
             src={heroImagePath}
             alt={heroName ?? "Hero"}
-            width={64}
-            height={64}
-            className="h-16 w-16 rounded-md object-cover"
+            width={44}
+            height={44}
+            className="h-11 w-11 rounded-md object-cover"
           />
+        ) : undefined
+      }
+    >
+      {isHeroScope ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[color:var(--aqt-fg-muted)]">
+          <span>Hero: {heroName ?? "All heroes"}</span>
+          <span className="text-[color:var(--aqt-fg-faint)]">•</span>
+          <span>
+            {playtimeLabel}: {formatDuration(playtimeSeconds ?? 0)}
+          </span>
         </div>
       ) : null}
 
-      <CardHeader className={`relative pb-3`}>
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-        {isHeroScope ? (
-          <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-muted-foreground">
-            <span>Hero: {heroName ?? "All heroes"}</span>
-            <span>•</span>
-            <span>
-              {playtimeLabel}: {formatDuration(playtimeSeconds ?? 0)}
-            </span>
-          </div>
-        ) : null}
-      </CardHeader>
+      {loading ? (
+        <CompareMetricsSkeleton mode={mode} isHeroScope={isHeroScope} />
+      ) : errorMessage ? (
+        <p className="text-sm text-[color:var(--aqt-rose)]">{errorMessage}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-[color:var(--aqt-fg-muted)]">No metrics available for current filters.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className={textHeader}>Metric</th>
+                {mode === "subject" ? <th className={numHeader}>Value</th> : null}
+                {mode === "subject" && !isHeroScope ? <th className={numHeader}>Percentile</th> : null}
+                {mode === "baseline" ? <th className={numHeader}>Baseline</th> : null}
+                {mode === "baseline" ? <th className={numHeader}>Delta</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={`${mode}-${row.key}`}
+                  className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
+                >
+                  <td className="px-3 py-2.5 font-medium text-[color:var(--aqt-fg)]">{row.label}</td>
 
-      <CardContent className="relative">
-        {loading ? (
-          <CompareMetricsSkeleton mode={mode} isHeroScope={isHeroScope} />
-        ) : errorMessage ? (
-          <p className="text-sm text-destructive">{errorMessage}</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No metrics available for current filters.</p>
-        ) : (
-          <div className="rounded-xl border bg-background/10 p-1">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Metric</TableHead>
-                  {mode === "subject" ? <TableHead className="text-right">Value</TableHead> : null}
-                  {mode === "subject" && !isHeroScope ? <TableHead className="text-right">Percentile</TableHead> : null}
-                  {mode === "baseline" ? <TableHead className="text-right">Baseline</TableHead> : null}
-                  {mode === "baseline" ? <TableHead className="text-right">Delta</TableHead> : null}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={`${mode}-${row.key}`} className="h-12">
-                    <TableCell className="font-medium align-middle leading-none">{row.label}</TableCell>
+                  {mode === "subject" ? (
+                    <td className={`${numCell} whitespace-nowrap text-[color:var(--aqt-fg)]`}>
+                      {formatMetricValue(row.subjectValue)}
+                    </td>
+                  ) : null}
 
-                    {mode === "subject" ? (
-                      <TableCell className="text-right tabular-nums align-middle whitespace-nowrap leading-none">
-                        {formatMetricValue(row.subjectValue)}
-                      </TableCell>
-                    ) : null}
+                  {mode === "subject" && !isHeroScope ? (
+                    <td className={`${numCell} whitespace-nowrap`}>{formatPercent(row.percentile)}</td>
+                  ) : null}
 
-                    {mode === "subject" && !isHeroScope ? (
-                      <TableCell className="text-right tabular-nums align-middle whitespace-nowrap leading-none">
-                        {formatPercent(row.percentile)}
-                      </TableCell>
-                    ) : null}
+                  {mode === "baseline" ? (
+                    <td className={`${numCell} whitespace-nowrap`}>{formatMetricValue(row.baselineValue)}</td>
+                  ) : null}
 
-                    {mode === "baseline" ? (
-                      <TableCell className="text-right tabular-nums align-middle whitespace-nowrap leading-none">
-                        {formatMetricValue(row.baselineValue)}
-                      </TableCell>
-                    ) : null}
-
-                    {mode === "baseline" ? (
-                      <TableCell className="text-right align-middle whitespace-nowrap leading-none">
-                        <TrendDelta
-                          delta={row.delta}
-                          deltaPercent={row.deltaPercent}
-                          betterWorse={row.betterWorse}
-                        />
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  {mode === "baseline" ? (
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <TrendDelta
+                        delta={row.delta}
+                        deltaPercent={row.deltaPercent}
+                        betterWorse={row.betterWorse}
+                      />
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </CardSurface>
   );
 };
 

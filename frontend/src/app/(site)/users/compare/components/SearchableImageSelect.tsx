@@ -75,7 +75,8 @@ const SearchableImageSelect = ({
           disabled={disabled}
           className={cn(
             "h-10 w-full justify-between font-normal",
-            triggerClassName ?? "border-border/60 bg-background/15 hover:bg-background/20"
+            triggerClassName ??
+              "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg)] hover:bg-[hsl(0_0%_100%/0.04)]"
           )}
         >
           <div className="flex items-center gap-2 overflow-hidden">

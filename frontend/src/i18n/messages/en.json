@@ -2359,6 +2359,8 @@
       "selectedUserColumn": "Selected User",
       "compareAgainst": "Compare against",
       "noMetrics": "No metrics available for current filters.",
+      "colMetric": "Metric",
+      "colDelta": "Δ",
       "selectSubjectUser": "Select subject user",
       "filters": {
         "title": "Filters",
