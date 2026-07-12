@@ -1,5 +1,6 @@
 {
   "common": {
+    "previewBadge": "Скрыт",
     "draft": "Драфт",
     "back": "Назад",
     "cancel": "Отмена",
@@ -1392,6 +1393,8 @@
     "allFieldsVisible": "Все поля видны в таблице",
     "topHeroes": "Топ героев",
     "newBadge": "Новичок",
+    "previewBanner": "Предпросмотр — скрыт от публичного сайта",
+    "previewBannerDescription": "Этот турнир видят только администраторы воркспейса и приглашённые для предпросмотра пользователи.",
     "previousTournaments": "{count, plural, one {# предыдущий турнир} few {# предыдущих турнира} many {# предыдущих турниров} other {# предыдущих турниров}}",
     "resetColumns": "Сбросить по умолчанию",
     "columnCategory": {

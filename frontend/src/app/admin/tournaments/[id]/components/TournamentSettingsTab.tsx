@@ -12,7 +12,8 @@ import {
   CalendarDays,
   Wrench,
   Award,
-  Network
+  Network,
+  EyeOff
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import type { Tournament } from "@/types/tournament.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import { getTournamentForm, type TournamentFormState } from "./tournamentWorkspace.helpers";
+import { TournamentPreviewAllowlist } from "./TournamentPreviewAllowlist";
 import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +107,7 @@ export function TournamentSettingsTab({
         : null,
       is_league: formData.is_league,
       is_finished: formData.is_finished,
+      is_hidden: formData.is_hidden,
       start_date: formData.start_date,
       end_date: formData.end_date,
       win_points: formData.win_points,
@@ -409,6 +412,46 @@ export function TournamentSettingsTab({
                   </Label>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Card: Visibility (hidden / preview) */}
+          <Card className="border-border/40 bg-card/50">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <EyeOff className="size-4 text-primary" />
+                <CardTitle className="text-sm font-semibold">Visibility</CardTitle>
+              </div>
+              <CardDescription className="text-xs">
+                Hide this tournament and all its data from the public site. Only workspace admins
+                and the preview allowlist below can see a hidden tournament.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-3.5">
+                <Checkbox
+                  id="settings-is-hidden"
+                  checked={formData.is_hidden}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, is_hidden: checked === true })
+                  }
+                />
+                <Label htmlFor="settings-is-hidden" className="cursor-pointer text-sm font-medium">
+                  Hidden (preview) — not visible to the public
+                </Label>
+              </div>
+
+              {formData.is_hidden && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Preview allowlist
+                  </p>
+                  <TournamentPreviewAllowlist
+                    tournamentId={tournamentId}
+                    workspaceId={tournament.workspace_id}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -121,6 +121,7 @@ export interface TournamentUpdateInput {
   challonge_slug?: string | null;
   is_league?: boolean;
   is_finished?: boolean;
+  is_hidden?: boolean;
   team_formation?: string;
   start_date?: string;
   end_date?: string;
@@ -132,6 +133,20 @@ export interface TournamentUpdateInput {
   draw_points?: number;
   loss_points?: number;
   division_grid_version_id?: number | null;
+}
+
+export interface TournamentPreviewAccessUser {
+  id: number;
+  name: string;
+  avatar_url?: string | null;
+}
+
+export interface TournamentPreviewAccessEntry {
+  id: number;
+  tournament_id: number;
+  auth_user_id: number;
+  created_at: string;
+  user?: TournamentPreviewAccessUser | null;
 }
 
 export interface TournamentStatusTransitionInput {

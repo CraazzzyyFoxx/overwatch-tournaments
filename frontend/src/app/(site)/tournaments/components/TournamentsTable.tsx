@@ -41,6 +41,20 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
                 {t("common.live")}
               </span>
             )}
+            {tournament.is_hidden && (
+              <span
+                className="status-pill"
+                style={{
+                  fontSize: "8.5px",
+                  padding: "2px 7px",
+                  background: "hsl(var(--muted) / 0.6)",
+                  color: "hsl(var(--muted-foreground))",
+                  border: "1px solid hsl(var(--border))"
+                }}
+              >
+                {t("common.previewBadge")}
+              </span>
+            )}
           </span>
           <span className="sub">
             {formatDateRange(tournament.start_date, tournament.end_date)}
