@@ -19,8 +19,9 @@ from pydantic import ValidationError
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
-from shared.rpc.identity import MissingIdentityError, rehydrate_user
+from shared.rpc.identity import MissingIdentityError, rehydrate_user, rehydrate_user_optional
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
+from shared.services.tournament_visibility import assert_tournament_viewable
 
 
 def identity_user_id(data: dict[str, Any]) -> int | None:
@@ -65,6 +66,22 @@ def actor(data: dict[str, Any]) -> AuthUser:
     (the envelope helper maps that to ``unauthorized``).
     """
     return rehydrate_user(data.get("identity"))
+
+
+def optional_actor(data: dict[str, Any]) -> AuthUser | None:
+    """Rehydrate identity for AuthOptional reads; None when anonymous."""
+    return rehydrate_user_optional(data.get("identity"))
+
+
+async def gate_tournament(session: Any, data: dict[str, Any], tournament_id: int | None) -> None:
+    """404 a hidden tournament for an ineligible viewer (issue #115).
+
+    No-op when ``tournament_id`` is None (a cross-tournament read with no single
+    tournament to gate). The route must be AuthOptional so identity reaches here.
+    """
+    if tournament_id is None:
+        return
+    await assert_tournament_viewable(session, optional_actor(data), int(tournament_id))
 
 
 def require_active(user: AuthUser) -> None:

@@ -18,6 +18,7 @@ import { MapRead } from "@/types/map.types";
 import {
   TournamentCreateInput,
   TournamentUpdateInput,
+  TournamentPreviewAccessEntry,
   TournamentStatusTransitionInput,
   StageCreateInput,
   StageUpdateInput,
@@ -175,6 +176,30 @@ class AdminService {
       method: "POST"
     });
     return response.json();
+  }
+
+  // ─── Tournament preview allowlist (hidden tournaments) ──────────────────────
+
+  async getTournamentPreviewAccess(tournamentId: number): Promise<TournamentPreviewAccessEntry[]> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access`);
+    return response.json();
+  }
+
+  async addTournamentPreviewUser(
+    tournamentId: number,
+    authUserId: number
+  ): Promise<TournamentPreviewAccessEntry> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access`, {
+      method: "POST",
+      body: { auth_user_id: authUserId }
+    });
+    return response.json();
+  }
+
+  async removeTournamentPreviewUser(tournamentId: number, authUserId: number): Promise<void> {
+    await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access/${authUserId}`, {
+      method: "DELETE"
+    });
   }
 
   // ─── Team CRUD ─────────────────────────────────────────────────────────────

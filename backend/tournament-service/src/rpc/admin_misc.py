@@ -31,17 +31,19 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
 from src import models
 from src.core import auth
-from src.rpc._helpers import _bool, _dump, _identity, _payload, _q1, _require_id, _run
+from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
 from src.schemas.admin import encounter as enc_schemas
 from src.schemas.admin import tournament as tournament_schemas
 from src.schemas.admin.computation import TournamentComputationJobRead
 from src.services.admin import encounter as enc_service
+from src.services.admin import preview_access as preview_access_service
 from src.services.admin import standing as standing_service
 from src.services.admin import tournament as tournament_service
 from src.services.computation import jobs as computation_jobs
 from src.services.encounter import captain as captain_service
 from src.services.encounter import map_veto as map_veto_service
 from src.services.tournament import flows as tournament_flows
+from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 
 
 class AdminMapPoolAssign(BaseModel):
@@ -170,6 +172,60 @@ def register(broker: Any, logger: Any) -> None:
                 force=body.force,
             )
             return _dump(await tournament_flows.to_pydantic(session, tournament, ["stages"]))
+
+        return await _run(logger, op)
+
+    # ── preview access (hidden-tournament allowlist; workspace-admin gated) ─
+
+    def _require_ws_admin(user: models.AuthUser, ws_id: int) -> None:
+        if not user.is_workspace_admin(ws_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Workspace admin privileges required",
+            )
+
+    @broker.subscriber("rpc.tournament.preview_access_list")
+    async def _preview_access_list(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            _require_ws_admin(user, ws_id)
+            rows = await preview_access_service.list_preview_access(session, tournament_id)
+            return [preview_access_service.serialize_entry(row) for row in rows]
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.preview_access_add")
+    async def _preview_access_add(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            _require_ws_admin(user, ws_id)
+            payload = _payload(data)
+            try:
+                auth_user_id = int(payload["auth_user_id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail="auth_user_id is required") from exc
+            row = await preview_access_service.add_preview_access(session, tournament_id, auth_user_id)
+            # Refresh the (viewer-agnostic) cached tournament read so the badge/state update.
+            await invalidate_tournament_cache(tournament_id, "structure_changed")
+            return preview_access_service.serialize_entry(row)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.preview_access_remove")
+    async def _preview_access_remove(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            _require_ws_admin(user, ws_id)
+            auth_user_id = _path_int(data, "auth_user_id")
+            await preview_access_service.remove_preview_access(session, tournament_id, auth_user_id)
+            await invalidate_tournament_cache(tournament_id, "structure_changed")
+            return None
 
         return await _run(logger, op)
 

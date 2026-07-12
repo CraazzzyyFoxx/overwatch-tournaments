@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
+from shared.services.tournament_visibility import visible_tournament_ids_subquery
 from src import models, schemas
 from src.core import utils
 from src.services.user import service as user_service
@@ -210,6 +211,12 @@ async def get_all(
     if params.tournament_id:
         query = query.where(sa.and_(models.Team.tournament_id == params.tournament_id))
         total_query = total_query.where(sa.and_(models.Team.tournament_id == params.tournament_id))
+    else:
+        # Cross-tournament browse: exclude teams of hidden tournaments (issue #115).
+        # A specific tournament_id is authorized upstream by assert_tournament_viewable.
+        visible_ids = visible_tournament_ids_subquery(None)
+        query = query.where(models.Team.tournament_id.in_(visible_ids))
+        total_query = total_query.where(models.Team.tournament_id.in_(visible_ids))
 
     if workspace_id is not None:
         query = query.join(models.Tournament, models.Team.tournament_id == models.Tournament.id)

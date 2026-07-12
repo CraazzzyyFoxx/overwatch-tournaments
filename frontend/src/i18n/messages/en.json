@@ -1,5 +1,6 @@
 {
   "common": {
+    "previewBadge": "Hidden",
     "draft": "Draft",
     "back": "Back",
     "cancel": "Cancel",
@@ -1392,6 +1393,8 @@
     "allFieldsVisible": "All fields visible in table",
     "topHeroes": "Top Heroes",
     "newBadge": "New",
+    "previewBanner": "Preview — hidden from the public site",
+    "previewBannerDescription": "Only workspace admins and preview-invited users can see this tournament.",
     "previousTournaments": "{count, plural, one {# previous tournament} other {# previous tournaments}}",
     "resetColumns": "Reset to defaults",
     "columnCategory": {

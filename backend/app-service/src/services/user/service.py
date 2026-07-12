@@ -2338,6 +2338,11 @@ async def get_tournaments_with_stats(
             sa.and_(
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
+                # Hidden tournaments (issue #115) never appear in a user's public
+                # tournament list. This read is cashews-cached without the viewer,
+                # so exclude unconditionally; admins/allowlisted view hidden
+                # tournaments through the gated tournament pages instead.
+                models.Tournament.is_hidden.is_(False),
             )
         )
         .group_by(models.Team.id)

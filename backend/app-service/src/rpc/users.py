@@ -108,6 +108,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.compare")
     async def _compare(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             grid = await get_division_grid(session, None)
             qp = build_query_model(schemas.UserCompareQueryParams, data.get("query"))
             return await user_flows.get_compare(
@@ -119,6 +120,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.compare_heroes")
     async def _compare_heroes(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             grid = await get_division_grid(session, None)
             qp = build_query_model(schemas.UserHeroCompareQueryParams, data.get("query"))
             return await user_flows.get_hero_compare(
@@ -158,6 +160,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _tournament(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             tournament_id = int(data["tournament_id"])
+            await c.gate_tournament(session, data, tournament_id)
             grid = await get_division_grid(session, None, tournament_id)
             return await user_flows.get_tournament_with_stats(session, c.require_id(data), tournament_id, grid=grid)
 
@@ -171,6 +174,7 @@ def register(broker: Any, logger: Any) -> None:
             # workspace_id is needed. The route's user id (data["id"]) is only
             # the viewing context and is intentionally unused here.
             tournament_id = int(data["tournament_id"])
+            await c.gate_tournament(session, data, tournament_id)
             raw_stat = c.q1(data, "stat", str, None)
             if not raw_stat:
                 raise HTTPException(status_code=422, detail="stat query parameter is required")
@@ -185,6 +189,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.maps")
     async def _maps(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             qp = build_query_model(schemas.UserMapsSearchQueryParams[_MAPS_SORT], data.get("query"))
             return await map_flows.get_top_user(
                 session,
@@ -198,6 +203,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.maps_summary")
     async def _maps_summary(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             qp = build_query_model(schemas.UserMapsSearchQueryParams[_MAPS_SORT], data.get("query"))
             return await map_flows.get_top_user_summary(
                 session,
@@ -236,6 +242,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.heroes")
     async def _heroes(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             qp = build_query_model(pagination.PaginationQueryParams, data.get("query"))
             raw_stats = c.q(data, "stats") or []
             try:

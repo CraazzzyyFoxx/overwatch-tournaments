@@ -9,6 +9,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.services.tournament_visibility import visible_tournament_ids_subquery
 from src import models, schemas
 from src.core import enums, pagination, utils
 from src.core.workspace import workspace_filter
@@ -236,6 +237,10 @@ def _apply_encounter_filters(
 
     if params.tournament_id:
         query = query.where(models.Encounter.tournament_id == params.tournament_id)
+    else:
+        # Cross-tournament browse: never surface hidden tournaments (issue #115).
+        # A specific tournament_id is authorized upstream by assert_tournament_viewable.
+        query = query.where(models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None)))
     if params.stage_id is not None:
         query = query.where(models.Encounter.stage_id == params.stage_id)
     if params.stage_item_id is not None:
@@ -1160,6 +1165,13 @@ async def get_all_matches(
         total_query = total_query.join(models.Encounter, models.Match.encounter_id == models.Encounter.id).where(
             sa.and_(models.Encounter.tournament_id == params.tournament_id)
         )
+    else:
+        # Cross-tournament browse: exclude matches of hidden tournaments (issue #115).
+        _visible_encounter_ids = sa.select(models.Encounter.id).where(
+            models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None))
+        )
+        query = query.where(models.Match.encounter_id.in_(_visible_encounter_ids))
+        total_query = total_query.where(models.Match.encounter_id.in_(_visible_encounter_ids))
 
     if params.home_team_id:
         if not encounter_joined:

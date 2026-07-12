@@ -10,6 +10,7 @@ export type TournamentFormState = {
   challonge_slug: string;
   is_league: boolean;
   is_finished: boolean;
+  is_hidden: boolean;
   start_date: string;
   end_date: string;
   win_points: number;
@@ -104,6 +105,7 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     challonge_slug: tournament.challonge_slug ?? "",
     is_league: tournament.is_league,
     is_finished: tournament.is_finished,
+    is_hidden: tournament.is_hidden ?? false,
     start_date: toDateInput(tournament.start_date),
     end_date: toDateInput(tournament.end_date),
     win_points: tournament.win_points ?? 1,

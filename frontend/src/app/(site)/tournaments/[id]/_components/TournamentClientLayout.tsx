@@ -101,6 +101,19 @@ export default function TournamentClientLayout({
 
   return (
     <div className="aqt-tn space-y-4">
+      {tournament.is_hidden && (
+        <div
+          role="status"
+          className="rounded-xl border px-4 py-3"
+          style={{
+            borderColor: "hsl(var(--border))",
+            background: "hsl(var(--muted) / 0.4)"
+          }}
+        >
+          <p className="text-sm font-semibold">{t("tournamentDetail.previewBanner")}</p>
+          <p className="text-xs opacity-70">{t("tournamentDetail.previewBannerDescription")}</p>
+        </div>
+      )}
       <PageHero
         eyebrow={
           <HeroCoord className="inline-flex flex-wrap items-center gap-2">

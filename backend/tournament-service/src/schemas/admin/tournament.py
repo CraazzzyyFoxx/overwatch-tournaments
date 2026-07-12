@@ -19,6 +19,7 @@ class TournamentCreate(BaseModel):
     name: str
     description: str | None = None
     is_league: bool = False
+    is_hidden: bool = False
     team_formation: str = "balancer"
     status: TournamentStatus = TournamentStatus.DRAFT
     start_date: date
@@ -42,6 +43,7 @@ class TournamentUpdate(BaseModel):
     challonge_slug: str | None = None
     is_league: bool | None = None
     is_finished: bool | None = None
+    is_hidden: bool | None = None
     team_formation: str | None = None
     start_date: date | None = None
     end_date: date | None = None

@@ -11,6 +11,7 @@ from shared import models
 from shared.core import enums
 from shared.core.pagination import PaginationSortParams, PaginationSortSearchParams
 from shared.repository.base import BaseRepository
+from shared.services.tournament_visibility import visible_tournament_ids_subquery
 
 
 class HeroRepository(BaseRepository[models.Hero]):
@@ -69,6 +70,16 @@ class HeroRepository(BaseRepository[models.Hero]):
         ]
         if narrow_to_user:
             playtime_filters.append(models.MatchStatistics.user_id == user_id)
+        if tournament_id is None:
+            # Cross-tournament aggregate: exclude hidden tournaments' stats (issue
+            # #115). A specific tournament_id is authorized by the caller's gate.
+            playtime_filters.append(
+                models.MatchStatistics.match_id.in_(
+                    sa.select(models.Match.id)
+                    .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+                    .where(models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None)))
+                )
+            )
 
         playtime_cte = (
             sa.select(

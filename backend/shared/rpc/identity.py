@@ -32,7 +32,13 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
 
-__all__ = ("rehydrate_user", "ensure_workspace_permission", "ensure_admin_panel_access", "MissingIdentityError")
+__all__ = (
+    "rehydrate_user",
+    "rehydrate_user_optional",
+    "ensure_workspace_permission",
+    "ensure_admin_panel_access",
+    "MissingIdentityError",
+)
 
 
 class MissingIdentityError(Exception):
@@ -81,6 +87,18 @@ def rehydrate_user(identity: dict[str, Any] | None) -> AuthUser:
         denies=identity.get("denies", []),
     )
     return user
+
+
+def rehydrate_user_optional(identity: dict[str, Any] | None) -> AuthUser | None:
+    """Like ``rehydrate_user`` but returns ``None`` for anonymous callers.
+
+    The gateway injects ``identity`` only when a valid token is present on an
+    AuthOptional route, so a falsy payload means anonymous — never an error.
+    Use this on public reads that must still recognise a logged-in viewer.
+    """
+    if not identity:
+        return None
+    return rehydrate_user(identity)
 
 
 def ensure_workspace_permission(user: AuthUser, workspace_id: int, resource: str, action: str) -> None:
