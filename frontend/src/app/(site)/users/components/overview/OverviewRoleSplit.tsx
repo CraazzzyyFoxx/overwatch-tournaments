@@ -4,7 +4,7 @@ import { Layers } from "lucide-react";
 import { UserProfile, UserRole, UserMapRead } from "@/types/user.types";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
-import { CardSurface, RolePyramid, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
+import { CardSurface, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
 import { getOverall } from "@/app/(site)/users/components/heroes/utils";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -149,13 +149,31 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
       })}
     >
       <div className="flex flex-col gap-3.5">
-        <RolePyramid
-          segments={buckets.map((b) => ({
-            role: b.key,
-            maps: b.maps,
-            label: b.maps > 0 ? `${t(ROLE_SHORT_KEY[b.key] as Parameters<typeof t>[0])} ${b.maps}` : ""
-          }))}
-        />
+        {/* Role-spectrum distribution bar (design-book §3f) — one thin
+            full-width bar segmented by each role's share of maps played. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full border border-[color:var(--aqt-border)]">
+            {buckets.map((b) =>
+              b.share > 0 ? (
+                <div
+                  key={b.key}
+                  style={{ width: `${b.share * 100}%`, background: ROLE_COLOR[b.key] }}
+                  title={`${t(ROLE_LABEL_KEY[b.key] as Parameters<typeof t>[0])} · ${Math.round(b.share * 100)}%`}
+                />
+              ) : null
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-3.5 gap-y-1">
+            {buckets.map((b) => (
+              <span key={b.key} className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--aqt-fg-muted)]">
+                <span className="inline-block h-[7px] w-[7px] rounded-full" style={{ background: ROLE_COLOR[b.key] }} />
+                {t(ROLE_SHORT_KEY[b.key] as Parameters<typeof t>[0])}
+                <span className="aqt-tnum font-bold text-[color:var(--aqt-fg)]">{b.maps}</span>
+                <span className="aqt-mono text-[color:var(--aqt-fg-faint)]">{Math.round(b.share * 100)}%</span>
+              </span>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-col gap-3">
           {buckets.map((b) => (
             <div
