@@ -210,7 +210,7 @@ async def get_history_tournaments(
         .join(players_sq, players_sq.c.tournament_id == models.Tournament.id, isouter=True)
         .join(teams_sq, teams_sq.c.tournament_id == models.Tournament.id, isouter=True)
         .join(encounters_sq, encounters_sq.c.tournament_id == models.Tournament.id, isouter=True)
-        .where(models.Tournament.number.isnot(None))
+        .where(models.Tournament.number.isnot(None), models.Tournament.is_hidden.is_(False))
         .order_by(models.Tournament.number)
     )
     if workspace_id is not None:
@@ -250,6 +250,7 @@ async def get_avg_div_tournaments(
         .where(
             models.Player.tournament_id == models.Tournament.id,
             models.Tournament.number.isnot(None),
+            models.Tournament.is_hidden.is_(False),
         )
         # Grouping by the Tournament PK lets Postgres project the whole
         # tournament row (functional dependency).
@@ -276,7 +277,8 @@ async def get_tournaments_overall(session: AsyncSession, workspace_id: int | Non
         3. The total number of players.
         4. The total number of champions.
     """
-    ws_filters = []
+    # Hidden tournaments (issue #115) never contribute to public overall stats.
+    ws_filters = [models.Tournament.is_hidden.is_(False)]
     if workspace_id is not None:
         ws_filters.append(models.Tournament.workspace_id == workspace_id)
 
@@ -361,6 +363,7 @@ async def get_owal_standings(
         .where(
             sa.and_(
                 models.Tournament.is_league.is_(True),
+                models.Tournament.is_hidden.is_(False),
                 models.Tournament.name.startswith(season),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
@@ -390,6 +393,7 @@ async def get_owal_days(
         .where(
             sa.and_(
                 models.Tournament.is_league.is_(True),
+                models.Tournament.is_hidden.is_(False),
                 models.Tournament.name.startswith(season),
             )
         )
@@ -408,6 +412,7 @@ async def get_owal_seasons(session: AsyncSession, workspace_id: int | None = Non
     query = sa.select(models.Tournament.name).where(
         sa.and_(
             models.Tournament.is_league.is_(True),
+            models.Tournament.is_hidden.is_(False),
             models.Tournament.name.startswith("OWAL Season "),
             *ws_filters,
         )
@@ -466,6 +471,7 @@ async def get_league_player_stacks(
                 .where(
                     sa.and_(
                         models.Tournament.is_league.is_(True),
+                        models.Tournament.is_hidden.is_(False),
                         models.Tournament.is_finished.is_(True),
                         models.Tournament.name.startswith(season),
                         models.Player.is_substitution.is_(False),

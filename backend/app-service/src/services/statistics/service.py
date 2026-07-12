@@ -69,6 +69,7 @@ async def get_top_champions(
                 models.TournamentGroup.is_groups.is_(False),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_league.is_(False),
+                models.Tournament.is_hidden.is_(False),
                 *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
             )
         )
@@ -114,6 +115,7 @@ async def get_top_winrate_players(
         .where(
             models.Player.is_substitution.is_(False),
             models.Tournament.is_league.is_(False),
+            models.Tournament.is_hidden.is_(False),
             *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
         )
         .group_by(models.User.id)
@@ -152,6 +154,7 @@ async def get_top_won_players(
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .where(
             models.Player.is_substitution.is_(False),
+            models.Tournament.is_hidden.is_(False),
             *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
         )
         .group_by(models.User.id)

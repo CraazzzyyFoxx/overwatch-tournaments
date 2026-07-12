@@ -32,6 +32,7 @@ __all__ = (
     "assert_tournament_viewable",
     "admin_visible_workspace_ids",
     "visible_tournaments_predicate",
+    "visible_tournament_ids_subquery",
 )
 
 
@@ -112,3 +113,16 @@ def visible_tournaments_predicate(user: AuthUser | None) -> sa.ColumnElement[boo
     # Avoid the SQLAlchemy single-element or_() deprecation warning (anonymous
     # viewers produce exactly one clause).
     return clauses[0] if len(clauses) == 1 else sa.or_(*clauses)
+
+
+def visible_tournament_ids_subquery(user: AuthUser | None):
+    """A scalar SELECT of tournament ids the viewer may see.
+
+    For filtering any table that carries a ``tournament_id`` (encounters,
+    matches, teams, stats) WITHOUT joining ``Tournament`` into the outer query:
+    ``.where(Model.tournament_id.in_(visible_tournament_ids_subquery(user)))``.
+
+    Pass ``user=None`` for viewer-agnostic public aggregates — it reduces to
+    "every non-hidden tournament", excluding all hidden ones.
+    """
+    return sa.select(Tournament.id).where(visible_tournaments_predicate(user))

@@ -10,6 +10,7 @@ from shared.models.tournament.tournament import Tournament
 from shared.services.tournament_visibility import (
     admin_visible_workspace_ids,
     can_view_tournament,
+    visible_tournament_ids_subquery,
 )
 
 
@@ -64,6 +65,16 @@ def test_hidden_visible_to_allowlisted_user():
 
 def test_hidden_not_visible_to_non_allowlisted_logged_in_user():
     assert can_view_tournament(_user(9), _tournament(True), {7}) is False
+
+
+def test_visible_ids_subquery_excludes_hidden_for_anonymous():
+    # The cross-tournament browse/aggregate filter (encounters/matches/teams/
+    # stats) reduces to "non-hidden tournaments" for user=None.
+    sql = str(
+        visible_tournament_ids_subquery(None).compile(compile_kwargs={"literal_binds": True})
+    ).lower()
+    assert "is_hidden" in sql
+    assert "false" in sql
 
 
 def test_admin_visible_workspace_ids_filters_to_admin_only():

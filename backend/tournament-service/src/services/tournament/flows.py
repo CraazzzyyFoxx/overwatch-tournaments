@@ -240,7 +240,13 @@ async def lookup(
     limit: int = 500,
 ) -> list[schemas.LookupItem]:
     """Lightweight id/name lookup for pickers (rpc.tournament.lookup_tournaments)."""
-    query = sa.select(models.Tournament.id, models.Tournament.name).order_by(models.Tournament.id.desc()).limit(limit)
+    query = (
+        sa.select(models.Tournament.id, models.Tournament.name)
+        # Hidden tournaments never appear in public pickers/lookups (issue #115).
+        .where(models.Tournament.is_hidden.is_(False))
+        .order_by(models.Tournament.id.desc())
+        .limit(limit)
+    )
     if workspace_id is not None:
         query = query.where(models.Tournament.workspace_id == workspace_id)
     if is_league is not None:
