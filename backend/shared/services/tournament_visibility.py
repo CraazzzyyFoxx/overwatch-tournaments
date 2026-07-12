@@ -109,4 +109,6 @@ def visible_tournaments_predicate(user: AuthUser | None) -> sa.ColumnElement[boo
                 )
             )
         )
-    return sa.or_(*clauses)
+    # Avoid the SQLAlchemy single-element or_() deprecation warning (anonymous
+    # viewers produce exactly one clause).
+    return clauses[0] if len(clauses) == 1 else sa.or_(*clauses)
