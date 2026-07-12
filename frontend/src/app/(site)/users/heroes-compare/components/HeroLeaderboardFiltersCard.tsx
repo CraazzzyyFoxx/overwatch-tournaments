@@ -23,7 +23,7 @@ interface HeroLeaderboardFiltersCardProps {
 }
 
 const TRIGGER =
-  "border-[var(--aqt-border-2)] bg-white/[0.025] text-[var(--aqt-fg)] hover:bg-white/[0.04]";
+  "border-[var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.025)] text-[var(--aqt-fg)] hover:bg-[hsl(0_0%_100%/0.04)]";
 const LABEL = "text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--aqt-fg-faint)]";
 
 const HeroLeaderboardFiltersCard = ({
@@ -77,7 +77,7 @@ const HeroLeaderboardFiltersCard = ({
         onClick={onResetColumns}
         disabled={resetDisabled}
         title={t("users.heroesCompare.filters.resetColumnsTitle")}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--aqt-border-2)] bg-white/[0.025] px-3 text-xs font-semibold text-[var(--aqt-fg-muted)] transition-colors hover:bg-white/[0.05] hover:text-[var(--aqt-fg)] disabled:pointer-events-none disabled:opacity-40"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.025)] px-3 text-xs font-semibold text-[var(--aqt-fg-muted)] transition-colors hover:bg-[hsl(0_0%_100%/0.05)] hover:text-[var(--aqt-fg)] disabled:pointer-events-none disabled:opacity-40"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         {t("users.heroesCompare.filters.resetColumns")}

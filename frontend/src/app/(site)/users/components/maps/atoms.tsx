@@ -29,7 +29,7 @@ export const AqtSelect = ({
     <SelectTrigger
       title={title}
       className={cn(
-        "aqt-mono h-8 shadow-none border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0",
+        "aqt-mono h-8 shadow-none border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0",
         width
       )}
     >

@@ -53,7 +53,7 @@ const HeroLeaderboardTable = ({
   return (
     <section className="overflow-hidden rounded-[var(--aqt-radius)] border border-[var(--aqt-border)] bg-[var(--aqt-card)]">
       {/* Board head */}
-      <div className="flex items-center gap-3.5 border-b border-[var(--aqt-border)] bg-white/[0.012] px-5 py-4">
+      <div className="flex items-center gap-3.5 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-5 py-4">
         {selectedHero && <HeroImage hero={selectedHero} size={44} rounded="lg" />}
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
@@ -78,7 +78,7 @@ const HeroLeaderboardTable = ({
           </p>
         </div>
         {!isLoading && rows.length > 0 && (
-          <span className="ml-auto rounded-full border border-[var(--aqt-border-2)] bg-white/[0.03] px-[11px] py-[5px] font-[family-name:var(--aqt-mono)] text-[11px] text-[var(--aqt-fg-muted)]">
+          <span className="ml-auto rounded-full border border-[var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.03)] px-[11px] py-[5px] font-[family-name:var(--aqt-mono)] text-[11px] text-[var(--aqt-fg-muted)]">
             {t.rich("users.heroesCompare.table.playersCount", {
               count: rows.length,
               em: (chunks) => (
@@ -121,7 +121,7 @@ const HeroLeaderboardTable = ({
 
       {/* Teams legend */}
       {!isLoading && legendTeams.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--aqt-border)] bg-white/[0.008] px-5 py-3 text-[11px] text-[var(--aqt-fg-dim)]">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.008)] px-5 py-3 text-[11px] text-[var(--aqt-fg-dim)]">
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--aqt-fg-faint)]">
             {t("common.teams")}
           </span>
