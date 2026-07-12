@@ -38,6 +38,13 @@ class Tournament(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     is_league: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
     is_finished: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
+    # Hidden (preview) mode — orthogonal to ``status``. When true the tournament
+    # and ALL its nested data are visible only to workspace admins and users on
+    # the ``TournamentPreviewAccess`` allowlist; everyone else gets 404 and it is
+    # filtered out of listings. Indexed because it participates in list filtering.
+    is_hidden: Mapped[bool] = mapped_column(
+        Boolean(), default=False, server_default="false", nullable=False, index=True
+    )
     # How teams are formed for this tournament: "balancer" (auto-balance) or
     # "draft" (live draft). Stored as text (not a PG enum) to stay flexible.
     team_formation: Mapped[str] = mapped_column(String(), default="balancer", server_default="balancer", nullable=False)
