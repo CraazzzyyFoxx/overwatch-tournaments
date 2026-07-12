@@ -9,6 +9,7 @@ import { getOverall } from "@/app/(site)/users/components/heroes/utils";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import HeroImage from "@/components/hero/HeroImage";
+import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 
 // Canonical English role names used ONLY for icon selection in PlayerRoleIcon.
 const ROLE_ICON: Record<AqtRoleKey, string> = {
@@ -71,6 +72,8 @@ interface Bucket {
 interface Signature {
   key: AqtRoleKey;
   hero: HeroWithUserStats["hero"];
+  /** Full per-hero stats, kept for the hover popover (design-book §11). */
+  stats: HeroWithUserStats["stats"];
   games: number;
   kda: number | null;
   winPct: number | null;
@@ -129,6 +132,7 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
     signatures.push({
       key,
       hero: top.hero,
+      stats: top.stats,
       games: gamesByHero.get(top.hero.id) ?? 0,
       kda: statAvg10(top.stats, LogStatsName.KDA),
       winPct: winFrac == null ? null : winFrac * 100
@@ -225,7 +229,12 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
                   <div className="flex justify-center" title={roleName} aria-label={roleName}>
                     <PlayerRoleIcon role={ROLE_ICON[sig.key]} size={14} color={ROLE_COLOR[sig.key]} />
                   </div>
-                  <HeroImage hero={sig.hero} size={26} title={sig.hero.name} />
+                  <HeroImage
+                    hero={sig.hero}
+                    size={26}
+                    title={sig.hero.name}
+                    popover={<HeroUserStatsPopover hero={sig.hero} stats={sig.stats} />}
+                  />
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-bold text-[color:var(--aqt-fg)]">{sig.hero.name}</div>
                     <div className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">

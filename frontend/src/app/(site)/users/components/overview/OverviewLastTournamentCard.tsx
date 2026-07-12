@@ -6,6 +6,7 @@ import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
+import { UserTournamentStat } from "@/types/statistics.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -128,7 +129,10 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId }: Props) 
     router.push(`${pathname}?${nextSearchParams.toString()}`);
   };
 
-  const s = tournament.stats;
+  // `stats` is a partial map keyed by backend LogStatsName — only the ranked
+  // tournament stats the backend computes are present. Access by string key and
+  // guard each entry so a missing / degenerate rank never renders a tile.
+  const s = tournament.stats as Record<string, UserTournamentStat | undefined>;
   type Tile = {
     key: string;
     /** Backend LogStatsName value the leaderboard modal fetches. */
@@ -138,27 +142,35 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId }: Props) 
     value: string;
     highlight?: "good" | "bad";
   };
+  // Render order (design-book §3). Every key here is a ranked tournament stat
+  // the backend emits (`tournament_stats`) and the lobby leaderboard accepts.
+  const STAT_ORDER: { key: string; labelKey: string }[] = [
+    { key: "kda", labelKey: "users.overview.lastTournament.stat.kda" },
+    { key: "performance", labelKey: "users.overview.lastTournament.stat.mvpScore" },
+    { key: "hero_damage_dealt", labelKey: "users.overview.lastTournament.stat.dmgPerMap" },
+    { key: "eliminations", labelKey: "users.overview.lastTournament.stat.elims" },
+    { key: "deaths", labelKey: "users.overview.lastTournament.stat.deaths" },
+    { key: "assists", labelKey: "users.overview.lastTournament.stat.assists" },
+    { key: "kd", labelKey: "users.overview.lastTournament.stat.kd" },
+    { key: "damage_delta", labelKey: "users.overview.lastTournament.stat.dmgDelta" }
+  ];
   const statTiles: Tile[] = [];
-  if (s) {
-    if (s.kda) {
-      statTiles.push({ key: "kda", statName: "kda", label: t("users.overview.lastTournament.stat.kda"), entry: s.kda, value: compactNumber(s.kda.value) });
-    }
-    if (s.performance) {
-      statTiles.push({ key: "mvp", statName: "performance", label: t("users.overview.lastTournament.stat.mvpScore"), entry: s.performance, value: compactNumber(s.performance.value) });
-    }
-    if (s.hero_damage_dealt) {
-      statTiles.push({ key: "dmg", statName: "hero_damage_dealt", label: t("users.overview.lastTournament.stat.dmgPerMap"), entry: s.hero_damage_dealt, value: compactNumber(s.hero_damage_dealt.value) });
-    }
-    if (s.damage_delta) {
-      statTiles.push({
-        key: "delta",
-        statName: "damage_delta",
-        label: t("users.overview.lastTournament.stat.dmgDelta"),
-        entry: s.damage_delta,
-        value: s.damage_delta.value >= 0 ? `+${compactNumber(s.damage_delta.value)}` : compactNumber(s.damage_delta.value),
-        highlight: s.damage_delta.value >= 0 ? "good" : "bad"
-      });
-    }
+  for (const def of STAT_ORDER) {
+    const entry = s?.[def.key];
+    if (!entry || !Number.isFinite(entry.rank) || entry.total <= 0) continue;
+    const isDelta = def.key === "damage_delta";
+    statTiles.push({
+      key: def.key,
+      statName: def.key,
+      label: t(def.labelKey as Parameters<typeof t>[0]),
+      entry: { rank: entry.rank, total: entry.total },
+      value: isDelta
+        ? entry.value >= 0
+          ? `+${compactNumber(entry.value)}`
+          : compactNumber(entry.value)
+        : compactNumber(entry.value),
+      highlight: isDelta ? (entry.value >= 0 ? "good" : "bad") : undefined
+    });
   }
   const lobbySize = statTiles[0]?.entry.total ?? null;
 

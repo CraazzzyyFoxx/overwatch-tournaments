@@ -1923,6 +1923,10 @@
           "kda": "KDA",
           "mvpScore": "Очки MVP",
           "dmgPerMap": "Урон/карта",
+          "elims": "Убийства",
+          "deaths": "Смерти",
+          "assists": "Помощь",
+          "kd": "K/D",
           "dmgDelta": "Δ урона"
         }
       }

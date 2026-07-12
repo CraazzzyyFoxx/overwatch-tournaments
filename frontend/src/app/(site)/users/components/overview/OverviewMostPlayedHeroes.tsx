@@ -5,6 +5,7 @@ import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
+import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 
 interface Props {
   heroes: HeroPlaytime[];
@@ -46,7 +47,13 @@ const OverviewMostPlayedHeroes = async ({ heroes, userSlug, totalCount, limit = 
           const widthPct = (hp.playtime / maxPlay) * 100;
           return (
             <div key={hp.hero.id} className="grid grid-cols-[30px_1fr_64px] items-center gap-2.5">
-              <HeroImage hero={hp.hero} size="md" title={hp.hero.name} bare />
+              <HeroImage
+                hero={hp.hero}
+                size="md"
+                title={hp.hero.name}
+                bare
+                popover={<HeroUserStatsPopover hero={hp.hero} playtimeShare={hp.playtime} />}
+              />
               <div
                 className="relative h-5 cursor-pointer overflow-hidden rounded-[5px] transition-[filter] hover:brightness-110"
                 style={{ width: `${widthPct}%`, background: heroBarBackground(hp.hero.color) }}

@@ -1923,6 +1923,10 @@
           "kda": "KDA",
           "mvpScore": "MVP score",
           "dmgPerMap": "Dmg/map",
+          "elims": "Elims",
+          "deaths": "Deaths",
+          "assists": "Assists",
+          "kd": "K/D",
           "dmgDelta": "Δ Damage"
         }
       }

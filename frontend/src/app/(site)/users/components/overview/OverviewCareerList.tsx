@@ -16,7 +16,9 @@ const fmt = (value: number | null | undefined, digits = 2, suffix = "") => {
   return `${value.toFixed(digits)}${suffix}`;
 };
 
-const Row = ({
+// A single bordered stat cell — the design-book §3b `.statgrid` aesthetic
+// (mono uppercase label + Onest value), matching the last-tournament tiles.
+const StatCell = ({
   label,
   value,
   highlight,
@@ -27,11 +29,14 @@ const Row = ({
   highlight?: string;
   title?: string;
 }) => (
-  <div className="flex items-center justify-between border-b border-[color:var(--aqt-border)] px-[18px] py-[9px] last:border-b-0">
-    <span className="text-[12.5px] text-[color:var(--aqt-fg-muted)]" title={title}>
+  <div className="flex flex-col gap-1 rounded-[8px] border border-[color:var(--aqt-border)] px-3 py-2.5">
+    <span
+      className="aqt-mono text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]"
+      title={title}
+    >
       {label}
     </span>
-    <span className="aqt-tnum text-[13px] font-bold" style={{ color: highlight ?? "var(--aqt-fg)" }}>
+    <span className="aqt-display aqt-tnum text-[20px] font-bold leading-none" style={{ color: highlight ?? "var(--aqt-fg)" }}>
       {value}
     </span>
   </div>
@@ -83,6 +88,38 @@ const OverviewCareerList = async ({ profile, tournaments = [] }: Props) => {
   const podiumPct = totalPlaced > 0 ? Math.round((podiumCount / totalPlaced) * 100) : 0;
   const showVerdict = totalPlaced >= MIN_FINISH_SAMPLE;
 
+  interface Cell {
+    key: string;
+    label: string;
+    value: string;
+    highlight?: string;
+    title?: string;
+  }
+  const cells: Cell[] = [
+    { key: "tournaments", label: t("users.overview.career.tournaments"), value: `${profile.tournaments_count}` },
+    {
+      key: "won",
+      label: t("users.overview.career.tournamentsWon"),
+      value: `${profile.tournaments_won}`,
+      highlight: profile.tournaments_won > 0 ? "var(--aqt-amber)" : undefined
+    },
+    { key: "winrate", label: t("users.overview.career.winrate"), value: fmt(winrate, 2, "%") },
+    { key: "maps", label: t("users.overview.career.maps"), value: `${profile.maps_won} / ${profile.maps_total}` },
+    ...(closeness !== null
+      ? [
+          {
+            key: "closeness",
+            label: t("users.overview.career.closeness"),
+            value: fmt(closeness, 0, "%"),
+            title: t("users.overview.career.closenessGlossary")
+          }
+        ]
+      : []),
+    { key: "avgPlacement", label: t("users.overview.career.avgPlacement"), value: fmt(profile.avg_placement) },
+    { key: "avgPlayoff", label: t("users.overview.career.avgPlayoffPlace"), value: fmt(profile.avg_playoff_placement) },
+    { key: "avgGroup", label: t("users.overview.career.avgGroupPlace"), value: fmt(profile.avg_group_placement, 0) }
+  ];
+
   return (
     <CardSurface flush title={t("users.overview.career.title")} icon={<Medal size={15} />}>
       {totalPlaced > 0 ? (
@@ -116,24 +153,21 @@ const OverviewCareerList = async ({ profile, tournaments = [] }: Props) => {
         </div>
       ) : null}
 
-      <Row label={t("users.overview.career.tournaments")} value={`${profile.tournaments_count}`} />
-      <Row
-        label={t("users.overview.career.tournamentsWon")}
-        value={`${profile.tournaments_won}`}
-        highlight={profile.tournaments_won > 0 ? "var(--aqt-amber)" : undefined}
-      />
-      <Row label={t("users.overview.career.winrate")} value={fmt(winrate, 2, "%")} />
-      <Row label={t("users.overview.career.maps")} value={`${profile.maps_won} / ${profile.maps_total}`} />
-      {closeness !== null ? (
-        <Row
-          label={t("users.overview.career.closeness")}
-          value={fmt(closeness, 0, "%")}
-          title={t("users.overview.career.closenessGlossary")}
-        />
-      ) : null}
-      <Row label={t("users.overview.career.avgPlacement")} value={fmt(profile.avg_placement)} />
-      <Row label={t("users.overview.career.avgPlayoffPlace")} value={fmt(profile.avg_playoff_placement)} />
-      <Row label={t("users.overview.career.avgGroupPlace")} value={fmt(profile.avg_group_placement, 0)} />
+      <div
+        className={`grid grid-cols-2 gap-2.5 px-[18px] pt-3.5 sm:grid-cols-3 ${showVerdict ? "pb-1" : "pb-4"} ${
+          totalPlaced > 0 ? "border-t border-[color:var(--aqt-border)]" : ""
+        }`}
+      >
+        {cells.map((cell) => (
+          <StatCell
+            key={cell.key}
+            label={cell.label}
+            value={cell.value}
+            highlight={cell.highlight}
+            title={cell.title}
+          />
+        ))}
+      </div>
 
       {showVerdict ? (
         <div

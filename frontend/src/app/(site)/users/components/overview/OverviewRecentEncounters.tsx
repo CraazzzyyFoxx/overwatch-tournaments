@@ -4,7 +4,9 @@ import { Swords } from "lucide-react";
 import Link from "next/link";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
+import { Hero } from "@/types/hero.types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -75,11 +77,24 @@ const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: P
         const subLabel = stage || `BO${enc.best_of || "?"}`;
         const mapCount = enc.matches?.length || 0;
 
+        // The viewer's unique heroes across this encounter's matches
+        // (match `heroes` are already the viewer's). Deduped by image/name;
+        // no popover — match-history heroes have no per-hero user stats
+        // (design-book §11).
+        const heroMap = new Map<string, Hero>();
+        for (const m of enc.matches ?? []) {
+          for (const h of m.heroes ?? []) {
+            const heroKey = h.image_path || h.name;
+            if (!heroMap.has(heroKey)) heroMap.set(heroKey, h);
+          }
+        }
+        const encHeroes = Array.from(heroMap.values());
+
         return (
           <Link
             key={enc.id}
             href={`/encounters/${enc.id}`}
-            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
+            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)] sm:grid-cols-[auto_1fr_auto_auto_auto_auto]"
           >
             <span className="aqt-mono min-w-[42px] text-[11px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
               {tournamentLabel}{stageShort ? `·${stageShort.charAt(0)}` : ""}
@@ -96,6 +111,9 @@ const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: P
                 {subLabel} · {t("users.overview.mapsCount", { count: mapCount })}
               </div>
             </div>
+            <span className="hidden items-center sm:inline-flex">
+              {encHeroes.length > 0 ? <HeroStrip heroes={encHeroes} size="sm" limit={4} /> : null}
+            </span>
             <span className="inline-flex gap-[3px]">
               {pips.map((p, i) => (
                 <span key={i} className={cn("aqt-pip", p)} />

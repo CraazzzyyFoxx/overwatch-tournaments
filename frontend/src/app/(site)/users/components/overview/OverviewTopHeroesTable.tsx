@@ -8,6 +8,7 @@ import { LogStatsName } from "@/types/stats.types";
 import { CardSurface, normalizeRole, type AqtRoleKey } from "@/app/(site)/users/components/shared/atoms";
 import { formatStatValue, getOverall } from "@/app/(site)/users/components/heroes/utils";
 import HeroImage from "@/components/hero/HeroImage";
+import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 
 interface Props {
@@ -65,6 +66,8 @@ const winrateColor = (pct: number): string => {
 interface Row {
   id: number;
   hero: HeroWithUserStats["hero"];
+  /** Full per-hero stats, kept for the hover popover (design-book §11). */
+  stats: HeroWithUserStats["stats"];
   roleKey: AqtRoleKey | null;
   games: number;
   winPct: number | null;
@@ -106,6 +109,7 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
       return {
         id: h.hero.id,
         hero: h.hero,
+        stats: h.stats,
         roleKey: normalizeRole(h.hero.type ?? h.hero.role),
         games,
         winPct: winFrac == null ? null : winFrac * 100,
@@ -154,7 +158,12 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
                 >
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2.5">
-                      <HeroImage hero={r.hero} size="sm" title={r.hero.name} />
+                      <HeroImage
+                        hero={r.hero}
+                        size="sm"
+                        title={r.hero.name}
+                        popover={<HeroUserStatsPopover hero={r.hero} stats={r.stats} />}
+                      />
                       <div className="min-w-0">
                         <div className="truncate text-[13.5px] font-bold text-[color:var(--aqt-fg)]">
                           {r.hero.name}
