@@ -39,6 +39,7 @@ class TournamentRead(BaseRead):
     challonge_slug: str | None
     is_league: bool
     is_finished: bool
+    is_hidden: bool = False
     team_formation: str = "balancer"
     status: enums.TournamentStatus
     start_date: datetime

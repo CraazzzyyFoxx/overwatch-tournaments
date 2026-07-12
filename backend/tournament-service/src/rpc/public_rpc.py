@@ -37,6 +37,7 @@ from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.profile_visibility import resolve_profiles_open
+from shared.services.tournament_visibility import assert_tournament_viewable
 from src import models, schemas
 from src.rpc._helpers import (
     _dump,
@@ -64,6 +65,7 @@ from src.schemas.registration_build import (
     _reg_to_read,
     _resolve_tournament_workspace,
 )
+from src.services import visibility_resolvers
 from src.services.encounter import captain as captain_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import map_veto as map_veto_service
@@ -192,8 +194,10 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.captain_map_pool")
     async def _captain_map_pool(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            # Public route — no identity required.
+            # Public route — no identity required, but hidden tournaments 404.
             encounter_id = _require_id(data)
+            tournament_id = await visibility_resolvers.tournament_id_for_encounter(session, encounter_id)
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             pool = await map_veto_service.get_map_pool(session, encounter_id)
             return [map_veto_service.serialize_map_pool_entry(entry) for entry in pool]
 
@@ -206,6 +210,8 @@ def register(broker: Any, logger: Any) -> None:
             # viewer_side=None (the pool serializes identically either way).
             encounter_id = _require_id(data)
             user = _optional_identity(data)
+            tournament_id = await visibility_resolvers.tournament_id_for_encounter(session, encounter_id)
+            await assert_tournament_viewable(session, user, tournament_id)
             encounter = await captain_service._load_encounter(session, encounter_id)
             viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await map_veto_service.get_map_pool_state(
@@ -246,8 +252,9 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_pub_form")
     async def _reg_pub_form(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            # Public route — no identity required.
+            # Public route — no identity required, but hidden tournaments 404.
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             form = await reg_service.get_registration_form(session, tournament_id)
             if form is None:
                 return None
@@ -261,6 +268,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             body = RegistrationCreate.model_validate(_payload(data))
             # Full use-case (validation, duplicate check, create, serialize)
             # lives in the service layer; commits internally.
@@ -277,6 +285,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 return None
@@ -297,6 +306,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             body = RegistrationUpdate.model_validate(_payload(data))
 
             form = await reg_service.get_registration_form(session, tournament_id)
@@ -343,6 +353,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -357,6 +368,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -398,6 +410,7 @@ def register(broker: Any, logger: Any) -> None:
             # the service layer (always-live data; see its docstring for the
             # cache.disabling() warning).
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             return _dump(await reg_service.build_public_registration_list(session, tournament_id=tournament_id))
 
         return await _run(logger, op)

@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.division_grid import DivisionGrid
+from shared.models.identity.auth_user import AuthUser
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
+from shared.services.tournament_visibility import visible_tournaments_predicate
 from src import models, schemas
 from src.core import config, enums, errors, pagination
 from src.services.registration import service as registration_service
@@ -113,6 +115,7 @@ async def to_pydantic(
         number=tournament.number,
         is_league=tournament.is_league,
         is_finished=tournament.is_finished,
+        is_hidden=tournament.is_hidden,
         team_formation=tournament.team_formation,
         status=tournament.status,
         name=tournament.name,
@@ -297,7 +300,10 @@ async def get_by_number_and_league(
 
 
 async def get_all(
-    session: AsyncSession, params: schemas.TournamentPaginationSortSearchParams
+    session: AsyncSession,
+    params: schemas.TournamentPaginationSortSearchParams,
+    *,
+    viewer: AuthUser | None = None,
 ) -> pagination.Paginated[schemas.TournamentRead]:
     """
     Retrieves a paginated list of `Tournament` model instances and converts them to `TournamentRead` schemas.
@@ -309,7 +315,9 @@ async def get_all(
     Returns:
         A `Paginated` instance containing `TournamentRead` schemas.
     """
-    results, total = await service.get_all(session, params)
+    results, total = await service.get_all(
+        session, params, visibility=visible_tournaments_predicate(viewer)
+    )
     tournament_ids = [result.id for result in results]
     participants_counts = (
         await team_service.get_player_count_by_tournament_bulk(session, tournament_ids)

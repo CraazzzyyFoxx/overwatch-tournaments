@@ -110,7 +110,10 @@ async def get_by_number_and_league(
 
 
 async def get_all(
-    session: AsyncSession, params: schemas.TournamentPaginationSortSearchParams
+    session: AsyncSession,
+    params: schemas.TournamentPaginationSortSearchParams,
+    *,
+    visibility: sa.ColumnElement[bool] | None = None,
 ) -> tuple[typing.Sequence[models.Tournament], int]:
     """
     Retrieves a paginated list of `Tournament` model instances based on filtering and sorting parameters.
@@ -137,6 +140,12 @@ async def get_all(
     if params.workspace_id is not None:
         query = query.where(models.Tournament.workspace_id == params.workspace_id)
         total_query = total_query.where(models.Tournament.workspace_id == params.workspace_id)
+
+    # Hidden-tournament visibility filter (issue #115): applied to BOTH the page
+    # and count query so hidden tournaments never leak into results OR totals.
+    if visibility is not None:
+        query = query.where(visibility)
+        total_query = total_query.where(visibility)
 
     result = await session.execute(query)
     total_result = await session.execute(total_query)
