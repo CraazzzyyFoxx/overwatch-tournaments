@@ -20,6 +20,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.crud import CrudDispatcher, EntityConfig
 from src import schemas
 from src.core import auth, db
+from src.core.workspace import get_division_grid
 from src.schemas.admin import encounter as enc_schemas
 from src.schemas.admin import player_sub_role as psr_schemas
 from src.schemas.admin import stage as stage_schemas
@@ -106,7 +107,12 @@ async def _ser_team(session: AsyncSession, m: Any) -> Any:
 
 
 async def _ser_player(session: AsyncSession, m: Any) -> Any:
-    return _dump(await team_flows.to_pydantic_player(session, m, ["user", "tournament"]))
+    # to_pydantic_player requires the effective division grid to resolve
+    # PlayerRead.division. Resolve it from the player's own tournament so the
+    # value matches team-roster serialization (see team_flows.to_pydantic),
+    # instead of silently falling back to DEFAULT_GRID.
+    grid = await get_division_grid(session, None, tournament_id=m.tournament_id)
+    return _dump(await team_flows.to_pydantic_player(session, m, ["user", "tournament"], grid=grid))
 
 
 async def _ser_stage(session: AsyncSession, m: Any) -> Any:
