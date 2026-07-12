@@ -1885,6 +1885,8 @@
         "dialogSubtitle": "{count, plural, one {# уникальный тиммейт} few {# уникальных тиммейта} many {# уникальных тиммейтов} other {# уникальных тиммейта}} · {maps, plural, one {# карта вместе} few {# карты вместе} many {# карт вместе} other {# карты вместе}}",
         "you": "Вы",
         "edgesHint": "Толщина связей — по числу совместных турниров",
+        "wrHint": "полоса — винрейт вместе",
+        "playedMaps": "{count}× · {maps, plural, one {# карта} few {# карты} many {# карт} other {# карты}}",
         "footer": "{count, plural, one {# уникальный} few {# уникальных} many {# уникальных} other {# уникальных}} · {maps, plural, one {# карта} few {# карты} many {# карт} other {# карты}}",
         "searchPlaceholder": "Поиск тиммейтов…",
         "noMatch": "Нет тиммейтов по запросу",

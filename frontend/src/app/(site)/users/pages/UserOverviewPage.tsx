@@ -98,7 +98,6 @@ const UserOverviewPage = async ({ profile, tournamentId, user }: OverviewPagePro
         {teammates.results.length > 0 ? (
           <OverviewTeammatesSynergy
             teammates={teammates.results}
-            selfName={user.name}
             totalCount={teammates.total ?? teammates.results.length}
             totalMaps={totalSharedMaps}
           />

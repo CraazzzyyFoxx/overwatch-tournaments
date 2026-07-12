@@ -1885,6 +1885,8 @@
         "dialogSubtitle": "{count, plural, one {# unique stack-mate} other {# unique stack-mates}} · {maps, plural, one {# map together} other {# maps together}}",
         "you": "You",
         "edgesHint": "Edges sized by appearances",
+        "wrHint": "bar = win rate together",
+        "playedMaps": "{count}× · {maps, plural, one {# map} other {# maps}}",
         "footer": "{count, plural, one {# unique} other {# unique}} · {maps, plural, one {# map} other {# maps}}",
         "searchPlaceholder": "Search teammates…",
         "noMatch": "No teammates match search",
