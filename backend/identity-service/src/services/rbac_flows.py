@@ -549,6 +549,39 @@ async def remove_linked_player_from_auth_user(
     await PlayerLinkService.admin_unlink_player(session, user_id, player_id)
 
 
+async def delete_auth_user(
+    session: AsyncSession,
+    current_user: models.AuthUser,
+    user_id: int,
+) -> None:
+    """Permanently delete an auth account (superuser only).
+
+    Cascades roles, permission denies, refresh tokens/sessions, OAuth
+    connections, API keys and preview-access grants (FK ondelete=CASCADE). The
+    linked ``players.user`` is preserved with its ``auth_user_id`` nulled
+    (ondelete=SET NULL), so tournament history and ``workspace_member`` rows
+    survive the deletion.
+    """
+    _require_superuser(current_user)
+
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    result = await session.execute(select(models.AuthUser).where(models.AuthUser.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    email = user.email  # capture before delete/commit expires the instance
+    await session.delete(user)
+    await session.commit()
+    await invalidate_rbac(user_id)
+    logger.info(f"Auth user deleted by admin: user_id={user_id} email={email} actor_user_id={current_user.id}")
+
+
 async def assign_role_to_user(
     session: AsyncSession,
     current_user: models.AuthUser,

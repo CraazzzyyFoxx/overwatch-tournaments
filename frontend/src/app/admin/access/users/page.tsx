@@ -19,6 +19,17 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { UserDenyEditor } from "./UserDenyEditor";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +51,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
+import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { AuthAdminUser } from "@/types/rbac.types";
 import type { MinimizedUser } from "@/types/user.types";
 
@@ -47,7 +59,8 @@ const PAGE_SIZE = 15;
 
 export default function AccessAdminUsersPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSuperuser } = usePermissions();
+  const currentUserId = useAuthProfileStore((s) => s.user?.id);
   const canAssignRoles = hasPermission("role.assign") && hasPermission("role.read");
   const canManageLinkedPlayers = hasPermission("auth_user.update");
 
@@ -120,6 +133,16 @@ export default function AccessAdminUsersPage() {
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       notify.success("Linked analytics account removed");
+    },
+    onError: (error) => notify.apiError(error)
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: number) => rbacService.deleteUser(userId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] });
+      setManagingUserId(null);
+      notify.success("Account deleted");
     },
     onError: (error) => notify.apiError(error)
   });
@@ -476,7 +499,42 @@ export default function AccessAdminUsersPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
+            {isSuperuser && userDetailQuery.data && userDetailQuery.data.id !== currentUserId ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={deleteUserMutation.isPending}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Account
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently deletes the auth account for{" "}
+                      <span className="font-medium text-foreground">
+                        {userDetailQuery.data.email}
+                      </span>
+                      , including its roles, permission denies, OAuth connections, API keys, and
+                      active sessions. The linked player profile and tournament history are
+                      preserved (only unlinked). This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => deleteUserMutation.mutate(userDetailQuery.data!.id)}
+                    >
+                      Delete Account
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <span />
+            )}
             <Button variant="ghost" onClick={() => setManagingUserId(null)}>
               Close
             </Button>

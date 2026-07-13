@@ -804,6 +804,19 @@ async def rpc_rbac_remove_linked_player(data: dict, msg: RabbitMessage) -> dict:
     return await _with_active_user(data.get("access_token"), op)
 
 
+@broker.subscriber("rpc.identity.rbac.delete_auth_user")
+async def rpc_rbac_delete_auth_user(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        await rbac_flows.delete_auth_user(session, user, user_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
 @broker.subscriber("rpc.identity.rbac.assign_role")
 async def rpc_rbac_assign_role(data: dict, msg: RabbitMessage) -> dict:
     data = data or {}

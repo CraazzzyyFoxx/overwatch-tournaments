@@ -119,6 +119,13 @@ export const rbacService = {
     return rbacFetch<AuthAdminUserDetail>(`/rbac/users/${userId}`).then(normalizeAuthAdminUserDetail);
   },
 
+  /** Permanently delete an auth account (superuser only; self-delete rejected server-side). */
+  deleteUser(userId: number) {
+    return rbacFetch<void>(`/rbac/users/${userId}`, {
+      method: "DELETE",
+    });
+  },
+
   listRoles(params?: RoleListParams): Promise<PaginatedResponse<RbacRole>> {
     return rbacFetch<PaginatedResponse<RbacRole>>(`/rbac/roles${listQuery(params)}`);
   },

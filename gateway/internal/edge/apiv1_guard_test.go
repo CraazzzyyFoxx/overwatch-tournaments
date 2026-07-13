@@ -321,6 +321,7 @@ func buildAuthGuardedMux(t *testing.T) *http.ServeMux {
 	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", h.RbacAssignRole)
 	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", h.RbacRemoveRole)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", h.RbacGetAuthUser)
+	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}", h.RbacDeleteAuthUser)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", h.RbacGetUserRoles)
 	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/linked-players", h.RbacAssignLinkedPlayer)
 	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/linked-players/{player_id}", h.RbacRemoveLinkedPlayer)
@@ -403,6 +404,7 @@ func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
 		{"POST", "/api/auth/rbac/users/assign-role"},
 		{"POST", "/api/auth/rbac/users/remove-role"},
 		{"GET", "/api/auth/rbac/users/5"},
+		{"DELETE", "/api/auth/rbac/users/5"},
 		{"GET", "/api/auth/rbac/users/5/roles"},
 		{"POST", "/api/auth/rbac/users/5/linked-players"},
 		{"DELETE", "/api/auth/rbac/users/5/linked-players/9"},

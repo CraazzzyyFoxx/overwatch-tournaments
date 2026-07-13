@@ -60,6 +60,7 @@ const (
 	queueRbacDeleteRole         = "rpc.identity.rbac.delete_role"
 	queueRbacListAuthUsers      = "rpc.identity.rbac.list_auth_users"
 	queueRbacGetAuthUser        = "rpc.identity.rbac.get_auth_user"
+	queueRbacDeleteAuthUser     = "rpc.identity.rbac.delete_auth_user"
 	queueRbacAssignLinkedPlayer = "rpc.identity.rbac.assign_linked_player"
 	queueRbacRemoveLinkedPlayer = "rpc.identity.rbac.remove_linked_player"
 	queueRbacAssignRole         = "rpc.identity.rbac.assign_role"
@@ -480,6 +481,12 @@ func (h *Handler) RbacListAuthUsers(w http.ResponseWriter, r *http.Request) {
 // RbacGetAuthUser mirrors GET /rbac/users/{user_id}.
 func (h *Handler) RbacGetAuthUser(w http.ResponseWriter, r *http.Request) {
 	h.authedFields(w, r, queueRbacGetAuthUser, http.StatusOK, map[string]any{"user_id": r.PathValue("user_id")})
+}
+
+// RbacDeleteAuthUser mirrors DELETE /rbac/users/{user_id} -> 204 (superuser only, enforced in identity-svc).
+func (h *Handler) RbacDeleteAuthUser(w http.ResponseWriter, r *http.Request) {
+	h.authedFields(w, r, queueRbacDeleteAuthUser, http.StatusNoContent,
+		map[string]any{"user_id": r.PathValue("user_id")})
 }
 
 // RbacAssignLinkedPlayer mirrors POST /rbac/users/{user_id}/linked-players -> 204.

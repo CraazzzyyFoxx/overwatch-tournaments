@@ -791,3 +791,98 @@ def test_delete_oauth_connection_route_blocks_last_passwordless_login() -> None:
     )
     assert session.delete_called is False
     assert session.commit_called is False
+
+
+def test_delete_auth_user_route_deletes_and_invalidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    target = SimpleNamespace(id=9, email="grace@example.com")
+
+    class _ScalarResult:
+        def __init__(self, value):
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    class _FakeSession:
+        def __init__(self):
+            self.commit_called = False
+            self.deleted: list[object] = []
+
+        async def execute(self, _query):
+            return _ScalarResult(target)
+
+        async def delete(self, value):
+            self.deleted.append(value)
+
+        async def commit(self):
+            self.commit_called = True
+
+    invalidated: list[int] = []
+
+    async def fake_invalidate_rbac(user_id):
+        invalidated.append(user_id)
+
+    monkeypatch.setattr("src.services.rbac_flows.invalidate_rbac", fake_invalidate_rbac, raising=False)
+
+    session = _FakeSession()
+
+    asyncio.run(
+        rbac_flows.delete_auth_user(
+            session,
+            SimpleNamespace(id=1, is_superuser=True),
+            9,
+        )
+    )
+
+    assert session.deleted == [target]
+    assert session.commit_called is True
+    assert invalidated == [9]
+
+
+def test_delete_auth_user_route_blocks_self_delete() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            rbac_flows.delete_auth_user(
+                object(),
+                SimpleNamespace(id=7, is_superuser=True),
+                7,
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Cannot delete your own account"
+
+
+def test_delete_auth_user_route_requires_superuser() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            rbac_flows.delete_auth_user(
+                object(),
+                SimpleNamespace(id=1, is_superuser=False),
+                9,
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+def test_delete_auth_user_route_raises_not_found() -> None:
+    class _ScalarResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class _FakeSession:
+        async def execute(self, _query):
+            return _ScalarResult()
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            rbac_flows.delete_auth_user(
+                _FakeSession(),
+                SimpleNamespace(id=1, is_superuser=True),
+                404,
+            )
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "User not found"

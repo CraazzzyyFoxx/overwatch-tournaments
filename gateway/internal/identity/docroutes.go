@@ -76,6 +76,7 @@ var AdminDocRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/auth/rbac/users/assign-role", Queue: "rpc.identity.rbac.assign_role", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/rbac/users/remove-role", Queue: "rpc.identity.rbac.remove_role", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}", Queue: "rpc.identity.rbac.get_auth_user", Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/auth/rbac/users/{user_id}", Queue: "rpc.identity.rbac.delete_auth_user", Auth: edge.AuthRequired, Success: 204},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}/roles", Queue: "rpc.identity.rbac.get_user_roles", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}/denies", Queue: "rpc.identity.rbac.list_user_denies", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/rbac/users/{user_id}/denies", Queue: "rpc.identity.rbac.add_user_deny", Body: true, Auth: edge.AuthRequired},

@@ -215,6 +215,7 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", identityHandler.RbacAssignRole)
 	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
+	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}", identityHandler.RbacDeleteAuthUser)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacListUserDenies)
 	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacAddUserDeny)
