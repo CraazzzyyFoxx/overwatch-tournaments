@@ -109,6 +109,19 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "rank.fetch_log", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.parser.rank.stats")
+    async def _stats(data: dict, msg: RabbitMessage) -> dict:
+        # GET /admin/rank/stats — require_role("admin").
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            if not user.has_role("admin"):
+                raise HTTPException(status_code=403, detail="Role required: admin")
+            result = await rank_admin.get_collection_stats(session)
+            return rc_schemas.RankCollectionStats.model_validate(result)
+
+        return await c.envelope(logger, "rank.stats", op, session_factory=_SF)
+
     @broker.subscriber("rpc.parser.rank.user_collection")
     async def _user_collection(data: dict, msg: RabbitMessage) -> dict:
         # GET /admin/rank/users/{user_id}/collection — require_role("admin").

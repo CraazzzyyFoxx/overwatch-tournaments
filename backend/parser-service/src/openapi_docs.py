@@ -39,6 +39,10 @@ DOCS: dict[str, dict] = {
         "summary": "Current user ranks",
         "description": "Returns a user's current OverFast ranks for the requested platform; public read.",
     },
+    "rpc.parser.rank.stats": {
+        "summary": "Rank collection health stats",
+        "description": "Aggregated OverFast rank-collection health: battle-tag state counts by status and priority tier, snapshot coverage over 24h/7d, last successful capture, last-24h fetch-outcome mix with error rate, and the active config; requires the global admin role.",
+    },
     "rpc.parser.rank.fetch_log": {
         "summary": "Rank fetch log",
         "description": "Lists OverFast rank-collection fetch-log entries filtered by status, source and cursor; requires the global admin role.",

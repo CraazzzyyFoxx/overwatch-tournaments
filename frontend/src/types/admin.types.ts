@@ -71,6 +71,8 @@ export interface CollectTriggerResult {
 export interface RankFetchLogRow {
   id: number;
   social_account_id: number | null;
+  /** Owning player id, resolved via the social account; null when deleted. */
+  user_id: number | null;
   battle_tag: string;
   status: string;
   source: string;
@@ -84,6 +86,37 @@ export interface RankFetchLogQuery {
   source?: string;
   before_id?: number;
   limit?: number;
+}
+
+// ─── Rank collection health stats (parser admin) ───────────────────────────────
+
+export interface RankStatusCounts {
+  ok: number;
+  pending: number;
+  not_found: number;
+  private: number;
+  error: number;
+  rate_limited: number;
+  disabled: number;
+}
+
+export interface RankCollectionStats {
+  total: number;
+  never_checked: number;
+  by_status: RankStatusCounts;
+  tier0: number;
+  tier1: number;
+  tier2: number;
+  coverage_24h: number;
+  coverage_7d: number;
+  last_success_at: string | null;
+  fetch_24h: RankStatusCounts;
+  fetch_24h_total: number;
+  error_rate_24h: number;
+  enabled: boolean;
+  scope: string;
+  interval_seconds: number;
+  rate_limit_per_minute: number;
 }
 
 // ─── Tournament ──────────────────────────────────────────────────────────────

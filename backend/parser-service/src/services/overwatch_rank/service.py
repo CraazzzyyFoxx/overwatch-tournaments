@@ -362,6 +362,70 @@ async def count_in_scope(session: AsyncSession, *, scope: str) -> int:
     return int(await session.scalar(query) or 0)
 
 
+async def collection_stats(session: AsyncSession) -> dict:
+    """Aggregate collection health (DB layer only; caller adds config).
+
+    Mirrors the manual incident-diagnostic queries: state status/tier mix, whole
+    population size, distinct-account snapshot coverage over 24h/7d, the global
+    last successful capture, and the last-24h ``fetch_log`` outcome mix.
+    """
+    state = models.BattleTagRankState
+    snap = models.UserRankSnapshot
+    log = models.RankFetchLog
+    now = _now()
+
+    by_status = {
+        str(status): int(count)
+        for status, count in (
+            await session.execute(sa.select(state.status, sa.func.count()).group_by(state.status))
+        ).all()
+    }
+    by_tier = {
+        int(tier): int(count)
+        for tier, count in (
+            await session.execute(sa.select(state.priority_tier, sa.func.count()).group_by(state.priority_tier))
+        ).all()
+    }
+    total = int(await session.scalar(sa.select(sa.func.count()).select_from(state)) or 0)
+    never_checked = int(
+        await session.scalar(
+            sa.select(sa.func.count()).select_from(state).where(state.last_checked_at.is_(None))
+        )
+        or 0
+    )
+    last_success_at = await session.scalar(sa.select(sa.func.max(state.last_success_at)))
+
+    async def _coverage(delta: timedelta) -> int:
+        return int(
+            await session.scalar(
+                sa.select(sa.func.count(sa.distinct(snap.social_account_id))).where(snap.captured_at > now - delta)
+            )
+            or 0
+        )
+
+    fetch_24h = {
+        str(status): int(count)
+        for status, count in (
+            await session.execute(
+                sa.select(log.status, sa.func.count())
+                .where(log.created_at > now - timedelta(hours=24))
+                .group_by(log.status)
+            )
+        ).all()
+    }
+
+    return {
+        "total": total,
+        "never_checked": never_checked,
+        "by_status": by_status,
+        "by_tier": by_tier,
+        "last_success_at": last_success_at,
+        "coverage_24h": await _coverage(timedelta(hours=24)),
+        "coverage_7d": await _coverage(timedelta(days=7)),
+        "fetch_24h": fetch_24h,
+    }
+
+
 async def select_and_claim_due(
     session: AsyncSession,
     *,

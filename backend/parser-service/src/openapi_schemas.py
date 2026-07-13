@@ -55,6 +55,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.parser.rank.user_current": Op(
         response=schemas.CurrentRanksResponse, query_params=(QueryParam("platform", required=True),)
     ),
+    "rpc.parser.rank.stats": Op(response=rc_schemas.RankCollectionStats),
     "rpc.parser.rank.fetch_log": Op(response=rc_schemas.FetchLogRead, response_array=True),
     "rpc.parser.rank.user_collection": Op(response=rc_schemas.CollectionStatusRead, response_array=True),
     "rpc.parser.rank.collect": Op(request=rc_schemas.CollectTriggerRequest, response=rc_schemas.CollectTriggerResponse),

@@ -185,3 +185,39 @@ class RecordFailureTransientTests(IsolatedAsyncioTestCase):
         state, now = await self._run(transient=True, consecutive_failures=999)
         self.assertNotEqual(state.status, enums.RankCollectionStatus.disabled.value)
         self.assertEqual(state.next_eligible_at, now + timedelta(seconds=service.MAX_BACKOFF_SECONDS))
+
+
+class CollectionStatsAssemblyTests(IsolatedAsyncioTestCase):
+    """get_collection_stats merges DB aggregates + config into the dashboard shape."""
+
+    async def test_assembles_rates_tiers_and_validates(self) -> None:
+        from unittest.mock import patch
+
+        from src.schemas.admin.rank_collection import RankCollectionStats
+        from src.services.overwatch_rank import admin
+
+        raw = {
+            "total": 100,
+            "never_checked": 5,
+            "by_status": {"ok": 60, "disabled": 10, "error": 30},
+            "by_tier": {0: 90, 2: 10},  # tier 1 absent -> defaults to 0
+            "last_success_at": None,
+            "coverage_24h": 40,
+            "coverage_7d": 70,
+            "fetch_24h": {"ok": 70, "error": 20, "rate_limited": 10},
+        }
+        cfg = RankCollectionConfig(enabled=True, scope="all")
+        with (
+            patch.object(admin.service, "collection_stats", AsyncMock(return_value=raw)),
+            patch.object(admin.settings_provider, "get_rank_collection_config", AsyncMock(return_value=cfg)),
+        ):
+            result = await admin.get_collection_stats(object())
+
+        self.assertEqual((result["tier0"], result["tier1"], result["tier2"]), (90, 0, 10))
+        self.assertEqual(result["fetch_24h_total"], 100)
+        self.assertEqual(result["error_rate_24h"], 0.3)  # (error 20 + rate_limited 10) / 100
+        self.assertEqual(result["scope"], "all")
+        # Coerces nested dicts into RankStatusCounts and ignores the extra keys.
+        model = RankCollectionStats.model_validate(result)
+        self.assertEqual(model.by_status.disabled, 10)
+        self.assertEqual(model.fetch_24h.error, 20)

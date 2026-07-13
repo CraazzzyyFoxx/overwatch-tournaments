@@ -88,7 +88,8 @@ import {
   CollectTriggerInput,
   CollectTriggerResult,
   RankFetchLogRow,
-  RankFetchLogQuery
+  RankFetchLogQuery,
+  RankCollectionStats
 } from "@/types/admin.types";
 
 class AdminService {
@@ -1407,6 +1408,11 @@ class AdminService {
       body: data,
       skipWorkspace: true
     });
+    return response.json();
+  }
+
+  async getRankCollectionStats(): Promise<RankCollectionStats> {
+    const response = await apiFetch("/api/v1/admin/rank/stats", { skipWorkspace: true });
     return response.json();
   }
 
