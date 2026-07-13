@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
 import { notify } from "@/lib/notify";
@@ -268,7 +269,7 @@ export default function AccessAdminUsersPage() {
             per_page: pageSize,
             sort: sortField ?? undefined,
             order: sortDir,
-            search: search || undefined,
+            search: search || undefined
           })
         }
         columns={columns}
@@ -326,83 +327,90 @@ export default function AccessAdminUsersPage() {
                 </div>
               </div>
 
-              <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
+              <Tabs key={userDetailQuery.data.id} defaultValue="roles" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="roles">Roles</TabsTrigger>
+                  <TabsTrigger value="player">Player</TabsTrigger>
+                  <TabsTrigger value="oauth">OAuth</TabsTrigger>
+                  <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                </TabsList>
 
-              <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      Assigned Roles
-                    </h3>
-                  </div>
+                <TabsContent value="roles" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                  <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        Assigned Roles
+                      </h3>
+                    </div>
 
-                  <div className="space-y-3">
-                    {userDetailQuery.data.roles.length > 0 ? (
-                      userDetailQuery.data.roles.map((role) => (
-                        <div
-                          key={role.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
-                        >
-                          <div>
-                            <p className="font-medium">{role.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {role.description || "No description provided."}
-                            </p>
+                    <div className="space-y-3">
+                      {userDetailQuery.data.roles.length > 0 ? (
+                        userDetailQuery.data.roles.map((role) => (
+                          <div
+                            key={role.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
+                          >
+                            <div>
+                              <p className="font-medium">{role.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {role.description || "No description provided."}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!canAssignRoles || removeRoleMutation.isPending}
+                              onClick={() =>
+                                removeRoleMutation.mutate({
+                                  user_id: userDetailQuery.data!.id,
+                                  role_id: role.id
+                                })
+                              }
+                            >
+                              {canAssignRoles ? "Remove" : "Assigned"}
+                            </Button>
                           </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No roles assigned.</p>
+                      )}
+                    </div>
+
+                    {canAssignRoles ? (
+                      <div className="rounded-md border border-dashed border-border p-4">
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium">Assign another role</p>
+                          <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {assignableRoles.map((role) => (
+                                <SelectItem key={role.id} value={String(role.id)}>
+                                  {role.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!canAssignRoles || removeRoleMutation.isPending}
+                            disabled={!selectedRoleId || assignRoleMutation.isPending}
                             onClick={() =>
-                              removeRoleMutation.mutate({
+                              assignRoleMutation.mutate({
                                 user_id: userDetailQuery.data!.id,
-                                role_id: role.id
+                                role_id: Number(selectedRoleId)
                               })
                             }
                           >
-                            {canAssignRoles ? "Remove" : "Assigned"}
+                            <Shield className="mr-2 h-4 w-4" />
+                            Assign Role
                           </Button>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No roles assigned.</p>
-                    )}
-                  </div>
-
-                  {canAssignRoles ? (
-                    <div className="rounded-md border border-dashed border-border p-4">
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium">Assign another role</p>
-                        <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {assignableRoles.map((role) => (
-                              <SelectItem key={role.id} value={String(role.id)}>
-                                {role.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          disabled={!selectedRoleId || assignRoleMutation.isPending}
-                          onClick={() =>
-                            assignRoleMutation.mutate({
-                              user_id: userDetailQuery.data!.id,
-                              role_id: Number(selectedRoleId)
-                            })
-                          }
-                        >
-                          <Shield className="mr-2 h-4 w-4" />
-                          Assign Role
-                        </Button>
                       </div>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+                  </div>
+                </TabsContent>
 
-                <div className="space-y-6">
+                <TabsContent value="player" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -479,7 +487,9 @@ export default function AccessAdminUsersPage() {
                       </div>
                     ) : null}
                   </div>
+                </TabsContent>
 
+                <TabsContent value="oauth" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -533,6 +543,13 @@ export default function AccessAdminUsersPage() {
                       )}
                     </div>
                   </div>
+                </TabsContent>
+
+                <TabsContent
+                  value="permissions"
+                  className="max-h-[60vh] space-y-4 overflow-y-auto pr-1"
+                >
+                  <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
 
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
@@ -555,8 +572,8 @@ export default function AccessAdminUsersPage() {
                       ) : null}
                     </div>
                   </div>
-                </div>
-              </div>
+                </TabsContent>
+              </Tabs>
             </div>
           ) : (
             <div className="py-8 text-sm text-muted-foreground">
