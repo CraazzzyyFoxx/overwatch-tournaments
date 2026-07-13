@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { authService, OAuthLinkAuthRequiredError } from "@/services/auth.service";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
@@ -265,6 +266,17 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
         // (e.g. `<page>?settings=profile`), clamped same-origin. `/account` is
         // not a real route, so ignoring `redirect` here 404'd after linking.
         const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
+        // The link wrote a new verified social account, but the public profile
+        // (users/[slug], getUserByName) is Next-Data-Cached under the "users"
+        // tag. Unlike the react-query social mutations (which call
+        // revalidateUser), this redirect path must bust it itself or the new
+        // account stays hidden until the 300s revalidate window elapses.
+        // Best-effort: the link is already committed, so never fail on it.
+        try {
+          revalidateTag("users", "max");
+        } catch {
+          // cache invalidation is best-effort
+        }
         const response = NextResponse.redirect(safeRedirectTarget(linkResult.redirect, origin));
         clearCsrfCookie(response);
         return response;

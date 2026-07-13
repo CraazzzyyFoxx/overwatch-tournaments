@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { revalidateTag } from "next/cache";
 import { authService } from "@/services/auth.service";
 import { getAccessToken } from "@/lib/auth-cookies";
 import { safeRedirectTarget } from "@/lib/oauth-callback";
@@ -94,6 +95,16 @@ export async function GET(request: Request) {
 
   try {
     await authService.completeLink(ticket, accessToken, guard);
+    // Best-effort: bust the Next Data Cache "users" tag so the public profile
+    // reflects the newly linked social account immediately (react-query
+    // mutations use revalidateUser). The link is already committed, so a
+    // cache-bust failure must never fail the request — worst case the profile
+    // self-heals within the 300s revalidate window.
+    try {
+      revalidateTag("users", "max");
+    } catch {
+      // cache invalidation is best-effort
+    }
     const response = NextResponse.redirect(safeRedirectTarget(next, currentOrigin));
     clearGuardCookie(response);
     return response;
