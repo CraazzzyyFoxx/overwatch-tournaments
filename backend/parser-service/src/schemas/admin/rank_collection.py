@@ -6,6 +6,8 @@ __all__ = (
     "CollectionStatusRead",
     "CollectTriggerRequest",
     "CollectTriggerResponse",
+    "ReenableDisabledRequest",
+    "ReenableDisabledResponse",
     "FetchLogRead",
 )
 
@@ -29,6 +31,15 @@ class CollectTriggerRequest(BaseModel):
 
 class CollectTriggerResponse(BaseModel):
     enqueued: int
+
+
+class ReenableDisabledRequest(BaseModel):
+    # Limit to tags that ever produced a snapshot (skip genuinely-dead handles).
+    only_previously_succeeded: bool = False
+
+
+class ReenableDisabledResponse(BaseModel):
+    reenabled: int
 
 
 class FetchLogRead(BaseModel):

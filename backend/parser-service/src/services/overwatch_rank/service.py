@@ -504,27 +504,73 @@ async def record_failure(
     status: enums.RankCollectionStatus,
     error: str | None,
     config: RankCollectionConfig,
+    transient: bool = False,
     now: datetime | None = None,
 ) -> int:
-    """Apply exponential backoff for a transient failure; auto-disable dead tags."""
+    """Apply exponential backoff for a failure; auto-disable only *permanent* ones.
+
+    ``transient=True`` (OverFast 5xx / timeout / 429 — the upstream is at fault,
+    not the tag) NEVER auto-disables: it only backs off (capped at
+    ``MAX_BACKOFF_SECONDS``) so the tag keeps retrying and recovers on its own
+    once OverFast is healthy again. Without this, an upstream outage that trips
+    ``max_consecutive_failures`` in a row would permanently disable healthy
+    accounts with no recovery path (``select_and_claim_due`` skips ``disabled``
+    and nothing re-enables them). Only permanent failures (an invalid battle tag
+    that will never resolve) count toward auto-disable.
+    """
     now = now or _now()
     state = await ensure_state(session, social_account_id, battle_tag)
     state.last_checked_at = now
     state.last_error = (error or "")[:2000] or None
     state.consecutive_failures = (state.consecutive_failures or 0) + 1
 
-    if state.consecutive_failures >= config.max_consecutive_failures:
+    if not transient and state.consecutive_failures >= config.max_consecutive_failures:
         state.status = enums.RankCollectionStatus.disabled.value
         state.next_eligible_at = None
     else:
+        # Cap the exponent: a transient outage can drive consecutive_failures
+        # arbitrarily high (it no longer disables), and 2**big is wasteful — the
+        # backoff is clamped to MAX_BACKOFF_SECONDS long before then anyway.
         backoff = min(
-            config.backoff_base_seconds * (2 ** (state.consecutive_failures - 1)),
+            config.backoff_base_seconds * (2 ** min(state.consecutive_failures - 1, 16)),
             MAX_BACKOFF_SECONDS,
         )
         state.status = status.value
         state.next_eligible_at = now + timedelta(seconds=backoff)
     await session.flush()
     return 0
+
+
+async def reenable_disabled(
+    session: AsyncSession,
+    *,
+    interval_seconds: int,
+    only_previously_succeeded: bool = False,
+    now: datetime | None = None,
+) -> int:
+    """Requeue auto-disabled tags: ``disabled`` -> ``pending``, reset failures.
+
+    Recovery path for accounts wrongly disabled by a transient upstream outage
+    (see ``record_failure``). ``next_eligible_at`` is spread across
+    ``[now, now+interval_seconds]`` (like the seeders) so re-enabling the whole
+    backlog doesn't stampede OverFast. ``only_previously_succeeded`` limits it to
+    tags that ever produced a snapshot (skip genuinely-dead handles). Returns the
+    number of rows re-enabled; caller commits.
+    """
+    now = now or _now()
+    state = models.BattleTagRankState
+    query = sa.update(state).where(state.status == enums.RankCollectionStatus.disabled.value)
+    if only_previously_succeeded:
+        query = query.where(state.last_success_at.isnot(None))
+    result = await session.execute(
+        query.values(
+            status=enums.RankCollectionStatus.pending.value,
+            consecutive_failures=0,
+            last_error=None,
+            next_eligible_at=_seed_next_eligible(interval_seconds),
+        )
+    )
+    return result.rowcount or 0
 
 
 async def defer_tag(

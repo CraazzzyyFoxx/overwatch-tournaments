@@ -51,6 +51,10 @@ DOCS: dict[str, dict] = {
         "summary": "Trigger rank collection",
         "description": "Enqueues an OverFast rank-collection run for a user or specific battle tags and returns the enqueued count; requires the global admin role.",
     },
+    "rpc.parser.rank.reenable_disabled": {
+        "summary": "Re-enable disabled rank collection",
+        "description": "Requeues battle tags that were auto-disabled by a transient OverFast outage (status disabled -> pending, failure counter reset), spreading them across the collection interval; optionally limited to tags that previously succeeded. Returns the re-enabled count; requires the global admin role.",
+    },
     # ── achievement calculate ─────────────────────────────────────────────────
     "rpc.parser.ach.calculate": {
         "summary": "Run achievement calculation",

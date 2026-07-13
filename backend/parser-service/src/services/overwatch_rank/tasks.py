@@ -202,6 +202,7 @@ async def process_fetch_rank(
                     status=enums.RankCollectionStatus.rate_limited,
                     error="429 rate limited",
                     config=cfg,
+                    transient=True,
                 )
                 await service.log_fetch(
                     session,
@@ -245,6 +246,7 @@ async def process_fetch_rank(
                 status=enums.RankCollectionStatus.error,
                 error=str(exc),
                 config=cfg,
+                transient=True,
             )
             await service.log_fetch(
                 session,

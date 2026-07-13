@@ -1422,6 +1422,17 @@ class AdminService {
     });
     return response.json();
   }
+
+  async reenableDisabledRankCollection(
+    onlyPreviouslySucceeded = false
+  ): Promise<{ reenabled: number }> {
+    const response = await apiFetch("/api/v1/admin/rank/reenable-disabled", {
+      method: "POST",
+      body: { only_previously_succeeded: onlyPreviouslySucceeded },
+      skipWorkspace: true
+    });
+    return response.json();
+  }
 }
 
 const adminService = new AdminService();

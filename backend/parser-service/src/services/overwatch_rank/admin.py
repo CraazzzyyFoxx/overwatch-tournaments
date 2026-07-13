@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.social import SocialProvider
 from shared.schemas.events import FetchRankEvent
+from shared.services import settings_provider
 from src import models
 
 from . import service, tasks
@@ -87,6 +88,26 @@ async def _resolve_target_tags(
     else:
         return []
     return list((await session.scalars(query)).all())
+
+
+async def reenable_disabled(
+    session: AsyncSession,
+    *,
+    only_previously_succeeded: bool = False,
+) -> int:
+    """Requeue auto-disabled tags (admin recovery after a transient OverFast outage).
+
+    Uses the configured collection interval to spread the re-enabled backlog.
+    Returns the number of tags re-enabled; commits.
+    """
+    cfg = await settings_provider.get_rank_collection_config(session)
+    count = await service.reenable_disabled(
+        session,
+        interval_seconds=cfg.interval_seconds,
+        only_previously_succeeded=only_previously_succeeded,
+    )
+    await session.commit()
+    return count
 
 
 async def trigger_collection(

@@ -137,3 +137,19 @@ def register(broker: Any, logger: Any) -> None:
             return rc_schemas.CollectTriggerResponse(enqueued=enqueued)
 
         return await c.envelope(logger, "rank.collect", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.parser.rank.reenable_disabled")
+    async def _reenable_disabled(data: dict, msg: RabbitMessage) -> dict:
+        # POST /admin/rank/reenable-disabled — require_role("admin").
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            if not user.has_role("admin"):
+                raise HTTPException(status_code=403, detail="Role required: admin")
+            body = rc_schemas.ReenableDisabledRequest.model_validate(c.payload(data))
+            count = await rank_admin.reenable_disabled(
+                session, only_previously_succeeded=body.only_previously_succeeded
+            )
+            return rc_schemas.ReenableDisabledResponse(reenabled=count)
+
+        return await c.envelope(logger, "rank.reenable_disabled", op, session_factory=_SF)

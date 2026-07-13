@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Search } from "lucide-react";
+import { Loader2, RefreshCw, RotateCcw, Search } from "lucide-react";
 
 import UserRankHistory from "@/components/UserRankHistory";
 import { Badge } from "@/components/ui/badge";
@@ -345,16 +345,42 @@ function PlayerDialog({ user, onClose }: { user: MinimizedUser; onClose: () => v
   );
 }
 
+function ReenableDisabledButton() {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => adminService.reenableDisabledRankCollection(false),
+    onSuccess: (result) => {
+      notify.success(`Re-enabled ${result.reenabled} disabled battle tag(s)`);
+      queryClient.invalidateQueries({ queryKey: ["admin", "rank", "fetch-log"] });
+    },
+    onError: (error) => notify.apiError(error, { title: "Failed to re-enable" })
+  });
+
+  return (
+    <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+      {mutation.isPending ? (
+        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+      ) : (
+        <RotateCcw className="mr-1.5 h-4 w-4" />
+      )}
+      Re-enable disabled
+    </Button>
+  );
+}
+
 export default function RankCollectionAdminPage() {
   const [selectedUser, setSelectedUser] = useState<MinimizedUser | null>(null);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Rank Collection</h1>
-        <p className="mt-2 text-muted-foreground">
-          Live OverFast worker task history and per-player manual re-fetch.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Rank Collection</h1>
+          <p className="mt-2 text-muted-foreground">
+            Live OverFast worker task history and per-player manual re-fetch.
+          </p>
+        </div>
+        <ReenableDisabledButton />
       </div>
 
       <FetchLogSection />
