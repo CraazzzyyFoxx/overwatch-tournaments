@@ -286,8 +286,10 @@ export default function UnifiedRegistrationForm({
     discord_nick: state.discordNick,
     twitch_nick: state.twitchNick,
   };
+  // ``require_verified`` gates the registrant's own OAuth accounts; admin editing
+  // is unconstrained (matches AccountStep, which renders a plain input in admin).
   const getVerifiedError = (fieldKey: string): string | null =>
-    isEnabled(fieldKey)
+    mode === "public" && isEnabled(fieldKey)
       ? getVerifiedFieldError(
           fieldKey,
           verifiedFieldValues[fieldKey] ?? "",
