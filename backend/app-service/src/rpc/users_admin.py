@@ -29,7 +29,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SOCIAL_PROVIDERS, SocialProvider
 from shared.rpc.query import build_query_model
 from shared.services import social_identity as social_svc
-from src import models
+from src import models, schemas
 from src.core import db
 from src.schemas.admin import user as admin_schemas
 from src.schemas.admin import user_merge as merge_schemas
@@ -66,9 +66,14 @@ def _account_gate(data: dict) -> Any:
     return user
 
 
+async def _resolve_my_player_id_or_none(session: Any, user: Any) -> int | None:
+    """Current user's linked player id, or None when no player is linked."""
+    return await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
+
+
 async def _resolve_my_player_id(session: Any, user: Any) -> int:
     """Current user's linked player id (404 if the user has no player)."""
-    player_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
+    player_id = await _resolve_my_player_id_or_none(session, user)
     if player_id is None:
         raise HTTPException(status_code=404, detail="No linked player profile")
     return player_id
@@ -287,7 +292,14 @@ def register(broker: Any, logger: Any) -> None:
     async def _me_social_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _account_gate(data)
-            player_id = await _resolve_my_player_id(session, user)
+            player_id = await _resolve_my_player_id_or_none(session, user)
+            if player_id is None:
+                # Belt-and-suspenders after the iwrefac09 backfill: a self-listing
+                # endpoint must not 404 just because the caller has no linked
+                # player. Return an empty list (My Account then renders the empty
+                # state + link buttons) instead of crashing. id=0 is a "no player"
+                # sentinel; both callers read only ``.social_accounts``.
+                return schemas.UserRead(id=0, name="", social_accounts=[])
             return await _refresh_user(session, player_id)
 
         return await c.envelope(logger, "users.me_social_list", op, session_factory=_SF)
