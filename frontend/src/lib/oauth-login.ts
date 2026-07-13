@@ -127,7 +127,7 @@ export async function startOAuthLogin(request: Request, provider: OAuthProviderN
     if (guardHashParam) guardHash = guardHashParam;
   }
 
-  let redirect = action === "link" ? "/account" : "/";
+  let redirect = action === "link" ? "/?settings=profile" : "/";
   if (nextParam) {
     try {
       const nextUrl = new URL(nextParam, origin);

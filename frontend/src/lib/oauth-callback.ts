@@ -260,9 +260,12 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
           return response;
         }
 
-        // mode === "linked" (platform apex / a `.owt` subdomain) -- unchanged.
+        // mode === "linked" (platform apex / a `.owt` subdomain): return the
+        // user to where they started the link — the signed state's `redirect`
+        // (e.g. `<page>?settings=profile`), clamped same-origin. `/account` is
+        // not a real route, so ignoring `redirect` here 404'd after linking.
         const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
-        const response = NextResponse.redirect(new URL("/account", origin));
+        const response = NextResponse.redirect(safeRedirectTarget(linkResult.redirect, origin));
         clearCsrfCookie(response);
         return response;
       } catch (err) {
@@ -271,7 +274,7 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
           // in, then retry linking from account settings.
           const loginUrl = new URL("/", SITE_URL);
           loginUrl.searchParams.set("login", "1");
-          loginUrl.searchParams.set("next", "/account");
+          loginUrl.searchParams.set("next", "/?settings=profile");
           const response = NextResponse.redirect(loginUrl);
           clearCsrfCookie(response);
           return response;
