@@ -725,6 +725,10 @@ async def list_oauth_connections(
         query = query.where(OAuthConnection.provider == params.provider)
         count_query = count_query.where(OAuthConnection.provider == params.provider)
 
+    if params.auth_user_id is not None:
+        query = query.where(OAuthConnection.auth_user_id == params.auth_user_id)
+        count_query = count_query.where(OAuthConnection.auth_user_id == params.auth_user_id)
+
     if params.search:
         term = f"%{params.search}%"
         condition = (

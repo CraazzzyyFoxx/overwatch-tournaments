@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { UserDenyEditor } from "./UserDenyEditor";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
@@ -78,6 +79,16 @@ export default function AccessAdminUsersPage() {
   const userDetailQuery = useQuery({
     queryKey: ["access-admin", "users", managingUserId],
     queryFn: () => rbacService.getUser(managingUserId as number),
+    enabled: managingUserId !== null
+  });
+
+  const oauthConnectionsQuery = useQuery({
+    queryKey: ["access-admin", "users", managingUserId, "oauth-connections"],
+    queryFn: () =>
+      rbacService.listOAuthConnections({
+        auth_user_id: managingUserId as number,
+        per_page: -1
+      }),
     enabled: managingUserId !== null
   });
 
@@ -467,6 +478,60 @@ export default function AccessAdminUsersPage() {
                         </div>
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        OAuth Connections
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Provider accounts linked to this auth account.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {oauthConnectionsQuery.isLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading connections...</p>
+                      ) : oauthConnectionsQuery.data?.results.length ? (
+                        oauthConnectionsQuery.data.results.map((conn) => {
+                          const expired = conn.token_expires_at
+                            ? new Date(conn.token_expires_at) < new Date()
+                            : false;
+                          return (
+                            <div
+                              key={conn.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
+                            >
+                              <div className="min-w-0 space-y-1">
+                                <ProviderBadge provider={conn.provider} />
+                                <p className="truncate text-sm font-medium">
+                                  {conn.display_name ?? conn.username}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {conn.username}
+                                  {conn.email ? ` · ${conn.email}` : ""}
+                                </p>
+                              </div>
+                              {conn.token_expires_at ? (
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    expired
+                                      ? "border-red-500/30 text-red-400"
+                                      : "border-green-500/30 text-green-400"
+                                  }
+                                >
+                                  {expired ? "Expired" : "Active"}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No OAuth connections.</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">

@@ -169,6 +169,7 @@ class OAuthConnectionListQueryParams(pagination.PaginationSortQueryParams[_OAUTH
     order: pagination.SortOrder = pagination.SortOrder.DESC
     search: str | None = None
     provider: str | None = None
+    auth_user_id: int | None = None
 
 
 @dataclass
@@ -176,6 +177,7 @@ class OAuthConnectionListParams(pagination.PaginationSortParams):
     per_page: int = 20
     search: str | None = None
     provider: str | None = None
+    auth_user_id: int | None = None
 
 
 class PlayerLinkRequest(BaseModel):

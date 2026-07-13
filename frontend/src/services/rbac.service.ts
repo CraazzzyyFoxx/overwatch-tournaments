@@ -94,6 +94,7 @@ type PermissionListParams = ListParams & {
 type OAuthConnectionListParams = ListParams & {
   search?: string;
   provider?: string;
+  auth_user_id?: number;
 };
 
 type SessionListParams = ListParams & {
