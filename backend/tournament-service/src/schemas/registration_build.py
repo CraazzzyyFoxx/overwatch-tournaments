@@ -122,9 +122,12 @@ def _reg_to_read(
     """Serialize a registration for public API responses.
 
     ``include_private=False`` is for anonymous/list contexts: it strips
-    self-declared smurf tags (anti-multi-accounting data), free-text notes and
-    organizer-defined custom fields — all of which may contain PII and are only
-    meant for the registrant themselves and tournament admins.
+    free-text notes and organizer-defined custom fields — both of which may
+    contain PII and are only meant for the registrant themselves and admins.
+    Smurf tags stay public: they are declared alternate battle tags, the same
+    anti-smurf transparency class as ``battle_tag``/``discord_nick``/
+    ``twitch_nick`` (all already public), and the participants roster exists
+    precisely to surface them.
     """
     roles = (
         [
@@ -150,7 +153,7 @@ def _reg_to_read(
         # workspace_member anchor (callers eager-load it; see helper).
         user_id=_registration_player_id(reg),
         battle_tag=reg.battle_tag,
-        smurf_tags_json=reg.smurf_tags_json if include_private else None,
+        smurf_tags_json=reg.smurf_tags_json,
         discord_nick=reg.discord_nick,
         twitch_nick=reg.twitch_nick,
         stream_pov=reg.stream_pov,

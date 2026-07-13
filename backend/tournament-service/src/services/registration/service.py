@@ -809,8 +809,8 @@ async def build_public_registration_list(
                 workspace_id=workspace_id,
                 status_meta_map=status_meta_map,
                 show_ranks=show_ranks,
-                # Anonymous endpoint: strip smurf tags / notes / custom
-                # fields (PII + anti-smurf data meant for admins only).
+                # Anonymous endpoint: strip notes / custom fields (may hold
+                # PII, admin-only). Smurf tags stay public — see _reg_to_read.
                 include_private=False,
             ).model_dump(),
             balancer_status=r.balancer_status,
