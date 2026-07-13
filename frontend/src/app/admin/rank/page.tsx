@@ -17,16 +17,20 @@ export default function RankCollectionAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Rank Collection</h1>
-        <p className="mt-2 text-muted-foreground">
-          OverFast collection health, live worker task history and per-player inspection.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Rank Collection</h1>
+          <p className="mt-2 text-muted-foreground">
+            OverFast collection health, live worker task history and per-player inspection.
+          </p>
+        </div>
+        <div className="sm:pt-1">
+          <RankPlayerSearch onSelect={openPlayer} />
+        </div>
       </div>
 
       <RankHealthDashboard />
       <RankTaskHistory onSelectUser={openPlayer} />
-      <RankPlayerSearch onSelect={openPlayer} />
 
       {selected && (
         <RankPlayerDetail userId={selected.userId} label={selected.label} onClose={() => setSelected(null)} />

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Search } from "lucide-react";
 
 import UserRankHistory from "@/components/UserRankHistory";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,58 +22,84 @@ interface SelectUser {
   (userId: number, label: string): void;
 }
 
-// ─── Player search ───────────────────────────────────────────────────────────
+// ─── Player search (header combobox) ─────────────────────────────────────────
 
+/** Compact search that lives in the page header; matches drop down below the
+ *  input and open the player detail on select. */
 export function RankPlayerSearch({ onSelect }: { onSelect: SelectUser }) {
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(term.trim()), 300);
     return () => clearTimeout(handle);
   }, [term]);
 
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
   const searchQuery = useQuery({
     queryKey: ["admin", "rank", "user-search", debounced],
     queryFn: () => userService.searchUsers(debounced),
     enabled: debounced.length >= 2
   });
+  const results = searchQuery.data ?? [];
+  const showDropdown = open && debounced.length >= 2;
+
+  const pick = (id: number, name: string) => {
+    onSelect(id, name);
+    setOpen(false);
+    setTerm("");
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Players</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search player by battle tag…"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-          />
+    <div ref={containerRef} className="relative w-full sm:w-72">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        className="pl-8"
+        placeholder="Search player by battle tag…"
+        value={term}
+        onChange={(event) => {
+          setTerm(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
+      />
+      {showDropdown && (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
+          {searchQuery.isLoading ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p>
+          ) : results.length > 0 ? (
+            <div className="max-h-72 divide-y divide-border overflow-y-auto">
+              {results.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => pick(user.id, user.name)}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-muted/50"
+                >
+                  {user.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 py-2 text-sm text-muted-foreground">No players found.</p>
+          )}
         </div>
-        {searchQuery.isLoading && debounced.length >= 2 ? (
-          <p className="text-sm text-muted-foreground">Searching…</p>
-        ) : (searchQuery.data ?? []).length > 0 ? (
-          <div className="divide-y divide-border rounded-md border">
-            {(searchQuery.data ?? []).map((user) => (
-              <button
-                key={user.id}
-                type="button"
-                onClick={() => onSelect(user.id, user.name)}
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-muted/50"
-              >
-                {user.name}
-              </button>
-            ))}
-          </div>
-        ) : debounced.length >= 2 ? (
-          <p className="text-sm text-muted-foreground">No players found.</p>
-        ) : null}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
