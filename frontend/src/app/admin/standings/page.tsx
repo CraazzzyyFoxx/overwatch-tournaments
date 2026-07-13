@@ -307,8 +307,8 @@ export default function StandingsPage() {
       accessorKey: "buchholz",
       header: "BH",
       cell: ({ row }) => {
-        const bh = row.getValue<number | null>("buchholz");
-        return bh !== null ? (
+        const bh = row.getValue<number | null | undefined>("buchholz");
+        return bh != null ? (
           <div className="text-center text-sm">{bh.toFixed(2)}</div>
         ) : (
           <div className="text-center">—</div>
@@ -319,8 +319,8 @@ export default function StandingsPage() {
       accessorKey: "tb",
       header: "TB",
       cell: ({ row }) => {
-        const tb = row.getValue<number | null>("tb");
-        return tb !== null ? (
+        const tb = row.getValue<number | null | undefined>("tb");
+        return tb != null ? (
           <div className="text-center text-sm">{tb}</div>
         ) : (
           <div className="text-center">—</div>
