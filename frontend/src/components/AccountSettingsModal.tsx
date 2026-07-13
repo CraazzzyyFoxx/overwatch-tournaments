@@ -5,17 +5,19 @@ import { useEffect } from "react";
 import { type SettingsTab, useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { User as UserIcon, X, MonitorCog, Shield } from "lucide-react";
+import { useTranslations } from "next-intl";
 import AccountSessionsSection from "./account-settings/AccountSessionsSection";
 import MyAccountSection from "./account-settings/MyAccountSection";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const TAB_CONFIG: { id: SettingsTab; label: string; icon: ReactNode }[] = [
-  { id: "profile", label: "My Account", icon: <UserIcon className="w-4 h-4" /> },
-  { id: "preferences", label: "Preferences", icon: <MonitorCog className="w-4 h-4" /> },
-  { id: "sessions", label: "Sessions", icon: <Shield className="w-4 h-4" /> },
+const TAB_CONFIG: { id: SettingsTab; icon: ReactNode }[] = [
+  { id: "profile", icon: <UserIcon className="w-4 h-4" /> },
+  { id: "preferences", icon: <MonitorCog className="w-4 h-4" /> },
+  { id: "sessions", icon: <Shield className="w-4 h-4" /> },
 ];
 
 const AccountSettingsModal = () => {
+  const t = useTranslations("accountSettings");
   const { isOpen, close, activeTab, setActiveTab, open } = useAccountSettingsModalStore();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -51,7 +53,7 @@ const AccountSettingsModal = () => {
           "--lg-c": "139 92 246", // purple
         } as CSSProperties}
       >
-        <DialogTitle className="sr-only">Account Settings</DialogTitle>
+        <DialogTitle className="sr-only">{t("title")}</DialogTitle>
 
         {/* Close button — anchored to the dialog's top-right in both layouts (DialogContent
             is the positioned ancestor), so it stays pinned on the mobile full-screen sheet. */}
@@ -71,7 +73,7 @@ const AccountSettingsModal = () => {
         <div className="relative z-10 shrink-0 bg-black/10 border-b border-white/10 md:border-b-0 md:w-1/3 md:max-w-[280px] md:pt-14 md:pb-8 md:flex md:flex-col md:items-end">
           <div className="w-full md:max-w-[220px] px-3 py-3 md:py-0 md:space-y-1">
             <h2 className="hidden md:block px-3 pb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              User Settings
+              {t("sidebarHeading")}
             </h2>
             {/* pr-14 on mobile keeps the last tab from scrolling under the hoisted close button */}
             <div className="flex gap-1 overflow-x-auto pr-14 md:flex-col md:overflow-visible md:pr-0">
@@ -86,7 +88,7 @@ const AccountSettingsModal = () => {
                   }`}
                 >
                   {tab.icon}
-                  {tab.label}
+                  {t(`tabs.${tab.id}`)}
                 </button>
               ))}
             </div>
@@ -102,8 +104,8 @@ const AccountSettingsModal = () => {
               {activeTab === "profile" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-white">My Account</h3>
-                    <p className="text-sm text-slate-400 mt-1">Manage your avatar and linked accounts.</p>
+                    <h3 className="text-xl font-semibold tracking-tight text-white">{t("profile.title")}</h3>
+                    <p className="text-sm text-slate-400 mt-1">{t("profile.desc")}</p>
                   </div>
                   <MyAccountSection />
                 </div>
@@ -112,12 +114,12 @@ const AccountSettingsModal = () => {
               {activeTab === "preferences" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-white">Preferences</h3>
-                    <p className="text-sm text-slate-400 mt-1">Customize your tournament experience.</p>
+                    <h3 className="text-xl font-semibold tracking-tight text-white">{t("preferences.title")}</h3>
+                    <p className="text-sm text-slate-400 mt-1">{t("preferences.desc")}</p>
                   </div>
                   <div className="flex flex-col items-center justify-center py-20 text-slate-500 border border-dashed border-white/10 rounded-xl">
                     <MonitorCog className="w-12 h-12 mb-4 opacity-50" />
-                    <p>App preferences coming soon</p>
+                    <p>{t("preferences.comingSoon")}</p>
                   </div>
                 </div>
               )}
@@ -125,10 +127,8 @@ const AccountSettingsModal = () => {
               {activeTab === "sessions" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-white">Sessions</h3>
-                    <p className="text-sm text-slate-400 mt-1">
-                      Review active logins, session history, and revoke access on other devices.
-                    </p>
+                    <h3 className="text-xl font-semibold tracking-tight text-white">{t("sessions.title")}</h3>
+                    <p className="text-sm text-slate-400 mt-1">{t("sessions.desc")}</p>
                   </div>
                   <AccountSessionsSection />
                 </div>

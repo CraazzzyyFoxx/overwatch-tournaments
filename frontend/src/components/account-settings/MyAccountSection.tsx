@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, EyeOff, Loader2, Plus, Star, Unlink } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
@@ -19,6 +20,7 @@ import type { User } from "@/types/user.types";
 const OAUTH_ADDABLE = ["battlenet", "discord", "twitch"] as const;
 
 export default function MyAccountSection() {
+  const t = useTranslations("accountSettings");
   const user = useAuthProfileStore((s) => s.user);
   const fetchMe = useAuthProfileStore((s) => s.fetchMe);
   const { canUseCapability } = usePermissions();
@@ -86,7 +88,7 @@ export default function MyAccountSection() {
     <div className="space-y-8">
       {/* ── Avatar ─────────────────────────────────────── */}
       <section className="space-y-3">
-        <h4 className="text-sm font-medium text-slate-300">Avatar</h4>
+        <h4 className="text-sm font-medium text-slate-300">{t("avatar.title")}</h4>
         <div className="flex items-center gap-4">
           <EditableAvatar
             src={user?.avatarUrl}
@@ -100,24 +102,24 @@ export default function MyAccountSection() {
             onError={(message) => notify.error(message)}
           />
           {canAvatar ? (
-            <p className="text-xs text-slate-500">Click or drop an image to change it; hover to edit.</p>
+            <p className="text-xs text-slate-500">{t("avatar.hint")}</p>
           ) : (
-            <p className="text-xs text-slate-500">Changing your avatar has been disabled by an administrator.</p>
+            <p className="text-xs text-slate-500">{t("avatar.disabled")}</p>
           )}
         </div>
       </section>
 
       {/* ── Linked accounts ────────────────────────────── */}
       <section className="space-y-3">
-        <h4 className="text-sm font-medium text-slate-300">Linked accounts</h4>
+        <h4 className="text-sm font-medium text-slate-300">{t("linked.title")}</h4>
         {!canSocial ? (
-          <p className="text-xs text-slate-500">Managing your accounts has been disabled by an administrator.</p>
+          <p className="text-xs text-slate-500">{t("linked.disabled")}</p>
         ) : (
           <>
             <div className="space-y-1.5">
               {socialQuery.isLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
               {!socialQuery.isLoading && accounts.length === 0 && (
-                <p className="text-sm text-slate-500">No linked accounts yet — add one via OAuth below.</p>
+                <p className="text-sm text-slate-500">{t("linked.empty")}</p>
               )}
               {accounts.map((account) => {
                 const visible = account.visible_global !== false;
@@ -128,15 +130,15 @@ export default function MyAccountSection() {
                   >
                     <SocialIcon provider={account.provider} size={15} />
                     <span className="flex-1 truncate text-sm text-white">{account.username}</span>
-                    {account.is_verified && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label="Verified" />}
+                    {account.is_verified && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label={t("linked.verifiedAria")} />}
                     {account.is_primary ? (
-                      <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" aria-label="Primary" />
+                      <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-400" aria-label={t("linked.primaryAria")} />
                     ) : (
                       <Button
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7"
-                        title={account.is_verified ? "Make primary" : "Only OAuth-verified accounts can be primary"}
+                        title={account.is_verified ? t("linked.makePrimary") : t("linked.primaryNeedsVerified")}
                         disabled={!account.is_verified || setPrimary.isPending}
                         onClick={() => setPrimary.mutate(account.id)}
                       >
@@ -147,10 +149,10 @@ export default function MyAccountSection() {
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 text-slate-400 hover:text-white"
-                      title={visible ? "Hide from your public profile" : "Show on your public profile"}
+                      title={visible ? t("linked.hide") : t("linked.show")}
                       disabled={setVisibility.isPending}
                       onClick={() => setVisibility.mutate({ id: account.id, visible: !visible })}
-                      aria-label={`${visible ? "Hide" : "Show"} ${account.username}`}
+                      aria-label={visible ? t("linked.hideAria", { name: account.username }) : t("linked.showAria", { name: account.username })}
                     >
                       {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     </Button>
@@ -159,15 +161,15 @@ export default function MyAccountSection() {
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-slate-400 hover:text-red-400"
-                        title="Disconnect this OAuth account"
+                        title={t("linked.disconnect")}
                         disabled={unlinkAccount.isPending}
                         onClick={() => {
                           const label = getSocialProviderConfig(account.provider).label;
-                          if (window.confirm(`Disconnect your ${label} account? You can reconnect it later via OAuth.`)) {
+                          if (window.confirm(t("linked.disconnectConfirm", { provider: label }))) {
                             unlinkAccount.mutate(account.provider);
                           }
                         }}
-                        aria-label={`Disconnect ${account.username}`}
+                        aria-label={t("linked.disconnectAria", { name: account.username })}
                       >
                         <Unlink className="h-3.5 w-3.5" />
                       </Button>
@@ -189,11 +191,7 @@ export default function MyAccountSection() {
                 </a>
               ))}
             </div>
-            <p className="text-[11px] text-slate-500">
-              Accounts can only be added through OAuth, which also verifies them. Disconnect removes the OAuth link
-              (the account stays, unverified, until you reconnect); hiding removes it from your public profile. Only
-              an administrator can fully delete an account.
-            </p>
+            <p className="text-[11px] text-slate-500">{t("linked.footnote")}</p>
           </>
         )}
       </section>

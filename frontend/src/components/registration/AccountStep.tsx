@@ -6,7 +6,7 @@ import AccountCombobox from "./AccountCombobox";
 import VerifiedAccountSelect from "./VerifiedAccountSelect";
 import SmurfTagsInput from "./SmurfTagsInput";
 import FieldLabel from "./FieldLabel";
-import { UserRound } from "lucide-react";
+import { ArrowRight, Link2, UserRound } from "lucide-react";
 
 interface AccountStepProps {
   values: Record<string, string>;
@@ -25,6 +25,8 @@ interface AccountStepProps {
   accounts?: readonly SocialAccount[];
   /** Per-field `require_verified` errors, computed by the parent. */
   verifiedErrors?: Record<string, string | null>;
+  /** Public mode only: open profile settings so the user can link accounts. */
+  onLinkAccounts?: () => void;
 }
 
 export default function AccountStep({
@@ -42,6 +44,7 @@ export default function AccountStep({
   onDisplayNameChange,
   accounts = [],
   verifiedErrors = {},
+  onLinkAccounts,
 }: AccountStepProps) {
   const t = useTranslations();
   const fields = form.built_in_fields;
@@ -66,6 +69,28 @@ export default function AccountStep({
             : t("registration.accounts.desc")}
         </p>
       </div>
+
+      {mode === "public" && accounts.length === 0 && onLinkAccounts && (
+        <button
+          type="button"
+          onClick={onLinkAccounts}
+          className="flex w-full items-start gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 p-3 text-left transition-colors hover:bg-white/6"
+        >
+          <Link2 className="mt-0.5 size-4 shrink-0 text-[color:var(--aqt-fg-muted)]" />
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium text-[color:var(--aqt-fg)]">
+              {t("registration.accounts.noAccountsHint")}
+            </div>
+            <div className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
+              {t("registration.accounts.noAccountsHintDesc")}
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[color:var(--aqt-fg)]">
+              {t("registration.accounts.noAccountsHintCta")}
+              <ArrowRight className="size-3" />
+            </div>
+          </div>
+        </button>
+      )}
 
       {mode === "admin" && onDisplayNameChange && (
         <div className="space-y-1.5">

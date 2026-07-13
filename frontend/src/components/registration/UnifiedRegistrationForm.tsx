@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import heroService from "@/services/hero.service";
 import { useTranslations } from "next-intl";
+import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import type {
   RegistrationForm,
   RoleInput,
@@ -150,6 +151,7 @@ export default function UnifiedRegistrationForm({
   submitPending = false,
 }: UnifiedRegistrationFormProps) {
   const t = useTranslations();
+  const openAccountSettings = useAccountSettingsModalStore((s) => s.open);
   const [state, dispatch] = useReducer(formReducer, initialState);
   const [error, setError] = useState<string | null>(null);
   const [liveValidationErrors, setLiveValidationErrors] = useState<Record<string, string | null>>({});
@@ -667,6 +669,17 @@ export default function UnifiedRegistrationForm({
               discord_nick: getVerifiedError("discord_nick"),
               twitch_nick: getVerifiedError("twitch_nick"),
             }}
+            onLinkAccounts={
+              mode === "public"
+                ? () => {
+                    // Close registration and open profile settings on the
+                    // "My Account" tab. Linking there redirects through OAuth
+                    // and returns via ?settings=profile (AccountSettingsModal).
+                    onCancel();
+                    openAccountSettings("profile");
+                  }
+                : undefined
+            }
           />
         )}
 

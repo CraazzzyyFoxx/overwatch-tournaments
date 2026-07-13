@@ -238,7 +238,10 @@
       "useValue": "Use \"{value}\"",
       "discordPlaceholder": "username",
       "twitchPlaceholder": "channel_name",
-      "verified": "Verified"
+      "verified": "Verified",
+      "noAccountsHint": "You don't have any linked accounts yet.",
+      "noAccountsHintDesc": "Link your Battle.net, Discord or Twitch in profile settings to autofill and verify them.",
+      "noAccountsHintCta": "Link accounts in profile settings"
     },
     "roles": {
       "title": "Choose Your Role",
@@ -308,6 +311,75 @@
       "pendingReviewDesc": "The application is currently under review by the tournament organizers.",
       "showDetails": "Show details",
       "hideDetails": "Hide details"
+    }
+  },
+  "accountSettings": {
+    "title": "Account Settings",
+    "sidebarHeading": "User Settings",
+    "tabs": {
+      "profile": "My Account",
+      "preferences": "Preferences",
+      "sessions": "Sessions"
+    },
+    "profile": {
+      "title": "My Account",
+      "desc": "Manage your avatar and linked accounts."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "desc": "Customize your tournament experience.",
+      "comingSoon": "App preferences coming soon"
+    },
+    "avatar": {
+      "title": "Avatar",
+      "hint": "Click or drop an image to change it; hover to edit.",
+      "disabled": "Changing your avatar has been disabled by an administrator."
+    },
+    "linked": {
+      "title": "Linked accounts",
+      "disabled": "Managing your accounts has been disabled by an administrator.",
+      "empty": "No linked accounts yet — add one via OAuth below.",
+      "makePrimary": "Make primary",
+      "primaryNeedsVerified": "Only OAuth-verified accounts can be primary",
+      "primaryAria": "Primary",
+      "verifiedAria": "Verified",
+      "hide": "Hide from your public profile",
+      "show": "Show on your public profile",
+      "hideAria": "Hide {name}",
+      "showAria": "Show {name}",
+      "disconnect": "Disconnect this OAuth account",
+      "disconnectAria": "Disconnect {name}",
+      "disconnectConfirm": "Disconnect your {provider} account? You can reconnect it later via OAuth.",
+      "footnote": "Accounts can only be added through OAuth, which also verifies them. Disconnect removes the OAuth link (the account stays, unverified, until you reconnect); hiding removes it from your public profile. Only an administrator can fully delete an account."
+    },
+    "sessions": {
+      "title": "Sessions",
+      "desc": "Review active logins, session history, and revoke access on other devices.",
+      "statusActive": "Active",
+      "statusRevoked": "Revoked",
+      "statusExpired": "Expired",
+      "unavailable": "Unavailable",
+      "unknownDevice": "Unknown device",
+      "deviceOn": "{browser} on {platform}",
+      "currentSession": "Current session",
+      "revoke": "Revoke",
+      "signedIn": "Signed in",
+      "lastSeen": "Last seen",
+      "expires": "Expires",
+      "revokedLabel": "Revoked",
+      "sessionLabel": "Session",
+      "summaryCurrent": "Current",
+      "summaryOtherActive": "Other active",
+      "summaryHistory": "History",
+      "currentSectionTitle": "Current Session",
+      "otherActiveTitle": "Other Active Sessions",
+      "historyTitle": "Session History",
+      "noOtherActive": "No other active sessions.",
+      "noHistory": "No historical sessions yet.",
+      "loadFailed": "Failed to load sessions",
+      "retry": "Retry",
+      "revokedToast": "Session revoked",
+      "revokedToastDesc": "The selected session was signed out."
     }
   },
   "draft": {
