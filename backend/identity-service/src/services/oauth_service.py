@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import OAUTH_TO_SOCIAL
+from shared.core.social import OAUTH_TO_SOCIAL, normalize_social_handle
 from shared.models.identity.oauth import OAuthConnection
 from shared.models.identity.rbac import user_roles
 from shared.models.identity.social import SocialAccount
@@ -859,6 +859,61 @@ class OAuthService:
         await session.commit()
 
     @classmethod
+    async def _find_unowned_player_by_handle(
+        cls,
+        session: AsyncSession,
+        oauth_info: schemas.OAuthUserInfo,
+    ) -> models.User | None:
+        """Match an UNOWNED player (``players.user.auth_user_id IS NULL``) by the
+        provider's verified handle, so a first-time OAuth login reconciles onto
+        the player's existing shadow tournament identity instead of spawning a
+        duplicate that an admin then has to merge by hand.
+
+        The handle here is the real username/battletag of the account that just
+        completed the OAuth exchange, so for THIS provider it is a trustworthy
+        ownership signal. This is the deliberately-relaxed complement to
+        ``_find_player_by_provider_record`` (which requires a prior
+        ``provider_user_id``). It stays conservative: it never touches a player
+        already owned by another auth account (that is a merge conflict), and it
+        refuses to guess when more than one player carries the same handle.
+        """
+        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        if provider is None:
+            return None
+        normalized = normalize_social_handle(provider, cls._oauth_handle(oauth_info))
+        if not normalized:
+            return None
+
+        players = (
+            (
+                await session.execute(
+                    select(models.User)
+                    .join(SocialAccount, SocialAccount.user_id == models.User.id)
+                    .where(
+                        SocialAccount.provider == provider,
+                        SocialAccount.username_normalized == normalized,
+                    )
+                )
+            )
+            .scalars()
+            .unique()
+            .all()
+        )
+        if len(players) == 1 and players[0].auth_user_id is None:
+            logger.info(
+                "Reconciled OAuth login onto existing unowned player by handle",
+                provider=provider,
+                player_id=players[0].id,
+            )
+            return players[0]
+        if len(players) > 1:
+            logger.warning(
+                "Ambiguous unowned-player match for OAuth handle; not auto-linking",
+                provider=provider,
+            )
+        return None
+
+    @classmethod
     async def _find_existing_auth_user(
         cls,
         session: AsyncSession,
@@ -871,6 +926,12 @@ class OAuthService:
 
         If matched_player is returned without auth_user, the caller should create
         a new AuthUser and set ``matched_player.auth_user_id`` to link them.
+
+        matched_player is resolved first by verified ``provider_user_id`` and, if
+        that misses, by the verified handle of an UNOWNED player
+        (``_find_unowned_player_by_handle``) — the relaxed path that stops
+        first-login duplicates for players who already exist as a shadow identity
+        but were never OAuth-verified.
 
         FAIL-CLOSED (review C1/C2): a matching email is NEVER used to reuse an
         existing account. Email is not proof that the OAuth caller owns the
@@ -885,7 +946,16 @@ class OAuthService:
         # Provider-subject player lookup (provider_user_id only — see method doc).
         player = await cls._find_player_by_provider_record(session, oauth_info)
         if player is None:
-            return None, None
+            # Relaxed reconciliation (requested): no verified provider_user_id
+            # yet, so fall back to an UNOWNED player already carrying this
+            # provider's handle (their shadow tournament identity). Returned as
+            # matched_player (auth_user=None) so the caller creates the AuthUser,
+            # links the player, and pins the now-verified provider_user_id via
+            # _attach_verified_social_account — next login uses the fast path.
+            player = await cls._find_unowned_player_by_handle(session, oauth_info)
+            if player is None:
+                return None, None
+            return None, player
 
         # Primary: players.user.auth_user_id direct link.
         auth_user = await cls._find_auth_user_for_player(session, player)
