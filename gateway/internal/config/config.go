@@ -31,19 +31,27 @@ var DefaultWSAllowedOrigins = splitCSV(defaultWSAllowedOrigins)
 
 // Config holds all runtime settings for the gateway.
 type Config struct {
-	Port             string
-	MetricsPort      string
-	Environment      string
-	JWTSecret        string
-	RedisURL         string
-	RabbitMQURL      string
-	DatabaseURL      string
-	DBPgBouncer      bool
-	WSIdleTimeout    time.Duration
-	WSReplayLimit    int
-	WSAllowedOrigins []string
-	AuthRateLimit    int
-	AuthRateWindow   time.Duration
+	Port        string
+	MetricsPort string
+	Environment string
+	JWTSecret   string
+	RedisURL    string
+	RabbitMQURL string
+	DatabaseURL string
+	DBPgBouncer bool
+	// DBMaxConns caps the gateway's own Postgres pool (ACL / event-replay /
+	// custom-domain reads). Modest by default since the gateway shares Postgres
+	// with the workers; raise it if WS/ACL load starves the pool.
+	DBMaxConns int
+	// DBStatementTimeout is a server-side backstop cancelling any gateway query
+	// running longer, so a slow/hung Postgres can't pin pool connections against
+	// the unauthenticated /ws lookup path. 0 disables.
+	DBStatementTimeout time.Duration
+	WSIdleTimeout      time.Duration
+	WSReplayLimit      int
+	WSAllowedOrigins   []string
+	AuthRateLimit      int
+	AuthRateWindow     time.Duration
 	// WSCustomDomainRateLimit/Window bound how often ws.Handler's dynamic
 	// custom-domain Origin lookup (see acceptOptionsFor) may run per client
 	// IP. /ws carries neither auth nor the outer nginx-level limiter that
@@ -161,6 +169,8 @@ func Load() (*Config, error) {
 		RabbitMQURL:              rabbitURL,
 		DatabaseURL:              dbURL,
 		DBPgBouncer:              getenvBool("DB_PGBOUNCER", false),
+		DBMaxConns:               getenvInt("GATEWAY_DB_MAX_CONNS", 16),
+		DBStatementTimeout:       time.Duration(getenvInt("GATEWAY_DB_STATEMENT_TIMEOUT_MS", 15000)) * time.Millisecond,
 		WSIdleTimeout:            time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
 		WSReplayLimit:            getenvInt("WS_REPLAY_LIMIT", 500),
 		WSAllowedOrigins:         splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),

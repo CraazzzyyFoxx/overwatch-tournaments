@@ -10,11 +10,15 @@ COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
 MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 
-# Stateless RPC workers that are safe to replicate: competing consumers on
-# RabbitMQ spread RPC calls across replicas automatically, cache lives in shared
-# Redis, and DB access goes through pgBouncer. Do NOT add balancer-svc (owns the
-# draft clock) or analytics-worker (jobs not yet idempotent) — those are
-# singletons. Override on the CLI, e.g. `make prod-scale PROD_SCALE='app-svc=3'`.
+# Workers safe to replicate: RabbitMQ competing-consumers spread RPC calls + jobs
+# across replicas automatically, cache lives in shared Redis, DB access goes via
+# pgBouncer. balancer-svc is safe too (its draft clock is guarded by a per-draft
+# Redis lock — shared/services/distributed_lock.py — so only one replica drives
+# each live draft); kept out of the default because each replica reserves ~4 CPU.
+# Do NOT scale analytics-worker: it starts an APScheduler on every replica
+# (scheduled jobs would multi-fire) and its jobs aren't idempotent — it needs
+# leader-election first. Override on the CLI, e.g.
+#   make prod-scale PROD_SCALE='app-svc=3 balancer-svc=2'
 PROD_SCALE ?= app-svc=2 identity-svc=2
 
 help:

@@ -92,7 +92,7 @@ func run() error {
 	}()
 
 	// Postgres pool for read-only queries (event replay + ACL membership).
-	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer)
+	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer, cfg.DBMaxConns, cfg.DBStatementTimeout)
 	if err != nil {
 		return err
 	}
