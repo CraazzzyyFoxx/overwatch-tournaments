@@ -24,14 +24,16 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    # Backbone: every RPC round-trips through the broker, so give it real CPU
+    # headroom — throttling here adds latency to the whole stack.
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
+          cpus: '1.00'
+          memory: 1G
         reservations:
-          cpus: '0.10'
-          memory: 128M
+          cpus: '0.50'
+          memory: 256M
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
@@ -260,14 +262,17 @@ services:
   # Headless RPC worker replacing the HTTP `backend` behind the gateway.
   app-svc:
     image: registry.craazzzyyfoxx.me/aqt-app:latest
+    # Hottest read/write path (all of /api/v1/core). Single event loop per
+    # process, so raise the CPU ceiling AND scale replicas (`make prod-scale`)
+    # for real throughput — the two are complementary.
     deploy:
       resources:
         limits:
-          cpus: '1.00'
-          memory: 768M
+          cpus: '2.00'
+          memory: 1G
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.75'
+          memory: 512M
     build:
       context: ./backend
       args:
@@ -500,14 +505,16 @@ services:
 
   identity-svc:
     image: registry.craazzzyyfoxx.me/aqt-identity:latest
+    # Auth hot path: every authenticated request validates its token via
+    # gateway -> identity-svc. Under-provisioning this throttles all traffic.
     deploy:
       resources:
         limits:
-          cpus: '0.50'
+          cpus: '1.00'
           memory: 512M
         reservations:
-          cpus: '0.10'
-          memory: 128M
+          cpus: '0.50'
+          memory: 256M
     build:
       context: ./backend
       args:
@@ -548,14 +555,16 @@ services:
 
   gateway:
     image: registry.craazzzyyfoxx.me/aqt-gateway:latest
+    # Single entry point for ALL REST + WS + JWT. 0.5 CPU here was the primary
+    # ingress bottleneck (CFS throttling under load); give it headroom.
     deploy:
       resources:
         limits:
+          cpus: '2.00'
+          memory: 256M
+        reservations:
           cpus: '0.50'
           memory: 128M
-        reservations:
-          cpus: '0.10'
-          memory: 64M
     build:
       context: ./gateway
       dockerfile: Dockerfile
