@@ -45,7 +45,9 @@ type Config struct {
 	DBMaxConns int
 	// DBStatementTimeout is a server-side backstop cancelling any gateway query
 	// running longer, so a slow/hung Postgres can't pin pool connections against
-	// the unauthenticated /ws lookup path. 0 disables.
+	// the unauthenticated /ws lookup path. Applied on direct Postgres only
+	// (pgBouncer rejects it as a startup parameter — set it on the role there).
+	// 0 disables.
 	DBStatementTimeout time.Duration
 	WSIdleTimeout      time.Duration
 	WSReplayLimit      int
