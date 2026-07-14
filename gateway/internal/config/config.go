@@ -61,6 +61,10 @@ type Config struct {
 	// public API calls, so a tight limit would throttle legitimate visitors.
 	AnonRateLimit  int
 	AnonRateWindow time.Duration
+	// RPCMaxInFlight caps concurrent in-flight RPC calls per queue (bulkhead).
+	// When a queue is saturated the gateway sheds the request with an immediate
+	// 503 instead of queueing it for up to the full RPC timeout. 0 disables.
+	RPCMaxInFlight int
 	Upstreams      Upstreams
 	Sentry         Sentry
 	Tracing        Tracing
@@ -166,6 +170,7 @@ func Load() (*Config, error) {
 		WSCustomDomainRateWindow: time.Duration(getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_WINDOW", 10)) * time.Second,
 		AnonRateLimit:            getenvInt("GATEWAY_ANON_RATE_LIMIT", 0), // 0 = disabled (pass-through)
 		AnonRateWindow:           time.Duration(getenvInt("GATEWAY_ANON_RATE_WINDOW", 10)) * time.Second,
+		RPCMaxInFlight:           getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),

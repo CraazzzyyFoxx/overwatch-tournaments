@@ -23,6 +23,7 @@ type Metrics struct {
 	duration    *prometheus.HistogramVec
 	activeUsers *prometheus.GaugeVec
 	wsConns     *prometheus.GaugeVec
+	rpcShed     *prometheus.CounterVec
 }
 
 // New builds the collectors and registers them (plus Go/process runtime
@@ -54,8 +55,12 @@ func New() *Metrics {
 			Name: "gateway_ws_connections",
 			Help: "Live WebSocket connections (state=total|authenticated).",
 		}, []string{"state"}),
+		rpcShed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "gateway_rpc_shed_total",
+			Help: "RPC requests rejected by the per-queue in-flight cap (bulkhead), by queue.",
+		}, []string{"queue"}),
 	}
-	reg.MustRegister(m.requests, m.duration, m.activeUsers, m.wsConns)
+	reg.MustRegister(m.requests, m.duration, m.activeUsers, m.wsConns, m.rpcShed)
 	return m
 }
 
@@ -63,6 +68,9 @@ func New() *Metrics {
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.reg, promhttp.HandlerOpts{})
 }
+
+// RPCShed records one RPC request rejected by the per-queue in-flight cap.
+func (m *Metrics) RPCShed(queue string) { m.rpcShed.WithLabelValues(queue).Inc() }
 
 // Serve runs a dedicated metrics HTTP server until ctx is cancelled. It blocks,
 // so run it in a goroutine.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -26,8 +25,9 @@ const (
 )
 
 // IdentityResolver validates a request's bearer token, returning the RBAC payload
-// (or ok=false when absent/invalid). Matches principal.Resolver.Resolve.
-type IdentityResolver func(r *http.Request) (map[string]any, bool)
+// (ok=false when absent/invalid; non-nil err when the identity backend is
+// unavailable, so callers can 503 instead of 401). Matches principal.Resolver.Resolve.
+type IdentityResolver func(r *http.Request) (map[string]any, bool, error)
 
 // Binary serves the identity endpoint the JSON callIdentity path can't: the
 // current-user avatar multipart upload, base64-encoded into the RPC body. Like
@@ -55,7 +55,14 @@ func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 	// Validate the token up front (not just its presence) so an invalid bearer is
 	// rejected before we buffer/parse the multipart upload.
 	if b.resolver != nil {
-		if _, ok := b.resolver(r); !ok {
+		_, ok, err := b.resolver(r)
+		if err != nil {
+			b.log.Error("identity resolution unavailable", "err", err)
+			w.Header().Set("Retry-After", "1")
+			writeDetail(w, http.StatusServiceUnavailable, "identity service unavailable")
+			return
+		}
+		if !ok {
 			writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 			return
 		}
@@ -109,8 +116,9 @@ func (b *Binary) relayAvatar(w http.ResponseWriter, r *http.Request, queue strin
 
 	raw, err := b.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			b.log.Error("identity rpc unavailable", "method", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "identity service unavailable")
 			return
 		}

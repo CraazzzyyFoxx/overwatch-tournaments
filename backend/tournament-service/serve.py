@@ -45,14 +45,14 @@ logger = setup_logging(
 )
 
 broker = make_rabbit_broker(
-    config.settings.rabbitmq_url,
-    logger=logger,
-    # Channel QoS backpressure: bound how many messages are in flight on this
-    # worker at once; excess waits in RabbitMQ instead of piling up in-process.
-    default_channel=Channel(prefetch_count=config.settings.broker_prefetch_count),
+    config.settings.rabbitmq_url, logger=logger, prefetch_count=config.settings.rpc_prefetch_count
 )
 app = FastStream(broker)
 scheduler = AsyncIOScheduler()
+
+# Long-running compute jobs get their own AMQP channel so a burst of bracket /
+# standings recomputes can't occupy the RPC default-channel QoS slots.
+_JOBS_CHANNEL = Channel(prefetch_count=4)
 
 # Expose the worker broker to event publishers that don't thread one through
 # (e.g. standings-invalidation enqueues from the bracket/standings workers).
@@ -150,7 +150,7 @@ async def stop_scheduler() -> None:
     scheduler.shutdown(wait=False)
 
 
-@broker.subscriber(TOURNAMENT_BRACKET_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE)
+@broker.subscriber(TOURNAMENT_BRACKET_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE, channel=_JOBS_CHANNEL)
 async def consume_bracket_job(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=TOURNAMENT_BRACKET_JOBS_QUEUE,
@@ -162,7 +162,7 @@ async def consume_bracket_job(data: dict, msg: RabbitMessage) -> None:
         await process_bracket_job(event.job_id)
 
 
-@broker.subscriber(TOURNAMENT_STANDINGS_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE)
+@broker.subscriber(TOURNAMENT_STANDINGS_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE, channel=_JOBS_CHANNEL)
 async def consume_standings_job(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=TOURNAMENT_STANDINGS_JOBS_QUEUE,

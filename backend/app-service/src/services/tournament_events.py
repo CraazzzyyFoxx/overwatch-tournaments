@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from cashews import cache
-from faststream.rabbit import RabbitMessage
+from faststream.rabbit import Channel, RabbitMessage
 
 from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHANGED_EXCHANGE
 from shared.observability import observe_message_processing
@@ -65,6 +65,10 @@ async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     await invalidate_achievement_rarity_cache()
 
 
+# Isolated channel: cache-invalidation bursts must not compete with RPC QoS.
+_EVENTS_CHANNEL = Channel(prefetch_count=4)
+
+
 def register(broker: Any, logger: Any) -> None:
     """Register the cache-invalidation consumer on the headless worker's broker.
 
@@ -73,7 +77,7 @@ def register(broker: Any, logger: Any) -> None:
     invalidation messages between them.
     """
 
-    @broker.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE)
+    @broker.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE, channel=_EVENTS_CHANNEL)
     async def process_tournament_changed(data: dict[str, Any], msg: RabbitMessage) -> None:
         async with observe_message_processing(
             queue=TOURNAMENT_CHANGED_APP_QUEUE,

@@ -15,11 +15,6 @@ class Settings(BaseServiceSettings):
     challonge_auto_sync_enabled: bool = True
     challonge_auto_sync_interval_minutes: int = 5
 
-    # RabbitMQ channel QoS: max unacked messages delivered to this worker at
-    # once. Without it a burst of slow requests piles up unboundedly on one
-    # process with no backpressure (excess stays queued in RabbitMQ instead).
-    broker_prefetch_count: int = 32
-
     tournaments_cache_ttl: int = 60 * 5
     teams_cache_ttl: int = 60 * 5
     encounters_cache_ttl: int = 60 * 5

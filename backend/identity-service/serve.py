@@ -84,7 +84,7 @@ logger = setup_logging(
     json_output=settings.json_logging,
 )
 
-broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger, prefetch_count=settings.rpc_prefetch_count)
 app = FastStream(broker)
 
 

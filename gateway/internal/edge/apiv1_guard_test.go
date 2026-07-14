@@ -68,7 +68,7 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	mux.Handle("/api/v1/admin/ws/", d.Subtree(parser.AchievementAdminRoutes))
 	// Binary/multipart handlers (registering them must not conflict with the
 	// workspace member routes or the get-by-id routes).
-	bin := app.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
+	bin := app.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux.HandleFunc("POST /api/v1/workspaces/{id}/icon", bin.IconUpload)
 	mux.HandleFunc("DELETE /api/v1/workspaces/{id}/icon", bin.IconDelete)
@@ -77,7 +77,7 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/matches/{match_id}/log", bin.MatchLog)
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/avatar", bin.UserAvatarUpload)
 	mux.HandleFunc("POST /api/v1/user/create/csv", bin.UsersCsvImport)
-	pbin := parser.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
+	pbin := parser.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux.HandleFunc("POST /api/v1/admin/logs/upload", pbin.AdminLogsUpload)
 	mux.HandleFunc("POST /api/v1/teams/create/balancer", pbin.TeamsBalancerUpload)
@@ -146,7 +146,7 @@ func buildBalancerGuardedMux(t *testing.T) *http.ServeMux {
 	d.Register(mux, balancer.DraftReadRoutes)
 	d.Register(mux, balancer.DraftRoutes)
 	d.Register(mux, balancer.JobRoutes)
-	bbin := balancer.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool) { return nil, false },
+	bbin := balancer.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", bbin.TeamsImport)
 	mux.HandleFunc("POST /api/balancer/jobs", bbin.JobCreate)

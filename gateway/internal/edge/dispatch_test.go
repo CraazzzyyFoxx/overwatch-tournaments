@@ -3,6 +3,7 @@ package edge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -70,7 +71,7 @@ func TestDispatch_TypedSuccess(t *testing.T) {
 func TestDispatch_GenericCrudUpdate(t *testing.T) {
 	m := &mockCaller{reply: []byte(`{"ok":true,"data":{"id":5,"name":"X"}}`)}
 	identity := map[string]any{"user_id": 1.0, "is_superuser": true}
-	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool) { return identity, true })
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return identity, true, nil })
 	spec := RouteSpec{
 		Method: "PATCH", Pattern: "/api/v1/admin/teams/{id}", Queue: "rpc.tournament.admin.update",
 		Entity: "team", Action: "update", IDParam: "id", Body: true, Auth: AuthRequired,
@@ -97,11 +98,52 @@ func TestDispatch_GenericCrudUpdate(t *testing.T) {
 
 func TestDispatch_AuthRequiredNoIdentity(t *testing.T) {
 	m := &mockCaller{}
-	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool) { return nil, false })
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil })
 	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/admin/x", Queue: "q", Auth: AuthRequired}
 	w := serve(d, spec, "GET", "/api/v1/admin/x", "")
 	if w.Code != 401 {
 		t.Fatalf("code=%d", w.Code)
+	}
+	if m.calls != 0 {
+		t.Fatalf("rpc must not be called, calls=%d", m.calls)
+	}
+}
+
+// TestDispatch_IdentityUnavailable_503WithRetryAfter is the regression for the
+// finding: when the identity backend is unavailable (bulkhead shed,
+// disconnected, or timed out), the dispatcher must surface a 503 with
+// Retry-After, never a 401 — and must never call the route's own RPC.
+func TestDispatch_IdentityUnavailable_503WithRetryAfter(t *testing.T) {
+	m := &mockCaller{}
+	resolverErr := fmt.Errorf("rpc to %q: %w", "rpc.identity.validate_token", rpc.ErrOverloaded)
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, resolverErr })
+	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/admin/x", Queue: "q", Auth: AuthRequired}
+	w := serve(d, spec, "GET", "/api/v1/admin/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+	if m.calls != 0 {
+		t.Fatalf("rpc must not be called, calls=%d", m.calls)
+	}
+}
+
+// TestDispatch_IdentityUnavailable_AuthOptional_503 asserts the same 503
+// behavior holds for AuthOptional routes — an unavailable identity backend is
+// still a 503, not a silent fall-through to anonymous.
+func TestDispatch_IdentityUnavailable_AuthOptional_503(t *testing.T) {
+	m := &mockCaller{}
+	resolverErr := fmt.Errorf("rpc to %q: %w", "rpc.identity.validate_token", rpc.ErrOverloaded)
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, resolverErr })
+	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/x", Queue: "q", Auth: AuthOptional}
+	w := serve(d, spec, "GET", "/api/v1/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
 	}
 	if m.calls != 0 {
 		t.Fatalf("rpc must not be called, calls=%d", m.calls)
@@ -183,5 +225,31 @@ func TestDispatch_NullData_WritesLiteralNull(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("content-type=%q", ct)
+	}
+}
+
+func TestDispatch_Overloaded_503WithRetryAfter(t *testing.T) {
+	m := &mockCaller{err: fmt.Errorf("rpc to %q: %w", "q", rpc.ErrOverloaded)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+}
+
+func TestDispatch_Unavailable_HasRetryAfter(t *testing.T) {
+	m := &mockCaller{err: rpc.ErrNotConnected}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
 	}
 }

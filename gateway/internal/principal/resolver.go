@@ -47,17 +47,22 @@ func New(caller RPCCaller) *Resolver {
 }
 
 // Resolve implements edge.IdentityResolver: bearer token -> RBAC payload.
-func (r *Resolver) Resolve(req *http.Request) (map[string]any, bool) {
+//
+// A non-nil error means the identity backend was unavailable (the RPC
+// bulkhead shed the call, the client was disconnected, or the call timed
+// out) — the caller should respond 503, not 401. Anonymous requests (no
+// bearer token) never produce an error.
+func (r *Resolver) Resolve(req *http.Request) (map[string]any, bool, error) {
 	token := bearer(req)
 	if token == "" {
-		return nil, false
+		return nil, false, nil
 	}
 
 	now := r.now()
 	r.mu.Lock()
 	if e, ok := r.cache[token]; ok && now.Before(e.exp) {
 		r.mu.Unlock()
-		return e.payload, e.ok
+		return e.payload, e.ok, nil
 	}
 	r.mu.Unlock()
 
@@ -65,19 +70,25 @@ func (r *Resolver) Resolve(req *http.Request) (map[string]any, bool) {
 	ctx, cancel := context.WithTimeout(req.Context(), validateTimeout)
 	defer cancel()
 
+	raw, err := r.rpc.Call(ctx, validateQueue, body)
+	if err != nil {
+		// Transport failure: the token was never actually judged by identity-svc,
+		// so we must not cache ok=false here — that would keep a valid session
+		// "logged out" for cacheTTL after a single hiccup (shed/disconnect/timeout).
+		return nil, false, err
+	}
+
 	var payload map[string]any
 	ok := false
-	if raw, err := r.rpc.Call(ctx, validateQueue, body); err == nil {
-		var env rpc.Envelope
-		if json.Unmarshal(raw, &env) == nil && env.OK && len(env.Data) > 0 {
-			if json.Unmarshal(env.Data, &payload) == nil {
-				ok = true
-			}
+	var env rpc.Envelope
+	if json.Unmarshal(raw, &env) == nil && env.OK && len(env.Data) > 0 {
+		if json.Unmarshal(env.Data, &payload) == nil {
+			ok = true
 		}
 	}
 
 	r.store(token, entry{payload: payload, ok: ok, exp: now.Add(cacheTTL)})
-	return payload, ok
+	return payload, ok, nil
 }
 
 func (r *Resolver) store(token string, e entry) {
