@@ -38,6 +38,7 @@ from src.services.registration.utils import (
     normalize_battle_tag,
     normalize_battle_tag_key,
 )
+from src.services.registration.service import ensure_player_identity
 from src.services.tournament.events import (
     enqueue_registration_approved,
     enqueue_registration_rejected,
@@ -191,6 +192,7 @@ async def create_manual_registration(
     notes: str | None,
     admin_notes: str | None,
     roles: list[dict[str, Any]],
+    auth_user_id: int | None = None,
 ) -> models.BalancerRegistration:
     battle_tag = normalize_battle_tag(battle_tag)
     await ensure_unique_battle_tag(session, tournament_id=tournament_id, battle_tag=battle_tag)
@@ -230,6 +232,11 @@ async def create_manual_registration(
     replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
     session.add(registration)
     await session.flush()
+    # Optionally anchor on a chosen site account: find-or-create that account's
+    # player and set workspace_member_id (identity + battletag collapse handled
+    # by ensure_player_identity). Without it, manual rows stay unlinked as before.
+    if auth_user_id is not None:
+        await ensure_player_identity(session, registration, auth_user_id=auth_user_id)
     await enqueue_registration_approved(session, registration)
     await session.commit()
     return await get_registration_by_id(session, registration.id)
@@ -250,6 +257,7 @@ async def update_registration_profile(
     status_value: str | None,
     balancer_status_value: str | None,
     roles: list[dict[str, Any]] | None,
+    auth_user_id: int | None = None,
 ) -> models.BalancerRegistration:
     registration = await get_registration_by_id(session, registration_id)
     previous_status = registration.status
@@ -321,6 +329,11 @@ async def update_registration_profile(
         override_changed = True
     if override_changed:
         registration.balancer_profile_overridden_at = datetime.now(UTC)
+
+    # (Re)anchor on a chosen site account when provided. Uses the possibly-just-
+    # updated battle_tag; ensure_player_identity flushes only (commit below).
+    if auth_user_id is not None:
+        await ensure_player_identity(session, registration, auth_user_id=auth_user_id)
 
     if status_value == "approved" and previous_status != "approved":
         await enqueue_registration_approved(session, registration)

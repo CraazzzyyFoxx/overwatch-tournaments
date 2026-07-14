@@ -466,6 +466,8 @@ export interface AdminRegistrationCreateInput {
   admin_notes?: string | null;
   is_flex?: boolean;
   roles?: AdminRegistrationRole[];
+  /** Site account to anchor this registration on (its player). */
+  auth_user_id?: number | null;
 }
 
 export interface AdminRegistrationUpdateInput {
@@ -481,6 +483,8 @@ export interface AdminRegistrationUpdateInput {
   status?: string | null;
   balancer_status?: string | null;
   roles?: AdminRegistrationRole[] | null;
+  /** When set, (re)anchor the registration on this site account's player. */
+  auth_user_id?: number | null;
 }
 
 export interface AdminRegistrationExclusionInput {

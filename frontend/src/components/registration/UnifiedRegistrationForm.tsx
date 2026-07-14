@@ -14,6 +14,8 @@ import type { AdditionalRole } from "./types";
 import type { User } from "@/types/user.types";
 import type { AdminRegistration, BalancerRoleCode, BalancerRoleSubtype } from "@/types/balancer-admin.types";
 
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/admin/AuthUserSearchCombobox";
+import { rbacService } from "@/services/rbac.service";
 import StepIndicator from "@/components/registration/StepIndicator";
 import AccountStep from "@/components/registration/AccountStep";
 import RoleStep from "@/components/registration/RoleStep";
@@ -155,6 +157,30 @@ export default function UnifiedRegistrationForm({
   const [state, dispatch] = useReducer(formReducer, initialState);
   const [error, setError] = useState<string | null>(null);
   const [liveValidationErrors, setLiveValidationErrors] = useState<Record<string, string | null>>({});
+  // Admin-only: site account to anchor this registration on. Prefills empty
+  // identity handles from the account's OAuth-verified logins on select.
+  const [authUserId, setAuthUserId] = useState<number | undefined>(undefined);
+  const [authUserLabel, setAuthUserLabel] = useState<string | undefined>(undefined);
+
+  const handleSelectAuthUser = async (authUser: AuthUserOption | undefined) => {
+    setAuthUserId(authUser?.id);
+    setAuthUserLabel(authUser?.label);
+    if (!authUser) return;
+    try {
+      const page = await rbacService.listOAuthConnections({ auth_user_id: authUser.id, per_page: -1 });
+      const handleFor = (provider: string) => page.results.find((c) => c.provider === provider)?.username;
+      const prefill: Array<[keyof UnifiedFormState, string | undefined, string]> = [
+        ["battleTag", handleFor("battlenet"), state.battleTag],
+        ["discordNick", handleFor("discord"), state.discordNick],
+        ["twitchNick", handleFor("twitch"), state.twitchNick],
+      ];
+      for (const [key, handle, current] of prefill) {
+        if (handle && !current.trim()) dispatch({ type: "SET_FIELD", key, value: handle });
+      }
+    } catch {
+      // Best-effort prefill (e.g. missing auth_user:read); linking still works.
+    }
+  };
 
   const isEnabled = (fieldKey: string) => formConfig.built_in_fields?.[fieldKey]?.enabled !== false;
   const isRequired = (fieldKey: string) =>
@@ -543,6 +569,7 @@ export default function UnifiedRegistrationForm({
           status: state.status,
           balancer_status: state.balancerStatus,
           roles: buildAdminRolePayload(),
+          auth_user_id: authUserId ?? null,
         };
         onSubmit(payload);
       }
@@ -645,6 +672,22 @@ export default function UnifiedRegistrationForm({
       <StepIndicator steps={STEPS} current={state.step} />
 
       <div className="flex-1">
+        {state.step === 0 && mode === "admin" && (
+          <div className="mb-4 space-y-1.5">
+            <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
+              Linked Site Account
+            </h3>
+            <AuthUserSearchCombobox
+              value={authUserId}
+              selectedLabel={authUserLabel}
+              onSelect={handleSelectAuthUser}
+            />
+            <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
+              Optional. Anchors this registration on the selected account; empty handles are prefilled
+              from its verified logins.
+            </p>
+          </div>
+        )}
         {state.step === 0 && (
           <AccountStep
             mode={mode}
