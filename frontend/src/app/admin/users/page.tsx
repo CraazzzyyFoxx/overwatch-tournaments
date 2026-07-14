@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AuthUserSearchCombobox } from "@/components/admin/AuthUserSearchCombobox";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { PlayerProfileDialog } from "@/components/admin/PlayerProfileDialog";
@@ -22,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -30,19 +31,20 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import adminService from "@/services/admin.service";
+import { rbacService } from "@/services/rbac.service";
 import type { User } from "@/types/user.types";
-import type { UserCreateInput, CsvUserImportParams } from "@/types/admin.types";
+import type { CsvUserImportParams } from "@/types/admin.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
+import { notify } from "@/lib/notify";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-
 
 const defaultImportParams: CsvUserImportParams = {
   battle_tag_row: 1,
@@ -51,7 +53,7 @@ const defaultImportParams: CsvUserImportParams = {
   smurf_row: 4,
   start_row: 1,
   delimiter: ",",
-  sheet_url: "",
+  sheet_url: ""
 };
 
 interface ColumnStepperProps {
@@ -68,10 +70,7 @@ function ColumnStepper({ label, value, onChange, required }: ColumnStepperProps)
     <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
       <div className="flex items-center gap-3 min-w-0">
         {!required && (
-          <Switch
-            checked={enabled}
-            onCheckedChange={(checked) => onChange(checked ? 1 : null)}
-          />
+          <Switch checked={enabled} onCheckedChange={(checked) => onChange(checked ? 1 : null)} />
         )}
         <span className={`text-sm font-medium ${!enabled ? "text-muted-foreground" : ""}`}>
           {label}
@@ -88,7 +87,9 @@ function ColumnStepper({ label, value, onChange, required }: ColumnStepperProps)
         >
           <Minus className="h-3 w-3" />
         </Button>
-        <div className={`w-10 text-center tabular-nums text-sm font-medium ${!enabled ? "text-muted-foreground" : ""}`}>
+        <div
+          className={`w-10 text-center tabular-nums text-sm font-medium ${!enabled ? "text-muted-foreground" : ""}`}
+        >
           {enabled ? value : "—"}
         </div>
         <Button
@@ -125,7 +126,7 @@ function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       }
       return adminService.bulkCreateUsersFromCsv(
         submitParams,
-        tab === "file" ? file ?? undefined : undefined,
+        tab === "file" ? (file ?? undefined) : undefined
       );
     },
     onSuccess: () => {
@@ -133,11 +134,10 @@ function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       onOpenChange(false);
       setFile(null);
       setParams({ ...defaultImportParams });
-    },
+    }
   });
 
-  const canSubmit =
-    (tab === "file" && file !== null) || (tab === "sheet" && !!params.sheet_url);
+  const canSubmit = (tab === "file" && file !== null) || (tab === "sheet" && !!params.sheet_url);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,7 +220,9 @@ function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
                 size="icon"
                 className="h-9 w-9 shrink-0"
                 disabled={(params.start_row ?? 0) <= 0}
-                onClick={() => setParams({ ...params, start_row: Math.max(0, (params.start_row ?? 0) - 1) })}
+                onClick={() =>
+                  setParams({ ...params, start_row: Math.max(0, (params.start_row ?? 0) - 1) })
+                }
               >
                 <Minus className="h-3 w-3" />
               </Button>
@@ -237,18 +239,14 @@ function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Skip header rows (0 = no skip)
-            </p>
+            <p className="text-xs text-muted-foreground">Skip header rows (0 = no skip)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="delimiter">Delimiter</Label>
             <Input
               id="delimiter"
               value={params.delimiter ?? ","}
-              onChange={(e) =>
-                setParams({ ...params, delimiter: e.target.value })
-              }
+              onChange={(e) => setParams({ ...params, delimiter: e.target.value })}
             />
           </div>
         </div>
@@ -275,7 +273,7 @@ function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
 
 export default function UsersAdminPage() {
   const queryClient = useQueryClient();
-  const { canAccessPermission, isSuperuser } = usePermissions();
+  const { canAccessPermission, hasPermission, isSuperuser } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -283,6 +281,16 @@ export default function UsersAdminPage() {
   const [mergeUser, setMergeUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [createName, setCreateName] = useState("");
+  // Optionally link the new player to an existing auth account on creation.
+  const [linkAuthUserId, setLinkAuthUserId] = useState<number | null>(null);
+  const [linkAuthUserLabel, setLinkAuthUserLabel] = useState("");
+  const canLinkAuth = hasPermission("auth_user.update");
+
+  const resetCreateForm = () => {
+    setCreateName("");
+    setLinkAuthUserId(null);
+    setLinkAuthUserLabel("");
+  };
   const canCreate = canAccessPermission("user.create", workspaceId);
   const canUpdate = canAccessPermission("user.update", workspaceId);
   const canDelete = canAccessPermission("user.delete", workspaceId);
@@ -292,15 +300,44 @@ export default function UsersAdminPage() {
   const canManageIdentity = isSuperuser;
   const canSetVisibility = canAccessPermission("user.read", workspaceId);
   const canOpenProfile = canUpdate || canDelete || canManageIdentity || canSetVisibility;
-  const isCreateDirty = createDialogOpen && hasUnsavedChanges({ name: createName }, { name: "" });
+  const isCreateDirty =
+    createDialogOpen &&
+    hasUnsavedChanges(
+      { name: createName, authUserId: linkAuthUserId },
+      { name: "", authUserId: null }
+    );
 
   const createMutation = useMutation({
-    mutationFn: (data: UserCreateInput) => adminService.createUser(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      setCreateDialogOpen(false);
-      setCreateName("");
+    // Create the player, then (optionally) link it to an auth account. The link
+    // is a second call; if it fails we still report the player as created and
+    // surface a warning rather than throwing — re-submitting would otherwise
+    // create a duplicate player. The admin can retry the link from Access Users.
+    mutationFn: async (input: { name: string; authUserId: number | null }) => {
+      const user = await adminService.createUser({ name: input.name });
+      if (input.authUserId == null) {
+        return { user, linkWarning: undefined as string | undefined };
+      }
+      try {
+        await rbacService.assignLinkedPlayer(input.authUserId, {
+          player_id: user.id,
+          is_primary: true
+        });
+        return { user, linkWarning: undefined as string | undefined };
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "unknown error";
+        return {
+          user,
+          linkWarning: `Player "${user.name}" created, but linking to the auth account failed: ${detail}. Link it from Access Users.`
+        };
+      }
     },
+    onSuccess: ({ linkWarning }) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] });
+      setCreateDialogOpen(false);
+      resetCreateForm();
+      if (linkWarning) notify.error(linkWarning);
+    }
   });
 
   const deleteMutation = useMutation({
@@ -308,19 +345,19 @@ export default function UsersAdminPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       setDeletingUser(null);
-    },
+    }
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name: createName });
+    createMutation.mutate({ name: createName, authUserId: linkAuthUserId });
   };
 
   const columns: ColumnDef<User>[] = [
     {
       accessorKey: "id",
       header: "ID",
-      size: 60,
+      size: 60
     },
     {
       accessorKey: "name",
@@ -344,7 +381,7 @@ export default function UsersAdminPage() {
             <span className="font-medium truncate">{user.name}</span>
           </div>
         );
-      },
+      }
     },
     {
       id: "identities",
@@ -352,10 +389,12 @@ export default function UsersAdminPage() {
       cell: ({ row }) => {
         const user = row.original;
         if (!user.social_accounts?.length) {
-          return <span className="text-xs text-muted-foreground/50 italic">No identities linked</span>;
+          return (
+            <span className="text-xs text-muted-foreground/50 italic">No identities linked</span>
+          );
         }
         return <SocialAccountList accounts={user.social_accounts} linkify={false} />;
-      },
+      }
     },
     {
       id: "actions",
@@ -388,7 +427,10 @@ export default function UsersAdminPage() {
               )}
               {(canOpenProfile || canMerge) && canDelete && <DropdownMenuSeparator />}
               {canDelete && (
-                <DropdownMenuItem onClick={() => setDeletingUser(user)} className="text-destructive">
+                <DropdownMenuItem
+                  onClick={() => setDeletingUser(user)}
+                  className="text-destructive"
+                >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
                 </DropdownMenuItem>
@@ -396,8 +438,8 @@ export default function UsersAdminPage() {
             </DropdownMenuContent>
           </DropdownMenu>
         );
-      },
-    },
+      }
+    }
   ];
 
   return (
@@ -408,17 +450,14 @@ export default function UsersAdminPage() {
         actions={
           canCreate ? (
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setImportDialogOpen(true)}
-              >
+              <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                 <Upload className="mr-2 h-4 w-4" />
                 Import CSV
               </Button>
               <Button
                 onClick={() => {
                   createMutation.reset();
-                  setCreateName("");
+                  resetCreateForm();
                   setCreateDialogOpen(true);
                 }}
               >
@@ -431,8 +470,24 @@ export default function UsersAdminPage() {
       />
 
       <AdminDataTable
-        queryKey={(page, search, pageSize, sortField, sortDir) => ["admin", "users", page, search, pageSize, sortField, sortDir]}
-        queryFn={(page, search, pageSize, sortField, sortDir) => adminService.getUsers({ page, search, per_page: pageSize, sort: sortField ?? undefined, order: sortDir })}
+        queryKey={(page, search, pageSize, sortField, sortDir) => [
+          "admin",
+          "users",
+          page,
+          search,
+          pageSize,
+          sortField,
+          sortDir
+        ]}
+        queryFn={(page, search, pageSize, sortField, sortDir) =>
+          adminService.getUsers({
+            page,
+            search,
+            per_page: pageSize,
+            sort: sortField ?? undefined,
+            order: sortDir
+          })
+        }
         columns={columns}
         searchPlaceholder="Search users..."
         emptyMessage="No users found."
@@ -445,7 +500,7 @@ export default function UsersAdminPage() {
         onOpenChange={(open) => {
           if (!open) {
             setCreateDialogOpen(false);
-            setCreateName("");
+            resetCreateForm();
           }
         }}
         title="Create User"
@@ -454,9 +509,7 @@ export default function UsersAdminPage() {
         isSubmitting={createMutation.isPending}
         submittingLabel="Creating player identity…"
         errorMessage={
-          createMutation.error instanceof Error
-            ? createMutation.error.message
-            : undefined
+          createMutation.error instanceof Error ? createMutation.error.message : undefined
         }
         isDirty={isCreateDirty}
       >
@@ -471,6 +524,24 @@ export default function UsersAdminPage() {
               required
             />
           </div>
+          {canLinkAuth && (
+            <div className="space-y-2">
+              <Label htmlFor="link-auth-account">Link to auth account (optional)</Label>
+              <AuthUserSearchCombobox
+                id="link-auth-account"
+                value={linkAuthUserId ?? undefined}
+                selectedLabel={linkAuthUserLabel || undefined}
+                onSelect={(account) => {
+                  setLinkAuthUserId(account?.id ?? null);
+                  setLinkAuthUserLabel(account?.label ?? "");
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Attaches this player to an existing auth account (that account&rsquo;s profile and
+                analytics will resolve to this player).
+              </p>
+            </div>
+          )}
         </div>
       </EntityFormDialog>
 
@@ -486,7 +557,7 @@ export default function UsersAdminPage() {
             "All Discord identities",
             "All BattleTag identities",
             "All Twitch identities",
-            "All player records",
+            "All player records"
           ]}
         />
       )}
@@ -525,10 +596,7 @@ export default function UsersAdminPage() {
       )}
 
       {/* CSV Import Dialog */}
-      <CsvImportDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-      />
+      <CsvImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
     </div>
   );
 }
