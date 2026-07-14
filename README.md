@@ -7,7 +7,7 @@
 [![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://anakq.xyz/api/redoc)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/LICENSE)
 
-> **OWT** provides comprehensive statistics about Anakq's sub-tournaments —
+> **OWT** provides comprehensive statistics about Overwatch Tournaments —
 > the history of past tournaments and player statistics such as tournaments participated in, divisions, teams,
 > heroes, and performance metrics.
 > The backend is a Python microservices platform (FastAPI, SQLAlchemy, PostgreSQL, Redis, RabbitMQ) and the
