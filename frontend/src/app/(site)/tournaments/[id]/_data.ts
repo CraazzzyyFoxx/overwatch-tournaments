@@ -7,6 +7,17 @@ import type { Tournament } from "@/types/tournament.types";
 export type TournamentOverviewState =
   { kind: "success"; overview: Tournament } | { kind: "not-found" } | { kind: "error" };
 
+const CANONICAL_TOURNAMENT_ID = /^[1-9]\d*$/;
+
+export function parseCanonicalTournamentId(rawTournamentId: string): number | null {
+  if (!CANONICAL_TOURNAMENT_ID.test(rawTournamentId)) {
+    return null;
+  }
+
+  const tournamentId = Number(rawTournamentId);
+  return Number.isSafeInteger(tournamentId) ? tournamentId : null;
+}
+
 async function loadTournamentOverviewState(tournamentId: number): Promise<TournamentOverviewState> {
   if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
     return { kind: "not-found" };

@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import type { TournamentStatus } from "@/types/tournament.types";
 
-import { getTournamentOverviewState } from "./_data";
+import { getTournamentOverviewState, parseCanonicalTournamentId } from "./_data";
 
 type TournamentIndexPageProps = {
   params: Promise<{ id: string }>;
@@ -52,9 +52,12 @@ export default async function TournamentIndexPage({
 }: TournamentIndexPageProps) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
+  const tournamentId = parseCanonicalTournamentId(resolvedParams.id);
+  if (tournamentId === null) {
+    notFound();
+  }
   const teamsPath = `/tournaments/${resolvedParams.id}/teams`;
 
-  const tournamentId = Number(resolvedParams.id);
   const tab = resolvedSearchParams.tab;
 
   if (tab && !isTab(tab)) {

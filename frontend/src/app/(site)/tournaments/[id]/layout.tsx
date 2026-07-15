@@ -5,48 +5,44 @@ import { getTranslations } from "next-intl/server";
 
 import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
-import { getTournamentOverviewState } from "./_data";
+import { getTournamentOverviewState, parseCanonicalTournamentId } from "./_data";
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 
-function assertValidTournamentId(tournamentId: number): void {
-  if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
-    notFound();
-  }
-}
-
 export async function generateMetadata(props: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const tournamentId = Number(params.id);
+  const tournamentId = parseCanonicalTournamentId(params.id);
   const { name, origin } = await resolveSiteMetadata();
   const metadataBase = new URL(origin);
   const t = await getTranslations();
 
-  const overviewState = await getTournamentOverviewState(tournamentId);
-  if (overviewState.kind === "success") {
-    const tournament = overviewState.overview;
-    const title = `${t("tournamentDetail.metaTitle", { name: tournament.name })} | ${name}`;
-    const description = t("tournamentDetail.metaDescription", {
-      name: tournament.name
-    });
+  if (tournamentId !== null) {
+    const overviewState = await getTournamentOverviewState(tournamentId);
+    if (overviewState.kind === "success") {
+      const tournament = overviewState.overview;
+      const title = `${t("tournamentDetail.metaTitle", { name: tournament.name })} | ${name}`;
+      const description = t("tournamentDetail.metaDescription", {
+        name: tournament.name
+      });
 
-    return {
-      title,
-      description,
-      metadataBase,
-      openGraph: {
+      return {
         title,
         description,
-        url: `${origin}/tournaments/${tournamentId}`,
-        type: "website",
-        siteName: name,
-        locale: "en_US"
-      }
-    };
+        metadataBase,
+        openGraph: {
+          title,
+          description,
+          url: `${origin}/tournaments/${tournamentId}`,
+          type: "website",
+          siteName: name,
+          locale: "en_US"
+        }
+      };
+    }
   }
 
   return {
@@ -64,8 +60,10 @@ export default async function TournamentLayout({
   params: Promise<{ id: string }>;
 }>) {
   const resolvedParams = await params;
-  const tournamentId = Number(resolvedParams.id);
-  assertValidTournamentId(tournamentId);
+  const tournamentId = parseCanonicalTournamentId(resolvedParams.id);
+  if (tournamentId === null) {
+    notFound();
+  }
 
   return (
     <Suspense fallback={<TournamentShellSkeleton />}>

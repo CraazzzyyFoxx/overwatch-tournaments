@@ -125,7 +125,7 @@ describe("tournament overview server contract", () => {
       (declaration) => declaration.name?.text === "TournamentLayout"
     );
     const validationCall = nodesMatching(sourceFile, ts.isCallExpression).find(
-      (call) => call.expression.getText(sourceFile) === "assertValidTournamentId"
+      (call) => call.expression.getText(sourceFile) === "parseCanonicalTournamentId"
     );
 
     expect(importedNames(sourceFile, "react")).toContain("Suspense");
@@ -139,6 +139,25 @@ describe("tournament overview server contract", () => {
     expect(
       hasJsxAttribute(sourceFile, suspense[0], "fallback", "<TournamentShellSkeleton />")
     ).toBe(true);
+  });
+
+  it("shares one canonical raw-id parser across layout, metadata, and index route", () => {
+    const data = parsedSource("_data.ts");
+    const dataSource = sourceFor("_data.ts");
+    const layout = parsedSource("layout.tsx");
+    const page = parsedSource("page.tsx");
+
+    expect(dataSource).not.toMatch(/^[\s\S]*["']use client["']/);
+    expect(dataSource).toContain("parseCanonicalTournamentId");
+    expect(importedNames(layout, "./_data")).toContain("parseCanonicalTournamentId");
+    expect(importedNames(page, "./_data")).toContain("parseCanonicalTournamentId");
+    expect(
+      calledIdentifiers(layout).filter((name) => name === "parseCanonicalTournamentId")
+    ).toHaveLength(2);
+    expect(
+      calledIdentifiers(page).filter((name) => name === "parseCanonicalTournamentId")
+    ).toHaveLength(1);
+    expect(calledIdentifiers(data)).not.toContain("notFound");
   });
 
   it("owns streamed overview errors and hydrates with a request-local query client", () => {
