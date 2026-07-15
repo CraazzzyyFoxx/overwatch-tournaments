@@ -4,11 +4,8 @@ import { Pause, Radio, ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { HeroCoord, HeroStamp, HeroStat } from "@/components/site/PageHero";
-import { cn } from "@/lib/utils";
 import type { DraftBoard } from "@/types/draft.types";
 import type { Tournament } from "@/types/tournament.types";
-
-import { DraftClock } from "./DraftClock";
 
 interface DraftPageHeroProps {
   tournament: Tournament;
@@ -41,14 +38,14 @@ export function DraftPageHero({ tournament, board, mode }: DraftPageHeroProps) {
             <HeroCoord>{t("coordinate", { tournament: tournament.id, session: session.id })}</HeroCoord>
             <HeroCoord>{t(`mode.${mode}`)}</HeroCoord>
             <span className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] px-3 text-xs font-medium">
-              <StateIcon
-                className={cn(
-                  "h-3.5 w-3.5",
-                  session.status === "live"
-                    ? "text-[color:var(--aqt-teal)]"
-                    : "text-[color:var(--aqt-amber)]"
-                )}
-              />
+              {session.status === "live" ? (
+                <span
+                  className="h-2 w-2 rounded-full bg-[color:var(--aqt-teal)] animate-pulse motion-reduce:animate-none"
+                  aria-hidden
+                />
+              ) : (
+                <StateIcon className="h-3.5 w-3.5 text-[color:var(--aqt-amber)]" />
+              )}
               {t(`status.${session.status}`)}
             </span>
           </div>
@@ -72,13 +69,27 @@ export function DraftPageHero({ tournament, board, mode }: DraftPageHeroProps) {
             className="min-w-0 [&>span:nth-child(2)]:truncate [&>span:nth-child(2)]:text-lg"
           />
           <HeroStat
-            label={t("timeLeft")}
+            label={t("sequence")}
             value={
-              <DraftClock
-                expiresAt={current?.clock_expires_at ?? null}
-                paused={session.status === "paused"}
-                compact
-              />
+              <div className="flex flex-wrap gap-1" aria-label={t("progress")}>
+                {board.picks.map((pick) => {
+                  const done = ["completed", "autopicked", "skipped"].includes(pick.status);
+                  const onClock = pick.status === "on_clock";
+                  return (
+                    <span
+                      key={pick.id}
+                      title={`#${pick.overall_no}`}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        done
+                          ? "bg-[color:var(--aqt-support)]"
+                          : onClock
+                            ? "bg-[color:var(--aqt-teal)] animate-pulse motion-reduce:animate-none"
+                            : "bg-[color:var(--aqt-fg-faint)]"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
             }
           />
         </div>
