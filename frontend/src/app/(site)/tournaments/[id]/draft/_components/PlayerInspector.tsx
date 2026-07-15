@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Crown, ShieldCheck, X } from "lucide-react";
+import { Ban, Crown, HelpCircle, ShieldCheck, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
@@ -8,6 +8,7 @@ import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -50,8 +51,23 @@ export function PlayerInspector({
   if (!player) {
     return (
       <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-5 text-sm text-[color:var(--aqt-fg-muted)]">
-        <p className="font-medium text-[color:var(--aqt-fg)]">{t("inspectorEmptyTitle")}</p>
-        <p className="mt-1">{t("inspectorEmptyHint")}</p>
+        <p className="flex items-center gap-1.5 font-medium text-[color:var(--aqt-fg)]">
+          {t("inspectorEmptyTitle")}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--aqt-fg-faint)] outline-none transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                  aria-label={t("howItWorks")}
+                >
+                  <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[16rem] text-xs">{t("inspectorEmptyHint")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </p>
       </section>
     );
   }
