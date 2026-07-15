@@ -15,6 +15,35 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";
 
 type SortBy = "placement" | "sr" | "name";
+type TeamsQueryPresentation = {
+  initialState: "skeleton" | "error" | null;
+  contentState: "empty" | "teams" | null;
+  showUpdating: boolean;
+  showRefreshError: boolean;
+};
+
+export function getTeamsQueryPresentation({
+  data,
+  teamCount,
+  isPending,
+  isError,
+  isFetching
+}: {
+  data: unknown;
+  teamCount: number;
+  isPending: boolean;
+  isError: boolean;
+  isFetching: boolean;
+}): TeamsQueryPresentation {
+  const hasCachedData = data !== undefined;
+
+  return {
+    initialState: hasCachedData ? null : isError ? "error" : isPending ? "skeleton" : null,
+    contentState: hasCachedData ? (teamCount === 0 ? "empty" : "teams") : null,
+    showUpdating: hasCachedData && isFetching && !isError,
+    showRefreshError: hasCachedData && isError
+  };
+}
 
 export const TournamentTeamsPageSkeleton = () => {
   return <TournamentTeamsSkeleton />;
@@ -71,21 +100,25 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
     return sortTeams(filtered, sortBy);
   }, [teams, groupFilter, sortBy]);
 
-  if (teamsQuery.isPending && !teamsQuery.data) {
-    return <TournamentTeamsPageSkeleton />;
-  }
+  const presentation = getTeamsQueryPresentation({
+    data: teamsQuery.data,
+    teamCount: teams.length,
+    isPending: teamsQuery.isPending,
+    isError: teamsQuery.isError,
+    isFetching: teamsQuery.isFetching
+  });
 
-  if (teamsQuery.isError && !teamsQuery.data) {
+  if (presentation.initialState === "error") {
     return <TournamentPageState state="initial-error" onRetry={() => void teamsQuery.refetch()} />;
   }
 
-  if (teams.length === 0) {
-    return <TournamentPageState state="empty" />;
+  if (presentation.initialState === "skeleton" || presentation.contentState === null) {
+    return <TournamentTeamsPageSkeleton />;
   }
 
   const content = (
     <div className="space-y-4">
-      {teamsQuery.isFetching && !teamsQuery.isError ? (
+      {presentation.showUpdating ? (
         <p
           className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"
           role="status"
@@ -94,57 +127,63 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
           {t("tournamentDetail.pageState.updating")}
         </p>
       ) : null}
-      <div className="section-head">
-        <h2>
-          {t("common.teams")} <span className="count-tag">{teams.length}</span>
-        </h2>
-      </div>
-
-      <div className="filters">
-        <button
-          type="button"
-          className={cn("filter-chip", groupFilter === "all" && "active")}
-          onClick={() => setGroupFilter("all")}
-        >
-          {t("common.all")} <span className="count">{teams.length}</span>
-        </button>
-        {groups.map(([name, count]) => (
-          <button
-            key={name}
-            type="button"
-            className={cn("filter-chip", groupFilter === name && "active")}
-            onClick={() => setGroupFilter(name)}
-          >
-            {t("common.group")} {name} <span className="count">{count}</span>
-          </button>
-        ))}
-
-        <select
-          className="filter-sort"
-          style={{ marginLeft: "auto" }}
-          value={sortBy}
-          onChange={(event) => setSortBy(event.target.value as SortBy)}
-          aria-label={t("tournamentDetail.sortTeams")}
-        >
-          <option value="placement">{t("common.byPlacement")}</option>
-          <option value="sr">{t("common.byAvgSr")}</option>
-          <option value="name">{t("common.byName")}</option>
-        </select>
-      </div>
-
-      {visibleTeams.length === 0 ? (
-        <TournamentPageState state="filtered-empty" onReset={() => setGroupFilter("all")} />
+      {presentation.contentState === "empty" ? (
+        <TournamentPageState state="empty" />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {visibleTeams.map((team) => (
-            <TournamentTeamCard key={team.id} team={team} />
-          ))}
-        </div>
+        <>
+          <div className="section-head">
+            <h2>
+              {t("common.teams")} <span className="count-tag">{teams.length}</span>
+            </h2>
+          </div>
+
+          <div className="filters">
+            <button
+              type="button"
+              className={cn("filter-chip", groupFilter === "all" && "active")}
+              onClick={() => setGroupFilter("all")}
+            >
+              {t("common.all")} <span className="count">{teams.length}</span>
+            </button>
+            {groups.map(([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                className={cn("filter-chip", groupFilter === name && "active")}
+                onClick={() => setGroupFilter(name)}
+              >
+                {t("common.group")} {name} <span className="count">{count}</span>
+              </button>
+            ))}
+
+            <select
+              className="filter-sort"
+              style={{ marginLeft: "auto" }}
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortBy)}
+              aria-label={t("tournamentDetail.sortTeams")}
+            >
+              <option value="placement">{t("common.byPlacement")}</option>
+              <option value="sr">{t("common.byAvgSr")}</option>
+              <option value="name">{t("common.byName")}</option>
+            </select>
+          </div>
+
+          {visibleTeams.length === 0 ? (
+            <TournamentPageState state="filtered-empty" onReset={() => setGroupFilter("all")} />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {visibleTeams.map((team) => (
+                <TournamentTeamCard key={team.id} team={team} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 
-  if (teamsQuery.isError) {
+  if (presentation.showRefreshError) {
     return (
       <TournamentPageState
         state="refresh-error"
