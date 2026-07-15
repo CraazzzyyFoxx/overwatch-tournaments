@@ -2993,28 +2993,23 @@ async def get_tournament_stats_overall(
     return won_maps, lost_maps, closeness, playtime
 
 
-async def get_statistics_by_heroes(
-    session: AsyncSession,
+def _statistics_by_heroes_query(
+    *,
     user_id: int,
-    stats: list[enums.LogStatsName] | None = None,
-    tournament_id: int | None = None,
-    workspace_id: int | None = None,
-) -> typing.Sequence[tuple[enums.LogStatsName, models.Hero, float, float, float, dict]]:
-    """
-    Retrieves a user's hero statistics, including total value, max value, average value, and best performance metadata.
+    stats: list[enums.LogStatsName] | None,
+    tournament_id: int | None,
+    workspace_id: int | None,
+) -> sa.Select:
+    """Build the per-(hero, stat) totals + best-performance query for one user.
 
-    Args:
-        session: An SQLAlchemy `AsyncSession` for database interaction.
-        user_id: The ID of the user to retrieve hero statistics for.
-
-    Returns:
-        A sequence of tuples containing:
-        1. The statistic name (e.g., HeroDamageDealt, Eliminations).
-        2. The `Hero` model instance.
-        3. The total value of the statistic.
-        4. The maximum value of the statistic.
-        5. The average value of the statistic (per 10 minutes).
-        6. A dictionary containing metadata about the best performance (e.g., encounter ID, map name, tournament name).
+    Uses the deferred-metadata-join rewrite (same shape as the precomputed
+    ``matches.mv_hero_global_stats`` view; see migration ``herostatmv01``): rank
+    the slim eligible set with a bare window function, then join the four
+    metadata tables (match/map/encounter/tournament) only for the
+    ~(#heroes x #stats) winning rows. The previous form joined those tables
+    *into* the window CTE, so ``row_number()`` ranked the full eligible set
+    already fanned out across four tables — which blew past ``statement_timeout``
+    for heavy users (e.g. an unfiltered workspace-wide read).
     """
     eligible_stats = _build_eligible_hero_stats_cte(
         user_id=user_id,
@@ -3025,14 +3020,29 @@ async def get_statistics_by_heroes(
     )
     direction_score = _hero_direction_score(eligible_stats.c.value, eligible_stats.c.name)
 
-    best_result_cte = (
+    # Totals per (hero, stat). Joins matches.match only for playtime (the
+    # per-10min average denominator); no metadata tables, no window function.
+    agg_cte = (
         sa.select(
             eligible_stats.c.hero_id,
             eligible_stats.c.name,
-            models.Match.encounter_id,
-            models.Map.name.label("map_name"),
-            models.Map.image_path.label("map_link"),
-            models.Tournament.name.label("tournament_name"),
+            sa.func.sum(eligible_stats.c.value).label("total_value"),
+            sa.func.sum(models.Match.time).label("total_time"),
+        )
+        .select_from(eligible_stats)
+        .join(models.Match, models.Match.id == eligible_stats.c.match_id)
+        .group_by(eligible_stats.c.hero_id, eligible_stats.c.name)
+        .cte("hero_stats_agg")
+    )
+
+    # Rank eligible rows per (hero, stat) on the slim set alone. The tiebreaker
+    # is the match id, which equals ``eligible.match_id``, so no join is needed
+    # here (the old form joined matches.match purely for ``match.id``).
+    ranked_cte = (
+        sa.select(
+            eligible_stats.c.hero_id,
+            eligible_stats.c.name,
+            eligible_stats.c.match_id,
             eligible_stats.c.value,
             sa.func.row_number()
             .over(
@@ -3040,26 +3050,41 @@ async def get_statistics_by_heroes(
                     eligible_stats.c.hero_id,
                     eligible_stats.c.name,
                 ],
-                order_by=[direction_score.desc(), models.Match.id.desc()],
+                order_by=[direction_score.desc(), eligible_stats.c.match_id.desc()],
             )
             .label("row_num"),
         )
-        .join(models.Match, eligible_stats.c.match_id == models.Match.id)
+        .select_from(eligible_stats)
+        .cte("hero_stats_ranked")
+    )
+
+    # Hydrate map/tournament metadata only for the winning row per (hero, stat).
+    best_result_cte = (
+        sa.select(
+            ranked_cte.c.hero_id,
+            ranked_cte.c.name,
+            ranked_cte.c.value.label("best_value"),
+            models.Match.encounter_id,
+            models.Map.name.label("map_name"),
+            models.Map.image_path.label("map_link"),
+            models.Tournament.name.label("tournament_name"),
+        )
+        .select_from(ranked_cte)
+        .join(models.Match, models.Match.id == ranked_cte.c.match_id)
         .join(models.Map, models.Map.id == models.Match.map_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+        .where(ranked_cte.c.row_num == 1)
         .cte("best_result_cte")
     )
 
-    query = (
+    return (
         sa.select(
-            eligible_stats.c.name,
+            agg_cte.c.name,
             models.Hero,
-            sa.func.sum(eligible_stats.c.value).label("total_value"),
-            best_result_cte.c.value.label("best_value"),
-            (sa.func.sum(eligible_stats.c.value) / sa.func.nullif(sa.func.sum(models.Match.time), 0) * 600).label(
-                "avg_per_10min"
-            ),
+            agg_cte.c.total_value.label("total_value"),
+            best_result_cte.c.best_value.label("best_value"),
+            (agg_cte.c.total_value / sa.func.nullif(agg_cte.c.total_time, 0) * 600).label("avg_per_10min"),
             sa.func.jsonb_build_object(
                 "encounter_id",
                 best_result_cte.c.encounter_id,
@@ -3071,28 +3096,47 @@ async def get_statistics_by_heroes(
                 best_result_cte.c.tournament_name,
             ).label("best_metadata"),
         )
-        .select_from(eligible_stats)
-        .join(models.Match, models.Match.id == eligible_stats.c.match_id)
-        .join(models.Hero, models.Hero.id == eligible_stats.c.hero_id)
+        .select_from(agg_cte)
+        .join(models.Hero, models.Hero.id == agg_cte.c.hero_id)
         .join(
             best_result_cte,
             sa.and_(
-                best_result_cte.c.hero_id == eligible_stats.c.hero_id,
-                best_result_cte.c.name == eligible_stats.c.name,
-                best_result_cte.c.row_num == 1,
+                best_result_cte.c.hero_id == agg_cte.c.hero_id,
+                best_result_cte.c.name == agg_cte.c.name,
             ),
-        )
-        .group_by(
-            eligible_stats.c.name,
-            models.Hero.id,
-            best_result_cte.c.encounter_id,
-            best_result_cte.c.map_name,
-            best_result_cte.c.map_link,
-            best_result_cte.c.tournament_name,
-            best_result_cte.c.value,
         )
     )
 
+
+async def get_statistics_by_heroes(
+    session: AsyncSession,
+    user_id: int,
+    stats: list[enums.LogStatsName] | None = None,
+    tournament_id: int | None = None,
+    workspace_id: int | None = None,
+) -> typing.Sequence[tuple[enums.LogStatsName, models.Hero, float, float, float, dict]]:
+    """
+    Retrieves a user's hero statistics, including total value, best value, average value, and best performance metadata.
+
+    Args:
+        session: An SQLAlchemy `AsyncSession` for database interaction.
+        user_id: The ID of the user to retrieve hero statistics for.
+
+    Returns:
+        A sequence of tuples containing:
+        1. The statistic name (e.g., HeroDamageDealt, Eliminations).
+        2. The `Hero` model instance.
+        3. The total value of the statistic.
+        4. The best value of the statistic.
+        5. The average value of the statistic (per 10 minutes).
+        6. A dictionary containing metadata about the best performance (e.g., encounter ID, map name, tournament name).
+    """
+    query = _statistics_by_heroes_query(
+        user_id=user_id,
+        stats=stats,
+        tournament_id=tournament_id,
+        workspace_id=workspace_id,
+    )
     result = await session.execute(query)
     return result.all()
 

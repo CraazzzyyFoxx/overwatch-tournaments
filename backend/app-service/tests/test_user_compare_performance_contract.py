@@ -181,3 +181,38 @@ def test_compare_catalog_entities_execute_one_statement() -> None:
 
     assert [entity.id for entity in entities] == [1, 2, 3]
     session.execute.assert_awaited_once()
+
+
+def test_statistics_by_heroes_defers_metadata_join_off_the_window() -> None:
+    """Guard the deferred-metadata-join rewrite (see migration ``herostatmv01``).
+
+    The window function (``hero_stats_ranked``) must rank the slim eligible set
+    alone; map/encounter/tournament are joined only for the winning rows in
+    ``best_result_cte``. Joining those tables *into* the window CTE ranks the
+    full eligible set already fanned out across four tables and blows past
+    ``statement_timeout`` for heavy users (Sentry OWT-TOURNAMENTS-2G).
+    """
+    statement = service._statistics_by_heroes_query(  # noqa: SLF001 - query contract
+        user_id=552,
+        stats=None,
+        tournament_id=None,
+        workspace_id=1,
+    )
+
+    sql = _postgres_sql(statement)
+
+    assert "hero_stats_agg AS" in sql
+    assert "hero_stats_ranked AS" in sql
+    assert "best_result_cte AS" in sql
+
+    # The ranking CTE ranks the slim eligible set with no metadata joins.
+    ranked_body = sql.split("hero_stats_ranked AS")[1].split("best_result_cte AS")[0]
+    assert "row_number() OVER" in ranked_body
+    assert "overwatch.map" not in ranked_body
+    assert "tournament.tournament" not in ranked_body
+    assert "matches.match " not in ranked_body
+
+    # Metadata is hydrated only for the winning row per (hero, stat).
+    assert "FROM hero_stats_ranked JOIN matches.match" in sql
+    assert "JOIN overwatch.map" in sql
+    assert "WHERE hero_stats_ranked.row_num = 1" in sql
