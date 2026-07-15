@@ -20,11 +20,7 @@ const C = 2 * Math.PI * R;
 
 export function DraftClockRing({ expiresAt, paused, totalSeconds, accent }: DraftClockRingProps) {
   const t = useTranslations();
-  const [now, setNow] = useState<number | null>(null);
-
-  useEffect(() => {
-    setNow(Date.now());
-  }, [expiresAt]);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (paused || !expiresAt) return;
