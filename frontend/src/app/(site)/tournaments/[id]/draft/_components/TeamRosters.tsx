@@ -8,11 +8,12 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { HeroCoord } from "@/components/site/PageHero";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
+import { teamCrest } from "../_lib/draft-crest";
 import { buildRosterByTeam, rosterRankForPlayer, rosterRoleForPlayer } from "../_lib/draft-workspace-model";
 
 const ROSTER_ROLES: DraftRole[] = ["tank", "dps", "support"];
@@ -26,6 +27,43 @@ interface TeamRostersProps {
   focusTeamOnly?: boolean;
   onClockTeamId?: number | null;
   divisionGrid: DivisionGrid;
+  /** Vertical compact card list (mockup `.teams-col`) vs the default grid of full team cards. */
+  variant?: "grid" | "column";
+  /** Auth user ids of captains currently connected, for the column card's captain dot. */
+  onlineCaptainIds?: Set<number>;
+}
+
+interface TeamRosterView {
+  roster: DraftPlayer[];
+  roleFillCounts: Record<DraftRole, number>;
+  roleTarget: number;
+  avgRank: number | null;
+  avgDivision: number | null;
+  openSlots: number;
+}
+
+function computeTeamRosterView(
+  team: DraftTeam,
+  rosters: Map<number, DraftPlayer[]>,
+  picks: DraftPick[],
+  teamSize: number,
+  divisionGrid: DivisionGrid
+): TeamRosterView {
+  const roster = rosters.get(team.id) ?? [];
+  const rosterRoles = roster.map((player) => rosterRoleForPlayer(player, picks));
+  // ponytail: role-target = ceil(team_size/3) default; upgrade to real targets if the session exposes them
+  const roleTarget = Math.ceil(teamSize / 3);
+  const roleFillCounts = Object.fromEntries(
+    ROSTER_ROLES.map((role) => [role, rosterRoles.filter((r) => r === role).length])
+  ) as Record<DraftRole, number>;
+  const rankValues = roster
+    .map((player) => player.rank_value)
+    .filter((value): value is number => value != null);
+  const avgRank =
+    rankValues.length > 0 ? rankValues.reduce((sum, value) => sum + value, 0) / rankValues.length : null;
+  const avgDivision = avgRank == null ? null : resolveDivisionFromRank(divisionGrid, avgRank);
+  const openSlots = Math.max(0, teamSize - roster.length);
+  return { roster, roleFillCounts, roleTarget, avgRank, avgDivision, openSlots };
 }
 
 export function TeamRosters({
@@ -36,10 +74,148 @@ export function TeamRosters({
   myTeamId = null,
   focusTeamOnly = false,
   onClockTeamId = null,
-  divisionGrid
+  divisionGrid,
+  variant = "grid",
+  onlineCaptainIds
 }: TeamRostersProps) {
   const t = useTranslations("draftRedesign");
   const rosters = buildRosterByTeam(players);
+
+  if (variant === "column") {
+    const columnTeams = [...teams].sort((left, right) => left.draft_position - right.draft_position);
+    return (
+      <section aria-labelledby="team-rosters-heading">
+        <div className="border-b border-[color:var(--aqt-border)] pb-3">
+          <HeroCoord>{t("rosterCoordinate")}</HeroCoord>
+          <h2 id="team-rosters-heading" className="mt-1 font-onest text-lg font-semibold">
+            {t("teamRosters")}
+          </h2>
+        </div>
+        <div className="mt-4 flex flex-col gap-3 overflow-y-auto">
+          {columnTeams.map((team) => {
+            const view = computeTeamRosterView(team, rosters, picks, teamSize, divisionGrid);
+            const onClock = team.id === onClockTeamId;
+            const isMine = team.id === myTeamId;
+            const crest = teamCrest(team);
+            const captainOnline =
+              team.captain_auth_user_id != null && (onlineCaptainIds?.has(team.captain_auth_user_id) ?? false);
+
+            return (
+              <div
+                key={team.id}
+                className={cn(
+                  "min-w-0 overflow-hidden rounded-[14px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]",
+                  isMine && "border-[color:var(--aqt-teal)]/60",
+                  onClock && "ring-1 ring-[color:var(--aqt-teal)] shadow-[0_0_22px_hsl(172_72%_45%_/_0.2)]"
+                )}
+              >
+                {onClock && (
+                  <p className="px-3 pt-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-teal)]">
+                    {t("onTheClock")}
+                  </p>
+                )}
+                <div className="flex items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
+                  <span
+                    className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] text-[13px] font-extrabold"
+                    style={{ background: `hsl(${crest.hue} 55% 22%)`, color: `hsl(${crest.hue} 70% 72%)` }}
+                  >
+                    {crest.initial}
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold tracking-tight">{team.name}</span>
+                  <span
+                    className="h-[7px] w-[7px] shrink-0 rounded-full"
+                    style={
+                      captainOnline
+                        ? { background: "var(--aqt-support)", boxShadow: "0 0 5px var(--aqt-support)" }
+                        : { background: "var(--aqt-fg-faint)" }
+                    }
+                    title={captainOnline ? t("captainOnline") : t("captainOffline")}
+                  />
+                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                    {view.avgDivision != null && (
+                      <span
+                        title={`${getDivisionLabel(divisionGrid, view.avgDivision)} · ${view.avgRank!.toFixed(0)} SR`}
+                      >
+                        <PlayerDivisionIcon
+                          division={view.avgDivision}
+                          width={20}
+                          height={20}
+                          className="h-5 w-5 object-contain"
+                          tournamentGrid={divisionGrid}
+                        />
+                      </span>
+                    )}
+                    <span className="font-mono text-[11px] text-[color:var(--aqt-fg-faint)]">
+                      #{team.draft_position}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex gap-4 border-b border-[color:var(--aqt-border)] px-3 py-2 font-mono text-[11px] text-[color:var(--aqt-fg-muted)]">
+                  {ROSTER_ROLES.map((role) => (
+                    <span key={role} className="inline-flex items-center gap-1" style={{ color: ROLE_ACCENT[role] }}>
+                      <PlayerRoleIcon role={getRoleIconName(role)} size={13} color={ROLE_ACCENT[role]} />
+                      {view.roleFillCounts[role]}/{view.roleTarget}
+                    </span>
+                  ))}
+                </div>
+                <div className="divide-y divide-[color:var(--aqt-border)]">
+                  {view.roster.map((player) => {
+                    const role = rosterRoleForPlayer(player, picks);
+                    const rank = rosterRankForPlayer(player, role);
+                    const division = player.division_number ?? resolveDivisionFromRank(divisionGrid, rank);
+                    const divisionLabel = division == null ? null : getDivisionLabel(divisionGrid, division);
+                    return (
+                      <div
+                        key={player.id}
+                        className="grid grid-cols-[22px_1fr_auto] items-center gap-2 px-3 py-1.5 text-[13px]"
+                      >
+                        <span className="inline-flex h-[22px] w-[22px] items-center justify-center" title={t(`roles.${role}`)}>
+                          {player.is_captain ? (
+                            <Crown className="h-3.5 w-3.5 text-[color:var(--aqt-warm)]" />
+                          ) : (
+                            <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
+                          )}
+                        </span>
+                        <span className="min-w-0 truncate font-medium">{player.battle_tag ?? `#${player.id}`}</span>
+                        {division != null ? (
+                          <span title={[divisionLabel, rank != null ? `${rank} SR` : null].filter(Boolean).join(" · ")}>
+                            <PlayerDivisionIcon
+                              division={division}
+                              width={20}
+                              height={20}
+                              className="h-5 w-5 object-contain"
+                              tournamentGrid={divisionGrid}
+                            />
+                          </span>
+                        ) : (
+                          <span className="text-[color:var(--aqt-fg-faint)]">—</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {Array.from({ length: view.openSlots }, (_, index) => (
+                    <div
+                      key={`open-${index}`}
+                      className="grid grid-cols-[22px_1fr_auto] items-center gap-2 px-3 py-1.5 text-[13px] opacity-40"
+                    >
+                      <span className="inline-flex h-[22px] w-[22px] items-center justify-center text-[color:var(--aqt-fg-faint)]">
+                        ·
+                      </span>
+                      <span className="min-w-0 truncate italic text-[color:var(--aqt-fg-faint)]">
+                        {t("openSlot")} {view.roster.length + index + 1}
+                      </span>
+                      <span className="text-[color:var(--aqt-fg-faint)]">—</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
   const visibleTeams =
     focusTeamOnly && myTeamId != null
       ? teams.filter((team) => team.id === myTeamId)
@@ -60,20 +236,9 @@ export function TeamRosters({
         )}
       >
         {visibleTeams.map((team) => {
-          const roster = rosters.get(team.id) ?? [];
+          const view = computeTeamRosterView(team, rosters, picks, teamSize, divisionGrid);
+          const { roster, roleTarget, avgRank, avgDivision, openSlots } = view;
           const onClock = team.id === onClockTeamId;
-          const rosterRoles = roster.map((player) => rosterRoleForPlayer(player, picks));
-          // ponytail: role-target = ceil(team_size/3) default; upgrade to real targets if the session exposes them
-          const roleTarget = Math.ceil(teamSize / 3);
-          const rankValues = roster
-            .map((player) => player.rank_value)
-            .filter((value): value is number => value != null);
-          const avgRank =
-            rankValues.length > 0
-              ? rankValues.reduce((sum, value) => sum + value, 0) / rankValues.length
-              : null;
-          const avgDivision = avgRank == null ? null : resolveDivisionFromRank(divisionGrid, avgRank);
-          const openSlots = Math.max(0, teamSize - roster.length);
 
           return (
             <TournamentTeamCardFrame
@@ -107,7 +272,7 @@ export function TeamRosters({
               )}
               <div className="flex flex-wrap gap-3 px-4 pt-2 text-xs text-[color:var(--aqt-fg-muted)]">
                 {ROSTER_ROLES.map((role) => {
-                  const filled = rosterRoles.filter((r) => r === role).length;
+                  const filled = view.roleFillCounts[role];
                   return (
                     <span key={role} className="inline-flex items-center gap-1">
                       <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
