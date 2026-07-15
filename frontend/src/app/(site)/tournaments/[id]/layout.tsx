@@ -1,11 +1,13 @@
 import React, { Suspense } from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
-import { getTournamentOverview } from "./_data";
+import { getTournamentOverviewState } from "./_data";
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
+import TournamentShellError from "./TournamentShellError";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +21,12 @@ export async function generateMetadata(props: {
   const metadataBase = new URL(origin);
   const t = await getTranslations();
 
-  try {
-    const tournament = await getTournamentOverview(tournamentId);
+  const overviewState = await getTournamentOverviewState(tournamentId);
+  if (overviewState.kind === "success") {
+    const tournament = overviewState.overview;
     const title = `${t("tournamentDetail.metaTitle", { name: tournament.name })} | ${name}`;
     const description = t("tournamentDetail.metaDescription", {
-      name: tournament.name,
+      name: tournament.name
     });
 
     return {
@@ -39,13 +42,13 @@ export async function generateMetadata(props: {
         locale: "en_US"
       }
     };
-  } catch {
-    return {
-      title: `${t("tournamentDetail.metaTitleFallback")} | ${name}`,
-      description: t("tournamentDetail.metaDescriptionFallback"),
-      metadataBase
-    };
   }
+
+  return {
+    title: `${t("tournamentDetail.metaTitleFallback")} | ${name}`,
+    description: t("tournamentDetail.metaDescriptionFallback"),
+    metadataBase
+  };
 }
 
 export default async function TournamentLayout({
@@ -57,13 +60,20 @@ export default async function TournamentLayout({
 }>) {
   const resolvedParams = await params;
   const tournamentId = Number(resolvedParams.id);
+  const overviewState = await getTournamentOverviewState(tournamentId);
+
+  if (overviewState.kind === "not-found") {
+    notFound();
+  }
+
+  if (overviewState.kind === "error") {
+    return <TournamentShellError />;
+  }
 
   return (
     <Suspense fallback={<TournamentShellSkeleton />}>
-      <TournamentOverviewBoundary tournamentId={tournamentId}>
-        <TournamentClientLayout tournamentId={tournamentId}>
-          {children}
-        </TournamentClientLayout>
+      <TournamentOverviewBoundary tournamentId={tournamentId} overview={overviewState.overview}>
+        <TournamentClientLayout tournamentId={tournamentId}>{children}</TournamentClientLayout>
       </TournamentOverviewBoundary>
     </Suspense>
   );

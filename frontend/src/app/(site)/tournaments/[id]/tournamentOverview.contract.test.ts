@@ -17,7 +17,7 @@ function parsedSource(relativePath: string): ts.SourceFile {
     sourceFor(relativePath),
     ts.ScriptTarget.Latest,
     true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   );
 }
 
@@ -45,7 +45,7 @@ function importedNames(sourceFile: ts.SourceFile, moduleName: string): Set<strin
 
 function nodesMatching<T extends ts.Node>(
   sourceFile: ts.SourceFile,
-  predicate: (node: ts.Node) => node is T,
+  predicate: (node: ts.Node) => node is T
 ): T[] {
   const matches: T[] = [];
   const visit = (node: ts.Node) => {
@@ -75,7 +75,7 @@ function jsxElements(sourceFile: ts.SourceFile, componentName: string): ts.JsxOp
     sourceFile,
     (node): node is ts.JsxOpeningLikeElement =>
       (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      node.tagName.getText(sourceFile) === componentName,
+      node.tagName.getText(sourceFile) === componentName
   );
 }
 
@@ -83,7 +83,7 @@ function hasJsxAttribute(
   sourceFile: ts.SourceFile,
   element: ts.JsxOpeningLikeElement,
   attributeName: string,
-  expressionText?: string,
+  expressionText?: string
 ): boolean {
   return element.attributes.properties.some((attribute) => {
     if (!ts.isJsxAttribute(attribute) || attribute.name.getText(sourceFile) !== attributeName) {
@@ -111,7 +111,7 @@ describe("tournament overview server contract", () => {
     const source = sourceFor("_data.ts");
 
     expect(importedNames(sourceFile, "react")).toContain("cache");
-    expect(source).toMatch(/export const getTournamentOverview\s*=\s*cache\s*\(/);
+    expect(source).toMatch(/export const getTournamentOverviewState\s*=\s*cache\s*\(/);
     expect(calledMethods(sourceFile)).toContain("getPublicOverview");
     expect(source).not.toContain("unstable_cache");
     expect(source).not.toContain("getStages");
@@ -119,46 +119,57 @@ describe("tournament overview server contract", () => {
 
   it("wraps the server boundary in Suspense with the shared exact shell fallback", () => {
     const sourceFile = parsedSource("layout.tsx");
+    const source = sourceFor("layout.tsx");
     const suspense = jsxElements(sourceFile, "Suspense");
+    const stateCall = nodesMatching(sourceFile, ts.isCallExpression).find(
+      (call) => call.expression.getText(sourceFile) === "getTournamentOverviewState"
+    );
 
     expect(importedNames(sourceFile, "react")).toContain("Suspense");
+    expect(stateCall).toBeDefined();
+    expect(stateCall?.getStart(sourceFile) ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      suspense[0].getStart(sourceFile)
+    );
+    expect(source).toMatch(
+      /if\s*\(overviewState\.kind\s*===\s*["']not-found["']\)[\s\S]*?notFound\(\)/
+    );
+    expect(source).toMatch(
+      /if\s*\(overviewState\.kind\s*===\s*["']error["']\)[\s\S]*?<TournamentShellError\s*\/>/
+    );
     expect(jsxElements(sourceFile, "TournamentOverviewBoundary")).toHaveLength(1);
     expect(suspense).toHaveLength(1);
-    expect(hasJsxAttribute(sourceFile, suspense[0], "fallback", "<TournamentShellSkeleton />")).toBe(true);
+    expect(
+      hasJsxAttribute(sourceFile, suspense[0], "fallback", "<TournamentShellSkeleton />")
+    ).toBe(true);
   });
 
-  it("owns initial errors and hydrates a request-local overview query", () => {
+  it("hydrates the resolved overview with a request-local query client", () => {
     const sourceFile = parsedSource("TournamentOverviewBoundary.tsx");
     const source = sourceFor("TournamentOverviewBoundary.tsx");
     const queryClients = nodesMatching(sourceFile, ts.isNewExpression).filter(
-      (expression) => expression.expression.getText(sourceFile) === "QueryClient",
-    );
-    const overviewCall = nodesMatching(sourceFile, ts.isCallExpression).find(
-      (call) => call.expression.getText(sourceFile) === "getTournamentOverview",
+      (expression) => expression.expression.getText(sourceFile) === "QueryClient"
     );
     const seedCall = nodesMatching(sourceFile, ts.isCallExpression).find(
-      (call) => call.expression.getText(sourceFile) === "queryClient.setQueryData",
+      (call) => call.expression.getText(sourceFile) === "queryClient.setQueryData"
     );
 
     expect(importedNames(sourceFile, "./_queries/tournamentOverview")).toContain(
-      "tournamentOverviewQueryOptions",
+      "tournamentOverviewQueryOptions"
     );
-    expect(calledIdentifiers(sourceFile)).toContain("getTournamentOverview");
-    expect(calledIdentifiers(sourceFile)).toContain("isNotFoundError");
-    expect(calledIdentifiers(sourceFile)).toContain("notFound");
+    expect(calledIdentifiers(sourceFile)).not.toContain("getTournamentOverview");
+    expect(calledIdentifiers(sourceFile)).not.toContain("isNotFoundError");
+    expect(calledIdentifiers(sourceFile)).not.toContain("notFound");
     expect(queryClients).toHaveLength(1);
     expect(isInsideFunction(queryClients[0])).toBe(true);
-    expect(overviewCall).toBeDefined();
-    expect(overviewCall!.getStart(sourceFile)).toBeLessThan(queryClients[0].getStart(sourceFile));
+    expect(source).toMatch(/overview:\s*Tournament/);
     expect(calledMethods(sourceFile)).toContain("setQueryData");
     expect(seedCall?.arguments.map((argument) => argument.getText(sourceFile))).toEqual([
       "overviewOptions.queryKey",
-      "overview",
+      "overview"
     ]);
     expect(calledIdentifiers(sourceFile)).toContain("dehydrate");
     expect(jsxElements(sourceFile, "HydrationBoundary")).toHaveLength(1);
-    expect(jsxElements(sourceFile, "TournamentShellError")).toHaveLength(1);
-    expect(jsxElements(sourceFile, "TournamentShellError")[0]?.attributes.properties).toHaveLength(0);
+    expect(jsxElements(sourceFile, "TournamentShellError")).toHaveLength(0);
     expect(source).not.toContain("prefetchQuery");
   });
 
@@ -181,9 +192,9 @@ describe("tournament overview server contract", () => {
     const page = parsedSource("page.tsx");
     const pageSource = sourceFor("page.tsx");
 
-    expect(calledIdentifiers(layout)).toContain("getTournamentOverview");
-    expect(calledIdentifiers(page)).toContain("getTournamentOverview");
-    expect(pageSource).toContain("tournament.stages.length");
+    expect(calledIdentifiers(layout)).toContain("getTournamentOverviewState");
+    expect(calledIdentifiers(page)).toContain("getTournamentOverviewState");
+    expect(pageSource).toContain("overviewState.overview.stages.length");
     expect(pageSource).not.toContain("getTournamentStages");
     expect(calledMethods(page)).not.toContain("getStages");
   });
@@ -194,11 +205,15 @@ describe("tournament overview server contract", () => {
     const skeletonSource = sourceFor("_components/TournamentSkeletons.tsx");
 
     expect(importedNames(loading, "./_components/TournamentSkeletons")).toContain(
-      "TournamentShellSkeleton",
+      "TournamentShellSkeleton"
     );
     expect(jsxElements(loading, "TournamentShellSkeleton")).toHaveLength(1);
     expect(jsxElements(skeleton, "PageHero")).toHaveLength(1);
-    expect(skeletonSource).toContain("aria-busy");
+    expect(skeletonSource).toContain('role="status"');
+    expect(skeletonSource).toContain('aria-live="polite"');
+    expect(skeletonSource).toContain('t("common.loading")');
+    expect(skeletonSource.match(/role="status"/g)).toHaveLength(1);
+    expect(skeletonSource).toMatch(/aria-hidden="true"[\s\S]*?<PageHero/);
     expect(skeletonSource).toContain("tabs");
     expect(skeletonSource).toContain("min-w-0");
   });
@@ -207,7 +222,7 @@ describe("tournament overview server contract", () => {
     const sourceFile = parsedSource("TournamentShellError.tsx");
     const source = sourceFor("TournamentShellError.tsx");
     const component = nodesMatching(sourceFile, ts.isFunctionDeclaration).find(
-      (declaration) => declaration.name?.text === "TournamentShellError",
+      (declaration) => declaration.name?.text === "TournamentShellError"
     );
 
     expect(source).toMatch(/^\s*["']use client["']/);
