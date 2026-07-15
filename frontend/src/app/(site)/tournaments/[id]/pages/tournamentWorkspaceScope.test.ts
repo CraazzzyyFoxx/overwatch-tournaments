@@ -106,7 +106,7 @@ describe("tournament workspace scoped pages", () => {
 
   it("uses the tournament workspace when loading bracket encounters", () => {
     const source = readFileSync(
-      join(import.meta.dir, "..", "bracket", "TournamentBracketPage.tsx"),
+      join(import.meta.dir, "..", "bracket", "bracketData.ts"),
       "utf8"
     );
 

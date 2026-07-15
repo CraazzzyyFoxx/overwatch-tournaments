@@ -1,44 +1,24 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
 
-import { Skeleton } from "@/components/ui/skeleton";
-import { useTournamentQuery, useTournamentStagesQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
 import TournamentBracketPage from "./TournamentBracketPage";
 
-function BracketPageSkeleton() {
-  return (
-    <div className="space-y-4">
-      <Skeleton className="h-12 w-full rounded-xl" />
-      <Skeleton className="h-[520px] w-full rounded-xl" />
-    </div>
-  );
-}
-
 export default function BracketPage() {
-  const t = useTranslations();
   const params = useParams<{ id: string }>();
   const tournamentId = Number(params.id);
   const tournamentQuery = useTournamentQuery(tournamentId);
-  const stagesQuery = useTournamentStagesQuery(tournamentId);
 
-  if (tournamentQuery.isLoading || stagesQuery.isLoading) {
-    return <BracketPageSkeleton />;
+  if (tournamentQuery.isPending && !tournamentQuery.data) {
+    return <TournamentBracketSkeleton />;
   }
 
   if (!tournamentQuery.data) {
-    return (
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-8 text-center text-muted-foreground">
-        {t("common.tournamentNotFound")}
-      </div>
-    );
+    return <TournamentPageState state="initial-error" onRetry={() => tournamentQuery.refetch()} />;
   }
 
-  return (
-    <TournamentBracketPage
-      tournament={tournamentQuery.data}
-      stages={stagesQuery.data ?? []}
-    />
-  );
+  return <TournamentBracketPage tournament={tournamentQuery.data} />;
 }
