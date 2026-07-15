@@ -104,12 +104,11 @@ export function PlayerInspector({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {headerDivision != null && (
-            <span className="flex flex-col items-center gap-0.5" title={getDivisionLabel(divisionGrid, headerDivision) ?? undefined}>
+            <span title={getDivisionLabel(divisionGrid, headerDivision) ?? undefined}>
               <PlayerDivisionIcon division={headerDivision} tournamentGrid={divisionGrid} width={32} height={32} className="h-8 w-8 object-contain" />
-              <span className="text-[10px] text-[color:var(--aqt-fg-muted)]">{getDivisionLabel(divisionGrid, headerDivision)}</span>
             </span>
           )}
-          <Button variant="ghost" size="icon" className="h-11 w-11" onClick={onClose} aria-label={t("closeInspector")}><X className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onClose} aria-label={t("closeInspector")}><X className="h-4 w-4" /></Button>
         </div>
       </div>
 
@@ -138,7 +137,7 @@ export function PlayerInspector({
                 title={[isPrimary ? t("primaryRole") : null, roleRank != null ? `${roleRank} SR` : null].filter(Boolean).join(" · ") || undefined}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
-                  "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 py-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                  "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 py-1.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
                   isPrimary ? "border-[color:var(--aqt-teal)]/60" : "border-[color:var(--aqt-border-2)]",
                   active ? "bg-[color:var(--aqt-teal)]/15" : "hover:border-[color:var(--aqt-teal)]/50",
                   blocked && "cursor-not-allowed opacity-45"
@@ -150,9 +149,9 @@ export function PlayerInspector({
                 </span>
                 <span className="ml-auto flex shrink-0 items-center gap-1.5">
                   {heroes.length > 0 && (
-                    <AvatarStack size={16} max={3}>
+                    <AvatarStack size={24} max={3}>
                       {heroes.map((hero) => (
-                        <Avatar key={hero.slug} className="h-4 w-4" title={hero.slug}>
+                        <Avatar key={hero.slug} className="h-6 w-6" title={hero.slug}>
                           <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
                         </Avatar>
                       ))}

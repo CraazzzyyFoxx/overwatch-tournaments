@@ -93,6 +93,10 @@ export function CaptainDraftWorkspace({
     gating.isMyPick &&
     currentPick != null &&
     canConfirmPick(connectionState, currentPick.version, options, selection);
+  const pickBarVisible =
+    currentPick != null ||
+    board.session.status === "live" ||
+    board.session.status === "paused";
 
   const selectPlayer = (player: DraftPlayer, role: DraftRole | null = null) => {
     setSelectedPlayerId(player.id);
@@ -172,7 +176,7 @@ export function CaptainDraftWorkspace({
   );
 
   return (
-    <div className="space-y-5">
+    <div className={cn("space-y-5", pickBarVisible && "sm:pb-32")}>
       {optionsLoading && gating.isMyPick && (
         <p className="border-l-2 border-[color:var(--aqt-teal)] pl-3 text-sm text-[color:var(--aqt-fg-muted)]" role="status">
           {t("checkingSafeOptions")}
@@ -267,20 +271,22 @@ export function CaptainDraftWorkspace({
         </aside>
       </div>
 
-      <PickCommandBar
-        player={selectedPlayer}
-        role={selectedRole}
-        teamName={myTeam?.name ?? t("myTeam")}
-        canConfirm={confirmAllowed}
-        pending={mutations.makePick.isPending}
-        connectionState={connectionState}
-        announcement={announcement}
-        onConfirm={confirm}
-        divisionGrid={divisionGrid}
-        board={board}
-        isMyPick={gating.isMyPick}
-        myTeamId={gating.myTeamId}
-      />
+      {pickBarVisible && (
+        <PickCommandBar
+          player={selectedPlayer}
+          role={selectedRole}
+          teamName={myTeam?.name ?? t("myTeam")}
+          canConfirm={confirmAllowed}
+          pending={mutations.makePick.isPending}
+          connectionState={connectionState}
+          announcement={announcement}
+          onConfirm={confirm}
+          divisionGrid={divisionGrid}
+          board={board}
+          isMyPick={gating.isMyPick}
+          myTeamId={gating.myTeamId}
+        />
+      )}
     </div>
   );
 }

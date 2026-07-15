@@ -82,7 +82,7 @@ export function PickCommandBar({
     <>
       <section
         className={cn(
-          "sticky bottom-2 z-20 mx-auto mt-5 w-full max-w-[min(1320px,94vw)] rounded-xl border bg-[color:var(--aqt-card)]/95 p-3 shadow-xl backdrop-blur transition-colors supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+          "mt-5 w-full rounded-xl border bg-[color:var(--aqt-card)]/95 p-3 shadow-xl backdrop-blur transition-colors supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:fixed sm:bottom-2 sm:left-1/2 sm:z-40 sm:mt-0 sm:w-[min(1320px,94vw)] sm:-translate-x-1/2",
           !isConnected
             ? "border-[color:var(--aqt-warm)]/60"
             : ready

@@ -38,7 +38,7 @@ import { allPlayerHeroes, playerRoles, roleTopHeroes } from "../_lib/draft-works
 
 const POOL_ROLES: DraftRole[] = ["tank", "dps", "support"];
 const SEGMENT_CLASS =
-  "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+  "inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
 
 interface PlayerPoolProps {
@@ -113,16 +113,16 @@ export function PlayerPool({
       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
         <label className="relative">
           <span className="sr-only">{t("searchPlayers")}</span>
-          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[color:var(--aqt-fg-faint)]" />
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[color:var(--aqt-fg-faint)]" />
           <Input
-            className="min-h-11 pl-9"
+            className="pl-9"
             value={query}
             onChange={(event) => onFiltersChange({ query: event.target.value })}
             placeholder={t("searchPlayers")}
           />
         </label>
         <Select value={sort} onValueChange={(value) => onFiltersChange({ sort: value as DraftPoolSort })}>
-          <SelectTrigger className="min-h-11 w-full sm:w-32" aria-label={t("sortPool")}><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-32" aria-label={t("sortPool")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="rank">{t("sortRank")}</SelectItem>
             <SelectItem value="name">{t("sortName")}</SelectItem>
@@ -160,7 +160,7 @@ export function PlayerPool({
               type="button"
               variant="outline"
               size="sm"
-              className="min-h-11 gap-1.5"
+              className="min-h-9 gap-1.5"
               aria-label={t("heroFilterCount", { count: heroFilter.size })}
             >
               {t("heroFilter")} ({heroFilter.size})
@@ -314,7 +314,7 @@ export function PlayerPool({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11"
+                  className="h-9 w-9"
                   onClick={() => onToggleShortlist(player.id)}
                   aria-pressed={bookmarked}
                   aria-label={bookmarked ? t("removeShortlist") : t("addShortlist")}
