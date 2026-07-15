@@ -5,11 +5,11 @@ import Image from "next/image";
 
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionIconSrc, getDivisionLabel } from "@/lib/division-grid";
-import type { DivisionGridVersion } from "@/types/workspace.types";
+import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 
 export interface DivisionIconProps {
   division: number;
-  tournamentGrid?: DivisionGridVersion | null;
+  tournamentGrid?: DivisionGridVersion | DivisionGrid | null;
   width?: number;
   height?: number;
   className?: string;

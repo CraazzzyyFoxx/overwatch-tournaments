@@ -158,6 +158,7 @@ export function PlayerPool({
                       <Link
                         href={`/users/${profileSlug}`}
                         onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
                         className="truncate font-medium hover:text-[color:var(--aqt-teal)] hover:underline"
                       >
                         {player.battle_tag}
@@ -168,7 +169,7 @@ export function PlayerPool({
                     {blocked ? <Ban className="h-4 w-4 shrink-0 text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-4 w-4 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
                     <span className="ml-auto shrink-0" title={divisionTitle}>
                       {division != null ? (
-                        <PlayerDivisionIcon division={division} width={26} height={26} className="h-6 w-6 object-contain" />
+                        <PlayerDivisionIcon division={division} tournamentGrid={divisionGrid} width={26} height={26} className="h-6 w-6 object-contain" />
                       ) : (
                         <span className="text-[color:var(--aqt-fg-faint)]">—</span>
                       )}
@@ -185,7 +186,7 @@ export function PlayerPool({
                       </span>
                     )}
                     {player.is_flex && (
-                      <span className="rounded border border-violet-400/50 px-1 text-[10px] uppercase tracking-wide text-violet-300">
+                      <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
                         {t("flex")}
                       </span>
                     )}
