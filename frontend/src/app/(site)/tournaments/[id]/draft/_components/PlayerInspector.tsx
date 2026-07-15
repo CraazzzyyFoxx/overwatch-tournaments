@@ -1,12 +1,11 @@
 "use client";
 
-import { Ban, Crown, HelpCircle, ShieldCheck, X } from "lucide-react";
+import { Ban, Crown, HelpCircle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
@@ -19,9 +18,9 @@ import type {
   DraftRole
 } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/player";
+import { formatSubRoleLabel, getPlayerSlug } from "@/utils/player";
 
-import { optionForSelection, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
+import { optionForSelection, playerRoles } from "../_lib/draft-workspace-model";
 
 const BADGE_CLASS =
   "rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]";
@@ -117,50 +116,46 @@ export function PlayerInspector({
         {player.is_flex && <span className={BADGE_CLASS}>{t("flex")}</span>}
       </div>
 
-      <div className="mt-3 space-y-1.5">
-        <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("chooseRole")}</p>
-        <div className="space-y-1.5">
-          {roles.map((entry) => {
+      <div className="mt-3">
+        <p className="mb-2 text-xs text-[color:var(--aqt-fg-muted)]">{t("chooseRole")}</p>
+        <div className="flex gap-2">
+          {roles.map((entry, index) => {
             const option = optionForSelection(options, player.id, entry);
             const blocked = safetyRequired && option?.is_safe !== true;
             const roleRank = player.role_ranks[entry] ?? player.rank_value ?? null;
             const roleDivision = resolveDivisionFromRank(divisionGrid, roleRank);
-            const heroes = roleTopHeroes(player, entry);
+            const active = role === entry;
             return (
               <button
                 key={entry}
                 type="button"
                 disabled={blocked}
-                aria-pressed={role === entry}
+                aria-pressed={active}
+                title={roleRank != null ? `${roleRank} SR` : undefined}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
-                  "flex min-h-11 w-full flex-col gap-1 rounded-lg border px-3 py-1.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-                  role === entry ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/10" : "border-[color:var(--aqt-border-2)]",
+                  "relative flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                  active
+                    ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/10"
+                    : "border-[color:var(--aqt-border-2)] hover:border-[color:var(--aqt-teal)]/50",
                   blocked && "cursor-not-allowed opacity-45"
                 )}
               >
-                <span className="flex items-center gap-2">
-                  <PlayerRoleIcon role={getRoleIconName(entry)} size={16} color={ROLE_ACCENT[entry]} />
-                  <span className="flex-1 truncate">{t(`roles.${entry}`)}</span>
-                  {blocked ? <Ban className="h-3.5 w-3.5 shrink-0" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
+                <span
+                  className="absolute right-1.5 top-1.5 font-mono text-[10px] font-semibold text-[color:var(--aqt-fg-faint)]"
+                  aria-label={t("rolePriority", { n: index + 1 })}
+                >
+                  {index + 1}
                 </span>
-                <span className="flex items-center gap-2 pl-6">
-                  <span className="flex items-center gap-1 font-mono text-xs text-[color:var(--aqt-fg-muted)]">
-                    {roleRank != null ? `${roleRank} SR` : "—"}
-                    {roleDivision != null && (
-                      <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={18} height={18} className="h-[18px] w-[18px] object-contain" />
-                    )}
-                  </span>
-                  {heroes.length > 0 && (
-                    <AvatarStack size={24} max={3} className="ml-auto">
-                      {heroes.map((hero) => (
-                        <Avatar key={hero.slug} className="h-6 w-6" title={hero.slug}>
-                          <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
-                        </Avatar>
-                      ))}
-                    </AvatarStack>
-                  )}
-                </span>
+                <PlayerRoleIcon role={getRoleIconName(entry)} size={20} color={ROLE_ACCENT[entry]} />
+                <span className="max-w-full truncate text-[11px] font-medium uppercase tracking-wide">{t(`roles.${entry}`)}</span>
+                {blocked ? (
+                  <Ban className="h-[30px] w-[30px] text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} />
+                ) : roleDivision != null ? (
+                  <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={30} height={30} className="h-[30px] w-[30px] object-contain" />
+                ) : (
+                  <span className="flex h-[30px] items-center text-sm text-[color:var(--aqt-fg-faint)]">—</span>
+                )}
               </button>
             );
           })}

@@ -2959,6 +2959,7 @@
     "note": "Note",
     "role": "Role",
     "chooseRole": "Choose role",
+    "rolePriority": "Priority {n}",
     "rank": "Rank",
     "optionReason": { "role_filled": "This roster slot is already filled.", "role_shortage": "Choosing this option would leave another required role impossible to fill." },
     "shortlist": "Shortlist",
